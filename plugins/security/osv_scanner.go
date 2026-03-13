@@ -34,11 +34,11 @@ func (p *OSVScannerPlugin) Execute(ctx context.Context, opts models.ExecuteOpts)
 		defer cancel()
 	}
 
-	cmd := exec.CommandContext(ctx, "osv-scanner", "--format", "json", "--recursive", opts.RepoPath)
+	cmd := plugin.CommandContext(ctx, "osv-scanner", "--format", "json", "--recursive", opts.RepoPath)
 	out, err := cmd.Output()
 	if err != nil {
 		if len(out) == 0 {
-			return nil, fmt.Errorf("osv-scanner execution failed: %w", err)
+			return nil, plugin.WrapExecError("osv-scanner", err)
 		}
 	}
 
@@ -79,7 +79,7 @@ type osvVuln struct {
 
 func parseOSVScannerOutput(data []byte) ([]models.Finding, error) {
 	var output osvOutput
-	if err := json.Unmarshal(data, &output); err != nil {
+	if err := json.Unmarshal(plugin.ExtractJSON(data), &output); err != nil {
 		return nil, fmt.Errorf("failed to parse osv-scanner output: %w", err)
 	}
 

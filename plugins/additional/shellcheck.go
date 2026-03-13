@@ -46,15 +46,16 @@ func (p *ShellcheckPlugin) Execute(ctx context.Context, opts models.ExecuteOpts)
 	shellFiles = append(shellFiles, rootShellFiles...)
 
 	if len(shellFiles) == 0 {
+		plugin.Skipf(opts.OnOutput, "shellcheck", "no shell scripts (*.sh) found in repository. Add .sh files to enable shell script analysis.")
 		return nil, nil
 	}
 
 	args := append([]string{"-f", "json"}, shellFiles...)
-	cmd := exec.CommandContext(ctx, "shellcheck", args...)
+	cmd := plugin.CommandContext(ctx, "shellcheck", args...)
 	out, err := cmd.Output()
 	if err != nil {
 		if len(out) == 0 {
-			return nil, fmt.Errorf("shellcheck execution failed: %w", err)
+			return nil, plugin.WrapExecError("shellcheck", err)
 		}
 	}
 
@@ -80,7 +81,7 @@ type shellcheckResult struct {
 
 func parseShellcheckOutput(data []byte) ([]models.Finding, error) {
 	var results []shellcheckResult
-	if err := json.Unmarshal(data, &results); err != nil {
+	if err := json.Unmarshal(plugin.ExtractJSON(data), &results); err != nil {
 		return nil, fmt.Errorf("failed to parse shellcheck output: %w", err)
 	}
 

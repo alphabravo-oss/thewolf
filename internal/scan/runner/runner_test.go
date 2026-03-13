@@ -479,7 +479,7 @@ func TestRun(t *testing.T) {
 			Concurrency: 1,
 			Timeout:     5 * time.Second,
 			OnToolStart: func(name string) { started = true },
-			OnToolDone:  func(name string, n int, e error) { done = true },
+			OnToolDone:  func(name string, findings []models.Finding, e error) { done = true },
 		})
 
 		if err != nil {

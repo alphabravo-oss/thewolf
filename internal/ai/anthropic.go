@@ -124,6 +124,10 @@ type anthropicResponse struct {
 		Type string `json:"type"`
 		Text string `json:"text"`
 	} `json:"content"`
+	Usage *struct {
+		InputTokens  int `json:"input_tokens"`
+		OutputTokens int `json:"output_tokens"`
+	} `json:"usage"`
 	Error *struct {
 		Type    string `json:"type"`
 		Message string `json:"message"`
@@ -166,32 +170,32 @@ func (p *AnthropicProvider) sendWithSystem(ctx context.Context, prompt string, m
 
 	httpResp, err := p.httpClient.Do(httpReq)
 	if err != nil {
-		p.emitLog(prompt, "", err.Error(), start)
+		p.emitLog(prompt, "", err.Error(), start, 0, 0, 0)
 		return "", fmt.Errorf("http request: %w", err)
 	}
 	defer httpResp.Body.Close()
 
 	respBytes, err := io.ReadAll(httpResp.Body)
 	if err != nil {
-		p.emitLog(prompt, "", err.Error(), start)
+		p.emitLog(prompt, "", err.Error(), start, 0, 0, 0)
 		return "", fmt.Errorf("read response: %w", err)
 	}
 
 	if httpResp.StatusCode != http.StatusOK {
 		errMsg := fmt.Sprintf("API returned status %d: %s", httpResp.StatusCode, string(respBytes))
-		p.emitLog(prompt, "", errMsg, start)
+		p.emitLog(prompt, "", errMsg, start, 0, 0, 0)
 		return "", fmt.Errorf("%s", errMsg)
 	}
 
 	var apiResp anthropicResponse
 	if err := json.Unmarshal(respBytes, &apiResp); err != nil {
-		p.emitLog(prompt, string(respBytes), err.Error(), start)
+		p.emitLog(prompt, string(respBytes), err.Error(), start, 0, 0, 0)
 		return "", fmt.Errorf("unmarshal response: %w", err)
 	}
 
 	if apiResp.Error != nil {
 		errMsg := fmt.Sprintf("API error (%s): %s", apiResp.Error.Type, apiResp.Error.Message)
-		p.emitLog(prompt, "", errMsg, start)
+		p.emitLog(prompt, "", errMsg, start, 0, 0, 0)
 		return "", fmt.Errorf("%s", errMsg)
 	}
 
@@ -203,16 +207,24 @@ func (p *AnthropicProvider) sendWithSystem(ctx context.Context, prompt string, m
 	}
 
 	if text.Len() == 0 {
-		p.emitLog(prompt, "", "empty response from Anthropic API", start)
+		p.emitLog(prompt, "", "empty response from Anthropic API", start, 0, 0, 0)
 		return "", fmt.Errorf("empty response from Anthropic API")
 	}
 
 	result := text.String()
-	p.emitLog(prompt, result, "", start)
+
+	promptTokens := EstimateTokens(prompt)
+	responseTokens := EstimateTokens(result)
+	if apiResp.Usage != nil {
+		promptTokens = apiResp.Usage.InputTokens
+		responseTokens = apiResp.Usage.OutputTokens
+	}
+
+	p.emitLog(prompt, result, "", start, promptTokens, responseTokens, 0)
 	return result, nil
 }
 
-func (p *AnthropicProvider) emitLog(prompt, response, errMsg string, start time.Time) {
+func (p *AnthropicProvider) emitLog(prompt, response, errMsg string, start time.Time, promptTokens, responseTokens int, cost float64) {
 	if p.logCallback == nil {
 		return
 	}
@@ -223,10 +235,12 @@ func (p *AnthropicProvider) emitLog(prompt, response, errMsg string, start time.
 		Response:       response,
 		Error:          errMsg,
 		DurationMs:     time.Since(start).Milliseconds(),
-		PromptTokens:   EstimateTokens(prompt),
-		ResponseTokens: EstimateTokens(response),
+		PromptTokens:   promptTokens,
+		ResponseTokens: responseTokens,
+		CostUSD:        cost,
 	})
 }
+
 
 // ---------- Shared prompt builders ----------
 

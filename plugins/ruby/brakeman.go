@@ -29,17 +29,22 @@ func (p *BrakemanPlugin) CheckAvailable() bool {
 }
 
 func (p *BrakemanPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
+	if !plugin.HasFile(opts.RepoPath, "Gemfile") {
+		plugin.Skipf(opts.OnOutput, "brakeman", "no Gemfile found — not a Ruby project. Brakeman requires a Rails/Ruby application.")
+		return nil, nil
+	}
+
 	if opts.Timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, opts.Timeout)
 		defer cancel()
 	}
 
-	cmd := exec.CommandContext(ctx, "brakeman", "-f", "json", "-q", opts.RepoPath)
+	cmd := plugin.CommandContext(ctx, "brakeman", "-f", "json", "-q", opts.RepoPath)
 	out, err := cmd.Output()
 	if err != nil {
 		if len(out) == 0 {
-			return nil, fmt.Errorf("brakeman execution failed: %w", err)
+			return nil, plugin.WrapExecError("brakeman", err)
 		}
 	}
 
@@ -64,7 +69,7 @@ type brakemanWarning struct {
 
 func parseBrakemanOutput(data []byte) ([]models.Finding, error) {
 	var output brakemanOutput
-	if err := json.Unmarshal(data, &output); err != nil {
+	if err := json.Unmarshal(plugin.ExtractJSON(data), &output); err != nil {
 		return nil, fmt.Errorf("failed to parse brakeman output: %w", err)
 	}
 

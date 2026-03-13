@@ -27,6 +27,11 @@ func (p *ValePlugin) CheckAvailable() bool {
 }
 
 func (p *ValePlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
+	if !plugin.HasFilesWithExtension(opts.RepoPath, "md", "rst", "txt") {
+		plugin.Skipf(opts.OnOutput, "vale", "no documentation files (*.md, *.rst) found. Add Markdown or reStructuredText files to enable prose linting.")
+		return nil, nil
+	}
+
 	timeout := opts.Timeout
 	if timeout > 0 {
 		var cancel context.CancelFunc
@@ -35,11 +40,11 @@ func (p *ValePlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]mo
 	}
 
 	args := []string{"--output", "JSON", opts.RepoPath}
-	cmd := exec.CommandContext(ctx, "vale", args...)
+	cmd := plugin.CommandContext(ctx, "vale", args...)
 	out, err := cmd.Output()
 	if err != nil {
 		if len(out) == 0 {
-			return nil, fmt.Errorf("vale execution failed: %w", err)
+			return nil, plugin.WrapExecError("vale", err)
 		}
 	}
 
@@ -63,7 +68,7 @@ type valeAlert struct {
 
 func parseValeOutput(data []byte) ([]models.Finding, error) {
 	var output map[string][]valeAlert
-	if err := json.Unmarshal(data, &output); err != nil {
+	if err := json.Unmarshal(plugin.ExtractJSON(data), &output); err != nil {
 		return nil, fmt.Errorf("failed to parse vale output: %w", err)
 	}
 

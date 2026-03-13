@@ -36,8 +36,10 @@ func (p *SemgrepPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([
 		defer cancel()
 	}
 
-	args := []string{"scan", "--json", opts.RepoPath}
-	cmd := exec.CommandContext(ctx, "semgrep", args...)
+	args := []string{"scan", "--json", "--jobs", "1"}
+	args = append(args, plugin.ExcludeArgs("--exclude")...)
+	args = append(args, opts.RepoPath)
+	cmd := plugin.CommandContext(ctx, "semgrep", args...)
 
 	var stdout bytes.Buffer
 	cmd.Stdout = &stdout
@@ -99,7 +101,7 @@ type semgrepResult struct {
 
 func parseSemgrepOutput(data []byte) ([]models.Finding, error) {
 	var output semgrepOutput
-	if err := json.Unmarshal(data, &output); err != nil {
+	if err := json.Unmarshal(plugin.ExtractJSON(data), &output); err != nil {
 		return nil, fmt.Errorf("failed to parse semgrep output: %w", err)
 	}
 

@@ -31,6 +31,9 @@ type langConfig struct {
 	// testToSource maps a test file path (relative) to a candidate source file
 	// path (relative). Returns "" if no mapping can be derived.
 	testToSource func(rel string) string
+	// packageLevel indicates that any test file in a directory covers all
+	// source files in that directory (e.g. Go packages).
+	packageLevel bool
 }
 
 var languages = []langConfig{
@@ -43,6 +46,10 @@ var languages = []langConfig{
 	swiftLang(),
 	phpLang(),
 	cLang(),
+	csharpLang(),
+	scalaLang(),
+	dartLang(),
+	elixirLang(),
 }
 
 // Analyze walks repoPath, classifies files by language, identifies test files,
@@ -126,6 +133,32 @@ func Analyze(repoPath string) (*CoverageReport, error) {
 		}
 	}
 
+	// Package-level coverage: if a language uses package-level testing,
+	// any test file in a directory covers ALL source files in that directory.
+	testDirsByLang := make(map[string]map[string]bool) // lang -> set of dirs with tests
+	for _, tf := range testFiles {
+		for _, lc := range languages {
+			if lc.name == tf.lang && lc.packageLevel {
+				if testDirsByLang[tf.lang] == nil {
+					testDirsByLang[tf.lang] = make(map[string]bool)
+				}
+				testDirsByLang[tf.lang][filepath.Dir(tf.rel)] = true
+				break
+			}
+		}
+	}
+
+	for _, sf := range sourceFiles {
+		if coveredSources[sf.rel] {
+			continue // already covered by 1:1 mapping
+		}
+		if dirs, ok := testDirsByLang[sf.lang]; ok {
+			if dirs[filepath.Dir(sf.rel)] {
+				coveredSources[sf.rel] = true
+			}
+		}
+	}
+
 	// Build per-language stats.
 	langSourceFiles := make(map[string][]string)
 	langTestCount := make(map[string]int)
@@ -183,8 +216,9 @@ func hasLangExtension(base string, exts map[string]bool) bool {
 
 func goLang() langConfig {
 	return langConfig{
-		name:       "go",
-		extensions: map[string]bool{"go": true},
+		name:         "go",
+		extensions:   map[string]bool{"go": true},
+		packageLevel: true,
 		isTest: func(rel, base string) bool {
 			return strings.HasSuffix(base, "_test.go")
 		},
@@ -350,17 +384,23 @@ func javaLang() langConfig {
 				return true
 			}
 			return strings.HasSuffix(base, "Test.java") || strings.HasSuffix(base, "Tests.java") ||
+				strings.HasSuffix(base, "IT.java") || strings.HasSuffix(base, "ITCase.java") ||
 				strings.HasSuffix(base, "Test.kt") || strings.HasSuffix(base, "Tests.kt")
 		},
 		testToSource: func(rel string) string {
 			base := filepath.Base(rel)
 			dir := filepath.Dir(rel)
 
+			javaSuffixes := []string{
+				"Tests.java", "Test.java", "ITCase.java", "IT.java",
+				"Tests.kt", "Test.kt",
+			}
+
 			// src/test/java/com/foo/BarTest.java -> src/main/java/com/foo/Bar.java
 			if strings.Contains(rel, "src/test/") {
 				srcDir := strings.Replace(dir, "src/test/", "src/main/", 1)
 				srcBase := base
-				for _, suf := range []string{"Tests.java", "Test.java", "Tests.kt", "Test.kt"} {
+				for _, suf := range javaSuffixes {
 					if strings.HasSuffix(base, suf) {
 						ext := filepath.Ext(suf) // .java or .kt
 						srcBase = strings.TrimSuffix(base, suf) + ext
@@ -370,7 +410,7 @@ func javaLang() langConfig {
 				return filepath.ToSlash(filepath.Join(srcDir, srcBase))
 			}
 			// FooTest.java -> Foo.java
-			for _, suf := range []string{"Tests.java", "Test.java", "Tests.kt", "Test.kt"} {
+			for _, suf := range javaSuffixes {
 				if strings.HasSuffix(base, suf) {
 					ext := filepath.Ext(suf)
 					src := strings.TrimSuffix(base, suf) + ext
@@ -429,6 +469,136 @@ func phpLang() langConfig {
 				src := strings.TrimSuffix(base, "Test.php") + ".php"
 				srcDir := strings.Replace(dir, "tests", "src", 1)
 				srcDir = strings.Replace(srcDir, "test", "src", 1)
+				return filepath.ToSlash(filepath.Join(srcDir, src))
+			}
+			return ""
+		},
+	}
+}
+
+func csharpLang() langConfig {
+	return langConfig{
+		name:       "csharp",
+		extensions: map[string]bool{"cs": true},
+		isTest: func(rel, base string) bool {
+			name := strings.TrimSuffix(base, ".cs")
+			if strings.HasSuffix(name, "Tests") || strings.HasSuffix(name, "Test") {
+				return true
+			}
+			// .NET test project directories: MyProject.Tests/, Tests/, Test/
+			return strings.Contains(rel, ".Tests/") || strings.Contains(rel, ".Test/") ||
+				strings.Contains(rel, "Tests/") || strings.Contains(rel, "Test/")
+		},
+		testToSource: func(rel string) string {
+			base := filepath.Base(rel)
+			dir := filepath.Dir(rel)
+
+			// FooTests.cs -> Foo.cs, FooTest.cs -> Foo.cs
+			for _, suf := range []string{"Tests.cs", "Test.cs"} {
+				if strings.HasSuffix(base, suf) {
+					src := strings.TrimSuffix(base, suf) + ".cs"
+					// Map test project dir to source project dir:
+					// MyProject.Tests/ -> MyProject/
+					srcDir := strings.Replace(dir, ".Tests", "", 1)
+					srcDir = strings.Replace(srcDir, ".Test", "", 1)
+					// Also handle tests/ -> src/ layout
+					srcDir = strings.Replace(srcDir, "tests", "src", 1)
+					srcDir = strings.Replace(srcDir, "test", "src", 1)
+					return filepath.ToSlash(filepath.Join(srcDir, src))
+				}
+			}
+			return ""
+		},
+	}
+}
+
+func scalaLang() langConfig {
+	return langConfig{
+		name:       "scala",
+		extensions: map[string]bool{"scala": true},
+		isTest: func(rel, base string) bool {
+			if strings.Contains(rel, "src/test/") {
+				return true
+			}
+			name := strings.TrimSuffix(base, ".scala")
+			return strings.HasSuffix(name, "Test") || strings.HasSuffix(name, "Tests") ||
+				strings.HasSuffix(name, "Spec") || strings.HasSuffix(name, "Suite")
+		},
+		testToSource: func(rel string) string {
+			base := filepath.Base(rel)
+			dir := filepath.Dir(rel)
+
+			scalaSuffixes := []string{"Tests.scala", "Test.scala", "Spec.scala", "Suite.scala"}
+
+			// src/test/scala/com/foo/BarSpec.scala -> src/main/scala/com/foo/Bar.scala
+			if strings.Contains(rel, "src/test/") {
+				srcDir := strings.Replace(dir, "src/test/", "src/main/", 1)
+				srcBase := base
+				for _, suf := range scalaSuffixes {
+					if strings.HasSuffix(base, suf) {
+						srcBase = strings.TrimSuffix(base, suf) + ".scala"
+						break
+					}
+				}
+				return filepath.ToSlash(filepath.Join(srcDir, srcBase))
+			}
+			// FooSpec.scala -> Foo.scala (same dir)
+			for _, suf := range scalaSuffixes {
+				if strings.HasSuffix(base, suf) {
+					src := strings.TrimSuffix(base, suf) + ".scala"
+					return filepath.ToSlash(filepath.Join(dir, src))
+				}
+			}
+			return ""
+		},
+	}
+}
+
+func dartLang() langConfig {
+	return langConfig{
+		name:       "dart",
+		extensions: map[string]bool{"dart": true},
+		isTest: func(rel, base string) bool {
+			if strings.HasSuffix(base, "_test.dart") {
+				return true
+			}
+			return strings.Contains(rel, "test/")
+		},
+		testToSource: func(rel string) string {
+			base := filepath.Base(rel)
+			dir := filepath.Dir(rel)
+
+			if strings.HasSuffix(base, "_test.dart") {
+				src := strings.TrimSuffix(base, "_test.dart") + ".dart"
+				// test/ -> lib/ is the standard Dart/Flutter convention
+				srcDir := strings.Replace(dir, "test", "lib", 1)
+				return filepath.ToSlash(filepath.Join(srcDir, src))
+			}
+			// Files in test/ without _test suffix -> try lib/ mapping
+			if strings.Contains(rel, "test/") {
+				srcDir := strings.Replace(dir, "test", "lib", 1)
+				return filepath.ToSlash(filepath.Join(srcDir, base))
+			}
+			return ""
+		},
+	}
+}
+
+func elixirLang() langConfig {
+	return langConfig{
+		name:       "elixir",
+		extensions: map[string]bool{"ex": true, "exs": true},
+		isTest: func(rel, base string) bool {
+			return strings.HasSuffix(base, "_test.exs")
+		},
+		testToSource: func(rel string) string {
+			base := filepath.Base(rel)
+			dir := filepath.Dir(rel)
+
+			// test/foo_test.exs -> lib/foo.ex
+			if strings.HasSuffix(base, "_test.exs") {
+				src := strings.TrimSuffix(base, "_test.exs") + ".ex"
+				srcDir := strings.Replace(dir, "test", "lib", 1)
 				return filepath.ToSlash(filepath.Join(srcDir, src))
 			}
 			return ""

@@ -84,20 +84,41 @@ ui/                Next.js frontend application
 configs/           Default configuration
 ```
 
-## Supported Tools
+## Supported Languages & Tools
 
-| Category | Tools |
-|----------|-------|
-| **General Security** | Semgrep, Trivy, Gitleaks, TruffleHog, Grype, OSV-Scanner, Detect-Secrets |
-| **Go** | Gosec, Staticcheck, Govulncheck |
-| **Python** | Bandit, Ruff, Mypy, Pip-audit, Radon, Vulture |
-| **JavaScript** | ESLint, npm-audit |
-| **Rust** | Clippy |
-| **Containers** | Hadolint, Dockle, Checkov |
-| **Infrastructure** | TFLint, Kubescape, Kube-linter |
-| **Additional** | CodeQL, PMD, ShellCheck, ScanCode |
-| **SBOM** | Syft |
-| **Docs** | Spectral, Vale |
+### Language-Specific Analysis Tools
+
+| Language | Analysis Tools | Test Coverage Detection |
+|----------|---------------|----------------------|
+| **Go** | Gosec, Staticcheck, Govulncheck | `*_test.go` — package-level (any test covers all source files in the directory) |
+| **Python** | Bandit, Ruff, Mypy, Pip-audit, Radon, Vulture | `test_*.py`, `*_test.py`, `tests/` directory |
+| **JavaScript / TypeScript** | ESLint, npm-audit | `.test.{js,ts,jsx,tsx}`, `.spec.{js,ts,jsx,tsx}`, `__tests__/` directory |
+| **Rust** | Clippy | `*_test.rs`, `test_*`, `tests/` directory |
+| **Java / Kotlin** | Infer, PMD | `*Test.java`, `*Tests.java`, `*IT.java`, `*ITCase.java`, `src/test/` → `src/main/` mapping |
+| **C / C++** | Cppcheck, Infer | `*_test.{c,cpp,cc}`, `test_*`, `test/` → `src/` mapping |
+| **C#** | cross-language tools only | `*Test.cs`, `*Tests.cs`, `.Tests/` → project mapping |
+| **Ruby** | Brakeman, RuboCop | `*_spec.rb`, `*_test.rb`, `spec/` → `lib/` mapping |
+| **Swift** | SwiftLint | `*Test.swift`, `*Tests.swift`, `Tests/` → `Sources/` mapping |
+| **PHP** | PHPStan | `*Test.php`, `tests/` → `src/` mapping |
+| **Scala** | cross-language tools only | `*Test.scala`, `*Spec.scala`, `*Suite.scala`, `src/test/` → `src/main/` mapping |
+| **Dart** | cross-language tools only | `*_test.dart`, `test/` → `lib/` mapping |
+| **Elixir** | cross-language tools only | `*_test.exs`, `test/` → `lib/` mapping |
+| **SQL** | SQLFluff | — |
+| **Shell** | ShellCheck | — |
+
+### Cross-Language Tools
+
+| Category | Tools | Description |
+|----------|-------|-------------|
+| **SAST** | Semgrep, CodeQL | Pattern-based and semantic static analysis across all languages |
+| **SCA** | Trivy, Grype, OSV-Scanner | Dependency vulnerability scanning |
+| **Secrets** | Gitleaks, TruffleHog, Detect-Secrets | Secret and credential detection in source code |
+| **Containers** | Hadolint, Dockle, Checkov | Dockerfile linting, image checks, IaC security |
+| **Infrastructure** | TFLint, Kubescape, Kube-linter | Terraform and Kubernetes configuration scanning |
+| **SBOM** | Syft | Software bill of materials generation |
+| **License** | ScanCode | License compliance scanning |
+| **Docs** | Spectral, Vale | API spec linting and documentation style checking |
+| **DAST** | Nuclei | Template-based dynamic vulnerability scanning |
 
 ## Configuration
 

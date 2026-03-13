@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"strings"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
@@ -33,11 +34,19 @@ func (p *KubescapePlugin) Execute(ctx context.Context, opts models.ExecuteOpts) 
 		defer cancel()
 	}
 
-	cmd := exec.CommandContext(ctx, "kubescape", "scan", "--format", "json", "--output", "-", opts.RepoPath)
+	cmd := plugin.CommandContext(ctx, "kubescape", "scan", "--format", "json", "--output", "-", opts.RepoPath)
 	out, err := cmd.Output()
 	if err != nil {
+		// "no resources found" is not an error — it just means the repo has no K8s manifests.
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			stderr := string(exitErr.Stderr)
+			if strings.Contains(stderr, "no resources found") {
+				plugin.Skipf(opts.OnOutput, "kubescape", "no Kubernetes manifests found in this repository. Add YAML files with Kubernetes resources (Deployments, Services, etc.) to enable scanning.")
+				return nil, nil
+			}
+		}
 		if len(out) == 0 {
-			return nil, fmt.Errorf("kubescape execution failed: %w", err)
+			return nil, plugin.WrapExecError("kubescape", err)
 		}
 	}
 
@@ -64,7 +73,7 @@ type kubescapeControlResult struct {
 
 func parseKubescapeOutput(data []byte) ([]models.Finding, error) {
 	var output kubescapeOutput
-	if err := json.Unmarshal(data, &output); err != nil {
+	if err := json.Unmarshal(plugin.ExtractJSON(data), &output); err != nil {
 		return nil, fmt.Errorf("failed to parse kubescape output: %w", err)
 	}
 

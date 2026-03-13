@@ -135,6 +135,7 @@ func NewServer(store db.Store, addr string) *Server {
 				r.Post("/", routes.CreateScan)
 				r.Get("/{id}", routes.GetScan)
 				r.Get("/{id}/findings", routes.GetScanFindings)
+				r.Get("/{id}/findings/stats", routes.GetScanFindingStats)
 				r.Get("/{id}/stream", routes.StreamScan)
 				r.Get("/{id}/report", routes.GetScanReport)
 				r.Get("/{id}/sarif", routes.GetScanSARIF)

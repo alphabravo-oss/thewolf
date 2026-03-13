@@ -29,17 +29,22 @@ func (p *RubocopPlugin) CheckAvailable() bool {
 }
 
 func (p *RubocopPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
+	if !plugin.HasFilesWithExtension(opts.RepoPath, "rb") {
+		plugin.Skipf(opts.OnOutput, "rubocop", "no Ruby files (*.rb) found. Add Ruby source files to enable linting.")
+		return nil, nil
+	}
+
 	if opts.Timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, opts.Timeout)
 		defer cancel()
 	}
 
-	cmd := exec.CommandContext(ctx, "rubocop", "--format", "json", opts.RepoPath)
+	cmd := plugin.CommandContext(ctx, "rubocop", "--format", "json", opts.RepoPath)
 	out, err := cmd.Output()
 	if err != nil {
 		if len(out) == 0 {
-			return nil, fmt.Errorf("rubocop execution failed: %w", err)
+			return nil, plugin.WrapExecError("rubocop", err)
 		}
 	}
 
@@ -68,7 +73,7 @@ type rubocopOffense struct {
 
 func parseRubocopOutput(data []byte) ([]models.Finding, error) {
 	var output rubocopOutput
-	if err := json.Unmarshal(data, &output); err != nil {
+	if err := json.Unmarshal(plugin.ExtractJSON(data), &output); err != nil {
 		return nil, fmt.Errorf("failed to parse rubocop output: %w", err)
 	}
 

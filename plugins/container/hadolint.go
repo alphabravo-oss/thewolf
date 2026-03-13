@@ -50,13 +50,14 @@ func (p *HadolintPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) (
 		}
 	}
 	if len(unique) == 0 {
-		return nil, nil // No Dockerfiles to lint.
+		plugin.Skipf(opts.OnOutput, "hadolint", "no Dockerfiles found (searched for Dockerfile* in all directories). Add a Dockerfile to enable linting.")
+		return nil, nil
 	}
 
 	var allFindings []models.Finding
 	for _, df := range unique {
 		args := []string{"--format", "json", df}
-		cmd := exec.CommandContext(ctx, "hadolint", args...)
+		cmd := plugin.CommandContext(ctx, "hadolint", args...)
 		out, err := cmd.Output()
 		if err != nil && len(out) == 0 {
 			continue // Skip files that hadolint can't process.
@@ -81,7 +82,7 @@ type hadolintResult struct {
 
 func parseHadolintOutput(data []byte) ([]models.Finding, error) {
 	var results []hadolintResult
-	if err := json.Unmarshal(data, &results); err != nil {
+	if err := json.Unmarshal(plugin.ExtractJSON(data), &results); err != nil {
 		return nil, fmt.Errorf("failed to parse hadolint output: %w", err)
 	}
 

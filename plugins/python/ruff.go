@@ -28,18 +28,23 @@ func (p *RuffPlugin) CheckAvailable() bool {
 }
 
 func (p *RuffPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
+	if !plugin.HasFilesWithExtension(opts.RepoPath, "py") {
+		plugin.Skipf(opts.OnOutput, "ruff", "no Python files (*.py) found. Add Python source files to enable linting.")
+		return nil, nil
+	}
+
 	if opts.Timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, opts.Timeout)
 		defer cancel()
 	}
 
-	cmd := exec.CommandContext(ctx, "ruff", "check", opts.RepoPath, "--output-format", "json")
+	cmd := plugin.CommandContext(ctx, "ruff", "check", opts.RepoPath, "--output-format", "json")
 	out, err := cmd.Output()
 	if err != nil {
 		// Ruff exits non-zero when findings exist; only fail if no output.
 		if len(out) == 0 {
-			return nil, fmt.Errorf("ruff execution failed: %w", err)
+			return nil, plugin.WrapExecError("ruff", err)
 		}
 	}
 
@@ -61,7 +66,7 @@ type ruffResult struct {
 
 func parseRuffOutput(data []byte) ([]models.Finding, error) {
 	var results []ruffResult
-	if err := json.Unmarshal(data, &results); err != nil {
+	if err := json.Unmarshal(plugin.ExtractJSON(data), &results); err != nil {
 		return nil, fmt.Errorf("failed to parse ruff output: %w", err)
 	}
 

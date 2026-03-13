@@ -32,18 +32,23 @@ func (p *VulturePlugin) CheckAvailable() bool {
 var vultureLineRegex = regexp.MustCompile(`^(.+?):(\d+): (.+?) \((\d+)% confidence\)$`)
 
 func (p *VulturePlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
+	if !plugin.HasFilesWithExtension(opts.RepoPath, "py") {
+		plugin.Skipf(opts.OnOutput, "vulture", "no Python files (*.py) found. Add Python source files to enable dead code detection.")
+		return nil, nil
+	}
+
 	if opts.Timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, opts.Timeout)
 		defer cancel()
 	}
 
-	cmd := exec.CommandContext(ctx, "vulture", opts.RepoPath, "--min-confidence", "80")
+	cmd := plugin.CommandContext(ctx, "vulture", opts.RepoPath, "--min-confidence", "80")
 	out, err := cmd.Output()
 	if err != nil {
 		// Vulture exits non-zero when dead code is found; only fail if no output.
 		if len(out) == 0 {
-			return nil, fmt.Errorf("vulture execution failed: %w", err)
+			return nil, plugin.WrapExecError("vulture", err)
 		}
 	}
 

@@ -34,12 +34,24 @@ func (p *PMDPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]mod
 		defer cancel()
 	}
 
-	args := []string{"check", "--format", "json", "-d", opts.RepoPath}
-	cmd := exec.CommandContext(ctx, "pmd", args...)
+	args := []string{
+		"check",
+		"--format", "json",
+		"-d", opts.RepoPath,
+		"--rulesets", "rulesets/java/quickstart.xml,rulesets/ecmascript/quickstart.xml",
+		"--no-progress",
+	}
+	cmd := plugin.CommandContext(ctx, "pmd", args...)
 	out, err := cmd.Output()
 	if err != nil {
+		// PMD exits with code 4 when violations are found — that's normal.
+		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 4 {
+			if len(out) > 0 {
+				return parsePMDOutput(out)
+			}
+		}
 		if len(out) == 0 {
-			return nil, fmt.Errorf("pmd execution failed: %w", err)
+			return nil, plugin.WrapExecError("pmd", err)
 		}
 	}
 
@@ -67,7 +79,7 @@ type pmdViolation struct {
 
 func parsePMDOutput(data []byte) ([]models.Finding, error) {
 	var output pmdOutput
-	if err := json.Unmarshal(data, &output); err != nil {
+	if err := json.Unmarshal(plugin.ExtractJSON(data), &output); err != nil {
 		return nil, fmt.Errorf("failed to parse pmd output: %w", err)
 	}
 

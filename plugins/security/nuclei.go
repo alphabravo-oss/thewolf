@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"os/exec"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
@@ -43,11 +42,11 @@ func (p *NucleiPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]
 		args = append(args, "-l", opts.RepoPath)
 	}
 
-	cmd := exec.CommandContext(ctx, "nuclei", args...)
+	cmd := plugin.CommandContext(ctx, "nuclei", args...)
 	out, err := cmd.Output()
 	if err != nil {
 		if len(out) == 0 {
-			return nil, fmt.Errorf("nuclei execution failed: %w", err)
+			return nil, plugin.WrapExecError("nuclei", err)
 		}
 	}
 

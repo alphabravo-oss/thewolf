@@ -29,17 +29,22 @@ func (p *SwiftLintPlugin) CheckAvailable() bool {
 }
 
 func (p *SwiftLintPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
+	if !plugin.HasFilesWithExtension(opts.RepoPath, "swift") {
+		plugin.Skipf(opts.OnOutput, "swiftlint", "no Swift files (*.swift) found. Add Swift source files to enable linting.")
+		return nil, nil
+	}
+
 	if opts.Timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, opts.Timeout)
 		defer cancel()
 	}
 
-	cmd := exec.CommandContext(ctx, "swiftlint", "lint", "--reporter", "json", "--path", opts.RepoPath)
+	cmd := plugin.CommandContext(ctx, "swiftlint", "lint", "--reporter", "json", "--path", opts.RepoPath)
 	out, err := cmd.Output()
 	if err != nil {
 		if len(out) == 0 {
-			return nil, fmt.Errorf("swiftlint execution failed: %w", err)
+			return nil, plugin.WrapExecError("swiftlint", err)
 		}
 	}
 
@@ -57,7 +62,7 @@ type swiftlintViolation struct {
 
 func parseSwiftLintOutput(data []byte) ([]models.Finding, error) {
 	var violations []swiftlintViolation
-	if err := json.Unmarshal(data, &violations); err != nil {
+	if err := json.Unmarshal(plugin.ExtractJSON(data), &violations); err != nil {
 		return nil, fmt.Errorf("failed to parse swiftlint output: %w", err)
 	}
 

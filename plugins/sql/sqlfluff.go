@@ -29,17 +29,22 @@ func (p *SQLFluffPlugin) CheckAvailable() bool {
 }
 
 func (p *SQLFluffPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
+	if !plugin.HasFilesWithExtension(opts.RepoPath, "sql") {
+		plugin.Skipf(opts.OnOutput, "sqlfluff", "no SQL files (*.sql) found. Add SQL files to enable linting.")
+		return nil, nil
+	}
+
 	if opts.Timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, opts.Timeout)
 		defer cancel()
 	}
 
-	cmd := exec.CommandContext(ctx, "sqlfluff", "lint", "--format", "json", opts.RepoPath)
+	cmd := plugin.CommandContext(ctx, "sqlfluff", "lint", "--format", "json", opts.RepoPath)
 	out, err := cmd.Output()
 	if err != nil {
 		if len(out) == 0 {
-			return nil, fmt.Errorf("sqlfluff execution failed: %w", err)
+			return nil, plugin.WrapExecError("sqlfluff", err)
 		}
 	}
 
@@ -60,7 +65,7 @@ type sqlfluffViolation struct {
 
 func parseSQLFluffOutput(data []byte) ([]models.Finding, error) {
 	var results []sqlfluffResult
-	if err := json.Unmarshal(data, &results); err != nil {
+	if err := json.Unmarshal(plugin.ExtractJSON(data), &results); err != nil {
 		return nil, fmt.Errorf("failed to parse sqlfluff output: %w", err)
 	}
 

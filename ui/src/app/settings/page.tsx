@@ -347,12 +347,17 @@ export default function SettingsPage() {
 
       <Tabs defaultValue="api-keys">
         <TabsList>
+          <TabsTrigger value="scan">Scan</TabsTrigger>
           <TabsTrigger value="api-keys">API Keys</TabsTrigger>
           <TabsTrigger value="git">Git Credentials</TabsTrigger>
           <TabsTrigger value="plugins">Plugins</TabsTrigger>
           <TabsTrigger value="ai">AI Assessment</TabsTrigger>
           <TabsTrigger value="profile">Profile</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="scan" className="space-y-4">
+          <ScanSettingsSection />
+        </TabsContent>
 
         <TabsContent value="api-keys" className="space-y-4">
           <Card>
@@ -846,6 +851,62 @@ const PROMPT_SECTIONS: { key: PromptSection; label: string }[] = [
   { key: "scoring_criteria", label: "Scoring Criteria" },
   { key: "output_instructions", label: "Output Instructions" },
 ];
+
+function ScanSettingsSection() {
+  const queryClient = useQueryClient();
+
+  const { data: settings = {} } = useQuery({
+    queryKey: ["settings"],
+    queryFn: () => api.get<AppSettings>("/settings").then((r) => r.data ?? {}),
+    retry: false,
+  });
+
+  const settingsMutation = useMutation({
+    mutationFn: (patch: AppSettings) => api.put("/settings", patch),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["settings"] }),
+  });
+
+  const concurrency = parseInt(settings.scan_concurrency || "8", 10) || 8;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-sm">Scan Execution</CardTitle>
+        <CardDescription>
+          Control how scans run across your repositories.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <div className="space-y-2">
+          <Label htmlFor="scan-concurrency">Tool Concurrency</Label>
+          <p className="text-xs text-muted-foreground">
+            Maximum number of analysis tools to run in parallel during a scan.
+            Lower values reduce system load; higher values complete scans faster.
+          </p>
+          <div className="flex items-center gap-3">
+            <Input
+              id="scan-concurrency"
+              type="number"
+              min={1}
+              max={32}
+              value={concurrency}
+              onChange={(e) => {
+                const val = parseInt(e.target.value, 10);
+                if (val >= 1 && val <= 32) {
+                  settingsMutation.mutate({ scan_concurrency: String(val) });
+                }
+              }}
+              className="w-24"
+            />
+            <span className="text-sm text-muted-foreground">
+              tools at a time (default: 8)
+            </span>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 interface DefaultPrompts {
   tool_assess: Record<PromptSection, string>;

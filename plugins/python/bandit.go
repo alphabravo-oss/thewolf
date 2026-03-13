@@ -28,17 +28,22 @@ func (p *BanditPlugin) CheckAvailable() bool {
 }
 
 func (p *BanditPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
+	if !plugin.HasFilesWithExtension(opts.RepoPath, "py") {
+		plugin.Skipf(opts.OnOutput, "bandit", "no Python files (*.py) found. Add Python source files to enable security analysis.")
+		return nil, nil
+	}
+
 	if opts.Timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, opts.Timeout)
 		defer cancel()
 	}
 
-	cmd := exec.CommandContext(ctx, "bandit", "-r", opts.RepoPath, "-f", "json", "--exit-zero")
+	cmd := plugin.CommandContext(ctx, "bandit", "-r", opts.RepoPath, "-f", "json", "--exit-zero")
 	out, err := cmd.Output()
 	if err != nil {
 		if len(out) == 0 {
-			return nil, fmt.Errorf("bandit execution failed: %w", err)
+			return nil, plugin.WrapExecError("bandit", err)
 		}
 	}
 
@@ -66,7 +71,7 @@ type banditResult struct {
 
 func parseBanditOutput(data []byte) ([]models.Finding, error) {
 	var output banditOutput
-	if err := json.Unmarshal(data, &output); err != nil {
+	if err := json.Unmarshal(plugin.ExtractJSON(data), &output); err != nil {
 		return nil, fmt.Errorf("failed to parse bandit output: %w", err)
 	}
 

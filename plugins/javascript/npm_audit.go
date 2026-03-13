@@ -29,18 +29,27 @@ func (p *NPMAuditPlugin) CheckAvailable() bool {
 }
 
 func (p *NPMAuditPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
+	jsDir := plugin.FindFile(opts.RepoPath, "package-lock.json")
+	if jsDir == "" {
+		jsDir = plugin.FindFile(opts.RepoPath, "package.json")
+	}
+	if jsDir == "" {
+		plugin.Skipf(opts.OnOutput, "npm-audit", "no package.json found in project or immediate subdirectories.")
+		return nil, nil
+	}
+
 	if opts.Timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, opts.Timeout)
 		defer cancel()
 	}
 
-	cmd := exec.CommandContext(ctx, "npm", "audit", "--json")
-	cmd.Dir = opts.RepoPath
+	cmd := plugin.CommandContext(ctx, "npm", "audit", "--json")
+	cmd.Dir = jsDir
 	out, err := cmd.Output()
 	if err != nil {
 		if len(out) == 0 {
-			return nil, fmt.Errorf("npm audit execution failed: %w", err)
+			return nil, plugin.WrapExecError("npm-audit", err)
 		}
 	}
 
@@ -66,7 +75,7 @@ type npmViaEntry struct {
 
 func parseNPMAuditOutput(data []byte) ([]models.Finding, error) {
 	var output npmAuditOutput
-	if err := json.Unmarshal(data, &output); err != nil {
+	if err := json.Unmarshal(plugin.ExtractJSON(data), &output); err != nil {
 		return nil, fmt.Errorf("failed to parse npm audit output: %w", err)
 	}
 

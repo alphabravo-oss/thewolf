@@ -27,6 +27,17 @@ func (p *SpectralPlugin) CheckAvailable() bool {
 }
 
 func (p *SpectralPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
+	hasSpec := plugin.HasFile(opts.RepoPath, "openapi.yaml") ||
+		plugin.HasFile(opts.RepoPath, "openapi.yml") ||
+		plugin.HasFile(opts.RepoPath, "openapi.json") ||
+		plugin.HasFile(opts.RepoPath, "swagger.yaml") ||
+		plugin.HasFile(opts.RepoPath, "swagger.yml") ||
+		plugin.HasFile(opts.RepoPath, "swagger.json")
+	if !hasSpec {
+		plugin.Skipf(opts.OnOutput, "spectral", "no OpenAPI/Swagger spec files found. Add an API specification file to enable linting.")
+		return nil, nil
+	}
+
 	timeout := opts.Timeout
 	if timeout > 0 {
 		var cancel context.CancelFunc
@@ -35,11 +46,11 @@ func (p *SpectralPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) (
 	}
 
 	args := []string{"lint", opts.RepoPath, "-f", "json"}
-	cmd := exec.CommandContext(ctx, "spectral", args...)
+	cmd := plugin.CommandContext(ctx, "spectral", args...)
 	out, err := cmd.Output()
 	if err != nil {
 		if len(out) == 0 {
-			return nil, fmt.Errorf("spectral execution failed: %w", err)
+			return nil, plugin.WrapExecError("spectral", err)
 		}
 	}
 
@@ -64,7 +75,7 @@ type spectralResult struct {
 
 func parseSpectralOutput(data []byte) ([]models.Finding, error) {
 	var results []spectralResult
-	if err := json.Unmarshal(data, &results); err != nil {
+	if err := json.Unmarshal(plugin.ExtractJSON(data), &results); err != nil {
 		return nil, fmt.Errorf("failed to parse spectral output: %w", err)
 	}
 

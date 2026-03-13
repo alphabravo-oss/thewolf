@@ -28,17 +28,22 @@ func (p *RadonPlugin) CheckAvailable() bool {
 }
 
 func (p *RadonPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
+	if !plugin.HasFilesWithExtension(opts.RepoPath, "py") {
+		plugin.Skipf(opts.OnOutput, "radon", "no Python files (*.py) found. Add Python source files to enable complexity analysis.")
+		return nil, nil
+	}
+
 	if opts.Timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, opts.Timeout)
 		defer cancel()
 	}
 
-	cmd := exec.CommandContext(ctx, "radon", "cc", opts.RepoPath, "-j")
+	cmd := plugin.CommandContext(ctx, "radon", "cc", opts.RepoPath, "-j")
 	out, err := cmd.Output()
 	if err != nil {
 		if len(out) == 0 {
-			return nil, fmt.Errorf("radon execution failed: %w", err)
+			return nil, plugin.WrapExecError("radon", err)
 		}
 	}
 
@@ -57,7 +62,7 @@ type radonBlock struct {
 
 func parseRadonOutput(data []byte) ([]models.Finding, error) {
 	var output map[string][]radonBlock
-	if err := json.Unmarshal(data, &output); err != nil {
+	if err := json.Unmarshal(plugin.ExtractJSON(data), &output); err != nil {
 		return nil, fmt.Errorf("failed to parse radon output: %w", err)
 	}
 

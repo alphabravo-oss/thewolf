@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -15,8 +15,11 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ClipboardCopy, Download } from "lucide-react";
 import { StatusBadge } from "@/components/status-badge";
 import { SeverityBadge } from "@/components/severity-badge";
 import { LoadingSpinner } from "@/components/loading-spinner";
@@ -43,6 +46,23 @@ function triggerDownload(path: string) {
   document.body.appendChild(a);
   a.click();
   a.remove();
+}
+
+async function fetchAndCopy(path: string): Promise<boolean> {
+  // Build an authenticated URL the same way triggerDownload does — this
+  // guarantees the token is always present regardless of cookie scope.
+  const token = getToken();
+  const separator = path.includes("?") ? "&" : "?";
+  const url = `${API_BASE}${path}${token ? `${separator}token=${encodeURIComponent(token)}` : ""}`;
+  try {
+    const res = await fetch(url, { credentials: "include" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const text = await res.text();
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function scoreColor(score: number): string {
@@ -172,6 +192,7 @@ function parseScanArrays(s: ScanDetail): ScanDetail {
 
 export default function ScanResultsPage() {
   const { id } = useParams<{ id: string }>();
+  const queryClient = useQueryClient();
   const [expandedAILog, setExpandedAILog] = useState<string | null>(null);
   const [expandedTool, setExpandedTool] = useState<string | null>(null);
   const [showRawOutput, setShowRawOutput] = useState<string | null>(null);
@@ -179,7 +200,53 @@ export default function ScanResultsPage() {
   const [toolOutputLoading, setToolOutputLoading] = useState<string | null>(null);
   const [findingSort, setFindingSort] = useState<"score" | "severity">("score");
   const [expandedAISummary, setExpandedAISummary] = useState<string | null>(null);
+  const [showZeroTools, setShowZeroTools] = useState(false);
+  const [showAIDetails, setShowAIDetails] = useState(false);
   const [copiedTool, setCopiedTool] = useState<string | null>(null);
+  const [copiedExport, setCopiedExport] = useState<string | null>(null);
+  const [lazyFindings, setLazyFindings] = useState<Record<string, Finding[]>>({});
+  const [lazyFindingsLoading, setLazyFindingsLoading] = useState<string | null>(null);
+  const [cancellingAI, setCancellingAI] = useState(false);
+  const [aiCancelled, setAICancelled] = useState(false);
+
+  const handleCancelAI = useCallback(async () => {
+    if (cancellingAI) return;
+    setCancellingAI(true);
+    try {
+      await api.delete(`/scans/${id}`);
+      setAICancelled(true);
+      // Refetch scan data to pick up any state changes
+      queryClient.invalidateQueries({ queryKey: ["scan", id] });
+      queryClient.invalidateQueries({ queryKey: ["scan-ai-logs", id] });
+    } catch {
+      // Even if backend returns 409 (no active AI), treat as cancelled from UI perspective
+      setAICancelled(true);
+    }
+    setCancellingAI(false);
+  }, [id, cancellingAI, queryClient]);
+
+  const handleCopyExport = useCallback(async (key: string, path: string) => {
+    const ok = await fetchAndCopy(path);
+    if (ok) {
+      setCopiedExport(key);
+      setTimeout(() => setCopiedExport(null), 2000);
+    }
+  }, []);
+
+  const fetchToolFindings = useCallback(
+    async (toolName: string) => {
+      if (lazyFindings[toolName] !== undefined) return;
+      setLazyFindingsLoading(toolName);
+      try {
+        const res = await api.get<Finding[]>(`/scans/${id}/findings?tool=${toolName}&per_page=5000`);
+        setLazyFindings(prev => ({ ...prev, [toolName]: res.data ?? [] }));
+      } catch {
+        setLazyFindings(prev => ({ ...prev, [toolName]: [] }));
+      }
+      setLazyFindingsLoading(null);
+    },
+    [id, lazyFindings],
+  );
 
   const fetchToolOutput = useCallback(
     async (toolName: string) => {
@@ -207,20 +274,37 @@ export default function ScanResultsPage() {
   const { data: scan, isLoading } = useQuery({
     queryKey: ["scan", id],
     queryFn: async () => {
-      const [scanRes, findingsRes] = await Promise.all([
-        api.get<ScanDetail>(`/scans/${id}`),
-        api.get<Finding[]>(`/scans/${id}/findings?per_page=500`).catch(() => ({ data: [] as Finding[] })),
-      ]);
+      const scanRes = await api.get<ScanDetail>(`/scans/${id}`);
       const s = parseScanArrays(scanRes.data);
-      s.findings = findingsRes.data ?? [];
+      s.findings = [];
       return s;
     },
     refetchInterval: (query) => {
       const s = query.state.data;
       if (!s) return false;
       if (s.status === "running" || s.status === "pending") return 5_000;
-      // After completion, keep polling briefly if AI summary hasn't arrived yet
-      if (s.status === "completed" && !s.ai_summary) return 5_000;
+      // After completion, poll for AI summary but give up after 3 minutes
+      if (s.status === "completed" && s.ai_enabled !== false && !s.ai_summary && !aiCancelled) {
+        const completedAt = s.completed_at ? new Date(s.completed_at).getTime() : 0;
+        if (completedAt && Date.now() - completedAt > 180_000) return false; // 3 min timeout
+        return 5_000;
+      }
+      return false;
+    },
+  });
+
+  // Fetch aggregate stats (severity/tool counts) without loading all findings.
+  const { data: findingStats } = useQuery<{
+    total: number;
+    by_severity: Record<string, number>;
+    by_tool: Record<string, number>;
+  }>({
+    queryKey: ["scan-finding-stats", id],
+    queryFn: () => api.get(`/scans/${id}/findings/stats`).then((r) => (r.data as { total: number; by_severity: Record<string, number>; by_tool: Record<string, number> })),
+    refetchInterval: (query) => {
+      if (!scan) return false;
+      if (scan.status === "running" || scan.status === "pending") return 5_000;
+      if (!query.state.data) return 5_000;
       return false;
     },
   });
@@ -235,10 +319,13 @@ export default function ScanResultsPage() {
     queryFn: () => api.get<AILog[]>(`/scans/${id}/ai-logs`).then((r) => r.data ?? []),
     refetchInterval: (query) => {
       if (!scan) return false;
-      // Poll while scan is running
       if (scan.status === "running" || scan.status === "pending") return 5_000;
-      // After completion, keep polling if no AI logs yet (AI may still be running)
-      if (scan.status === "completed" && (!query.state.data || query.state.data.length === 0)) return 5_000;
+      // After completion, poll for AI logs if summary hasn't arrived
+      if (scan.status === "completed" && scan.ai_enabled !== false && !scan.ai_summary) {
+        const completedAt = scan.completed_at ? new Date(scan.completed_at).getTime() : 0;
+        if (completedAt && Date.now() - completedAt > 180_000) return false;
+        return 5_000;
+      }
       return false;
     },
   });
@@ -250,11 +337,39 @@ export default function ScanResultsPage() {
     refetchInterval: (query) => {
       if (!scan || scan.status === "pending") return false;
       if (scan.status === "running") return 5_000;
-      // After completion, poll until we have summaries
-      const data = query.state.data;
-      if (!data || data.length === 0) return 5_000;
+      // After completion, poll for summaries if AI is still running
+      if (scan.ai_enabled !== false && !scan.ai_summary) {
+        const completedAt = scan.completed_at ? new Date(scan.completed_at).getTime() : 0;
+        if (completedAt && Date.now() - completedAt > 180_000) return false;
+        return 5_000;
+      }
       return false;
     },
+  });
+
+  // Auto-fetch tool output for failed tools so [FIX] lines are available.
+  useQuery({
+    queryKey: ["scan-failed-tool-outputs", id, scan?.tools_failed],
+    queryFn: async () => {
+      if (!scan?.tools_failed?.length) return null;
+      const failed: string[] = Array.isArray(scan.tools_failed) ? scan.tools_failed : [];
+      for (const tool of failed) {
+        if (toolOutput[tool] !== undefined) continue;
+        try {
+          const token = getToken();
+          const headers: Record<string, string> = {};
+          if (token) headers["Authorization"] = `Bearer ${token}`;
+          const res = await fetch(`${API_BASE}/scans/${id}/tools/${tool}/output`, {
+            headers,
+            credentials: "include",
+          });
+          const text = res.ok ? await res.text() : "";
+          setToolOutput((prev) => ({ ...prev, [tool]: text }));
+        } catch { /* ignore */ }
+      }
+      return null;
+    },
+    enabled: !!scan && Array.isArray(scan.tools_failed) && scan.tools_failed.length > 0,
   });
 
   const { data: recommendations } = useQuery<ScanRecommendation[]>({
@@ -264,9 +379,12 @@ export default function ScanResultsPage() {
     refetchInterval: (query) => {
       if (!scan || scan.status === "pending") return false;
       if (scan.status === "running") return 5_000;
-      // After completion, poll until we have recommendations
-      const data = query.state.data;
-      if (!data || data.length === 0) return 5_000;
+      // After completion, poll for recommendations if AI is still running
+      if (scan.ai_enabled !== false && !scan.ai_summary) {
+        const completedAt = scan.completed_at ? new Date(scan.completed_at).getTime() : 0;
+        if (completedAt && Date.now() - completedAt > 180_000) return false;
+        return 5_000;
+      }
       return false;
     },
   });
@@ -278,27 +396,52 @@ export default function ScanResultsPage() {
   const sevOrder: Record<string, number> = { critical: 5, high: 4, medium: 3, low: 2, info: 1 };
   const findingsBySeverity = severities.map((sev) => ({
     severity: sev,
-    count: scan.findings?.filter((f) => f.severity === sev).length ?? 0,
+    count: findingStats?.by_severity?.[sev] ?? scan.findings?.filter((f) => f.severity === sev).length ?? 0,
   }));
 
   const toolBreakdown = scan.tools_selected?.map((tool) => {
-    const toolFindings = (scan.findings ?? []).filter((f) => f.tool_name === tool);
+    const loadedFindings = lazyFindings[tool] ?? [];
+    const statsCount = findingStats?.by_tool?.[tool] ?? 0;
+    const totalCount = Math.max(loadedFindings.length, statsCount);
+    // Severity counts: use loaded findings if available, otherwise try tool summaries
+    const ts = toolSummaries?.find(s => s.tool_name === tool);
+    let sevCounts: Record<string, number>;
+    if (loadedFindings.length > 0) {
+      sevCounts = severities.reduce((acc, sev) => {
+        acc[sev] = loadedFindings.filter((f) => f.severity === sev).length;
+        return acc;
+      }, {} as Record<string, number>);
+    } else if (ts?.severity_counts) {
+      try { sevCounts = JSON.parse(ts.severity_counts); } catch { sevCounts = {}; }
+    } else {
+      sevCounts = {};
+    }
     return {
       tool,
       completed: scan.tools_completed?.includes(tool) ?? false,
       failed: scan.tools_failed?.includes(tool) ?? false,
-      findings: toolFindings,
-      sevCounts: severities.reduce((acc, sev) => {
-        acc[sev] = toolFindings.filter((f) => f.severity === sev).length;
-        return acc;
-      }, {} as Record<string, number>),
+      findings: loadedFindings,
+      totalCount,
+      sevCounts,
     };
   });
 
   const sortFindings = (findings: Finding[]) => {
     return [...findings].sort((a, b) => {
-      if (findingSort === "score") return b.composite_score - a.composite_score;
-      return (sevOrder[b.severity] ?? 0) - (sevOrder[a.severity] ?? 0);
+      if (findingSort === "score") {
+        const scoreDiff = (b.composite_score ?? 0) - (a.composite_score ?? 0);
+        if (scoreDiff !== 0) return scoreDiff;
+        // Tiebreak by severity then file path
+        const sevDiff = (sevOrder[b.severity] ?? 0) - (sevOrder[a.severity] ?? 0);
+        if (sevDiff !== 0) return sevDiff;
+        return (a.file_path ?? "").localeCompare(b.file_path ?? "");
+      }
+      const sevDiff = (sevOrder[b.severity] ?? 0) - (sevOrder[a.severity] ?? 0);
+      if (sevDiff !== 0) return sevDiff;
+      // Tiebreak by composite score then file path
+      const scoreDiff = (b.composite_score ?? 0) - (a.composite_score ?? 0);
+      if (scoreDiff !== 0) return scoreDiff;
+      return (a.file_path ?? "").localeCompare(b.file_path ?? "");
     });
   };
 
@@ -353,22 +496,58 @@ export default function ScanResultsPage() {
               <Link href={`/scans/${id}/live`}>View Live</Link>
             </Button>
           )}
+          {!scan.ai_summary && !aiCancelled && scan.status === "completed" && aiLogs.length > 0 && (() => {
+            const completedAt = scan.completed_at ? new Date(scan.completed_at).getTime() : 0;
+            const isStale = completedAt > 0 && Date.now() - completedAt > 180_000;
+            if (isStale) return null; // AI is already dead, no point showing cancel
+            return (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleCancelAI}
+                disabled={cancellingAI}
+              >
+                {cancellingAI ? "Cancelling..." : "Cancel AI"}
+              </Button>
+            );
+          })()}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline">Export</Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" className="w-72">
+              <DropdownMenuLabel>Findings Data</DropdownMenuLabel>
               <DropdownMenuItem onClick={() => triggerDownload(`/findings/export?scan_id=${id}&format=csv`)}>
-                Export Findings CSV
+                <Download className="w-4 h-4 mr-2 shrink-0" />
+                <span className="flex-1">Download Findings CSV</span>
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => triggerDownload(`/findings/export?scan_id=${id}&format=json`)}>
-                Export Findings JSON
+                <Download className="w-4 h-4 mr-2 shrink-0" />
+                <span className="flex-1">Download Findings JSON</span>
               </DropdownMenuItem>
+              <DropdownMenuItem onClick={(e) => { e.preventDefault(); handleCopyExport("json", `/findings/export?scan_id=${id}&format=json`); }}>
+                <ClipboardCopy className="w-4 h-4 mr-2 shrink-0" />
+                <span className="flex-1">{copiedExport === "json" ? "Copied!" : "Copy Findings JSON"}</span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel>Reports</DropdownMenuLabel>
               <DropdownMenuItem onClick={() => triggerDownload(`/scans/${id}/report`)}>
-                Download Report
+                <Download className="w-4 h-4 mr-2 shrink-0" />
+                <span className="flex-1">Download Markdown Report</span>
               </DropdownMenuItem>
+              <DropdownMenuItem onClick={(e) => { e.preventDefault(); handleCopyExport("md", `/scans/${id}/report`); }}>
+                <ClipboardCopy className="w-4 h-4 mr-2 shrink-0" />
+                <span className="flex-1">{copiedExport === "md" ? "Copied!" : "Copy Markdown Report"}</span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel>Machine-Readable</DropdownMenuLabel>
               <DropdownMenuItem onClick={() => triggerDownload(`/scans/${id}/sarif`)}>
-                Download SARIF
+                <Download className="w-4 h-4 mr-2 shrink-0" />
+                <span className="flex-1">Download SARIF</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={(e) => { e.preventDefault(); handleCopyExport("sarif", `/scans/${id}/sarif`); }}>
+                <ClipboardCopy className="w-4 h-4 mr-2 shrink-0" />
+                <span className="flex-1">{copiedExport === "sarif" ? "Copied!" : "Copy SARIF to Clipboard"}</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -377,62 +556,7 @@ export default function ScanResultsPage() {
 
       {coverage && <CoverageCard coverage={coverage} />}
 
-      {/* AI Assessment Overview */}
-      {scan.ai_enabled && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm flex items-center gap-2">
-              AI Assessment
-              {aiLogs.length > 0 && !aiLogs.some(l => l.error) ? (
-                <span className="text-xs font-bold text-green-600 dark:text-green-400">Complete</span>
-              ) : aiLogs.some(l => l.error) ? (
-                <span className="text-xs font-bold text-red-600 dark:text-red-400">Errors</span>
-              ) : (
-                <span className="text-xs font-bold text-yellow-500 animate-pulse">Pending</span>
-              )}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {aiLogs.length > 0 && (() => {
-              const firstLog = aiLogs[0];
-              const totalTokens = aiLogs.reduce((sum, l) => sum + l.prompt_tokens + l.response_tokens, 0);
-              const totalDuration = aiLogs.reduce((sum, l) => sum + l.duration_ms, 0);
-              const errorCount = aiLogs.filter(l => l.error).length;
-              return (
-                <div className="grid gap-3 md:grid-cols-4 text-sm">
-                  <div>
-                    <span className="text-muted-foreground">Provider / Model</span>
-                    <p className="font-medium">{firstLog.provider}{firstLog.model ? ` / ${firstLog.model}` : ""}</p>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">AI Calls</span>
-                    <p className="font-medium">{aiLogs.length}{errorCount > 0 ? ` (${errorCount} failed)` : ""}</p>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Total Tokens</span>
-                    <p className="font-medium">{totalTokens.toLocaleString()}</p>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Total Duration</span>
-                    <p className="font-medium">{(totalDuration / 1000).toFixed(1)}s</p>
-                  </div>
-                </div>
-              );
-            })()}
-            {scan.ai_summary && (
-              <div className="border-t pt-3">
-                <p className="text-xs font-medium text-muted-foreground mb-1">AI Summary</p>
-                <Markdown className="text-sm">{scan.ai_summary}</Markdown>
-              </div>
-            )}
-            {aiLogs.length === 0 && !scan.ai_summary && (
-              <p className="text-sm text-muted-foreground">AI assessment is enabled and will run after tool scans complete.</p>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      <div className="grid gap-4 md:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-6">
         {findingsBySeverity.map(({ severity, count }) => (
           <Card key={severity}>
             <CardContent className="pt-6 text-center">
@@ -441,7 +565,153 @@ export default function ScanResultsPage() {
             </CardContent>
           </Card>
         ))}
+        {/* AI Assessment compact card */}
+        {scan.ai_enabled !== false && (() => {
+          const aiDone = !!scan.ai_summary;
+          const aiHasErrors = aiLogs.some(l => l.error);
+          const totalToolsWithFindings = findingStats?.by_tool ? Object.keys(findingStats.by_tool).length : 0;
+          const assessedTools = new Set(aiLogs.filter(l => l.phase === "tool_assess" && !l.error).map(l => l.tool_name)).size;
+          const hasSummaryLog = aiLogs.some(l => l.phase === "summary" && !l.error);
+          const completedAt = scan.completed_at ? new Date(scan.completed_at).getTime() : 0;
+          const aiStale = !aiDone && !aiCancelled && completedAt > 0 && Date.now() - completedAt > 180_000;
+          const aiRunning = !aiDone && !aiStale && !aiCancelled;
+          const totalTokens = aiLogs.reduce((s, l) => s + (l.prompt_tokens || 0) + (l.response_tokens || 0), 0);
+          const totalDuration = aiLogs.reduce((s, l) => s + l.duration_ms, 0);
+          const totalCost = aiLogs.reduce((s, l) => s + (l.cost_usd || 0), 0);
+          const toolProgress = totalToolsWithFindings > 0 ? `${assessedTools}/${totalToolsWithFindings}` : aiLogs.length > 0 ? `${aiLogs.length} calls` : "";
+          return (
+          <Card
+            className={`cursor-pointer transition-colors ${aiDone ? "border-blue-200 dark:border-blue-800" : aiCancelled ? "border-orange-200 dark:border-orange-800" : aiStale ? "border-orange-200 dark:border-orange-800" : aiHasErrors ? "border-red-200 dark:border-red-800" : "border-yellow-200 dark:border-yellow-800"}`}
+            onClick={() => setShowAIDetails(prev => !prev)}
+          >
+            <CardContent className="pt-6 text-center">
+              <div className="flex items-center justify-center gap-1.5 mb-2">
+                {aiDone && !aiHasErrors ? (
+                  <span className="text-green-600">&#10003;</span>
+                ) : aiHasErrors && aiDone ? (
+                  <span className="text-orange-500">&#9888;</span>
+                ) : aiCancelled ? (
+                  <span className="text-orange-500">&#10007;</span>
+                ) : aiStale ? (
+                  <span className="text-orange-500">&#9888;</span>
+                ) : aiHasErrors && !aiDone ? (
+                  <span className="text-red-600">&#10007;</span>
+                ) : aiRunning ? (
+                  <span className="animate-spin inline-block w-3.5 h-3.5 border-2 border-blue-600 border-t-transparent rounded-full" />
+                ) : (
+                  <span className="text-muted-foreground">&#8943;</span>
+                )}
+                <span className="text-xs font-bold">AI</span>
+              </div>
+              <p className="text-sm font-bold">
+                {aiDone
+                  ? toolProgress || "Done"
+                  : aiCancelled
+                    ? toolProgress || "Cancelled"
+                  : aiStale
+                    ? toolProgress || "Interrupted"
+                    : assessedTools > 0
+                      ? hasSummaryLog
+                        ? "Summarizing"
+                        : `${assessedTools}/${totalToolsWithFindings} tools`
+                      : aiLogs.length > 0
+                        ? `${aiLogs.length} calls...`
+                        : "Pending"}
+              </p>
+              {aiLogs.length > 0 && (
+                <p className="text-[10px] text-muted-foreground mt-0.5">
+                  {(() => {
+                    const inTok = aiLogs.reduce((s, l) => s + (l.prompt_tokens || 0), 0);
+                    const outTok = aiLogs.reduce((s, l) => s + (l.response_tokens || 0), 0);
+                    if (totalCost > 0) return `$${totalCost.toFixed(4)}`;
+                    if (totalTokens > 0) return `${(inTok / 1000).toFixed(1)}k in / ${(outTok / 1000).toFixed(1)}k out`;
+                    return `${(totalDuration / 1000).toFixed(1)}s`;
+                  })()}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+          );
+        })()}
       </div>
+
+      {/* AI Details (shown when AI card is clicked) */}
+      {showAIDetails && aiLogs.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">AI Assessment Details</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {(() => {
+              const totalCost = aiLogs.reduce((s, l) => s + (l.cost_usd || 0), 0);
+              return (
+              <div className={`grid grid-cols-2 gap-4 text-center ${totalCost > 0 ? "md:grid-cols-6" : "md:grid-cols-5"}`}>
+                <div>
+                  <p className="text-xs text-muted-foreground">Provider / Model</p>
+                  <p className="text-sm font-medium">{aiLogs[0]?.provider} / {aiLogs[0]?.model}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">AI Calls</p>
+                  <p className="text-sm font-medium">{aiLogs.length}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Input Tokens</p>
+                  <p className="text-sm font-medium">{aiLogs.reduce((s, l) => s + (l.prompt_tokens || 0), 0).toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Output Tokens</p>
+                  <p className="text-sm font-medium">{aiLogs.reduce((s, l) => s + (l.response_tokens || 0), 0).toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Total Duration</p>
+                  <p className="text-sm font-medium">{(aiLogs.reduce((s, l) => s + l.duration_ms, 0) / 1000).toFixed(1)}s</p>
+                </div>
+                {totalCost > 0 && (
+                  <div>
+                    <p className="text-xs text-muted-foreground">Cost</p>
+                    <p className="text-sm font-medium">${totalCost.toFixed(4)}</p>
+                  </div>
+                )}
+              </div>
+              );
+            })()}
+            {aiLogs.length > 0 && (
+              <div className="mt-3 border-t pt-3">
+                <p className="text-xs text-muted-foreground mb-2">Per-call breakdown</p>
+                <div className="space-y-1">
+                  {aiLogs.map((log) => (
+                    <div key={log.id} className={`flex items-center justify-between text-xs px-2 py-1.5 rounded ${log.error ? "bg-red-50 dark:bg-red-950/20" : "bg-muted/30"}`}>
+                      <div className="flex items-center gap-2">
+                        <span className={`inline-block w-1.5 h-1.5 rounded-full ${log.error ? "bg-red-500" : "bg-green-500"}`} />
+                        <span className="font-medium capitalize">{log.phase}</span>
+                        {log.tool_name && <span className="font-mono text-muted-foreground">{log.tool_name}</span>}
+                      </div>
+                      <div className="flex items-center gap-3 text-muted-foreground">
+                        <span>{(log.prompt_tokens || 0).toLocaleString()} in</span>
+                        <span>{(log.response_tokens || 0).toLocaleString()} out</span>
+                        <span>{(log.duration_ms / 1000).toFixed(1)}s</span>
+                        {log.cost_usd > 0 && <span>${log.cost_usd.toFixed(4)}</span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* AI Summary (shown below severity cards when available) */}
+      {scan.ai_summary && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">AI Summary</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Markdown className="text-sm">{scan.ai_summary}</Markdown>
+          </CardContent>
+        </Card>
+      )}
 
       {recommendations && recommendations.length > 0 && (
         <Card>
@@ -510,12 +780,18 @@ export default function ScanResultsPage() {
         </CardHeader>
         <CardContent>
           <div className="space-y-1">
-            {toolBreakdown?.map(({ tool, completed, failed, findings, sevCounts }) => (
+            {toolBreakdown?.filter(t => t.totalCount > 0 || t.failed).map(({ tool, completed, failed, findings, totalCount, sevCounts }) => (
               <div key={tool} className="border rounded-md">
                 {/* Tool header */}
                 <button
                   type="button"
-                  onClick={() => setExpandedTool(prev => prev === tool ? null : tool)}
+                  onClick={() => {
+                    const next = expandedTool === tool ? null : tool;
+                    setExpandedTool(next);
+                    if (next && findings.length === 0 && totalCount > 0) {
+                      fetchToolFindings(tool);
+                    }
+                  }}
                   className="flex items-center justify-between py-2.5 px-3 w-full text-left hover:bg-muted/40 rounded-md transition-colors"
                 >
                   <div className="flex items-center gap-2">
@@ -525,7 +801,8 @@ export default function ScanResultsPage() {
                     <span className="font-mono text-sm font-medium">{tool}</span>
                     <StatusBadge status={failed ? "failed" : completed ? "completed" : "running"} />
                     {(() => {
-                      if (!scan.ai_enabled) return null;
+                      if (totalCount === 0) return null;
+                      if (scan.ai_enabled === false && !scan.ai_summary && aiLogs.length === 0) return null;
                       const hasToolSummary = toolSummaries?.some(s => s.tool_name === tool && s.summary_text);
                       const hasScanSummary = toolBreakdown?.length === 1 && scan.ai_summary;
                       const aiLog = aiLogs.find(l => l.tool_name === tool);
@@ -536,10 +813,7 @@ export default function ScanResultsPage() {
                       if (aiError) {
                         return <span className="text-xs font-bold text-red-600 dark:text-red-400" title={`AI analysis failed: ${aiError}`}>AI</span>;
                       }
-                      if (completed && (scan.status === "running" || scan.status === "pending")) {
-                        return <span className="text-xs font-bold text-yellow-500 animate-pulse" title="AI analysis pending">AI</span>;
-                      }
-                      if (completed && scan.status === "completed") {
+                      if (completed && !scan.ai_summary) {
                         return <span className="text-xs font-bold text-yellow-500 animate-pulse" title="AI analysis in progress">AI</span>;
                       }
                       return null;
@@ -552,7 +826,7 @@ export default function ScanResultsPage() {
                     {sevCounts.medium > 0 && <span className="text-xs px-1.5 py-0.5 rounded bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-400 font-medium">{sevCounts.medium}M</span>}
                     {sevCounts.low > 0 && <span className="text-xs px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400 font-medium">{sevCounts.low}L</span>}
                     {sevCounts.info > 0 && <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 font-medium">{sevCounts.info}I</span>}
-                    <span className="text-sm text-muted-foreground ml-1">{findings.length} total</span>
+                    <span className="text-sm text-muted-foreground ml-1">{totalCount} total</span>
                   </div>
                 </button>
 
@@ -599,16 +873,42 @@ export default function ScanResultsPage() {
                         </div>
                       );
                     })()}
+                    {/* How to fix — shown for failed tools with diagnostic output */}
+                    {failed && toolOutput[tool] && (() => {
+                      const fixLines = toolOutput[tool]
+                        .split("\n")
+                        .filter(l => l.startsWith("[FIX]"))
+                        .map(l => l.replace(/^\[FIX\]\s*\S+:\s*/, ""));
+                      if (fixLines.length === 0) return null;
+                      return (
+                        <div className="border-b bg-blue-50/50 dark:bg-blue-950/20 px-4 py-3 space-y-1">
+                          <p className="text-xs font-semibold text-blue-700 dark:text-blue-400">How to fix</p>
+                          {fixLines.map((line, i) => (
+                            <p key={i} className="text-xs text-blue-600 dark:text-blue-400 font-mono">
+                              {line}
+                            </p>
+                          ))}
+                        </div>
+                      );
+                    })()}
+
                     {/* Findings list */}
-                    {findings.length > 0 ? (
-                      <div className="divide-y">
-                        {sortFindings(findings).map((f) => (
-                          <FindingRow key={f.id} finding={f} />
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-xs text-muted-foreground px-3 py-4">No findings from this tool.</p>
-                    )}
+                    {(() => {
+                      const displayFindings = findings.length > 0 ? findings : (lazyFindings[tool] ?? []);
+                      if (lazyFindingsLoading === tool) {
+                        return <p className="text-xs text-muted-foreground px-3 py-4">Loading findings...</p>;
+                      }
+                      if (displayFindings.length > 0) {
+                        return (
+                          <div className="divide-y">
+                            {sortFindings(displayFindings).map((f) => (
+                              <FindingRow key={f.id} finding={f} />
+                            ))}
+                          </div>
+                        );
+                      }
+                      return <p className="text-xs text-muted-foreground px-3 py-4">No findings from this tool.</p>;
+                    })()}
 
                     {/* Raw output toggle */}
                     <div className="border-t px-3 py-2">
@@ -655,6 +955,34 @@ export default function ScanResultsPage() {
                 )}
               </div>
             ))}
+            {/* Zero findings tools — collapsed */}
+            {(() => {
+              const zeroTools = toolBreakdown?.filter(t => t.totalCount === 0 && !t.failed) ?? [];
+              if (zeroTools.length === 0) return null;
+              return (
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowZeroTools(prev => !prev)}
+                    className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors py-1"
+                  >
+                    <span>{showZeroTools ? "\u25BC" : "\u25B6"}</span>
+                    <span>Zero findings ({zeroTools.length} tools)</span>
+                  </button>
+                  {showZeroTools && (
+                    <div className="mt-1 space-y-0.5">
+                      {zeroTools.map(({ tool, completed }) => (
+                        <div key={tool} className="flex items-center gap-2 py-1.5 px-3 rounded-md bg-muted/30">
+                          <span className="font-mono text-xs text-muted-foreground">{tool}</span>
+                          <StatusBadge status={completed ? "completed" : "running"} />
+                          <span className="text-xs text-muted-foreground ml-auto">0 findings</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         </CardContent>
       </Card>

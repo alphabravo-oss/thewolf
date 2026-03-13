@@ -417,6 +417,7 @@ export interface AILog {
   prompt_tokens: number;
   response_tokens: number;
   duration_ms: number;
+  cost_usd: number;
   created_at: string;
 }
 
@@ -467,6 +468,7 @@ export interface ScanProgressEvent {
   tool_name: string;
   status: "running" | "completed" | "failed";
   finding_count: number;
+  total_findings?: number;
   elapsed_ms: number;
   progress_pct: number;
 }

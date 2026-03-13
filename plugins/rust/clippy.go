@@ -36,7 +36,8 @@ func (p *ClippyPlugin) CheckAvailable() bool {
 func (p *ClippyPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
 	// Verify this is a Rust project before attempting to run clippy.
 	if _, err := os.Stat(filepath.Join(opts.RepoPath, "Cargo.toml")); err != nil {
-		return nil, nil // Not a Rust project — skip.
+		plugin.Skipf(opts.OnOutput, "clippy", "no Cargo.toml found — this doesn't appear to be a Rust project. Initialize with 'cargo init' to enable Clippy analysis.")
+		return nil, nil
 	}
 
 	if opts.Timeout > 0 {
@@ -45,12 +46,12 @@ func (p *ClippyPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]
 		defer cancel()
 	}
 
-	cmd := exec.CommandContext(ctx, "cargo", "clippy", "--message-format", "json")
+	cmd := plugin.CommandContext(ctx, "cargo", "clippy", "--message-format", "json")
 	cmd.Dir = opts.RepoPath
 	out, err := cmd.Output()
 	if err != nil {
 		if len(out) == 0 {
-			return nil, fmt.Errorf("cargo clippy execution failed: %w", err)
+			return nil, plugin.WrapExecError("clippy", err)
 		}
 	}
 

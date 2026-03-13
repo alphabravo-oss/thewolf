@@ -40,6 +40,8 @@ export default function ScanLivePage() {
   const [toolLogs, setToolLogs] = useState<Map<string, string[]>>(new Map());
   const [activeLogTool, setActiveLogTool] = useState<string | null>(null);
   const logEndRef = useRef<HTMLDivElement>(null);
+  const logContainerRef = useRef<HTMLDivElement>(null);
+  const userScrolledRef = useRef(false);
   const [repoSummary, setRepoSummary] = useState<RepoDetection[]>([]);
   const [scanMeta, setScanMeta] = useState<{ repoName?: string; branch?: string } | null>(null);
   const [scanStatus, setScanStatus] = useState<string>("pending");
@@ -214,9 +216,24 @@ export default function ScanLivePage() {
     return () => clearInterval(timer);
   }, [scanData?.completed_at]);
 
+  // Auto-scroll the log panel only — never scroll the page.
+  // Stop auto-scrolling if the user has scrolled up to read history.
   useEffect(() => {
-    logEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (userScrolledRef.current) return;
+    const container = logContainerRef.current;
+    if (container) {
+      container.scrollTop = container.scrollHeight;
+    }
   }, [toolLogs, activeLogTool]);
+
+  // Reset scroll lock when user switches tools
+  useEffect(() => {
+    userScrolledRef.current = false;
+    const container = logContainerRef.current;
+    if (container) {
+      container.scrollTop = container.scrollHeight;
+    }
+  }, [activeLogTool]);
 
   const { connected } = useSSE<SSEEvent>({
     path: `/scans/${id}/stream`,
@@ -254,13 +271,17 @@ export default function ScanLivePage() {
           });
           return next;
         });
-        // Recalculate total from all tools
-        setTools((current) => {
-          let sum = 0;
-          for (const t of current.values()) sum += t.findings;
-          setTotalFindings(sum);
-          return current;
-        });
+        // Use cumulative total from server if available, otherwise sum from tool cards.
+        if (progress.total_findings != null && progress.total_findings > 0) {
+          setTotalFindings(progress.total_findings);
+        } else {
+          setTools((current) => {
+            let sum = 0;
+            for (const t of current.values()) sum += t.findings;
+            setTotalFindings(sum);
+            return current;
+          });
+        }
       }
       if (event.type === "tool_output") {
         const logEvent = event as unknown as ToolLogEvent;
@@ -327,16 +348,30 @@ export default function ScanLivePage() {
   });
 
   const isFinished = scanStatus === "completed" || scanStatus === "failed" || scanStatus === "cancelled";
+  const aiStillRunning = aiProgress != null && aiProgress.phase !== "complete" && aiProgress.phase !== "failed" && aiProgress.phase !== "cancelled";
+  const [cancelling, setCancelling] = useState(false);
+
+  const handleCancel = async () => {
+    if (cancelling) return;
+    setCancelling(true);
+    try {
+      await api.delete(`/scans/${id}`);
+      setScanStatus("cancelled");
+    } catch {
+      // If cancel fails, allow retry
+      setCancelling(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">
-            {isFinished ? "Scan Complete" : "Live Scan Progress"}
+            {isFinished ? (scanStatus === "cancelled" ? "Scan Cancelled" : "Scan Complete") : "Live Scan Progress"}
           </h1>
           <div className="flex items-center gap-3 mt-1">
-            <StatusBadge status={scanStatus as "running" | "completed" | "failed" | "pending"} />
+            <StatusBadge status={scanStatus as "running" | "completed" | "failed" | "pending" | "cancelled"} />
             {scanMeta?.repoName && (
               <span className="text-sm font-medium">{scanMeta.repoName}</span>
             )}
@@ -352,9 +387,20 @@ export default function ScanLivePage() {
             )}
           </div>
         </div>
-        <Button variant={isFinished ? "default" : "outline"} onClick={() => router.push(`/scans/${id}`)}>
-          View Results
-        </Button>
+        <div className="flex items-center gap-2">
+          {(!isFinished || aiStillRunning) && (
+            <Button
+              variant="destructive"
+              onClick={handleCancel}
+              disabled={cancelling}
+            >
+              {cancelling ? "Cancelling..." : aiStillRunning && isFinished ? "Cancel AI" : "Cancel Scan"}
+            </Button>
+          )}
+          <Button variant={isFinished ? "default" : "outline"} onClick={() => router.push(`/scans/${id}`)}>
+            View Results
+          </Button>
+        </div>
       </div>
 
       {/* Repo Info Card */}
@@ -396,7 +442,7 @@ export default function ScanLivePage() {
         </Card>
       )}
 
-      <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
+      <div className="grid gap-3 grid-cols-2 md:grid-cols-5">
         <Card>
           <CardContent className="pt-4 pb-3 text-center">
             <p className="text-2xl font-bold">{totalFindings}</p>
@@ -427,6 +473,44 @@ export default function ScanLivePage() {
             </CardContent>
           </Card>
         )}
+        {/* AI Assessment status card */}
+        {(aiProgress || aiCallLogs.length > 0 || scanData?.ai_enabled) && (
+          <Card className={aiStillRunning ? "border-blue-200 dark:border-blue-800" : ""}>
+            <CardContent className="pt-4 pb-3 text-center">
+              <div className="flex items-center justify-center gap-1.5">
+                {aiStillRunning ? (
+                  <span className="animate-spin inline-block w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full" />
+                ) : aiProgress?.phase === "complete" || aiCallLogs.some(l => !l.error) ? (
+                  <span className="text-green-600 text-sm">&#10003;</span>
+                ) : aiProgress?.phase === "cancelled" ? (
+                  <span className="text-orange-500 text-sm">&#10007;</span>
+                ) : aiProgress?.phase === "failed" || aiCallLogs.some(l => l.error) ? (
+                  <span className="text-red-600 text-sm">&#10007;</span>
+                ) : (
+                  <span className="text-muted-foreground text-sm">&#8943;</span>
+                )}
+                <p className="text-sm font-semibold">
+                  {aiProgress
+                    ? aiProgress.phase === "complete" ? "Done"
+                      : aiProgress.phase === "failed" ? "Failed"
+                      : aiProgress.phase === "cancelled" ? "Cancelled"
+                      : aiProgress.phase === "summarizing" ? "Summarizing"
+                      : aiProgress.step && aiProgress.totalSteps
+                        ? `${aiProgress.step}/${aiProgress.totalSteps} tools`
+                        : "Running"
+                    : aiCallLogs.length > 0
+                      ? `${aiCallLogs.length} calls`
+                      : "Pending"}
+                </p>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {aiStillRunning && aiProgress?.tool
+                  ? `Assessing: ${aiProgress.tool}`
+                  : "AI Assessment"}
+              </p>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       <div className="space-y-2">
@@ -453,59 +537,34 @@ export default function ScanLivePage() {
                 <div className="mt-1">
                   <StatusBadge status={tool.status === "pending" ? "pending" : tool.status} />
                 </div>
-                {tool.status === "failed" && tool.error && (
-                  <p className="mt-1 text-[10px] text-red-600 dark:text-red-400 truncate" title={tool.error}>
-                    {tool.error}
-                  </p>
-                )}
+                {tool.status === "failed" && (() => {
+                  const logs = toolLogs.get(tool.name) || [];
+                  const fixLine = logs.find(l => l.startsWith("[FIX]"));
+                  if (fixLine) {
+                    // Show the diagnostic problem instead of raw error
+                    const problem = fixLine.replace(/^\[FIX\]\s*\S+:\s*/, "");
+                    return (
+                      <p className="mt-1 text-[10px] text-blue-600 dark:text-blue-400 truncate" title={problem}>
+                        {problem}
+                      </p>
+                    );
+                  }
+                  if (tool.error) {
+                    return (
+                      <p className="mt-1 text-[10px] text-red-600 dark:text-red-400 truncate" title={tool.error}>
+                        {tool.error}
+                      </p>
+                    );
+                  }
+                  return null;
+                })()}
               </Card>
             ))}
           </div>
         )}
       </div>
 
-      {/* AI Assessment Progress */}
-      {aiProgress && (
-        <Card className="border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/20">
-          <CardContent className="pt-4 pb-3">
-            <div className="flex items-center gap-3">
-              <div className="flex-shrink-0">
-                {aiProgress.phase === "complete" ? (
-                  <span className="text-green-600 text-lg">&#10003;</span>
-                ) : aiProgress.phase === "failed" ? (
-                  <span className="text-red-600 text-lg">&#10007;</span>
-                ) : (
-                  <span className="animate-spin inline-block w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full" />
-                )}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium">
-                  {aiProgress.phase === "assessing" && aiProgress.tool
-                    ? `AI: Assessing ${aiProgress.tool} findings`
-                    : aiProgress.phase === "summarizing"
-                      ? "AI: Generating executive summary"
-                      : aiProgress.phase === "complete"
-                        ? "AI Assessment Complete"
-                        : aiProgress.phase === "failed"
-                          ? "AI Assessment Failed"
-                          : "AI Assessment..."}
-                  {aiProgress.step && aiProgress.totalSteps && (
-                    <span className="ml-2 text-xs text-muted-foreground">
-                      ({aiProgress.step}/{aiProgress.totalSteps})
-                    </span>
-                  )}
-                </p>
-                <div className="mt-1.5 h-1.5 bg-blue-100 dark:bg-blue-900 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-blue-600 rounded-full transition-all duration-500"
-                    style={{ width: `${aiProgress.progressPct}%` }}
-                  />
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {/* AI Assessment Progress removed — now shown as compact card in summary grid above */}
 
       {/* AI Call Logs */}
       {aiCallLogs.length > 0 && (
@@ -544,22 +603,33 @@ export default function ScanLivePage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="bg-muted/50 rounded-md p-3 h-64 overflow-y-auto font-mono text-xs leading-relaxed">
+          <div
+            ref={logContainerRef}
+            onScroll={() => {
+              const el = logContainerRef.current;
+              if (el) {
+                // User scrolled up if they're more than 40px from the bottom
+                userScrolledRef.current = el.scrollHeight - el.scrollTop - el.clientHeight > 40;
+              }
+            }}
+            className="bg-muted/50 rounded-md p-3 h-64 overflow-y-auto font-mono text-xs leading-relaxed">
             {activeLogTool && toolLogs.get(activeLogTool)?.length ? (
               <>
                 {toolLogs.get(activeLogTool)!.map((line, i) => (
                   <div
                     key={i}
                     className={`whitespace-pre-wrap ${
-                      line.startsWith("[ERROR]") || line.startsWith("[STDERR]")
-                        ? "text-red-600 dark:text-red-400 font-semibold"
-                        : "text-muted-foreground"
+                      line.startsWith("[FIX]")
+                        ? "text-blue-600 dark:text-blue-400 font-semibold"
+                        : line.startsWith("[ERROR]") || line.startsWith("[STDERR]")
+                          ? "text-red-600 dark:text-red-400 font-semibold"
+                          : "text-muted-foreground"
                     }`}
                   >
                     {line}
                   </div>
                 ))}
-                <div ref={logEndRef} />
+                <div ref={logEndRef} aria-hidden />
               </>
             ) : (
               <p className="text-muted-foreground">

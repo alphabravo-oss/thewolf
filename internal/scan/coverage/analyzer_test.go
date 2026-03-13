@@ -38,16 +38,18 @@ func TestAnalyze_GoRepo(t *testing.T) {
 	if report.TestFiles != 2 {
 		t.Errorf("TestFiles: got %d, want 2", report.TestFiles)
 	}
-	if report.FilesWithTests != 2 {
-		t.Errorf("FilesWithTests: got %d, want 2", report.FilesWithTests)
+	// Go uses package-level testing: any test file in a directory covers all
+	// source files in that directory, so all 4 source files are covered.
+	if report.FilesWithTests != 4 {
+		t.Errorf("FilesWithTests: got %d, want 4", report.FilesWithTests)
 	}
-	if report.FilesWithoutTests != 2 {
-		t.Errorf("FilesWithoutTests: got %d, want 2", report.FilesWithoutTests)
+	if report.FilesWithoutTests != 0 {
+		t.Errorf("FilesWithoutTests: got %d, want 0", report.FilesWithoutTests)
 	}
 
-	// coverage should be 50%
-	if report.CoveragePercent != 50 {
-		t.Errorf("CoveragePercent: got %f, want 50", report.CoveragePercent)
+	// coverage should be 100%
+	if report.CoveragePercent != 100 {
+		t.Errorf("CoveragePercent: got %f, want 100", report.CoveragePercent)
 	}
 
 	langGo, ok := report.ByLanguage["go"]
@@ -172,6 +174,49 @@ func TestAnalyze_JavaRepo(t *testing.T) {
 	createFile(t, dir, "src/main/java/com/example/App.java")
 	createFile(t, dir, "src/test/java/com/example/AppTest.java")
 	createFile(t, dir, "src/main/java/com/example/Service.java")
+	createFile(t, dir, "src/test/java/com/example/ServiceIT.java")
+
+	report, err := Analyze(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if report.TotalSourceFiles != 2 {
+		t.Errorf("TotalSourceFiles: got %d, want 2", report.TotalSourceFiles)
+	}
+	// Both AppTest.java and ServiceIT.java (integration test) should map
+	if report.FilesWithTests != 2 {
+		t.Errorf("FilesWithTests: got %d, want 2", report.FilesWithTests)
+	}
+}
+
+func TestAnalyze_CSharpRepo(t *testing.T) {
+	dir := t.TempDir()
+	createFile(t, dir, "MyProject/Foo.cs")
+	createFile(t, dir, "MyProject/Bar.cs")
+	createFile(t, dir, "MyProject.Tests/FooTests.cs")
+
+	report, err := Analyze(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if report.TotalSourceFiles != 2 {
+		t.Errorf("TotalSourceFiles: got %d, want 2", report.TotalSourceFiles)
+	}
+	if report.TestFiles != 1 {
+		t.Errorf("TestFiles: got %d, want 1", report.TestFiles)
+	}
+	if report.FilesWithTests != 1 {
+		t.Errorf("FilesWithTests: got %d, want 1", report.FilesWithTests)
+	}
+}
+
+func TestAnalyze_ScalaRepo(t *testing.T) {
+	dir := t.TempDir()
+	createFile(t, dir, "src/main/scala/com/example/App.scala")
+	createFile(t, dir, "src/test/scala/com/example/AppSpec.scala")
+	createFile(t, dir, "src/main/scala/com/example/Service.scala")
 
 	report, err := Analyze(dir)
 	if err != nil {
@@ -183,5 +228,79 @@ func TestAnalyze_JavaRepo(t *testing.T) {
 	}
 	if report.FilesWithTests != 1 {
 		t.Errorf("FilesWithTests: got %d, want 1", report.FilesWithTests)
+	}
+	if _, ok := report.ByLanguage["scala"]; !ok {
+		t.Fatal("expected 'scala' language in ByLanguage")
+	}
+}
+
+func TestAnalyze_DartRepo(t *testing.T) {
+	dir := t.TempDir()
+	createFile(t, dir, "lib/app.dart")
+	createFile(t, dir, "lib/utils.dart")
+	createFile(t, dir, "test/app_test.dart")
+
+	report, err := Analyze(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if report.TotalSourceFiles != 2 {
+		t.Errorf("TotalSourceFiles: got %d, want 2", report.TotalSourceFiles)
+	}
+	if report.TestFiles != 1 {
+		t.Errorf("TestFiles: got %d, want 1", report.TestFiles)
+	}
+	// test/app_test.dart -> lib/app.dart
+	if report.FilesWithTests != 1 {
+		t.Errorf("FilesWithTests: got %d, want 1", report.FilesWithTests)
+	}
+}
+
+func TestAnalyze_ElixirRepo(t *testing.T) {
+	dir := t.TempDir()
+	createFile(t, dir, "lib/app.ex")
+	createFile(t, dir, "lib/worker.ex")
+	createFile(t, dir, "test/app_test.exs")
+
+	report, err := Analyze(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if report.TotalSourceFiles != 2 {
+		t.Errorf("TotalSourceFiles: got %d, want 2", report.TotalSourceFiles)
+	}
+	if report.TestFiles != 1 {
+		t.Errorf("TestFiles: got %d, want 1", report.TestFiles)
+	}
+	// test/app_test.exs -> lib/app.ex
+	if report.FilesWithTests != 1 {
+		t.Errorf("FilesWithTests: got %d, want 1", report.FilesWithTests)
+	}
+}
+
+func TestAnalyze_GoPackageLevel(t *testing.T) {
+	dir := t.TempDir()
+	// Simulate a Go package where one test file covers all source files
+	createFile(t, dir, "plugins/infra/kubelinter.go")
+	createFile(t, dir, "plugins/infra/kubescape.go")
+	createFile(t, dir, "plugins/infra/tflint.go")
+	createFile(t, dir, "plugins/infra/infra_test.go")
+
+	report, err := Analyze(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if report.TotalSourceFiles != 3 {
+		t.Errorf("TotalSourceFiles: got %d, want 3", report.TotalSourceFiles)
+	}
+	// All 3 source files should be covered via package-level detection
+	if report.FilesWithTests != 3 {
+		t.Errorf("FilesWithTests: got %d, want 3", report.FilesWithTests)
+	}
+	if report.CoveragePercent != 100 {
+		t.Errorf("CoveragePercent: got %f, want 100", report.CoveragePercent)
 	}
 }

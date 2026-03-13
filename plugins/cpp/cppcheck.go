@@ -30,17 +30,22 @@ func (p *CppcheckPlugin) CheckAvailable() bool {
 }
 
 func (p *CppcheckPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
+	if !plugin.HasFilesWithExtension(opts.RepoPath, "c", "cpp", "cc", "h", "hpp") {
+		plugin.Skipf(opts.OnOutput, "cppcheck", "no C/C++ source files found. Add .c, .cpp, or .h files to enable static analysis.")
+		return nil, nil
+	}
+
 	if opts.Timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, opts.Timeout)
 		defer cancel()
 	}
 
-	cmd := exec.CommandContext(ctx, "cppcheck", "--xml", "--enable=all", opts.RepoPath)
-	out, err := cmd.CombinedOutput()
+	cmd := plugin.CommandContext(ctx, "cppcheck", "--xml", "--enable=all", opts.RepoPath)
+	out, err := cmd.Output()
 	if err != nil {
 		if len(out) == 0 {
-			return nil, fmt.Errorf("cppcheck execution failed: %w", err)
+			return nil, plugin.WrapExecError("cppcheck", err)
 		}
 	}
 
@@ -68,7 +73,7 @@ type cppcheckLocation struct {
 
 func parseCppcheckOutput(data []byte) ([]models.Finding, error) {
 	var results cppcheckResults
-	if err := xml.Unmarshal(data, &results); err != nil {
+	if err := xml.Unmarshal(plugin.ExtractXML(data), &results); err != nil {
 		return nil, fmt.Errorf("failed to parse cppcheck output: %w", err)
 	}
 

@@ -35,11 +35,11 @@ func (p *ScancodePlugin) Execute(ctx context.Context, opts models.ExecuteOpts) (
 	}
 
 	args := []string{"--json-pp", "-", "--license", opts.RepoPath}
-	cmd := exec.CommandContext(ctx, "scancode", args...)
+	cmd := plugin.CommandContext(ctx, "scancode", args...)
 	out, err := cmd.Output()
 	if err != nil {
 		if len(out) == 0 {
-			return nil, fmt.Errorf("scancode execution failed: %w", err)
+			return nil, plugin.WrapExecError("scancode", err)
 		}
 	}
 
@@ -68,7 +68,7 @@ type scancodeLicense struct {
 
 func parseScancodeOutput(data []byte) ([]models.Finding, error) {
 	var output scancodeOutput
-	if err := json.Unmarshal(data, &output); err != nil {
+	if err := json.Unmarshal(plugin.ExtractJSON(data), &output); err != nil {
 		return nil, fmt.Errorf("failed to parse scancode output: %w", err)
 	}
 

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"strings"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
@@ -35,11 +36,19 @@ func (p *ESLintPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]
 		defer cancel()
 	}
 
-	cmd := exec.CommandContext(ctx, "eslint", opts.RepoPath, "-f", "json")
+	cmd := plugin.CommandContext(ctx, "eslint", opts.RepoPath, "-f", "json")
 	out, err := cmd.Output()
 	if err != nil {
+		// ESLint v9+ exits with code 2 when no config file is found.
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			stderr := string(exitErr.Stderr)
+			if strings.Contains(stderr, "eslint.config") || strings.Contains(stderr, "eslintrc") {
+				plugin.Skipf(opts.OnOutput, "eslint", "no ESLint configuration found. Create an eslint.config.js (ESLint v9+) or .eslintrc.* file in the repository root to enable linting.")
+				return nil, nil
+			}
+		}
 		if len(out) == 0 {
-			return nil, fmt.Errorf("eslint execution failed: %w", err)
+			return nil, plugin.WrapExecError("eslint", err)
 		}
 	}
 
@@ -61,7 +70,7 @@ type eslintMessage struct {
 
 func parseESLintOutput(data []byte) ([]models.Finding, error) {
 	var files []eslintFile
-	if err := json.Unmarshal(data, &files); err != nil {
+	if err := json.Unmarshal(plugin.ExtractJSON(data), &files); err != nil {
 		return nil, fmt.Errorf("failed to parse eslint output: %w", err)
 	}
 

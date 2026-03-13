@@ -3,7 +3,6 @@ package python
 import (
 	"bufio"
 	"context"
-	"fmt"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -32,19 +31,24 @@ func (p *MypyPlugin) CheckAvailable() bool {
 var mypyLineRegex = regexp.MustCompile(`^(.+?):(\d+):(\d+): (error|warning|note): (.+?)(?:\s+\[(.+?)\])?$`)
 
 func (p *MypyPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
+	if !plugin.HasFilesWithExtension(opts.RepoPath, "py") {
+		plugin.Skipf(opts.OnOutput, "mypy", "no Python files (*.py) found. Add Python source files to enable type checking.")
+		return nil, nil
+	}
+
 	if opts.Timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, opts.Timeout)
 		defer cancel()
 	}
 
-	cmd := exec.CommandContext(ctx, "mypy", opts.RepoPath,
+	cmd := plugin.CommandContext(ctx, "mypy", opts.RepoPath,
 		"--no-error-summary", "--show-column-numbers", "--show-error-codes", "--no-color")
 	out, err := cmd.Output()
 	if err != nil {
 		// mypy exits non-zero when type errors are found; only fail if no output.
 		if len(out) == 0 {
-			return nil, fmt.Errorf("mypy execution failed: %w", err)
+			return nil, plugin.WrapExecError("mypy", err)
 		}
 	}
 

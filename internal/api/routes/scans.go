@@ -40,6 +40,7 @@ var SSEBroker *sse.Broker
 var (
 	activeScansMu  sync.Mutex
 	activeScanCtxs = make(map[string]context.CancelFunc)
+	activeAICtxs   = make(map[string]context.CancelFunc)
 )
 
 // createScanRequest is the JSON body for POST /api/scans.
@@ -99,6 +100,12 @@ func CreateScan(w http.ResponseWriter, r *http.Request) {
 	}
 	if !req.AIEnabled && collectionConfig.AIEnabled {
 		req.AIEnabled = collectionConfig.AIEnabled
+	}
+	// Default to AI enabled if the global setting is on and no explicit choice was made.
+	if !req.AIEnabled {
+		if globalAI, err := h.Store.GetSetting(r.Context(), "ai_enabled"); err == nil && globalAI == "true" {
+			req.AIEnabled = true
+		}
 	}
 	// Global AI kill switch — override per-scan/collection AI if globally disabled.
 	if req.AIEnabled {
@@ -196,6 +203,16 @@ func executeScan(h *Handler, scanID, userID, repoPath, branch string, req create
 	var toolStateMu sync.Mutex
 	toolsCompleted := make([]string, 0)
 	toolsFailed := make([]string, 0)
+	cumulativeFindingCount := 0
+
+	// Read scan concurrency from settings (default: 8).
+	scanConcurrency := 8
+	if val, err := h.Store.GetSetting(context.Background(), "scan_concurrency"); err == nil && val != "" {
+		if n, parseErr := strconv.Atoi(val); parseErr == nil && n > 0 {
+			scanConcurrency = n
+		}
+	}
+	log.Info().Str("scan_id", scanID).Int("concurrency", scanConcurrency).Msg("scan concurrency configured")
 
 	cfg := runner.RunConfig{
 		RepoPath:      repoPath,
@@ -203,6 +220,7 @@ func executeScan(h *Handler, scanID, userID, repoPath, branch string, req create
 		Registry:      h.Registry,
 		Tools:         req.Tools,
 		DisabledTools: req.DisabledTools,
+		Concurrency:   scanConcurrency,
 		OnToolsSelected: func(toolNames []string) {
 			log.Info().Str("scan_id", scanID).Int("count", len(toolNames)).Strs("tools", toolNames).Msg("tools selected")
 			// Persist selected tools immediately so the live page can show all cards.
@@ -230,7 +248,8 @@ func executeScan(h *Handler, scanID, userID, repoPath, branch string, req create
 				})
 			}
 		},
-		OnToolDone: func(toolName string, findingCount int, toolErr error) {
+		OnToolDone: func(toolName string, toolFindings []models.Finding, toolErr error) {
+			findingCount := len(toolFindings)
 			status := "completed"
 			errMsg := ""
 			if toolErr != nil {
@@ -240,31 +259,51 @@ func executeScan(h *Handler, scanID, userID, repoPath, branch string, req create
 			} else {
 				log.Info().Str("scan_id", scanID).Str("tool", toolName).Int("findings", findingCount).Msg("tool completed")
 			}
-			if SSEBroker != nil {
-				escapedErr, _ := json.Marshal(errMsg)
-				SSEBroker.Publish(topic, sse.Event{
-					Type: "scan_progress",
-					Data: fmt.Sprintf(`{"type":"scan_progress","scan_id":"%s","tool_name":"%s","status":"%s","finding_count":%d,"elapsed_ms":0,"progress_pct":100,"error":%s}`, scanID, toolName, status, findingCount, string(escapedErr)),
-				})
+
+			// Persist findings immediately so they appear in the UI in real time.
+			if findingCount > 0 {
+				persistAt := time.Now()
+				for i := range toolFindings {
+					toolFindings[i].ID = uuid.New().String()
+					toolFindings[i].ScanID = scanID
+					toolFindings[i].RepoID = scan.RepoID
+					toolFindings[i].CreatedAt = persistAt
+					toolFindings[i].UpdatedAt = persistAt
+				}
+				if createErr := h.Store.CreateFindings(context.Background(), toolFindings); createErr != nil {
+					log.Error().Str("scan_id", scanID).Str("tool", toolName).Err(createErr).Msg("failed to persist tool findings")
+				}
 			}
 
-			// Persist incremental tool status to DB so polling clients
-			// and page refreshes see correct per-tool state mid-scan.
+			// Update tool status and cumulative finding count atomically.
 			toolStateMu.Lock()
 			if toolErr != nil {
 				toolsFailed = append(toolsFailed, toolName)
 			} else {
 				toolsCompleted = append(toolsCompleted, toolName)
 			}
+			cumulativeFindingCount += findingCount
+			currentTotal := cumulativeFindingCount
 			completedJSON, _ := json.Marshal(toolsCompleted)
 			failedJSON, _ := json.Marshal(toolsFailed)
 			toolStateMu.Unlock()
 
+			// Update scan record with incremental state.
 			if s, err := h.Store.GetScanByID(context.Background(), scanID); err == nil {
 				s.ToolsCompleted = string(completedJSON)
 				s.ToolsFailed = string(failedJSON)
+				s.FindingCount = currentTotal
 				s.UpdatedAt = time.Now()
 				h.Store.UpdateScan(context.Background(), s)
+			}
+
+			// Broadcast SSE with per-tool count and cumulative total.
+			if SSEBroker != nil {
+				escapedErr, _ := json.Marshal(errMsg)
+				SSEBroker.Publish(topic, sse.Event{
+					Type: "scan_progress",
+					Data: fmt.Sprintf(`{"type":"scan_progress","scan_id":"%s","tool_name":"%s","status":"%s","finding_count":%d,"total_findings":%d,"elapsed_ms":0,"progress_pct":100,"error":%s}`, scanID, toolName, status, findingCount, currentTotal, string(escapedErr)),
+				})
 			}
 		},
 		OnToolOutput: func(toolName string, line string) {
@@ -310,8 +349,6 @@ func executeScan(h *Handler, scanID, userID, repoPath, branch string, req create
 	scan.UpdatedAt = completedAt
 
 	if result != nil {
-		scan.FindingCount = len(result.Findings)
-
 		failedNames := make(map[string]bool, len(result.ToolsFailed))
 		for name := range result.ToolsFailed {
 			failedNames[name] = true
@@ -390,28 +427,10 @@ func executeScan(h *Handler, scanID, userID, repoPath, branch string, req create
 		// Score findings with default AI context score.
 		scorer.ScoreFindings(result.Findings)
 
-		// Persist findings.
-		if len(result.Findings) > 0 {
-			for i := range result.Findings {
-				result.Findings[i].ID = uuid.New().String()
-				result.Findings[i].ScanID = scanID
-				result.Findings[i].RepoID = scan.RepoID
-				result.Findings[i].CreatedAt = completedAt
-				result.Findings[i].UpdatedAt = completedAt
-			}
-			_ = h.Store.CreateFindings(context.Background(), result.Findings)
-		}
-
-		// AI Assessment phase.
-		if req.AIEnabled && len(result.Findings) > 0 {
-			aiProvider := resolveAIProvider(h, req.AIEngine, req.AIModel, scan.UserID)
-			wolflog.Info().Str("engine", req.AIEngine).Str("provider", aiProvider.Name()).Int("findings", len(result.Findings)).Msg("AI assessment: resolved provider")
-			if aiProvider.Name() != "noop" {
-				runAIAssessment(context.Background(), h, aiProvider, scan, result.Findings, topic)
-			} else {
-				wolflog.Warn().Str("engine", req.AIEngine).Msg("AI assessment: skipped (noop provider)")
-			}
-		}
+		// Findings were persisted incrementally in OnToolDone.
+		// The runner's result.Findings is the deduplicated set — update
+		// the final count to reflect dedup (may be lower than cumulative).
+		scan.FindingCount = len(result.Findings)
 
 		// Static test coverage analysis.
 		covReport, covErr := coverage.Analyze(repoPath)
@@ -467,9 +486,9 @@ func executeScan(h *Handler, scanID, userID, repoPath, branch string, req create
 		}
 	}
 
+	// Mark scan complete NOW — tools are done. AI assessment runs in background.
 	_ = h.Store.UpdateScan(context.Background(), scan)
 
-	// Publish completion event.
 	if SSEBroker != nil {
 		SSEBroker.Publish(topic, sse.Event{
 			Type: "scan_complete",
@@ -481,7 +500,30 @@ func executeScan(h *Handler, scanID, userID, repoPath, branch string, req create
 		Str("scan_id", scanID).
 		Str("status", string(scan.Status)).
 		Int("findings", scan.FindingCount).
-		Msg("scan fully complete")
+		Msg("scan complete — all tools finished")
+
+	// AI Assessment phase — runs asynchronously after scan is already marked complete.
+	if result != nil && req.AIEnabled && len(result.Findings) > 0 {
+		aiProvider := resolveAIProvider(h, req.AIEngine, req.AIModel, scan.UserID)
+		wolflog.Info().Str("engine", req.AIEngine).Str("provider", aiProvider.Name()).Int("findings", len(result.Findings)).Msg("AI assessment: resolved provider")
+		if aiProvider.Name() != "noop" {
+			aiCtx, aiCancel := context.WithCancel(context.Background())
+			activeScansMu.Lock()
+			activeAICtxs[scan.ID] = aiCancel
+			activeScansMu.Unlock()
+			go func() {
+				defer func() {
+					activeScansMu.Lock()
+					delete(activeAICtxs, scan.ID)
+					activeScansMu.Unlock()
+					aiCancel()
+				}()
+				runAIAssessment(aiCtx, h, aiProvider, scan, result.Findings, topic)
+			}()
+		} else {
+			wolflog.Warn().Str("engine", req.AIEngine).Msg("AI assessment: skipped (noop provider)")
+		}
+	}
 }
 
 // ListScans handles GET /api/scans — list scans for the current user.
@@ -697,6 +739,43 @@ func GetScanFindings(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// GetScanFindingStats handles GET /api/scans/:id/findings/stats — severity and tool counts.
+// Returns aggregate counts without transferring all findings.
+func GetScanFindingStats(w http.ResponseWriter, r *http.Request) {
+	claims := auth.GetUserFromContext(r.Context())
+	if claims == nil {
+		response.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing user context")
+		return
+	}
+	h := DefaultHandler
+	if h == nil {
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "handler not initialized")
+		return
+	}
+
+	scanID := chi.URLParam(r, "id")
+	findings, err := h.Store.ListFindingsByScan(r.Context(), scanID)
+	if err != nil {
+		response.WriteError(w, http.StatusNotFound, "not_found", fmt.Sprintf("scan %s not found", scanID))
+		return
+	}
+
+	bySeverity := map[string]int{"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
+	byTool := make(map[string]int)
+	for _, f := range findings {
+		bySeverity[string(f.Severity)]++
+		byTool[f.ToolName]++
+	}
+
+	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{
+		Data: map[string]interface{}{
+			"total":       len(findings),
+			"by_severity": bySeverity,
+			"by_tool":     byTool,
+		},
+	})
+}
+
 // StreamScan handles GET /api/scans/:id/stream — SSE endpoint for scan progress.
 func StreamScan(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetUserFromContext(r.Context())
@@ -885,14 +964,22 @@ func CancelScan(w http.ResponseWriter, r *http.Request) {
 	}
 
 
-	if scan.Status != models.ScanStatusRunning && scan.Status != models.ScanStatusPending {
+	// Check if there's an active AI assessment for this scan.
+	activeScansMu.Lock()
+	_, hasActiveScan := activeScanCtxs[id]
+	_, hasActiveAI := activeAICtxs[id]
+	activeScansMu.Unlock()
+
+	if scan.Status != models.ScanStatusRunning && scan.Status != models.ScanStatusPending && !hasActiveAI {
 		response.WriteError(w, http.StatusConflict, "conflict", "scan is not running or pending")
 		return
 	}
 
 	now := time.Now()
-	scan.Status = models.ScanStatusCancelled
-	scan.CompletedAt = &now
+	if scan.Status == models.ScanStatusRunning || scan.Status == models.ScanStatusPending {
+		scan.Status = models.ScanStatusCancelled
+		scan.CompletedAt = &now
+	}
 	scan.UpdatedAt = now
 
 	if err := h.Store.UpdateScan(r.Context(), scan); err != nil {
@@ -901,9 +988,17 @@ func CancelScan(w http.ResponseWriter, r *http.Request) {
 	}
 
 	activeScansMu.Lock()
-	if cancelFn, ok := activeScanCtxs[id]; ok {
-		cancelFn()
-		delete(activeScanCtxs, id)
+	if hasActiveScan {
+		if cancelFn, ok := activeScanCtxs[id]; ok {
+			cancelFn()
+			delete(activeScanCtxs, id)
+		}
+	}
+	if hasActiveAI {
+		if cancelFn, ok := activeAICtxs[id]; ok {
+			cancelFn()
+			delete(activeAICtxs, id)
+		}
 	}
 	activeScansMu.Unlock()
 
@@ -1190,6 +1285,7 @@ func runAIAssessment(ctx context.Context, h *Handler, provider ai.Provider, scan
 			PromptTokens:   entry.PromptTokens,
 			ResponseTokens: entry.ResponseTokens,
 			DurationMs:     entry.DurationMs,
+			CostUSD:        entry.CostUSD,
 		}
 		if err := h.Store.CreateAILog(context.Background(), logEntry); err != nil {
 			wolflog.Error().Err(err).Msg("Failed to persist AI log")
@@ -1261,6 +1357,16 @@ func runAIAssessment(ctx context.Context, h *Handler, provider ai.Provider, scan
 
 	// Phase 1: Assess each tool's findings.
 	for step, toolName := range toolNames {
+		if ctx.Err() != nil {
+			wolflog.Info().Str("scan_id", scan.ID).Msg("AI assessment: cancelled")
+			if SSEBroker != nil {
+				SSEBroker.Publish(topic, sse.Event{
+					Type: "ai_assessment",
+					Data: fmt.Sprintf(`{"type":"ai_assessment","scan_id":"%s","phase":"cancelled","progress_pct":0}`, scan.ID),
+				})
+			}
+			return
+		}
 		currentPhase = "tool_assess"
 		currentTool = toolName
 		indices := byTool[toolName]
@@ -1361,6 +1467,18 @@ func runAIAssessment(ctx context.Context, h *Handler, provider ai.Provider, scan
 
 	// Re-score with AI context scores.
 	scorer.ScoreFindings(findings)
+
+	// Check cancellation before executive summary.
+	if ctx.Err() != nil {
+		wolflog.Info().Str("scan_id", scan.ID).Msg("AI assessment: cancelled before summary")
+		if SSEBroker != nil {
+			SSEBroker.Publish(topic, sse.Event{
+				Type: "ai_assessment",
+				Data: fmt.Sprintf(`{"type":"ai_assessment","scan_id":"%s","phase":"cancelled","progress_pct":0}`, scan.ID),
+			})
+		}
+		return
+	}
 
 	// Phase 2: Executive summary across all tools.
 	currentPhase = "summary"
@@ -1637,8 +1755,8 @@ func parsePagination(r *http.Request) (page, perPage int) {
 	}
 	if v := r.URL.Query().Get("per_page"); v != "" {
 		if pp, err := strconv.Atoi(v); err == nil && pp > 0 {
-			if pp > 200 {
-				pp = 200
+			if pp > 5000 {
+				pp = 5000
 			}
 			perPage = pp
 		}

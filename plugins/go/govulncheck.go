@@ -30,18 +30,24 @@ func (p *GovulncheckPlugin) CheckAvailable() bool {
 }
 
 func (p *GovulncheckPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
+	goDir := plugin.FindFile(opts.RepoPath, "go.mod")
+	if goDir == "" {
+		plugin.Skipf(opts.OnOutput, "govulncheck", "no go.mod found in project or immediate subdirectories.")
+		return nil, nil
+	}
+
 	if opts.Timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, opts.Timeout)
 		defer cancel()
 	}
 
-	cmd := exec.CommandContext(ctx, "govulncheck", "-json", "./...")
-	cmd.Dir = opts.RepoPath
+	cmd := plugin.CommandContext(ctx, "govulncheck", "-json", "./...")
+	cmd.Dir = goDir
 	out, err := cmd.Output()
 	if err != nil {
 		if len(out) == 0 {
-			return nil, fmt.Errorf("govulncheck execution failed: %w", err)
+			return nil, plugin.WrapExecError("govulncheck", err)
 		}
 	}
 

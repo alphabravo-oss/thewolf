@@ -34,11 +34,11 @@ func (p *DetectSecretsPlugin) Execute(ctx context.Context, opts models.ExecuteOp
 		defer cancel()
 	}
 
-	cmd := exec.CommandContext(ctx, "detect-secrets", "scan", opts.RepoPath)
+	cmd := plugin.CommandContext(ctx, "detect-secrets", "scan", opts.RepoPath)
 	out, err := cmd.Output()
 	if err != nil {
 		if len(out) == 0 {
-			return nil, fmt.Errorf("detect-secrets execution failed: %w", err)
+			return nil, plugin.WrapExecError("detect-secrets", err)
 		}
 	}
 
@@ -57,7 +57,7 @@ type detectSecretsResult struct {
 
 func parseDetectSecretsOutput(data []byte) ([]models.Finding, error) {
 	var output detectSecretsOutput
-	if err := json.Unmarshal(data, &output); err != nil {
+	if err := json.Unmarshal(plugin.ExtractJSON(data), &output); err != nil {
 		return nil, fmt.Errorf("failed to parse detect-secrets output: %w", err)
 	}
 

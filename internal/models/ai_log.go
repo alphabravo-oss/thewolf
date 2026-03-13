@@ -16,5 +16,6 @@ type AILog struct {
 	PromptTokens   int       `json:"prompt_tokens" db:"prompt_tokens"`
 	ResponseTokens int       `json:"response_tokens" db:"response_tokens"`
 	DurationMs     int64     `json:"duration_ms" db:"duration_ms"`
+	CostUSD        float64   `json:"cost_usd" db:"cost_usd"`
 	CreatedAt      time.Time `json:"created_at" db:"created_at"`
 }

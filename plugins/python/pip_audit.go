@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
@@ -34,13 +36,27 @@ func (p *PipAuditPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) (
 		defer cancel()
 	}
 
-	cmd := exec.CommandContext(ctx, "pip-audit", "-r", "requirements.txt", "-f", "json")
+	// Auto-detect requirements files
+	reqFiles := []string{"requirements.txt", "requirements/base.txt", "requirements/prod.txt", "requirements-dev.txt"}
+	var reqFile string
+	for _, f := range reqFiles {
+		if _, err := os.Stat(filepath.Join(opts.RepoPath, f)); err == nil {
+			reqFile = f
+			break
+		}
+	}
+	if reqFile == "" {
+		plugin.Skipf(opts.OnOutput, "pip-audit", "no requirements file found (checked requirements.txt, requirements/base.txt, requirements/prod.txt, requirements-dev.txt). Add a requirements file or use pip freeze > requirements.txt to enable dependency auditing.")
+		return nil, nil
+	}
+
+	cmd := plugin.CommandContext(ctx, "pip-audit", "-r", reqFile, "-f", "json")
 	cmd.Dir = opts.RepoPath
 	out, err := cmd.Output()
 	if err != nil {
 		// pip-audit exits non-zero when vulnerabilities are found; only fail if no output.
 		if len(out) == 0 {
-			return nil, fmt.Errorf("pip-audit execution failed: %w", err)
+			return nil, plugin.WrapExecError("pip-audit", err)
 		}
 	}
 
@@ -66,7 +82,7 @@ type pipAuditVuln struct {
 
 func parsePipAuditOutput(data []byte) ([]models.Finding, error) {
 	var output pipAuditOutput
-	if err := json.Unmarshal(data, &output); err != nil {
+	if err := json.Unmarshal(plugin.ExtractJSON(data), &output); err != nil {
 		return nil, fmt.Errorf("failed to parse pip-audit output: %w", err)
 	}
 

@@ -29,17 +29,22 @@ func (p *PHPStanPlugin) CheckAvailable() bool {
 }
 
 func (p *PHPStanPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
+	if !plugin.HasFilesWithExtension(opts.RepoPath, "php") {
+		plugin.Skipf(opts.OnOutput, "phpstan", "no PHP files (*.php) found. Add PHP source files to enable static analysis.")
+		return nil, nil
+	}
+
 	if opts.Timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, opts.Timeout)
 		defer cancel()
 	}
 
-	cmd := exec.CommandContext(ctx, "phpstan", "analyse", "--error-format=json", "--no-progress", opts.RepoPath)
+	cmd := plugin.CommandContext(ctx, "phpstan", "analyse", "--error-format=json", "--no-progress", opts.RepoPath)
 	out, err := cmd.Output()
 	if err != nil {
 		if len(out) == 0 {
-			return nil, fmt.Errorf("phpstan execution failed: %w", err)
+			return nil, plugin.WrapExecError("phpstan", err)
 		}
 	}
 
@@ -63,7 +68,7 @@ type phpstanMessage struct {
 
 func parsePHPStanOutput(data []byte) ([]models.Finding, error) {
 	var output phpstanOutput
-	if err := json.Unmarshal(data, &output); err != nil {
+	if err := json.Unmarshal(plugin.ExtractJSON(data), &output); err != nil {
 		return nil, fmt.Errorf("failed to parse phpstan output: %w", err)
 	}
 

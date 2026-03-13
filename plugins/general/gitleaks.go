@@ -7,6 +7,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strings"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
@@ -40,8 +42,26 @@ func (p *GitleaksPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) (
 	reportFile := filepath.Join(os.TempDir(), fmt.Sprintf("gitleaks-%d.json", os.Getpid()))
 	defer os.Remove(reportFile)
 
-	args := []string{"detect", "--source", opts.RepoPath, "--report-format", "json", "--report-path", reportFile, "--no-git"}
-	cmd := exec.CommandContext(ctx, "gitleaks", args...)
+	// Generate a config that extends the default rules with path exclusions.
+	configFile := filepath.Join(os.TempDir(), fmt.Sprintf("gitleaks-config-%d.toml", os.Getpid()))
+	defer os.Remove(configFile)
+	var configBuf strings.Builder
+	configBuf.WriteString("[extend]\n# use default gitleaks rules\n\n[allowlist]\npaths = [\n")
+	for i, dir := range plugin.DefaultExcludeDirs {
+		if i > 0 {
+			configBuf.WriteString(",\n")
+		}
+		// Regex pattern to match the directory anywhere in the path.
+		configBuf.WriteString(fmt.Sprintf(`  '''(^|/)%s(/|$)'''`, regexp.QuoteMeta(dir)))
+	}
+	configBuf.WriteString("\n]\n")
+	if err := os.WriteFile(configFile, []byte(configBuf.String()), 0644); err != nil {
+		return nil, fmt.Errorf("gitleaks: failed to write config: %w", err)
+	}
+
+	args := []string{"detect", "--source", opts.RepoPath, "--report-format", "json", "--report-path", reportFile, "--no-git", "--config", configFile}
+	cmd := plugin.CommandContext(ctx, "gitleaks", args...)
+	cmd.Env = append(os.Environ(), "GOMAXPROCS=2")
 	cmd.Stderr = nil
 	// Gitleaks exits with code 1 when leaks are found — that's not an error for us.
 	_ = cmd.Run()
@@ -49,6 +69,7 @@ func (p *GitleaksPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) (
 	out, err := os.ReadFile(reportFile)
 	if err != nil {
 		// No report file means gitleaks didn't produce output (e.g. no leaks found).
+		plugin.Infof(opts.OnOutput, "gitleaks", "scan completed, no secrets detected.")
 		return nil, nil
 	}
 
@@ -68,7 +89,7 @@ type gitleaksFinding struct {
 
 func parseGitleaksOutput(data []byte) ([]models.Finding, error) {
 	var results []gitleaksFinding
-	if err := json.Unmarshal(data, &results); err != nil {
+	if err := json.Unmarshal(plugin.ExtractJSON(data), &results); err != nil {
 		return nil, fmt.Errorf("failed to parse gitleaks output: %w", err)
 	}
 

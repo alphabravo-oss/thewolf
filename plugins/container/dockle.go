@@ -40,12 +40,13 @@ func (p *DocklePlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]
 	// a Dockerfile if one exists in the repo, otherwise skip.
 	dockerfile := filepath.Join(opts.RepoPath, "Dockerfile")
 	if _, err := os.Stat(dockerfile); err != nil {
-		return nil, nil // No Dockerfile — nothing to scan.
+		plugin.Skipf(opts.OnOutput, "dockle", "no Dockerfile found in repository root. Add a Dockerfile to enable container image analysis.")
+		return nil, nil
 	}
 
 	// Build a temporary image for scanning.
 	imageName := fmt.Sprintf("wolf-dockle-scan:%d", os.Getpid())
-	buildCmd := exec.CommandContext(ctx, "docker", "build", "-t", imageName, "-f", dockerfile, opts.RepoPath)
+	buildCmd := plugin.CommandContext(ctx, "docker", "build", "-t", imageName, "-f", dockerfile, opts.RepoPath)
 	if buildOut, err := buildCmd.CombinedOutput(); err != nil {
 		return nil, fmt.Errorf("docker build failed: %s: %w", string(buildOut), err)
 	}
@@ -54,11 +55,11 @@ func (p *DocklePlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]
 	}()
 
 	args := []string{"--format", "json", imageName}
-	cmd := exec.CommandContext(ctx, "dockle", args...)
+	cmd := plugin.CommandContext(ctx, "dockle", args...)
 	out, err := cmd.Output()
 	if err != nil {
 		if len(out) == 0 {
-			return nil, fmt.Errorf("dockle execution failed: %w", err)
+			return nil, plugin.WrapExecError("dockle", err)
 		}
 	}
 
@@ -78,7 +79,7 @@ type dockleDetail struct {
 
 func parseDockleOutput(data []byte) ([]models.Finding, error) {
 	var output dockleOutput
-	if err := json.Unmarshal(data, &output); err != nil {
+	if err := json.Unmarshal(plugin.ExtractJSON(data), &output); err != nil {
 		return nil, fmt.Errorf("failed to parse dockle output: %w", err)
 	}
 

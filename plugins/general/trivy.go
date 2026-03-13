@@ -35,11 +35,11 @@ func (p *TrivyPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]m
 	}
 
 	args := []string{"fs", "--format", "json", opts.RepoPath}
-	cmd := exec.CommandContext(ctx, "trivy", args...)
+	cmd := plugin.CommandContext(ctx, "trivy", args...)
 	out, err := cmd.Output()
 	if err != nil {
 		if len(out) == 0 {
-			return nil, fmt.Errorf("trivy execution failed: %w", err)
+			return nil, plugin.WrapExecError("trivy", err)
 		}
 	}
 
@@ -67,7 +67,7 @@ type trivyVulnerability struct {
 
 func parseTrivyOutput(data []byte) ([]models.Finding, error) {
 	var output trivyOutput
-	if err := json.Unmarshal(data, &output); err != nil {
+	if err := json.Unmarshal(plugin.ExtractJSON(data), &output); err != nil {
 		return nil, fmt.Errorf("failed to parse trivy output: %w", err)
 	}
 

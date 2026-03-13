@@ -1,6 +1,7 @@
 package infra
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -33,12 +34,20 @@ func (p *KubeLinterPlugin) Execute(ctx context.Context, opts models.ExecuteOpts)
 		defer cancel()
 	}
 
-	cmd := exec.CommandContext(ctx, "kube-linter", "lint", "--format", "json", opts.RepoPath)
+	cmd := plugin.CommandContext(ctx, "kube-linter", "lint", "--format", "json", opts.RepoPath)
 	out, err := cmd.Output()
 	if err != nil {
 		if len(out) == 0 {
-			return nil, fmt.Errorf("kube-linter execution failed: %w", err)
+			// kube-linter exits non-zero with no output when there are no K8s files.
+			plugin.Skipf(opts.OnOutput, "kube-linter", "no Kubernetes manifests found. Add YAML files with K8s resources to enable linting.")
+			return nil, nil
 		}
+	}
+
+	// Handle empty or whitespace-only output (no K8s manifests found)
+	if len(bytes.TrimSpace(out)) == 0 {
+		plugin.Skipf(opts.OnOutput, "kube-linter", "no Kubernetes manifests found. Add YAML files with K8s resources to enable linting.")
+		return nil, nil
 	}
 
 	return parseKubeLinterOutput(out)
@@ -64,7 +73,7 @@ type kubeLinterReport struct {
 
 func parseKubeLinterOutput(data []byte) ([]models.Finding, error) {
 	var output kubeLinterOutput
-	if err := json.Unmarshal(data, &output); err != nil {
+	if err := json.Unmarshal(plugin.ExtractJSON(data), &output); err != nil {
 		return nil, fmt.Errorf("failed to parse kube-linter output: %w", err)
 	}
 

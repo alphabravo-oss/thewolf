@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
-	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -37,7 +36,7 @@ type RunConfig struct {
 	Timeout       time.Duration
 	OnToolsSelected func(toolNames []string) // called with the full list before any tool starts
 	OnToolStart     func(toolName string)
-	OnToolDone      func(toolName string, findings int, err error)
+	OnToolDone      func(toolName string, findings []models.Finding, err error)
 	OnToolOutput    func(toolName string, line string)
 }
 
@@ -177,13 +176,10 @@ func SelectTools(cfg RunConfig) []models.Plugin {
 	return selected
 }
 
-// defaultConcurrency returns the default worker count: min(NumCPU, 8).
+// defaultConcurrency returns the default worker count: 4.
+// Kept conservative because some tools (e.g. semgrep) are CPU-intensive.
 func defaultConcurrency() int {
-	n := runtime.NumCPU()
-	if n > 8 {
-		return 8
-	}
-	return n
+	return 4
 }
 
 // extractStderr extracts stderr content from an exec.ExitError if present.
@@ -291,6 +287,14 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 
 			elapsed := time.Since(toolStart)
 
+			// Assign fingerprints immediately so callers can persist per-tool.
+			for i := range findings {
+				f := &findings[i]
+				if f.Fingerprint == "" {
+					f.Fingerprint = Fingerprint(f.ToolName, f.RuleID, f.Title, f.FilePath)
+				}
+			}
+
 			mu.Lock()
 			result.ToolsRun = append(result.ToolsRun, toolName)
 			if err != nil {
@@ -314,13 +318,19 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 							cfg.OnToolOutput(toolName, "[STDERR] "+line)
 						}
 					}
+					// Try to diagnose the failure and provide actionable guidance.
+					if diag := plugin.DiagnoseExecError(toolName, err, extractStderr(err)); diag != nil {
+						plugin.EmitDiagnostic(func(line string) {
+							cfg.OnToolOutput(toolName, line)
+						}, diag)
+					}
 				}
 			} else {
 				log.Info().Str("tool", toolName).Dur("elapsed", elapsed).Int("findings", len(findings)).Msg("tool completed")
 			}
 
 			if cfg.OnToolDone != nil {
-				cfg.OnToolDone(toolName, len(findings), err)
+				cfg.OnToolDone(toolName, findings, err)
 			}
 
 			// We don't return errors here because a single tool failure
@@ -333,15 +343,7 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	// but we call it to ensure all goroutines complete.
 	_ = g.Wait()
 
-	// Assign fingerprints to all findings.
-	for i := range allFindings {
-		f := &allFindings[i]
-		if f.Fingerprint == "" {
-			f.Fingerprint = Fingerprint(f.ToolName, f.RuleID, f.Title, f.FilePath)
-		}
-	}
-
-	// Deduplicate findings.
+	// Deduplicate findings (fingerprints already assigned per-tool above).
 	result.Findings = Deduplicate(allFindings)
 
 	// Sort ToolsRun for deterministic output.

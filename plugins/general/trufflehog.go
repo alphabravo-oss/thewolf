@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
@@ -36,12 +37,24 @@ func (p *TrufflehogPlugin) Execute(ctx context.Context, opts models.ExecuteOpts)
 		defer cancel()
 	}
 
-	args := []string{"filesystem", "--json", opts.RepoPath}
-	cmd := exec.CommandContext(ctx, "trufflehog", args...)
+	// Write exclude patterns to a temp file — trufflehog takes a single --exclude-paths file.
+	excludeFile, err := os.CreateTemp("", "trufflehog-exclude-*.txt")
+	if err != nil {
+		return nil, fmt.Errorf("trufflehog: failed to create exclude file: %w", err)
+	}
+	defer os.Remove(excludeFile.Name())
+	for _, dir := range plugin.DefaultExcludeDirs {
+		fmt.Fprintln(excludeFile, dir)
+	}
+	excludeFile.Close()
+
+	args := []string{"filesystem", "--json", "--exclude-paths", excludeFile.Name(), opts.RepoPath}
+	cmd := plugin.CommandContext(ctx, "trufflehog", args...)
+	cmd.Env = append(os.Environ(), "GOMAXPROCS=2")
 	out, err := cmd.Output()
 	if err != nil {
 		if len(out) == 0 {
-			return nil, fmt.Errorf("trufflehog execution failed: %w", err)
+			return nil, plugin.WrapExecError("trufflehog", err)
 		}
 	}
 

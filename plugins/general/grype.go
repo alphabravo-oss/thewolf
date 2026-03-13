@@ -35,11 +35,11 @@ func (p *GrypePlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]m
 	}
 
 	args := []string{"dir:" + opts.RepoPath, "-o", "json"}
-	cmd := exec.CommandContext(ctx, "grype", args...)
+	cmd := plugin.CommandContext(ctx, "grype", args...)
 	out, err := cmd.Output()
 	if err != nil {
 		if len(out) == 0 {
-			return nil, fmt.Errorf("grype execution failed: %w", err)
+			return nil, plugin.WrapExecError("grype", err)
 		}
 	}
 
@@ -75,7 +75,7 @@ type grypeArtifact struct {
 
 func parseGrypeOutput(data []byte) ([]models.Finding, error) {
 	var output grypeOutput
-	if err := json.Unmarshal(data, &output); err != nil {
+	if err := json.Unmarshal(plugin.ExtractJSON(data), &output); err != nil {
 		return nil, fmt.Errorf("failed to parse grype output: %w", err)
 	}
 

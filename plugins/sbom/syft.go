@@ -35,11 +35,11 @@ func (p *SyftPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]mo
 	}
 
 	args := []string{opts.RepoPath, "-o", "json"}
-	cmd := exec.CommandContext(ctx, "syft", args...)
+	cmd := plugin.CommandContext(ctx, "syft", args...)
 	out, err := cmd.Output()
 	if err != nil {
 		if len(out) == 0 {
-			return nil, fmt.Errorf("syft execution failed: %w", err)
+			return nil, plugin.WrapExecError("syft", err)
 		}
 	}
 
@@ -65,7 +65,7 @@ type syftArtifact struct {
 
 func parseSyftOutput(data []byte) ([]models.Finding, error) {
 	var output syftOutput
-	if err := json.Unmarshal(data, &output); err != nil {
+	if err := json.Unmarshal(plugin.ExtractJSON(data), &output); err != nil {
 		return nil, fmt.Errorf("failed to parse syft output: %w", err)
 	}
 

@@ -35,11 +35,11 @@ func (p *CheckovPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([
 	}
 
 	args := []string{"-d", opts.RepoPath, "-o", "json", "--quiet"}
-	cmd := exec.CommandContext(ctx, "checkov", args...)
+	cmd := plugin.CommandContext(ctx, "checkov", args...)
 	out, err := cmd.Output()
 	if err != nil {
 		if len(out) == 0 {
-			return nil, fmt.Errorf("checkov execution failed: %w", err)
+			return nil, plugin.WrapExecError("checkov", err)
 		}
 	}
 
@@ -70,10 +70,10 @@ type checkovCheck struct {
 func parseCheckovOutput(data []byte) ([]models.Finding, error) {
 	// Checkov can return an array or object
 	var output checkovOutput
-	if err := json.Unmarshal(data, &output); err != nil {
+	if err := json.Unmarshal(plugin.ExtractJSON(data), &output); err != nil {
 		// Try as array (multiple frameworks)
 		var outputs []checkovOutput
-		if err2 := json.Unmarshal(data, &outputs); err2 != nil {
+		if err2 := json.Unmarshal(plugin.ExtractJSON(data), &outputs); err2 != nil {
 			return nil, fmt.Errorf("failed to parse checkov output: %w", err)
 		}
 		var findings []models.Finding

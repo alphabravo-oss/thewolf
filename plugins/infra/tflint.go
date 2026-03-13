@@ -27,18 +27,23 @@ func (p *TFLintPlugin) CheckAvailable() bool {
 }
 
 func (p *TFLintPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
+	if !plugin.HasFilesWithExtension(opts.RepoPath, "tf") {
+		plugin.Skipf(opts.OnOutput, "tflint", "no Terraform files (*.tf) found. Add .tf files to enable infrastructure linting.")
+		return nil, nil
+	}
+
 	if opts.Timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, opts.Timeout)
 		defer cancel()
 	}
 
-	cmd := exec.CommandContext(ctx, "tflint", "--format", "json")
+	cmd := plugin.CommandContext(ctx, "tflint", "--format", "json")
 	cmd.Dir = opts.RepoPath
 	out, err := cmd.Output()
 	if err != nil {
 		if len(out) == 0 {
-			return nil, fmt.Errorf("tflint execution failed: %w", err)
+			return nil, plugin.WrapExecError("tflint", err)
 		}
 	}
 
@@ -69,7 +74,7 @@ type tflintIssue struct {
 
 func parseTFLintOutput(data []byte) ([]models.Finding, error) {
 	var output tflintOutput
-	if err := json.Unmarshal(data, &output); err != nil {
+	if err := json.Unmarshal(plugin.ExtractJSON(data), &output); err != nil {
 		return nil, fmt.Errorf("failed to parse tflint output: %w", err)
 	}
 

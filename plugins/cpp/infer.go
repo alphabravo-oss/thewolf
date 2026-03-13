@@ -29,24 +29,29 @@ func (p *InferPlugin) CheckAvailable() bool {
 }
 
 func (p *InferPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
+	if !plugin.HasFile(opts.RepoPath, "Makefile") {
+		plugin.Skipf(opts.OnOutput, "infer", "no Makefile found — Infer requires a build system. Add a Makefile to enable analysis.")
+		return nil, nil
+	}
+
 	if opts.Timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, opts.Timeout)
 		defer cancel()
 	}
 
-	cmd := exec.CommandContext(ctx, "infer", "run", "--", "make")
+	cmd := plugin.CommandContext(ctx, "infer", "run", "--", "make")
 	cmd.Dir = opts.RepoPath
 	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("infer execution failed: %w", err)
+		return nil, plugin.WrapExecError("infer", err)
 	}
 
 	// Read the report
-	reportCmd := exec.CommandContext(ctx, "infer", "report", "--issues-json", "-")
+	reportCmd := plugin.CommandContext(ctx, "infer", "report", "--issues-json", "-")
 	reportCmd.Dir = opts.RepoPath
 	out, err := reportCmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("infer report failed: %w", err)
+		return nil, plugin.WrapExecError("infer", err)
 	}
 
 	return parseInferOutput(out)
@@ -64,7 +69,7 @@ type inferIssue struct {
 
 func parseInferOutput(data []byte) ([]models.Finding, error) {
 	var issues []inferIssue
-	if err := json.Unmarshal(data, &issues); err != nil {
+	if err := json.Unmarshal(plugin.ExtractJSON(data), &issues); err != nil {
 		return nil, fmt.Errorf("failed to parse infer output: %w", err)
 	}
 

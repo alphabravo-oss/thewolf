@@ -28,6 +28,7 @@ type AICallLog struct {
 	DurationMs     int64
 	PromptTokens   int
 	ResponseTokens int
+	CostUSD        float64
 }
 
 // EstimateTokens approximates token count from string length (~4 chars/token).
