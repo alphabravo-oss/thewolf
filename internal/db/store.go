@@ -76,6 +76,7 @@ type Store interface {
 
 	// FixItems
 	CreateFixItem(ctx context.Context, item *models.FixItem) error
+	GetFixItemByID(ctx context.Context, id string) (*models.FixItem, error)
 	ListFixItemsByFix(ctx context.Context, fixID string) ([]models.FixItem, error)
 	UpdateFixItem(ctx context.Context, item *models.FixItem) error
 

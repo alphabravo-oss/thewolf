@@ -65,9 +65,20 @@ type FixItemStatus string
 const (
 	FixItemStatusPending    FixItemStatus = "pending"
 	FixItemStatusInProgress FixItemStatus = "in_progress"
+	FixItemStatusProposed   FixItemStatus = "proposed"  // diff ready for review (interactive mode)
+	FixItemStatusApproved   FixItemStatus = "approved"  // user approved, pending commit
+	FixItemStatusRejected   FixItemStatus = "rejected"  // user rejected
 	FixItemStatusFixed      FixItemStatus = "fixed"
 	FixItemStatusFailed     FixItemStatus = "failed"
 	FixItemStatusSkipped    FixItemStatus = "skipped"
+)
+
+// FixMode represents the fix operation mode.
+type FixMode string
+
+const (
+	FixModeInteractive FixMode = "interactive" // generate diffs for review
+	FixModeWolfPack    FixMode = "wolfpack"    // auto-fix everything
 )
 
 // LoopStatus represents the status of a loop.

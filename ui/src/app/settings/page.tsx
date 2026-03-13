@@ -43,6 +43,8 @@ import type {
   AppSettings,
   AIProvider,
   AIPromptTemplate,
+  FixEngine,
+  FixMode,
 } from "@/lib/types";
 
 interface PluginInfo {
@@ -352,6 +354,7 @@ export default function SettingsPage() {
           <TabsTrigger value="git">Git Credentials</TabsTrigger>
           <TabsTrigger value="plugins">Plugins</TabsTrigger>
           <TabsTrigger value="ai">AI Assessment</TabsTrigger>
+          <TabsTrigger value="fix-engine">Fix Engine</TabsTrigger>
           <TabsTrigger value="profile">Profile</TabsTrigger>
         </TabsList>
 
@@ -635,6 +638,10 @@ export default function SettingsPage() {
 
         <TabsContent value="ai" className="space-y-4">
           <AIAssessmentSection />
+        </TabsContent>
+
+        <TabsContent value="fix-engine" className="space-y-4">
+          <FixEngineSection />
         </TabsContent>
 
         <TabsContent value="profile" className="space-y-4">
@@ -1375,5 +1382,142 @@ function PromptSectionEditor({
         </div>
       )}
     </div>
+  );
+}
+
+function FixEngineSection() {
+  const queryClient = useQueryClient();
+  const [saving, setSaving] = useState(false);
+
+  const { data: engines = [] } = useQuery<FixEngine[]>({
+    queryKey: ["fix-engines"],
+    queryFn: () => api.get<FixEngine[]>("/fix-engines").then(r => r.data ?? []),
+  });
+
+  const { data: settings } = useQuery<AppSettings>({
+    queryKey: ["settings"],
+    queryFn: () => api.get<AppSettings>("/settings").then(r => r.data ?? {}),
+  });
+
+  const currentEngine = settings?.["fix.engine"] ?? "auto";
+  const currentMode = (settings?.["fix.default_mode"] ?? "interactive") as FixMode;
+  const currentMaxBudget = settings?.["fix.max_budget_usd"] ?? "";
+  const currentMaxTurns = settings?.["fix.max_turns"] ?? "";
+
+  const saveSetting = async (key: string, value: string) => {
+    setSaving(true);
+    try {
+      await api.put("/settings", { [key]: value });
+      queryClient.invalidateQueries({ queryKey: ["settings"] });
+    } catch (err) {
+      console.error("Failed to save setting:", err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-sm">Fix Engine Configuration</CardTitle>
+        <CardDescription>
+          Configure the default AI engine and mode for fix operations.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <Label>Preferred Engine</Label>
+          <Select value={currentEngine} onValueChange={(v) => saveSetting("fix.engine", v)}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {engines.map((eng) => (
+                <SelectItem key={eng.name} value={eng.name}>
+                  {eng.label} {eng.available ? "✓" : "(not installed)"}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            The AI CLI tool used to generate code fixes. &quot;Auto&quot; tries available engines in order.
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Default Mode</Label>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={currentMode === "wolfpack"}
+                onCheckedChange={(checked) => saveSetting("fix.default_mode", checked ? "wolfpack" : "interactive")}
+              />
+              <span className="text-sm">
+                {currentMode === "wolfpack" ? "🐺 Wolf Pack (auto-fix)" : "Interactive (review diffs)"}
+              </span>
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Interactive mode generates diffs for review. Wolf Pack mode auto-fixes and commits without human review.
+          </p>
+        </div>
+
+        {(currentEngine === "claude-code" || currentEngine === "auto") && (
+          <>
+            <div className="space-y-2">
+              <Label>Max Budget per Finding (USD)</Label>
+              <Input
+                type="number"
+                min="0"
+                step="0.10"
+                placeholder="No limit"
+                defaultValue={currentMaxBudget}
+                key={`budget-${currentMaxBudget}`}
+                onBlur={(e) => saveSetting("fix.max_budget_usd", e.target.value)}
+                className="w-32"
+              />
+              <p className="text-xs text-muted-foreground">
+                Maximum API cost allowed per finding fix. Leave empty for no limit.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Max Turns per Finding</Label>
+              <Input
+                type="number"
+                min="1"
+                max="100"
+                step="1"
+                placeholder="20"
+                defaultValue={currentMaxTurns}
+                key={`turns-${currentMaxTurns}`}
+                onBlur={(e) => saveSetting("fix.max_turns", e.target.value)}
+                className="w-32"
+              />
+              <p className="text-xs text-muted-foreground">
+                Maximum agentic turns per finding. Default is 20.
+              </p>
+            </div>
+          </>
+        )}
+
+        <div className="space-y-2">
+          <Label>Available Engines</Label>
+          <div className="grid gap-2">
+            {engines.map((eng) => (
+              <div key={eng.name} className="flex items-center justify-between text-sm border rounded-md px-3 py-2">
+                <div>
+                  <span className="font-medium">{eng.label}</span>
+                  {eng.binary && <span className="text-muted-foreground ml-2">({eng.binary})</span>}
+                </div>
+                <span className={eng.available ? "text-green-600" : "text-muted-foreground"}>
+                  {eng.available ? "Installed" : "Not found"}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

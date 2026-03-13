@@ -1259,6 +1259,7 @@ func ListAILogs(w http.ResponseWriter, r *http.Request) {
 	scanID := chi.URLParam(r, "id")
 	logs, err := h.Store.ListAILogsByScan(r.Context(), scanID)
 	if err != nil {
+		wolflog.Error().Err(err).Str("scan_id", scanID).Msg("ListAILogsByScan failed")
 		response.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to list AI logs")
 		return
 	}

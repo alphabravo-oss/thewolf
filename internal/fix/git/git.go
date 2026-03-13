@@ -63,9 +63,15 @@ func CleanupWorktree(repoPath, worktreePath string) error {
 	return nil
 }
 
-// CaptureDiff returns the git diff for staged and unstaged changes.
+// CaptureDiff returns the git diff for staged, unstaged, and untracked changes.
+// It uses intent-to-add (git add -N) to include new files in the diff output.
 func CaptureDiff(repoPath string) (string, error) {
-	// Get both staged and unstaged diff
+	// Mark untracked files as intent-to-add so they appear in the diff
+	addCmd := exec.Command("git", "add", "-N", ".")
+	addCmd.Dir = repoPath
+	addCmd.CombinedOutput() // ignore errors (e.g., nothing to add)
+
+	// Get both staged and unstaged diff (including intent-to-add files)
 	cmd := exec.Command("git", "diff", "HEAD")
 	cmd.Dir = repoPath
 	output, err := cmd.CombinedOutput()
@@ -75,8 +81,13 @@ func CaptureDiff(repoPath string) (string, error) {
 	return string(output), nil
 }
 
-// ChangedFiles returns the list of files changed relative to HEAD.
+// ChangedFiles returns the list of files changed relative to HEAD, including untracked files.
 func ChangedFiles(repoPath string) ([]string, error) {
+	// intent-to-add to include new files
+	addCmd := exec.Command("git", "add", "-N", ".")
+	addCmd.Dir = repoPath
+	addCmd.CombinedOutput()
+
 	cmd := exec.Command("git", "diff", "--name-only", "HEAD")
 	cmd.Dir = repoPath
 	output, err := cmd.CombinedOutput()
@@ -110,7 +121,14 @@ func CommitAll(repoPath, message string) error {
 }
 
 // RevertChanges discards all uncommitted changes in the working tree.
+// It resets the index first to clear intent-to-add entries (from git add -N)
+// so that new files become untracked and git clean can remove them.
 func RevertChanges(repoPath string) error {
+	// Reset index to HEAD — clears staged changes and intent-to-add entries
+	resetCmd := exec.Command("git", "reset", "HEAD")
+	resetCmd.Dir = repoPath
+	resetCmd.CombinedOutput() // ignore errors (e.g., nothing to reset)
+
 	cmd := exec.Command("git", "checkout", "--", ".")
 	cmd.Dir = repoPath
 	output, err := cmd.CombinedOutput()
@@ -181,6 +199,62 @@ func ListBranches(repoPath string) ([]string, error) {
 	}
 
 	return branches, nil
+}
+
+// IsGitRepo checks whether the given path is inside a git repository.
+func IsGitRepo(path string) bool {
+	cmd := exec.Command("git", "rev-parse", "--is-inside-work-tree")
+	cmd.Dir = path
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(string(output)) == "true"
+}
+
+// InitRepo initializes a new git repository, adds all files, and creates an initial commit.
+func InitRepo(path string) error {
+	initCmd := exec.Command("git", "init")
+	initCmd.Dir = path
+	if out, err := initCmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("git init: %s: %w", string(out), err)
+	}
+
+	addCmd := exec.Command("git", "add", "-A")
+	addCmd.Dir = path
+	if out, err := addCmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("git add: %s: %w", string(out), err)
+	}
+
+	commitCmd := exec.Command("git", "commit", "-m", "Initial commit (pre-wolf)")
+	commitCmd.Dir = path
+	if out, err := commitCmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("git commit: %s: %w", string(out), err)
+	}
+
+	return nil
+}
+
+// StashChanges stashes any uncommitted changes in the repo.
+func StashChanges(path string) error {
+	cmd := exec.Command("git", "stash", "--include-untracked")
+	cmd.Dir = path
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("git stash: %s: %w", string(output), err)
+	}
+	return nil
+}
+
+// StashPop restores previously stashed changes.
+func StashPop(path string) error {
+	cmd := exec.Command("git", "stash", "pop")
+	cmd.Dir = path
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("git stash pop: %s: %w", string(output), err)
+	}
+	return nil
 }
 
 func sanitizePath(s string) string {

@@ -8,8 +8,7 @@ import {
   LayoutDashboardIcon,
   PackageIcon,
   BugIcon,
-  WrenchIcon,
-  RepeatIcon,
+  PawPrintIcon,
   SettingsIcon,
 } from "lucide-react";
 import {
@@ -30,8 +29,7 @@ const navItems = [
   { title: "Dashboard", href: "/", icon: LayoutDashboardIcon },
   { title: "Collections", href: "/collections", icon: PackageIcon },
   { title: "Findings", href: "/findings", icon: BugIcon },
-  { title: "Fixes", href: "/fixes", icon: WrenchIcon },
-  { title: "Loops", href: "/loops", icon: RepeatIcon },
+  { title: "Wolf", href: "/wolf", icon: PawPrintIcon },
 ];
 
 const bottomItems = [
@@ -45,6 +43,9 @@ export function AppSidebar() {
 
   function isActive(href: string) {
     if (href === "/") return pathname === "/";
+    if (href === "/wolf") {
+      return pathname.startsWith("/wolf") || pathname.startsWith("/fixes") || pathname.startsWith("/loops");
+    }
     return pathname.startsWith(href);
   }
 

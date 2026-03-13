@@ -37,6 +37,9 @@ var migration007SQL string
 //go:embed migrations/008_ai_log_cost.sql
 var migration008SQL string
 
+//go:embed migrations/009_fix_mode_and_engine.sql
+var migration009SQL string
+
 // SQLiteStore implements Store using SQLite.
 type SQLiteStore struct {
 	db *sqlx.DB
@@ -103,6 +106,11 @@ func (s *SQLiteStore) Migrate() error {
 		}
 	}
 	if _, err := s.db.Exec(migration008SQL); err != nil {
+		if !strings.Contains(err.Error(), "duplicate column") {
+			return err
+		}
+	}
+	if _, err := s.db.Exec(migration009SQL); err != nil {
 		if !strings.Contains(err.Error(), "duplicate column") {
 			return err
 		}
@@ -495,10 +503,10 @@ func (s *SQLiteStore) CreateFix(ctx context.Context, fix *models.Fix) error {
 	fix.CreatedAt = now
 	fix.UpdatedAt = now
 	_, err := s.db.NamedExecContext(ctx,
-		`INSERT INTO fixes (id, user_id, scan_id, loop_id, status, severity_filter, branch_name,
+		`INSERT INTO fixes (id, user_id, scan_id, loop_id, status, mode, engine, severity_filter, branch_name,
 		 worktree_path, findings_attempted, findings_fixed, findings_failed, pr_urls,
 		 started_at, completed_at, created_at, updated_at)
-		 VALUES (:id, :user_id, :scan_id, :loop_id, :status, :severity_filter, :branch_name,
+		 VALUES (:id, :user_id, :scan_id, :loop_id, :status, :mode, :engine, :severity_filter, :branch_name,
 		 :worktree_path, :findings_attempted, :findings_fixed, :findings_failed, :pr_urls,
 		 :started_at, :completed_at, :created_at, :updated_at)`, fix)
 	return err
@@ -523,8 +531,9 @@ func (s *SQLiteStore) ListFixesByUser(ctx context.Context, userID string) ([]mod
 func (s *SQLiteStore) UpdateFix(ctx context.Context, fix *models.Fix) error {
 	fix.UpdatedAt = time.Now().UTC()
 	_, err := s.db.NamedExecContext(ctx,
-		`UPDATE fixes SET status=:status, severity_filter=:severity_filter, branch_name=:branch_name,
-		 worktree_path=:worktree_path, findings_attempted=:findings_attempted, findings_fixed=:findings_fixed,
+		`UPDATE fixes SET status=:status, mode=:mode, engine=:engine, severity_filter=:severity_filter,
+		 branch_name=:branch_name, worktree_path=:worktree_path,
+		 findings_attempted=:findings_attempted, findings_fixed=:findings_fixed,
 		 findings_failed=:findings_failed, pr_urls=:pr_urls, started_at=:started_at,
 		 completed_at=:completed_at, updated_at=:updated_at WHERE id=:id`, fix)
 	return err
@@ -542,6 +551,15 @@ func (s *SQLiteStore) CreateFixItem(ctx context.Context, item *models.FixItem) e
 		 VALUES (:id, :fix_id, :finding_id, :status, :files_changed, :diff,
 		 :validation_result, :validation_output, :error_message, :created_at, :updated_at)`, item)
 	return err
+}
+
+func (s *SQLiteStore) GetFixItemByID(ctx context.Context, id string) (*models.FixItem, error) {
+	var item models.FixItem
+	err := s.db.GetContext(ctx, &item, "SELECT * FROM fix_items WHERE id = ?", id)
+	if err != nil {
+		return nil, err
+	}
+	return &item, nil
 }
 
 func (s *SQLiteStore) ListFixItemsByFix(ctx context.Context, fixID string) ([]models.FixItem, error) {
@@ -748,7 +766,15 @@ func (s *SQLiteStore) DeleteScanCascade(ctx context.Context, scanID string) erro
 	if _, err := tx.ExecContext(ctx, "DELETE FROM scan_artifacts WHERE scan_id = ?", scanID); err != nil {
 		return fmt.Errorf("delete scan_artifacts: %w", err)
 	}
-	// ai_logs, tool_summaries, scan_recommendations cascade via FK, but be explicit.
+	if _, err := tx.ExecContext(ctx, "DELETE FROM ai_logs WHERE scan_id = ?", scanID); err != nil {
+		return fmt.Errorf("delete ai_logs: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, "DELETE FROM tool_summaries WHERE scan_id = ?", scanID); err != nil {
+		return fmt.Errorf("delete tool_summaries: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, "DELETE FROM scan_recommendations WHERE scan_id = ?", scanID); err != nil {
+		return fmt.Errorf("delete scan_recommendations: %w", err)
+	}
 	if _, err := tx.ExecContext(ctx, "DELETE FROM scans WHERE id = ?", scanID); err != nil {
 		return fmt.Errorf("delete scan: %w", err)
 	}

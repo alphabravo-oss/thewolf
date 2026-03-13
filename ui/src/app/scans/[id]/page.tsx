@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,6 +19,24 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ClipboardCopy, Download } from "lucide-react";
 import { StatusBadge } from "@/components/status-badge";
 import { SeverityBadge } from "@/components/severity-badge";
@@ -27,7 +45,7 @@ import { EmptyState } from "@/components/empty-state";
 import { CoverageCard } from "@/components/coverage-card";
 import { Markdown } from "@/components/markdown";
 import api, { getToken } from "@/lib/api";
-import type { Scan, Finding, ScanArtifact, Severity, CoverageReport, AILog, ToolSummary, ScanRecommendation } from "@/lib/types";
+import type { Scan, Finding, ScanArtifact, Severity, CoverageReport, AILog, ToolSummary, ScanRecommendation, FixEngine, FixMode } from "@/lib/types";
 
 interface ScanDetail extends Scan {
   findings: Finding[];
@@ -208,6 +226,13 @@ export default function ScanResultsPage() {
   const [lazyFindingsLoading, setLazyFindingsLoading] = useState<string | null>(null);
   const [cancellingAI, setCancellingAI] = useState(false);
   const [aiCancelled, setAICancelled] = useState(false);
+  const [showWolfDialog, setShowWolfDialog] = useState(false);
+  const [wolfMode, setWolfMode] = useState<FixMode>("interactive");
+  const [wolfEngine, setWolfEngine] = useState("auto");
+  const [wolfSeverities, setWolfSeverities] = useState<Set<string>>(new Set(["critical", "high"]));
+  const [wolfSubmitting, setWolfSubmitting] = useState(false);
+  const [wolfAutoInit, setWolfAutoInit] = useState(false);
+  const router = useRouter();
 
   const handleCancelAI = useCallback(async () => {
     if (cancellingAI) return;
@@ -389,6 +414,42 @@ export default function ScanResultsPage() {
     },
   });
 
+  const { data: fixEngines = [] } = useQuery<FixEngine[]>({
+    queryKey: ["fix-engines"],
+    queryFn: () => api.get<FixEngine[]>("/fix-engines").then(r => r.data ?? []),
+    enabled: showWolfDialog,
+  });
+
+  const wolfFindingCount = (() => {
+    if (!findingStats?.by_severity) return 0;
+    let count = 0;
+    for (const sev of wolfSeverities) {
+      count += findingStats.by_severity[sev] ?? 0;
+    }
+    return count;
+  })();
+
+  const handleWolfSubmit = async () => {
+    setWolfSubmitting(true);
+    try {
+      const res = await api.post<{ id: string }>("/fixes", {
+        scan_id: id,
+        severity: Array.from(wolfSeverities),
+        mode: wolfMode,
+        engine: wolfEngine,
+        auto_init: wolfAutoInit,
+      });
+      const fixId = res.data?.id;
+      if (fixId) {
+        router.push(`/fixes/${fixId}/review`);
+      }
+    } catch (err) {
+      console.error("Failed to create fix:", err);
+    } finally {
+      setWolfSubmitting(false);
+    }
+  };
+
   if (isLoading) return <LoadingSpinner />;
   if (!scan) return <EmptyState title="Scan not found" />;
 
@@ -511,6 +572,14 @@ export default function ScanResultsPage() {
               </Button>
             );
           })()}
+          {scan.status === "completed" && scan.finding_count > 0 && (
+            <Button
+              variant="destructive"
+              onClick={() => setShowWolfDialog(true)}
+            >
+              🐺 Send in the Wolf
+            </Button>
+          )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline">Export</Button>
@@ -1054,6 +1123,90 @@ export default function ScanResultsPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Wolf Dialog */}
+      <Dialog open={showWolfDialog} onOpenChange={setShowWolfDialog}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>🐺 Send in the Wolf</DialogTitle>
+            <DialogDescription>
+              Configure the AI fix engine to automatically generate fixes for scan findings.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Fix Engine</Label>
+              <Select value={wolfEngine} onValueChange={setWolfEngine}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {fixEngines.map((eng) => (
+                    <SelectItem key={eng.name} value={eng.name} disabled={!eng.available && eng.name !== "auto"}>
+                      {eng.label} {eng.available ? "✓" : eng.name === "auto" ? "" : "(not installed)"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>Wolf Pack Mode 🐺</Label>
+                <p className="text-xs text-muted-foreground">Auto-fix everything without review</p>
+              </div>
+              <Switch
+                checked={wolfMode === "wolfpack"}
+                onCheckedChange={(checked) => setWolfMode(checked ? "wolfpack" : "interactive")}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Severity Filter</Label>
+              <div className="flex flex-wrap gap-3">
+                {(["critical", "high", "medium", "low", "info"] as const).map((sev) => (
+                  <label key={sev} className="flex items-center gap-1.5 text-sm">
+                    <Checkbox
+                      checked={wolfSeverities.has(sev)}
+                      onCheckedChange={(checked) => {
+                        const next = new Set(wolfSeverities);
+                        if (checked) next.add(sev); else next.delete(sev);
+                        setWolfSeverities(next);
+                      }}
+                    />
+                    {sev}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>Auto-initialize Git</Label>
+                <p className="text-xs text-muted-foreground">Initialize a git repo if the directory isn&apos;t one</p>
+              </div>
+              <Switch
+                checked={wolfAutoInit}
+                onCheckedChange={setWolfAutoInit}
+              />
+            </div>
+
+            <div className="text-sm text-muted-foreground bg-muted rounded-md px-3 py-2">
+              <strong>{wolfFindingCount}</strong> findings will be sent for {wolfMode === "wolfpack" ? "auto-fixing" : "review"}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowWolfDialog(false)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              onClick={handleWolfSubmit}
+              disabled={wolfSubmitting || wolfFindingCount === 0}
+            >
+              {wolfSubmitting ? "Unleashing..." : wolfMode === "wolfpack" ? "🐺 Unleash the Pack" : "🐺 Unleash"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
     </div>
   );

@@ -164,8 +164,14 @@ func NewServer(store db.Store, addr string) *Server {
 				r.Post("/", routes.CreateFix)
 				r.Get("/{id}", routes.GetFix)
 				r.Get("/{id}/stream", routes.StreamFix)
+				r.Post("/{id}/items/{itemId}/approve", routes.ApproveFixItem)
+				r.Post("/{id}/items/{itemId}/reject", routes.RejectFixItem)
+				r.Post("/{id}/approve-all", routes.ApproveAllFixItems)
+				r.Post("/{id}/reject-all", routes.RejectAllFixItems)
 				r.Delete("/{id}", routes.CancelFix)
 			})
+
+			r.Get("/fix-engines", routes.ListFixEngines)
 
 			r.Route("/loops", func(r chi.Router) {
 				r.Get("/", routes.ListLoops)

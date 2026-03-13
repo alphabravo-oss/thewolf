@@ -9,6 +9,8 @@ type Fix struct {
 	ScanID            string    `json:"scan_id" db:"scan_id"`
 	LoopID            *string   `json:"loop_id,omitempty" db:"loop_id"`
 	Status            FixStatus `json:"status" db:"status"`
+	Mode              FixMode   `json:"mode" db:"mode"`
+	Engine            string    `json:"engine" db:"engine"`
 	SeverityFilter    string    `json:"severity_filter" db:"severity_filter"`
 	BranchName        string    `json:"branch_name" db:"branch_name"`
 	WorktreePath      string    `json:"worktree_path" db:"worktree_path"`

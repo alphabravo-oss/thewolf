@@ -71,6 +71,11 @@ func (s *PostgresStore) Migrate() error {
 			return err
 		}
 	}
+	if _, err := s.db.Exec(migration009SQL); err != nil {
+		if !strings.Contains(err.Error(), "duplicate column") && !strings.Contains(err.Error(), "already exists") {
+			return err
+		}
+	}
 	// Seed default setting using Postgres-compatible syntax.
 	if _, err := s.db.Exec(`INSERT INTO settings (key, value) VALUES ('ai_enabled', 'true') ON CONFLICT(key) DO NOTHING`); err != nil {
 		if !strings.Contains(err.Error(), "already exists") && !strings.Contains(err.Error(), "does not exist") {
@@ -465,10 +470,10 @@ func (s *PostgresStore) CreateFix(ctx context.Context, fix *models.Fix) error {
 	fix.CreatedAt = now
 	fix.UpdatedAt = now
 	_, err := s.db.NamedExecContext(ctx,
-		`INSERT INTO fixes (id, user_id, scan_id, loop_id, status, severity_filter, branch_name,
+		`INSERT INTO fixes (id, user_id, scan_id, loop_id, status, mode, engine, severity_filter, branch_name,
 		 worktree_path, findings_attempted, findings_fixed, findings_failed, pr_urls,
 		 started_at, completed_at, created_at, updated_at)
-		 VALUES (:id, :user_id, :scan_id, :loop_id, :status, :severity_filter, :branch_name,
+		 VALUES (:id, :user_id, :scan_id, :loop_id, :status, :mode, :engine, :severity_filter, :branch_name,
 		 :worktree_path, :findings_attempted, :findings_fixed, :findings_failed, :pr_urls,
 		 :started_at, :completed_at, :created_at, :updated_at)`, fix)
 	return err
@@ -493,8 +498,9 @@ func (s *PostgresStore) ListFixesByUser(ctx context.Context, userID string) ([]m
 func (s *PostgresStore) UpdateFix(ctx context.Context, fix *models.Fix) error {
 	fix.UpdatedAt = time.Now().UTC()
 	_, err := s.db.NamedExecContext(ctx,
-		`UPDATE fixes SET status=:status, severity_filter=:severity_filter, branch_name=:branch_name,
-		 worktree_path=:worktree_path, findings_attempted=:findings_attempted, findings_fixed=:findings_fixed,
+		`UPDATE fixes SET status=:status, mode=:mode, engine=:engine, severity_filter=:severity_filter,
+		 branch_name=:branch_name, worktree_path=:worktree_path,
+		 findings_attempted=:findings_attempted, findings_fixed=:findings_fixed,
 		 findings_failed=:findings_failed, pr_urls=:pr_urls, started_at=:started_at,
 		 completed_at=:completed_at, updated_at=:updated_at WHERE id=:id`, fix)
 	return err
@@ -512,6 +518,15 @@ func (s *PostgresStore) CreateFixItem(ctx context.Context, item *models.FixItem)
 		 VALUES (:id, :fix_id, :finding_id, :status, :files_changed, :diff,
 		 :validation_result, :validation_output, :error_message, :created_at, :updated_at)`, item)
 	return err
+}
+
+func (s *PostgresStore) GetFixItemByID(ctx context.Context, id string) (*models.FixItem, error) {
+	var item models.FixItem
+	err := s.db.GetContext(ctx, &item, "SELECT * FROM fix_items WHERE id = $1", id)
+	if err != nil {
+		return nil, err
+	}
+	return &item, nil
 }
 
 func (s *PostgresStore) ListFixItemsByFix(ctx context.Context, fixID string) ([]models.FixItem, error) {
@@ -718,7 +733,15 @@ func (s *PostgresStore) DeleteScanCascade(ctx context.Context, scanID string) er
 	if _, err := tx.ExecContext(ctx, "DELETE FROM scan_artifacts WHERE scan_id = $1", scanID); err != nil {
 		return fmt.Errorf("delete scan_artifacts: %w", err)
 	}
-	// ai_logs, tool_summaries, scan_recommendations cascade via FK, but be explicit.
+	if _, err := tx.ExecContext(ctx, "DELETE FROM ai_logs WHERE scan_id = $1", scanID); err != nil {
+		return fmt.Errorf("delete ai_logs: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, "DELETE FROM tool_summaries WHERE scan_id = $1", scanID); err != nil {
+		return fmt.Errorf("delete tool_summaries: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, "DELETE FROM scan_recommendations WHERE scan_id = $1", scanID); err != nil {
+		return fmt.Errorf("delete scan_recommendations: %w", err)
+	}
 	if _, err := tx.ExecContext(ctx, "DELETE FROM scans WHERE id = $1", scanID); err != nil {
 		return fmt.Errorf("delete scan: %w", err)
 	}

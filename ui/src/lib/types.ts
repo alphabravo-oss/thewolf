@@ -31,9 +31,22 @@ export type FixStatus =
 export type FixItemStatus =
   | "pending"
   | "in_progress"
+  | "proposed"
+  | "approved"
+  | "rejected"
   | "fixed"
   | "failed"
   | "skipped";
+
+export type FixMode = "interactive" | "wolfpack";
+
+export interface FixEngine {
+  name: string;
+  label: string;
+  binary: string;
+  mode: string;
+  available: boolean;
+}
 
 export type LoopStatus =
   | "running"
@@ -228,6 +241,8 @@ export interface Fix {
   scan_id: string;
   loop_id?: string;
   status: FixStatus;
+  mode: FixMode;
+  engine: string;
   severity_filter: Severity[];
   branch_name: string;
   worktree_path: string;

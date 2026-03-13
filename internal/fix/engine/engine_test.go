@@ -76,10 +76,12 @@ func TestBuildPrompt(t *testing.T) {
 				LineStart:   42,
 				Severity:    models.SeverityHigh,
 				Description: "User input not sanitized",
+				Category:    models.CategorySAST,
 			},
 			contains: []string{
 				"SQL Injection",
-				"main.go:42",
+				"`main.go`",
+				"42",
 				"high",
 				"User input not sanitized",
 			},
@@ -93,10 +95,11 @@ func TestBuildPrompt(t *testing.T) {
 				Severity:    models.SeverityMedium,
 				Description: "Reflected XSS",
 				CodeSnippet: "document.write(input)",
+				Category:    models.CategorySAST,
 			},
 			contains: []string{
 				"document.write(input)",
-				"Code:",
+				"Current Code",
 			},
 		},
 		{
@@ -108,23 +111,49 @@ func TestBuildPrompt(t *testing.T) {
 				Severity:        models.SeverityCritical,
 				Description:     "Unbounded copy",
 				AIFixSuggestion: "Use strncpy instead",
+				Category:        models.CategorySAST,
 			},
 			contains: []string{
-				"Suggestion: Use strncpy instead",
+				"Use strncpy instead",
+				"Suggested Fix",
 			},
 		},
 		{
-			name: "finding without optional fields",
+			name: "finding with line range",
 			finding: models.Finding{
 				Title:       "Issue",
 				FilePath:    "file.py",
-				LineStart:   1,
+				LineStart:   10,
+				LineEnd:     20,
 				Severity:    models.SeverityLow,
-				Description: "Minor issue",
+				Description: "Multi-line issue",
+				Category:    models.CategoryQuality,
 			},
 			contains: []string{
-				"Issue",
-				"file.py:1",
+				"10-20",
+			},
+		},
+		{
+			name: "finding with tool and rule info",
+			finding: models.Finding{
+				Title:        "Hardcoded secret",
+				FilePath:     "config.go",
+				LineStart:    1,
+				Severity:     models.SeverityHigh,
+				Description:  "Secret in code",
+				Category:     models.CategorySecrets,
+				ToolName:     "gitleaks",
+				RuleID:       "generic-api-key",
+				CWEID:        "CWE-798",
+				FunctionName: "init",
+				ModuleName:   "config",
+			},
+			contains: []string{
+				"gitleaks",
+				"generic-api-key",
+				"CWE-798",
+				"`init`",
+				"`config`",
 			},
 		},
 	}
@@ -143,35 +172,40 @@ func TestBuildPrompt(t *testing.T) {
 
 func TestParseClaudeOutput(t *testing.T) {
 	tests := []struct {
-		name         string
-		input        []byte
-		wantSuccess  bool
-		wantFiles    int
-		wantErr      bool
+		name        string
+		input       []byte
+		wantSuccess bool
+		wantErr     bool
 	}{
 		{
-			name:        "valid JSON with files_changed",
-			input:       []byte(`{"result":"ok","files_changed":["main.go","util.go"]}`),
+			name:        "valid JSON with result",
+			input:       []byte(`{"result":"Fixed the issue","session_id":"abc","is_error":false,"total_cost_usd":0.01,"num_turns":3}`),
 			wantSuccess: true,
-			wantFiles:   2,
 		},
 		{
-			name:        "valid JSON without files_changed",
+			name:        "error response",
+			input:       []byte(`{"result":"API key invalid","is_error":true,"subtype":"error_api"}`),
+			wantSuccess: false,
+		},
+		{
+			name:        "max-turns exit treated as success",
+			input:       []byte(`{"result":"Partial progress","is_error":true,"subtype":"error_max_turns","num_turns":20}`),
+			wantSuccess: true,
+		},
+		{
+			name:        "valid JSON without is_error field",
 			input:       []byte(`{"result":"done"}`),
 			wantSuccess: true,
-			wantFiles:   0,
 		},
 		{
 			name:        "non-JSON output treated as success",
 			input:       []byte("Fixed the issue in main.go"),
 			wantSuccess: true,
-			wantFiles:   0,
 		},
 		{
 			name:        "empty output",
 			input:       []byte(""),
 			wantSuccess: true,
-			wantFiles:   0,
 		},
 	}
 
@@ -190,10 +224,17 @@ func TestParseClaudeOutput(t *testing.T) {
 			if result.Success != tt.wantSuccess {
 				t.Errorf("Success = %v, want %v", result.Success, tt.wantSuccess)
 			}
-			if len(result.FilesChanged) != tt.wantFiles {
-				t.Errorf("FilesChanged count = %d, want %d", len(result.FilesChanged), tt.wantFiles)
-			}
 		})
+	}
+}
+
+func TestParseCodexOutput(t *testing.T) {
+	result := parseCodexOutput([]byte(`{"type":"message","content":"done"}`))
+	if !result.Success {
+		t.Error("expected success")
+	}
+	if result.Output == "" {
+		t.Error("expected non-empty output")
 	}
 }
 

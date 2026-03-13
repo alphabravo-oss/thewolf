@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"os/exec"
 	"testing"
 	"time"
 
@@ -656,6 +658,11 @@ func TestCreateFix(t *testing.T) {
 		Status: models.ScanStatusCompleted, CreatedAt: now, UpdatedAt: now,
 	}
 	env.Store.CreateScan(context.Background(), scan)
+
+	// Ensure the test repo path exists and is a git repo
+	os.MkdirAll("/tmp/test-repo", 0755)
+	exec.Command("git", "init", "/tmp/test-repo").CombinedOutput()
+	exec.Command("git", "-C", "/tmp/test-repo", "commit", "--allow-empty", "-m", "init").CombinedOutput()
 
 	w := env.doRequest(http.MethodPost, "/api/fixes", map[string]interface{}{
 		"scan_id":  scan.ID,
