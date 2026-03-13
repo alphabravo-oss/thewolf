@@ -1,0 +1,11 @@
+[
+  {
+    "file": "scripts/deploy.sh",
+    "line": 5,
+    "endLine": 5,
+    "column": 10,
+    "level": "warning",
+    "code": 2086,
+    "message": "Double quote to prevent globbing and word splitting."
+  }
+]

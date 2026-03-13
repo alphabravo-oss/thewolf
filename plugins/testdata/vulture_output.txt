@@ -1,0 +1,2 @@
+app/models.py:15: unused variable 'temp_data' (90% confidence)
+app/utils.py:42: unused function 'old_helper' (80% confidence)

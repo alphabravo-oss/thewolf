@@ -1,0 +1,18 @@
+{
+  "files": [
+    {
+      "filename": "src/Main.java",
+      "violations": [
+        {
+          "beginline": 10,
+          "endline": 15,
+          "description": "Avoid unused local variables",
+          "rule": "UnusedLocalVariable",
+          "ruleset": "Best Practices",
+          "priority": 3,
+          "externalInfoUrl": "https://pmd.github.io/latest/pmd_rules_java_bestpractices.html#unusedlocalvariable"
+        }
+      ]
+    }
+  ]
+}

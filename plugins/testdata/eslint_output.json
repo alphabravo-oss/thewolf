@@ -1,0 +1,21 @@
+[
+  {
+    "filePath": "/src/app.js",
+    "messages": [
+      {
+        "ruleId": "no-unused-vars",
+        "severity": 2,
+        "message": "\"x\" is defined but never used.",
+        "line": 10,
+        "endLine": 10
+      },
+      {
+        "ruleId": "semi",
+        "severity": 1,
+        "message": "Missing semicolon.",
+        "line": 15,
+        "endLine": 15
+      }
+    ]
+  }
+]

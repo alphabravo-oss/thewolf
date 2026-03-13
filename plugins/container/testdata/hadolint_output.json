@@ -1,0 +1,18 @@
+[
+  {
+    "line": 3,
+    "code": "DL3008",
+    "message": "Pin versions in apt get install",
+    "column": 1,
+    "file": "Dockerfile",
+    "level": "warning"
+  },
+  {
+    "line": 7,
+    "code": "DL3009",
+    "message": "Delete the apt-get lists after installing something",
+    "column": 1,
+    "file": "Dockerfile",
+    "level": "info"
+  }
+]

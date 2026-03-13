@@ -1,0 +1,2 @@
+{"DetectorName":"AWS","Verified":true,"Raw":"AKIAIOSFODNN7EXAMPLE","SourceMetadata":{"Data":{"Filesystem":{"file":"env/.env","line":3}}}}
+{"DetectorName":"GitHub","Verified":false,"Raw":"ghp_xxxxxxxxxxxx","SourceMetadata":{"Data":{"Filesystem":{"file":"scripts/deploy.sh","line":10}}}}

@@ -1,0 +1,34 @@
+{
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "rules": [
+            {
+              "id": "js/sql-injection",
+              "shortDescription": {"text": "SQL injection"},
+              "defaultConfiguration": {"level": "error"},
+              "properties": {"tags": ["security"]}
+            }
+          ]
+        }
+      },
+      "results": [
+        {
+          "ruleId": "js/sql-injection",
+          "ruleIndex": 0,
+          "message": {"text": "This query depends on a user-provided value."},
+          "level": "error",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {"uri": "src/db.js"},
+                "region": {"startLine": 45, "endLine": 45, "startColumn": 10}
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

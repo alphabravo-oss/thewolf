@@ -1,0 +1,14 @@
+{
+  "README.md": [
+    {
+      "Action": {"name": "suggest", "params": ["utilize"]},
+      "Check": "Microsoft.We",
+      "Line": 5,
+      "Link": "",
+      "Message": "Try to avoid using 'We'.",
+      "Severity": "warning",
+      "Span": [1, 2],
+      "Match": "We"
+    }
+  ]
+}

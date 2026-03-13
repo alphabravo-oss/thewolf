@@ -1,0 +1,16 @@
+{
+  "results": {
+    "failed_checks": [
+      {
+        "check_id": "CKV_DOCKER_2",
+        "check_result": {"result": "FAILED"},
+        "name": "Ensure that HEALTHCHECK instructions have been added to container images",
+        "file_path": "/Dockerfile",
+        "file_line_range": [1, 15],
+        "guideline": "https://docs.bridgecrew.io/docs/ensure-that-healthcheck-instructions-have-been-added-to-container-images",
+        "severity": "MEDIUM",
+        "code_block": []
+      }
+    ]
+  }
+}

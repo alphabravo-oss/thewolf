@@ -1,0 +1,13 @@
+[
+  {
+    "code": "operation-description",
+    "path": ["paths", "/users", "get"],
+    "message": "Operation must have a description.",
+    "severity": 1,
+    "range": {
+      "start": {"line": 20},
+      "end": {"line": 25}
+    },
+    "source": "openapi.yaml"
+  }
+]

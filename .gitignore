@@ -1,0 +1,56 @@
+# Binaries
+wolf
+*.exe
+*.dll
+*.so
+*.dylib
+build/
+
+# Database
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Go
+vendor/
+
+# Node / Next.js
+node_modules/
+.next/
+ui/node_modules/
+ui/.next/
+ui/out/
+
+# Air (hot reload)
+tmp/
+.air.toml
+
+# Ruff cache
+.ruff_cache/
+
+# Wolf runtime artifacts
+.wolf/
+
+# Scan artifacts (local dev)
+artifacts/
+
+# Misc
+-.json
+*.log

@@ -1,0 +1,113 @@
+package security
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"os/exec"
+	"strings"
+
+	"github.com/alphabravocompany/thewolf/internal/models"
+	"github.com/alphabravocompany/thewolf/internal/plugin"
+)
+
+// OSVScannerPlugin runs Google's OSV-Scanner for dependency vulnerability scanning.
+type OSVScannerPlugin struct{}
+
+func init() {
+	plugin.Register(&OSVScannerPlugin{})
+}
+
+func (p *OSVScannerPlugin) Name() string             { return "osv-scanner" }
+func (p *OSVScannerPlugin) Category() models.Category { return models.CategorySCA }
+func (p *OSVScannerPlugin) Languages() []models.Language { return nil }
+
+func (p *OSVScannerPlugin) CheckAvailable() bool {
+	_, err := exec.LookPath("osv-scanner")
+	return err == nil
+}
+
+func (p *OSVScannerPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
+	if opts.Timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, opts.Timeout)
+		defer cancel()
+	}
+
+	cmd := exec.CommandContext(ctx, "osv-scanner", "--format", "json", "--recursive", opts.RepoPath)
+	out, err := cmd.Output()
+	if err != nil {
+		if len(out) == 0 {
+			return nil, fmt.Errorf("osv-scanner execution failed: %w", err)
+		}
+	}
+
+	return parseOSVScannerOutput(out)
+}
+
+type osvOutput struct {
+	Results []osvResult `json:"results"`
+}
+
+type osvResult struct {
+	Source struct {
+		Path string `json:"path"`
+		Type string `json:"type"`
+	} `json:"source"`
+	Packages []osvPackageResult `json:"packages"`
+}
+
+type osvPackageResult struct {
+	Package struct {
+		Name      string `json:"name"`
+		Version   string `json:"version"`
+		Ecosystem string `json:"ecosystem"`
+	} `json:"package"`
+	Vulnerabilities []osvVuln `json:"vulnerabilities"`
+}
+
+type osvVuln struct {
+	ID       string `json:"id"`
+	Summary  string `json:"summary"`
+	Details  string `json:"details"`
+	Severity []struct {
+		Type  string `json:"type"`
+		Score string `json:"score"`
+	} `json:"severity"`
+	Aliases []string `json:"aliases"`
+}
+
+func parseOSVScannerOutput(data []byte) ([]models.Finding, error) {
+	var output osvOutput
+	if err := json.Unmarshal(data, &output); err != nil {
+		return nil, fmt.Errorf("failed to parse osv-scanner output: %w", err)
+	}
+
+	var findings []models.Finding
+	for _, r := range output.Results {
+		for _, pkg := range r.Packages {
+			for _, v := range pkg.Vulnerabilities {
+				cve := ""
+				for _, alias := range v.Aliases {
+					if strings.HasPrefix(alias, "CVE-") {
+						cve = alias
+						break
+					}
+				}
+
+				findings = append(findings, models.Finding{
+					ToolName:    "osv-scanner",
+					Category:    models.CategorySCA,
+					Severity:    models.SeverityHigh,
+					Title:       fmt.Sprintf("%s: %s", v.ID, v.Summary),
+					Description: fmt.Sprintf("Package: %s@%s (%s)\n\n%s", pkg.Package.Name, pkg.Package.Version, pkg.Package.Ecosystem, v.Details),
+					FilePath:    r.Source.Path,
+					CWEID:       cve,
+					RuleID:      v.ID,
+					Status:      models.StatusOpen,
+				})
+			}
+		}
+	}
+	return findings, nil
+}

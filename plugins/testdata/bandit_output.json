@@ -1,0 +1,30 @@
+{
+  "results": [
+    {
+      "test_id": "B301",
+      "test_name": "blacklist_calls",
+      "issue_severity": "HIGH",
+      "issue_confidence": "HIGH",
+      "issue_text": "Use of unsafe yaml.load. Use yaml.safe_load instead.",
+      "filename": "app/config.py",
+      "line_number": 42,
+      "end_col_offset": 55,
+      "issue_cwe": {"id": 502, "link": "https://cwe.mitre.org/data/definitions/502.html"},
+      "more_info": "https://bandit.readthedocs.io/en/latest/plugins/b301_pickle.html",
+      "code": "42 data = yaml.load(f.read())\n"
+    },
+    {
+      "test_id": "B105",
+      "test_name": "hardcoded_password_string",
+      "issue_severity": "LOW",
+      "issue_confidence": "MEDIUM",
+      "issue_text": "Possible hardcoded password: 'secret123'",
+      "filename": "app/auth.py",
+      "line_number": 15,
+      "end_col_offset": 30,
+      "issue_cwe": {"id": 259, "link": "https://cwe.mitre.org/data/definitions/259.html"},
+      "more_info": "https://bandit.readthedocs.io/en/latest/plugins/b105_hardcoded_password_string.html",
+      "code": "15 PASSWORD = 'secret123'\n"
+    }
+  ]
+}

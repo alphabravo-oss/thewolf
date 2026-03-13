@@ -1,0 +1,128 @@
+package db
+
+import (
+	"context"
+
+	"github.com/alphabravocompany/thewolf/internal/models"
+)
+
+// Store defines the interface for all database operations.
+type Store interface {
+	// Lifecycle
+	Close() error
+	Migrate() error
+	Ping(ctx context.Context) error
+
+	// Users
+	CreateUser(ctx context.Context, user *models.User) error
+	GetUserByID(ctx context.Context, id string) (*models.User, error)
+	GetUserByEmail(ctx context.Context, email string) (*models.User, error)
+	UpdateUser(ctx context.Context, user *models.User) error
+
+	// Repos
+	CreateRepo(ctx context.Context, repo *models.Repo) error
+	GetRepoByID(ctx context.Context, id string) (*models.Repo, error)
+	ListReposByUser(ctx context.Context, userID string) ([]models.Repo, error)
+	UpdateRepo(ctx context.Context, repo *models.Repo) error
+	UpdateRepoDetection(ctx context.Context, repoID, languages, frameworks string) error
+	DeleteRepo(ctx context.Context, id string) error
+
+	// Collections
+	CreateCollection(ctx context.Context, col *models.Collection) error
+	GetCollectionByID(ctx context.Context, id string) (*models.Collection, error)
+	GetCollectionByName(ctx context.Context, name string) (*models.Collection, error)
+	ListCollectionsByUser(ctx context.Context, userID string) ([]models.Collection, error)
+	UpdateCollection(ctx context.Context, col *models.Collection) error
+	DeleteCollection(ctx context.Context, id string) error
+	AddRepoToCollection(ctx context.Context, collectionID, repoID string) error
+	RemoveRepoFromCollection(ctx context.Context, collectionID, repoID string) error
+	ListReposInCollection(ctx context.Context, collectionID string) ([]models.Repo, error)
+
+	// Secrets
+	CreateSecret(ctx context.Context, secret *models.Secret) error
+	GetSecretByID(ctx context.Context, id string) (*models.Secret, error)
+	ListSecretsByUser(ctx context.Context, userID string) ([]models.Secret, error)
+	DeleteSecret(ctx context.Context, id string) error
+
+	// RepoMaps
+	CreateRepoMap(ctx context.Context, rm *models.RepoMap) error
+	GetRepoMap(ctx context.Context, repoID, branch string) (*models.RepoMap, error)
+	UpdateRepoMap(ctx context.Context, rm *models.RepoMap) error
+
+	// Scans
+	CreateScan(ctx context.Context, scan *models.Scan) error
+	GetScanByID(ctx context.Context, id string) (*models.Scan, error)
+	ListAllScans(ctx context.Context) ([]models.Scan, error)
+	ListScansByUser(ctx context.Context, userID string) ([]models.Scan, error)
+	ListScansByRepo(ctx context.Context, repoID string) ([]models.Scan, error)
+	ListScansByCollection(ctx context.Context, collectionID string) ([]models.Scan, error)
+	UpdateScan(ctx context.Context, scan *models.Scan) error
+	DeleteScan(ctx context.Context, id string) error
+
+	// Findings
+	CreateFinding(ctx context.Context, f *models.Finding) error
+	CreateFindings(ctx context.Context, findings []models.Finding) error
+	GetFindingByID(ctx context.Context, id string) (*models.Finding, error)
+	ListFindingsByScan(ctx context.Context, scanID string) ([]models.Finding, error)
+	ListFindingsByRepo(ctx context.Context, repoID string) ([]models.Finding, error)
+	UpdateFinding(ctx context.Context, f *models.Finding) error
+	UpdateFindingStatus(ctx context.Context, id string, status models.Status) error
+
+	// Fixes
+	CreateFix(ctx context.Context, fix *models.Fix) error
+	GetFixByID(ctx context.Context, id string) (*models.Fix, error)
+	ListFixesByUser(ctx context.Context, userID string) ([]models.Fix, error)
+	UpdateFix(ctx context.Context, fix *models.Fix) error
+
+	// FixItems
+	CreateFixItem(ctx context.Context, item *models.FixItem) error
+	ListFixItemsByFix(ctx context.Context, fixID string) ([]models.FixItem, error)
+	UpdateFixItem(ctx context.Context, item *models.FixItem) error
+
+	// Loops
+	CreateLoop(ctx context.Context, loop *models.Loop) error
+	GetLoopByID(ctx context.Context, id string) (*models.Loop, error)
+	ListLoopsByUser(ctx context.Context, userID string) ([]models.Loop, error)
+	UpdateLoop(ctx context.Context, loop *models.Loop) error
+
+	// ScanArtifacts
+	CreateScanArtifact(ctx context.Context, artifact *models.ScanArtifact) error
+	ListScanArtifacts(ctx context.Context, scanID string) ([]models.ScanArtifact, error)
+
+	// AILogs
+	CreateAILog(ctx context.Context, log *models.AILog) error
+	ListAILogsByScan(ctx context.Context, scanID string) ([]models.AILog, error)
+
+	// ToolSummaries
+	CreateToolSummary(ctx context.Context, ts *models.ToolSummary) error
+	ListToolSummariesByScan(ctx context.Context, scanID string) ([]models.ToolSummary, error)
+
+	// ScanRecommendations
+	CreateScanRecommendation(ctx context.Context, rec *models.ScanRecommendation) error
+	ListScanRecommendations(ctx context.Context, scanID string) ([]models.ScanRecommendation, error)
+
+	// Settings
+	GetSetting(ctx context.Context, key string) (string, error)
+	SetSetting(ctx context.Context, key, value string) error
+	ListSettings(ctx context.Context) (map[string]string, error)
+
+	// Cascade Deletes
+	// ListScanIDsByCollection returns all scan IDs for a collection.
+	ListScanIDsByCollection(ctx context.Context, collectionID string) ([]string, error)
+	// ListScanIDsByRepo returns all scan IDs for a repo.
+	ListScanIDsByRepo(ctx context.Context, repoID string) ([]string, error)
+	// DeleteScanCascade deletes a scan and all related data (findings, artifacts, fixes).
+	DeleteScanCascade(ctx context.Context, scanID string) error
+	// DeleteCollectionCascade deletes a collection, its scans, and all related data.
+	DeleteCollectionCascade(ctx context.Context, collectionID string) ([]string, error)
+	// DeleteRepoCascade deletes a repo, its scans, and all related data. Returns scan IDs for artifact cleanup.
+	DeleteRepoCascade(ctx context.Context, repoID string) ([]string, error)
+
+	// AI Prompt Templates
+	CreatePromptTemplate(ctx context.Context, tmpl *models.AIPromptTemplate) error
+	GetPromptTemplate(ctx context.Context, id string) (*models.AIPromptTemplate, error)
+	ListPromptTemplates(ctx context.Context, scope, scopeID string) ([]models.AIPromptTemplate, error)
+	UpdatePromptTemplate(ctx context.Context, tmpl *models.AIPromptTemplate) error
+	DeletePromptTemplate(ctx context.Context, id string) error
+	ResolvePromptSection(ctx context.Context, promptType, section, collectionID string) (string, error)
+}

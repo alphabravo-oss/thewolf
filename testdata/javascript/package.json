@@ -1,0 +1,9 @@
+{
+  "name": "testdata-js",
+  "version": "1.0.0",
+  "description": "Test data with known npm audit issues",
+  "dependencies": {
+    "express": "4.17.1",
+    "lodash": "4.17.20"
+  }
+}

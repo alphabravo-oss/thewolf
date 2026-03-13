@@ -1,0 +1,21 @@
+{
+  "dependencies": [
+    {
+      "name": "requests",
+      "version": "2.25.0",
+      "vulns": [
+        {
+          "id": "PYSEC-2023-1234",
+          "description": "Requests before 2.31.0 allows SSRF",
+          "fix_versions": ["2.31.0"],
+          "aliases": ["CVE-2023-32681"]
+        }
+      ]
+    },
+    {
+      "name": "flask",
+      "version": "2.0.0",
+      "vulns": []
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "Results": [
+    {
+      "Target": "requirements.txt",
+      "Vulnerabilities": [
+        {
+          "VulnerabilityID": "CVE-2023-1234",
+          "PkgName": "flask",
+          "InstalledVersion": "1.0.0",
+          "FixedVersion": "2.3.0",
+          "Severity": "HIGH",
+          "Title": "Arbitrary code execution in Flask",
+          "Description": "A vulnerability in Flask allows arbitrary code execution."
+        },
+        {
+          "VulnerabilityID": "CVE-2023-5678",
+          "PkgName": "requests",
+          "InstalledVersion": "2.20.0",
+          "FixedVersion": "",
+          "Severity": "MEDIUM",
+          "Title": "SSRF in requests",
+          "Description": "Server-side request forgery in requests library."
+        }
+      ]
+    }
+  ]
+}

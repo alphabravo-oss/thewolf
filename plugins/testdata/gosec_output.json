@@ -1,0 +1,30 @@
+{
+  "Issues": [
+    {
+      "severity": "HIGH",
+      "confidence": "HIGH",
+      "cwe": {
+        "id": "89"
+      },
+      "rule_id": "G201",
+      "details": "SQL string formatting",
+      "file": "db/queries.go",
+      "line": "25",
+      "column": "2",
+      "code": "q := fmt.Sprintf(\"SELECT * FROM users WHERE id = %s\", id)"
+    },
+    {
+      "severity": "MEDIUM",
+      "confidence": "HIGH",
+      "cwe": {
+        "id": "326"
+      },
+      "rule_id": "G401",
+      "details": "Use of weak cryptographic primitive",
+      "file": "crypto/hash.go",
+      "line": "15",
+      "column": "10",
+      "code": "h := md5.New()"
+    }
+  ]
+}

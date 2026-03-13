@@ -1,0 +1,3 @@
+app/main.py:10:5: error: Incompatible return value type (got "str", expected "int") [return-value]
+app/utils.py:25:1: warning: Unused "type: ignore" comment [unused-ignore]
+app/models.py:5:10: note: Revealed type is "builtins.str" [reveal]

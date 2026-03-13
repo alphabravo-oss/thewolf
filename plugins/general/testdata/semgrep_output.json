@@ -1,0 +1,36 @@
+{
+  "results": [
+    {
+      "check_id": "python.lang.security.audit.dangerous-system-call",
+      "path": "app/server.py",
+      "start": {"line": 42, "col": 5},
+      "end": {"line": 42, "col": 30},
+      "extra": {
+        "message": "Detected a dangerous system call. Use subprocess instead.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": ["CWE-78"],
+          "category": "security",
+          "confidence": "HIGH"
+        },
+        "lines": "os.system(user_input)"
+      }
+    },
+    {
+      "check_id": "python.lang.best-practice.open-never-closed",
+      "path": "utils/io.py",
+      "start": {"line": 10, "col": 1},
+      "end": {"line": 10, "col": 25},
+      "extra": {
+        "message": "File opened but never closed. Use a with statement.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": "",
+          "category": "best-practice",
+          "confidence": "MEDIUM"
+        },
+        "lines": "f = open('data.txt')"
+      }
+    }
+  ]
+}

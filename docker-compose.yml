@@ -1,0 +1,75 @@
+services:
+  wolf:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${WOLF_VERSION:-dev}
+        COMMIT: ${WOLF_COMMIT:-unknown}
+        BUILD_DATE: ${WOLF_BUILD_DATE:-unknown}
+    ports:
+      - "${WOLF_PORT:-8778}:8778"
+    volumes:
+      - wolf-data:/home/wolf/.wolf
+    environment:
+      - WOLF_MASTER_KEY=${WOLF_MASTER_KEY:-}
+      - WOLF_DB_DRIVER=${WOLF_DB_DRIVER:-sqlite}
+      - WOLF_DB_DSN=${WOLF_DB_DSN:-}
+      - WOLF_LOG_LEVEL=${WOLF_LOG_LEVEL:-info}
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: false
+    networks:
+      - wolf-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wolf", "version"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
+        reservations:
+          cpus: "0.5"
+          memory: 256M
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-wolf}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-wolf}
+      POSTGRES_DB: ${POSTGRES_DB:-wolf}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    networks:
+      - wolf-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-wolf}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 128M
+    profiles:
+      - postgres
+
+networks:
+  wolf-net:
+    driver: bridge
+
+volumes:
+  wolf-data:
+  pg-data:

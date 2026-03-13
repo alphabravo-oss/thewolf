@@ -1,0 +1,22 @@
+{
+  "matches": [
+    {
+      "vulnerability": {
+        "id": "CVE-2022-9999",
+        "severity": "Critical",
+        "description": "Critical vulnerability in lodash",
+        "fix": {
+          "versions": ["4.17.21"]
+        }
+      },
+      "artifact": {
+        "name": "lodash",
+        "version": "4.17.15",
+        "type": "npm",
+        "locations": [
+          {"path": "package-lock.json"}
+        ]
+      }
+    }
+  ]
+}

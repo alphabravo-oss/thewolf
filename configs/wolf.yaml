@@ -1,0 +1,65 @@
+server:
+  port: 8778
+  bind: "127.0.0.1"
+  log_level: "info"
+
+database:
+  driver: "sqlite"
+  dsn: "~/.wolf/wolf.db"
+
+scan:
+  concurrency: 8
+  timeout: "30m"
+  default_preset: "standard"
+  exclude_patterns:
+    - "vendor/"
+    - "node_modules/"
+    - ".git/"
+    - "__pycache__/"
+    - "dist/"
+    - "build/"
+    - ".wolf/"
+
+fix:
+  engine: "claude-code"
+  max_file_changes: 10
+  validation: true
+  branch_prefix: "wolf-fix"
+
+loop:
+  max_iterations: 5
+  rescan_strategy: "smart"
+  severity_filter:
+    - "critical"
+    - "high"
+  guardrails:
+    max_regressions: 3
+    stale_iterations: 2
+
+ai:
+  provider: "anthropic"
+  model: "claude-sonnet-4-20250514"
+  scoring: true
+  summarization: true
+
+presets:
+  quick:
+    description: "Essential security scanners — fast results"
+    tools:
+      - semgrep
+      - trivy
+      - gitleaks
+  standard:
+    description: "Recommended set — security + quality"
+    tools:
+      - semgrep
+      - trivy
+      - gitleaks
+      - bandit
+      - ruff
+      - eslint
+      - gosec
+      - npm-audit
+  deep:
+    description: "All available tools + AI analysis"
+    tools: "all"

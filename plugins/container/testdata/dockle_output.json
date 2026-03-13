@@ -1,0 +1,16 @@
+{
+  "details": [
+    {
+      "code": "CIS-DI-0001",
+      "title": "Create a user for the container",
+      "level": "WARN",
+      "alerts": ["Last user should not be root"]
+    },
+    {
+      "code": "CIS-DI-0005",
+      "title": "Enable Content trust for Docker",
+      "level": "INFO",
+      "alerts": ["export DOCKER_CONTENT_TRUST=1"]
+    }
+  ]
+}

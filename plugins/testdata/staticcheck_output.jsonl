@@ -1,0 +1,2 @@
+{"code":"SA1000","severity":"error","location":{"file":"main.go","line":15,"column":2},"end":{"file":"main.go","line":15,"column":10},"message":"Invalid regular expression"}
+{"code":"SA4006","severity":"warning","location":{"file":"utils.go","line":30,"column":2},"end":{"file":"utils.go","line":30,"column":10},"message":"Value assigned to variable is never read"}

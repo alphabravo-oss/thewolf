@@ -1,0 +1,22 @@
+{
+  "vulnerabilities": {
+    "lodash": {
+      "severity": "high",
+      "via": [
+        {
+          "title": "Prototype Pollution",
+          "url": "https://npmjs.com/advisories/1065",
+          "cve": "CVE-2020-8203",
+          "range": "<4.17.20",
+          "source": 1065
+        }
+      ]
+    },
+    "minimist": {
+      "severity": "low",
+      "via": [
+        "lodash"
+      ]
+    }
+  }
+}

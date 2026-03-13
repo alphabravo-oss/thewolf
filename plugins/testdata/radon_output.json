@@ -1,0 +1,36 @@
+{
+  "app/complex.py": [
+    {
+      "name": "process_data",
+      "type": "function",
+      "classname": null,
+      "lineno": 10,
+      "endline": 55,
+      "complexity": 15,
+      "rank": "D",
+      "col_offset": 0
+    },
+    {
+      "name": "simple_func",
+      "type": "function",
+      "classname": null,
+      "lineno": 60,
+      "endline": 65,
+      "complexity": 2,
+      "rank": "A",
+      "col_offset": 0
+    }
+  ],
+  "app/handler.py": [
+    {
+      "name": "handle_request",
+      "type": "method",
+      "classname": "RequestHandler",
+      "lineno": 20,
+      "endline": 80,
+      "complexity": 25,
+      "rank": "E",
+      "col_offset": 4
+    }
+  ]
+}

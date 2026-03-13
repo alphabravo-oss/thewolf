@@ -1,0 +1,18 @@
+[
+  {
+    "code": "F401",
+    "message": "os imported but unused",
+    "filename": "app/main.py",
+    "location": {"row": 1, "column": 1},
+    "end_location": {"row": 1, "column": 10},
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "code": "E501",
+    "message": "Line too long (120 > 88)",
+    "filename": "app/utils.py",
+    "location": {"row": 45, "column": 1},
+    "end_location": {"row": 45, "column": 120},
+    "url": "https://docs.astral.sh/ruff/rules/line-too-long"
+  }
+]
