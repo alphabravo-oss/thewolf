@@ -26,6 +26,14 @@ func (p *InferPlugin) Languages() []models.Language {
 func (p *InferPlugin) CheckAvailable() bool { return container.IsScannersReady() }
 
 func (p *InferPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
+	// Facebook only ships infer for Linux/x86_64 — there's no Linux
+	// arm64 binary on any infer release. Skip cleanly on arm64 hosts
+	// rather than fail when the binary isn't in the jvm bucket image.
+	if plugin.IsArm64Host() {
+		plugin.Skipf(opts.OnOutput, "infer",
+			"no upstream Linux/arm64 binary — infer is unavailable on this host. Skipping.")
+		return nil, nil
+	}
 	cfg := container.ConfigFromOpts(opts.ContainerCfg)
 	// Infer ships in the JVM bucket image (with pmd). It's not in the
 	// default wolf-scanners. Skip cleanly when not configured rather

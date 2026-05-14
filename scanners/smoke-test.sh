@@ -87,8 +87,14 @@ fi
 if [[ "$VARIANT" == "jvm" ]]; then
     echo ""
     echo "[JVM tools]"
-    run check "infer $INFER_VERSION" "$INFER_VERSION" infer --version
-    run check "pmd $PMD_VERSION"     "$PMD_VERSION"   pmd --version
+    # Infer doesn't ship a Linux/arm64 binary upstream — install
+    # script skips it on aarch64. Match that here so the smoke test
+    # doesn't spuriously red-flag a successful arm64 build.
+    case "$(uname -m)" in
+        aarch64|arm64) echo "  SKIP infer (no upstream linux/arm64 binary)" ;;
+        *) run check "infer $INFER_VERSION" "$INFER_VERSION" infer --version ;;
+    esac
+    run check "pmd $PMD_VERSION" "$PMD_VERSION" pmd --version
 fi
 
 if [[ "$VARIANT" == "rust" ]]; then
