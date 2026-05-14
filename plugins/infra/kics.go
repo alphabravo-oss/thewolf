@@ -1,9 +1,12 @@
 package infra
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
@@ -40,8 +43,19 @@ func (p *KICSPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]mo
 		defer cancel()
 	}
 	cfg := container.ConfigFromOpts(opts.ContainerCfg)
+	// Build the kics command. KICS does NOT auto-discover any project
+	// config file; the only way to opt out of a query is the
+	// --exclude-queries CLI flag (csv of UUIDs) or inline
+	// `# kics-scan ignore-line` comments. To keep wolf's "drop a config
+	// file at the repo root" pattern working consistently across
+	// scanners, read .kics.yaml here and translate exclude-queries
+	// into the CLI flag.
+	excludeFlag := ""
+	if uuids := kicsLoadExcludeQueries(opts.RepoPath); uuids != "" {
+		excludeFlag = " --exclude-queries " + uuids
+	}
 	// Wrap in sh -c so we can read the results file after kics writes it.
-	script := "kics scan -p /scan -o /tmp/kics --no-progress " +
+	script := "kics scan -p /scan" + excludeFlag + " -o /tmp/kics --no-progress " +
 		"--report-formats json --silent >/dev/null 2>&1; " +
 		"cat /tmp/kics/results.json"
 	// EntrypointOverride="sh" — the runner skips the tool-name dispatcher
@@ -148,4 +162,63 @@ func cweOrEmpty(s string) string {
 		return s
 	}
 	return "CWE-" + s
+}
+
+// kicsLoadExcludeQueries reads <repoRoot>/.kics.yaml and returns a
+// comma-separated list of query UUIDs from its `exclude-queries:`
+// section, or "" if the file is absent / unreadable / has no
+// exclusions. The format we support is intentionally narrow — a
+// flat YAML list under a single top-level key:
+//
+//	exclude-queries:
+//	  - 965a08d7-ef86-4f14-8792-4a3b2098937e
+//	  - 2b6ebc63-a614-4dab-aebf-a4fdba2387a3
+//
+// Lines starting with `#` are skipped. We don't pull in a YAML
+// dependency for this — gopkg.in/yaml.v3 isn't in go.mod and the
+// shape is simple enough that a 20-line scanner does the job.
+func kicsLoadExcludeQueries(repoPath string) string {
+	if repoPath == "" {
+		return ""
+	}
+	f, err := os.Open(filepath.Join(repoPath, ".kics.yaml"))
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+
+	var uuids []string
+	inSection := false
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		raw := sc.Text()
+		// Strip inline comments. KICS query UUIDs are hex+dash so a
+		// '#' anywhere on the line is a comment marker.
+		if i := strings.Index(raw, "#"); i >= 0 {
+			raw = raw[:i]
+		}
+		line := strings.TrimRight(raw, " \t")
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		// Top-level key with no leading whitespace.
+		if !strings.HasPrefix(line, " ") && !strings.HasPrefix(line, "\t") {
+			inSection = strings.HasPrefix(trimmed, "exclude-queries:")
+			continue
+		}
+		if !inSection {
+			continue
+		}
+		// List item — accept `- <uuid>` after any indent.
+		if strings.HasPrefix(trimmed, "- ") {
+			uuid := strings.TrimSpace(strings.TrimPrefix(trimmed, "- "))
+			// Strip surrounding quotes if the user wrote them.
+			uuid = strings.Trim(uuid, `"'`)
+			if uuid != "" {
+				uuids = append(uuids, uuid)
+			}
+		}
+	}
+	return strings.Join(uuids, ",")
 }

@@ -1,6 +1,8 @@
 package infra
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
@@ -198,5 +200,69 @@ func TestMapTFLintSeverity(t *testing.T) {
 		if got != tc.expected {
 			t.Errorf("mapTFLintSeverity(%q) = %s, want %s", tc.input, got, tc.expected)
 		}
+	}
+}
+
+func TestKICSLoadExcludeQueries(t *testing.T) {
+	tmp := t.TempDir()
+	cases := []struct {
+		name     string
+		yaml     string
+		expected string
+	}{
+		{
+			name:     "no file",
+			yaml:     "",
+			expected: "",
+		},
+		{
+			name: "two uuids with comments",
+			yaml: `# top-level comment
+exclude-queries:
+  # apt pin
+  - 965a08d7-ef86-4f14-8792-4a3b2098937e
+  - 2b6ebc63-a614-4dab-aebf-a4fdba2387a3  # apk pin
+`,
+			expected: "965a08d7-ef86-4f14-8792-4a3b2098937e,2b6ebc63-a614-4dab-aebf-a4fdba2387a3",
+		},
+		{
+			name: "quoted uuids",
+			yaml: `exclude-queries:
+  - "965a08d7-ef86-4f14-8792-4a3b2098937e"
+  - '2b6ebc63-a614-4dab-aebf-a4fdba2387a3'
+`,
+			expected: "965a08d7-ef86-4f14-8792-4a3b2098937e,2b6ebc63-a614-4dab-aebf-a4fdba2387a3",
+		},
+		{
+			name: "list under different key is ignored",
+			yaml: `other-list:
+  - 965a08d7-ef86-4f14-8792-4a3b2098937e
+exclude-queries:
+  - 2b6ebc63-a614-4dab-aebf-a4fdba2387a3
+`,
+			expected: "2b6ebc63-a614-4dab-aebf-a4fdba2387a3",
+		},
+		{
+			name:     "empty section",
+			yaml:     "exclude-queries:\n",
+			expected: "",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := filepath.Join(tmp, tc.name)
+			if err := os.MkdirAll(repo, 0o750); err != nil {
+				t.Fatal(err)
+			}
+			if tc.yaml != "" {
+				if err := os.WriteFile(filepath.Join(repo, ".kics.yaml"), []byte(tc.yaml), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			got := kicsLoadExcludeQueries(repo)
+			if got != tc.expected {
+				t.Errorf("got %q, want %q", got, tc.expected)
+			}
+		})
 	}
 }
