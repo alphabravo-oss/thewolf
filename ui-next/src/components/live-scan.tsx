@@ -1,6 +1,6 @@
 // Live-scan visualization: per-tool status cards + a collapsible log
 // viewer. Wired to the SSE stream the Go API publishes at
-// /api/scans/{id}/events. Each tool moves: queued → running → done|failed
+// /api/scans/{id}/stream. Each tool moves: queued → running → done|failed
 // with a glow that matches its status.
 //
 // Findings count is updated optimistically as `scan_progress` events
@@ -95,55 +95,79 @@ export function LiveScan({
     if (scanStatus === "completed" || scanStatus === "failed" || scanStatus === "cancelled") {
       return;
     }
-    const es = new EventSource(`/api/scans/${scanId}/events`, {
+    const es = new EventSource(`/api/scans/${scanId}/stream`, {
       withCredentials: true,
     });
     eventSourceRef.current = es;
 
-    es.addEventListener("scan_progress", (evt) => {
-      const data = JSON.parse((evt as MessageEvent).data);
-      setTools((prev) => {
-        const t = prev[data.tool_name];
-        if (!t) return prev;
-        const newStatus = data.status as ToolStatus;
-        // Set startedAt on the running transition; clear once the tool
-        // reaches a terminal state so the card stops ticking.
-        let startedAt = t.startedAt;
-        if (newStatus === "running" && startedAt === null) {
-          startedAt = performance.now();
-        } else if (newStatus !== "running") {
-          startedAt = null;
+    // The server intentionally does NOT emit `event:` field lines —
+    // its JSON payload carries its own `type` key. Because of that,
+    // EventSource fires `onmessage` for every event regardless of
+    // logical type, and addEventListener('scan_progress', …) would
+    // never fire. Dispatch on data.type from inside onmessage.
+    es.onmessage = (evt) => {
+      let data: { type?: string; [k: string]: unknown };
+      try {
+        data = JSON.parse(evt.data);
+      } catch {
+        return;
+      }
+      switch (data.type) {
+        case "scan_progress": {
+          const toolName = data.tool_name as string;
+          const newStatus = data.status as ToolStatus;
+          const findingCount = (data.finding_count as number | undefined) ?? 0;
+          const elapsedMs = (data.elapsed_ms as number | undefined) ?? 0;
+          setTools((prev) => {
+            const t = prev[toolName];
+            if (!t) return prev;
+            // Set startedAt on the running transition; clear once the
+            // tool reaches a terminal state so the card stops ticking.
+            let startedAt = t.startedAt;
+            if (newStatus === "running" && startedAt === null) {
+              startedAt = performance.now();
+            } else if (newStatus !== "running") {
+              startedAt = null;
+            }
+            return {
+              ...prev,
+              [toolName]: {
+                ...t,
+                status: newStatus,
+                findingCount: findingCount || t.findingCount,
+                // Server's elapsed_ms is meaningful only on terminal
+                // status (running broadcasts hardcode 0). Trust it
+                // when non-zero.
+                elapsedMs: elapsedMs > 0 ? elapsedMs : t.elapsedMs,
+                startedAt,
+              },
+            };
+          });
+          break;
         }
-        return {
-          ...prev,
-          [data.tool_name]: {
-            ...t,
-            status: newStatus,
-            findingCount: data.finding_count ?? t.findingCount,
-            // Server's elapsed_ms is meaningful only on terminal status
-            // (running broadcasts hardcode 0). Trust it when non-zero.
-            elapsedMs: data.elapsed_ms > 0 ? data.elapsed_ms : t.elapsedMs,
-            startedAt,
-          },
-        };
-      });
-    });
-
-    es.addEventListener("tool_output", (evt) => {
-      const data = JSON.parse((evt as MessageEvent).data);
-      setTools((prev) => {
-        const t = prev[data.tool_name];
-        if (!t) return prev;
-        return {
-          ...prev,
-          [data.tool_name]: {
-            ...t,
-            // Cap retained log per tool at 500 lines to avoid runaway memory.
-            log: [...t.log.slice(-499), data.line],
-          },
-        };
-      });
-    });
+        case "tool_output": {
+          const toolName = data.tool_name as string;
+          const line = data.line as string;
+          setTools((prev) => {
+            const t = prev[toolName];
+            if (!t) return prev;
+            return {
+              ...prev,
+              [toolName]: {
+                ...t,
+                // Cap retained log per tool at 500 lines to avoid
+                // runaway memory on long-running tools.
+                log: [...t.log.slice(-499), line],
+              },
+            };
+          });
+          break;
+        }
+        // tools_selected, scan_status, scan_complete, scan_cancelled —
+        // not consumed by this component (the parent route's polling
+        // useQuery already picks up the terminal status and navigates).
+      }
+    };
 
     es.onerror = () => {
       // EventSource will auto-reconnect; we just log.
