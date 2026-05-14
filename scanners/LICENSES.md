@@ -44,6 +44,7 @@ each tool's terms.
 | vale | MIT | — |
 | nuclei | MIT | Templates may have own licenses. |
 | scorecard | Apache-2.0 | OpenSSF project; some checks call GitHub API and may need GITHUB_AUTH_TOKEN. |
+| renovate | AGPL-3.0 | Mend Renovate. Wolf runs it in `--dry-run=full` (detect-only) so we never open PRs. AGPL applies the same way as trufflehog above: redistributing wolf-scanners as a hosted service requires source disclosure (we keep `scanners/` open in the wolf repo). |
 | rust toolchain + clippy | Apache-2.0 / MIT | — |
 | **CodeQL** | **GitHub CodeQL Terms** | **Free for analysis of open-source code only.** Commercial / private-repo analysis requires a GitHub Enterprise Advanced Security license. Operators of wolf in commercial settings must confirm their CodeQL license; if you don't have one, set `disabled_tools: [codeql]` in `wolf.yaml`. |
 

@@ -49,6 +49,12 @@
   All Images buttons.
 - **OpenSSF Scorecard** scanner — repo-hygiene scoring (branch
   protection, signed releases, pinned deps).
+- **Renovate** scanner (dry-run / detect-only) — flags outdated and
+  vulnerable deps across Helm, GitHub Actions, Dockerfile base images,
+  Terraform modules, pre-commit hooks, GitLab CI, Bitbucket pipelines,
+  Gradle / Maven / sbt — ecosystems trivy/grype/osv-scanner don't
+  cover well. Severity by gap: patch→info, minor→low, major→medium,
+  vulnerability→high.
 - **CI workflows**: `.github/workflows/scanners-image.yml` (matrix
   build of 4 images with smoke test) and `go.yml` (vet/build/test/
   lint).

@@ -104,5 +104,11 @@ func DefaultUpstreamTools() map[string]ToolImageSpec {
 
 		// Repo-hygiene (new in 2.0).
 		"scorecard": {Image: "gcr.io/openssf/scorecard:v5.0.0", Entrypoint: "scorecard"},
+
+		// Stale/insecure-dependency detection across many ecosystems
+		// (npm, pip, gem, composer, cargo, go.mod, helm, github-actions,
+		// Dockerfile base images, terraform modules, …). Used in
+		// dry-run / detect-only mode — wolf never opens PRs from it.
+		"renovate": {Image: "ghcr.io/renovatebot/renovate:39.55.0", Entrypoint: "renovate"},
 	}
 }

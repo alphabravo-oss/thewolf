@@ -133,13 +133,13 @@ See `PLAN.md` for the full architecture; `scanners/README.md` for how to add or 
 
 ## Supported tools
 
-**Total: 35 scanners** across SAST, SCA, secrets, container, infrastructure, license, SBOM, docs, DAST, repo-hygiene, and per-language categories.
+**Total: 36 scanners** across SAST, SCA, secrets, container, infrastructure, license, SBOM, docs, DAST, repo-hygiene, dependency-freshness, and per-language categories.
 
 ### By tier
 
 | Tier | Count | How wolf gets the binary |
 |---|---|---|
-| **Upstream-official images** | 18 | `docker pull aquasec/trivy`, etc. — maintainer-published, multi-arch |
+| **Upstream-official images** | 19 | `docker pull aquasec/trivy`, etc. — maintainer-published, multi-arch |
 | **Wolf-built default image** | 14 | bundled in `wolf-scanners:<version>` via pip / npm / go install / apt / composer / github-release |
 | **Wolf-built bucket images** | 3 | bundled in `wolf-scanners-{jvm,rust,codeql}:<version>` |
 
@@ -156,6 +156,7 @@ Every tool's tier is annotated as 🌐 (upstream), 📦 (wolf-built default), �
 | **SCA** | Trivy | 🌐 | `aquasec/trivy` | Filesystem + container + IaC vulnerability scanner |
 | **SCA** | Grype | 🌐 | `anchore/grype` | Vulnerability matcher (paired with Syft for SBOM-based scanning) |
 | **SCA** | OSV-Scanner | 🌐 | `ghcr.io/google/osv-scanner` | Multi-ecosystem dep scanner using Google's OSV database |
+| **SCA / freshness** | Renovate | 🌐 | `ghcr.io/renovatebot/renovate` | Mend Renovate in dry-run / detect-only mode — flags outdated and vulnerable deps across npm, pip, gem, composer, cargo, go.mod, Helm, GitHub Actions, Dockerfile base images, Terraform, pre-commit, GitLab CI, Bitbucket, Gradle, Maven, sbt. Severity by gap: patch → info, minor → low, major → medium, vuln → high. |
 | **Secrets** | Gitleaks | 🌐 | `zricethezav/gitleaks` | Regex-based secret detection across history + working tree |
 | **Secrets** | TruffleHog | 🌐 | `trufflesecurity/trufflehog` | Deep secret scanner with live-credential verification |
 | **Secrets** | detect-secrets | 📦 | `wolf-scanners` | Baseline-style secret scanner by Yelp |
@@ -296,7 +297,7 @@ Or set `WOLF_SCANNERS_DISABLE_UPSTREAM=1` to force everything through wolf-built
 Operators behind corporate proxies need outbound HTTPS to:
 
 - **docker.io** — most upstream images (`aquasec/trivy`, `semgrep/semgrep`, `zricethezav/gitleaks`, `anchore/{grype,syft}`, `trufflesecurity/trufflehog`, `hadolint/hadolint`, `goodwithtech/dockle`, `bridgecrew/checkov`, `stackrox/kube-linter`, `projectdiscovery/nuclei`, `jdkato/vale`, `stoplight/spectral`)
-- **ghcr.io** — `ghcr.io/alphabravocompany/wolf-scanners*`, `ghcr.io/terraform-linters/tflint`, `ghcr.io/nexb/scancode-toolkit`, `ghcr.io/google/osv-scanner`
+- **ghcr.io** — `ghcr.io/alphabravocompany/wolf-scanners*`, `ghcr.io/terraform-linters/tflint`, `ghcr.io/nexb/scancode-toolkit`, `ghcr.io/google/osv-scanner`, `ghcr.io/renovatebot/renovate`
 - **quay.io** — `quay.io/kubescape/kubescape-cli`
 - **gcr.io** — `gcr.io/openssf/scorecard`
 

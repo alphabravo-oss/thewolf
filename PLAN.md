@@ -188,6 +188,7 @@ For the tools where the maintainer publishes a multi-arch image we trust, the wo
 | spectral | `stoplight/spectral:6.13.1` | |
 | scancode | `ghcr.io/nexb/scancode-toolkit:v32.3.0` | avoids the pyicu/libicu-dev build complexity |
 | scorecard | `gcr.io/openssf/scorecard:v5.0.0` | OpenSSF repo-hygiene |
+| renovate | `ghcr.io/renovatebot/renovate:39.55.0` | dry-run / detect-only; flags outdated + vulnerable deps across many ecosystems (Helm, GitHub Actions, Dockerfile base images, Terraform modules — coverage trivy/grype/osv don't have) |
 
 These are pulled lazily on first invocation (or eagerly via `wolf pull scanners`). Operators opt out with `WOLF_SCANNERS_DISABLE_UPSTREAM=1`.
 
