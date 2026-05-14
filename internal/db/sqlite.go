@@ -37,6 +37,9 @@ var migration007SQL string
 //go:embed migrations/008_ai_log_cost.sql
 var migration008SQL string
 
+//go:embed migrations/009_scan_tools_errors.sql
+var migration009SQL string
+
 // SQLiteStore implements Store using SQLite.
 type SQLiteStore struct {
 	db *sqlx.DB
@@ -103,6 +106,11 @@ func (s *SQLiteStore) Migrate() error {
 		}
 	}
 	if _, err := s.db.Exec(migration008SQL); err != nil {
+		if !strings.Contains(err.Error(), "duplicate column") {
+			return err
+		}
+	}
+	if _, err := s.db.Exec(migration009SQL); err != nil {
 		if !strings.Contains(err.Error(), "duplicate column") {
 			return err
 		}
@@ -341,12 +349,15 @@ func (s *SQLiteStore) CreateScan(ctx context.Context, scan *models.Scan) error {
 	now := time.Now().UTC()
 	scan.CreatedAt = now
 	scan.UpdatedAt = now
+	if scan.ToolsErrors == "" {
+		scan.ToolsErrors = "{}"
+	}
 	_, err := s.db.NamedExecContext(ctx,
 		`INSERT INTO scans (id, user_id, repo_id, collection_id, loop_id, iteration, branch, status,
-		 tools_selected, tools_completed, tools_failed, finding_count, coverage_summary, ai_enabled, ai_summary,
+		 tools_selected, tools_completed, tools_failed, tools_errors, finding_count, coverage_summary, ai_enabled, ai_summary,
 		 started_at, completed_at, created_at, updated_at)
 		 VALUES (:id, :user_id, :repo_id, :collection_id, :loop_id, :iteration, :branch, :status,
-		 :tools_selected, :tools_completed, :tools_failed, :finding_count, :coverage_summary, :ai_enabled, :ai_summary,
+		 :tools_selected, :tools_completed, :tools_failed, :tools_errors, :finding_count, :coverage_summary, :ai_enabled, :ai_summary,
 		 :started_at, :completed_at, :created_at, :updated_at)`, scan)
 	return err
 }
@@ -389,7 +400,7 @@ func (s *SQLiteStore) UpdateScan(ctx context.Context, scan *models.Scan) error {
 	scan.UpdatedAt = time.Now().UTC()
 	_, err := s.db.NamedExecContext(ctx,
 		`UPDATE scans SET status=:status, tools_selected=:tools_selected, tools_completed=:tools_completed,
-		 tools_failed=:tools_failed, finding_count=:finding_count, coverage_summary=:coverage_summary,
+		 tools_failed=:tools_failed, tools_errors=:tools_errors, finding_count=:finding_count, coverage_summary=:coverage_summary,
 		 ai_enabled=:ai_enabled, ai_summary=:ai_summary, started_at=:started_at, completed_at=:completed_at, updated_at=:updated_at
 		 WHERE id=:id`, scan)
 	return err

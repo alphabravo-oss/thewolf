@@ -61,48 +61,78 @@ function ScansPage() {
             <thead className="text-xs uppercase tracking-wide text-muted-foreground bg-muted/20">
               <tr>
                 <th className="text-left font-medium px-4 py-2">Status</th>
-                <th className="text-left font-medium px-4 py-2">Repo</th>
-                <th className="text-left font-medium px-4 py-2">Branch</th>
+                <th className="text-left font-medium px-4 py-2">Scan ID</th>
+                <th className="text-left font-medium px-4 py-2">Repo · Branch</th>
                 <th className="text-left font-medium px-4 py-2">Tools</th>
                 <th className="text-right font-medium px-4 py-2">Findings</th>
-                <th className="text-right font-medium px-4 py-2">Started</th>
+                <th className="text-left font-medium px-4 py-2">Started</th>
+                <th className="text-right font-medium px-4 py-2">Duration</th>
               </tr>
             </thead>
             <tbody>
-              {q.data.map((s) => (
-                <tr key={s.id} className="border-t border-border/30 table-row-hover">
-                  <td className="px-4 py-2">
-                    <ScanStatusPill status={s.status} />
-                  </td>
-                  <td className="px-4 py-2">
-                    <Link
-                      to={
-                        s.status === "running"
-                          ? "/scans/$scanId/live"
-                          : "/scans/$scanId"
-                      }
-                      params={{ scanId: s.id }}
-                      className="font-medium hover:underline"
-                    >
-                      {s.repo?.name ?? s.id.slice(0, 8)}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-2 text-muted-foreground">
-                    {s.branch}
-                  </td>
-                  <td className="px-4 py-2 text-muted-foreground tabular-nums">
-                    {parseToolList(s.tools_completed).length}/{parseToolList(s.tools_selected).length}
-                  </td>
-                  <td className="px-4 py-2 text-right font-mono tabular-nums">
-                    {s.finding_count}
-                  </td>
-                  <td className="px-4 py-2 text-right text-muted-foreground tabular-nums">
-                    {s.started_at
-                      ? new Date(s.started_at).toLocaleString()
-                      : "—"}
-                  </td>
-                </tr>
-              ))}
+              {q.data.map((s) => {
+                const sel = parseToolList(s.tools_selected);
+                const done = parseToolList(s.tools_completed);
+                const failed = parseToolList(s.tools_failed);
+                const startMs = s.started_at ? new Date(s.started_at).getTime() : 0;
+                const endMs = s.completed_at
+                  ? new Date(s.completed_at).getTime()
+                  : s.status === "running"
+                    ? Date.now()
+                    : startMs;
+                const durationSec = startMs && endMs ? Math.round((endMs - startMs) / 1000) : 0;
+                return (
+                  <tr key={s.id} className="border-t border-border/30 table-row-hover">
+                    <td className="px-4 py-2">
+                      <ScanStatusPill status={s.status} />
+                    </td>
+                    <td className="px-4 py-2">
+                      <Link
+                        to={
+                          s.status === "running"
+                            ? "/scans/$scanId/live"
+                            : "/scans/$scanId"
+                        }
+                        params={{ scanId: s.id }}
+                        className="font-mono text-xs hover:underline text-muted-foreground"
+                        title={s.id}
+                      >
+                        {s.id.slice(0, 8)}
+                      </Link>
+                    </td>
+                    <td className="px-4 py-2">
+                      <div className="text-sm font-medium">
+                        {s.repo?.name ?? "—"}
+                      </div>
+                      <div className="text-xs text-muted-foreground font-mono">
+                        {s.branch}
+                      </div>
+                    </td>
+                    <td className="px-4 py-2 text-xs tabular-nums">
+                      <span className="text-foreground">{done.length}</span>
+                      <span className="text-muted-foreground">/{sel.length}</span>
+                      {failed.length > 0 && (
+                        <span className="text-red-400 ml-1">· {failed.length} failed</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2 text-right font-mono tabular-nums">
+                      {s.finding_count.toLocaleString()}
+                    </td>
+                    <td className="px-4 py-2 text-xs text-muted-foreground">
+                      {s.started_at
+                        ? new Date(s.started_at).toLocaleString()
+                        : "—"}
+                    </td>
+                    <td className="px-4 py-2 text-right text-xs text-muted-foreground tabular-nums">
+                      {durationSec > 0
+                        ? durationSec < 60
+                          ? `${durationSec}s`
+                          : `${Math.floor(durationSec / 60)}m ${durationSec % 60}s`
+                        : "—"}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

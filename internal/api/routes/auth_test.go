@@ -88,20 +88,13 @@ func TestRegisterAndLogin(t *testing.T) {
 		t.Fatal("login: expected access_token")
 	}
 
-	// Check cookie was set
-	cookies := w.Result().Cookies()
-	found := false
-	for _, c := range cookies {
-		if c.Name == "wolf_token" {
-			found = true
-			if !c.HttpOnly {
-				t.Error("wolf_token cookie should be HttpOnly")
-			}
-		}
-	}
-	if !found {
-		t.Error("login: expected wolf_token cookie")
-	}
+	// Note: login no longer sets an HttpOnly wolf_token cookie. The SPA
+	// writes its own JS-readable cookie from the access_token returned
+	// in the JSON body, because a server-set HttpOnly cookie would
+	// shadow document.cookie writes from the SPA and break auth.
+	// Middleware still accepts either Bearer header or wolf_token
+	// cookie, so the SPA path works; this test just asserts the JSON
+	// body carries the token.
 }
 
 func TestRegisterDuplicate(t *testing.T) {

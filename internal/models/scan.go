@@ -15,6 +15,10 @@ type Scan struct {
 	ToolsSelected   string     `json:"tools_selected" db:"tools_selected"`
 	ToolsCompleted  string     `json:"tools_completed" db:"tools_completed"`
 	ToolsFailed     string     `json:"tools_failed" db:"tools_failed"`
+	// ToolsErrors is a JSON-encoded map {toolName: errorMessage} so the
+	// UI can surface *why* a given tool failed without digging into log
+	// artifacts. Empty "{}" when no failures.
+	ToolsErrors     string     `json:"tools_errors" db:"tools_errors"`
 	FindingCount    int        `json:"finding_count" db:"finding_count"`
 	CoverageSummary string     `json:"coverage_summary" db:"coverage_summary"`
 	AIEnabled       bool       `json:"ai_enabled" db:"ai_enabled"`

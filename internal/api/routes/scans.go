@@ -214,6 +214,9 @@ func executeScan(h *Handler, scanID, userID, repoPath, branch string, req create
 	var toolStateMu sync.Mutex
 	toolsCompleted := make([]string, 0)
 	toolsFailed := make([]string, 0)
+	// toolsErrors maps toolName → error message. Persisted so the UI
+	// can render "why" beside the failure indicator.
+	toolsErrors := make(map[string]string)
 	cumulativeFindingCount := 0
 
 	// Read scan concurrency from settings (default: 8).
@@ -291,6 +294,13 @@ func executeScan(h *Handler, scanID, userID, repoPath, branch string, req create
 			toolStateMu.Lock()
 			if toolErr != nil {
 				toolsFailed = append(toolsFailed, toolName)
+				// Trim the error to a UI-friendly size; full traces
+				// remain in the per-tool .log artifact for deep dives.
+				e := toolErr.Error()
+				if len(e) > 500 {
+					e = e[:500] + "…"
+				}
+				toolsErrors[toolName] = e
 			} else {
 				toolsCompleted = append(toolsCompleted, toolName)
 			}
@@ -298,12 +308,14 @@ func executeScan(h *Handler, scanID, userID, repoPath, branch string, req create
 			currentTotal := cumulativeFindingCount
 			completedJSON, _ := json.Marshal(toolsCompleted)
 			failedJSON, _ := json.Marshal(toolsFailed)
+			errorsJSON, _ := json.Marshal(toolsErrors)
 			toolStateMu.Unlock()
 
 			// Update scan record with incremental state.
 			if s, err := h.Store.GetScanByID(context.Background(), scanID); err == nil {
 				s.ToolsCompleted = string(completedJSON)
 				s.ToolsFailed = string(failedJSON)
+				s.ToolsErrors = string(errorsJSON)
 				s.FindingCount = currentTotal
 				s.UpdatedAt = time.Now()
 				h.Store.UpdateScan(context.Background(), s)
@@ -439,10 +451,25 @@ func executeScan(h *Handler, scanID, userID, repoPath, branch string, req create
 		// Score findings with default AI context score.
 		scorer.ScoreFindings(result.Findings)
 
-		// Findings were persisted incrementally in OnToolDone.
-		// The runner's result.Findings is the deduplicated set — update
-		// the final count to reflect dedup (may be lower than cumulative).
-		scan.FindingCount = len(result.Findings)
+		// Findings were persisted incrementally in OnToolDone (raw, per-
+		// tool). The headline finding_count must reconcile with what the
+		// UI actually shows on the findings table, which means counting
+		// *visible* findings (post-suppression). Source from the DB so
+		// the number can never drift away from what the user sees.
+		if dbFindings, ferr := h.Store.ListFindingsByScan(context.Background(), scanID); ferr == nil {
+			dbFindings, _ = suppress.Apply(dbFindings, suppress.DefaultRules())
+			visible := 0
+			for _, f := range dbFindings {
+				if !f.Suppressed {
+					visible++
+				}
+			}
+			scan.FindingCount = visible
+		} else {
+			// Fall back to the runner's post-dedup count if the DB read
+			// fails — better than reporting zero.
+			scan.FindingCount = len(result.Findings)
+		}
 
 		// Static test coverage analysis.
 		covReport, covErr := coverage.Analyze(repoPath)
@@ -686,6 +713,7 @@ func GetScan(w http.ResponseWriter, r *http.Request) {
 			"tools_selected":   scan.ToolsSelected,
 			"tools_completed":  scan.ToolsCompleted,
 			"tools_failed":     scan.ToolsFailed,
+			"tools_errors":     scan.ToolsErrors,
 			"finding_count":    scan.FindingCount,
 			"coverage_summary": scan.CoverageSummary,
 			"ai_summary":       scan.AISummary,
@@ -1977,6 +2005,12 @@ func GetScanTools(w http.ResponseWriter, r *http.Request) {
 	json.Unmarshal([]byte(scan.ToolsCompleted), &completed)
 	json.Unmarshal([]byte(scan.ToolsFailed), &failed)
 
+	// Parse the per-tool error map (added in migration 009).
+	errs := make(map[string]string)
+	if scan.ToolsErrors != "" && scan.ToolsErrors != "{}" {
+		_ = json.Unmarshal([]byte(scan.ToolsErrors), &errs)
+	}
+
 	completedSet := make(map[string]bool)
 	for _, t := range completed {
 		completedSet[t] = true
@@ -1997,18 +2031,27 @@ func GetScanTools(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Get finding counts per tool.
+	// Get finding counts per tool — applies the same suppression filter
+	// the /findings endpoint does so per-tool numbers match the visible
+	// table.
 	findings, _ := h.Store.ListFindingsByScan(r.Context(), scanID)
-	findingCounts := make(map[string]int)
+	findings, _ = suppress.Apply(findings, suppress.DefaultRules())
+	visibleCounts := make(map[string]int)
+	totalCounts := make(map[string]int)
 	for _, f := range findings {
-		findingCounts[f.ToolName]++
+		totalCounts[f.ToolName]++
+		if !f.Suppressed {
+			visibleCounts[f.ToolName]++
+		}
 	}
 
 	type toolStatus struct {
 		Name         string `json:"name"`
 		Status       string `json:"status"`
-		FindingCount int    `json:"finding_count"`
+		FindingCount int    `json:"finding_count"`         // visible (post-suppression)
+		RawCount     int    `json:"raw_count,omitempty"`   // pre-suppression
 		HasOutput    bool   `json:"has_output"`
+		Error        string `json:"error,omitempty"`
 	}
 
 	var tools []toolStatus
@@ -2023,8 +2066,10 @@ func GetScanTools(w http.ResponseWriter, r *http.Request) {
 		tools = append(tools, toolStatus{
 			Name:         name,
 			Status:       status,
-			FindingCount: findingCounts[name],
+			FindingCount: visibleCounts[name],
+			RawCount:     totalCounts[name],
 			HasOutput:    hasOutput[name],
+			Error:        errs[name],
 		})
 	}
 

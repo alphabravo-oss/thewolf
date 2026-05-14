@@ -2,7 +2,17 @@
 // sort, paginate, export to JSON/CSV.
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeftIcon, BugIcon, DownloadIcon, FilterXIcon } from "lucide-react";
+import {
+  ArrowLeftIcon,
+  BugIcon,
+  CheckCircle2Icon,
+  ChevronDownIcon,
+  ChevronRightIcon,
+  DownloadIcon,
+  FilterXIcon,
+  LoaderIcon,
+  XCircleIcon,
+} from "lucide-react";
 import { useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import type { Finding, Scan, Severity } from "@/lib/types";
@@ -17,6 +27,17 @@ export const Route = createFileRoute("/_authed/scans/$scanId/")({
 });
 
 type SortKey = "severity" | "tool" | "file" | "title";
+
+// Shape returned by GET /api/scans/{id}/tools (added in server-side
+// per-tool status work).
+interface ToolStatusEntry {
+  name: string;
+  status: "completed" | "failed" | "running" | "pending";
+  finding_count: number;
+  raw_count?: number;
+  has_output: boolean;
+  error?: string;
+}
 
 const SEVERITY_RANK: Record<Severity, number> = {
   critical: 5,
@@ -36,6 +57,23 @@ function ScanDetailPage() {
     queryFn: async () => {
       const r = await api.get<Scan>(`/scans/${scanId}`);
       return r.data;
+    },
+    // Poll while running so the page self-updates.
+    refetchInterval: (q) => {
+      const s = q.state.data?.status;
+      return s === "running" || s === "pending" ? 3000 : false;
+    },
+  });
+
+  const toolsQ = useQuery({
+    queryKey: ["scan", scanId, "tools"],
+    queryFn: async () => {
+      const r = await api.get<ToolStatusEntry[]>(`/scans/${scanId}/tools`);
+      return r.data ?? [];
+    },
+    refetchInterval: (q) => {
+      const status = scanQ.data?.status;
+      return status === "running" || status === "pending" ? 3000 : false;
     },
   });
 
@@ -238,6 +276,8 @@ function ScanDetailPage() {
           </Link>
         )}
       </div>
+
+      <ToolsPanel tools={toolsQ.data} loading={toolsQ.isLoading} />
 
       <section>
         <div className="flex items-end justify-between gap-3 mb-3">
@@ -513,4 +553,152 @@ function downloadBlob(content: string, filename: string, mime: string) {
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+// ToolsPanel — collapsible per-tool status with finding counts and
+// expandable error details for failures. The "Tools" section is the
+// answer to "which tools actually ran, which succeeded, which failed,
+// and why" without leaving the scan page.
+function ToolsPanel({
+  tools,
+  loading,
+}: {
+  tools: ToolStatusEntry[] | undefined;
+  loading: boolean;
+}) {
+  const [open, setOpen] = useState(true);
+  if (loading || !tools) {
+    return (
+      <section className="glass-card p-5">
+        <h2 className="text-base font-semibold mb-2">Tools</h2>
+        <div className="text-sm text-muted-foreground">Loading per-tool status…</div>
+      </section>
+    );
+  }
+  const completed = tools.filter((t) => t.status === "completed");
+  const failed = tools.filter((t) => t.status === "failed");
+  const running = tools.filter((t) => t.status === "running" || t.status === "pending");
+
+  return (
+    <section className="glass-card p-5">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="flex items-center justify-between w-full"
+      >
+        <div className="flex items-center gap-2">
+          {open ? (
+            <ChevronDownIcon className="size-4 text-muted-foreground" />
+          ) : (
+            <ChevronRightIcon className="size-4 text-muted-foreground" />
+          )}
+          <h2 className="text-base font-semibold">Tools ({tools.length})</h2>
+        </div>
+        <div className="text-xs text-muted-foreground tabular-nums">
+          <span className="text-green-400">{completed.length} done</span>
+          {failed.length > 0 && (
+            <span className="text-red-400 ml-2">{failed.length} failed</span>
+          )}
+          {running.length > 0 && (
+            <span className="text-blue-300 ml-2">{running.length} running</span>
+          )}
+        </div>
+      </button>
+
+      {open && (
+        <>
+          {failed.length > 0 && (
+            <div className="mt-4">
+              <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-2">
+                Failed ({failed.length})
+              </div>
+              <div className="space-y-1">
+                {failed.map((t) => (
+                  <ToolRow key={t.name} tool={t} />
+                ))}
+              </div>
+            </div>
+          )}
+          {running.length > 0 && (
+            <div className="mt-4">
+              <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-2">
+                Running / pending ({running.length})
+              </div>
+              <div className="space-y-1">
+                {running.map((t) => (
+                  <ToolRow key={t.name} tool={t} />
+                ))}
+              </div>
+            </div>
+          )}
+          {completed.length > 0 && (
+            <div className="mt-4">
+              <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-2">
+                Completed ({completed.length})
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-1">
+                {completed
+                  .sort((a, b) => b.finding_count - a.finding_count)
+                  .map((t) => (
+                    <ToolRow key={t.name} tool={t} compact />
+                  ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
+function ToolRow({ tool, compact }: { tool: ToolStatusEntry; compact?: boolean }) {
+  const [showErr, setShowErr] = useState(false);
+  const icon =
+    tool.status === "completed" ? (
+      <CheckCircle2Icon className="size-3.5 text-green-400" />
+    ) : tool.status === "failed" ? (
+      <XCircleIcon className="size-3.5 text-red-400" />
+    ) : (
+      <LoaderIcon className="size-3.5 text-blue-300 animate-spin" />
+    );
+
+  if (compact) {
+    return (
+      <div className="flex items-center gap-1.5 text-xs py-0.5">
+        {icon}
+        <span className="font-mono truncate flex-1 min-w-0">{tool.name}</span>
+        <span className="text-muted-foreground tabular-nums">
+          {tool.finding_count > 0 ? tool.finding_count : "—"}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="text-sm">
+      <div className="flex items-center gap-2 py-1">
+        {icon}
+        <span className="font-mono flex-1 min-w-0 truncate">{tool.name}</span>
+        {tool.finding_count > 0 && (
+          <span className="text-xs text-muted-foreground tabular-nums">
+            {tool.finding_count} findings
+          </span>
+        )}
+        {tool.status === "failed" && tool.error && (
+          <button
+            type="button"
+            onClick={() => setShowErr(!showErr)}
+            className="text-[11px] underline text-muted-foreground hover:text-foreground"
+          >
+            {showErr ? "Hide error" : "Show error"}
+          </button>
+        )}
+      </div>
+      {showErr && tool.error && (
+        <pre className="text-[11px] font-mono text-red-300/80 bg-red-500/5 border border-red-500/10 rounded p-2 ml-5 mb-1 whitespace-pre-wrap break-all max-h-48 overflow-y-auto">
+          {tool.error}
+        </pre>
+      )}
+    </div>
+  );
 }
