@@ -1,0 +1,7 @@
+node_modules
+dist
+.vite
+*.local
+
+# TanStack Router generates this at build/dev. Re-generated on demand.
+src/routeTree.gen.ts

@@ -1,0 +1,205 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --font-inter: "Inter";
+    --font-mono: "JetBrains Mono";
+
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
+    --primary: 240 5.9% 10%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 240 5.9% 10%;
+    --radius: 0.5rem;
+    --sidebar: 0 0% 98%;
+    --sidebar-foreground: 240 5.9% 10%;
+    --sidebar-border: 240 5.9% 90%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+  }
+
+  .dark {
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 240 10% 5.5%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 10% 5.5%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 240 5.9% 10%;
+    --secondary: 240 3.7% 15.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
+    --accent: 240 3.7% 15.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 240 4.9% 83.9%;
+    --sidebar: 240 10% 4.5%;
+    --sidebar-foreground: 240 4.8% 75%;
+    --sidebar-border: 240 3.7% 12%;
+    --sidebar-accent: 240 3.7% 10%;
+    --sidebar-accent-foreground: 0 0% 98%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  /* Subtle dark scrollbar (astronomer-style). */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-muted rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground/30;
+  }
+  ::selection {
+    @apply bg-primary/20 text-foreground;
+  }
+}
+
+@layer components {
+  /* Glass-morphism card — the signature surface for panels/tiles. */
+  .glass-card {
+    @apply bg-card/50 backdrop-blur-xl border border-border/50 rounded-lg;
+  }
+
+  /* Status glows — subtle box-shadow halo that signals run-state. */
+  .glow-success {
+    box-shadow: 0 0 12px rgba(16, 185, 129, 0.15);
+  }
+  .glow-warning {
+    box-shadow: 0 0 12px rgba(245, 158, 11, 0.15);
+  }
+  .glow-error {
+    box-shadow: 0 0 12px rgba(239, 68, 68, 0.15);
+  }
+  .glow-info {
+    box-shadow: 0 0 12px rgba(59, 130, 246, 0.15);
+  }
+  .glow-pending {
+    box-shadow: 0 0 12px rgba(99, 102, 241, 0.15);
+  }
+
+  /* Brand gradient text. Used sparingly on top-level KPIs/headings. */
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-violet-400;
+  }
+  .text-gradient-warm {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-amber-400 to-rose-400;
+  }
+
+  /* Terminal-style live-log viewer. */
+  .log-viewer {
+    @apply bg-[#0a0a0f] font-mono text-[13px] leading-5 text-zinc-300 rounded-md p-3 overflow-auto;
+  }
+  .log-viewer .log-timestamp {
+    @apply text-zinc-600 select-none;
+  }
+  .log-viewer .log-error {
+    @apply text-red-400;
+  }
+  .log-viewer .log-warn {
+    @apply text-yellow-400;
+  }
+  .log-viewer .log-info {
+    @apply text-zinc-300;
+  }
+  .log-viewer .log-skip {
+    @apply text-zinc-500;
+  }
+  .log-viewer .log-fix {
+    @apply text-cyan-400;
+  }
+
+  /* Per-tool / per-metric gauge bar used in the live-scan view. */
+  .gauge-bar {
+    @apply h-1.5 rounded-full bg-muted overflow-hidden;
+  }
+  .gauge-bar-fill {
+    @apply h-full rounded-full transition-all duration-500 ease-out;
+  }
+
+  /* Data-table row hover. */
+  .table-row-hover {
+    @apply hover:bg-muted/50 transition-colors;
+  }
+
+  /* Sidebar nav item. */
+  .nav-item {
+    @apply flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium
+      text-muted-foreground hover:text-foreground hover:bg-accent
+      transition-all duration-150;
+  }
+  .nav-item.active {
+    @apply text-foreground bg-accent;
+  }
+
+  /* Shimmer loading skeleton. */
+  .shimmer {
+    @apply bg-shimmer-gradient bg-[length:200%_100%] animate-shimmer rounded-md;
+  }
+
+  /* Severity badges. */
+  .badge {
+    @apply inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium
+      ring-1 ring-inset whitespace-nowrap;
+  }
+  .badge-critical {
+    @apply bg-red-500/10 text-red-400 ring-red-500/30;
+  }
+  .badge-high {
+    @apply bg-orange-500/10 text-orange-400 ring-orange-500/30;
+  }
+  .badge-medium {
+    @apply bg-amber-500/10 text-amber-400 ring-amber-500/30;
+  }
+  .badge-low {
+    @apply bg-sky-500/10 text-sky-400 ring-sky-500/30;
+  }
+  .badge-info {
+    @apply bg-zinc-500/10 text-zinc-300 ring-zinc-500/30;
+  }
+}
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
