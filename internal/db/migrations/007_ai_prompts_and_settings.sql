@@ -1,5 +1,12 @@
+-- A settings KV store. The column name `key` collides with a SQL
+-- reserved keyword (sqlfluff RF04) but it's the natural name for a
+-- KV-store column and is already bound in internal/db/{sqlite,postgres}.go
+-- via `db:"key"` tags. Renaming would require a new migration plus a
+-- coordinated Go change; suppressing the lint here is the right
+-- trade-off for SQLite which accepts the bare identifier without
+-- escaping.
 CREATE TABLE IF NOT EXISTS settings (
-    key TEXT PRIMARY KEY,
+    key TEXT PRIMARY KEY,  -- noqa: RF04
     value TEXT NOT NULL DEFAULT '',
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
