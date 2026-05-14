@@ -22,7 +22,7 @@
 #   docker build -t wolf-scanners:dev -f scanners/Dockerfile scanners/
 # ============================================================
 
-FROM debian:12-slim AS base
+FROM debian:trixie-slim AS base
 
 ARG WOLF_VERSION=dev
 LABEL org.opencontainers.image.title="wolf-scanners" \
@@ -89,7 +89,19 @@ RUN  bash /tmp/install/swift.sh
 COPY install/lang_native.sh   /tmp/install/lang_native.sh
 RUN  bash /tmp/install/lang_native.sh
 
-RUN rm -rf /tmp/install /root/.npm /root/.cache /var/cache/apt/*
+# Strip build-only packages once all the installers have run. The native
+# extensions they compiled are already linked into pip/gem/npm trees, so
+# the toolchain itself is dead weight (and a CVE surface). Reuse the
+# runtime libs (libssl3, libffi8) — only the -dev / build-essential
+# variants come off.
+RUN apt-get update && apt-get purge -y --auto-remove \
+        build-essential pkg-config \
+        python3-dev ruby-dev \
+        libssl-dev libffi-dev \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /var/cache/apt/* \
+              /tmp/install /root/.npm /root/.cache \
+              /usr/share/doc/* /usr/share/man/*
 
 RUN groupadd -g 1000 wolf && \
     useradd  -u 1000 -g 1000 -m -d /home/wolf -s /bin/bash wolf

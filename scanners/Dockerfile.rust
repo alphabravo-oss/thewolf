@@ -5,7 +5,7 @@
 # Built only when wolf detects Rust code. Pulled lazily.
 # ============================================================
 
-FROM debian:12-slim AS base
+FROM debian:trixie-slim AS base
 
 ARG WOLF_VERSION=dev
 LABEL org.opencontainers.image.title="wolf-scanners-rust" \
@@ -32,7 +32,9 @@ RUN  bash /tmp/install/rust.sh
 
 RUN /usr/local/bin/smoke-test.sh
 
-RUN rm -rf /tmp/install /var/cache/apt/*
+# Keep build-essential + libssl-dev — cargo needs them at scan time
+# when clippy compiles user code. Just trim docs/man dirs (~30MB).
+RUN rm -rf /tmp/install /var/cache/apt/* /usr/share/doc/* /usr/share/man/*
 
 RUN groupadd -g 1000 wolf && \
     useradd  -u 1000 -g 1000 -m -d /home/wolf -s /bin/bash wolf

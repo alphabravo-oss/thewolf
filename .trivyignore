@@ -1,0 +1,12 @@
+# Trivy CVE allowlist for the wolf-scanners images.
+#
+# Each entry is a CVE ID, one per line. Include a comment explaining
+# WHY this CVE is acceptable for THIS image — never a blanket bypass.
+# When upstream releases a fix, the entry should be removed.
+#
+# Format:
+#   CVE-YYYY-NNNNN  # reason (image: <which one>, decided <date>, expires <date or "until upstream fix">)
+#
+# Empty for now — add entries only when a real CVE blocks publishing
+# AND the fix isn't available upstream. ignore-unfixed is set in the
+# workflow so CVEs without a fix don't fail the build either way.
