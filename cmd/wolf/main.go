@@ -152,23 +152,47 @@ func newServeCmd() *cobra.Command {
 			routes.BuildCommit = commit
 			routes.BuildDate = buildDate
 
-			// JWT secret. Defaults to a random-per-process value if
-			// WOLF_MASTER_KEY is unset (fine for dev; production should set
-			// it so tokens survive process restarts).
+			// JWT secret resolution order:
+			//   1. WOLF_MASTER_KEY env — preferred for production / clustered
+			//      deployments (every replica must share the same secret).
+			//   2. ~/.wolf/jwt-secret — auto-persisted dev fallback so tokens
+			//      survive `wolf serve` restarts without forcing the operator
+			//      to remember an env var. Generated lazily on first run,
+			//      written 0600.
+			//   3. Random per-process — only when (2) is unwritable (e.g.
+			//      no home dir). Logs a warning because every restart now
+			//      kicks every logged-in user out.
 			//
-			// Previous implementation used os.ReadFile("/dev/urandom") which
-			// reads the file in its entirety — but /dev/urandom is an
-			// infinite stream, so the call kept allocating memory forever
-			// (process grew past 18 GB before being killed). crypto/rand
-			// reads exactly the requested number of bytes from the OS
-			// CSPRNG and is the correct API.
+			// crypto/rand reads exactly the requested number of bytes from the
+			// OS CSPRNG. A prior bug used os.ReadFile("/dev/urandom") which
+			// streamed the (infinite) device until OOM — keep that lesson by
+			// staying on crypto/rand.
 			secret := []byte(envOr("WOLF_MASTER_KEY", ""))
 			if len(secret) == 0 {
-				secret = make([]byte, 32)
-				if _, err := cryptorand.Read(secret); err != nil {
-					return fmt.Errorf("read CSPRNG for JWT secret: %w", err)
+				if home, herr := os.UserHomeDir(); herr == nil && home != "" {
+					path := filepath.Join(home, ".wolf", "jwt-secret")
+					if data, rerr := os.ReadFile(path); rerr == nil && len(data) >= 32 {
+						secret = data
+					} else {
+						secret = make([]byte, 32)
+						if _, err := cryptorand.Read(secret); err != nil {
+							return fmt.Errorf("read CSPRNG for JWT secret: %w", err)
+						}
+						if mkErr := os.MkdirAll(filepath.Dir(path), 0o700); mkErr == nil {
+							if wErr := os.WriteFile(path, secret, 0o600); wErr == nil {
+								wolflog.L().Info().Str("path", path).Msg("JWT secret persisted; tokens will survive restart")
+							} else {
+								wolflog.L().Warn().Err(wErr).Msg("WOLF_MASTER_KEY unset and ~/.wolf/jwt-secret not writable; tokens won't survive restart")
+							}
+						}
+					}
+				} else {
+					secret = make([]byte, 32)
+					if _, err := cryptorand.Read(secret); err != nil {
+						return fmt.Errorf("read CSPRNG for JWT secret: %w", err)
+					}
+					wolflog.L().Warn().Msg("WOLF_MASTER_KEY unset and no home dir; tokens won't survive restart")
 				}
-				wolflog.L().Warn().Msg("WOLF_MASTER_KEY unset; using random secret (tokens won't survive restart)")
 			}
 			auth.SetJWTSecret(secret)
 
