@@ -25,6 +25,16 @@ func (p *PMDPlugin) Languages() []models.Language { return nil }
 func (p *PMDPlugin) CheckAvailable() bool { return container.IsScannersReady() }
 
 func (p *PMDPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
+	cfg := container.ConfigFromOpts(opts.ContainerCfg)
+	// PMD ships in the JVM bucket image (with infer). It's not in the
+	// default wolf-scanners image. If the operator hasn't built the JVM
+	// bucket and pointed WOLF_SCANNERS_IMAGE_JVM at it, skip cleanly
+	// instead of failing with "tool not present in image".
+	if !cfg.HasDedicatedImage("pmd") {
+		plugin.Skipf(opts.OnOutput, "pmd",
+			"not configured. PMD lives in the JVM bucket image; run `make scanners-build-jvm` then set WOLF_SCANNERS_IMAGE_JVM=wolf-scanners-jvm:dev. Skipping.")
+		return nil, nil
+	}
 	timeout := opts.Timeout
 	if timeout > 0 {
 		var cancel context.CancelFunc

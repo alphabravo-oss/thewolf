@@ -76,6 +76,17 @@ func detectCodeQLLanguage(repoPath string) string {
 }
 
 func (p *CodeQLPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
+	cfg := container.ConfigFromOpts(opts.ContainerCfg)
+	// CodeQL is the heaviest tool we ship (~800MB CLI). It lives in a
+	// dedicated bucket image that's NOT in the default wolf-scanners.
+	// If the operator hasn't built the codeql bucket and pointed
+	// WOLF_SCANNERS_IMAGE_CODEQL at it, skip cleanly with guidance —
+	// previously this surfaced as a confusing "exit 127" failure.
+	if !cfg.HasDedicatedImage("codeql") {
+		plugin.Skipf(opts.OnOutput, "codeql",
+			"not configured. CodeQL lives in its own bucket image; run `make scanners-build-codeql` then set WOLF_SCANNERS_IMAGE_CODEQL=wolf-scanners-codeql:dev. Skipping.")
+		return nil, nil
+	}
 	timeout := opts.Timeout
 	if timeout > 0 {
 		var cancel context.CancelFunc
@@ -90,7 +101,7 @@ func (p *CodeQLPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]
 		return nil, nil
 	}
 
-	cfg := container.ConfigFromOpts(opts.ContainerCfg)
+	// cfg already resolved above for the HasDedicatedImage check.
 	// CodeQL's database create + analyze pipeline writes to disk (it builds an
 	// AST database in a temp directory). We run all three steps inside the
 	// scanner container, using /tmp (the 512 MB tmpfs) for the database.

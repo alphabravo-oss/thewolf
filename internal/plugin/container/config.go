@@ -218,6 +218,25 @@ func (c *Config) ImageFor(tool string) string {
 	return c.Image
 }
 
+// HasDedicatedImage reports whether a tool will run inside a
+// non-default image — either an upstream spec or a wolf-built bucket
+// override. Returns false when the tool falls through to the default
+// wolf-scanners image. Heavyweight tools (codeql, infer, pmd, …) that
+// only exist inside bucket images can use this in CheckAvailable to
+// skip cleanly when the operator hasn't built/wired the bucket.
+func (c *Config) HasDedicatedImage(tool string) bool {
+	if c == nil {
+		return false
+	}
+	if spec, ok := c.UpstreamTools[tool]; ok && spec.Image != "" {
+		return true
+	}
+	if img, ok := c.ImageOverrides[tool]; ok && img != "" {
+		return true
+	}
+	return false
+}
+
 // UpstreamSpec returns the upstream image spec for the named tool, or
 // (ToolImageSpec{}, false) if the tool is served by ImageOverrides or the
 // default image. The shim uses this to decide whether to bypass

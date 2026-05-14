@@ -26,6 +26,15 @@ func (p *InferPlugin) Languages() []models.Language {
 func (p *InferPlugin) CheckAvailable() bool { return container.IsScannersReady() }
 
 func (p *InferPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
+	cfg := container.ConfigFromOpts(opts.ContainerCfg)
+	// Infer ships in the JVM bucket image (with pmd). It's not in the
+	// default wolf-scanners. Skip cleanly when not configured rather
+	// than fail with "exit 127".
+	if !cfg.HasDedicatedImage("infer") {
+		plugin.Skipf(opts.OnOutput, "infer",
+			"not configured. Infer lives in the JVM bucket image; run `make scanners-build-jvm` then set WOLF_SCANNERS_IMAGE_JVM=wolf-scanners-jvm:dev. Skipping.")
+		return nil, nil
+	}
 	if !plugin.HasFile(opts.RepoPath, "Makefile") {
 		plugin.Skipf(opts.OnOutput, "infer", "no Makefile found — Infer requires a build system. Add a Makefile to enable analysis.")
 		return nil, nil
@@ -36,8 +45,6 @@ func (p *InferPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]m
 		ctx, cancel = context.WithTimeout(ctx, opts.Timeout)
 		defer cancel()
 	}
-
-	cfg := container.ConfigFromOpts(opts.ContainerCfg)
 	// Infer needs ReadWrite to write the infer-out/ directory during the build,
 	// and runs the build (make) so it needs network for dependency fetches and
 	// access to compiler toolchains (bundled in wolf-scanners-jvm).

@@ -566,7 +566,9 @@ function ToolsPanel({
   tools: ToolStatusEntry[] | undefined;
   loading: boolean;
 }) {
-  const [open, setOpen] = useState(true);
+  // Collapsed by default — the findings table is the headline; the
+  // tools panel is "drill in when something looks off".
+  const [open, setOpen] = useState(false);
   if (loading || !tools) {
     return (
       <section className="glass-card p-5">
