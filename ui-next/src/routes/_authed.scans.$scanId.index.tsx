@@ -268,18 +268,7 @@ function ScanDetailPage() {
           </p>
         </div>
         <ScanStatusPill status={scan.status} />
-        {scan.status === "running" && (
-          <>
-            <Link
-              to="/scans/$scanId/live"
-              params={{ scanId }}
-              className="inline-flex items-center px-3 h-9 rounded-md bg-blue-500/15 ring-1 ring-blue-500/30 text-blue-300 text-sm hover:bg-blue-500/20"
-            >
-              Watch live →
-            </Link>
-            <CancelScanButton scanId={scanId} />
-          </>
-        )}
+        {scan.status === "running" && <CancelScanButton scanId={scanId} />}
       </div>
 
       {scan.status === "cancelled" && (
@@ -637,9 +626,18 @@ function ToolsPanel({
   scanId: string;
   scanStatus: string;
 }) {
-  // Collapsed by default — the findings table is the headline; the
-  // tools panel is "drill in when something looks off".
-  const [open, setOpen] = useState(false);
+  // Auto-expand while the scan is in flight so the user can watch
+  // tools tick through running → completed without an extra click.
+  // Once the scan terminates, default to collapsed — at that point
+  // the findings table is the headline and tools are drill-down.
+  const scanActive = scanStatus === "running" || scanStatus === "pending";
+  const [open, setOpen] = useState(scanActive);
+  // If the user lands on the page while running, then the scan
+  // finishes — leave the panel however the user has it. If they
+  // never touched it (open===true and scanActive flips), we keep
+  // it open so partial-results don't disappear from view. The
+  // collapsed-when-done default only applies to fresh loads of
+  // completed scans.
   if (loading || !tools) {
     return (
       <section className="glass-card p-5">
@@ -654,7 +652,6 @@ function ToolsPanel({
   const active = tools.filter(
     (t) => t.status === "running" || t.status === "queued" || t.status === "pending",
   );
-  const scanActive = scanStatus === "running" || scanStatus === "pending";
 
   return (
     <section className="glass-card p-5">
