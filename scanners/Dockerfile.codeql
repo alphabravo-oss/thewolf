@@ -7,9 +7,17 @@
 # We ship it as a SEPARATE image so operators who don't need (or
 # can't use) CodeQL don't pull it. Default wolf.yaml does not
 # include codeql in any preset.
+#
+# AMD64-ONLY: GitHub's CodeQL CLI ships a linux/amd64 binary only —
+# there is no published linux/arm64 build. Building a multi-arch
+# manifest produces an arm64 image with an amd64 binary inside,
+# which QEMU-translates with a ld-linux-x86-64.so.2 failure at
+# scan time. The Makefile + workflow restrict this image to
+# linux/amd64; the wolf codeql plugin should also skip cleanly
+# (or run under emulation) on arm64 hosts.
 # ============================================================
 
-FROM debian:trixie-slim AS base
+FROM --platform=linux/amd64 debian:trixie-slim AS base
 
 ARG WOLF_VERSION=dev
 LABEL org.opencontainers.image.title="wolf-scanners-codeql" \

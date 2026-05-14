@@ -76,6 +76,16 @@ func detectCodeQLLanguage(repoPath string) string {
 }
 
 func (p *CodeQLPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
+	// GitHub's CodeQL CLI ships a linux/amd64 binary only — there is no
+	// published linux/arm64 release. On Apple Silicon / arm64 Linux
+	// hosts the codeql image is amd64 and QEMU-translates with a hard
+	// ld-linux-x86-64.so.2 failure. Skip cleanly rather than pretend
+	// it'll work.
+	if plugin.IsArm64Host() {
+		plugin.Skipf(opts.OnOutput, "codeql",
+			"GitHub's CodeQL CLI is linux/amd64-only; no native arm64 build exists. Skipping on arm64 host.")
+		return nil, nil
+	}
 	cfg := container.ConfigFromOpts(opts.ContainerCfg)
 	// CodeQL is the heaviest tool we ship (~800MB CLI). It lives in a
 	// dedicated bucket image that's NOT in the default wolf-scanners.

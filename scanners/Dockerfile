@@ -36,15 +36,22 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 # Base packages. Note we no longer need libicu-dev (scancode is upstream)
 # or libxml2-dev (semgrep is upstream).
+#
+# Two installs because Debian 13 (trixie) ships an `npm` package that
+# *requires* its Recommends to be functional (icu/data, node-cacache,
+# etc.). With --no-install-recommends apt silently skips npm and the
+# build proceeds with no npm binary — yielding 'tool not present' at
+# scan time. Install nodejs+npm without --no-install-recommends so the
+# Recommends graph resolves; everything else stays slim.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates curl wget unzip tar gzip xz-utils \
         git jq \
         python3 python3-pip python3-venv python3-dev \
-        nodejs npm \
         ruby ruby-dev rubygems \
         php-cli \
         build-essential pkg-config \
         libssl-dev libffi-dev \
+    && apt-get install -y nodejs npm \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
