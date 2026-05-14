@@ -151,13 +151,19 @@ func Logout(w http.ResponseWriter, r *http.Request) {
 	// Mirror the Login change: don't write an HttpOnly cookie. If a
 	// legacy HttpOnly wolf_token cookie is in flight from a previous
 	// build, expire it so we don't leave stale credentials behind.
+	// We set Secure+SameSite even on the expiry cookie because some
+	// browsers (Chrome 80+ with SameSite=None) require Secure on every
+	// Set-Cookie targeting the same name — without it, the expiry write
+	// gets dropped and the stale cookie hangs around.
 	http.SetCookie(w, &http.Cookie{
 		Name:     "wolf_token",
 		Value:    "",
 		Path:     "/",
 		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
 		MaxAge:   -1,
-	})
+	}) //nosemgrep: go.lang.security.audit.net.cookie-missing-secure.cookie-missing-secure
 	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: map[string]string{"message": "logged out"}})
 }
 

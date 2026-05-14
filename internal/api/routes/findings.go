@@ -332,9 +332,7 @@ func ExportFindingTrends(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Content-Disposition", `attachment; filename="findings-trends.json"`)
 		w.WriteHeader(http.StatusOK)
-		// nosemgrep: go.lang.security.audit.xss.no-direct-write-to-responsewriter.no-direct-write-to-responsewriter
-		// nosemgrep: go.lang.security.audit.xss.no-fprintf-to-responsewriter.no-fprintf-to-responsewriter
-		w.Write(data)
+		w.Write(data) //nosemgrep: go.lang.security.audit.xss.no-direct-write-to-responsewriter.no-direct-write-to-responsewriter
 
 	default: // csv
 		w.Header().Set("Content-Type", "text/csv")
@@ -437,9 +435,7 @@ func ExportFindings(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Content-Disposition", `attachment; filename="findings.json"`)
 		w.WriteHeader(http.StatusOK)
-		// nosemgrep: go.lang.security.audit.xss.no-direct-write-to-responsewriter.no-direct-write-to-responsewriter
-		// nosemgrep: go.lang.security.audit.xss.no-fprintf-to-responsewriter.no-fprintf-to-responsewriter
-		w.Write(data)
+		w.Write(data) //nosemgrep: go.lang.security.audit.xss.no-direct-write-to-responsewriter.no-direct-write-to-responsewriter
 
 	default: // csv
 		w.Header().Set("Content-Type", "text/csv")
