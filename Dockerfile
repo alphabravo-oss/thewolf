@@ -2,7 +2,7 @@
 # checkov:skip=CKV_DOCKER_2 — bucket images are one-shot scanner containers, not long-lived services
 # Stage 1: Build the Go binary
 # ============================================================
-FROM golang:1.24-alpine AS builder
+FROM golang:1.26-alpine AS builder
 
 RUN apk add --no-cache gcc musl-dev sqlite-dev git
 
