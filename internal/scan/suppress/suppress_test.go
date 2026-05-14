@@ -51,17 +51,129 @@ func TestApply_VendorSuppressesEverything(t *testing.T) {
 	}
 }
 
-func TestApply_TestFileSuppressesOnlySecrets(t *testing.T) {
+func TestApply_TestFileSuppressesAllCategories(t *testing.T) {
+	// Defaults now suppress ALL findings in test files, not just
+	// hardcoded-secret. Test code is allowed to have intentional
+	// unsafe constructs; a finding there is the test pattern, not
+	// a real bug.
 	findings := []models.Finding{
 		{FilePath: "internal/foo/bar_test.go", FineCategory: "hardcoded-secret"},
 		{FilePath: "internal/foo/bar_test.go", FineCategory: "sql-injection"},
+		{FilePath: "internal/foo/bar.go", FineCategory: "sql-injection"}, // non-test, real
 	}
 	out, n := Apply(findings, DefaultRules())
-	if n != 1 {
-		t.Fatalf("expected 1 suppression, got %d", n)
+	if n != 2 {
+		t.Fatalf("expected 2 suppressions (both test-file findings), got %d", n)
 	}
-	if !out[0].Suppressed || out[1].Suppressed {
-		t.Errorf("expected only the secret finding to be suppressed: %+v", out)
+	if !out[0].Suppressed || !out[1].Suppressed {
+		t.Errorf("expected both test-file findings suppressed: %+v", out)
+	}
+	if out[2].Suppressed {
+		t.Errorf("non-test finding should NOT be suppressed: %+v", out[2])
+	}
+}
+
+// TestApply_LanguageTestPatterns exercises the per-language test-file
+// globs. Each row is a path that SHOULD match one of the default test-
+// suppression rules. Catches regressions if a glob is dropped/renamed.
+func TestApply_LanguageTestPatterns(t *testing.T) {
+	cases := []struct {
+		path      string
+		descrLang string // for error messages
+	}{
+		// Go
+		{"internal/foo/bar_test.go", "go test"},
+		{"internal/foo/mock_db.go", "go mock"},
+		{"internal/foo/db_mock.go", "go mock"},
+		// Python
+		{"app/test_users.py", "py test_*"},
+		{"app/users_test.py", "py *_test"},
+		{"tests/conftest.py", "py conftest (path)"},
+		{"app/conftest.py", "py conftest (name)"},
+		// JS/TS
+		{"src/foo.test.ts", "ts test"},
+		{"src/foo.test.tsx", "tsx test"},
+		{"src/foo.test.mjs", "mjs test"},
+		{"src/foo.spec.cjs", "cjs spec"},
+		{"src/Button.stories.tsx", "storybook"},
+		{"src/Story.stories.mdx", "storybook mdx"},
+		// Java / Kotlin (Maven, Gradle)
+		{"src/test/java/com/x/FooTest.java", "java test"},
+		{"src/test/java/com/x/FooTests.java", "java tests"},
+		{"src/test/java/com/x/PaymentIT.java", "java integration"},
+		{"src/test/kotlin/com/x/FooSpec.kt", "kotlin spec"},
+		{"src/test/kotlin/com/x/FooTest.kt", "kotlin test"},
+		// Ruby (RSpec / Minitest)
+		{"spec/models/user_spec.rb", "ruby spec"},
+		{"test/models/user_test.rb", "ruby test"},
+		// PHP (PHPUnit)
+		{"tests/UserTest.php", "php test"},
+		{"tests/UserTestCase.php", "php testcase"},
+		// C# / .NET
+		{"src/MyApp.Tests/UserTests.cs", ".net tests"},
+		{"src/MyApp.Tests/UserTest.cs", ".net test"},
+		// Swift (XCTest)
+		{"Tests/MyAppTests/UserTests.swift", "swift tests"},
+		// Rust (Cargo integration tests)
+		{"tests/integration_users.rs", "rust integration dir"},
+		// Universal test directories
+		{"app/test/fixtures.txt", "test/ dir"},
+		{"app/tests/spam.json", "tests/ dir"},
+		{"app/spec/anything.rb", "spec/ dir"},
+		{"app/Tests/X.cs", "Tests/ dir (case)"},
+		{"app/__tests__/foo.js", "jest tests dir"},
+		{"app/__snapshots__/foo.snap", "jest snapshots"},
+		{"app/__mocks__/db.ts", "jest mocks"},
+		{"app/__fixtures__/payload.json", "jest fixtures"},
+		{"app/e2e/login.spec.ts", "e2e dir"},
+		{"app/integrationTest/x.kt", "gradle integration"},
+		// Test fixture / mock data dirs
+		{"app/testdata/sample.json", "testdata"},
+		{"app/test-fixtures/sample.json", "test-fixtures"},
+		{"app/testFixtures/sample.json", "testFixtures"},
+		{"app/fixtures/users.yml", "fixtures"},
+		{"app/mock_data/x.json", "mock_data"},
+		{"app/mock-data/x.json", "mock-data"},
+		{"app/mocks/db.go", "mocks"},
+		// Cypress / Playwright
+		{"cypress/fixtures/login.json", "cypress fixtures"},
+		{"cypress/screenshots/run.png", "cypress screenshots"},
+		// Examples / demo / samples
+		{"examples/quickstart.js", "examples"},
+		{"example/x.js", "example"},
+		{"demo/foo.py", "demo"},
+		{"samples/payment.json", "samples"},
+		{"app/payment.sample.json", "*.sample.*"},
+		{"app/sample_payment.json", "sample_*"},
+	}
+	for _, tc := range cases {
+		f := models.Finding{FilePath: tc.path, FineCategory: "sql-injection"}
+		out, n := Apply([]models.Finding{f}, DefaultRules())
+		if n != 1 || !out[0].Suppressed {
+			t.Errorf("%s: %q should be suppressed by defaults, got %+v", tc.descrLang, tc.path, out[0])
+		}
+	}
+}
+
+// TestApply_RealCodeNotSuppressed locks down the inverse: a file path
+// that *looks* like a test (e.g. has 'test' as a substring inside an
+// otherwise normal package path) must NOT be suppressed.
+func TestApply_RealCodeNotSuppressed(t *testing.T) {
+	paths := []string{
+		"internal/contestant/score.go", // 'test' substring, not test
+		"app/protested/handler.py",     // same
+		"src/Components/Button.tsx",    // normal source
+		"cmd/wolf/main.go",
+		"src/foo.ts", // not .test or .spec
+		"src/api/users.java",
+		"app/lib/encryption.rb",
+	}
+	for _, p := range paths {
+		f := models.Finding{FilePath: p, FineCategory: "sql-injection"}
+		out, _ := Apply([]models.Finding{f}, DefaultRules())
+		if out[0].Suppressed {
+			t.Errorf("%q should NOT be suppressed (reason was %q)", p, out[0].SuppressedReason)
+		}
 	}
 }
 
