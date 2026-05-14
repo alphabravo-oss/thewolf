@@ -99,6 +99,7 @@ func parseImports(absPath, relPath, repoPath string, languages map[string]int, a
 }
 
 func parseGoImports(absPath, relPath, repoPath string, allFiles map[string]bool) []string {
+	// #nosec G304 -- reads source files inside the scan target dir
 	f, err := os.Open(absPath)
 	if err != nil {
 		return nil
@@ -157,6 +158,7 @@ func parseGoImports(absPath, relPath, repoPath string, allFiles map[string]bool)
 }
 
 func parsePythonImports(absPath string, allFiles map[string]bool) []string {
+	// #nosec G304 -- reads source files inside the scan target dir
 	f, err := os.Open(absPath)
 	if err != nil {
 		return nil
@@ -200,6 +202,7 @@ func parsePythonImports(absPath string, allFiles map[string]bool) []string {
 }
 
 func parseJSImports(absPath, relPath string, allFiles map[string]bool) []string {
+	// #nosec G304 -- reads source files inside the scan target dir
 	f, err := os.Open(absPath)
 	if err != nil {
 		return nil

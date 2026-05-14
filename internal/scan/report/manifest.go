@@ -126,7 +126,7 @@ func CountFindings(rawTotal int, deduped []models.Finding) Counts {
 // WriteManifest serializes m to <dir>/manifest.json with 2-space indent.
 // Returns the absolute path written.
 func WriteManifest(dir string, m Manifest) (string, error) {
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return "", err
 	}
 	data, err := json.MarshalIndent(m, "", "  ")
@@ -134,7 +134,7 @@ func WriteManifest(dir string, m Manifest) (string, error) {
 		return "", err
 	}
 	path := filepath.Join(dir, "manifest.json")
-	if err := os.WriteFile(path, data, 0o644); err != nil {
+	if err := os.WriteFile(path, data, 0o600); err != nil {
 		return "", err
 	}
 	return path, nil

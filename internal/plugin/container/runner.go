@@ -210,6 +210,7 @@ func CommandContext(ctx context.Context, cfg *Config, opts Options, tool string,
 		dockerArgs = append(dockerArgs, args...)
 	}
 
+	// #nosec G204 -- command is a configured tool name (docker / claude / codex / scanner binary); args sourced from internal config, not user input
 	cmd := exec.CommandContext(ctx, "docker", dockerArgs...)
 
 	if opts.Stdin != "" {
@@ -220,6 +221,7 @@ func CommandContext(ctx context.Context, cfg *Config, opts Options, tool string,
 	// signal that stops the tool *inside* the container (SIGKILL on the docker
 	// CLI process only orphans the container otherwise — see PLAN.md §5.7).
 	cmd.Cancel = func() error {
+		// #nosec G204 -- command is a configured tool name (docker / claude / codex / scanner binary); args sourced from internal config, not user input
 		_ = exec.Command("docker", "kill", name).Run() // best-effort
 		if cmd.Process != nil {
 			return syscall.Kill(cmd.Process.Pid, syscall.SIGTERM)

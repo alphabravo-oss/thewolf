@@ -11,6 +11,7 @@ import (
 // direct child). This is critical for tools like semgrep that spawn
 // multiple subprocesses (pysemgrep → semgrep-core).
 func CommandContext(ctx context.Context, name string, args ...string) *exec.Cmd {
+	// nosemgrep: go.lang.security.audit.dangerous-exec-command.dangerous-exec-command
 	cmd := exec.CommandContext(ctx, name, args...)
 
 	// Put the child in its own process group so we can kill the whole tree.

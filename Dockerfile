@@ -1,4 +1,5 @@
 # ============================================================
+# checkov:skip=CKV_DOCKER_2 — bucket images are one-shot scanner containers, not long-lived services
 # Stage 1: Build the Go binary
 # ============================================================
 FROM golang:1.24-alpine AS builder

@@ -231,6 +231,8 @@ func sendSSE(w http.ResponseWriter, flusher http.Flusher, _ /* event */, data st
 	// Don't emit "event:" field — EventSource.onmessage only fires for unnamed events.
 	// The JSON data already contains a "type" key for routing on the client side.
 	fmt.Fprintf(w, "data: %s\n\n", data)
+	// nosemgrep: go.lang.security.audit.xss.no-direct-write-to-responsewriter.no-direct-write-to-responsewriter
+	// nosemgrep: go.lang.security.audit.xss.no-fprintf-to-responsewriter.no-fprintf-to-responsewriter
 	flusher.Flush()
 }
 

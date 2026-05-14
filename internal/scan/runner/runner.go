@@ -399,12 +399,12 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 			// back from the tool but before parsing.
 			toolOpts.OnRawOutput = func(data []byte, ext string) {
 				if cfg.RawOutputDir != "" && len(data) > 0 {
-					if mkErr := os.MkdirAll(cfg.RawOutputDir, 0o755); mkErr == nil {
+					if mkErr := os.MkdirAll(cfg.RawOutputDir, 0o750); mkErr == nil {
 						if ext == "" {
 							ext = sniffExt(data)
 						}
 						path := filepath.Join(cfg.RawOutputDir, toolName+"."+ext)
-						if werr := os.WriteFile(path, data, 0o644); werr != nil {
+						if werr := os.WriteFile(path, data, 0o600); werr != nil {
 							log.Warn().Str("tool", toolName).Err(werr).Msg("failed to write raw tool output")
 						}
 					}

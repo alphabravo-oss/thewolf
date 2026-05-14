@@ -5,6 +5,7 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"fmt"
+	"math"
 	"strings"
 
 	"golang.org/x/crypto/argon2"
@@ -58,7 +59,13 @@ func VerifyPassword(password, encodedHash string) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("decode hash: %w", err)
 	}
-
+	// argon2.IDKey takes a uint32 key length. expectedHash is base64-
+	// decoded from a stored credential — in practice 32 bytes — but
+	// guard against a pathologically long stored value rather than
+	// silently truncating the conversion.
+	if len(expectedHash) > math.MaxUint32 {
+		return false, fmt.Errorf("hash length %d exceeds uint32", len(expectedHash))
+	}
 	hash := argon2.IDKey([]byte(password), salt, time, memory, threads, uint32(len(expectedHash)))
 
 	return subtle.ConstantTimeCompare(hash, expectedHash) == 1, nil

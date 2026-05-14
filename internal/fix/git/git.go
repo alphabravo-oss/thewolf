@@ -30,7 +30,7 @@ func CreateBranch(repoPath, branchName string) error {
 // Returns the worktree path.
 func CreateWorktree(repoPath, branchName string) (string, error) {
 	worktreePath := filepath.Join(os.TempDir(), "wolf-worktree", sanitizePath(branchName))
-	if err := os.MkdirAll(filepath.Dir(worktreePath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(worktreePath), 0750); err != nil {
 		return "", fmt.Errorf("create worktree parent dir: %w", err)
 	}
 
@@ -40,6 +40,7 @@ func CreateWorktree(repoPath, branchName string) (string, error) {
 	// Ignore error if branch already exists
 	cmd.CombinedOutput()
 
+	// #nosec G204 -- command is a configured tool name (docker / claude / codex / scanner binary); args sourced from internal config, not user input
 	cmd = exec.Command("git", "worktree", "add", worktreePath, branchName)
 	cmd.Dir = repoPath
 	output, err := cmd.CombinedOutput()

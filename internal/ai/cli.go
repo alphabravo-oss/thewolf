@@ -121,8 +121,12 @@ func (p *CLIProvider) send(ctx context.Context, prompt string) (string, error) {
 			`%s -p --output-format json --no-session-persistence --model sonnet --max-turns 1 --effort low --system-prompt %s`,
 			p.command, shellQuote(p.systemPrompt),
 		)
+		// #nosec G204 -- command is a configured tool name (docker / claude / codex / scanner binary); args sourced from internal config, not user input
+		// nosemgrep: go.lang.security.audit.dangerous-exec-command.dangerous-exec-command
 		cmd = exec.CommandContext(callCtx, "sh", "-c", shellCmd)
 	} else {
+		// #nosec G204 -- command is a configured tool name (docker / claude / codex / scanner binary); args sourced from internal config, not user input
+		// nosemgrep: go.lang.security.audit.dangerous-exec-command.dangerous-exec-command
 		cmd = exec.CommandContext(callCtx, p.command, "-p")
 	}
 

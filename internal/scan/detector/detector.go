@@ -148,6 +148,7 @@ func DetectLanguage(filePath string) models.Language {
 // detectFromShebang reads the first line of a file looking for a #! line
 // that indicates a scripting language.
 func detectFromShebang(filePath string) models.Language {
+	// #nosec G304 -- reads files inside the scan target dir (the whole point of detection)
 	f, err := os.Open(filePath)
 	if err != nil {
 		return ""
@@ -392,6 +393,7 @@ func detectRubyFrameworks(repoPath string, add func(Framework)) {
 
 // readFileContent returns the full text of a file, or "" on error.
 func readFileContent(path string) string {
+	// #nosec G304 -- reads files inside the scan target dir (the whole point of detection)
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return ""

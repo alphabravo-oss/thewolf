@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2317  # check() and present() are dispatched via run() further down
 # ============================================================
 # wolf-scanners smoke test — variant-aware.
 #

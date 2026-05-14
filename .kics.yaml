@@ -1,0 +1,17 @@
+# KICS scan configuration for thewolf.
+#
+# Wolf builds its own scanner images on top of Debian-slim and Alpine
+# bases and intentionally floats package versions within the apt/apk
+# install lines — pinning ~50 package versions across 4 Dockerfiles
+# turns each toolchain refresh into a multi-day rebase and tells us
+# nothing about wolf code. Disable those two queries globally.
+#
+# CKV_DOCKER_2 (Checkov, healthcheck missing) is filed under
+# Dockerfile checks via the per-Dockerfile `# checkov:skip=` comment
+# since these are one-shot bucket images with no service to probe.
+exclude-queries:
+  # Apt Get Install Pin Version Not Defined — affects scanners/Dockerfile,
+  # scanners/Dockerfile.jvm, scanners/Dockerfile.rust, scanners/Dockerfile.codeql.
+  - 965a08d7-ef86-4f14-8792-4a3b2098937e
+  # Unpinned Package Version in Apk Add — affects the main Dockerfile.
+  - 2b6ebc63-a614-4dab-aebf-a4fdba2387a3

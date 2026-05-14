@@ -64,6 +64,8 @@ func (v *Validator) Validate(ctx context.Context, toolName string, repoPath stri
 	copy(args, cmdParts[1:])
 	args = append(args, files...)
 
+	// #nosec G204 -- command is a configured tool name (docker / claude / codex / scanner binary); args sourced from internal config, not user input
+	// nosemgrep: go.lang.security.audit.dangerous-exec-command.dangerous-exec-command
 	cmd := exec.CommandContext(ctx, cmdParts[0], args...)
 	cmd.Dir = repoPath
 	output, err := cmd.CombinedOutput()
@@ -96,6 +98,8 @@ func (v *Validator) ValidateWithCommand(ctx context.Context, repoPath string, co
 		return &Result{Pass: true, Output: "empty command"}, nil
 	}
 
+	// #nosec G204 -- command is a configured tool name (docker / claude / codex / scanner binary); args sourced from internal config, not user input
+	// nosemgrep: go.lang.security.audit.dangerous-exec-command.dangerous-exec-command
 	cmd := exec.CommandContext(ctx, parts[0], parts[1:]...)
 	cmd.Dir = repoPath
 	output, err := cmd.CombinedOutput()

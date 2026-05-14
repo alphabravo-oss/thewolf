@@ -38,7 +38,7 @@ type WriteAllResult struct {
 // alongside everything else.
 func WriteAll(dir string, rcfg ReportConfig, manifest Manifest) (WriteAllResult, error) {
 	var res WriteAllResult
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return res, fmt.Errorf("create scan dir: %w", err)
 	}
 
@@ -67,7 +67,7 @@ func WriteAll(dir string, rcfg ReportConfig, manifest Manifest) (WriteAllResult,
 	// scan-output story breaks, so we surface the error.
 	if data, err := GenerateJSON(rcfg); err == nil {
 		path := filepath.Join(dir, "findings.json")
-		if werr := os.WriteFile(path, data, 0o644); werr == nil {
+		if werr := os.WriteFile(path, data, 0o600); werr == nil {
 			res.FindingsJSON = path
 		} else {
 			return res, fmt.Errorf("write findings.json: %w", werr)
@@ -79,7 +79,7 @@ func WriteAll(dir string, rcfg ReportConfig, manifest Manifest) (WriteAllResult,
 	// RAW.md — legacy combined markdown. Best-effort.
 	if md, err := GenerateMarkdown(rcfg); err == nil {
 		path := filepath.Join(dir, "RAW.md")
-		if werr := os.WriteFile(path, []byte(md), 0o644); werr == nil {
+		if werr := os.WriteFile(path, []byte(md), 0o600); werr == nil {
 			res.RawMarkdown = path
 		}
 	}
@@ -87,7 +87,7 @@ func WriteAll(dir string, rcfg ReportConfig, manifest Manifest) (WriteAllResult,
 	// combined.sarif — SARIF 2.1.0 aggregate. Best-effort.
 	if sarifData, err := GenerateSARIF(rcfg); err == nil {
 		path := filepath.Join(dir, "combined.sarif")
-		if werr := os.WriteFile(path, sarifData, 0o644); werr == nil {
+		if werr := os.WriteFile(path, sarifData, 0o600); werr == nil {
 			res.CombinedSARIF = path
 		}
 	}
@@ -108,13 +108,13 @@ func WriteAll(dir string, rcfg ReportConfig, manifest Manifest) (WriteAllResult,
 	}
 	if md := RenderFixHigh(fxCfg); md != "" {
 		path := filepath.Join(dir, "FIX-HIGH.md")
-		if werr := os.WriteFile(path, []byte(md), 0o644); werr == nil {
+		if werr := os.WriteFile(path, []byte(md), 0o600); werr == nil {
 			res.FixHigh = path
 		}
 	}
 	if md := RenderFixAll(fxCfg); md != "" {
 		path := filepath.Join(dir, "FIX-ALL.md")
-		if werr := os.WriteFile(path, []byte(md), 0o644); werr == nil {
+		if werr := os.WriteFile(path, []byte(md), 0o600); werr == nil {
 			res.FixAll = path
 		}
 	}

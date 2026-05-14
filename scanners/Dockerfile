@@ -1,4 +1,5 @@
 # ============================================================
+# checkov:skip=CKV_DOCKER_2 — bucket images are one-shot scanner containers, not long-lived services
 # wolf-scanners — DEFAULT IMAGE
 # ============================================================
 # Slim bundle of the tools that don't have a usable upstream image.

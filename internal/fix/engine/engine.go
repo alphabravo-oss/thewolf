@@ -193,6 +193,8 @@ func (c *Custom) Fix(ctx context.Context, req FixRequest) (*FixResult, error) {
 		return nil, fmt.Errorf("unknown custom engine mode: %s", mode)
 	}
 
+	// #nosec G204 -- command is a configured tool name (docker / claude / codex / scanner binary); args sourced from internal config, not user input
+	// nosemgrep: go.lang.security.audit.dangerous-exec-command.dangerous-exec-command
 	cmd := exec.CommandContext(ctx, c.Command, args...)
 	cmd.Dir = req.RepoPath
 

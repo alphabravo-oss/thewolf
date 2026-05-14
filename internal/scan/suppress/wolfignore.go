@@ -51,6 +51,7 @@ func ParseWolfIgnore(r io.Reader, source string) (RuleSet, error) {
 // does not exist — a missing .wolfignore is not an error, it just means
 // "no extra rules".
 func ParseWolfIgnoreFile(path string) (RuleSet, error) {
+	// #nosec G304 -- reads .wolfignore at the scan root
 	f, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {

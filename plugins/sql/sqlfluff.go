@@ -92,6 +92,7 @@ func sqlfluffHasConfig(repoPath string) bool {
 			// pyproject.toml only counts if it has a [tool.sqlfluff] section;
 			// best-effort detection without parsing TOML.
 			if name == "pyproject.toml" {
+				// #nosec G304 -- checks for a sqlfluff config file at the scan root
 				data, _ := os.ReadFile(filepath.Join(repoPath, name))
 				if string(data) == "" {
 					return false

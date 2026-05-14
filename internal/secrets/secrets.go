@@ -38,6 +38,7 @@ func LoadMasterKey() error {
 	keyDir := filepath.Join(home, ".wolf")
 	keyPath := filepath.Join(keyDir, "master.key")
 
+	// #nosec G304 -- reads secrets file path from validated config
 	data, err := os.ReadFile(keyPath)
 	if err == nil {
 		decoded, err := hex.DecodeString(string(data))

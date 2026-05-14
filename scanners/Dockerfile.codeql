@@ -1,4 +1,5 @@
 # ============================================================
+# checkov:skip=CKV_DOCKER_2 — bucket images are one-shot scanner containers, not long-lived services
 # wolf-scanners-codeql — CodeQL alone (~700 MB)
 # ============================================================
 # CodeQL has a license that restricts use to open-source codebases

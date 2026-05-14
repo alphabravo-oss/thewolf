@@ -98,7 +98,7 @@ func openStore() (db.Store, error) {
 		dsn := os.Getenv("WOLF_DB_DSN")
 		if dsn == "" {
 			home, _ := os.UserHomeDir()
-			_ = os.MkdirAll(home+"/.wolf", 0o755)
+			_ = os.MkdirAll(home+"/.wolf", 0o750)
 			dsn = home + "/.wolf/wolf.db"
 		}
 		return db.NewSQLite(dsn)
@@ -308,11 +308,11 @@ func newScanCmd() *cobra.Command {
 			// generic <root>/<uuid>/ layout used by the API server.
 			scanDirName := report.ScanDirName(absRepo, time.Now().UTC(), scanID)
 			scanDir := filepath.Join(artifactsRoot, scanDirName)
-			if err := os.MkdirAll(scanDir, 0o755); err != nil {
+			if err := os.MkdirAll(scanDir, 0o750); err != nil {
 				return fmt.Errorf("create scan dir: %w", err)
 			}
 			rawDir := filepath.Join(scanDir, "raw")
-			_ = os.MkdirAll(rawDir, 0o755)
+			_ = os.MkdirAll(rawDir, 0o750)
 
 			fmt.Printf("Scan ID: %s\nArtifacts: %s\n\n", scanID, scanDir)
 
@@ -495,6 +495,7 @@ func failedFrom(in map[string]error) map[string]string {
 // to "" when repoPath isn't a git checkout — the manifest field is omitempty.
 func readGitCommit(repoPath string) string {
 	gitHead := filepath.Join(repoPath, ".git", "HEAD")
+	// #nosec G304 -- path is an artifact under the scan dir
 	data, err := os.ReadFile(gitHead)
 	if err != nil {
 		return ""
@@ -508,6 +509,7 @@ func readGitCommit(repoPath string) string {
 		return head
 	}
 	ref := strings.TrimPrefix(head, "ref: ")
+	// #nosec G304 -- path is an artifact under the scan dir
 	refData, err := os.ReadFile(filepath.Join(repoPath, ".git", ref))
 	if err != nil {
 		return ""

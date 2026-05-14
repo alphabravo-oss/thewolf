@@ -64,6 +64,7 @@ func findGoMod(repoPath string) string {
 }
 
 func readGoModModule(modPath string) string {
+	// #nosec G304 -- reads source files inside the scan target dir
 	f, err := os.Open(modPath)
 	if err != nil {
 		return ""
@@ -80,6 +81,7 @@ func readGoModModule(modPath string) string {
 }
 
 func readPackageDecl(absPath string) string {
+	// #nosec G304 -- reads source files inside the scan target dir
 	f, err := os.Open(absPath)
 	if err != nil {
 		return ""
@@ -131,6 +133,7 @@ func extractJSModule(filePath, repoPath string) string {
 	for {
 		pkgPath := filepath.Join(dir, "package.json")
 		if _, err := os.Stat(pkgPath); err == nil {
+			// #nosec G304 -- reads source files inside the scan target dir
 			// Read name field
 			data, err := os.ReadFile(pkgPath)
 			if err == nil {
@@ -172,6 +175,7 @@ func extractJSONField(jsonStr, field string) string {
 }
 
 func extractJavaPackage(filePath string) string {
+	// #nosec G304 -- reads source files inside the scan target dir
 	absPath := filePath
 	f, err := os.Open(absPath)
 	if err != nil {
@@ -201,6 +205,7 @@ func extractRustCrate(filePath, repoPath string) string {
 		dir = filepath.Join(repoPath, dir)
 	}
 	for {
+		// #nosec G304 -- reads source files inside the scan target dir
 		cargoPath := filepath.Join(dir, "Cargo.toml")
 		if _, err := os.Stat(cargoPath); err == nil {
 			data, err := os.ReadFile(cargoPath)

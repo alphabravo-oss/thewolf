@@ -40,7 +40,7 @@ func CloneGitHub(owner, repo, branch, token string) (string, error) {
 		}
 	}
 
-	if err := os.MkdirAll(filepath.Dir(dest), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(dest), 0750); err != nil {
 		return "", fmt.Errorf("create cache dir: %w", err)
 	}
 
