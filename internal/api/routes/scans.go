@@ -231,6 +231,11 @@ func executeScan(h *Handler, scanID, userID, repoPath, branch string, req create
 	// toolsErrors maps toolName → error message. Persisted so the UI
 	// can render "why" beside the failure indicator.
 	toolsErrors := make(map[string]string)
+	// toolStartTimes captures when each tool entered the running state
+	// so OnToolDone can broadcast a real elapsed_ms (without changing
+	// the runner's callback signature). Without this the live page
+	// always shows "0s" because the SSE payload hardcoded elapsed.
+	toolStartTimes := make(map[string]time.Time)
 	cumulativeFindingCount := 0
 
 	// Read scan concurrency from settings (default: 8).
@@ -278,6 +283,9 @@ func executeScan(h *Handler, scanID, userID, repoPath, branch string, req create
 		},
 		OnToolStart: func(toolName string) {
 			log.Debug().Str("scan_id", scanID).Str("tool", toolName).Msg("tool starting")
+			toolStateMu.Lock()
+			toolStartTimes[toolName] = time.Now()
+			toolStateMu.Unlock()
 			if SSEBroker != nil {
 				SSEBroker.Publish(topic, sse.Event{
 					Type: "scan_progress",
@@ -362,12 +370,24 @@ func executeScan(h *Handler, scanID, userID, repoPath, branch string, req create
 				h.Store.UpdateScan(context.Background(), s)
 			}
 
+			// Compute real elapsed_ms so the live page can render a non-
+			// zero duration on the tool card. Without this every tool
+			// shows 0s forever; both OnToolStart and OnToolDone were
+			// hardcoding elapsed_ms=0 in the SSE payload.
+			elapsedMs := int64(0)
+			toolStateMu.Lock()
+			if startedAt, ok := toolStartTimes[toolName]; ok {
+				elapsedMs = time.Since(startedAt).Milliseconds()
+				delete(toolStartTimes, toolName)
+			}
+			toolStateMu.Unlock()
+
 			// Broadcast SSE with per-tool count and cumulative total.
 			if SSEBroker != nil {
 				escapedErr, _ := json.Marshal(errMsg)
 				SSEBroker.Publish(topic, sse.Event{
 					Type: "scan_progress",
-					Data: fmt.Sprintf(`{"type":"scan_progress","scan_id":"%s","tool_name":"%s","status":"%s","finding_count":%d,"total_findings":%d,"elapsed_ms":0,"progress_pct":100,"error":%s}`, scanID, toolName, status, findingCount, currentTotal, string(escapedErr)),
+					Data: fmt.Sprintf(`{"type":"scan_progress","scan_id":"%s","tool_name":"%s","status":"%s","finding_count":%d,"total_findings":%d,"elapsed_ms":%d,"progress_pct":100,"error":%s}`, scanID, toolName, status, findingCount, currentTotal, elapsedMs, string(escapedErr)),
 				})
 			}
 		},

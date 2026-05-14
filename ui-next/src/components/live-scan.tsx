@@ -23,7 +23,11 @@ interface ToolState {
   name: string;
   status: ToolStatus;
   findingCount: number;
+  // elapsedMs comes from the server on OnToolDone (real measured value).
+  // While the tool is running, the server emits 0 — we tick locally from
+  // startedAt instead so the card actually counts up.
   elapsedMs: number;
+  startedAt: number | null; // performance.now() when status flipped to running
   log: string[];
   expanded: boolean;
 }
@@ -62,12 +66,28 @@ export function LiveScan({
         status,
         findingCount: 0,
         elapsedMs: 0,
+        // If we joined mid-flight on a tool already in 'running', start
+        // the clock now — we don't know the true start time but at
+        // least the counter ticks forward visibly.
+        startedAt: status === "running" ? performance.now() : null,
         log: [],
         expanded: false,
       };
     }
     return seed;
   });
+  // Tick state forces a re-render every second so running tools'
+  // elapsed displays update. Doesn't mutate the tools map — we read
+  // performance.now() at render time against startedAt.
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    // Only tick while at least one tool is running. We re-check on
+    // every state change because tools transition out of running.
+    const anyRunning = Object.values(tools).some((t) => t.status === "running");
+    if (!anyRunning) return;
+    const id = setInterval(() => setTick((n) => n + 1), 1000);
+    return () => clearInterval(id);
+  }, [tools]);
 
   const eventSourceRef = useRef<EventSource | null>(null);
 
@@ -85,13 +105,25 @@ export function LiveScan({
       setTools((prev) => {
         const t = prev[data.tool_name];
         if (!t) return prev;
+        const newStatus = data.status as ToolStatus;
+        // Set startedAt on the running transition; clear once the tool
+        // reaches a terminal state so the card stops ticking.
+        let startedAt = t.startedAt;
+        if (newStatus === "running" && startedAt === null) {
+          startedAt = performance.now();
+        } else if (newStatus !== "running") {
+          startedAt = null;
+        }
         return {
           ...prev,
           [data.tool_name]: {
             ...t,
-            status: data.status,
+            status: newStatus,
             findingCount: data.finding_count ?? t.findingCount,
-            elapsedMs: data.elapsed_ms ?? t.elapsedMs,
+            // Server's elapsed_ms is meaningful only on terminal status
+            // (running broadcasts hardcode 0). Trust it when non-zero.
+            elapsedMs: data.elapsed_ms > 0 ? data.elapsed_ms : t.elapsedMs,
+            startedAt,
           },
         };
       });
@@ -150,6 +182,18 @@ function statusRank(s: ToolStatus): number {
   return { running: 0, queued: 1, failed: 2, completed: 3, skipped: 4 }[s] ?? 5;
 }
 
+// liveElapsedSeconds returns the elapsed seconds to display on a tool
+// card. For running tools, it ticks from `startedAt` (set when the SSE
+// status flipped to running) so the user sees a counter actually
+// advance. For terminal states (completed/failed) it uses the server-
+// measured elapsedMs which is the source of truth.
+function liveElapsedSeconds(t: ToolState): number {
+  if (t.status === "running" && t.startedAt !== null) {
+    return Math.max(0, Math.round((performance.now() - t.startedAt) / 1000));
+  }
+  return Math.round(t.elapsedMs / 1000);
+}
+
 function ToolCard({
   tool,
   onToggle,
@@ -191,9 +235,7 @@ function ToolCard({
         </div>
         <div className="text-right text-xs tabular-nums shrink-0">
           <div className="font-mono">{tool.findingCount}</div>
-          <div className="text-muted-foreground/70">
-            {Math.round(tool.elapsedMs / 1000)}s
-          </div>
+          <div className="text-muted-foreground/70">{liveElapsedSeconds(tool)}s</div>
         </div>
         {tool.log.length > 0 ? (
           tool.expanded ? (
