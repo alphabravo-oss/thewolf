@@ -15,6 +15,6 @@ CREATE TABLE IF NOT EXISTS ai_prompt_templates (
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_ai_prompt_templates_lookup
-    ON ai_prompt_templates(scope, scope_id, prompt_type, section);
+ON ai_prompt_templates (scope, scope_id, prompt_type, section);
 
 INSERT OR IGNORE INTO settings (key, value) VALUES ('ai_enabled', 'true');
