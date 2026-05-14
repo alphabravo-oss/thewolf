@@ -18,9 +18,12 @@ LABEL org.opencontainers.image.title="wolf-scanners-jvm" \
 ENV DEBIAN_FRONTEND=noninteractive \
     WOLF_SCANNERS_VARIANT=jvm
 
+# Debian 13 (trixie) ships OpenJDK 21 as its default — openjdk-17-*
+# is no longer in the indices. PMD 7.x + infer-static both work
+# fine on 21, so we follow the distro default rather than backport.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates curl unzip tar xz-utils \
-        openjdk-17-jdk-headless \
+        openjdk-21-jdk-headless \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
