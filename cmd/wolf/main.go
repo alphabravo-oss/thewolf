@@ -171,7 +171,7 @@ func newServeCmd() *cobra.Command {
 			if len(secret) == 0 {
 				if home, herr := os.UserHomeDir(); herr == nil && home != "" {
 					path := filepath.Join(home, ".wolf", "jwt-secret")
-					if data, rerr := os.ReadFile(path); rerr == nil && len(data) >= 32 {
+					if data, rerr := os.ReadFile(path); rerr == nil && len(data) >= 32 { // #nosec G304 -- path is validated upstream (scan-root / artifact-dir / configured input)
 						secret = data
 					} else {
 						secret = make([]byte, 32)

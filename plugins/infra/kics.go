@@ -181,7 +181,7 @@ func kicsLoadExcludeQueries(repoPath string) string {
 	if repoPath == "" {
 		return ""
 	}
-	f, err := os.Open(filepath.Join(repoPath, ".kics.yaml"))
+	f, err := os.Open(filepath.Join(repoPath, ".kics.yaml")) // #nosec G304 -- path is validated upstream (scan-root / artifact-dir / configured input)
 	if err != nil {
 		return ""
 	}

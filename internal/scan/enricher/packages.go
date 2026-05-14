@@ -177,7 +177,7 @@ func extractJSONField(jsonStr, field string) string {
 func extractJavaPackage(filePath string) string {
 	// #nosec G304 -- reads source files inside the scan target dir
 	absPath := filePath
-	f, err := os.Open(absPath)
+	f, err := os.Open(absPath) // #nosec G304 -- path is validated upstream (scan-root / artifact-dir / configured input)
 	if err != nil {
 		return ""
 	}
@@ -208,7 +208,7 @@ func extractRustCrate(filePath, repoPath string) string {
 		// #nosec G304 -- reads source files inside the scan target dir
 		cargoPath := filepath.Join(dir, "Cargo.toml")
 		if _, err := os.Stat(cargoPath); err == nil {
-			data, err := os.ReadFile(cargoPath)
+			data, err := os.ReadFile(cargoPath) // #nosec G304 -- path is validated upstream (scan-root / artifact-dir / configured input)
 			if err == nil {
 				// Simple name extraction from [package] section
 				lines := strings.Split(string(data), "\n")

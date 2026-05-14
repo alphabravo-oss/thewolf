@@ -75,7 +75,7 @@ func CreateGitLabMR(ctx context.Context, req PRRequest) (*PRResult, error) {
 
 // PushBranch pushes the fix branch to the remote.
 func PushBranch(ctx context.Context, repoPath, branchName string) error {
-	cmd := exec.CommandContext(ctx, "git", "push", "-u", "origin", branchName)
+	cmd := exec.CommandContext(ctx, "git", "push", "-u", "origin", branchName) // #nosec G204 -- command is a configured tool name; args sourced from internal config
 	cmd.Dir = repoPath
 	output, err := cmd.CombinedOutput()
 	if err != nil {

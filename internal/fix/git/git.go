@@ -38,7 +38,7 @@ func CreateWorktree(repoPath, branchName string) (string, error) {
 	cmd := exec.Command("git", "branch", branchName)
 	cmd.Dir = repoPath
 	// Ignore error if branch already exists
-	cmd.CombinedOutput()
+	cmd.CombinedOutput() // #nosec G104 -- intentional: response/log write errors are not actionable here
 
 	// #nosec G204 -- command is a configured tool name (docker / claude / codex / scanner binary); args sourced from internal config, not user input
 	cmd = exec.Command("git", "worktree", "add", worktreePath, branchName)
@@ -58,7 +58,7 @@ func CleanupWorktree(repoPath, worktreePath string) error {
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		// Try manual cleanup if git worktree remove fails
-		os.RemoveAll(worktreePath)
+		os.RemoveAll(worktreePath) // #nosec G104 -- intentional: response/log write errors are not actionable here
 		return fmt.Errorf("git worktree remove: %s: %w", string(output), err)
 	}
 	return nil

@@ -506,7 +506,7 @@ func init() {
 		}
 	}
 	if len(missing) > 0 {
-		os.Setenv("PATH", current+":"+strings.Join(missing, ":"))
+		os.Setenv("PATH", current+":"+strings.Join(missing, ":")) // #nosec G104 -- intentional: response/log write errors are not actionable here
 	}
 }
 

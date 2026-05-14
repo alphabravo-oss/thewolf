@@ -66,7 +66,7 @@ func VerifyPassword(password, encodedHash string) (bool, error) {
 	if len(expectedHash) > math.MaxUint32 {
 		return false, fmt.Errorf("hash length %d exceeds uint32", len(expectedHash))
 	}
-	hash := argon2.IDKey([]byte(password), salt, time, memory, threads, uint32(len(expectedHash)))
+	hash := argon2.IDKey([]byte(password), salt, time, memory, threads, uint32(len(expectedHash))) // #nosec G115 -- bounded above by an explicit length check; conversion is safe
 
 	return subtle.ConstantTimeCompare(hash, expectedHash) == 1, nil
 }

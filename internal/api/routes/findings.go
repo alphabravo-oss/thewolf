@@ -331,16 +331,16 @@ func ExportFindingTrends(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Content-Disposition", `attachment; filename="findings-trends.json"`)
-		w.WriteHeader(http.StatusOK)
-		w.Write(data) // nosemgrep: go.lang.security.audit.xss.no-direct-write-to-responsewriter.no-direct-write-to-responsewriter
+		w.WriteHeader(http.StatusOK) // #nosec G104 -- intentional: response/log write errors are not actionable here
+		w.Write(data) // nosemgrep: go.lang.security.audit.xss.no-direct-write-to-responsewriter.no-direct-write-to-responsewriter // #nosec G104 -- intentional: response/log write errors are not actionable here
 
 	default: // csv
 		w.Header().Set("Content-Type", "text/csv")
 		w.Header().Set("Content-Disposition", `attachment; filename="findings-trends.csv"`)
-		w.WriteHeader(http.StatusOK)
+		w.WriteHeader(http.StatusOK) // #nosec G104 -- intentional: response/log write errors are not actionable here
 
 		cw := csv.NewWriter(w)
-		cw.Write([]string{"date", "critical", "high", "medium", "low", "info", "total"})
+		cw.Write([]string{"date", "critical", "high", "medium", "low", "info", "total"}) // #nosec G104 -- intentional: response/log write errors are not actionable here
 		for _, t := range trends {
 			cw.Write([]string{
 				t.Date,
@@ -434,13 +434,13 @@ func ExportFindings(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Content-Disposition", `attachment; filename="findings.json"`)
-		w.WriteHeader(http.StatusOK)
-		w.Write(data) // nosemgrep: go.lang.security.audit.xss.no-direct-write-to-responsewriter.no-direct-write-to-responsewriter
+		w.WriteHeader(http.StatusOK) // #nosec G104 -- intentional: response/log write errors are not actionable here
+		w.Write(data) // nosemgrep: go.lang.security.audit.xss.no-direct-write-to-responsewriter.no-direct-write-to-responsewriter // #nosec G104 -- intentional: response/log write errors are not actionable here
 
 	default: // csv
 		w.Header().Set("Content-Type", "text/csv")
 		w.Header().Set("Content-Disposition", `attachment; filename="findings.csv"`)
-		w.WriteHeader(http.StatusOK)
+		w.WriteHeader(http.StatusOK) // #nosec G104 -- intentional: response/log write errors are not actionable here
 
 		cw := csv.NewWriter(w)
 		cw.Write([]string{
