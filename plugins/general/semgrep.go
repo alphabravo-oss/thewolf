@@ -36,9 +36,16 @@ func (p *SemgrepPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([
 	args := []string{"scan", "--json", "--jobs", "1"}
 	args = append(args, plugin.ExcludeArgs("--exclude")...)
 	args = append(args, "/scan")
+	// semgrep writes its first-run settings to ~/.semgrep. The image's
+	// HOME is /home/semgrep which is read-only under our --read-only
+	// mount, so the binary crashes on import. Redirect HOME to the
+	// per-container tmpfs.
 	cmd := container.CommandContext(ctx,
 		container.ConfigFromOpts(opts.ContainerCfg),
-		container.Options{RepoDir: opts.RepoPath},
+		container.Options{
+			RepoDir:  opts.RepoPath,
+			ExtraEnv: map[string]string{"HOME": "/tmp"},
+		},
 		"semgrep", args...)
 
 	var stdout bytes.Buffer
@@ -67,6 +74,7 @@ func (p *SemgrepPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([
 	if len(out) == 0 {
 		return nil, fmt.Errorf("semgrep produced no output")
 	}
+	plugin.SaveRaw(opts, out, "json")
 
 	findings, perr := parseSemgrepOutput(out)
 	if perr != nil {

@@ -44,12 +44,14 @@ func (p *KICSPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]mo
 	script := "kics scan -p /scan -o /tmp/kics --no-progress " +
 		"--report-formats json --silent >/dev/null 2>&1; " +
 		"cat /tmp/kics/results.json"
+	// EntrypointOverride="sh" — the runner skips the tool-name dispatcher
+	// when the override is set, so the args go straight to /bin/sh.
 	cmd := container.CommandContext(ctx, cfg,
 		container.Options{
 			RepoDir:            opts.RepoPath,
 			EntrypointOverride: "sh",
 		},
-		"sh", "-c", script)
+		"kics", "-c", script)
 	out, err := cmd.Output()
 	if err != nil && len(out) == 0 {
 		return nil, plugin.WrapExecError("kics", err)

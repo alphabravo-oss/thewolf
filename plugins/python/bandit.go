@@ -47,6 +47,7 @@ func (p *BanditPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]
 	if err != nil && len(out) == 0 {
 		return nil, plugin.WrapExecError("bandit", err)
 	}
+	plugin.SaveRaw(opts, out, "json")
 
 	findings, perr := parseBanditOutput(out)
 	if perr != nil {

@@ -85,6 +85,15 @@ type jsonFinding struct {
 	FilePurpose     string          `json:"file_purpose,omitempty"`
 	Dependents      json.RawMessage `json:"dependents,omitempty"`
 	Status          string          `json:"status"`
+
+	// Phase 2 / Phase 3 deterministic enrichment fields. Empty strings
+	// are omitted via omitempty so older consumers still parse the file.
+	FineCategory     string   `json:"fine_category,omitempty"`
+	FixStrategyID    string   `json:"fix_strategy_id,omitempty"`
+	Confidence       string   `json:"confidence,omitempty"`
+	CorroboratedBy   []string `json:"corroborated_by,omitempty"`
+	Suppressed       bool     `json:"suppressed,omitempty"`
+	SuppressedReason string   `json:"suppressed_reason,omitempty"`
 }
 
 type toolEntry struct {
@@ -142,25 +151,31 @@ func GenerateJSON(cfg ReportConfig) ([]byte, error) {
 	jFindings := make([]jsonFinding, 0, len(cfg.Findings))
 	for _, f := range cfg.Findings {
 		jf := jsonFinding{
-			ID:              f.ID,
-			ToolName:        f.ToolName,
-			Category:        string(f.Category),
-			Severity:        string(f.Severity),
-			Title:           f.Title,
-			Description:     f.Description,
-			FilePath:        f.FilePath,
-			LineStart:       f.LineStart,
-			LineEnd:         f.LineEnd,
-			CodeSnippet:     f.CodeSnippet,
-			CWEID:           f.CWEID,
-			RuleID:          f.RuleID,
-			CompositeScore:  f.CompositeScore,
-			AIFixSuggestion: f.AIFixSuggestion,
-			ModuleName:      f.ModuleName,
-			FunctionName:    f.FunctionName,
-			SymbolKind:      f.SymbolKind,
-			FilePurpose:     f.FilePurpose,
-			Status:          string(f.Status),
+			ID:               f.ID,
+			ToolName:         f.ToolName,
+			Category:         string(f.Category),
+			Severity:         string(f.Severity),
+			Title:            f.Title,
+			Description:      f.Description,
+			FilePath:         f.FilePath,
+			LineStart:        f.LineStart,
+			LineEnd:          f.LineEnd,
+			CodeSnippet:      f.CodeSnippet,
+			CWEID:            f.CWEID,
+			RuleID:           f.RuleID,
+			CompositeScore:   f.CompositeScore,
+			AIFixSuggestion:  f.AIFixSuggestion,
+			ModuleName:       f.ModuleName,
+			FunctionName:     f.FunctionName,
+			SymbolKind:       f.SymbolKind,
+			FilePurpose:      f.FilePurpose,
+			Status:           string(f.Status),
+			FineCategory:     f.FineCategory,
+			FixStrategyID:    f.FixStrategyID,
+			Confidence:       f.Confidence,
+			CorroboratedBy:   f.CorroboratedBy,
+			Suppressed:       f.Suppressed,
+			SuppressedReason: f.SuppressedReason,
 		}
 		if f.DependentsJSON != "" {
 			jf.Dependents = json.RawMessage(f.DependentsJSON)

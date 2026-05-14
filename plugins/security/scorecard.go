@@ -33,6 +33,13 @@ func (p *ScorecardPlugin) Languages() []models.Language { return nil }
 func (p *ScorecardPlugin) CheckAvailable() bool { return container.IsScannersReady() }
 
 func (p *ScorecardPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
+	// scorecard's upstream image is published amd64-only. On arm64 hosts
+	// the qemu-emulated container fails to find the "scorecard" binary
+	// in PATH (init failure) and exits 127 immediately. Skip cleanly.
+	if plugin.IsArm64Host() {
+		plugin.Skipf(opts.OnOutput, "scorecard", "no native arm64 image; amd64 image fails under qemu emulation. Run on amd64 host or omit scorecard from --tools.")
+		return nil, nil
+	}
 	if !plugin.HasFile(opts.RepoPath, ".git") {
 		plugin.Skipf(opts.OnOutput, "scorecard", "no .git directory — scorecard needs a git repository to inspect (branch protection, signed releases, etc).")
 		return nil, nil

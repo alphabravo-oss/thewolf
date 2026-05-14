@@ -39,11 +39,17 @@ func (p *GovulncheckPlugin) Execute(ctx context.Context, opts models.ExecuteOpts
 		defer cancel()
 	}
 
+	// govulncheck needs the Go toolchain to resolve modules and a
+	// writable HOME for the module cache.
 	cmd := container.CommandContext(ctx,
 		container.ConfigFromOpts(opts.ContainerCfg),
 		container.Options{
 			RepoDir: opts.RepoPath,
 			WorkDir: container.ContainerSubPath(opts.RepoPath, goDir),
+			ExtraEnv: map[string]string{
+				"HOME": "/tmp",
+				"PATH": "/usr/local/go-toolchain/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+			},
 		},
 		"govulncheck", "-json", "./...")
 	out, err := cmd.Output()

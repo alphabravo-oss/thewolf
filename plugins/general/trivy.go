@@ -31,14 +31,25 @@ func (p *TrivyPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]m
 		defer cancel()
 	}
 
+	// trivy caches its ~1GB vuln DB. Point its cache at the shared
+	// wolf-db Docker volume so we don't re-download every run; first
+	// run takes ~30s, subsequent runs are instant. HOME still goes to
+	// the tmpfs because trivy writes some non-cache files there.
 	cmd := container.CommandContext(ctx,
 		container.ConfigFromOpts(opts.ContainerCfg),
-		container.Options{RepoDir: opts.RepoPath},
-		"trivy", "fs", "--format", "json", "/scan")
+		container.Options{
+			RepoDir: opts.RepoPath,
+			ExtraEnv: map[string]string{
+				"HOME":             "/tmp",
+				"TRIVY_CACHE_DIR":  "/var/lib/wolf-db/trivy",
+			},
+		},
+		"trivy", "fs", "--format", "json", "--cache-dir", "/var/lib/wolf-db/trivy", "/scan")
 	out, err := cmd.Output()
 	if err != nil && len(out) == 0 {
 		return nil, plugin.WrapExecError("trivy", err)
 	}
+	plugin.SaveRaw(opts, out, "json")
 
 	findings, perr := parseTrivyOutput(out)
 	if perr != nil {

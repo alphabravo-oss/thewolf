@@ -38,12 +38,14 @@ func (p *DetektPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]
 	// detekt writes the report to a path; we use sh -c to read it back.
 	script := "detekt --input /scan --report xml:/tmp/detekt.xml >/dev/null 2>&1 || true; " +
 		"cat /tmp/detekt.xml 2>/dev/null || echo '<checkstyle/>'"
+	// EntrypointOverride="sh" — the runner skips the tool-name dispatcher
+	// when the override is set, so the args go straight to /bin/sh.
 	cmd := container.CommandContext(ctx, cfg,
 		container.Options{
 			RepoDir:            opts.RepoPath,
 			EntrypointOverride: "sh",
 		},
-		"sh", "-c", script)
+		"detekt", "-c", script)
 	out, err := cmd.Output()
 	if err != nil && len(out) == 0 {
 		return nil, plugin.WrapExecError("detekt", err)

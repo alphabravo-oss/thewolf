@@ -48,6 +48,7 @@ func (p *GitleaksPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) (
 		plugin.Infof(opts.OnOutput, "gitleaks", "scan completed, no secrets detected.")
 		return nil, nil
 	}
+	plugin.SaveRaw(opts, out, "json")
 
 	findings, perr := parseGitleaksOutput(out)
 	if perr != nil {

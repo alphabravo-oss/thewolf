@@ -36,10 +36,14 @@ func (p *RuffPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]mo
 		defer cancel()
 	}
 
+	// Ruff defaults to caching in <repo>/.ruff_cache; since /scan is
+	// mounted read-only that fails with "Read-only file system". Force
+	// the cache into the writable tmpfs at /tmp.
 	cmd := container.CommandContext(ctx,
 		container.ConfigFromOpts(opts.ContainerCfg),
 		container.Options{RepoDir: opts.RepoPath},
-		"ruff", "check", "/scan", "--output-format", "json")
+		"ruff", "check", "/scan", "--output-format", "json",
+		"--cache-dir", "/tmp/ruff-cache")
 	out, err := cmd.Output()
 	if err != nil && len(out) == 0 {
 		return nil, plugin.WrapExecError("ruff", err)

@@ -28,6 +28,13 @@ type ExecuteOpts struct {
 	Target       string            // URL or host for DAST scanners (nuclei, etc.)
 	OnOutput     func(line string) // callback for streaming tool stderr/progress lines
 
+	// OnRawOutput, when set, is called by a plugin with the verbatim bytes
+	// of the tool's output (typically JSON or SARIF) before parsing. ext is
+	// a hint at the canonical extension ("json", "sarif", "txt", "xml").
+	// Used to persist raw tool output for audit/reprocessing without
+	// requiring the runner to re-invoke the tool.
+	OnRawOutput func(data []byte, ext string)
+
 	// ContainerCfg is the runtime container backend configuration. It is
 	// typed as `any` here to avoid a circular import (models → container →
 	// models). Plugins assert it back to `*container.Config` at the call

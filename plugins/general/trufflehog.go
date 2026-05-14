@@ -36,15 +36,25 @@ func (p *TrufflehogPlugin) Execute(ctx context.Context, opts models.ExecuteOpts)
 	// The wolf-scanners image bakes a standard excludes file at
 	// /etc/wolf-scanners/trufflehog-excludes.txt; passing that lets us share
 	// wolf's DefaultExcludeDirs without needing a writable scratch volume.
+	// trufflehog uses git2go which insists on reading ~/.gitconfig. With
+	// the wolf default uid:gid (1000:1000) HOME defaults to / which is
+	// read-only under our --read-only flag, so trufflehog errors out on
+	// startup. Pointing HOME at the writable tmpfs avoids the issue.
+	// We previously passed --exclude-paths pointing at a wolf-baked file
+	// inside the scanners image. Dropped because the file isn't reliably
+	// present (image-build version skew). trufflehog's own defaults are
+	// reasonable; wolf's path-suppression layer filters further at the
+	// renderer.
+	//
+	// --no-update keeps the auto-updater from trying to move the binary
+	// to a read-only path on every invocation (exits 1 before scanning).
 	cmd := container.CommandContext(ctx,
 		container.ConfigFromOpts(opts.ContainerCfg),
 		container.Options{
 			RepoDir:  opts.RepoPath,
-			ExtraEnv: map[string]string{"GOMAXPROCS": "2"},
+			ExtraEnv: map[string]string{"GOMAXPROCS": "2", "HOME": "/tmp"},
 		},
-		"trufflehog", "filesystem", "--json",
-		"--exclude-paths", "/etc/wolf-scanners/trufflehog-excludes.txt",
-		"/scan")
+		"trufflehog", "filesystem", "--json", "--no-update", "/scan")
 	out, err := cmd.Output()
 	if err != nil && len(out) == 0 {
 		return nil, plugin.WrapExecError("trufflehog", err)

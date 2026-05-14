@@ -243,14 +243,6 @@ var Tools = []ToolDef{
 		},
 	},
 	{
-		Name: "scancode", Description: "License & copyright scanner",
-		ProjectURL: "https://github.com/aboutcode-org/scancode-toolkit",
-		CheckCmd: "scancode", CheckArgs: []string{"--version"}, Category: "license",
-		InstallMethods: []InstallMethod{
-			{Requires: "uv", Cmd: "uv tool install --upgrade 'scancode-toolkit>=32'"},
-		},
-	},
-	{
 		Name: "pmd", Description: "Java/Apex source code analyzer",
 		ProjectURL: "https://github.com/pmd/pmd",
 		CheckCmd: "pmd", CheckArgs: []string{"--version"}, Category: "sast",

@@ -1,6 +1,7 @@
 package goplug
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -10,6 +11,8 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/plugin"
 	"github.com/alphabravocompany/thewolf/internal/plugin/container"
 )
+
+func bytesContain(data []byte, s string) bool { return bytes.Contains(data, []byte(s)) }
 
 // GoKartPlugin runs Praetorian's GoKart, a source-to-sink taint-analysis
 // SAST for Go. Complements gosec (pattern-based): gosec flags constructs
@@ -38,16 +41,46 @@ func (p *GoKartPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]
 		ctx, cancel = context.WithTimeout(ctx, opts.Timeout)
 		defer cancel()
 	}
+	// gokart writes a config file to ~/.gokart on first invocation;
+	// HOME=/ is read-only under our --read-only mount so the write
+	// fails. Redirect HOME into the per-container tmpfs.
+	//
+	// gokart also shells out to `go` for module resolution. The
+	// wolf-scanners image installs the toolchain at
+	// /usr/local/go-toolchain but doesn't add it to the runtime PATH,
+	// so we prepend it here. Without this gokart resolves `go` to a
+	// `./go` directory in the scanned repo and exits immediately.
 	cmd := container.CommandContext(ctx,
 		container.ConfigFromOpts(opts.ContainerCfg),
 		container.Options{
 			RepoDir: opts.RepoPath,
 			WorkDir: container.ContainerSubPath(opts.RepoPath, goDir),
+			ExtraEnv: map[string]string{
+				"HOME": "/tmp",
+				"PATH": "/usr/local/go-toolchain/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+			},
 		},
 		"gokart", "scan", "-o", "json", "./...")
 	out, err := cmd.Output()
 	if err != nil && len(out) == 0 {
 		return nil, plugin.WrapExecError("gokart", err)
+	}
+
+	// gokart v0.5.x bundles golang.org/x/tools@v0.1.12, which can't read
+	// the export-data format used by Go 1.23+ packages. The binary
+	// panics during analysis ("unsupported version: 2") with the panic
+	// trace going to stderr; stdout receives only the startup banner
+	// ("Initializing default config ...", "Revving engines"). Detect
+	// the banner-without-JSON case and skip gracefully rather than
+	// surfacing a confusing "invalid character 'I'" parse error.
+	// Upstream issue: praetorian-inc/gokart has not shipped a release
+	// compatible with modern Go since 2023.
+	if bytesContain(out, "Revving engines") || bytesContain(out, "Initializing default config") {
+		// Only skip if there's no JSON payload appended after the banner.
+		if !bytesContain(out, "{") && !bytesContain(out, "[") {
+			plugin.Skipf(opts.OnOutput, "gokart", "incompatible with modern Go toolchain (upstream gokart bundles tools/go/internal/pkgbits that can't read Go 1.23+ export data). Skipping.")
+			return nil, nil
+		}
 	}
 
 	findings, perr := parseGoKartOutput(out)

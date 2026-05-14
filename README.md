@@ -173,7 +173,6 @@ Every tool's tier is annotated as 🌐 (upstream), 📦 (wolf-built default), �
 | **Infrastructure** | Kubescape | 🌐 | `quay.io/kubescape/kubescape-cli` | Kubernetes security/compliance scanner |
 | **Infrastructure** | Kube-linter | 🌐 | `stackrox/kube-linter` | Static analysis for K8s manifests and Helm charts |
 | **SBOM** | Syft | 🌐 | `anchore/syft` | SBOM generator (paired with Grype) |
-| **License** | ScanCode | 🌐 | `ghcr.io/nexb/scancode-toolkit` | License + copyright + dependency origin scanner |
 | **Docs** | Spectral | 🌐 | `stoplight/spectral` | OpenAPI / AsyncAPI / JSON-Schema linter |
 | **Docs** | Vale | 🌐 | `jdkato/vale` | Prose / documentation style linter |
 | **DAST** | Nuclei | 🌐 | `projectdiscovery/nuclei` | Template-based HTTP/DNS/TCP vulnerability scanner |
@@ -267,6 +266,59 @@ Environment overrides (12-factor) — see `PLAN.md` §5.6 for the full list.
 
 ## Operations
 
+### Activating optional bucket scanners (PMD, CodeQL)
+
+The default `wolf-scanners` image is kept lean — heavy JVM and CodeQL
+toolchains are not included so the base image stays under ~3 GB. To
+enable `pmd` (Java) or `codeql`, build the bucket image and point wolf
+at it:
+
+```bash
+# PMD lives in the JVM bucket (with infer)
+make scanners-build-jvm
+export WOLF_SCANNERS_IMAGE_JVM=wolf-scanners-jvm:dev
+
+# CodeQL has its own ~800MB bucket
+make scanners-build-codeql
+export WOLF_SCANNERS_IMAGE_CODEQL=wolf-scanners-codeql:dev
+```
+
+Without these env vars wolf will list `pmd` and `codeql` among the
+selected scanners but they exit with `tool not present in this image`.
+This is intentional — operators opt in to the heavyweight buckets.
+
+### Scanner DB cache (auto-configured)
+
+Vulnerability-database scanners (`grype`, `trivy`) cache their DBs on
+the host at `~/.wolf/scanner-cache/` and reuse them across runs. The
+first scan downloads (~30s); subsequent scans are instant.
+
+Override with `WOLF_SCANNERS_DB_VOLUME=<host-path>` (or `=""` to disable
+caching entirely and re-download each run).
+
+### Scanners that are skipped on arm64 hosts
+
+A few upstream images are published amd64-only and crash under qemu
+emulation on Apple Silicon / arm64 Linux. Wolf detects this and skips
+them cleanly with a `[SKIP]` message rather than surfacing the
+qemu-induced crash:
+
+- `bearer` — Go runtime panics under emulation
+- `scorecard` — image fails to find its entrypoint under emulation
+
+To use these scanners, run wolf from an amd64 host (CI, x86_64 server,
+etc.) or omit them from `--tools`.
+
+### Scanners that need a target argument
+
+Two scanners don't apply to source code and require an explicit target:
+
+- `nuclei` — DAST tool; pass `--target https://example.com` (an HTTP
+  endpoint to probe). Skips cleanly when no target is provided.
+- `dockle` — scans built container images; pass `--target <image:tag>`
+  for an image the operator has already built or pulled. Skips cleanly
+  when no target is provided.
+
 ### Diagnostics
 
 ```bash
@@ -305,7 +357,7 @@ Or set `WOLF_SCANNERS_DISABLE_UPSTREAM=1` to force everything through wolf-built
 Operators behind corporate proxies need outbound HTTPS to:
 
 - **docker.io** — most upstream images (`aquasec/trivy`, `semgrep/semgrep`, `zricethezav/gitleaks`, `anchore/{grype,syft}`, `trufflesecurity/trufflehog`, `hadolint/hadolint`, `goodwithtech/dockle`, `bridgecrew/checkov`, `stackrox/kube-linter`, `projectdiscovery/nuclei`, `jdkato/vale`, `stoplight/spectral`)
-- **ghcr.io** — `ghcr.io/alphabravocompany/wolf-scanners*`, `ghcr.io/terraform-linters/tflint`, `ghcr.io/nexb/scancode-toolkit`, `ghcr.io/google/osv-scanner`, `ghcr.io/renovatebot/renovate`
+- **ghcr.io** — `ghcr.io/alphabravocompany/wolf-scanners*`, `ghcr.io/terraform-linters/tflint`, `ghcr.io/google/osv-scanner`, `ghcr.io/renovatebot/renovate`
 - **us-docker.pkg.dev** — `us-docker.pkg.dev/fairwinds-ops/oss/pluto`
 - **quay.io** — `quay.io/kubescape/kubescape-cli`
 - **gcr.io** — `gcr.io/openssf/scorecard`

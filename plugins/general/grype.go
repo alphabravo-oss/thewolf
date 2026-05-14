@@ -31,9 +31,25 @@ func (p *GrypePlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]m
 		defer cancel()
 	}
 
+	// grype caches its ~1.5GB vuln database. We point it at the
+	// wolf-shared DBVolume mounted at /var/lib/wolf-db (a named Docker
+	// volume that persists across scan runs), with a sub-namespace per
+	// tool. First run downloads (~30s); subsequent runs reuse the cache.
+	// Falling back to /tmp keeps things working when no DBVolume is
+	// configured, at the cost of re-downloading every run.
 	cmd := container.CommandContext(ctx,
 		container.ConfigFromOpts(opts.ContainerCfg),
-		container.Options{RepoDir: opts.RepoPath},
+		container.Options{
+			RepoDir: opts.RepoPath,
+			ExtraEnv: map[string]string{
+				"HOME":               "/tmp",
+				"XDG_CACHE_HOME":     "/var/lib/wolf-db",
+				"GRYPE_DB_CACHE_DIR": "/var/lib/wolf-db/grype",
+			},
+			// grype loads its full vulnerability DB into memory before
+			// matching. 6g leaves headroom for the DB + scanning state.
+			MemoryOverride: "6g",
+		},
 		"grype", "dir:/scan", "-o", "json")
 	out, err := cmd.Output()
 	if err != nil && len(out) == 0 {

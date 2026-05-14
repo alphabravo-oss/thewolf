@@ -185,14 +185,24 @@ func executeScan(h *Handler, scanID, userID, repoPath, branch string, req create
 
 	topic := "scan:" + scanID
 
-	// Use the durable artifact store for per-tool log files (~/.wolf/artifacts/<scanID>/).
+	// Per-tool log files live under a project- and time-stamped directory so
+	// a host scanning many repos stays inspectable on disk. The DB still
+	// keys by scanID; the on-disk directory just embeds the repo basename,
+	// UTC timestamp, and the first 8 chars of scanID for legibility.
+	scanDirName := report.ScanDirName(repoPath, now.UTC(), scanID)
 	var logDir string
 	if artifacts.Global != nil {
-		logDir = artifacts.Global.ScanDir(scanID)
+		logDir = filepath.Join(artifacts.Global.Root(), scanDirName)
 	} else {
-		logDir = filepath.Join(os.TempDir(), "wolf-scans", scanID)
+		logDir = filepath.Join(os.TempDir(), "wolf-scans", scanDirName)
 	}
 	os.MkdirAll(logDir, 0o755)
+
+	// Raw pre-parse tool output lives in <logDir>/raw/. Plugins that opt
+	// into plugin.SaveRaw produce a <tool>.<ext> file here so the original
+	// tool output is preserved alongside the parsed findings.
+	rawDir := filepath.Join(logDir, "raw")
+	os.MkdirAll(rawDir, 0o755)
 
 	// Map to hold open log file writers per tool.
 	var logMu sync.Mutex
@@ -221,6 +231,7 @@ func executeScan(h *Handler, scanID, userID, repoPath, branch string, req create
 		Tools:         req.Tools,
 		DisabledTools: req.DisabledTools,
 		Concurrency:   scanConcurrency,
+		RawOutputDir:  rawDir,
 		OnToolsSelected: func(toolNames []string) {
 			log.Info().Str("scan_id", scanID).Int("count", len(toolNames)).Strs("tools", toolNames).Msg("tools selected")
 			// Persist selected tools immediately so the live page can show all cards.
@@ -483,6 +494,50 @@ func executeScan(h *Handler, scanID, userID, repoPath, branch string, req create
 				UpdatedAt:    time.Now(),
 			}
 			h.Store.CreateScanArtifact(context.Background(), artifact)
+		}
+	}
+
+	// Materialize the deterministic artifact bundle (findings.json, RAW.md,
+	// combined.sarif, manifest.json) so consumers can read scan output from
+	// disk without going through the API. Best-effort: failures are logged
+	// but don't fail the scan.
+	if result != nil {
+		rcfg := report.ReportConfig{
+			ScanID:      scanID,
+			RepoName:    scan.RepoID,
+			Branch:      branch,
+			Findings:    result.Findings,
+			ToolsRun:    result.ToolsRun,
+			ToolsFailed: result.ToolsFailed,
+			Duration:    result.Duration,
+		}
+		mfst := report.Manifest{
+			ScanID:      scanID,
+			RepoName:    filepath.Base(repoPath),
+			RepoPath:    repoPath,
+			Branch:      branch,
+			StartedAt:   now,
+			FinishedAt:  completedAt,
+			ScannersRun: result.ToolsRun,
+			Failed: func() map[string]string {
+				if len(result.ToolsFailed) == 0 {
+					return nil
+				}
+				m := make(map[string]string, len(result.ToolsFailed))
+				for k, v := range result.ToolsFailed {
+					m[k] = v.Error()
+				}
+				return m
+			}(),
+			Counts: report.CountFindings(0, result.Findings),
+		}
+		if w, werr := report.WriteAll(logDir, rcfg, mfst); werr != nil {
+			log.Warn().Str("scan_id", scanID).Err(werr).Msg("artifact bundle write failed")
+		} else {
+			log.Info().Str("scan_id", scanID).
+				Str("findings_json", w.FindingsJSON).
+				Str("manifest", w.Manifest).
+				Msg("artifact bundle written")
 		}
 	}
 

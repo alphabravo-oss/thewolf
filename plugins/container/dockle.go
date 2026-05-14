@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
@@ -38,6 +37,23 @@ func (p *DocklePlugin) Languages() []models.Language { return nil }
 func (p *DocklePlugin) CheckAvailable() bool { return pkgcontainer.IsScannersReady() }
 
 func (p *DocklePlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
+	// dockle scans **built container images**, not source. The previous
+	// behavior of docker-building the repo's Dockerfile in-band was
+	// brittle: any complex Dockerfile (multi-stage, host-tool deps, Go
+	// version skew) silently failed the scan. Mirror the nuclei pattern:
+	// require opts.Target to be a pre-built image name (or :tag) the
+	// operator has already produced or pulled.
+	if opts.Target == "" {
+		plugin.Skipf(opts.OnOutput, "dockle",
+			"no image target provided. dockle scans built images, not Dockerfiles; pass --target <image:tag> to enable. Skipping.")
+		return nil, nil
+	}
+	// Defensive sanity-check: presence of a Dockerfile is informational
+	// only — the user still has to build it themselves.
+	if _, err := os.Stat(filepath.Join(opts.RepoPath, "Dockerfile")); err != nil {
+		plugin.Infof(opts.OnOutput, "dockle", "no Dockerfile in repo root, but --target was provided; proceeding to scan %s", opts.Target)
+	}
+
 	timeout := opts.Timeout
 	if timeout > 0 {
 		var cancel context.CancelFunc
@@ -45,31 +61,15 @@ func (p *DocklePlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]
 		defer cancel()
 	}
 
-	dockerfile := filepath.Join(opts.RepoPath, "Dockerfile")
-	if _, err := os.Stat(dockerfile); err != nil {
-		plugin.Skipf(opts.OnOutput, "dockle", "no Dockerfile found in repository root. Add a Dockerfile to enable container image analysis.")
-		return nil, nil
-	}
-
-	// Build the image using the docker CLI mounted into wolf-slim.
-	imageName := fmt.Sprintf("wolf-dockle-scan:%d", os.Getpid())
-	buildCmd := exec.CommandContext(ctx, "docker", "build", "-t", imageName, "-f", dockerfile, opts.RepoPath)
-	if buildOut, err := buildCmd.CombinedOutput(); err != nil {
-		return nil, fmt.Errorf("docker build failed: %s: %w", string(buildOut), err)
-	}
-	defer func() {
-		_ = exec.Command("docker", "rmi", "-f", imageName).Run()
-	}()
-
-	// Run dockle inside the scanner image, with the docker socket mounted so
-	// dockle can fetch the just-built image from the local daemon.
+	// Run dockle against the user-provided image. The docker socket has
+	// to be mounted so dockle can read the image from the local daemon.
 	cfg := pkgcontainer.ConfigFromOpts(opts.ContainerCfg)
 	cmd := pkgcontainer.CommandContext(ctx, cfg,
 		pkgcontainer.Options{
 			NoRepoMount: true,
 			ExtraMounts: []string{"/var/run/docker.sock:/var/run/docker.sock"},
 		},
-		"dockle", "--format", "json", imageName)
+		"dockle", "--format", "json", opts.Target)
 	out, err := cmd.Output()
 	if err != nil && len(out) == 0 {
 		return nil, plugin.WrapExecError("dockle", err)

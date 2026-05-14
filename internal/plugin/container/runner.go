@@ -55,6 +55,13 @@ type Options struct {
 	// upstream-image routing); EntrypointOverride is per-invocation
 	// regardless of which image tier the tool lives in.
 	EntrypointOverride string
+
+	// MemoryOverride, when non-empty, replaces cfg.Memory for this
+	// invocation. Use for tools with hefty in-memory data structures
+	// (grype loads its full vulnerability DB into RAM, bearer parses
+	// the whole repo AST) that hit the default 2g cap. Docker units
+	// apply: "4g", "512m", etc.
+	MemoryOverride string
 }
 
 // containerCounter is monotonic; used to disambiguate container names within
@@ -97,7 +104,12 @@ func CommandContext(ctx context.Context, cfg *Config, opts Options, tool string,
 		"--name", name,
 		"--user", fmt.Sprintf("%d:%d", cfg.UID, cfg.GID),
 		"--read-only",
-		"--tmpfs", "/tmp:rw,size=512m,mode=1777",
+		// 4 GiB headroom: trivy + grype each unpack ~1GB vulnerability
+		// DBs and grype additionally needs scratch space to copy the
+		// downloaded archive to its cache location atomically. Tmpfs
+		// only commits pages on write, so this doesn't pin 4GB of
+		// physical memory up front.
+		"--tmpfs", "/tmp:rw,size=4g,mode=1777",
 	}
 
 	if !opts.NoRepoMount {
@@ -128,9 +140,13 @@ func CommandContext(ctx context.Context, cfg *Config, opts Options, tool string,
 	// Network policy.
 	dockerArgs = append(dockerArgs, "--network", cfg.Network)
 
-	// Resource limits.
-	if cfg.Memory != "" {
-		dockerArgs = append(dockerArgs, "--memory", cfg.Memory)
+	// Resource limits. MemoryOverride wins over cfg.Memory when set.
+	memLimit := cfg.Memory
+	if opts.MemoryOverride != "" {
+		memLimit = opts.MemoryOverride
+	}
+	if memLimit != "" {
+		dockerArgs = append(dockerArgs, "--memory", memLimit)
 	}
 	if cfg.CPUs != "" {
 		dockerArgs = append(dockerArgs, "--cpus", cfg.CPUs)
@@ -178,6 +194,16 @@ func CommandContext(ctx context.Context, cfg *Config, opts Options, tool string,
 			dockerArgs = append(dockerArgs, "--entrypoint", spec.Entrypoint)
 		}
 		dockerArgs = append(dockerArgs, spec.Image)
+		dockerArgs = append(dockerArgs, args...)
+	} else if opts.EntrypointOverride != "" {
+		// Non-upstream image WITH entrypoint override (e.g. plugins that
+		// wrap their invocation in `sh -c "..."`). Skip the tool-name
+		// dispatcher arg — the override IS the entrypoint and the args
+		// go straight to it. Without this branch the docker invocation
+		// becomes `<entrypoint> <tool> <args...>`, so plugins setting
+		// EntrypointOverride="sh" end up with `sh sh -c "..."` which
+		// fails with `sh: 0: cannot open sh: No such file`.
+		dockerArgs = append(dockerArgs, cfg.ImageFor(tool))
 		dockerArgs = append(dockerArgs, args...)
 	} else {
 		dockerArgs = append(dockerArgs, cfg.ImageFor(tool), tool)
@@ -250,7 +276,12 @@ func BuildDockerArgs(cfg *Config, opts Options, tool string, args ...string) (co
 		"run", "--rm", "--name", containerName,
 		"--user", fmt.Sprintf("%d:%d", cfg.UID, cfg.GID),
 		"--read-only",
-		"--tmpfs", "/tmp:rw,size=512m,mode=1777",
+		// 4 GiB headroom: trivy + grype each unpack ~1GB vulnerability
+		// DBs and grype additionally needs scratch space to copy the
+		// downloaded archive to its cache location atomically. Tmpfs
+		// only commits pages on write, so this doesn't pin 4GB of
+		// physical memory up front.
+		"--tmpfs", "/tmp:rw,size=4g,mode=1777",
 	}
 
 	if !opts.NoRepoMount {
@@ -272,8 +303,12 @@ func BuildDockerArgs(cfg *Config, opts Options, tool string, args ...string) (co
 	}
 	dockerArgs = append(dockerArgs, "--workdir", workdir, "--network", cfg.Network)
 
-	if cfg.Memory != "" {
-		dockerArgs = append(dockerArgs, "--memory", cfg.Memory)
+	memLimit := cfg.Memory
+	if opts.MemoryOverride != "" {
+		memLimit = opts.MemoryOverride
+	}
+	if memLimit != "" {
+		dockerArgs = append(dockerArgs, "--memory", memLimit)
 	}
 	if cfg.CPUs != "" {
 		dockerArgs = append(dockerArgs, "--cpus", cfg.CPUs)
@@ -309,6 +344,11 @@ func BuildDockerArgs(cfg *Config, opts Options, tool string, args ...string) (co
 			dockerArgs = append(dockerArgs, "--entrypoint", spec.Entrypoint)
 		}
 		dockerArgs = append(dockerArgs, spec.Image)
+		dockerArgs = append(dockerArgs, args...)
+	} else if opts.EntrypointOverride != "" {
+		// Mirror CommandContext: with an entrypoint override on a
+		// non-upstream image, skip the tool-name dispatcher arg.
+		dockerArgs = append(dockerArgs, cfg.ImageFor(tool))
 		dockerArgs = append(dockerArgs, args...)
 	} else {
 		dockerArgs = append(dockerArgs, cfg.ImageFor(tool), tool)

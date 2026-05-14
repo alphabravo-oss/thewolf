@@ -42,12 +42,14 @@ func (p *MarkdownlintPlugin) Execute(ctx context.Context, opts models.ExecuteOpt
 	cfg := container.ConfigFromOpts(opts.ContainerCfg)
 	// markdownlint writes its findings on stderr, exits non-zero when any
 	// finding is present. We redirect stderr→stdout and ignore exit code.
+	// EntrypointOverride="sh" — the runner skips the tool-name dispatcher
+	// when the override is set, so the args go straight to /bin/sh.
 	cmd := container.CommandContext(ctx, cfg,
 		container.Options{
 			RepoDir:            opts.RepoPath,
 			EntrypointOverride: "sh",
 		},
-		"sh", "-c", "markdownlint '/scan/**/*.md' 2>&1 || true")
+		"markdownlint", "-c", "markdownlint '/scan/**/*.md' 2>&1 || true")
 	out, err := cmd.Output()
 	if err != nil && len(out) == 0 {
 		return nil, plugin.WrapExecError("markdownlint", err)

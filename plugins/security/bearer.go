@@ -30,14 +30,31 @@ func (p *BearerPlugin) Languages() []models.Language { return nil }
 func (p *BearerPlugin) CheckAvailable() bool { return container.IsScannersReady() }
 
 func (p *BearerPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
+	// bearer publishes amd64-only images. On arm64 hosts (Apple Silicon,
+	// ARM Linux), Docker runs them via qemu emulation, but bearer's Go
+	// binary crashes with "lfstack.push invalid packing" — an upstream
+	// Go runtime bug under x86_64 emulation. Skip cleanly with guidance
+	// rather than surface a 200-line Go traceback.
+	if plugin.IsArm64Host() {
+		plugin.Skipf(opts.OnOutput, "bearer", "no native arm64 image; amd64 binary crashes under qemu emulation (upstream Go runtime bug). Run on amd64 host or omit bearer from --tools.")
+		return nil, nil
+	}
 	if opts.Timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, opts.Timeout)
 		defer cancel()
 	}
+	// bearer holds the whole repo AST in memory during data-flow tracking,
+	// which OOMs at the 2g default on non-trivial repos (visible as a Go
+	// runtime trace from the bearer binary's gc workers). 4g leaves room.
+	// HOME=/tmp because bearer caches rule packs under ~/.bearer.
 	cfg := container.ConfigFromOpts(opts.ContainerCfg)
 	cmd := container.CommandContext(ctx, cfg,
-		container.Options{RepoDir: opts.RepoPath},
+		container.Options{
+			RepoDir:        opts.RepoPath,
+			ExtraEnv:       map[string]string{"HOME": "/tmp"},
+			MemoryOverride: "4g",
+		},
 		"bearer", "scan", "/scan", "--format", "json", "--quiet", "--exit-code", "0")
 	out, err := cmd.Output()
 	if err != nil && len(out) == 0 {

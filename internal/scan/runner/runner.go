@@ -9,7 +9,9 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -17,6 +19,7 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
+	"github.com/alphabravocompany/thewolf/internal/finding/knowledge"
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
 	"github.com/alphabravocompany/thewolf/internal/wolflog"
@@ -42,10 +45,18 @@ type RunConfig struct {
 	// import cycle (see models.ExecuteOpts.ContainerCfg).
 	ContainerCfg any
 
+	// RawOutputDir, when non-empty, causes the runner to persist each
+	// plugin's raw pre-parse output (as forwarded via models.ExecuteOpts.
+	// OnRawOutput) to <RawOutputDir>/<tool>.<ext>. The directory is
+	// created on demand. Plugins that don't call OnRawOutput simply don't
+	// produce a file.
+	RawOutputDir string
+
 	OnToolsSelected func(toolNames []string) // called with the full list before any tool starts
 	OnToolStart     func(toolName string)
 	OnToolDone      func(toolName string, findings []models.Finding, err error)
 	OnToolOutput    func(toolName string, line string)
+	OnToolRaw       func(toolName string, data []byte, ext string) // optional: observe raw bytes
 }
 
 // MissingPluginSuggestion describes a plugin that could have been used but isn't installed.
@@ -97,8 +108,16 @@ func Fingerprint(toolName, ruleID, title, filePath string) string {
 	return fmt.Sprintf("%x", hash)
 }
 
-// dedupKey returns the deduplication key for a finding: file + line + issue type.
+// dedupKey returns the deduplication key for a finding. When a fine_category
+// is set (from the knowledge-base lookup that happens at parse time), the
+// key uses it so two tools reporting the same SQL injection at the same
+// line collapse into one record. When no fine_category is known, falls back
+// to rule_id / title — preserving the pre-Phase-2 behavior for uncategorized
+// findings.
 func dedupKey(f models.Finding) string {
+	if f.FineCategory != "" {
+		return fmt.Sprintf("%s:%d:%s", f.FilePath, f.LineStart, f.FineCategory)
+	}
 	identifier := f.RuleID
 	if identifier == "" {
 		identifier = f.Title
@@ -106,27 +125,91 @@ func dedupKey(f models.Finding) string {
 	return fmt.Sprintf("%s:%d:%s", f.FilePath, f.LineStart, identifier)
 }
 
-// Deduplicate removes duplicate findings. Two findings are considered duplicates
-// when they share the same file path, start line, and issue type (rule_id or title).
-// When duplicates exist, the finding with higher severity is kept.
+// confidenceFromCorroboration converts the number of distinct tools that
+// flagged a finding into a deterministic confidence label. The thresholds
+// are deliberately blunt — finer gradations require ground truth we don't
+// have.
+func confidenceFromCorroboration(n int) string {
+	switch {
+	case n >= 3:
+		return "high"
+	case n == 2:
+		return "medium"
+	default:
+		return "low"
+	}
+}
+
+// uniqStrings preserves first-seen order while removing duplicates.
+func uniqStrings(in []string) []string {
+	seen := make(map[string]bool, len(in))
+	out := make([]string, 0, len(in))
+	for _, s := range in {
+		if !seen[s] {
+			seen[s] = true
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// Deduplicate removes duplicate findings, merging cross-tool matches into a
+// single record annotated with CorroboratedBy + Confidence. Two findings are
+// duplicates when they share (file, start_line, fine_category) — or (file,
+// start_line, rule_id) when no fine_category is known.
+//
+// When duplicates exist the highest-severity record is kept as the primary,
+// but every contributing tool's name is preserved on CorroboratedBy so the
+// renderer can show "flagged by gosec + semgrep".
 func Deduplicate(findings []models.Finding) []models.Finding {
-	seen := make(map[string]int) // dedupKey -> index in result
+	type bucket struct {
+		idx   int      // position in result
+		tools []string // every tool that contributed a match
+	}
+	seen := make(map[string]*bucket, len(findings))
 	result := make([]models.Finding, 0, len(findings))
 
 	for _, f := range findings {
 		key := dedupKey(f)
-		if idx, exists := seen[key]; exists {
-			// Keep the one with higher severity.
-			if severityRank(f.Severity) > severityRank(result[idx].Severity) {
-				result[idx] = f
+		if b, exists := seen[key]; exists {
+			b.tools = append(b.tools, f.ToolName)
+			// Promote the higher-severity record to primary while
+			// preserving the running tool list.
+			if severityRank(f.Severity) > severityRank(result[b.idx].Severity) {
+				existingTools := b.tools
+				result[b.idx] = f
+				b.tools = existingTools
 			}
 		} else {
-			seen[key] = len(result)
+			seen[key] = &bucket{idx: len(result), tools: []string{f.ToolName}}
 			result = append(result, f)
 		}
 	}
 
+	// Annotate primaries with corroboration metadata.
+	for _, b := range seen {
+		tools := uniqStrings(b.tools)
+		result[b.idx].CorroboratedBy = tools
+		result[b.idx].Confidence = confidenceFromCorroboration(len(tools))
+	}
+
 	return result
+}
+
+// applyKnowledge enriches a finding with FineCategory + FixStrategyID from
+// the knowledge base. Safe to call on already-enriched findings (it preserves
+// existing values). Returns true when any field was set.
+func applyKnowledge(f *models.Finding) bool {
+	if f.FineCategory != "" {
+		return false
+	}
+	fc, fs := knowledge.Categorize(f.ToolName, f.RuleID)
+	if fc == "" {
+		return false
+	}
+	f.FineCategory = fc
+	f.FixStrategyID = fs
+	return true
 }
 
 // SelectTools determines which plugins to run based on the RunConfig.
@@ -188,6 +271,25 @@ func SelectTools(cfg RunConfig) []models.Plugin {
 // Kept conservative because some tools (e.g. semgrep) are CPU-intensive.
 func defaultConcurrency() int {
 	return 4
+}
+
+// sniffExt looks at the first non-whitespace bytes of data and returns a best-
+// guess canonical extension ("json", "sarif", "xml", "txt"). SARIF is reported
+// as "sarif" only if a top-level "$schema" mentions sarif; otherwise generic
+// JSON falls back to "json".
+func sniffExt(data []byte) string {
+	trim := strings.TrimLeft(string(data), " \t\r\n")
+	switch {
+	case strings.HasPrefix(trim, "<"):
+		return "xml"
+	case strings.HasPrefix(trim, "{") || strings.HasPrefix(trim, "["):
+		if strings.Contains(trim[:min(len(trim), 512)], "sarif") {
+			return "sarif"
+		}
+		return "json"
+	default:
+		return "txt"
+	}
 }
 
 // extractStderr extracts stderr content from an exec.ExitError if present.
@@ -291,17 +393,40 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 					cfg.OnToolOutput(toolName, line)
 				}
 			}
+			// Capture raw pre-parse tool output so we can persist it to
+			// disk and/or hand it to observers. Plugins call this via
+			// plugin.SaveRaw(opts, data, ext) right after they get bytes
+			// back from the tool but before parsing.
+			toolOpts.OnRawOutput = func(data []byte, ext string) {
+				if cfg.RawOutputDir != "" && len(data) > 0 {
+					if mkErr := os.MkdirAll(cfg.RawOutputDir, 0o755); mkErr == nil {
+						if ext == "" {
+							ext = sniffExt(data)
+						}
+						path := filepath.Join(cfg.RawOutputDir, toolName+"."+ext)
+						if werr := os.WriteFile(path, data, 0o644); werr != nil {
+							log.Warn().Str("tool", toolName).Err(werr).Msg("failed to write raw tool output")
+						}
+					}
+				}
+				if cfg.OnToolRaw != nil {
+					cfg.OnToolRaw(toolName, data, ext)
+				}
+			}
 
 			findings, err := p.Execute(gctx, toolOpts)
 
 			elapsed := time.Since(toolStart)
 
-			// Assign fingerprints immediately so callers can persist per-tool.
+			// Assign fingerprints + apply the deterministic knowledge base
+			// (fine_category, fix_strategy_id) so the dedupe step can merge
+			// cross-tool matches by canonical category.
 			for i := range findings {
 				f := &findings[i]
 				if f.Fingerprint == "" {
 					f.Fingerprint = Fingerprint(f.ToolName, f.RuleID, f.Title, f.FilePath)
 				}
+				applyKnowledge(f)
 			}
 
 			mu.Lock()

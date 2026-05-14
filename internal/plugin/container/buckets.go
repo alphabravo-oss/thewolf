@@ -83,13 +83,16 @@ func DefaultUpstreamTools() map[string]ToolImageSpec {
 		// Container / IaC.
 		"hadolint":    {Image: "hadolint/hadolint:v2.12.0-alpine"},
 		"dockle":      {Image: "goodwithtech/dockle:v0.4.14"},
-		"checkov":     {Image: "bridgecrew/checkov:3.2.297"},
+		"checkov":     {Image: "bridgecrew/checkov:3.2.527"},
 		"tflint":      {Image: "ghcr.io/terraform-linters/tflint:v0.54.0"},
 		"kubescape":   {Image: "quay.io/kubescape/kubescape-cli:v3.0.22"},
 		"kube-linter": {Image: "stackrox/kube-linter:v0.7.1"},
 
-		// SAST — semgrep's official image is multi-arch.
-		"semgrep": {Image: "semgrep/semgrep:1.92.0"},
+		// SAST — semgrep's official image is multi-arch. The image ships
+		// with an empty ENTRYPOINT and CMD=[semgrep --help], so we pin
+		// the entrypoint to "semgrep" so plugin args like ["scan",
+		// "--json", ...] dispatch correctly.
+		"semgrep": {Image: "semgrep/semgrep:1.92.0", Entrypoint: "semgrep"},
 
 		// DAST.
 		"nuclei": {Image: "projectdiscovery/nuclei:v3.3.5"},
@@ -98,11 +101,7 @@ func DefaultUpstreamTools() map[string]ToolImageSpec {
 		"vale":     {Image: "jdkato/vale:v3.9.1"},
 		"spectral": {Image: "stoplight/spectral:6.13.1"},
 
-		// License scanner — ScanCode's official image is large but
-		// avoids the pyicu/libicu-dev build complexity entirely.
-		"scancode": {Image: "ghcr.io/nexb/scancode-toolkit:v32.3.0"},
-
-		// Repo-hygiene (new in 2.0).
+// Repo-hygiene (new in 2.0).
 		"scorecard": {Image: "gcr.io/openssf/scorecard:v5.0.0", Entrypoint: "scorecard"},
 
 		// Stale/insecure-dependency detection across many ecosystems
@@ -122,7 +121,7 @@ func DefaultUpstreamTools() map[string]ToolImageSpec {
 
 		// Detects deprecated Kubernetes API versions — critical before a
 		// cluster upgrade. Apache-2.0.
-		"pluto": {Image: "us-docker.pkg.dev/fairwinds-ops/oss/pluto:v5.20.4"},
+		"pluto": {Image: "us-docker.pkg.dev/fairwinds-ops/oss/pluto:v5.9.0"},
 
 		// Kotlin static analysis — fills the gap left by Java-focused infer/pmd.
 		"detekt": {Image: "detekt/detekt:v1.23.7"},

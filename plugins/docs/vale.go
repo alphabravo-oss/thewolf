@@ -4,11 +4,25 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
 	"github.com/alphabravocompany/thewolf/internal/plugin/container"
 )
+
+// valeConfigPresent reports whether the repo (or its parent dir, mirroring
+// vale's own lookup) has a Vale config file. Vale recognizes .vale.ini and
+// _vale.ini; we check both.
+func valeConfigPresent(repoPath string) bool {
+	for _, name := range []string{".vale.ini", "_vale.ini"} {
+		if _, err := os.Stat(filepath.Join(repoPath, name)); err == nil {
+			return true
+		}
+	}
+	return false
+}
 
 // ValePlugin runs Vale documentation style checking.
 type ValePlugin struct{}
@@ -26,6 +40,14 @@ func (p *ValePlugin) CheckAvailable() bool { return container.IsScannersReady() 
 func (p *ValePlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
 	if !plugin.HasFilesWithExtension(opts.RepoPath, "md", "rst", "txt") {
 		plugin.Skipf(opts.OnOutput, "vale", "no documentation files (*.md, *.rst) found. Add Markdown or reStructuredText files to enable prose linting.")
+		return nil, nil
+	}
+	// vale exits with E100 "no config file found" and a non-zero status
+	// when neither a project-level .vale.ini nor a workspace ancestor
+	// provides one. That's a *user* configuration choice, not a wolf
+	// failure — skip cleanly so the scan doesn't appear broken.
+	if !valeConfigPresent(opts.RepoPath) {
+		plugin.Skipf(opts.OnOutput, "vale", "no .vale.ini found in repo root. Create one to enable prose linting (https://vale.sh/docs/topics/config/).")
 		return nil, nil
 	}
 

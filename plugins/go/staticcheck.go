@@ -40,11 +40,20 @@ func (p *StaticcheckPlugin) Execute(ctx context.Context, opts models.ExecuteOpts
 		defer cancel()
 	}
 
+	// staticcheck caches build artifacts under $XDG_CACHE_HOME (defaults
+	// to ~/.cache/staticcheck) and falls back to $HOME/.cache when XDG
+	// isn't set. Our --read-only root + HOME=/ blocks both. Redirect
+	// HOME into the per-container tmpfs. Also export PATH so the Go
+	// toolchain is reachable (staticcheck shells out to `go list`).
 	cmd := container.CommandContext(ctx,
 		container.ConfigFromOpts(opts.ContainerCfg),
 		container.Options{
 			RepoDir: opts.RepoPath,
 			WorkDir: container.ContainerSubPath(opts.RepoPath, goDir),
+			ExtraEnv: map[string]string{
+				"HOME": "/tmp",
+				"PATH": "/usr/local/go-toolchain/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+			},
 		},
 		"staticcheck", "-f", "json", "./...")
 	out, err := cmd.Output()

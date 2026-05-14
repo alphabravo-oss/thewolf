@@ -33,4 +33,40 @@ type Finding struct {
 	SARIFData         string   `json:"sarif_data,omitempty" db:"sarif_data"`
 	CreatedAt         time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt         time.Time `json:"updated_at" db:"updated_at"`
+
+	// --- Deterministic categorization fields (Phase 2). Not persisted to
+	// the DB yet; live in memory and in the on-disk findings.json. ---
+
+	// FineCategory is the canonical fine-grained issue category derived
+	// from a (tool, rule_id) knowledge-base lookup. Examples:
+	// "sql-injection", "weak-crypto", "hardcoded-secret". Empty when the
+	// knowledge base has no entry for the rule.
+	FineCategory string `json:"fine_category,omitempty" db:"-"`
+
+	// FixStrategyID points at a fix-strategy markdown template (e.g.
+	// "parameterize-query"). The renderer joins this against the
+	// strategy registry to produce a single "how to fix" block per
+	// category. Empty when uncategorized.
+	FixStrategyID string `json:"fix_strategy_id,omitempty" db:"-"`
+
+	// Confidence is "high" | "medium" | "low" — derived deterministically
+	// from cross-tool agreement at dedupe time. Three or more tools at
+	// the same location → high; two → medium; one → low.
+	Confidence string `json:"confidence,omitempty" db:"-"`
+
+	// CorroboratedBy lists every tool that reported a finding matching
+	// this one's (file, line, fine_category) key. The primary record's
+	// ToolName is always included.
+	CorroboratedBy []string `json:"corroborated_by,omitempty" db:"-"`
+
+	// Suppressed is true when a default rule or .wolfignore entry matched
+	// the finding's file path / rule / category. Suppressed findings
+	// still appear in findings.json (for audit) but are excluded from
+	// FIX-HIGH.md and from the visible portion of FIX-ALL.md.
+	Suppressed bool `json:"suppressed,omitempty" db:"-"`
+
+	// SuppressedReason is a short, human-readable explanation of which
+	// rule fired (e.g. "default:vendor", "default:test-file",
+	// ".wolfignore:**/legacy/**"). Empty when Suppressed is false.
+	SuppressedReason string `json:"suppressed_reason,omitempty" db:"-"`
 }

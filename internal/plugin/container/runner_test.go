@@ -35,7 +35,7 @@ func TestBuildDockerArgs_Bandit(t *testing.T) {
 		"run", "--rm", "--name", "wolf-scan-bandit-",
 		"--user 1000:1000",
 		"--read-only",
-		"--tmpfs /tmp:rw,size=512m,mode=1777",
+		"--tmpfs /tmp:rw,size=4g,mode=1777",
 		"-v /host/projects/myrepo:/scan:ro",
 		"--workdir /scan",
 		"--network bridge",
@@ -156,6 +156,46 @@ func TestBuildDockerArgs_UniqueNames(t *testing.T) {
 	name2, _ := BuildDockerArgs(cfg, Options{RepoDir: "/repos/x"}, "bandit", "/scan")
 	if name1 == name2 {
 		t.Errorf("expected unique names from sequential calls, both were %q", name1)
+	}
+}
+
+// TestBuildDockerArgs_EntrypointOverrideSkipsToolName locks in the fix for
+// the "sh: 0: cannot open sh: No such file" bug. Before the fix, plugins
+// that set EntrypointOverride="sh" produced docker invocations like
+//
+//	docker run --entrypoint sh <image> sh -c "..."
+//
+// causing sh to interpret its own name as the script. The runner now skips
+// the tool-name dispatcher when an EntrypointOverride is set on a
+// non-upstream image, so the args go straight to the entrypoint.
+func TestBuildDockerArgs_EntrypointOverrideSkipsToolName(t *testing.T) {
+	cfg := newTestCfg()
+	_, args := BuildDockerArgs(cfg,
+		Options{RepoDir: "/repos/myrepo", EntrypointOverride: "sh"},
+		"markdownlint", "-c", "markdownlint /scan/**/*.md")
+
+	joined := argList(args).String()
+
+	// Entrypoint flag present.
+	if !strings.Contains(joined, "--entrypoint sh") {
+		t.Errorf("missing --entrypoint sh in args: %s", joined)
+	}
+	// Image present.
+	if !strings.Contains(joined, "wolf-scanners:test") {
+		t.Errorf("missing image in args: %s", joined)
+	}
+	// Args present.
+	if !strings.Contains(joined, "-c markdownlint /scan/**/*.md") {
+		t.Errorf("missing script args: %s", joined)
+	}
+	// The tool name "markdownlint" should NOT appear immediately after
+	// the image — otherwise sh treats it as a script-name. We assert
+	// the image is followed directly by "-c".
+	if !strings.Contains(joined, "wolf-scanners:test -c ") {
+		t.Errorf("expected image followed by -c, got: %s", joined)
+	}
+	if strings.Contains(joined, "wolf-scanners:test markdownlint ") {
+		t.Errorf("entrypoint override should have stripped the tool-name dispatcher; got: %s", joined)
 	}
 }
 

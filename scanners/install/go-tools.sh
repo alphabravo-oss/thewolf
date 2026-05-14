@@ -10,7 +10,7 @@ source /etc/wolf-scanners/versions.env
 
 # Debian 12 ships an older golang-go; modern gosec/staticcheck/govulncheck
 # need Go 1.22+. Install a current Go toolchain from go.dev.
-GOTC_VERSION=1.23.4
+GOTC_VERSION=1.25.0
 ARCH="$(uname -m)"
 case "$ARCH" in
     x86_64)  GO_ARCH="amd64" ;;

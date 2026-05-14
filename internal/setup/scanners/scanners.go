@@ -13,11 +13,28 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
 	"github.com/alphabravocompany/thewolf/internal/plugin/container"
 )
+
+// defaultDBVolume returns a host bind-mount path under the user's home for
+// persistent scanner-DB caching. A host path is preferred over a Docker named
+// volume because the scanner containers run as the host user (UID/GID) and a
+// named volume's default root-owned perms would block writes.
+func defaultDBVolume() string {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return ""
+	}
+	dir := filepath.Join(home, ".wolf", "scanner-cache")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return ""
+	}
+	return dir
+}
 
 // Config is the wolf.yaml `scan.container` shape, with env overrides applied.
 // Field tags use yaml.v3 conventions, but we don't depend on yaml.v3 here —
@@ -48,7 +65,14 @@ func EnvDefaults() Config {
 		Network:              envOr("WOLF_SCANNERS_NETWORK", "bridge"),
 		Memory:               envOr("WOLF_SCANNERS_MEMORY", "2g"),
 		CPUs:                 envOr("WOLF_SCANNERS_CPUS", "1.5"),
-		DBVolume:             envOr("WOLF_SCANNERS_DB_VOLUME", ""),
+		// Default to a host bind-mount under ~/.wolf/scanner-cache so
+		// vulnerability DBs (grype, trivy, etc.) persist across scan
+		// runs without permission issues (the path inherits the host
+		// user's UID/GID, matching the scanner container user). A
+		// Docker named volume would land root-owned and block writes
+		// from the non-root scanner user. Operators who want strict
+		// ephemerality can set WOLF_SCANNERS_DB_VOLUME="" explicitly.
+		DBVolume:             envOr("WOLF_SCANNERS_DB_VOLUME", defaultDBVolume()),
 		DBRefresh:            envOr("WOLF_SCANNERS_DB_REFRESH", "never"),
 		HostReposRoot:        envOr("WOLF_HOST_REPOS_ROOT", ""),
 		InContainerReposRoot: envOr("WOLF_IN_CONTAINER_REPOS_ROOT", ""),

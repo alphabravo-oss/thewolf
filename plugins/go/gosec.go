@@ -39,17 +39,26 @@ func (p *GosecPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]m
 		defer cancel()
 	}
 
+	// gosec shells out to `go list` for module metadata, so PATH must
+	// include the Go toolchain installed under /usr/local/go-toolchain.
+	// HOME=/tmp because the go module cache + linter cache need a
+	// writable directory under our --read-only root.
 	cmd := container.CommandContext(ctx,
 		container.ConfigFromOpts(opts.ContainerCfg),
 		container.Options{
 			RepoDir: opts.RepoPath,
 			WorkDir: container.ContainerSubPath(opts.RepoPath, goDir),
+			ExtraEnv: map[string]string{
+				"HOME": "/tmp",
+				"PATH": "/usr/local/go-toolchain/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+			},
 		},
 		"gosec", "-fmt", "json", "./...")
 	out, err := cmd.Output()
 	if err != nil && len(out) == 0 {
 		return nil, plugin.WrapExecError("gosec", err)
 	}
+	plugin.SaveRaw(opts, out, "json")
 
 	findings, perr := parseGosecOutput(out)
 	if perr != nil {

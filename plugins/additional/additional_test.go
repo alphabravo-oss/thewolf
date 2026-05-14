@@ -109,39 +109,6 @@ func TestParseShellcheckOutput(t *testing.T) {
 	}
 }
 
-func TestParseScancodeOutput(t *testing.T) {
-	data, err := os.ReadFile("testdata/scancode_output.json")
-	if err != nil {
-		t.Fatalf("failed to read fixture: %v", err)
-	}
-
-	findings, err := parseScancodeOutput(data)
-	if err != nil {
-		t.Fatalf("parseScancodeOutput returned error: %v", err)
-	}
-
-	if len(findings) != 2 {
-		t.Fatalf("expected 2 findings, got %d", len(findings))
-	}
-
-	// MIT license should be info severity
-	f := findings[0]
-	if f.ToolName != "scancode" {
-		t.Errorf("expected tool name scancode, got %s", f.ToolName)
-	}
-	if f.Category != models.CategoryLicense {
-		t.Errorf("expected category license, got %s", f.Category)
-	}
-	if f.Severity != models.SeverityInfo {
-		t.Errorf("expected severity info for Permissive license, got %s", f.Severity)
-	}
-
-	// GPL license should be medium severity (Copyleft)
-	if findings[1].Severity != models.SeverityMedium {
-		t.Errorf("expected severity medium for Copyleft license, got %s", findings[1].Severity)
-	}
-}
-
 func TestAdditionalPluginMetadata(t *testing.T) {
 	plugins := []struct {
 		plugin   models.Plugin
@@ -152,7 +119,6 @@ func TestAdditionalPluginMetadata(t *testing.T) {
 		{&CodeQLPlugin{}, "codeql", models.CategorySAST, false},
 		{&PMDPlugin{}, "pmd", models.CategoryQuality, false},
 		{&ShellcheckPlugin{}, "shellcheck", models.CategoryQuality, true},
-		{&ScancodePlugin{}, "scancode", models.CategoryLicense, false},
 	}
 
 	for _, tc := range plugins {
