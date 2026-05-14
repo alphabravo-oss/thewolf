@@ -1,22 +1,639 @@
-// Settings — Phase 1 stub. The full settings panel (api keys, git creds,
-// AI providers, scan presets) ports in Phase 2.
-import { createFileRoute } from "@tanstack/react-router";
-import { SettingsIcon } from "lucide-react";
-import { EmptyState } from "@/components/empty-state";
+// Settings page — General / Secrets / Users / Scanners.
+//
+// Tab state lives in the URL (?tab=…) so deep links work and refresh
+// preserves which section the user was on. Scan presets were deliberately
+// omitted — wolf auto-detects per-repo language/framework, no manual
+// preset list is needed.
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  CheckIcon,
+  KeyIcon,
+  Loader2Icon,
+  PlusIcon,
+  SettingsIcon,
+  ShieldIcon,
+  Trash2Icon,
+  UsersIcon,
+} from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
+import { api } from "@/lib/api";
 
 export const Route = createFileRoute("/_authed/settings")({
+  validateSearch: (s: Record<string, unknown>) => ({
+    tab:
+      typeof s.tab === "string" && /^(general|secrets|users|scanners)$/.test(s.tab)
+        ? (s.tab as TabKey)
+        : ("general" as TabKey),
+  }),
   component: SettingsPage,
 });
 
+type TabKey = "general" | "secrets" | "users" | "scanners";
+
+const TABS: { key: TabKey; label: string; Icon: typeof SettingsIcon }[] = [
+  { key: "general", label: "General", Icon: SettingsIcon },
+  { key: "secrets", label: "Secrets", Icon: KeyIcon },
+  { key: "users", label: "Users", Icon: UsersIcon },
+  { key: "scanners", label: "Scanners", Icon: ShieldIcon },
+];
+
 function SettingsPage() {
+  const { tab } = Route.useSearch();
+  const navigate = useNavigate();
   return (
-    <div className="p-6 space-y-4 max-w-3xl">
+    <div className="p-6 space-y-6 max-w-4xl">
       <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
-      <EmptyState
-        icon={SettingsIcon}
-        title="Coming soon"
-        description="The full settings panel (API keys, git credentials, AI providers, scan presets) is ported in Phase 2 of the UI rewrite."
-      />
+      <nav className="flex gap-1 border-b border-border/40">
+        {TABS.map(({ key, label, Icon }) => {
+          const active = tab === key;
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => navigate({ to: "/settings", search: { tab: key } })}
+              className={
+                "inline-flex items-center gap-1.5 px-3 h-9 text-sm border-b-2 -mb-px " +
+                (active
+                  ? "border-primary text-foreground"
+                  : "border-transparent text-muted-foreground hover:text-foreground")
+              }
+            >
+              <Icon className="size-4" /> {label}
+            </button>
+          );
+        })}
+      </nav>
+
+      {tab === "general" && <GeneralTab />}
+      {tab === "secrets" && <SecretsTab />}
+      {tab === "users" && <UsersTab />}
+      {tab === "scanners" && <ScannersTab />}
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// General — global toggles backed by GET/PUT /api/settings
+// ---------------------------------------------------------------------------
+
+interface SettingRow {
+  key: string;
+  value: string;
+}
+
+// Knobs we expose. Anything else in the settings KV is left untouched.
+const GENERAL_KNOBS = [
+  {
+    key: "ai_enabled",
+    label: "AI features",
+    help: "Master switch for AI-assisted finding enrichment and fix suggestions. When off, scans complete normally but no AI prompts are issued.",
+    type: "bool" as const,
+  },
+  {
+    key: "scan_concurrency",
+    label: "Scan concurrency",
+    help: "Maximum number of scanner containers run in parallel per scan. Lower this if your host is under-provisioned for memory or CPU.",
+    type: "int" as const,
+    min: 1,
+    max: 32,
+  },
+];
+
+function GeneralTab() {
+  const qc = useQueryClient();
+  const q = useQuery({
+    queryKey: ["settings"],
+    queryFn: async () => {
+      const r = await api.get<SettingRow[] | Record<string, string>>("/settings");
+      // The endpoint returns either an array of {key,value} or a map.
+      // Normalize to a map for the form below.
+      const out: Record<string, string> = {};
+      if (Array.isArray(r.data)) {
+        for (const row of r.data) out[row.key] = row.value;
+      } else if (r.data && typeof r.data === "object") {
+        for (const [k, v] of Object.entries(r.data)) out[k] = String(v);
+      }
+      return out;
+    },
+  });
+  const m = useMutation({
+    mutationFn: (updates: Record<string, string>) => api.put("/settings", updates),
+    onSuccess: () => {
+      toast.success("Settings saved");
+      qc.invalidateQueries({ queryKey: ["settings"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Save failed"),
+  });
+
+  if (q.isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  const settings = q.data ?? {};
+
+  return (
+    <section className="glass-card p-5 space-y-5">
+      {GENERAL_KNOBS.map((knob) => {
+        const current = settings[knob.key] ?? "";
+        return (
+          <div key={knob.key} className="grid md:grid-cols-[1fr_240px] gap-4 items-start">
+            <div>
+              <label className="text-sm font-medium">{knob.label}</label>
+              <p className="text-xs text-muted-foreground mt-0.5">{knob.help}</p>
+            </div>
+            {knob.type === "bool" ? (
+              <BoolToggle
+                value={current === "true"}
+                onChange={(v) => m.mutate({ [knob.key]: v ? "true" : "false" })}
+                disabled={m.isPending}
+              />
+            ) : (
+              <IntInput
+                value={current}
+                min={knob.min}
+                max={knob.max}
+                onCommit={(v) => m.mutate({ [knob.key]: v })}
+                disabled={m.isPending}
+              />
+            )}
+          </div>
+        );
+      })}
+    </section>
+  );
+}
+
+function BoolToggle({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: boolean;
+  onChange: (v: boolean) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!value)}
+      disabled={disabled}
+      className={
+        "inline-flex items-center gap-2 px-3 h-9 rounded-md text-sm border " +
+        (value
+          ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-300"
+          : "bg-muted/40 border-border/40 text-muted-foreground hover:text-foreground") +
+        " disabled:opacity-50"
+      }
+    >
+      <span
+        className={
+          "size-2 rounded-full " + (value ? "bg-emerald-400" : "bg-muted-foreground/50")
+        }
+      />
+      {value ? "Enabled" : "Disabled"}
+    </button>
+  );
+}
+
+function IntInput({
+  value,
+  min,
+  max,
+  onCommit,
+  disabled,
+}: {
+  value: string;
+  min?: number;
+  max?: number;
+  onCommit: (v: string) => void;
+  disabled?: boolean;
+}) {
+  const [draft, setDraft] = useState(value);
+  // Keep draft in sync with server-confirmed value when it changes externally.
+  if (value !== draft && document.activeElement?.tagName !== "INPUT") {
+    setDraft(value);
+  }
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        type="number"
+        value={draft}
+        min={min}
+        max={max}
+        onChange={(e) => setDraft(e.target.value)}
+        className="w-24 h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm tabular-nums"
+        disabled={disabled}
+      />
+      <button
+        type="button"
+        onClick={() => onCommit(draft)}
+        disabled={disabled || draft === value}
+        className="inline-flex items-center gap-1 h-9 px-3 rounded-md bg-primary text-primary-foreground text-sm disabled:opacity-30"
+      >
+        <CheckIcon className="size-3.5" />
+        Save
+      </button>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Secrets — API keys and git tokens. Values are encrypted server-side; the
+// list endpoint returns them masked (last 4 chars only).
+// ---------------------------------------------------------------------------
+
+interface MaskedSecret {
+  id: string;
+  key_type: string;
+  key_name: string;
+  value: string; // masked
+  created_at: string;
+}
+
+const KEY_TYPES = [
+  { value: "github_token", label: "GitHub token" },
+  { value: "gitlab_token", label: "GitLab token" },
+  { value: "anthropic_key", label: "Anthropic API key" },
+  { value: "openai_key", label: "OpenAI API key" },
+  { value: "custom", label: "Custom" },
+];
+
+function SecretsTab() {
+  const qc = useQueryClient();
+  const q = useQuery({
+    queryKey: ["secrets"],
+    queryFn: async () => {
+      const r = await api.get<MaskedSecret[]>("/config/secrets");
+      return r.data ?? [];
+    },
+  });
+  const del = useMutation({
+    mutationFn: (id: string) => api.delete(`/config/secrets/${id}`),
+    onSuccess: () => {
+      toast.success("Secret deleted");
+      qc.invalidateQueries({ queryKey: ["secrets"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Delete failed"),
+  });
+  const create = useMutation({
+    mutationFn: (body: { key_type: string; key_name: string; value: string }) =>
+      api.post("/config/secrets", body),
+    onSuccess: () => {
+      toast.success("Secret added");
+      qc.invalidateQueries({ queryKey: ["secrets"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Create failed"),
+  });
+
+  return (
+    <section className="space-y-4">
+      <NewSecretForm onSubmit={(b) => create.mutate(b)} disabled={create.isPending} />
+      <div className="glass-card overflow-hidden">
+        {q.isLoading ? (
+          <div className="p-5 text-sm text-muted-foreground">Loading…</div>
+        ) : !q.data || q.data.length === 0 ? (
+          <div className="p-5 text-sm text-muted-foreground">No secrets stored.</div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="text-xs text-muted-foreground border-b border-border/30">
+              <tr>
+                <th className="text-left px-4 py-2">Type</th>
+                <th className="text-left px-4 py-2">Name</th>
+                <th className="text-left px-4 py-2">Value</th>
+                <th className="text-right px-4 py-2 w-12"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {q.data.map((s) => (
+                <tr key={s.id} className="border-t border-border/20">
+                  <td className="px-4 py-2 font-mono text-xs">{s.key_type}</td>
+                  <td className="px-4 py-2">{s.key_name}</td>
+                  <td className="px-4 py-2 font-mono text-xs text-muted-foreground">{s.value}</td>
+                  <td className="px-4 py-2 text-right">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (window.confirm(`Delete secret "${s.key_name}"? This cannot be undone.`)) {
+                          del.mutate(s.id);
+                        }
+                      }}
+                      disabled={del.isPending}
+                      className="text-muted-foreground hover:text-destructive disabled:opacity-50"
+                      aria-label="Delete"
+                    >
+                      <Trash2Icon className="size-4" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function NewSecretForm({
+  onSubmit,
+  disabled,
+}: {
+  onSubmit: (b: { key_type: string; key_name: string; value: string }) => void;
+  disabled?: boolean;
+}) {
+  const [keyType, setKeyType] = useState("github_token");
+  const [keyName, setKeyName] = useState("");
+  const [value, setValue] = useState("");
+  return (
+    <form
+      className="glass-card p-4 grid md:grid-cols-[200px_1fr_1fr_auto] gap-2 items-end"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!keyName.trim() || !value) return;
+        onSubmit({ key_type: keyType, key_name: keyName.trim(), value });
+        setKeyName("");
+        setValue("");
+      }}
+    >
+      <Field label="Type">
+        <select
+          value={keyType}
+          onChange={(e) => setKeyType(e.target.value)}
+          className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm"
+        >
+          {KEY_TYPES.map((k) => (
+            <option key={k.value} value={k.value}>
+              {k.label}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <Field label="Name">
+        <input
+          required
+          value={keyName}
+          onChange={(e) => setKeyName(e.target.value)}
+          placeholder="e.g. github-personal"
+          className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm"
+        />
+      </Field>
+      <Field label="Value">
+        <input
+          required
+          type="password"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder="paste secret"
+          className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm font-mono"
+        />
+      </Field>
+      <button
+        type="submit"
+        disabled={disabled || !keyName.trim() || !value}
+        className="inline-flex items-center gap-1 h-9 px-3 rounded-md bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
+      >
+        <PlusIcon className="size-4" /> Add
+      </button>
+    </form>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="block text-xs text-muted-foreground mb-1">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Users — list, create (admin flavor), delete. Self-delete blocked
+// server-side; the UI also hides the delete button on the current user's
+// row as a safety belt.
+// ---------------------------------------------------------------------------
+
+interface UserSummary {
+  id: string;
+  email: string;
+  created_at: string;
+  updated_at: string;
+}
+
+function UsersTab() {
+  const qc = useQueryClient();
+  const meQ = useQuery({
+    queryKey: ["me"],
+    queryFn: async () => (await api.get<{ id: string }>("/auth/me")).data,
+  });
+  const q = useQuery({
+    queryKey: ["users"],
+    queryFn: async () => (await api.get<UserSummary[]>("/users")).data ?? [],
+  });
+  const create = useMutation({
+    mutationFn: (body: { email: string; password: string }) => api.post("/users", body),
+    onSuccess: () => {
+      toast.success("User created");
+      qc.invalidateQueries({ queryKey: ["users"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Create failed"),
+  });
+  const del = useMutation({
+    mutationFn: (id: string) => api.delete(`/users/${id}`),
+    onSuccess: () => {
+      toast.success("User deleted");
+      qc.invalidateQueries({ queryKey: ["users"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Delete failed"),
+  });
+  const meId = meQ.data?.id;
+  return (
+    <section className="space-y-4">
+      <NewUserForm onSubmit={(b) => create.mutate(b)} disabled={create.isPending} />
+      <div className="glass-card overflow-hidden">
+        {q.isLoading ? (
+          <div className="p-5 text-sm text-muted-foreground">Loading…</div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="text-xs text-muted-foreground border-b border-border/30">
+              <tr>
+                <th className="text-left px-4 py-2">Email</th>
+                <th className="text-left px-4 py-2">Created</th>
+                <th className="text-right px-4 py-2 w-12"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {(q.data ?? []).map((u) => {
+                const isMe = u.id === meId;
+                return (
+                  <tr key={u.id} className="border-t border-border/20">
+                    <td className="px-4 py-2">
+                      {u.email}
+                      {isMe && (
+                        <span className="ml-2 text-[10px] uppercase tracking-wide text-muted-foreground">
+                          you
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2 text-xs text-muted-foreground">
+                      {new Date(u.created_at).toLocaleDateString()}
+                    </td>
+                    <td className="px-4 py-2 text-right">
+                      {!isMe && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (window.confirm(`Delete user "${u.email}"? This cannot be undone.`)) {
+                              del.mutate(u.id);
+                            }
+                          }}
+                          disabled={del.isPending}
+                          className="text-muted-foreground hover:text-destructive disabled:opacity-50"
+                          aria-label="Delete"
+                        >
+                          <Trash2Icon className="size-4" />
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function NewUserForm({
+  onSubmit,
+  disabled,
+}: {
+  onSubmit: (b: { email: string; password: string }) => void;
+  disabled?: boolean;
+}) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  return (
+    <form
+      className="glass-card p-4 grid md:grid-cols-[1fr_1fr_auto] gap-2 items-end"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!email.trim() || password.length < 8) return;
+        onSubmit({ email: email.trim().toLowerCase(), password });
+        setEmail("");
+        setPassword("");
+      }}
+    >
+      <Field label="Email">
+        <input
+          required
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="user@example.com"
+          className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm"
+        />
+      </Field>
+      <Field label="Password (≥8 chars)">
+        <input
+          required
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          minLength={8}
+          className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm"
+        />
+      </Field>
+      <button
+        type="submit"
+        disabled={disabled || !email.trim() || password.length < 8}
+        className="inline-flex items-center gap-1 h-9 px-3 rounded-md bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
+      >
+        <PlusIcon className="size-4" /> Add user
+      </button>
+    </form>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Scanners — read-only view of the live container.Config. Editing the
+// scanner backend happens via wolf.yaml + env + restart (per the API
+// comment on /api/scanners/config).
+// ---------------------------------------------------------------------------
+
+interface ScannersConfig {
+  image: string;
+  image_overrides: Record<string, string> | null;
+  pull_policy: string;
+  network: string;
+  memory: string;
+  cpus: string;
+  db_volume: string;
+  host_repos_root: string;
+  in_container_repos_root: string;
+  uid: number;
+  gid: number;
+}
+
+function ScannersTab() {
+  const q = useQuery({
+    queryKey: ["scanners-config"],
+    queryFn: async () => (await api.get<ScannersConfig>("/scanners/config")).data,
+  });
+  if (q.isLoading) {
+    return <p className="text-sm text-muted-foreground">Loading…</p>;
+  }
+  if (q.isError || !q.data) {
+    return (
+      <p className="text-sm text-destructive">
+        Failed to load scanner config — is the container backend initialized?
+      </p>
+    );
+  }
+  const cfg = q.data;
+  const rows: Array<[string, React.ReactNode]> = [
+    ["Default image", <code className="text-xs">{cfg.image}</code>],
+    ["Pull policy", cfg.pull_policy],
+    ["Network", cfg.network],
+    ["Memory", cfg.memory],
+    ["CPUs", cfg.cpus],
+    ["UID:GID", `${cfg.uid}:${cfg.gid}`],
+    ["Vuln-DB volume", <code className="text-xs">{cfg.db_volume || "—"}</code>],
+    [
+      "Host repos root",
+      <code className="text-xs">{cfg.host_repos_root || "—"}</code>,
+    ],
+  ];
+  return (
+    <section className="space-y-4">
+      <div className="glass-card p-5">
+        <p className="text-xs text-muted-foreground mb-3">
+          Read-only — edit via <code>wolf.yaml</code> /{" "}
+          <code>WOLF_SCANNERS_*</code> env, then restart wolf.
+        </p>
+        <dl className="grid md:grid-cols-2 gap-x-6 gap-y-2 text-sm">
+          {rows.map(([k, v]) => (
+            <div key={k} className="flex items-center justify-between gap-3">
+              <dt className="text-muted-foreground">{k}</dt>
+              <dd className="text-right">{v}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+      {cfg.image_overrides && Object.keys(cfg.image_overrides).length > 0 && (
+        <div className="glass-card p-5">
+          <h3 className="text-sm font-medium mb-2">Per-tool image overrides</h3>
+          <ul className="text-sm space-y-1">
+            {Object.entries(cfg.image_overrides).map(([tool, image]) => (
+              <li key={tool} className="flex items-center gap-3 font-mono text-xs">
+                <span className="text-muted-foreground w-24">{tool}</span>
+                <code>{image}</code>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </section>
   );
 }

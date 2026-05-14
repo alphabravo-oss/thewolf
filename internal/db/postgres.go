@@ -117,6 +117,18 @@ func (s *PostgresStore) UpdateUser(ctx context.Context, user *models.User) error
 	return err
 }
 
+func (s *PostgresStore) ListUsers(ctx context.Context) ([]models.User, error) {
+	var users []models.User
+	err := s.db.SelectContext(ctx, &users,
+		`SELECT id, email, password_hash, created_at, updated_at FROM users ORDER BY created_at ASC`)
+	return users, err
+}
+
+func (s *PostgresStore) DeleteUser(ctx context.Context, id string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM users WHERE id = $1`, id)
+	return err
+}
+
 // --- Repos ---
 
 func (s *PostgresStore) CreateRepo(ctx context.Context, repo *models.Repo) error {

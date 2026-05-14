@@ -115,6 +115,12 @@ func NewServer(store db.Store, addr string) *Server {
 				r.Put("/password", routes.ChangePassword)
 			})
 
+			r.Route("/users", func(r chi.Router) {
+				r.Get("/", routes.ListUsers)
+				r.Post("/", routes.CreateUserAdmin)
+				r.Delete("/{id}", routes.DeleteUser)
+			})
+
 			r.Route("/repos", func(r chi.Router) {
 				r.Get("/", routes.ListRepos)
 				r.Post("/", routes.CreateRepo)

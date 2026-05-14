@@ -155,6 +155,23 @@ func (s *SQLiteStore) UpdateUser(ctx context.Context, user *models.User) error {
 	return err
 }
 
+func (s *SQLiteStore) ListUsers(ctx context.Context) ([]models.User, error) {
+	var users []models.User
+	err := s.db.SelectContext(ctx, &users,
+		`SELECT id, email, password_hash, created_at, updated_at FROM users ORDER BY created_at ASC`)
+	return users, err
+}
+
+func (s *SQLiteStore) DeleteUser(ctx context.Context, id string) error {
+	// Cascading deletes (scans, secrets, etc.) are handled by ON DELETE
+	// CASCADE in the migration schema. If they're not, callers should
+	// clean up dependents before invoking this. We don't try to be
+	// clever here — a single DELETE against the users table is the
+	// right primitive.
+	_, err := s.db.ExecContext(ctx, `DELETE FROM users WHERE id = ?`, id)
+	return err
+}
+
 // --- Repos ---
 
 func (s *SQLiteStore) CreateRepo(ctx context.Context, repo *models.Repo) error {
