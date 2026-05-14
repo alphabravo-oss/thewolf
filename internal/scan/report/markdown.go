@@ -116,7 +116,7 @@ func renderMarkdown(cfg ReportConfig) (string, error) {
 	b.WriteString("## Findings by Severity\n\n")
 	for _, sev := range severityOrder {
 		filtered := filterBySeverity(cfg.Findings, sev)
-		title := strings.Title(string(sev)) //nolint:staticcheck
+		title := titleCase(string(sev))
 		fmt.Fprintf(&b, "### %s (%d)\n\n", title, len(filtered))
 
 		if len(filtered) == 0 {
@@ -162,4 +162,19 @@ func renderMarkdown(cfg ReportConfig) (string, error) {
 	b.WriteString("\n")
 
 	return b.String(), nil
+}
+
+// titleCase uppercases the first byte of s and lowercases the rest.
+// Severity values ("critical", "high", "medium", "low", "info") are all
+// lowercase ASCII, so byte-level handling is correct and avoids the
+// deprecated strings.Title (which gets Unicode word boundaries wrong).
+func titleCase(s string) string {
+	if s == "" {
+		return s
+	}
+	b := []byte(s)
+	if b[0] >= 'a' && b[0] <= 'z' {
+		b[0] -= 'a' - 'A'
+	}
+	return string(b)
 }

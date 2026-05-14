@@ -1169,11 +1169,15 @@ func CompareScan(w http.ResponseWriter, r *http.Request) {
 	id2 := chi.URLParam(r, "compareId")
 
 	scan1, err := h.Store.GetScanByID(r.Context(), id1)
-
-
+	if err != nil {
+		response.WriteError(w, http.StatusNotFound, "not_found", fmt.Sprintf("scan %s not found", id1))
+		return
+	}
 	scan2, err := h.Store.GetScanByID(r.Context(), id2)
-
-
+	if err != nil {
+		response.WriteError(w, http.StatusNotFound, "not_found", fmt.Sprintf("scan %s not found", id2))
+		return
+	}
 	findings1, err := h.Store.ListFindingsByScan(r.Context(), id1)
 	if err != nil {
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to list findings for scan1")
@@ -1841,19 +1845,6 @@ func buildReportConfig(h *Handler, r *http.Request, scan *models.Scan) (report.R
 }
 
 // findArtifact looks up a scan artifact by type.
-func findArtifact(h *Handler, r *http.Request, scanID string, artifactType models.ArtifactType) (*models.ScanArtifact, error) {
-	artifacts, err := h.Store.ListScanArtifacts(r.Context(), scanID)
-	if err != nil {
-		return nil, err
-	}
-	for _, a := range artifacts {
-		if a.ArtifactType == artifactType {
-			return &a, nil
-		}
-	}
-	return nil, fmt.Errorf("artifact of type %s not found", artifactType)
-}
-
 // parsePagination extracts page and per_page from query params with defaults.
 func parsePagination(r *http.Request) (page, perPage int) {
 	page = 1
@@ -1867,11 +1858,6 @@ func parsePagination(r *http.Request) (page, perPage int) {
 	// Accept legacy `limit` as an alias for `per_page` — earlier UI code
 	// used limit=, and there's no good reason to error or silently use
 	// the default when the client clearly means the same thing.
-	if v := r.URL.Query().Get("per_page"); v == "" {
-		if v2 := r.URL.Query().Get("limit"); v2 != "" {
-			v = v2
-		}
-	}
 	if v := r.URL.Query().Get("per_page"); v != "" {
 		if pp, err := strconv.Atoi(v); err == nil && pp > 0 {
 			if pp > 50000 {

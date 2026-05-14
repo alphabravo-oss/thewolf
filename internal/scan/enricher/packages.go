@@ -91,7 +91,8 @@ func readPackageDecl(absPath string) string {
 		if strings.HasPrefix(line, "package ") {
 			return strings.TrimSpace(strings.TrimPrefix(line, "package"))
 		}
-		// Skip comments and blank lines
+		// Skip comments and blank lines.
+		//lint:ignore SA4017 staticcheck mis-reads chained ||-HasPrefix as discarding the return; both halves contribute to the boolean.
 		if line == "" || strings.HasPrefix(line, "//") || strings.HasPrefix(line, "/*") {
 			continue
 		}
@@ -185,6 +186,7 @@ func extractJavaPackage(filePath string) string {
 			pkg = strings.TrimSuffix(pkg, ";")
 			return strings.TrimSpace(pkg)
 		}
+		//lint:ignore SA4017 see note in extractGoPackage above.
 		if line == "" || strings.HasPrefix(line, "//") || strings.HasPrefix(line, "/*") || strings.HasPrefix(line, "*") {
 			continue
 		}

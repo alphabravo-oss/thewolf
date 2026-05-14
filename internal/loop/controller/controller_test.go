@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/alphabravocompany/thewolf/internal/fix/engine"
 	"github.com/alphabravocompany/thewolf/internal/loop/tracker"
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
@@ -36,29 +35,6 @@ func (m *mockPlugin) Execute(_ context.Context, _ models.ExecuteOpts) ([]models.
 		return nil, m.execErr
 	}
 	return m.findings, nil
-}
-
-// --- Mock Fix Engine ---
-
-type mockFixEngine struct {
-	name      string
-	available bool
-	fixCount  int
-	fixErr    error
-}
-
-func (m *mockFixEngine) Name() string { return m.name }
-func (m *mockFixEngine) Available() bool { return m.available }
-
-func (m *mockFixEngine) Fix(_ context.Context, _ engine.FixRequest) (*engine.FixResult, error) {
-	m.fixCount++
-	if m.fixErr != nil {
-		return nil, m.fixErr
-	}
-	return &engine.FixResult{
-		Success: true,
-		Output:  "fixed",
-	}, nil
 }
 
 // --- Helper ---

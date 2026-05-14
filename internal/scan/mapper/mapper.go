@@ -255,12 +255,7 @@ func RunCloc(repoPath string) (map[string]FileStats, map[string]int, error) {
 			rel = key
 		}
 
-		fileStats[rel] = FileStats{
-			Language: entry.Language,
-			Code:     entry.Code,
-			Comment:  entry.Comment,
-			Blank:    entry.Blank,
-		}
+		fileStats[rel] = FileStats(entry)
 		locSummary[entry.Language] += entry.Code
 	}
 

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -240,17 +239,3 @@ func toJSON(v interface{}) string {
 	return string(b)
 }
 
-func parseSeverities(s string) []models.Severity {
-	if s == "" {
-		return nil
-	}
-	parts := strings.Split(s, ",")
-	var result []models.Severity
-	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if p != "" {
-			result = append(result, models.Severity(p))
-		}
-	}
-	return result
-}
