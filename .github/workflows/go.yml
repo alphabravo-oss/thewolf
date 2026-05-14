@@ -1,6 +1,11 @@
 # Build + test the wolf Go module on every push and PR.
 name: Go
 
+# Least-privilege default — jobs that need write access can opt in
+# at the job level. Satisfies Checkov CKV2_GHA_1 / KICS GHA-perms.
+permissions:
+  contents: read
+
 on:
   push:
     branches: [main]

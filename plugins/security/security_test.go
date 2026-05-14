@@ -33,6 +33,10 @@ func TestPluginMetadata(t *testing.T) {
 }
 
 func TestParseDetectSecretsOutput(t *testing.T) {
+	// Fixture mixes a high-noise KeywordDetector hit (filtered) and a
+	// pattern-based AWS key hit (kept). The parser drops KeywordDetector
+	// because its signal-to-noise on real codebases is too poor; see the
+	// detectSecretsNoiseTypes map.
 	data := []byte(`{
 		"results": {
 			"config/settings.py": [
@@ -54,8 +58,11 @@ func TestParseDetectSecretsOutput(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parseDetectSecretsOutput returned error: %v", err)
 	}
-	if len(findings) != 2 {
-		t.Fatalf("expected 2 findings, got %d", len(findings))
+	if len(findings) != 1 {
+		t.Fatalf("expected 1 finding (Secret Keyword filtered, AWS Access Key kept), got %d", len(findings))
+	}
+	if findings[0].Title != `Potential AWS Access Key detected` {
+		t.Errorf("kept finding should be AWS Access Key, got title=%q", findings[0].Title)
 	}
 
 	for _, f := range findings {

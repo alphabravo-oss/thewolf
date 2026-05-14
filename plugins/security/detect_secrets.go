@@ -60,6 +60,18 @@ type detectSecretsResult struct {
 	HashedSecret string `json:"hashed_secret"`
 }
 
+// detectSecretsNoiseTypes lists detect-secrets detector types whose
+// signal-to-noise is too poor to surface by default. KeywordDetector
+// (Type="Secret Keyword") flags every line that *mentions* "secret",
+// "password", "key", "token" as a substring — comments, variable
+// names, docstrings, test fixtures. Yelp themselves document it as
+// best-treated-as-baseline-only. We drop it; the other detectors
+// (AWS, GitHub, AzureStorage, BasicAuth with credentials, high-
+// entropy strings) are pattern-based and stay enabled.
+var detectSecretsNoiseTypes = map[string]bool{
+	"Secret Keyword": true,
+}
+
 func parseDetectSecretsOutput(data []byte) ([]models.Finding, error) {
 	var output detectSecretsOutput
 	if err := json.Unmarshal(plugin.ExtractJSON(data), &output); err != nil {
@@ -69,6 +81,9 @@ func parseDetectSecretsOutput(data []byte) ([]models.Finding, error) {
 	var findings []models.Finding
 	for file, secrets := range output.Results {
 		for i, s := range secrets {
+			if detectSecretsNoiseTypes[s.Type] {
+				continue
+			}
 			findings = append(findings, models.Finding{
 				ToolName:    "detect-secrets",
 				Category:    models.CategorySecrets,
