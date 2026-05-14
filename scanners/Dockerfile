@@ -37,13 +37,16 @@ ENV DEBIAN_FRONTEND=noninteractive \
 # Base packages. Note we no longer need libicu-dev (scancode is upstream)
 # or libxml2-dev (semgrep is upstream).
 #
-# Debian 13 (trixie) DROPPED the standalone `npm` package — it's no
-# longer in the apt indices. Trixie ships `node-corepack` (bundled
-# with nodejs) which is a shim that fetches npm/yarn/pnpm on demand.
-# After installing nodejs we enable corepack and pin npm@latest so
-# `which npm` resolves to a real binary at scan time.
+# Node is installed from the NodeSource apt repo because Debian 13
+# (trixie) dropped the standalone `npm` package, and the bundled
+# corepack only writes shims to user-scope (~/.cache/node/...) which
+# doesn't resolve at scan time when we run as root in CI / wolf as a
+# different uid. NodeSource's nodejs package bundles npm in /usr/bin.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        ca-certificates curl wget unzip tar gzip xz-utils \
+        ca-certificates curl wget gnupg \
+    && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get update && apt-get install -y --no-install-recommends \
+        unzip tar gzip xz-utils \
         git jq \
         python3 python3-pip python3-venv python3-dev \
         nodejs \
@@ -51,8 +54,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         php-cli \
         build-essential pkg-config \
         libssl-dev libffi-dev \
-    && corepack enable \
-    && corepack prepare npm@latest --activate \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
