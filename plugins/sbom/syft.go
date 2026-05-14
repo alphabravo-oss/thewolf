@@ -67,34 +67,19 @@ type syftArtifact struct {
 	} `json:"locations"`
 }
 
+// parseSyftOutput validates that the syft JSON is well-formed but does
+// NOT emit Findings rows — syft produces an SBOM (inventory), not
+// vulnerabilities. Emitting one Finding per package as severity=info
+// polluted the findings table with hundreds of non-issues that the UI
+// then had to filter. The SBOM itself is preserved via the standard
+// scanner-artifact persistence (syft.json under the scan artifact dir),
+// which is the correct place to surface inventory data.
 func parseSyftOutput(data []byte) ([]models.Finding, error) {
 	var output syftOutput
 	if err := json.Unmarshal(plugin.ExtractJSON(data), &output); err != nil {
 		return nil, fmt.Errorf("failed to parse syft output: %w", err)
 	}
-
-	findings := make([]models.Finding, 0, len(output.Artifacts))
-	for _, a := range output.Artifacts {
-		filePath := ""
-		if len(a.Locations) > 0 {
-			filePath = a.Locations[0].Path
-		}
-
-		license := ""
-		if len(a.Licenses) > 0 {
-			license = a.Licenses[0].Value
-		}
-
-		findings = append(findings, models.Finding{
-			ToolName:    "syft",
-			Category:    models.CategorySBOM,
-			Severity:    models.SeverityInfo,
-			Title:       fmt.Sprintf("Package: %s@%s (%s)", a.Name, a.Version, a.Type),
-			Description: fmt.Sprintf("Package %s version %s, type: %s, language: %s, license: %s", a.Name, a.Version, a.Type, a.Language, license),
-			FilePath:    filePath,
-			RuleID:      fmt.Sprintf("sbom-%s-%s", a.Name, a.Version),
-			Status:      models.StatusOpen,
-		})
-	}
-	return findings, nil
+	// Output is intentionally discarded after validation — see comment above.
+	_ = output
+	return nil, nil
 }

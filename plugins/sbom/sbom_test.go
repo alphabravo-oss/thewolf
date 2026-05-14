@@ -7,6 +7,11 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/models"
 )
 
+// TestParseSyftOutput verifies that parseSyftOutput validates a real
+// syft JSON payload and intentionally returns NO findings. Syft
+// produces an SBOM (inventory of packages), not vulnerabilities — the
+// SBOM is persisted as the syft.json scan artifact, not as Finding
+// rows. See parseSyftOutput's comment for the rationale.
 func TestParseSyftOutput(t *testing.T) {
 	data, err := os.ReadFile("testdata/syft_output.json")
 	if err != nil {
@@ -18,24 +23,14 @@ func TestParseSyftOutput(t *testing.T) {
 		t.Fatalf("parseSyftOutput returned error: %v", err)
 	}
 
-	if len(findings) != 2 {
-		t.Fatalf("expected 2 findings, got %d", len(findings))
-	}
-
-	f := findings[0]
-	if f.ToolName != "syft" {
-		t.Errorf("expected tool name syft, got %s", f.ToolName)
-	}
-	if f.Category != models.CategorySBOM {
-		t.Errorf("expected category sbom, got %s", f.Category)
-	}
-	if f.Severity != models.SeverityInfo {
-		t.Errorf("expected severity info, got %s", f.Severity)
-	}
-	if f.FilePath != "node_modules/express/package.json" {
-		t.Errorf("expected file path node_modules/express/package.json, got %s", f.FilePath)
+	if len(findings) != 0 {
+		t.Fatalf("expected 0 findings (syft is inventory, not vulns); got %d", len(findings))
 	}
 }
+
+// Keep an unused-import guard so the models package stays imported as
+// other tests in this file reference it.
+var _ = models.CategorySBOM
 
 func TestSyftPluginMetadata(t *testing.T) {
 	p := &SyftPlugin{}
