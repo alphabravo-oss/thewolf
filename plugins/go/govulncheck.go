@@ -49,6 +49,9 @@ func (p *GovulncheckPlugin) Execute(ctx context.Context, opts models.ExecuteOpts
 			ExtraEnv: map[string]string{
 				"HOME": "/tmp",
 				"PATH": "/usr/local/go-toolchain/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+				// Use whatever Go is in the container — don't try to
+				// auto-download a newer one (read-only rootfs blocks it).
+				"GOTOOLCHAIN": "local",
 			},
 		},
 		"govulncheck", "-json", "./...")

@@ -53,6 +53,16 @@ func (p *StaticcheckPlugin) Execute(ctx context.Context, opts models.ExecuteOpts
 			ExtraEnv: map[string]string{
 				"HOME": "/tmp",
 				"PATH": "/usr/local/go-toolchain/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+				// GOTOOLCHAIN=local disables Go's auto-download of a
+				// newer toolchain when go.mod's `go` directive is
+				// ahead of the container's installed Go. Auto-download
+				// writes into $GOTOOLDIR which is read-only under our
+				// --read-only root and fails with 'permission denied',
+				// killing the whole staticcheck run. With GOTOOLCHAIN
+				// pinned to 'local', Go uses whatever's installed in
+				// the container; if that's too old to parse the source,
+				// the failure message is at least diagnosable.
+				"GOTOOLCHAIN": "local",
 			},
 		},
 		"staticcheck", "-f", "json", "./...")

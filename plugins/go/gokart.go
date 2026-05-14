@@ -56,8 +56,9 @@ func (p *GoKartPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]
 			RepoDir: opts.RepoPath,
 			WorkDir: container.ContainerSubPath(opts.RepoPath, goDir),
 			ExtraEnv: map[string]string{
-				"HOME": "/tmp",
-				"PATH": "/usr/local/go-toolchain/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+				"HOME":        "/tmp",
+				"PATH":        "/usr/local/go-toolchain/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+				"GOTOOLCHAIN": "local",
 			},
 		},
 		"gokart", "scan", "-o", "json", "./...")
