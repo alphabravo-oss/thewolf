@@ -116,15 +116,20 @@ func TestWriteAll_SuppressionIntegration(t *testing.T) {
 			RuleID: "generic-api-key", FineCategory: "hardcoded-secret", FixStrategyID: "rotate-and-remove-secret",
 			Status: models.StatusOpen,
 		},
-		// Should be suppressed by default:test-file-secrets (category-scoped)
+		// Should be suppressed by default:test-file:go (catches all
+		// findings in _test.go files; the category-scoped narrow rule
+		// was replaced when we expanded test-file detection across
+		// languages — see internal/scan/suppress/defaults.go).
 		{
 			ToolName: "gitleaks", Severity: models.SeverityHigh,
 			Title: "aws-access-token", FilePath: "internal/foo/bar_test.go", LineStart: 5,
 			RuleID: "aws-access-token", FineCategory: "hardcoded-secret", FixStrategyID: "rotate-and-remove-secret",
 			Status: models.StatusOpen,
 		},
-		// SQL injection in a test file — should NOT be suppressed (only
-		// hardcoded-secret is suppressed in test files).
+		// SQL injection in a test file — also suppressed under the new
+		// 'all categories in test files' rule. A real bug in a test file
+		// indicates a test bug, not a production security issue; if you
+		// genuinely need to scan a test, negate via .wolfignore.
 		{
 			ToolName: "gosec", Severity: models.SeverityHigh,
 			Title: "G201", FilePath: "internal/foo/bar_test.go", LineStart: 7,
@@ -170,8 +175,9 @@ func TestWriteAll_SuppressionIntegration(t *testing.T) {
 	}
 
 	// FIX-ALL.md must show the appendix and reference all suppressed reasons.
+	// 4 suppressed: vendor, .next, two in *_test.go (secret + sql-injection).
 	fall, _ := os.ReadFile(res.FixAll)
-	if !strings.Contains(string(fall), "Suppressed (3 findings)") {
+	if !strings.Contains(string(fall), "Suppressed (4 findings)") {
 		t.Errorf("FIX-ALL.md missing suppressed appendix: %s", string(fall))
 	}
 	if !strings.Contains(string(fall), "default:vendor") ||
@@ -179,14 +185,14 @@ func TestWriteAll_SuppressionIntegration(t *testing.T) {
 		t.Error("FIX-ALL.md appendix missing expected reasons")
 	}
 
-	// manifest.json counts are correct.
+	// manifest.json counts are correct: 4 suppressed, 1 visible.
 	mdata, _ := os.ReadFile(res.Manifest)
 	mtxt := string(mdata)
-	if !strings.Contains(mtxt, `"suppressed": 3`) {
-		t.Errorf("manifest counts.suppressed != 3, got: %s", mtxt)
+	if !strings.Contains(mtxt, `"suppressed": 4`) {
+		t.Errorf("manifest counts.suppressed != 4, got: %s", mtxt)
 	}
-	if !strings.Contains(mtxt, `"visible": 2`) {
-		t.Errorf("manifest counts.visible != 2, got: %s", mtxt)
+	if !strings.Contains(mtxt, `"visible": 1`) {
+		t.Errorf("manifest counts.visible != 1, got: %s", mtxt)
 	}
 }
 
