@@ -6,7 +6,8 @@ BINARY      := wolf
 MODULE      := github.com/alphabravocompany/thewolf
 CMD         := ./cmd/wolf/
 BUILD_DIR   := ./build
-UI_DIR      := ./ui
+UI_DIR      := ./ui-next
+UI_LEGACY_DIR := ./ui
 
 # Version info
 VERSION     ?= $(shell git describe --tags --always 2>/dev/null || echo dev)
@@ -81,20 +82,24 @@ fmt:
 	gofmt -s -w .
 	@echo "==> Done"
 
-## ui-build: Build the Next.js UI
+## ui-build: Build the v2 Vite UI (ui-next/)
 ui-build:
-	@echo "==> Building UI..."
+	@echo "==> Building Wolf UI (Vite)..."
 	@if [ -f $(UI_DIR)/package.json ]; then \
-		cd $(UI_DIR) && npm ci && NEXT_TELEMETRY_DISABLED=1 npm run build; \
+		cd $(UI_DIR) && npm ci && npm run build; \
 	else \
-		echo "==> No UI package.json found, skipping"; \
+		echo "==> No UI package.json found at $(UI_DIR), skipping"; \
 	fi
 
-## dev: Start backend (Air live-reload) + frontend (Next.js HMR) together
+## ui-dev-install: One-time install for local dev (after a fresh clone)
+ui-dev-install:
+	cd $(UI_DIR) && npm install
+
+## dev: Start backend (Air live-reload) + frontend (Vite HMR) together
 dev:
 	@echo "==> Starting dev environment (API + UI)..."
 	@echo "    API:  http://localhost:8778"
-	@echo "    UI:   http://localhost:3000"
+	@echo "    UI:   http://localhost:3000  (proxies /api → :8778)"
 	@echo ""
 	@mkdir -p $(BUILD_DIR)/tmp
 	@trap 'kill 0' EXIT; \
@@ -108,12 +113,12 @@ dev-api:
 	@mkdir -p $(BUILD_DIR)/tmp
 	$(AIR)
 
-## dev-ui: Start only the Next.js UI dev server
+## dev-ui: Start only the Vite UI dev server
 dev-ui:
 	@if [ -f $(UI_DIR)/package.json ]; then \
 		cd $(UI_DIR) && npm run dev; \
 	else \
-		echo "==> No UI package.json found"; \
+		echo "==> No UI package.json found at $(UI_DIR)"; \
 	fi
 
 ## ui-dev: (alias) Start UI development server
@@ -232,7 +237,8 @@ clean:
 	@echo "==> Cleaning..."
 	rm -rf $(BUILD_DIR)
 	rm -f $(BINARY)
-	@if [ -d $(UI_DIR)/.next ]; then rm -rf $(UI_DIR)/.next; fi
+	@if [ -d $(UI_DIR)/dist ]; then rm -rf $(UI_DIR)/dist; fi
+	@if [ -d $(UI_LEGACY_DIR)/.next ]; then rm -rf $(UI_LEGACY_DIR)/.next; fi
 	@if [ -d $(UI_DIR)/out ]; then rm -rf $(UI_DIR)/out; fi
 	@echo "==> Clean"
 

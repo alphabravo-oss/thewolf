@@ -78,15 +78,18 @@ func NewServer(store db.Store, addr string) *Server {
 		AllowCredentials: true,
 		MaxAge:           300,
 	}))
-	r.Use(func(next http.Handler) http.Handler {
+	// JSON content-type middleware: scoped to /api/* only so the SPA's
+	// HTML/CSS/JS assets keep their correct types.
+	jsonContentType := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			next.ServeHTTP(w, r)
 		})
-	})
+	}
 
 	// Mount routes
 	r.Route("/api", func(r chi.Router) {
+		r.Use(jsonContentType)
 		// Public endpoints
 		r.Group(func(r chi.Router) {
 			r.Get("/health", routes.Health)
@@ -213,6 +216,10 @@ func NewServer(store db.Store, addr string) *Server {
 			r.Get("/collections/{id}/metrics", routes.CollectionMetrics)
 		})
 	})
+
+	// Static UI (SPA) — mounted AFTER /api so /api/* routes always win.
+	// Discovery: WOLF_UI_DIR env > /usr/share/wolf/ui/dist > ./ui-next/dist > ./dist.
+	MountStaticUI(r, os.Getenv("WOLF_UI_DIR"))
 
 	srv := &Server{
 		Router: r,

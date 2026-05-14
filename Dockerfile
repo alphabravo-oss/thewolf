@@ -29,19 +29,19 @@ RUN CGO_ENABLED=1 go build \
     -o /wolf ./cmd/wolf/
 
 # ============================================================
-# Stage 2: Build the Next.js UI
+# Stage 2: Build the v2 Vite UI (ui-next/)
 # ============================================================
 FROM node:20-alpine AS ui-builder
 
-WORKDIR /app/ui
+WORKDIR /app/ui-next
 
-COPY ui/package.json ui/package-lock.json* ./
-RUN if [ -f package.json ]; then npm ci --prefer-offline; fi
+# Install deps from the lockfile first for caching.
+COPY ui-next/package.json ui-next/package-lock.json ./
+RUN npm ci --prefer-offline --no-audit --no-fund
 
-COPY ui/ ./
-RUN if [ -f package.json ]; then \
-        NEXT_TELEMETRY_DISABLED=1 npm run build; \
-    fi
+# Build the SPA.
+COPY ui-next/ ./
+RUN npm run build
 
 # ============================================================
 # Stage 3: Minimal runtime
@@ -61,12 +61,9 @@ RUN apk add --no-cache ca-certificates tzdata docker-cli \
 
 COPY --from=builder /wolf /usr/local/bin/wolf
 
-# Copy UI build output if it exists
-COPY --from=ui-builder /app/ui/.next/standalone /usr/share/wolf/ui/standalone 2>/dev/null || true
-COPY --from=ui-builder /app/ui/.next/static /usr/share/wolf/ui/static 2>/dev/null || true
-COPY --from=ui-builder /app/ui/public /usr/share/wolf/ui/public 2>/dev/null || true
-# Fallback: copy static export if standalone not available
-COPY --from=ui-builder /app/ui/out /usr/share/wolf/ui/out 2>/dev/null || true
+# Copy the SPA build output. The Go server's MountStaticUI auto-discovers
+# this path; WOLF_UI_DIR can override it.
+COPY --from=ui-builder /app/ui-next/dist /usr/share/wolf/ui/dist
 
 RUN mkdir -p /home/wolf/.wolf \
     && chown -R wolf:wolf /home/wolf/.wolf

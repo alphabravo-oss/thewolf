@@ -6,8 +6,11 @@ import { Sidebar } from "./sidebar";
 import { Topbar } from "./topbar";
 import { CommandPalette } from "./command-palette";
 import { ShortcutsOverlay } from "./shortcuts-overlay";
+import { useRouteShortcuts } from "@/lib/route-shortcuts";
 
 export function AppShell() {
+  // `g <letter>` route shortcuts — registered once at the shell.
+  useRouteShortcuts();
   return (
     <div className="flex min-h-screen bg-background text-foreground">
       <Sidebar />
