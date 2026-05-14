@@ -1,0 +1,68 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":semanticCommits",
+    ":pinDigests",
+    ":dependencyDashboard",
+    ":enableVulnerabilityAlerts",
+    "schedule:weekly"
+  ],
+  "timezone": "America/New_York",
+  "labels": ["dependencies"],
+  "prHourlyLimit": 4,
+  "prConcurrentLimit": 10,
+  "rangeStrategy": "bump",
+  "packageRules": [
+    {
+      "description": "Auto-merge patch + minor for everything except UI majors. Patch is safe by definition; minor is library-author-promised-non-breaking.",
+      "matchUpdateTypes": ["patch", "minor", "pin", "digest"],
+      "automerge": true,
+      "automergeType": "branch",
+      "platformAutomerge": true
+    },
+    {
+      "description": "Group all Go indirect deps into one PR each cycle — they're rarely user-visible and reduce review churn.",
+      "matchManagers": ["gomod"],
+      "matchDepTypes": ["indirect"],
+      "groupName": "go-indirect"
+    },
+    {
+      "description": "Group GitHub Actions digest updates together — pinDigests creates a lot of tiny PRs otherwise.",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["digest"],
+      "groupName": "gha-digests"
+    },
+    {
+      "description": "Major bumps for our charmbracelet TUI stack travel together (bubbletea + lipgloss).",
+      "matchPackagePatterns": ["^github.com/charmbracelet/"],
+      "matchUpdateTypes": ["major"],
+      "groupName": "charmbracelet-v2"
+    },
+    {
+      "description": "tailwindcss + tailwind-merge move together; the merge package's API tracks tailwind majors.",
+      "matchPackageNames": ["tailwindcss", "tailwind-merge"],
+      "groupName": "tailwind"
+    },
+    {
+      "description": "vite + plugin-react move together; the plugin's compatibility table tracks vite majors.",
+      "matchPackageNames": ["vite", "@vitejs/plugin-react"],
+      "groupName": "vite"
+    },
+    {
+      "description": "Scanner-image base bumps need a coordinated rebuild of all 4 bucket images plus the main wolf Dockerfile. Keep them in one PR.",
+      "matchManagers": ["dockerfile"],
+      "matchPackageNames": ["golang", "debian", "alpine", "node"],
+      "matchUpdateTypes": ["major"],
+      "groupName": "container-bases"
+    }
+  ],
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "labels": ["security"]
+  },
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 5am on monday"]
+  }
+}
