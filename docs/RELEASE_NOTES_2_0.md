@@ -41,6 +41,7 @@ The default `wolf-scanners` image contains 35+ tools:
   cppcheck (C/C++); shellcheck (shell); sqlfluff (SQL)
 
 Optional images:
+
 - `wolf-scanners-jvm` — infer, pmd (for Java/Kotlin/C++ scanning that needs a JDK)
 - `wolf-scanners-rust` — clippy + the rust toolchain
 - `wolf-scanners-codeql` — CodeQL (license-restricted to open-source unless you

@@ -17,7 +17,7 @@ Operators pull only the images their repos need. A typical Python/JS shop never 
 
 ## Layout
 
-```
+```text
 scanners/
 ├── Dockerfile           # default image (core + small lang tools)
 ├── Dockerfile.jvm       # JVM bucket
@@ -50,7 +50,7 @@ scanners/
 
 ## Building locally
 
-```
+```shell
 # From repo root
 make scanners-build            # builds default wolf-scanners:dev
 make scanners-build-jvm        # builds wolf-scanners-jvm:dev

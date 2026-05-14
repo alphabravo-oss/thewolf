@@ -19,7 +19,7 @@ The new Wolf UI. Replaces the Next.js-based `ui/` directory.
 
 ## Layout
 
-```
+```text
 src/
   routes/                    Route files (TanStack Router auto-discovers).
     __root.tsx               Root (devtools mount).
@@ -59,14 +59,14 @@ src/
 
 ## Dev
 
-```
+```shell
 npm install
 npm run dev    # localhost:3000, proxies /api → :8778
 ```
 
 ## Build
 
-```
+```shell
 npm run build           # → dist/
 npm run typecheck       # tsc --noEmit
 ```

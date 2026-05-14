@@ -79,7 +79,7 @@ wolf version
 
 ## Architecture
 
-```
+```text
 cmd/wolf/                    CLI entrypoint (cobra; serve / scan / doctor / pull / version)
 internal/
   api/                       HTTP server, routes (incl. /api/scanners/*), SSE broker, middleware
