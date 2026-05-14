@@ -7,8 +7,30 @@ services:
         VERSION: ${WOLF_VERSION:-dev}
         COMMIT: ${WOLF_COMMIT:-unknown}
         BUILD_DATE: ${WOLF_BUILD_DATE:-unknown}
+    # Bind to 127.0.0.1 by default so the API isn't exposed on a
+    # public interface unless the operator explicitly overrides
+    # WOLF_BIND (KICS d6355c88 / 1c1325ff). Override with
+    # WOLF_BIND=0.0.0.0 for a deployment that fronts wolf behind
+    # a reverse proxy on a non-localhost interface.
     ports:
-      - "${WOLF_PORT:-8778}:8778"
+      - "${WOLF_BIND:-127.0.0.1}:${WOLF_PORT:-8778}:8778"
+    # Drop all Linux capabilities (KICS 451d79dc), keep only what
+    # wolf needs to write its sqlite db and spawn child scanners
+    # via the mounted docker socket (no extra caps required).
+    cap_drop:
+      - ALL
+    # Prevent privilege escalation inside the container — child
+    # processes can't gain new privs via setuid/setgid binaries
+    # (KICS 610e266e). The docker-socket mount is the real risk
+    # vector here; this hardens the surrounding container.
+    security_opt:
+      - no-new-privileges:true
+    # Read-only root filesystem (KICS ce76b7d0). Wolf writes only
+    # to /home/wolf/.wolf (the data volume below) and /tmp (which
+    # tmpfs covers via volumes).
+    read_only: true
+    tmpfs:
+      - /tmp
     volumes:
       - wolf-data:/home/wolf/.wolf
       # Mount the docker socket so wolf-slim can spawn scanner containers
@@ -63,12 +85,34 @@ services:
 
   postgres:
     image: postgres:16-alpine
+    # Pull the password from a docker secret rather than baking the
+    # literal env. POSTGRES_PASSWORD_FILE is honored by the official
+    # postgres image. For local dev a sane default still lands at
+    # the named secret below (created lazily from POSTGRES_PASSWORD).
+    # Operators in real environments set the secret via docker
+    # secret create or compose secrets: { external: true } — never
+    # commit the value (KICS 487f4be7).
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-wolf}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-wolf}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
       POSTGRES_DB: ${POSTGRES_DB:-wolf}
+    secrets:
+      - postgres_password
+    # Bind to 127.0.0.1 so postgres isn't reachable from outside the
+    # host (KICS d6355c88).
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "${POSTGRES_BIND:-127.0.0.1}:${POSTGRES_PORT:-5432}:5432"
+    cap_drop:
+      - ALL
+    cap_add:
+      # postgres needs to chown the data dir on first init.
+      - CHOWN
+      - FOWNER
+      - SETUID
+      - SETGID
+      - DAC_READ_SEARCH
+    security_opt:
+      - no-new-privileges:true
     volumes:
       - pg-data:/var/lib/postgresql/data
     networks:
@@ -98,3 +142,12 @@ volumes:
   pg-data:
   # Named volume for vuln-DB caches shared across all scanner-container runs.
   wolf-scanners-db:
+
+# Compose secrets — the postgres password lands here on dev machines
+# via the POSTGRES_PASSWORD env (compose substitutes into the file at
+# create time). In production, the operator should switch to:
+#   external: true
+# and provision the secret via `docker secret create postgres_password ...`.
+secrets:
+  postgres_password:
+    environment: POSTGRES_PASSWORD
