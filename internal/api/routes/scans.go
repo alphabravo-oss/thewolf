@@ -1836,10 +1836,25 @@ func parsePagination(r *http.Request) (page, perPage int) {
 			page = p
 		}
 	}
+	// Accept legacy `limit` as an alias for `per_page` — earlier UI code
+	// used limit=, and there's no good reason to error or silently use
+	// the default when the client clearly means the same thing.
+	if v := r.URL.Query().Get("per_page"); v == "" {
+		if v2 := r.URL.Query().Get("limit"); v2 != "" {
+			v = v2
+		}
+	}
 	if v := r.URL.Query().Get("per_page"); v != "" {
 		if pp, err := strconv.Atoi(v); err == nil && pp > 0 {
-			if pp > 5000 {
-				pp = 5000
+			if pp > 50000 {
+				pp = 50000
+			}
+			perPage = pp
+		}
+	} else if v := r.URL.Query().Get("limit"); v != "" {
+		if pp, err := strconv.Atoi(v); err == nil && pp > 0 {
+			if pp > 50000 {
+				pp = 50000
 			}
 			perPage = pp
 		}

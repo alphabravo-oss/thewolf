@@ -46,11 +46,14 @@ function ScanDetailPage() {
   const findingsQ = useQuery({
     queryKey: ["scan", scanId, "findings", includeSuppressed],
     queryFn: async () => {
-      const q = new URLSearchParams({ limit: "20000" });
+      // API caps per_page at 50000 — plenty for any single-scan view.
+      // If you ever exceed that, switch to server-side pagination.
+      const q = new URLSearchParams({ per_page: "50000" });
       if (includeSuppressed) q.set("include_suppressed", "true");
       const r = await api.get<Finding[]>(`/scans/${scanId}/findings?${q.toString()}`);
       return {
         items: r.data ?? [],
+        total: r.meta?.total ?? 0,
         suppressed: r.meta?.suppressed ?? 0,
       };
     },
@@ -65,6 +68,12 @@ function ScanDetailPage() {
 
   const findings = findingsQ.data?.items ?? [];
   const serverSuppressed = findingsQ.data?.suppressed ?? 0;
+  const serverTotal = findingsQ.data?.total ?? 0;
+  // The DB persists per-tool findings *before* dedup, so the raw row
+  // count == visible + suppressed. The scan record's finding_count is
+  // post-dedup and may not match — we prefer the DB-reported numbers
+  // because they reconcile with what the table actually shows.
+  const rawTotal = serverTotal + (includeSuppressed ? 0 : serverSuppressed);
 
   // Distinct tools + per-tool counts → drives the tool filter.
   const toolCounts = useMemo(() => {
@@ -202,8 +211,20 @@ function ScanDetailPage() {
             {completed.length}/{selected.length} tools completed
             {failed.length > 0 && (
               <span className="text-red-400"> · {failed.length} failed</span>
-            )}{" "}
-            · {scan.finding_count.toLocaleString()} findings
+            )}
+            {" · "}
+            {rawTotal > 0 ? (
+              <>
+                {serverTotal.toLocaleString()} visible
+                {serverSuppressed > 0 && !includeSuppressed && (
+                  <> · {serverSuppressed.toLocaleString()} suppressed</>
+                )}
+                {" · "}
+                {rawTotal.toLocaleString()} total
+              </>
+            ) : (
+              <>{scan.finding_count.toLocaleString()} findings</>
+            )}
           </p>
         </div>
         <ScanStatusPill status={scan.status} />
