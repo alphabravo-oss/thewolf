@@ -19,6 +19,7 @@ import (
 	"strings"
 
 	"github.com/alphabravocompany/thewolf/internal/plugin/container"
+	"github.com/alphabravocompany/thewolf/internal/wolflog"
 )
 
 // execLookPath and execCommand are package vars so tests can stub the
@@ -186,6 +187,14 @@ var bucketImageTools = map[string][]string{
 // images and populates cfg.ImageOverrides for the tools each bucket
 // serves. Already-configured overrides (from WOLF_SCANNERS_IMAGE_*) win
 // — we only fill in what the operator hasn't explicitly set.
+//
+// Defense: each candidate bucket image's ID is compared to the default
+// image's ID. If they match, the bucket is a tag-alias (e.g. the
+// operator ran `docker tag wolf-scanners:dev wolf-scanners-jvm:dev`
+// instead of building the bucket for real) and the override is
+// skipped with a warning. Wiring the override anyway would route
+// bucket tools to an image that doesn't contain them, producing
+// "tool not present in this image" failures at scan time.
 func autoDiscoverBucketImages(cfg *container.Config) {
 	if cfg == nil {
 		return
@@ -200,9 +209,19 @@ func autoDiscoverBucketImages(cfg *container.Config) {
 	if cfg.ImageOverrides == nil {
 		cfg.ImageOverrides = map[string]string{}
 	}
+	defaultID := dockerImageID(cfg.Image)
 	for bucket, tools := range bucketImageTools {
 		candidate := base + "-" + bucket + ":" + tag
-		if !dockerImageExists(candidate) {
+		candidateID := dockerImageID(candidate)
+		if candidateID == "" {
+			continue
+		}
+		if defaultID != "" && candidateID == defaultID {
+			wolflog.Warn().
+				Str("bucket", candidate).
+				Str("default", cfg.Image).
+				Strs("tools", tools).
+				Msg("bucket image is a tag-alias of default; skipping override (run `make scanners-build-" + bucket + "` to build for real)")
 			continue
 		}
 		for _, tool := range tools {
@@ -244,15 +263,20 @@ func containsAfter(s string, c byte, idx int) bool {
 	return false
 }
 
-// dockerImageExists runs `docker image inspect <ref>` and reports
-// whether the image is present locally. We don't pull on miss — the
-// auto-discovery is a pure "what's already here?" probe.
-func dockerImageExists(ref string) bool {
+// dockerImageID returns the local image ID for ref (e.g. "sha256:abc…")
+// or "" if docker is absent, the image isn't present, or inspect fails.
+// The ID is the content-addressable manifest digest; two tags pointing
+// to the same image share an ID, which is how we detect tag-aliases.
+func dockerImageID(ref string) string {
 	if _, err := execLookPath("docker"); err != nil {
-		return false
+		return ""
 	}
-	cmd := execCommand("docker", "image", "inspect", ref)
-	return cmd.Run() == nil
+	cmd := execCommand("docker", "image", "inspect", "--format", "{{.Id}}", ref)
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
 }
 
 // Doctor runs a series of diagnostics and writes a human-readable report to w.

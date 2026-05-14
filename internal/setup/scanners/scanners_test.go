@@ -103,18 +103,27 @@ func TestAutoDiscoverBucketImages(t *testing.T) {
 	defer func() { execLookPath, execCommand = origLook, origCmd }()
 
 	execLookPath = func(name string) (string, error) { return "/usr/bin/docker", nil }
-	// Pretend only the JVM bucket image is locally present.
-	execCommand = func(name string, args ...string) *exec.Cmd {
-		ref := args[len(args)-1]
-		if ref == "wolf-scanners-jvm:dev" {
-			return exec.Command("true")
+
+	// stubImageIDs returns a stub execCommand that pretends the given
+	// ref→ID map is what `docker image inspect --format {{.Id}}` would
+	// emit. Missing refs return exit=1 (image not found).
+	stubImageIDs := func(ids map[string]string) func(string, ...string) *exec.Cmd {
+		return func(name string, args ...string) *exec.Cmd {
+			ref := args[len(args)-1]
+			if id, ok := ids[ref]; ok {
+				return exec.Command("echo", id)
+			}
+			return exec.Command("false")
 		}
-		return exec.Command("false")
 	}
 
+	// Case 1: only the JVM bucket is present, with its own distinct ID.
+	execCommand = stubImageIDs(map[string]string{
+		"wolf-scanners:dev":     "sha256:default",
+		"wolf-scanners-jvm:dev": "sha256:jvm",
+	})
 	cfg := &container.Config{Image: "wolf-scanners:dev"}
 	autoDiscoverBucketImages(cfg)
-
 	if cfg.ImageOverrides["infer"] != "wolf-scanners-jvm:dev" {
 		t.Errorf("infer override = %q, want wolf-scanners-jvm:dev", cfg.ImageOverrides["infer"])
 	}
@@ -128,7 +137,11 @@ func TestAutoDiscoverBucketImages(t *testing.T) {
 		t.Errorf("codeql should not be set when codeql image absent: %v", cfg.ImageOverrides["codeql"])
 	}
 
-	// Pre-existing overrides must win over auto-discovery.
+	// Case 2: pre-existing override wins over auto-discovery.
+	execCommand = stubImageIDs(map[string]string{
+		"wolf-scanners:dev":     "sha256:default",
+		"wolf-scanners-jvm:dev": "sha256:jvm",
+	})
 	cfg2 := &container.Config{
 		Image:          "wolf-scanners:dev",
 		ImageOverrides: map[string]string{"infer": "custom:tag"},
@@ -141,14 +154,30 @@ func TestAutoDiscoverBucketImages(t *testing.T) {
 		t.Errorf("pmd should still auto-fill: got %q", cfg2.ImageOverrides["pmd"])
 	}
 
-	// No docker on host → no overrides added, no panic.
-	execLookPath = func(name string) (string, error) { return "", errors.New("not found") }
+	// Case 3: tag-alias. wolf-scanners-jvm:dev has the SAME ID as the
+	// default image — operator ran `docker tag` instead of building the
+	// real bucket. Must NOT wire the override, must NOT poison the run.
+	execCommand = stubImageIDs(map[string]string{
+		"wolf-scanners:dev":     "sha256:default",
+		"wolf-scanners-jvm:dev": "sha256:default", // <-- same ID
+	})
 	cfg3 := &container.Config{Image: "wolf-scanners:dev"}
 	autoDiscoverBucketImages(cfg3)
-	if len(cfg3.ImageOverrides) != 0 {
-		t.Errorf("expected no overrides when docker absent, got %v", cfg3.ImageOverrides)
+	if _, set := cfg3.ImageOverrides["infer"]; set {
+		t.Errorf("tag-alias: infer override must NOT be set, got %q", cfg3.ImageOverrides["infer"])
+	}
+	if _, set := cfg3.ImageOverrides["pmd"]; set {
+		t.Errorf("tag-alias: pmd override must NOT be set, got %q", cfg3.ImageOverrides["pmd"])
 	}
 
-	// nil cfg must not panic.
+	// Case 4: no docker on host → no overrides added, no panic.
+	execLookPath = func(name string) (string, error) { return "", errors.New("not found") }
+	cfg4 := &container.Config{Image: "wolf-scanners:dev"}
+	autoDiscoverBucketImages(cfg4)
+	if len(cfg4.ImageOverrides) != 0 {
+		t.Errorf("expected no overrides when docker absent, got %v", cfg4.ImageOverrides)
+	}
+
+	// Case 5: nil cfg must not panic.
 	autoDiscoverBucketImages(nil)
 }
