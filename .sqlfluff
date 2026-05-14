@@ -1,0 +1,14 @@
+[sqlfluff]
+# Internal DB is SQLite (mattn/go-sqlite3) — using ansi or postgres
+# raised PRS parse errors and dozens of false LT01s on migration DDL.
+dialect = sqlite
+
+# LT01 (whitespace) is auto-fixed by a one-time `sqlfluff fix` run on
+# the migrations; keep the rule off afterward so cosmetic whitespace
+# in future migrations doesn't churn findings.
+exclude_rules = LT01
+
+max_line_length = 160
+
+[sqlfluff:rules:capitalisation.keywords]
+capitalisation_policy = upper

@@ -1,0 +1,19 @@
+# yamllint config — extends default, then relaxes rules that fire on
+# GitHub Actions templating (`${{ … }}` inside flow scalars trips
+# braces/commas), and on YAML conventions wolf doesn't enforce
+# (document-start, truthy `on:` keyword).
+extends: default
+
+rules:
+  line-length:
+    max: 160
+    level: warning
+  braces: disable
+  commas: disable
+  document-start: disable
+  truthy:
+    check-keys: false
+
+ignore: |
+  ui-next/node_modules/
+  FINDINGS/

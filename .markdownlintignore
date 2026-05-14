@@ -1,0 +1,7 @@
+PLAN.md
+docs/PLAN-*.md
+CHANGELOG.md
+FINDINGS/
+FIXES.md
+scanners/LICENSES.md
+ui-next/node_modules/
