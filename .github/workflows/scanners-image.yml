@@ -31,6 +31,10 @@ on:
 env:
   REGISTRY: ghcr.io
   ORG: alphabravocompany
+  # Docker Hub mirror. Pushes only fire when DOCKERHUB_USERNAME is set
+  # in the org/repo secrets — otherwise the step skips and ghcr is the
+  # only destination. Login uses the docker.io default host.
+  DOCKERHUB_ORG: alphabravodevops
 
 jobs:
   build:
@@ -72,37 +76,78 @@ jobs:
             main|[0-9]*) : ;;
             *) echo "refusing unsafe version: $version" >&2; exit 1 ;;
           esac
-          image="${REGISTRY}/${ORG}/${IMAGE_NAME}"
-          tags="${image}:${version}"
-          if [ "$version" = "main" ]; then
-            short=$(git rev-parse --short HEAD)
-            tags="${tags},${image}:main-${short}"
-          else
-            major=$(echo "$version" | cut -d. -f1)
-            majmin=$(echo "$version" | cut -d. -f1,2)
-            if [ "$majmin" != "$version" ]; then
-              tags="${tags},${image}:${majmin}"
+          ghcr_image="${REGISTRY}/${ORG}/${IMAGE_NAME}"
+          dh_image="${DOCKERHUB_ORG}/${IMAGE_NAME}"
+          # Build tag list per registry. Each registry gets the same
+          # set: :VERSION, :MAJOR.MINOR, :MAJOR, plus :latest on real
+          # releases and :main / :main-<sha> on main branch builds.
+          mk_tags() {
+            local img="$1"
+            local out="${img}:${version}"
+            if [ "$version" = "main" ]; then
+              short=$(git rev-parse --short HEAD)
+              out="${out},${img}:main-${short}"
+            else
+              major=$(echo "$version" | cut -d. -f1)
+              majmin=$(echo "$version" | cut -d. -f1,2)
+              if [ "$majmin" != "$version" ]; then
+                out="${out},${img}:${majmin}"
+              fi
+              if [ "$major" != "$version" ] && [ "$major" != "$majmin" ]; then
+                out="${out},${img}:${major}"
+              fi
+              # :latest only on real releases — never on main builds.
+              out="${out},${img}:latest"
             fi
-            if [ "$major" != "$version" ] && [ "$major" != "$majmin" ]; then
-              tags="${tags},${image}:${major}"
-            fi
-          fi
-          echo "tags=${tags}"        >> "$GITHUB_OUTPUT"
-          echo "version=${version}"  >> "$GITHUB_OUTPUT"
+            echo "$out"
+          }
+          ghcr_tags=$(mk_tags "$ghcr_image")
+          dh_tags=$(mk_tags "$dh_image")
+          # Combined list goes to the multi-registry push step. If
+          # DOCKERHUB_USERNAME isn't set, the docker.io login step
+          # below skips and the docker.io tags get dropped from the
+          # final push tag list (we handle that there).
+          tags="${ghcr_tags},${dh_tags}"
+          echo "tags=${tags}"             >> "$GITHUB_OUTPUT"
+          echo "ghcr_tags=${ghcr_tags}"   >> "$GITHUB_OUTPUT"
+          echo "version=${version}"       >> "$GITHUB_OUTPUT"
+
+      # QEMU enables cross-arch builds for arm64 on amd64 runners.
+      # Without it, docker buildx silently produces single-arch images
+      # even with multi-platform requested.
+      - uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3
+        with:
+          platforms: linux/amd64,linux/arm64
 
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
+      # ghcr login — always present (GITHUB_TOKEN is automatic).
       - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Docker Hub login — optional. Skipped silently if the secret
+      # isn't set, in which case the push step below is told to ship
+      # only the ghcr tags.
+      - name: Login to Docker Hub
+        id: dockerhub
+        if: ${{ secrets.DOCKERHUB_USERNAME != '' }}
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # Build (amd64 only, loaded into the runner's docker daemon) so
+      # we can smoke-test before publishing. The cache is shared with
+      # the multi-arch push below so we don't rebuild the amd64 layers.
       - name: Build (load locally for smoke test)
         uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5
         with:
           context: scanners/
           file: scanners/${{ matrix.variant.dockerfile }}
+          platforms: linux/amd64
           push: false
           load: true
           tags: ${{ matrix.variant.image }}:test
@@ -116,14 +161,19 @@ jobs:
           IMAGE_NAME: ${{ matrix.variant.image }}
         run: docker run --rm "${IMAGE_NAME}:test" /usr/local/bin/smoke-test.sh
 
-      - name: Push
+      # Multi-arch push to both registries. The 'tags' input accepts a
+      # comma-separated list spanning multiple registries — buildkit
+      # pushes once per arch to each tag. If DOCKERHUB_USERNAME wasn't
+      # set, fall back to ghcr-only.
+      - name: Push (multi-arch)
         if: github.event_name == 'release' || github.ref == 'refs/heads/main'
         uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5
         with:
           context: scanners/
           file: scanners/${{ matrix.variant.dockerfile }}
+          platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: ${{ steps.dockerhub.outcome == 'success' && steps.meta.outputs.tags || steps.meta.outputs.ghcr_tags }}
           build-args: |
             WOLF_VERSION=${{ steps.meta.outputs.version }}
           cache-from: type=gha,scope=${{ matrix.variant.name }}

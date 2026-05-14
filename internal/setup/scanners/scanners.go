@@ -69,7 +69,7 @@ type Config struct {
 // result directly or merge it with a yaml-loaded Config.
 func EnvDefaults() Config {
 	return Config{
-		Image:                envOr("WOLF_SCANNERS_IMAGE", "ghcr.io/alphabravocompany/wolf-scanners:dev"),
+		Image:                envOr("WOLF_SCANNERS_IMAGE", "alphabravodevops/wolf-scanners:latest"),
 		ImageOverrides:       envBucketOverrides(),
 		PullPolicy:           envOr("WOLF_SCANNERS_PULL_POLICY", "IfNotPresent"),
 		Network:              envOr("WOLF_SCANNERS_NETWORK", "bridge"),

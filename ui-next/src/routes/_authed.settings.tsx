@@ -698,16 +698,19 @@ function ScannersTab() {
           </button>
         </div>
 
-        {/* First-run hint when pull resolves nothing for our wolf-built
-            image — we don't publish wolf-scanners:* to a registry yet
-            so the operator has to build locally. */}
+        {/* First-run hint: pull is the only setup step. The default
+            wolf-scanners* images are published to Docker Hub
+            (alphabravodevops/*); first scan triggers an auto-pull
+            per the IfNotPresent policy, but pre-pulling saves the
+            wait on the first real scan. If pull errors out for the
+            default image, surface the registry hint as a banner. */}
         {wolfBuiltMissing && (
           <div className="mt-3 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-            <strong>Wolf-built images aren't published to a registry yet.</strong>{" "}
-            Run <code>make scanners-build</code> from the wolf source repo to
-            create <code>{cfg.image}</code> locally. Bucket images: <code>make
-            scanners-build-jvm</code>, <code>scanners-build-rust</code>,
-            <code>scanners-build-codeql</code>.
+            <strong>Couldn't pull {cfg.image}.</strong> Check your network /
+            registry credentials. The default registry is{" "}
+            <code>docker.io/alphabravodevops</code>; override via{" "}
+            <code>WOLF_SCANNERS_IMAGE</code> to point at a mirror or a
+            locally-built image.
           </div>
         )}
 
