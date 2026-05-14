@@ -18,6 +18,7 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/artifacts"
 	"github.com/alphabravocompany/thewolf/internal/auth"
 	"github.com/alphabravocompany/thewolf/internal/db"
+	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
 	"github.com/alphabravocompany/thewolf/internal/wolflog"
 )
@@ -195,6 +196,7 @@ func NewServer(store db.Store, addr string) *Server {
 			// page surfaces these endpoints.
 			r.Route("/scanners", func(r chi.Router) {
 				r.Get("/config", routes.ScannersConfig)
+				r.Get("/list", routes.ScannersList)
 				r.Post("/doctor", routes.ScannersDoctor)
 				r.Post("/pull", routes.ScannersPull)
 			})
@@ -242,6 +244,14 @@ func NewServer(store db.Store, addr string) *Server {
 // Start starts the HTTP server (blocking).
 func (s *Server) Start() error {
 	wolflog.Info().Str("addr", s.Addr).Msg("API server starting")
+
+	// Orphan recovery: any scans still marked "running" or "pending" must
+	// be from a previous server process that crashed or was killed —
+	// their executeScan goroutine is gone, so they'll never finish
+	// themselves. Mark them as cancelled so the UI doesn't keep showing
+	// "1 scan running" forever and operators can re-trigger if needed.
+	recoverOrphanScans(s.Store)
+
 	err := s.httpServer.ListenAndServe()
 	if err == http.ErrServerClosed {
 		return nil
@@ -253,4 +263,36 @@ func (s *Server) Start() error {
 func (s *Server) Shutdown(ctx context.Context) error {
 	wolflog.Info().Msg("API server shutting down")
 	return s.httpServer.Shutdown(ctx)
+}
+
+// recoverOrphanScans walks the scans table and cancels any rows still in
+// the running or pending state — they belong to a previous process that
+// exited before writing their terminal status. Logged but errors are
+// non-fatal so a transient DB hiccup doesn't block startup.
+func recoverOrphanScans(store db.Store) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	scans, err := store.ListScansByUser(ctx, "")
+	if err != nil {
+		wolflog.Warn().Err(err).Msg("orphan recovery: failed to list scans")
+		return
+	}
+	now := time.Now().UTC()
+	recovered := 0
+	for i := range scans {
+		s := &scans[i]
+		if s.Status != models.ScanStatusRunning && s.Status != models.ScanStatusPending {
+			continue
+		}
+		s.Status = models.ScanStatusCancelled
+		s.CompletedAt = &now
+		if err := store.UpdateScan(ctx, s); err != nil {
+			wolflog.Warn().Err(err).Str("scan_id", s.ID).Msg("orphan recovery: update failed")
+			continue
+		}
+		recovered++
+	}
+	if recovered > 0 {
+		wolflog.Info().Int("count", recovered).Msg("orphan recovery: cancelled stuck scans from previous process")
+	}
 }

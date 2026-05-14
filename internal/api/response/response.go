@@ -14,9 +14,10 @@ type SuccessResponse struct {
 
 // ListMeta contains pagination metadata.
 type ListMeta struct {
-	Total   int `json:"total"`
-	Page    int `json:"page"`
-	PerPage int `json:"per_page"`
+	Total      int `json:"total"`
+	Page       int `json:"page"`
+	PerPage    int `json:"per_page"`
+	Suppressed int `json:"suppressed,omitempty"` // count of records hidden by server-side suppression rules
 }
 
 // ListResponse wraps a list of resources with pagination.

@@ -3,11 +3,49 @@ package routes
 import (
 	"bytes"
 	"net/http"
+	"sort"
 
 	"github.com/alphabravocompany/thewolf/internal/api/response"
+	"github.com/alphabravocompany/thewolf/internal/plugin"
 	"github.com/alphabravocompany/thewolf/internal/plugin/container"
 	"github.com/alphabravocompany/thewolf/internal/setup/scanners"
 )
+
+// scannerSummary is the lightweight per-plugin payload returned by
+// ScannersList for the UI's scanner-picker. Avoids the more elaborate
+// shape of CollectionTools (which adds language detection and install
+// hints — useful for collection setup but heavy for a multi-select).
+type scannerSummary struct {
+	Name      string   `json:"name"`
+	Category  string   `json:"category"`
+	Languages []string `json:"languages"`
+}
+
+// ScannersList returns every registered scanner plugin sorted by name.
+// Used by the New-scan form to render a checkbox list so operators can
+// pick exactly which tools to run.
+//
+// Route: GET /api/scanners/list
+func ScannersList(w http.ResponseWriter, r *http.Request) {
+	all := plugin.Global.GetAll()
+	out := make([]scannerSummary, 0, len(all))
+	for _, p := range all {
+		langs := make([]string, 0, len(p.Languages()))
+		for _, l := range p.Languages() {
+			langs = append(langs, string(l))
+		}
+		out = append(out, scannerSummary{
+			Name:      p.Name(),
+			Category:  string(p.Category()),
+			Languages: langs,
+		})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	response.WriteJSON(w, http.StatusOK, response.ListResponse{
+		Data: out,
+		Meta: response.ListMeta{Total: len(out), Page: 1, PerPage: len(out)},
+	})
+}
 
 // ScannersConfig returns the live container.Config the wolf-slim process is
 // using. Read-only — operators edit the config via wolf.yaml + env and

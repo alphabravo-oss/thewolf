@@ -332,6 +332,9 @@ export interface ApiMeta {
   per_page?: number;
   total?: number;
   total_pages?: number;
+  // Count of records hidden by server-side suppression rules. Present on
+  // endpoints that apply suppression (e.g. /scans/{id}/findings).
+  suppressed?: number;
 }
 
 export interface ApiError {

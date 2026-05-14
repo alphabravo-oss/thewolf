@@ -28,6 +28,7 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/scan/mapper"
 	"github.com/alphabravocompany/thewolf/internal/scan/report"
 	"github.com/alphabravocompany/thewolf/internal/scan/runner"
+	"github.com/alphabravocompany/thewolf/internal/scan/suppress"
 	promptpkg "github.com/alphabravocompany/thewolf/internal/prompt"
 	"github.com/alphabravocompany/thewolf/internal/scan/scorer"
 	"github.com/alphabravocompany/thewolf/internal/secrets"
@@ -728,6 +729,28 @@ func GetScanFindings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Apply path-suppression rules (testdata/, vendor/, node_modules/,
+	// generated, lockfiles). The Phase-3 suppress package marks each
+	// finding's Suppressed flag in-place; we then drop suppressed rows
+	// unless the client asked for them via ?include_suppressed=true.
+	// This is intentionally a query-time filter (rather than persisting
+	// the flag at scan time) so a default-rules change applies to all
+	// historical scans without a backfill.
+	findings, _ = suppress.Apply(findings, suppress.DefaultRules())
+	includeSuppressed := r.URL.Query().Get("include_suppressed") == "true"
+	suppressedCount := 0
+	if !includeSuppressed {
+		kept := findings[:0]
+		for _, f := range findings {
+			if f.Suppressed {
+				suppressedCount++
+				continue
+			}
+			kept = append(kept, f)
+		}
+		findings = kept
+	}
+
 	// Filter by severity (comma-separated).
 	severityFilter := r.URL.Query().Get("severity")
 	toolFilter := r.URL.Query().Get("tool")
@@ -790,7 +813,12 @@ func GetScanFindings(w http.ResponseWriter, r *http.Request) {
 
 	response.WriteJSON(w, http.StatusOK, response.ListResponse{
 		Data: paged,
-		Meta: response.ListMeta{Total: total, Page: page, PerPage: perPage},
+		Meta: response.ListMeta{
+			Total:      total,
+			Page:       page,
+			PerPage:    perPage,
+			Suppressed: suppressedCount,
+		},
 	})
 }
 

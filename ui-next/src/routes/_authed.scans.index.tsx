@@ -111,8 +111,10 @@ function ScansPage() {
   );
 }
 
-// New-scan form: pick a repo, override branch if needed, POST /api/scans,
-// navigate to the live scan view.
+// New-scan form: pick a repo, optionally narrow the tool list, override
+// branch, POST /api/scans, navigate to the live scan view.
+type ScannerSummary = { name: string; category: string; languages: string[] };
+
 function NewScanForm({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -123,16 +125,32 @@ function NewScanForm({ onClose }: { onClose: () => void }) {
       return r.data ?? [];
     },
   });
+  const scanners = useQuery({
+    queryKey: ["scanners", "list"],
+    queryFn: async () => {
+      const r = await api.get<ScannerSummary[]>("/scanners/list");
+      return r.data ?? [];
+    },
+  });
   const [repoId, setRepoId] = useState("");
   const [branch, setBranch] = useState("");
+  // Tool selection mode:
+  //   - "auto"     → empty tools array → backend auto-detects by language
+  //   - "explicit" → only the checked tools run
+  const [toolMode, setToolMode] = useState<"auto" | "explicit">("auto");
+  const [picked, setPicked] = useState<Set<string>>(new Set());
 
   const m = useMutation({
     mutationFn: async () => {
       const repo = repos.data?.find((r) => r.id === repoId);
-      const r = await api.post<Scan>("/scans", {
+      const body: Record<string, unknown> = {
         repo_id: repoId,
         branch: branch.trim() || repo?.default_branch || "main",
-      });
+      };
+      if (toolMode === "explicit" && picked.size > 0) {
+        body.tools = Array.from(picked).sort();
+      }
+      const r = await api.post<Scan>("/scans", body);
       return r.data;
     },
     onSuccess: (scan) => {
@@ -146,6 +164,28 @@ function NewScanForm({ onClose }: { onClose: () => void }) {
   });
 
   const selectedRepo = repos.data?.find((r) => r.id === repoId);
+
+  // Group scanners by category for a tidier checkbox list.
+  const grouped = (() => {
+    const map = new Map<string, ScannerSummary[]>();
+    for (const s of scanners.data ?? []) {
+      const key = s.category || "other";
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(s);
+    }
+    return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
+  })();
+
+  const togglePick = (name: string) => {
+    setPicked((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  };
+  const pickAll = () => setPicked(new Set((scanners.data ?? []).map((s) => s.name)));
+  const pickNone = () => setPicked(new Set());
 
   return (
     <form
@@ -216,6 +256,95 @@ function NewScanForm({ onClose }: { onClose: () => void }) {
         </label>
       )}
 
+      {selectedRepo && (
+        <div className="space-y-2">
+          <div className="text-xs text-muted-foreground">Tools to run</div>
+          <div className="flex gap-1 text-xs">
+            <button
+              type="button"
+              onClick={() => setToolMode("auto")}
+              className={`h-7 px-2.5 rounded-md transition ${
+                toolMode === "auto"
+                  ? "bg-primary text-primary-foreground"
+                  : "hover:bg-muted/40 text-muted-foreground"
+              }`}
+            >
+              Auto (by detected language)
+            </button>
+            <button
+              type="button"
+              onClick={() => setToolMode("explicit")}
+              className={`h-7 px-2.5 rounded-md transition ${
+                toolMode === "explicit"
+                  ? "bg-primary text-primary-foreground"
+                  : "hover:bg-muted/40 text-muted-foreground"
+              }`}
+            >
+              Pick tools
+            </button>
+          </div>
+
+          {toolMode === "explicit" && (
+            <div className="border border-border/40 rounded-md p-3 space-y-2 bg-muted/10">
+              {scanners.isLoading ? (
+                <div className="text-xs text-muted-foreground">Loading scanners…</div>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">
+                      {picked.size} of {scanners.data?.length ?? 0} selected
+                    </span>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={pickAll}
+                        className="underline hover:text-foreground text-muted-foreground"
+                      >
+                        All
+                      </button>
+                      <button
+                        type="button"
+                        onClick={pickNone}
+                        className="underline hover:text-foreground text-muted-foreground"
+                      >
+                        None
+                      </button>
+                    </div>
+                  </div>
+                  <div className="max-h-64 overflow-y-auto space-y-2">
+                    {grouped.map(([cat, items]) => (
+                      <div key={cat}>
+                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
+                          {cat}
+                        </div>
+                        <div className="grid grid-cols-3 gap-1 text-xs">
+                          {items.map((s) => (
+                            <label
+                              key={s.name}
+                              className="flex items-center gap-1.5 px-1.5 py-1 rounded hover:bg-muted/30 cursor-pointer"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={picked.has(s.name)}
+                                onChange={() => togglePick(s.name)}
+                                className="accent-primary"
+                              />
+                              <span className="truncate" title={s.languages.join(", ") || "any"}>
+                                {s.name}
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="flex items-center gap-2 justify-end">
         <button
           type="button"
@@ -226,11 +355,19 @@ function NewScanForm({ onClose }: { onClose: () => void }) {
         </button>
         <button
           type="submit"
-          disabled={!repoId || m.isPending}
+          disabled={
+            !repoId ||
+            m.isPending ||
+            (toolMode === "explicit" && picked.size === 0)
+          }
           className="h-8 px-3 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-50 inline-flex items-center gap-1.5"
         >
           <PlayIcon className="size-3.5" />
-          {m.isPending ? "Starting…" : "Start scan"}
+          {m.isPending
+            ? "Starting…"
+            : toolMode === "explicit"
+              ? `Start scan (${picked.size})`
+              : "Start scan"}
         </button>
       </div>
     </form>

@@ -48,13 +48,19 @@ func DefaultRules() RuleSet {
 		{PathGlob: "**/*.min.css", Reason: "default:minified"},
 		{PathGlob: "**/*.bundle.js", Reason: "default:bundled-asset"},
 
-		// --- Test fixtures and testdata: suppress *secrets* findings only.
-		// Real security findings in test files are still surfaced; only
-		// hardcoded-secret false positives (intentional fake creds in
-		// fixtures) are filtered.
-		{PathGlob: "**/testdata/**", Categories: []string{"hardcoded-secret"}, Reason: "default:testdata-secrets"},
-		{PathGlob: "**/test-fixtures/**", Categories: []string{"hardcoded-secret"}, Reason: "default:test-fixtures-secrets"},
-		{PathGlob: "**/fixtures/**", Categories: []string{"hardcoded-secret"}, Reason: "default:fixtures-secrets"},
+		// --- Test fixtures and testdata.
+		//
+		// testdata/, fixtures/, test-fixtures/ are by convention storage
+		// for inputs scanners are *supposed* to flag (anti-patterns,
+		// fake secrets, exploit payloads). Suppress ALL findings in
+		// these directories — they are noise in 99% of cases.
+		{PathGlob: "**/testdata/**", Reason: "default:testdata"},
+		{PathGlob: "**/test-fixtures/**", Reason: "default:test-fixtures"},
+		{PathGlob: "**/fixtures/**", Reason: "default:fixtures"},
+		// Test source files: only suppress findings that are commonly
+		// FPs in test contexts (hardcoded fake creds, intentional unsafe
+		// constructs). Real bugs in test code can still indicate a real
+		// problem so we don't blanket-suppress.
 		{PathGlob: "**/*_test.go", Categories: []string{"hardcoded-secret"}, Reason: "default:test-file-secrets"},
 		{PathGlob: "**/test_*.py", Categories: []string{"hardcoded-secret"}, Reason: "default:test-file-secrets"},
 		{PathGlob: "**/*_test.py", Categories: []string{"hardcoded-secret"}, Reason: "default:test-file-secrets"},
@@ -67,6 +73,10 @@ func DefaultRules() RuleSet {
 		{PathGlob: "**/*.spec.js", Categories: []string{"hardcoded-secret"}, Reason: "default:test-file-secrets"},
 		{PathGlob: "**/__tests__/**", Categories: []string{"hardcoded-secret"}, Reason: "default:test-file-secrets"},
 		{PathGlob: "**/e2e/**", Categories: []string{"hardcoded-secret"}, Reason: "default:e2e-secrets"},
+		// Some projects have *_test.* JSON/text fixture files alongside
+		// the test source — same suppression intent.
+		{PathGlob: "**/*_output.json", Reason: "default:scanner-fixture"},
+		{PathGlob: "**/*_output.jsonl", Reason: "default:scanner-fixture"},
 
 		// --- Lockfiles ---
 		{PathGlob: "**/package-lock.json", Reason: "default:lockfile"},
