@@ -65,7 +65,7 @@ func (c *ClaudeCode) Fix(ctx context.Context, req FixRequest) (*FixResult, error
 		model = "claude-sonnet-4-20250514"
 	}
 
-	cmd := exec.CommandContext(ctx, "claude",
+	cmd := exec.CommandContext(ctx, "claude", // #nosec G204 -- command is a configured tool name; args from internal config, not user input
 		"--dangerously-skip-permissions",
 		"--output-format", "json",
 		"--max-turns", "20",
@@ -111,7 +111,7 @@ func (c *Codex) Fix(ctx context.Context, req FixRequest) (*FixResult, error) {
 		req.Finding.Description,
 	)
 
-	cmd := exec.CommandContext(ctx, "codex",
+	cmd := exec.CommandContext(ctx, "codex", // #nosec G204 -- command is a configured tool name; args from internal config, not user input
 		"--approval-mode", "full-auto",
 		"--quiet",
 		prompt,

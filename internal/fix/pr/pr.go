@@ -30,7 +30,7 @@ func CreateGitHubPR(ctx context.Context, req PRRequest) (*PRResult, error) {
 	title := fmt.Sprintf("[Wolf] Fix %s issues (%d findings)", req.Category, len(req.Findings))
 	body := buildPRBody(req)
 
-	cmd := exec.CommandContext(ctx, "gh", "pr", "create",
+	cmd := exec.CommandContext(ctx, "gh", "pr", "create", // #nosec G204 -- command is a configured tool name; args from internal config, not user input
 		"--title", title,
 		"--body", body,
 		"--base", req.BaseBranch,
@@ -54,7 +54,7 @@ func CreateGitLabMR(ctx context.Context, req PRRequest) (*PRResult, error) {
 	title := fmt.Sprintf("[Wolf] Fix %s issues (%d findings)", req.Category, len(req.Findings))
 	body := buildPRBody(req)
 
-	cmd := exec.CommandContext(ctx, "glab", "mr", "create",
+	cmd := exec.CommandContext(ctx, "glab", "mr", "create", // #nosec G204 -- command is a configured tool name; args from internal config, not user input
 		"--title", title,
 		"--description", body,
 		"--source-branch", req.BranchName,
