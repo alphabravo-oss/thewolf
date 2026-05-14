@@ -136,6 +136,7 @@ func NewServer(store db.Store, addr string) *Server {
 
 			r.Route("/scans", func(r chi.Router) {
 				r.Get("/", routes.ListScans)
+				r.Get("/trends", routes.ScansTrends)
 				r.Post("/", routes.CreateScan)
 				r.Get("/{id}", routes.GetScan)
 				r.Get("/{id}/findings", routes.GetScanFindings)

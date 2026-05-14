@@ -2084,6 +2084,137 @@ func GetToolOutput(w http.ResponseWriter, r *http.Request) {
 	response.WriteError(w, http.StatusNotFound, "not_found", "tool output not found")
 }
 
+// scanTrendEntry is one row per past scan in the trends timeline. Severity
+// counts come from the persisted findings for that scan (post-suppression,
+// to match the visible-count semantics the UI uses everywhere else).
+type scanTrendEntry struct {
+	ScanID      string `json:"scan_id"`
+	Branch      string `json:"branch"`
+	Status      string `json:"status"`
+	CompletedAt string `json:"completed_at"`
+	Total       int    `json:"total"`
+	Critical    int    `json:"critical"`
+	High        int    `json:"high"`
+	Medium      int    `json:"medium"`
+	Low         int    `json:"low"`
+	Info        int    `json:"info"`
+}
+
+// ScansTrends handles GET /api/scans/trends?repo_id=&branch=&limit=
+// One row per past scan against the repo (+ branch if provided), ordered
+// by completed_at ascending so the chart's x-axis reads left-to-right
+// from oldest to newest. Default limit is 30 — enough to spot a trend
+// without hammering the DB on a noisy repo. Skipped: scans in
+// pending/running state (no findings yet to summarize).
+func ScansTrends(w http.ResponseWriter, r *http.Request) {
+	claims := auth.GetUserFromContext(r.Context())
+	if claims == nil {
+		response.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing user context")
+		return
+	}
+	h := DefaultHandler
+	if h == nil {
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "handler not initialized")
+		return
+	}
+
+	repoID := r.URL.Query().Get("repo_id")
+	if repoID == "" {
+		response.WriteError(w, http.StatusBadRequest, "validation_error", "repo_id is required")
+		return
+	}
+	branch := r.URL.Query().Get("branch")
+	limit := 30
+	if v := r.URL.Query().Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 200 {
+			limit = n
+		}
+	}
+
+	scans, err := h.Store.ListScansByRepo(r.Context(), repoID)
+	if err != nil {
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to list scans")
+		return
+	}
+
+	// Filter: branch match (if specified), terminal status only.
+	completed := make([]models.Scan, 0, len(scans))
+	for _, s := range scans {
+		if branch != "" && s.Branch != branch {
+			continue
+		}
+		if s.Status != models.ScanStatusCompleted && s.Status != models.ScanStatusCancelled && s.Status != models.ScanStatusFailed {
+			continue
+		}
+		completed = append(completed, s)
+	}
+
+	// Sort newest-first to apply the limit, then reverse for ascending x-axis.
+	sort.Slice(completed, func(i, j int) bool {
+		// Prefer completed_at when present; fall back to created_at.
+		ti := completed[i].CreatedAt
+		if completed[i].CompletedAt != nil {
+			ti = *completed[i].CompletedAt
+		}
+		tj := completed[j].CreatedAt
+		if completed[j].CompletedAt != nil {
+			tj = *completed[j].CompletedAt
+		}
+		return ti.After(tj)
+	})
+	if len(completed) > limit {
+		completed = completed[:limit]
+	}
+	// Reverse for asc.
+	for i, j := 0, len(completed)-1; i < j; i, j = i+1, j-1 {
+		completed[i], completed[j] = completed[j], completed[i]
+	}
+
+	out := make([]scanTrendEntry, 0, len(completed))
+	for _, s := range completed {
+		// Apply suppression to mirror the visible-count the rest of the UI
+		// shows. Cheap on this volume — we re-walk per scan, but the result
+		// is a single integer per severity.
+		findings, ferr := h.Store.ListFindingsByScan(r.Context(), s.ID)
+		if ferr != nil {
+			continue
+		}
+		findings, _ = suppress.Apply(findings, suppress.DefaultRules())
+
+		entry := scanTrendEntry{
+			ScanID: s.ID,
+			Branch: s.Branch,
+			Status: string(s.Status),
+		}
+		if s.CompletedAt != nil {
+			entry.CompletedAt = s.CompletedAt.Format(time.RFC3339)
+		} else {
+			entry.CompletedAt = s.CreatedAt.Format(time.RFC3339)
+		}
+		for _, f := range findings {
+			if f.Suppressed {
+				continue
+			}
+			entry.Total++
+			switch f.Severity {
+			case models.SeverityCritical:
+				entry.Critical++
+			case models.SeverityHigh:
+				entry.High++
+			case models.SeverityMedium:
+				entry.Medium++
+			case models.SeverityLow:
+				entry.Low++
+			case models.SeverityInfo:
+				entry.Info++
+			}
+		}
+		out = append(out, entry)
+	}
+
+	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: out})
+}
+
 // GetScanTools handles GET /api/scans/{id}/tools — list tools that ran in a scan.
 func GetScanTools(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetUserFromContext(r.Context())

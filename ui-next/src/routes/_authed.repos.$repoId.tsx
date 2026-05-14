@@ -1,5 +1,6 @@
 // Repo detail page. Shows metadata, detected languages, scan history,
-// and lets the user trigger a new scan or delete the repo.
+// trend chart of findings over time, and lets the user trigger a new
+// scan or delete the repo.
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -9,10 +10,35 @@ import {
   GitBranchIcon,
   HardDriveIcon,
 } from "lucide-react";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Legend,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import { useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import type { Repo, Scan } from "@/lib/types";
 import { CardSkeleton } from "@/components/skeleton";
+
+// One row per past scan from GET /api/scans/trends?repo_id=&branch=
+interface TrendPoint {
+  scan_id: string;
+  branch: string;
+  status: string;
+  completed_at: string;
+  total: number;
+  critical: number;
+  high: number;
+  medium: number;
+  low: number;
+  info: number;
+}
 
 export const Route = createFileRoute("/_authed/repos/$repoId")({
   component: RepoDetailPage,
@@ -37,6 +63,18 @@ function RepoDetailPage() {
       const r = await api.get<Scan[]>(`/scans?repo_id=${repoId}&limit=50`);
       return r.data ?? [];
     },
+  });
+
+  const trendsQ = useQuery({
+    queryKey: ["scans-trends", repoId],
+    queryFn: async () => {
+      const r = await api.get<TrendPoint[]>(
+        `/scans/trends?repo_id=${repoId}&limit=30`,
+      );
+      return r.data ?? [];
+    },
+    // Refresh when the user kicks off a new scan from this page.
+    refetchInterval: 30_000,
   });
 
   const startScan = useMutation({
@@ -170,6 +208,12 @@ function RepoDetailPage() {
         />
       </section>
 
+      <TrendsSection
+        trends={trendsQ.data ?? []}
+        loading={trendsQ.isLoading}
+        defaultBranch={r.default_branch || "main"}
+      />
+
       <section className="glass-card p-5">
         <h2 className="text-sm font-medium mb-3">
           Scans ({scansQ.data?.length ?? 0})
@@ -233,4 +277,115 @@ function parseLanguages(s: string | undefined): Array<[string, number]> {
   } catch {
     return [];
   }
+}
+
+// TrendsSection renders a stacked-bar chart of findings-by-severity
+// over the repo's scan history. With a branch filter, it's the
+// "trend on this repo/branch over all the runs" view. The x-axis is
+// per-scan timestamp (so multiple scans in one day each get a bar).
+// Hovering shows the severity breakdown; clicking a bar would be the
+// natural follow-up but we keep it static here — the scan list below
+// already provides drill-through.
+function TrendsSection({
+  trends,
+  loading,
+  defaultBranch,
+}: {
+  trends: TrendPoint[];
+  loading: boolean;
+  defaultBranch: string;
+}) {
+  const [branchFilter, setBranchFilter] = useState<string>(defaultBranch);
+  if (loading) {
+    return (
+      <section className="glass-card p-5">
+        <h2 className="text-sm font-medium mb-3">Trend</h2>
+        <div className="text-sm text-muted-foreground">Loading trend…</div>
+      </section>
+    );
+  }
+  if (!trends || trends.length === 0) {
+    return (
+      <section className="glass-card p-5">
+        <h2 className="text-sm font-medium mb-3">Trend</h2>
+        <p className="text-sm text-muted-foreground">
+          Run two or more scans on this repo to see a trend.
+        </p>
+      </section>
+    );
+  }
+  // Available branches across the trend window — keep "all" as the default
+  // top option, then list each branch we've seen.
+  const branches = Array.from(new Set(trends.map((p) => p.branch))).filter(Boolean);
+  const filtered =
+    branchFilter === "__all__"
+      ? trends
+      : trends.filter((p) => p.branch === branchFilter);
+  const data = filtered.map((p) => ({
+    // Short timestamp label so the x-axis fits.
+    name: new Date(p.completed_at).toLocaleString(undefined, {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }),
+    scan_id: p.scan_id,
+    critical: p.critical,
+    high: p.high,
+    medium: p.medium,
+    low: p.low,
+    info: p.info,
+    total: p.total,
+  }));
+  return (
+    <section className="glass-card p-5">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-sm font-medium">
+          Trend ({filtered.length} scan{filtered.length === 1 ? "" : "s"})
+        </h2>
+        {branches.length > 1 && (
+          <select
+            value={branchFilter}
+            onChange={(e) => setBranchFilter(e.target.value)}
+            className="text-xs bg-muted/40 border border-border/40 rounded px-2 h-7"
+          >
+            <option value="__all__">all branches</option>
+            {branches.map((b) => (
+              <option key={b} value={b}>
+                {b}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+      <div className="h-64 w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={data} margin={{ top: 5, right: 8, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeOpacity={0.1} vertical={false} />
+            <XAxis
+              dataKey="name"
+              tick={{ fontSize: 10 }}
+              interval="preserveStartEnd"
+            />
+            <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+            <Tooltip
+              contentStyle={{
+                background: "rgba(20,20,20,0.95)",
+                border: "1px solid rgba(255,255,255,0.1)",
+                fontSize: 12,
+              }}
+            />
+            <Legend wrapperStyle={{ fontSize: 11 }} iconType="square" />
+            {/* Stack severities so the bar height = total. Colors match
+                the rest of the UI's severity palette. */}
+            <Bar dataKey="critical" stackId="s" fill="#dc2626" name="Critical" />
+            <Bar dataKey="high" stackId="s" fill="#f97316" name="High" />
+            <Bar dataKey="medium" stackId="s" fill="#eab308" name="Medium" />
+            <Bar dataKey="low" stackId="s" fill="#3b82f6" name="Low" />
+            <Bar dataKey="info" stackId="s" fill="#71717a" name="Info" />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </section>
+  );
 }
