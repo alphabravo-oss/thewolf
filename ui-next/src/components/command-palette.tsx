@@ -12,7 +12,6 @@ import {
   BugIcon,
   WrenchIcon,
   RepeatIcon,
-  ContainerIcon,
   SettingsIcon,
   KeyboardIcon,
   LayoutDashboardIcon,
@@ -132,11 +131,6 @@ export function CommandPalette() {
               onSelect={() => go("/loops")}
               icon={RepeatIcon}
               label="Loops"
-            />
-            <PaletteItem
-              onSelect={() => go("/scanners")}
-              icon={ContainerIcon}
-              label="Scanners"
             />
             <PaletteItem
               onSelect={() => go("/settings")}

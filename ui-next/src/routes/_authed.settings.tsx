@@ -8,6 +8,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CheckIcon,
+  DownloadIcon,
   KeyIcon,
   Loader2Icon,
   PlusIcon,
@@ -557,9 +558,9 @@ function NewUserForm({
 }
 
 // ---------------------------------------------------------------------------
-// Scanners — read-only view of the live container.Config. Editing the
-// scanner backend happens via wolf.yaml + env + restart (per the API
-// comment on /api/scanners/config).
+// Scanners — live container config + operator actions (Doctor / Pull).
+// Editing the scanner backend itself happens via wolf.yaml + env + restart
+// per the API comment on /api/scanners/config.
 // ---------------------------------------------------------------------------
 
 interface ScannersConfig {
@@ -576,22 +577,71 @@ interface ScannersConfig {
   gid: number;
 }
 
+interface DoctorCheck {
+  label: string;
+  ok: boolean;
+  detail?: string;
+}
+
+interface DoctorResult {
+  overall_ok: boolean;
+  checks: DoctorCheck[];
+}
+
+interface PullResult {
+  pulled: string[];
+  errors?: { image: string; error: string }[];
+}
+
 function ScannersTab() {
-  const q = useQuery({
+  const qc = useQueryClient();
+  const cfgQ = useQuery({
     queryKey: ["scanners-config"],
     queryFn: async () => (await api.get<ScannersConfig>("/scanners/config")).data,
   });
-  if (q.isLoading) {
+  const [doctor, setDoctor] = useState<DoctorResult | null>(null);
+  const [pull, setPull] = useState<PullResult | null>(null);
+
+  const doctorMut = useMutation({
+    mutationFn: async () => (await api.post<DoctorResult>("/scanners/doctor")).data,
+    onSuccess: (d) => {
+      setDoctor(d);
+      if (d?.overall_ok) toast.success("All scanner checks passed");
+      else toast.error("Scanner checks failed — see report below");
+    },
+    onError: (e) =>
+      toast.error(e instanceof Error ? e.message : "Doctor failed"),
+  });
+
+  const pullMut = useMutation({
+    mutationFn: async () => (await api.post<PullResult>("/scanners/pull")).data,
+    onSuccess: (p) => {
+      setPull(p);
+      if (p && (!p.errors || p.errors.length === 0)) {
+        toast.success(`Pulled ${p.pulled?.length ?? 0} image(s)`);
+      } else {
+        toast.error(
+          `Pulled ${p?.pulled?.length ?? 0}, ${p?.errors?.length ?? 0} failed`,
+        );
+      }
+      qc.invalidateQueries({ queryKey: ["scanners-config"] });
+    },
+    onError: (e) =>
+      toast.error(e instanceof Error ? e.message : "Pull failed"),
+  });
+
+  if (cfgQ.isLoading) {
     return <p className="text-sm text-muted-foreground">Loading…</p>;
   }
-  if (q.isError || !q.data) {
+  if (cfgQ.isError || !cfgQ.data) {
     return (
       <p className="text-sm text-destructive">
         Failed to load scanner config — is the container backend initialized?
       </p>
     );
   }
-  const cfg = q.data;
+
+  const cfg = cfgQ.data;
   const rows: Array<[string, React.ReactNode]> = [
     ["Default image", <code className="text-xs">{cfg.image}</code>],
     ["Pull policy", cfg.pull_policy],
@@ -605,11 +655,128 @@ function ScannersTab() {
       <code className="text-xs">{cfg.host_repos_root || "—"}</code>,
     ],
   ];
+
+  // Heuristic for "set up needed": pull policy expects local image
+  // (Never / IfNotPresent) and the most recent pull / doctor surfaces
+  // an error. We can't probe "is the image present" from the client
+  // without a dedicated endpoint, so this is best-effort UX guidance.
+  const wolfBuiltMissing =
+    pull?.errors?.some((e) => e.image === cfg.image) ?? false;
+
   return (
     <section className="space-y-4">
+      {/* Operator actions row. Doctor + Set up are the two day-1 buttons. */}
+      <div className="glass-card p-5">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => pullMut.mutate()}
+            disabled={pullMut.isPending}
+            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
+            title="Pre-pull every image in the configured set so the first scan doesn't pay the pull latency"
+          >
+            {pullMut.isPending ? (
+              <Loader2Icon className="size-4 animate-spin" />
+            ) : (
+              <DownloadIcon className="size-4" />
+            )}
+            {pullMut.isPending ? "Pulling…" : "Set up scanners (pull images)"}
+          </button>
+          <button
+            type="button"
+            onClick={() => doctorMut.mutate()}
+            disabled={doctorMut.isPending}
+            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border/60 text-sm hover:bg-muted/30 disabled:opacity-50"
+            title="Run scanner-backend diagnostics (docker reachable, image present, cache writable, etc.)"
+          >
+            {doctorMut.isPending ? (
+              <Loader2Icon className="size-4 animate-spin" />
+            ) : (
+              <ShieldIcon className="size-4" />
+            )}
+            {doctorMut.isPending ? "Running…" : "Run Doctor"}
+          </button>
+        </div>
+
+        {/* First-run hint when pull resolves nothing for our wolf-built
+            image — we don't publish wolf-scanners:* to a registry yet
+            so the operator has to build locally. */}
+        {wolfBuiltMissing && (
+          <div className="mt-3 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+            <strong>Wolf-built images aren't published to a registry yet.</strong>{" "}
+            Run <code>make scanners-build</code> from the wolf source repo to
+            create <code>{cfg.image}</code> locally. Bucket images: <code>make
+            scanners-build-jvm</code>, <code>scanners-build-rust</code>,
+            <code>scanners-build-codeql</code>.
+          </div>
+        )}
+
+        {/* Doctor result panel. */}
+        {doctor && (
+          <div className="mt-4 rounded-md border border-border/40 bg-muted/20 p-3 text-sm space-y-1">
+            <div className="flex items-center gap-2 mb-1">
+              {doctor.overall_ok ? (
+                <CheckIcon className="size-4 text-emerald-400" />
+              ) : (
+                <span className="text-destructive">●</span>
+              )}
+              <span className="font-medium">
+                {doctor.overall_ok
+                  ? "All checks passed"
+                  : "Some checks failed"}
+              </span>
+            </div>
+            <ul className="text-xs space-y-0.5 font-mono">
+              {doctor.checks.map((c, i) => (
+                <li key={i} className="flex items-start gap-2">
+                  <span
+                    className={c.ok ? "text-emerald-400" : "text-destructive"}
+                  >
+                    {c.ok ? "✓" : "✗"}
+                  </span>
+                  <span className="flex-1">
+                    {c.label}
+                    {c.detail && (
+                      <span className="text-muted-foreground">
+                        {" "}
+                        — {c.detail}
+                      </span>
+                    )}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Pull result panel. */}
+        {pull && (
+          <div className="mt-4 rounded-md border border-border/40 bg-muted/20 p-3 text-sm space-y-1">
+            <div className="font-medium mb-1">
+              Pulled {pull.pulled?.length ?? 0} image
+              {(pull.pulled?.length ?? 0) === 1 ? "" : "s"}
+              {pull.errors && pull.errors.length > 0 && (
+                <span className="text-destructive ml-2">
+                  · {pull.errors.length} failed
+                </span>
+              )}
+            </div>
+            {pull.errors && pull.errors.length > 0 && (
+              <ul className="text-xs space-y-0.5 font-mono text-destructive">
+                {pull.errors.map((e, i) => (
+                  <li key={i}>
+                    {e.image}: {e.error}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+      </div>
+
       <div className="glass-card p-5">
         <p className="text-xs text-muted-foreground mb-3">
-          Read-only — edit via <code>wolf.yaml</code> /{" "}
+          Config is read-only — edit via <code>wolf.yaml</code> /{" "}
           <code>WOLF_SCANNERS_*</code> env, then restart wolf.
         </p>
         <dl className="grid md:grid-cols-2 gap-x-6 gap-y-2 text-sm">
