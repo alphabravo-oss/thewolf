@@ -3,6 +3,8 @@ package scanners
 import (
 	"bytes"
 	"context"
+	"errors"
+	"os/exec"
 	"strings"
 	"testing"
 
@@ -94,4 +96,59 @@ func TestDoctor_WithConfig(t *testing.T) {
 	if buf.Len() == 0 {
 		t.Error("Doctor produced no output")
 	}
+}
+
+func TestAutoDiscoverBucketImages(t *testing.T) {
+	origLook, origCmd := execLookPath, execCommand
+	defer func() { execLookPath, execCommand = origLook, origCmd }()
+
+	execLookPath = func(name string) (string, error) { return "/usr/bin/docker", nil }
+	// Pretend only the JVM bucket image is locally present.
+	execCommand = func(name string, args ...string) *exec.Cmd {
+		ref := args[len(args)-1]
+		if ref == "wolf-scanners-jvm:dev" {
+			return exec.Command("true")
+		}
+		return exec.Command("false")
+	}
+
+	cfg := &container.Config{Image: "wolf-scanners:dev"}
+	autoDiscoverBucketImages(cfg)
+
+	if cfg.ImageOverrides["infer"] != "wolf-scanners-jvm:dev" {
+		t.Errorf("infer override = %q, want wolf-scanners-jvm:dev", cfg.ImageOverrides["infer"])
+	}
+	if cfg.ImageOverrides["pmd"] != "wolf-scanners-jvm:dev" {
+		t.Errorf("pmd override = %q, want wolf-scanners-jvm:dev", cfg.ImageOverrides["pmd"])
+	}
+	if _, set := cfg.ImageOverrides["clippy"]; set {
+		t.Errorf("clippy should not be set when rust image absent: %v", cfg.ImageOverrides["clippy"])
+	}
+	if _, set := cfg.ImageOverrides["codeql"]; set {
+		t.Errorf("codeql should not be set when codeql image absent: %v", cfg.ImageOverrides["codeql"])
+	}
+
+	// Pre-existing overrides must win over auto-discovery.
+	cfg2 := &container.Config{
+		Image:          "wolf-scanners:dev",
+		ImageOverrides: map[string]string{"infer": "custom:tag"},
+	}
+	autoDiscoverBucketImages(cfg2)
+	if cfg2.ImageOverrides["infer"] != "custom:tag" {
+		t.Errorf("pre-set infer override clobbered: got %q", cfg2.ImageOverrides["infer"])
+	}
+	if cfg2.ImageOverrides["pmd"] != "wolf-scanners-jvm:dev" {
+		t.Errorf("pmd should still auto-fill: got %q", cfg2.ImageOverrides["pmd"])
+	}
+
+	// No docker on host → no overrides added, no panic.
+	execLookPath = func(name string) (string, error) { return "", errors.New("not found") }
+	cfg3 := &container.Config{Image: "wolf-scanners:dev"}
+	autoDiscoverBucketImages(cfg3)
+	if len(cfg3.ImageOverrides) != 0 {
+		t.Errorf("expected no overrides when docker absent, got %v", cfg3.ImageOverrides)
+	}
+
+	// nil cfg must not panic.
+	autoDiscoverBucketImages(nil)
 }

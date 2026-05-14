@@ -13,11 +13,20 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 
 	"github.com/alphabravocompany/thewolf/internal/plugin/container"
+)
+
+// execLookPath and execCommand are package vars so tests can stub the
+// shell out — autoDiscoverBucketImages calls `docker image inspect`,
+// which we don't want hitting the real daemon during unit tests.
+var (
+	execLookPath = exec.LookPath
+	execCommand  = exec.Command
 )
 
 // defaultDBVolume returns a host bind-mount path under the user's home for
@@ -146,11 +155,104 @@ func LoadAndInstall(ctx context.Context) (*container.Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("scanners: invalid container config: %w", err)
 	}
+	// Auto-discover bucket images locally. The three-tier design keeps
+	// heavyweight tools (codeql ~800MB, JVM ~600MB infer+pmd, rust
+	// ~400MB clippy) in dedicated bucket images so the default wolf-
+	// scanners stays lean. Rather than make operators set
+	// WOLF_SCANNERS_IMAGE_{JVM,RUST,CODEQL} by hand, walk `docker image
+	// ls` once at startup and wire the bucket-served tools into
+	// ImageOverrides if the corresponding image exists. Explicit env
+	// vars still take precedence (handled by ToContainerConfig before
+	// this point).
+	autoDiscoverBucketImages(cfg)
+
 	container.SetDefault(cfg)
 	if err := container.EnsureImage(ctx, cfg); err != nil {
 		return cfg, err
 	}
 	return cfg, nil
+}
+
+// bucketImageTools is the per-bucket map of tools served by each bucket
+// image. Keys match the SCANNERS_IMAGE-{name} convention used by the
+// Makefile targets (scanners-build-jvm, etc.).
+var bucketImageTools = map[string][]string{
+	"jvm":    {"infer", "pmd"},
+	"rust":   {"clippy"},
+	"codeql": {"codeql"},
+}
+
+// autoDiscoverBucketImages probes docker for locally-available bucket
+// images and populates cfg.ImageOverrides for the tools each bucket
+// serves. Already-configured overrides (from WOLF_SCANNERS_IMAGE_*) win
+// — we only fill in what the operator hasn't explicitly set.
+func autoDiscoverBucketImages(cfg *container.Config) {
+	if cfg == nil {
+		return
+	}
+	// Derive the bucket image base name from the default image. With
+	// the default "wolf-scanners:dev" we look for "wolf-scanners-jvm:dev"
+	// etc. Anything more exotic gets skipped silently.
+	base, tag := splitImageTag(cfg.Image)
+	if base == "" {
+		return
+	}
+	if cfg.ImageOverrides == nil {
+		cfg.ImageOverrides = map[string]string{}
+	}
+	for bucket, tools := range bucketImageTools {
+		candidate := base + "-" + bucket + ":" + tag
+		if !dockerImageExists(candidate) {
+			continue
+		}
+		for _, tool := range tools {
+			if _, alreadySet := cfg.ImageOverrides[tool]; alreadySet {
+				continue
+			}
+			cfg.ImageOverrides[tool] = candidate
+		}
+	}
+}
+
+// splitImageTag parses "repo:tag" into ("repo", "tag"). When no tag is
+// present, defaults the tag to "dev" so the bucket lookup uses the same
+// convention as the Makefile targets.
+func splitImageTag(s string) (repo, tag string) {
+	for i := len(s) - 1; i >= 0; i-- {
+		if s[i] == ':' {
+			// guard against registry-port colons by ensuring no '/' after
+			if !containsAfter(s, '/', i) {
+				return s[:i], s[i+1:]
+			}
+		}
+		if s[i] == '/' {
+			break
+		}
+	}
+	if s == "" {
+		return "", ""
+	}
+	return s, "dev"
+}
+
+func containsAfter(s string, c byte, idx int) bool {
+	for i := idx + 1; i < len(s); i++ {
+		if s[i] == c {
+			return true
+		}
+	}
+	return false
+}
+
+// dockerImageExists runs `docker image inspect <ref>` and reports
+// whether the image is present locally. We don't pull on miss — the
+// auto-discovery is a pure "what's already here?" probe.
+func dockerImageExists(ref string) bool {
+	if _, err := execLookPath("docker"); err != nil {
+		return false
+	}
+	cmd := execCommand("docker", "image", "inspect", ref)
+	return cmd.Run() == nil
 }
 
 // Doctor runs a series of diagnostics and writes a human-readable report to w.
