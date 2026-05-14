@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"os/exec"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -155,6 +156,13 @@ func ScannersPull(w http.ResponseWriter, r *http.Request) {
 		sub := *cfg
 		sub.Image = img
 		sub.ImageOverrides = nil
+		// Operator clicked 'Set up scanners' — bypass the configured
+		// PullPolicy. The policy gates scan-time auto-pulls; an explicit
+		// operator-initiated pull should always actually pull (or
+		// surface a real error). Without this override, deployments
+		// running PullPolicy=Never have a button that's always
+		// rejected by the policy it's supposed to bootstrap past.
+		sub.PullPolicy = container.PullAlways
 		if err := container.EnsureImage(r.Context(), &sub); err != nil {
 			errs = append(errs, pullErr{Image: img, Error: err.Error()})
 			continue
@@ -316,6 +324,10 @@ func ScannersPullOne(w http.ResponseWriter, r *http.Request) {
 	sub := *cfg
 	sub.Image = body.Image
 	sub.ImageOverrides = nil
+	// Same rationale as ScannersPull: explicit operator-initiated pull
+	// bypasses the configured PullPolicy. Without this, an operator on
+	// a Never-policy deployment can't use the per-image Update button.
+	sub.PullPolicy = container.PullAlways
 	if err := container.EnsureImage(r.Context(), &sub); err != nil {
 		response.WriteError(w, http.StatusInternalServerError, "pull_failed", err.Error())
 		return
@@ -352,44 +364,85 @@ func dockerImageDigest(ref string) (string, error) {
 }
 
 // dockerManifestDigest queries the registry for the current manifest
-// digest for ref's tag. Doesn't pull — `docker manifest inspect` only
-// fetches the small JSON. Errors are surfaced upstream so the UI can
-// distinguish "registry unreachable" from "image not on disk".
+// digest for ref's tag and returns the digest of the manifest entry
+// matching THIS host's platform (runtime.GOARCH). Without the platform
+// filter, multi-arch images would always look like "update available"
+// because the top-level manifest-list digest never matches any single
+// per-platform digest. Doesn't pull — `docker manifest inspect` only
+// fetches the small JSON.
 func dockerManifestDigest(ref string) (string, error) {
 	if _, err := exec.LookPath("docker"); err != nil {
 		return "", err
 	}
 	out, err := exec.Command("docker", "manifest", "inspect", "--verbose", ref).Output()
 	if err != nil {
-		// Fallback: some daemons need experimental manifest enabled.
-		// Try the non-verbose form which buildkit supports natively.
+		// Single-arch fallback. Some images have only one manifest
+		// (no manifest-list); --verbose returns an empty array, but
+		// the non-verbose call returns the image manifest directly.
 		out, err = exec.Command("docker", "manifest", "inspect", ref).Output()
 		if err != nil {
 			return "", err
 		}
+		// Non-verbose, single manifest: top-level .config.digest is
+		// the image layer-config sha. Use that as the comparison
+		// anchor since we can't get a multi-arch index here.
+		var asObj map[string]any
+		if json.Unmarshal(out, &asObj) == nil {
+			if d, ok := asObj["digest"].(string); ok {
+				return d, nil
+			}
+			if cfg, ok := asObj["config"].(map[string]any); ok {
+				if d, ok := cfg["digest"].(string); ok {
+					return d, nil
+				}
+			}
+		}
+		return "", nil
 	}
-	// Two shapes:
-	//   - non-verbose: {"manifests":[...], "mediaType":"...", ...}
-	//   - --verbose:   [{"Ref":"...", "Descriptor":{"digest":"sha256:..."}}, ...]
-	var asArray []map[string]any
-	if json.Unmarshal(out, &asArray) == nil && len(asArray) > 0 {
-		if desc, ok := asArray[0]["Descriptor"].(map[string]any); ok {
+	// --verbose shape: array of
+	//   { "Ref": "...", "Descriptor": {"digest": "sha256:...",
+	//     "platform": {"architecture": "...", "os": "..."}}, ... }
+	var entries []map[string]any
+	if jerr := json.Unmarshal(out, &entries); jerr != nil || len(entries) == 0 {
+		// Some daemons return a SINGLE object when the image isn't
+		// multi-arch (no manifest-list). Fall through to the digest
+		// at .Descriptor.digest.
+		var single map[string]any
+		if json.Unmarshal(out, &single) == nil {
+			if desc, ok := single["Descriptor"].(map[string]any); ok {
+				if d, ok := desc["digest"].(string); ok {
+					return d, nil
+				}
+			}
+		}
+		return "", nil
+	}
+	// Match the current host's platform first. RepoDigests on the
+	// local image is the per-arch digest, so we need to compare apples
+	// to apples here.
+	for _, e := range entries {
+		desc, ok := e["Descriptor"].(map[string]any)
+		if !ok {
+			continue
+		}
+		plat, ok := desc["platform"].(map[string]any)
+		if !ok {
+			continue
+		}
+		archStr, _ := plat["architecture"].(string)
+		osStr, _ := plat["os"].(string)
+		if osStr == "linux" && archStr == runtime.GOARCH {
 			if d, ok := desc["digest"].(string); ok {
 				return d, nil
 			}
 		}
 	}
-	var asObj map[string]any
-	if json.Unmarshal(out, &asObj) == nil {
-		// Top-level digest lives at .config.digest for image manifests,
-		// or .digest on the list. Try both.
-		if d, ok := asObj["digest"].(string); ok {
+	// No platform match — image probably single-arch or doesn't
+	// support this arch. Return the first descriptor's digest as a
+	// last-ditch comparison anchor.
+	if desc, ok := entries[0]["Descriptor"].(map[string]any); ok {
+		if d, ok := desc["digest"].(string); ok {
 			return d, nil
-		}
-		if cfg, ok := asObj["config"].(map[string]any); ok {
-			if d, ok := cfg["digest"].(string); ok {
-				return d, nil
-			}
 		}
 	}
 	return "", nil

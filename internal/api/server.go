@@ -69,7 +69,12 @@ func NewServer(store db.Store, addr string) *Server {
 	r.Use(chimw.RealIP)
 	r.Use(chimw.Logger)
 	r.Use(chimw.Recoverer)
-	r.Use(chimw.Timeout(60 * time.Second))
+	// 15-minute global timeout. Long enough for the legitimate slow
+	// operations — bulk scanner-image pulls (24 images × multi-MB each
+	// = several minutes), doctor diagnostics, scan progress streaming
+	// (SSE keeps the conn alive). Fast handlers complete in ms either
+	// way; this is the safety-net upper bound, not the expected case.
+	r.Use(chimw.Timeout(15 * time.Minute))
 	r.Use(middleware.MaxBodySize(1 << 20)) // 1 MB body limit
 	r.Use(generalLimiter.Handler)
 	r.Use(cors.Handler(cors.Options{
@@ -244,7 +249,10 @@ func NewServer(store db.Store, addr string) *Server {
 		Handler:           r,
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
-		WriteTimeout:      60 * time.Second,
+		// WriteTimeout matches the chi router-level Timeout above; the
+		// transport-level write deadline must outlast the slowest
+		// legitimate handler (bulk scanner pulls, SSE streams).
+		WriteTimeout:      15 * time.Minute,
 		IdleTimeout:       120 * time.Second,
 	}
 
