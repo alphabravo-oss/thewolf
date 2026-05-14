@@ -593,6 +593,15 @@ interface PullResult {
   errors?: { image: string; error: string }[];
 }
 
+interface ImageStatus {
+  image: string;
+  local_digest?: string;
+  remote_digest?: string;
+  updates_available: boolean;
+  local_error?: string;
+  remote_error?: string;
+}
+
 function ScannersTab() {
   const qc = useQueryClient();
   const cfgQ = useQuery({
@@ -777,6 +786,8 @@ function ScannersTab() {
         )}
       </div>
 
+      <ImagesPanel />
+
       <div className="glass-card p-5">
         <p className="text-xs text-muted-foreground mb-3">
           Config is read-only — edit via <code>wolf.yaml</code> /{" "}
@@ -805,5 +816,151 @@ function ScannersTab() {
         </div>
       )}
     </section>
+  );
+}
+
+// ImagesPanel — per-image digests + update detection + per-image pull.
+//
+// The list of images is whatever wolf is currently configured to use
+// (default + per-tool overrides + upstream-pinned scanner images). For
+// each, we show the LOCAL pull-time digest and the REMOTE current
+// digest. When they differ, an "Update" button appears that pulls
+// just that image. "Check for updates" re-runs the probe.
+function ImagesPanel() {
+  const qc = useQueryClient();
+  const q = useQuery({
+    queryKey: ["scanner-images"],
+    queryFn: async () =>
+      (await api.get<ImageStatus[]>("/scanners/images")).data ?? [],
+    // Don't auto-refetch — registry probes shell out per image and we
+    // don't want to hammer Docker Hub. User-driven only.
+    refetchOnWindowFocus: false,
+  });
+  const pullOne = useMutation({
+    mutationFn: (image: string) =>
+      api.post<{ image: string; local_digest: string }>(
+        "/scanners/images/pull",
+        { image },
+      ),
+    onSuccess: (_, image) => {
+      toast.success(`Pulled ${image}`);
+      qc.invalidateQueries({ queryKey: ["scanner-images"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Pull failed"),
+  });
+
+  return (
+    <div className="glass-card p-5">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-medium">Scanner images</h3>
+        <button
+          type="button"
+          onClick={() => qc.invalidateQueries({ queryKey: ["scanner-images"] })}
+          disabled={q.isFetching}
+          className="inline-flex items-center gap-1 h-8 px-2.5 rounded-md border border-border/60 text-xs hover:bg-muted/30 disabled:opacity-50"
+          title="Re-probe registries for the latest manifest digests"
+        >
+          {q.isFetching ? (
+            <Loader2Icon className="size-3.5 animate-spin" />
+          ) : (
+            <DownloadIcon className="size-3.5" />
+          )}
+          Check for updates
+        </button>
+      </div>
+
+      {q.isLoading ? (
+        <p className="text-xs text-muted-foreground">
+          Probing local + remote digests…
+        </p>
+      ) : q.data && q.data.length > 0 ? (
+        <ul className="space-y-2 text-sm">
+          {q.data.map((img) => (
+            <li
+              key={img.image}
+              className="flex flex-wrap items-center gap-3 border-b border-border/20 pb-2 last:border-0 last:pb-0"
+            >
+              <div className="font-mono text-xs flex-1 min-w-0 break-all">
+                {img.image}
+              </div>
+              <DigestPill label="local" value={img.local_digest} err={img.local_error} />
+              <DigestPill
+                label="remote"
+                value={img.remote_digest}
+                err={img.remote_error}
+              />
+              {img.updates_available && (
+                <span className="text-[10px] uppercase tracking-wide font-medium text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded px-1.5 py-0.5">
+                  update available
+                </span>
+              )}
+              {(img.updates_available || (!img.local_digest && !img.local_error)) && (
+                <button
+                  type="button"
+                  onClick={() => pullOne.mutate(img.image)}
+                  disabled={pullOne.isPending}
+                  className="inline-flex items-center gap-1 h-7 px-2.5 rounded-md bg-primary text-primary-foreground text-xs font-medium disabled:opacity-50"
+                >
+                  {pullOne.isPending && pullOne.variables === img.image ? (
+                    <Loader2Icon className="size-3 animate-spin" />
+                  ) : (
+                    <DownloadIcon className="size-3" />
+                  )}
+                  {img.updates_available ? "Update" : "Pull"}
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-xs text-muted-foreground">No images configured.</p>
+      )}
+    </div>
+  );
+}
+
+// DigestPill renders a labelled SHA-256 (truncated) or an error tag
+// when the probe failed.
+function DigestPill({
+  label,
+  value,
+  err,
+}: {
+  label: string;
+  value?: string;
+  err?: string;
+}) {
+  if (err) {
+    return (
+      <span
+        className="text-[10px] uppercase tracking-wide text-red-300 bg-red-500/10 border border-red-500/30 rounded px-1.5 py-0.5"
+        title={err}
+      >
+        {label}: error
+      </span>
+    );
+  }
+  if (!value) {
+    return (
+      <span
+        className="text-[10px] uppercase tracking-wide text-muted-foreground bg-muted/20 border border-border/30 rounded px-1.5 py-0.5"
+        title={label === "local" ? "image not pulled yet — use 'Set up scanners' or the per-image Update" : "no manifest available"}
+      >
+        {label}: {label === "local" ? "not pulled" : "—"}
+      </span>
+    );
+  }
+  // Display sha256:abcdef… (8 chars after the prefix is plenty to
+  // recognize and short enough to fit the row).
+  const short = value.startsWith("sha256:")
+    ? "sha256:" + value.slice(7, 15)
+    : value.slice(0, 16);
+  return (
+    <span
+      className="text-[10px] font-mono uppercase tracking-tight text-muted-foreground bg-muted/30 border border-border/30 rounded px-1.5 py-0.5"
+      title={value}
+    >
+      {label}: {short}…
+    </span>
   );
 }

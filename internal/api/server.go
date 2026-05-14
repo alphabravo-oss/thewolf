@@ -203,6 +203,8 @@ func NewServer(store db.Store, addr string) *Server {
 			// Scanner backend (PLAN.md §5). The container backend status
 			// page surfaces these endpoints.
 			r.Route("/scanners", func(r chi.Router) {
+				r.Get("/images", routes.ScannersImages)
+				r.Post("/images/pull", routes.ScannersPullOne)
 				r.Get("/config", routes.ScannersConfig)
 				r.Get("/list", routes.ScannersList)
 				r.Post("/doctor", routes.ScannersDoctor)
