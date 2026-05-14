@@ -215,7 +215,7 @@ func RunCloc(repoPath string) (map[string]FileStats, map[string]int, error) {
 		return nil, nil, fmt.Errorf("cloc not found in PATH")
 	}
 
-	cmd := exec.Command("cloc", "--json", "--by-file", repoPath) //nosemgrep: go.lang.security.audit.dangerous-exec-command.dangerous-exec-command
+	cmd := exec.Command("cloc", "--json", "--by-file", repoPath) // nosemgrep: go.lang.security.audit.dangerous-exec-command.dangerous-exec-command
 	out, err := cmd.Output()
 	if err != nil {
 		return nil, nil, fmt.Errorf("cloc exec: %w", err)
@@ -282,7 +282,7 @@ func RunCtags(repoPath string) ([]Symbol, error) {
 		"-f", "-", // write to stdout
 	}
 
-	cmd := exec.Command(binary, args...) //nosemgrep: go.lang.security.audit.dangerous-exec-command.dangerous-exec-command
+	cmd := exec.Command(binary, args...) // nosemgrep: go.lang.security.audit.dangerous-exec-command.dangerous-exec-command
 	out, err := cmd.Output()
 	if err != nil {
 		// Retry without --output-format=json (older ctags).
@@ -354,7 +354,7 @@ func runCtagsTabular(binary, repoPath string) ([]Symbol, error) {
 		repoPath,
 		"-f", "-",
 	}
-	cmd := exec.Command(binary, args...) //nosemgrep: go.lang.security.audit.dangerous-exec-command.dangerous-exec-command
+	cmd := exec.Command(binary, args...) // nosemgrep: go.lang.security.audit.dangerous-exec-command.dangerous-exec-command
 	out, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("ctags tabular exec: %w", err)
@@ -434,7 +434,7 @@ func runTreeSitter(repoPath string, files []string) ([]Symbol, error) {
 	for _, rel := range files {
 		abs := filepath.Join(repoPath, rel)
 
-		cmd := exec.Command("tree-sitter", "parse", abs) //nosemgrep: go.lang.security.audit.dangerous-exec-command.dangerous-exec-command
+		cmd := exec.Command("tree-sitter", "parse", abs) // nosemgrep: go.lang.security.audit.dangerous-exec-command.dangerous-exec-command
 		out, err := cmd.Output()
 		if err != nil {
 			continue // skip unparseable files

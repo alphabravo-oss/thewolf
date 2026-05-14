@@ -163,7 +163,7 @@ func Logout(w http.ResponseWriter, r *http.Request) {
 		Secure:   true,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   -1,
-	}) //nosemgrep: go.lang.security.audit.net.cookie-missing-secure.cookie-missing-secure
+	}) // nosemgrep: go.lang.security.audit.net.cookie-missing-secure.cookie-missing-secure
 	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: map[string]string{"message": "logged out"}})
 }
 

@@ -100,11 +100,11 @@ func ServeHTTP(w http.ResponseWriter, r *http.Request, client *Client) {
 				return
 			}
 			if event.ID != "" {
-				fmt.Fprintf(w, "id: %s\n", event.ID) //nosemgrep: go.lang.security.audit.xss.no-fprintf-to-responsewriter.no-fprintf-to-responsewriter
+				fmt.Fprintf(w, "id: %s\n", event.ID) // nosemgrep: go.lang.security.audit.xss.no-fprintf-to-responsewriter.no-fprintf-to-responsewriter
 			}
 			// Don't emit "event:" field — the JSON data already contains a "type" key,
 			// and EventSource.onmessage only fires for unnamed events.
-			fmt.Fprintf(w, "data: %s\n\n", event.Data) //nosemgrep: go.lang.security.audit.xss.no-fprintf-to-responsewriter.no-fprintf-to-responsewriter
+			fmt.Fprintf(w, "data: %s\n\n", event.Data) // nosemgrep: go.lang.security.audit.xss.no-fprintf-to-responsewriter.no-fprintf-to-responsewriter
 			flusher.Flush()
 		case <-r.Context().Done():
 			return
