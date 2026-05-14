@@ -13,6 +13,13 @@ rules:
   document-start: disable
   truthy:
     check-keys: false
+  # GitHub Action SHA-pinning convention is `<repo>@<sha> # <ver>` —
+  # exactly one space between the value and the `#` comment marker.
+  # yamllint's default `comments: { min-spaces-from-content: 2 }`
+  # flags it. Allowing 1 space matches the de-facto convention
+  # and keeps the renovate-friendly format intact.
+  comments:
+    min-spaces-from-content: 1
 
 ignore: |
   ui-next/node_modules/

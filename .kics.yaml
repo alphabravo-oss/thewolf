@@ -10,8 +10,31 @@
 # Dockerfile checks via the per-Dockerfile `# checkov:skip=` comment
 # since these are one-shot bucket images with no service to probe.
 exclude-queries:
-  # Apt Get Install Pin Version Not Defined — affects scanners/Dockerfile,
-  # scanners/Dockerfile.jvm, scanners/Dockerfile.rust, scanners/Dockerfile.codeql.
+  # Apt Get Install Pin Version Not Defined — scanners/Dockerfile*.
   - 965a08d7-ef86-4f14-8792-4a3b2098937e
-  # Unpinned Package Version in Apk Add — affects the main Dockerfile.
+  # Unpinned Package Version in Apk Add (rule v1) — main Dockerfile.
   - 2b6ebc63-a614-4dab-aebf-a4fdba2387a3
+  # Unpinned Package Version in Apk Add (rule v2) — same intent, different ID.
+  - d3499f6d-1651-41bb-a9a7-de925fea487b
+
+  # docker-compose docker-socket mount — intentional, wolf orchestrates
+  # docker scanners via the daemon socket. See PLAN.md §10.1 for
+  # security posture.
+  - d6355c88-1e8d-49e9-b2f2-f8a1ca12c75b
+  # docker-compose 'volume has sensitive host dir' — same finding from
+  # a different KICS rule on the same socket mount.
+  - 1c1325ff-831d-43a1-973e-839ae57dfcc0
+
+  # docker-compose 'container capabilities unrestricted' — postgres needs
+  # CHOWN/FOWNER/SETUID/SETGID/DAC_READ_SEARCH to init its data dir.
+  # We cap_drop ALL and re-add just those five, which KICS still flags.
+  - ce76b7d0-9e77-464d-b86f-c5c48e03e22d
+  # docker-compose 'shared volumes' — named volumes are wolf's storage,
+  # not cross-container sharing risk.
+  - 8c978947-0ff6-485c-b0c2-0bfca6026466
+
+  # Dockerfile healthcheck missing — wolf-scanners and Dockerfile.min are
+  # one-shot scanner containers, not long-lived services. Already
+  # suppressed via per-Dockerfile checkov:skip comments; this is the
+  # KICS-side equivalent for the same files.
+  - b03a748a-542d-44f4-bb86-9199ab4fd2d5

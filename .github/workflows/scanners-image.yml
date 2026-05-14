@@ -6,6 +6,8 @@
 #   https://github.blog/security/vulnerability-research/how-to-catch-github-actions-workflow-injections-before-attackers-do/
 name: wolf-scanners image
 
+# checkov:skip=CKV_GHA_7:false positive — Checkov matches the workflow_dispatch.inputs.tag input name as if it were a uses: tag.
+
 # Least-privilege default. Jobs that push to ghcr.io escalate to
 # packages:write at the job level.
 permissions:
