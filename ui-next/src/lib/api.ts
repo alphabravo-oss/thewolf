@@ -53,6 +53,18 @@ async function request<T>(
     headers,
     credentials: "include",
   });
+
+  // Hard 401 on a request that *had* a token = the token is stale (server
+  // restart rotated the JWT signing secret, or the session was revoked).
+  // Drop the cookie and bounce to /login so the user gets a clean re-auth
+  // instead of an infinite console-spamming retry loop.
+  if (res.status === 401 && token) {
+    clearToken();
+    if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
+      window.location.replace("/login");
+    }
+  }
+
   if (res.status === 204) return { data: null as T };
   const body: ApiResponse<T> = await res.json();
   if (!res.ok) {

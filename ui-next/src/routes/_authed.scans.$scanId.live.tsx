@@ -7,6 +7,7 @@ import { useEffect } from "react";
 import { ArrowLeftIcon } from "lucide-react";
 import { api } from "@/lib/api";
 import type { Scan } from "@/lib/types";
+import { parseToolList } from "@/lib/types";
 import { LiveScan } from "@/components/live-scan";
 import { CardSkeleton } from "@/components/skeleton";
 import { ScanStatusPill } from "@/components/scan-status-pill";
@@ -68,7 +69,7 @@ function LiveScanPage() {
             </span>
           </h1>
           <p className="text-xs text-muted-foreground">
-            {scan.tools_completed.length}/{scan.tools_selected.length} tools
+            {parseToolList(scan.tools_completed).length}/{parseToolList(scan.tools_selected).length} tools
             completed
           </p>
         </div>
@@ -77,7 +78,10 @@ function LiveScanPage() {
 
       <LiveScan
         scanId={scan.id}
-        initialTools={scan.tools_selected}
+        initialTools={parseToolList(scan.tools_selected)}
+        initialCompleted={parseToolList(scan.tools_completed)}
+        initialFailed={parseToolList(scan.tools_failed)}
+        initialRunning={parseToolList(scan.tools_running)}
         scanStatus={scan.status}
       />
     </div>

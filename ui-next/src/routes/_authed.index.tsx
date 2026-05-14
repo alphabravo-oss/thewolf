@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { api } from "@/lib/api";
 import type { Collection, Scan } from "@/lib/types";
+import { parseToolList } from "@/lib/types";
 import { CardSkeleton, ListSkeleton } from "@/components/skeleton";
 import { EmptyState } from "@/components/empty-state";
 import { ScanStatusPill } from "@/components/scan-status-pill";
@@ -21,15 +22,15 @@ function DashboardPage() {
   const collections = useQuery({
     queryKey: ["collections", "all"],
     queryFn: async () => {
-      const r = await api.get<{ collections: Collection[] }>("/collections");
-      return r.data.collections ?? [];
+      const r = await api.get<Collection[]>("/collections");
+      return r.data ?? [];
     },
   });
   const scans = useQuery({
     queryKey: ["scans", "recent"],
     queryFn: async () => {
-      const r = await api.get<{ scans: Scan[] }>("/scans?limit=10");
-      return r.data.scans ?? [];
+      const r = await api.get<Scan[]>("/scans?limit=10");
+      return r.data ?? [];
     },
     refetchInterval: 15_000,
   });
@@ -112,8 +113,8 @@ function DashboardPage() {
                         {s.repo?.name ?? s.id.slice(0, 8)}
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        {s.branch} · {s.tools_completed.length}/
-                        {s.tools_selected.length} tools
+                        {s.branch} · {parseToolList(s.tools_completed).length}/
+                        {parseToolList(s.tools_selected).length} tools
                       </div>
                     </div>
                     <div className="text-sm font-mono tabular-nums">

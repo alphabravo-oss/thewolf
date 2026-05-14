@@ -1,0 +1,236 @@
+// Repo detail page. Shows metadata, detected languages, scan history,
+// and lets the user trigger a new scan or delete the repo.
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  ArrowLeftIcon,
+  PlayIcon,
+  Trash2Icon,
+  GitBranchIcon,
+  HardDriveIcon,
+} from "lucide-react";
+import { toast } from "sonner";
+import { api } from "@/lib/api";
+import type { Repo, Scan } from "@/lib/types";
+import { CardSkeleton } from "@/components/skeleton";
+
+export const Route = createFileRoute("/_authed/repos/$repoId")({
+  component: RepoDetailPage,
+});
+
+function RepoDetailPage() {
+  const { repoId } = Route.useParams();
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+
+  const repoQ = useQuery({
+    queryKey: ["repo", repoId],
+    queryFn: async () => {
+      const r = await api.get<Repo>(`/repos/${repoId}`);
+      return r.data;
+    },
+  });
+
+  const scansQ = useQuery({
+    queryKey: ["scans", "by-repo", repoId],
+    queryFn: async () => {
+      const r = await api.get<Scan[]>(`/scans?repo_id=${repoId}&limit=50`);
+      return r.data ?? [];
+    },
+  });
+
+  const startScan = useMutation({
+    mutationFn: async () => {
+      const r = await api.post<Scan>("/scans", {
+        repo_id: repoId,
+        branch: repoQ.data?.default_branch || "main",
+      });
+      return r.data;
+    },
+    onSuccess: (scan) => {
+      toast.success("Scan started");
+      qc.invalidateQueries({ queryKey: ["scans"] });
+      navigate({ to: "/scans/$scanId", params: { scanId: scan.id } });
+    },
+    onError: (e) => {
+      toast.error(e instanceof Error ? e.message : "Failed to start scan");
+    },
+  });
+
+  const del = useMutation({
+    mutationFn: async () => {
+      await api.delete(`/repos/${repoId}`);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["repos"] });
+      toast.success("Repo deleted");
+      navigate({ to: "/repos" });
+    },
+    onError: (e) => {
+      toast.error(e instanceof Error ? e.message : "Delete failed");
+    },
+  });
+
+  if (repoQ.isLoading || !repoQ.data) {
+    return (
+      <div className="p-6 max-w-5xl">
+        <CardSkeleton />
+      </div>
+    );
+  }
+  const r = repoQ.data;
+  const langs = parseLanguages(r.detected_languages);
+
+  return (
+    <div className="p-6 space-y-6 max-w-5xl">
+      <div className="flex items-start gap-3">
+        <Link
+          to="/repos"
+          className="size-9 grid place-items-center rounded-md hover:bg-muted/50"
+          aria-label="Back"
+        >
+          <ArrowLeftIcon className="size-4" />
+        </Link>
+        <div className="flex-1 min-w-0">
+          <h1 className="text-xl font-semibold flex items-center gap-2">
+            {r.source_type === "local" ? (
+              <HardDriveIcon className="size-5 text-muted-foreground" />
+            ) : (
+              <GitBranchIcon className="size-5 text-muted-foreground" />
+            )}
+            {r.name}
+          </h1>
+          <div className="text-sm text-muted-foreground font-mono break-all mt-1">
+            {r.source_path}
+          </div>
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => startScan.mutate()}
+            disabled={startScan.isPending}
+            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-50"
+          >
+            <PlayIcon className="size-4" />
+            {startScan.isPending ? "Starting…" : "Scan now"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (
+                window.confirm(
+                  `Delete repo "${r.name}"? This removes it from all collections and deletes its scans. Cannot be undone.`,
+                )
+              ) {
+                del.mutate();
+              }
+            }}
+            className="size-9 grid place-items-center rounded-md hover:bg-destructive/10 text-destructive"
+            aria-label="Delete"
+          >
+            <Trash2Icon className="size-4" />
+          </button>
+        </div>
+      </div>
+
+      <section className="glass-card p-5 grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+        <Field label="Source type" value={r.source_type} mono />
+        <Field label="Default branch" value={r.default_branch || "main"} />
+        <Field
+          label="Languages"
+          value={
+            langs.length === 0 ? (
+              <em className="text-muted-foreground">not yet detected</em>
+            ) : (
+              langs
+                .map(([l, n]) => `${l} (${n})`)
+                .join(", ")
+            )
+          }
+        />
+        <Field
+          label="Frameworks"
+          value={
+            r.detected_frameworks && r.detected_frameworks !== "null"
+              ? r.detected_frameworks
+              : (
+                <em className="text-muted-foreground">none detected</em>
+              )
+          }
+        />
+        <Field
+          label="First seen"
+          value={r.created_at ? new Date(r.created_at).toLocaleString() : "—"}
+        />
+        <Field
+          label="Last detection"
+          value={
+            r.detected_at ? new Date(r.detected_at).toLocaleString() : "—"
+          }
+        />
+      </section>
+
+      <section className="glass-card p-5">
+        <h2 className="text-sm font-medium mb-3">
+          Scans ({scansQ.data?.length ?? 0})
+        </h2>
+        {scansQ.isLoading ? (
+          <div className="text-sm text-muted-foreground">Loading…</div>
+        ) : !scansQ.data || scansQ.data.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No scans yet. Click <strong>Scan now</strong> above to run one.
+          </p>
+        ) : (
+          <ul className="divide-y divide-border/30">
+            {scansQ.data.slice(0, 20).map((s) => (
+              <li key={s.id} className="py-2 text-sm flex justify-between">
+                <Link
+                  to="/scans/$scanId"
+                  params={{ scanId: s.id }}
+                  className="flex-1 min-w-0 hover:underline"
+                >
+                  <span className="font-mono">{s.id.slice(0, 8)}</span>
+                  <span className="text-muted-foreground"> · {s.status}</span>
+                  {s.branch && (
+                    <span className="text-muted-foreground"> · {s.branch}</span>
+                  )}
+                </Link>
+                <span className="text-xs text-muted-foreground">
+                  {s.finding_count ?? 0} findings
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function Field({
+  label,
+  value,
+  mono,
+}: {
+  label: string;
+  value: React.ReactNode;
+  mono?: boolean;
+}) {
+  return (
+    <div>
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className={`text-sm ${mono ? "font-mono" : ""}`}>{value}</div>
+    </div>
+  );
+}
+
+// detected_languages is JSON-encoded: {"go": 219, "python": 2, ...}
+function parseLanguages(s: string | undefined): Array<[string, number]> {
+  if (!s) return [];
+  try {
+    const obj = JSON.parse(s) as Record<string, number>;
+    return Object.entries(obj).sort(([, a], [, b]) => b - a);
+  } catch {
+    return [];
+  }
+}

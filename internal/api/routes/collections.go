@@ -28,9 +28,13 @@ type createCollectionRequest struct {
 }
 
 type updateCollectionRequest struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	ScanConfig  string `json:"scan_config,omitempty"`
+	// Pointer fields so the client can distinguish "leave alone"
+	// (omitted) from "set to empty" (explicit ""). Previously the
+	// handler couldn't tell the difference, making it impossible to
+	// clear a description from the UI.
+	Name        *string `json:"name,omitempty"`
+	Description *string `json:"description,omitempty"`
+	ScanConfig  *string `json:"scan_config,omitempty"`
 }
 
 type addRepoToCollectionRequest struct {
@@ -82,6 +86,19 @@ func CreateCollection(w http.ResponseWriter, r *http.Request) {
 	if req.Name == "" {
 		response.WriteError(w, http.StatusBadRequest, "validation_error", "name is required")
 		return
+	}
+
+	// Enforce per-user name uniqueness so users can't end up with two
+	// collections called "Backend" that they can't tell apart in the
+	// UI. The DB has no constraint for this (the migration would need
+	// to be applied to existing rows), so we do a runtime check.
+	if existing, _ := h.Store.ListCollectionsByUser(r.Context(), claims.UserID); existing != nil {
+		for _, c := range existing {
+			if strings.EqualFold(c.Name, req.Name) {
+				response.WriteError(w, http.StatusConflict, "name_taken", "a collection with that name already exists")
+				return
+			}
+		}
 	}
 
 	scanConfig := req.ScanConfig
@@ -182,14 +199,26 @@ func UpdateCollection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Name != "" {
-		col.Name = req.Name
+	if req.Name != nil && *req.Name != "" && *req.Name != col.Name {
+		// Same per-user name-uniqueness rule as CreateCollection.
+		if existing, _ := h.Store.ListCollectionsByUser(r.Context(), claims.UserID); existing != nil {
+			for _, c := range existing {
+				if c.ID == col.ID {
+					continue
+				}
+				if strings.EqualFold(c.Name, *req.Name) {
+					response.WriteError(w, http.StatusConflict, "name_taken", "a collection with that name already exists")
+					return
+				}
+			}
+		}
+		col.Name = *req.Name
 	}
-	if req.Description != "" {
-		col.Description = req.Description
+	if req.Description != nil {
+		col.Description = *req.Description
 	}
-	if req.ScanConfig != "" {
-		col.ScanConfig = req.ScanConfig
+	if req.ScanConfig != nil && *req.ScanConfig != "" {
+		col.ScanConfig = *req.ScanConfig
 	}
 	col.UpdatedAt = time.Now()
 

@@ -1,21 +1,24 @@
 // Sidebar nav. Astronomer-style: dense, grouped, with subtle active-state
 // glow. Responsive: collapses to a hamburger-triggered drawer on screens
 // narrower than `md` (768 px).
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboardIcon,
   PackageIcon,
+  GitForkIcon,
   BugIcon,
   WrenchIcon,
   RepeatIcon,
   ContainerIcon,
   SettingsIcon,
   GaugeIcon,
+  LogOutIcon,
   MenuIcon,
   XIcon,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { WolfLogo } from "./wolf-logo";
+import { api, clearToken } from "@/lib/api";
 import { cn } from "@/lib/cn";
 
 type NavItem = {
@@ -27,6 +30,7 @@ type NavItem = {
 const primary: NavItem[] = [
   { label: "Dashboard", to: "/", icon: LayoutDashboardIcon },
   { label: "Collections", to: "/collections", icon: PackageIcon },
+  { label: "Repos", to: "/repos", icon: GitForkIcon },
   { label: "Scans", to: "/scans", icon: GaugeIcon },
   { label: "Findings", to: "/findings", icon: BugIcon },
   { label: "Fixes", to: "/fixes", icon: WrenchIcon },
@@ -42,12 +46,25 @@ export function Sidebar() {
   const pathname = useRouterState({
     select: (s) => s.location.pathname,
   });
+  const navigate = useNavigate();
 
   // Mobile drawer. Auto-closes on route change.
   const [mobileOpen, setMobileOpen] = useState(false);
   useEffect(() => {
     setMobileOpen(false);
   }, [pathname]);
+
+  async function handleLogout() {
+    // Best-effort server-side logout (clears server session if any);
+    // either way we drop the local cookie and redirect to /login.
+    try {
+      await api.post("/auth/logout");
+    } catch {
+      // server returned 401 or 500 — we still want to clear locally.
+    }
+    clearToken();
+    navigate({ to: "/login" });
+  }
 
   function isActive(to: string) {
     if (to === "/") return pathname === "/";
@@ -114,6 +131,15 @@ export function Sidebar() {
           {secondary.map((item) => (
             <NavLink key={item.to} item={item} active={isActive(item.to)} />
           ))}
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="nav-item w-full text-left"
+            aria-label="Sign out"
+          >
+            <LogOutIcon className="size-4 shrink-0" />
+            <span className="truncate">Sign out</span>
+          </button>
         </div>
       </aside>
     </>

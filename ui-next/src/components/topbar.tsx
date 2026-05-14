@@ -18,10 +18,8 @@ export function Topbar() {
   const { data: running } = useQuery({
     queryKey: ["scans", "running"],
     queryFn: async () => {
-      const r = await api.get<{ scans: Scan[] }>(
-        "/scans?status=running&limit=10",
-      );
-      return r.data.scans ?? [];
+      const r = await api.get<Scan[]>("/scans?status=running&limit=10");
+      return r.data ?? [];
     },
     refetchInterval: 5000,
     staleTime: 0,

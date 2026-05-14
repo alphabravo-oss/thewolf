@@ -173,10 +173,12 @@ export interface Scan {
   iteration?: number;
   branch: string;
   status: ScanStatus;
-  tools_selected: string[];
-  tools_completed: string[];
-  tools_running: string[];
-  tools_failed: string[];
+  // The API stores these as JSON-encoded strings, NOT arrays. Use
+  // parseToolList() to get a real string[] for length / iteration.
+  tools_selected: string;
+  tools_completed: string;
+  tools_running: string;
+  tools_failed: string;
   finding_count: number;
   coverage_summary?: Record<string, unknown>;
   ai_enabled?: boolean;
@@ -546,3 +548,17 @@ export interface ResolutionRate {
 
 // Settings map
 export type AppSettings = Record<string, string>;
+
+// parseToolList unwraps the API's JSON-encoded tool list strings into a
+// real string[]. Returns [] for empty / null / "null" / malformed inputs.
+// Use everywhere the UI reads scan.tools_* to avoid the "503 tools" bug
+// where .length on the raw string returns the character count.
+export function parseToolList(s: string | null | undefined): string[] {
+  if (!s || s === "null") return [];
+  try {
+    const parsed = JSON.parse(s);
+    return Array.isArray(parsed) ? parsed.map(String) : [];
+  } catch {
+    return [];
+  }
+}

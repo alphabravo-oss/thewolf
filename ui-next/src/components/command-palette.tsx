@@ -46,24 +46,24 @@ export function CommandPalette() {
   const collections = useQuery({
     queryKey: ["collections", "all"],
     queryFn: async () => {
-      const r = await api.get<{ collections: Collection[] }>("/collections");
-      return r.data.collections ?? [];
+      const r = await api.get<Collection[]>("/collections");
+      return r.data ?? [];
     },
     enabled: open,
   });
   const recentScans = useQuery({
     queryKey: ["scans", "recent"],
     queryFn: async () => {
-      const r = await api.get<{ scans: Scan[] }>("/scans?limit=10");
-      return r.data.scans ?? [];
+      const r = await api.get<Scan[]>("/scans?limit=10");
+      return r.data ?? [];
     },
     enabled: open,
   });
   const repos = useQuery({
     queryKey: ["repos", "all"],
     queryFn: async () => {
-      const r = await api.get<{ repos: Repo[] }>("/repos");
-      return r.data.repos ?? [];
+      const r = await api.get<Repo[]>("/repos");
+      return r.data ?? [];
     },
     enabled: open,
   });

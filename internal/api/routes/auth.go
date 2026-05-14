@@ -130,15 +130,13 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Set HTTP-only cookie
-	http.SetCookie(w, &http.Cookie{
-		Name:     "wolf_token",
-		Value:    tokens.AccessToken,
-		Path:     "/",
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   86400, // 24 hours
-	})
+	// Note: we used to also set an HttpOnly wolf_token cookie here, but
+	// browsers won't let the SPA's document.cookie write overwrite an
+	// existing HttpOnly cookie with the same name. The net effect was
+	// that the SPA's setToken() silently failed, getToken() returned
+	// null, and the /_authed route guard kicked the user back to /login
+	// in an infinite loop. The SPA holds the JS-readable cookie and
+	// sends the Bearer header; both auth paths the middleware accepts.
 
 	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{
 		Data: map[string]interface{}{
@@ -150,6 +148,9 @@ func Login(w http.ResponseWriter, r *http.Request) {
 }
 
 func Logout(w http.ResponseWriter, r *http.Request) {
+	// Mirror the Login change: don't write an HttpOnly cookie. If a
+	// legacy HttpOnly wolf_token cookie is in flight from a previous
+	// build, expire it so we don't leave stale credentials behind.
 	http.SetCookie(w, &http.Cookie{
 		Name:     "wolf_token",
 		Value:    "",

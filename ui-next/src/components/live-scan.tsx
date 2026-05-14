@@ -31,16 +31,35 @@ interface ToolState {
 interface LiveScanProps {
   scanId: string;
   initialTools: string[];
+  initialCompleted?: string[];
+  initialFailed?: string[];
+  initialRunning?: string[];
   scanStatus: ScanStatus;
 }
 
-export function LiveScan({ scanId, initialTools, scanStatus }: LiveScanProps) {
+export function LiveScan({
+  scanId,
+  initialTools,
+  initialCompleted = [],
+  initialFailed = [],
+  initialRunning = [],
+  scanStatus,
+}: LiveScanProps) {
   const [tools, setTools] = useState<Record<string, ToolState>>(() => {
     const seed: Record<string, ToolState> = {};
+    const completedSet = new Set(initialCompleted);
+    const failedSet = new Set(initialFailed);
+    const runningSet = new Set(initialRunning);
     for (const name of initialTools) {
+      // Seed status from the scan record so reloading mid-scan, or joining
+      // late, doesn't surface every already-finished tool as "queued".
+      let status: ToolStatus = "queued";
+      if (failedSet.has(name)) status = "failed";
+      else if (completedSet.has(name)) status = "completed";
+      else if (runningSet.has(name)) status = "running";
       seed[name] = {
         name,
-        status: "queued",
+        status,
         findingCount: 0,
         elapsedMs: 0,
         log: [],
