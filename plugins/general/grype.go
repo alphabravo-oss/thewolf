@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
+	"github.com/alphabravocompany/thewolf/internal/plugin/container"
 )
 
 // GrypePlugin runs Grype vulnerability scanning.
@@ -21,10 +21,7 @@ func (p *GrypePlugin) Name() string               { return "grype" }
 func (p *GrypePlugin) Category() models.Category   { return models.CategorySCA }
 func (p *GrypePlugin) Languages() []models.Language { return nil }
 
-func (p *GrypePlugin) CheckAvailable() bool {
-	_, err := exec.LookPath("grype")
-	return err == nil
-}
+func (p *GrypePlugin) CheckAvailable() bool { return container.IsScannersReady() }
 
 func (p *GrypePlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
 	timeout := opts.Timeout
@@ -34,16 +31,23 @@ func (p *GrypePlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]m
 		defer cancel()
 	}
 
-	args := []string{"dir:" + opts.RepoPath, "-o", "json"}
-	cmd := plugin.CommandContext(ctx, "grype", args...)
+	cmd := container.CommandContext(ctx,
+		container.ConfigFromOpts(opts.ContainerCfg),
+		container.Options{RepoDir: opts.RepoPath},
+		"grype", "dir:/scan", "-o", "json")
 	out, err := cmd.Output()
-	if err != nil {
-		if len(out) == 0 {
-			return nil, plugin.WrapExecError("grype", err)
-		}
+	if err != nil && len(out) == 0 {
+		return nil, plugin.WrapExecError("grype", err)
 	}
 
-	return parseGrypeOutput(out)
+	findings, perr := parseGrypeOutput(out)
+	if perr != nil {
+		return nil, perr
+	}
+	for i := range findings {
+		findings[i].FilePath = container.NormalizePath(findings[i].FilePath)
+	}
+	return findings, nil
 }
 
 type grypeOutput struct {

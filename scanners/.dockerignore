@@ -1,0 +1,12 @@
+# Avoid sending unrelated repo content into the build context.
+# scanners/ stands alone — only the files in this directory are needed.
+**/*
+!Dockerfile
+!Dockerfile.*
+!.dockerignore
+!versions.env
+!trufflehog-excludes.txt
+!wolf-tool-entry
+!smoke-test.sh
+!install/**
+!testdata/**

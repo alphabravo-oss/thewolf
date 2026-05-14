@@ -1,0 +1,40 @@
+# ============================================================
+# wolf-scanners-min — ultra-light image for the end-to-end shim
+# validation tests. Contains only what TestShim_Bandit_E2E needs:
+#   - python3 + bandit
+#   - the wolf-tool-entry script
+# Builds in 1-2 minutes, ~150 MB image.
+# Not for production use — use the main Dockerfile for that.
+# ============================================================
+FROM debian:12-slim
+
+ARG WOLF_VERSION=dev
+LABEL org.opencontainers.image.title="wolf-scanners-min" \
+      org.opencontainers.image.description="Minimal test image (bandit only) for the wolf shim's integration tests"
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    WOLF_SCANNERS_VARIANT=default
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates curl \
+        python3 python3-pip python3-venv \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY versions.env       /etc/wolf-scanners/versions.env
+COPY wolf-tool-entry    /usr/local/bin/wolf-tool-entry
+RUN chmod +x /usr/local/bin/wolf-tool-entry
+
+# Install bandit only (and nothing else).
+RUN python3 -m venv /opt/py && \
+    . /opt/py/bin/activate && \
+    pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir bandit && \
+    ln -sf /opt/py/bin/bandit /usr/local/bin/bandit
+
+RUN groupadd -g 1000 wolf && \
+    useradd  -u 1000 -g 1000 -m -d /home/wolf -s /bin/bash wolf
+
+USER wolf
+WORKDIR /scan
+ENTRYPOINT ["/usr/local/bin/wolf-tool-entry"]

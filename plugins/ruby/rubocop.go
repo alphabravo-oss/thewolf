@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
+	"github.com/alphabravocompany/thewolf/internal/plugin/container"
 )
 
 // RubocopPlugin runs RuboCop static analysis for Ruby code.
@@ -23,10 +23,7 @@ func (p *RubocopPlugin) Languages() []models.Language {
 	return []models.Language{models.LangRuby}
 }
 
-func (p *RubocopPlugin) CheckAvailable() bool {
-	_, err := exec.LookPath("rubocop")
-	return err == nil
-}
+func (p *RubocopPlugin) CheckAvailable() bool { return container.IsScannersReady() }
 
 func (p *RubocopPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
 	if !plugin.HasFilesWithExtension(opts.RepoPath, "rb") {
@@ -40,15 +37,23 @@ func (p *RubocopPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([
 		defer cancel()
 	}
 
-	cmd := plugin.CommandContext(ctx, "rubocop", "--format", "json", opts.RepoPath)
+	cmd := container.CommandContext(ctx,
+		container.ConfigFromOpts(opts.ContainerCfg),
+		container.Options{RepoDir: opts.RepoPath},
+		"rubocop", "--format", "json", "/scan")
 	out, err := cmd.Output()
-	if err != nil {
-		if len(out) == 0 {
-			return nil, plugin.WrapExecError("rubocop", err)
-		}
+	if err != nil && len(out) == 0 {
+		return nil, plugin.WrapExecError("rubocop", err)
 	}
 
-	return parseRubocopOutput(out)
+	findings, perr := parseRubocopOutput(out)
+	if perr != nil {
+		return nil, perr
+	}
+	for i := range findings {
+		findings[i].FilePath = container.NormalizePath(findings[i].FilePath)
+	}
+	return findings, nil
 }
 
 type rubocopOutput struct {

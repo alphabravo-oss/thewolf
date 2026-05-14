@@ -5,10 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
+	"github.com/alphabravocompany/thewolf/internal/plugin/container"
 )
 
 // KubeLinterPlugin runs KubeLinter for Kubernetes manifest linting.
@@ -22,10 +22,7 @@ func (p *KubeLinterPlugin) Name() string             { return "kube-linter" }
 func (p *KubeLinterPlugin) Category() models.Category { return models.CategoryInfra }
 func (p *KubeLinterPlugin) Languages() []models.Language { return nil }
 
-func (p *KubeLinterPlugin) CheckAvailable() bool {
-	_, err := exec.LookPath("kube-linter")
-	return err == nil
-}
+func (p *KubeLinterPlugin) CheckAvailable() bool { return container.IsScannersReady() }
 
 func (p *KubeLinterPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
 	if opts.Timeout > 0 {
@@ -34,23 +31,28 @@ func (p *KubeLinterPlugin) Execute(ctx context.Context, opts models.ExecuteOpts)
 		defer cancel()
 	}
 
-	cmd := plugin.CommandContext(ctx, "kube-linter", "lint", "--format", "json", opts.RepoPath)
+	cmd := container.CommandContext(ctx,
+		container.ConfigFromOpts(opts.ContainerCfg),
+		container.Options{RepoDir: opts.RepoPath},
+		"kube-linter", "lint", "--format", "json", "/scan")
 	out, err := cmd.Output()
-	if err != nil {
-		if len(out) == 0 {
-			// kube-linter exits non-zero with no output when there are no K8s files.
-			plugin.Skipf(opts.OnOutput, "kube-linter", "no Kubernetes manifests found. Add YAML files with K8s resources to enable linting.")
-			return nil, nil
-		}
+	if err != nil && len(out) == 0 {
+		plugin.Skipf(opts.OnOutput, "kube-linter", "no Kubernetes manifests found. Add YAML files with K8s resources to enable linting.")
+		return nil, nil
 	}
-
-	// Handle empty or whitespace-only output (no K8s manifests found)
 	if len(bytes.TrimSpace(out)) == 0 {
 		plugin.Skipf(opts.OnOutput, "kube-linter", "no Kubernetes manifests found. Add YAML files with K8s resources to enable linting.")
 		return nil, nil
 	}
 
-	return parseKubeLinterOutput(out)
+	findings, perr := parseKubeLinterOutput(out)
+	if perr != nil {
+		return nil, perr
+	}
+	for i := range findings {
+		findings[i].FilePath = container.NormalizePath(findings[i].FilePath)
+	}
+	return findings, nil
 }
 
 type kubeLinterOutput struct {

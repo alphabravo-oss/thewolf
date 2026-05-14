@@ -4,13 +4,13 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
+	"github.com/alphabravocompany/thewolf/internal/plugin/container"
 )
 
 // VulturePlugin runs Vulture dead code finder for Python.
@@ -24,10 +24,7 @@ func (p *VulturePlugin) Name() string               { return "vulture" }
 func (p *VulturePlugin) Category() models.Category   { return models.CategoryQuality }
 func (p *VulturePlugin) Languages() []models.Language { return []models.Language{models.LangPython} }
 
-func (p *VulturePlugin) CheckAvailable() bool {
-	_, err := exec.LookPath("vulture")
-	return err == nil
-}
+func (p *VulturePlugin) CheckAvailable() bool { return container.IsScannersReady() }
 
 var vultureLineRegex = regexp.MustCompile(`^(.+?):(\d+): (.+?) \((\d+)% confidence\)$`)
 
@@ -43,16 +40,23 @@ func (p *VulturePlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([
 		defer cancel()
 	}
 
-	cmd := plugin.CommandContext(ctx, "vulture", opts.RepoPath, "--min-confidence", "80")
+	cmd := container.CommandContext(ctx,
+		container.ConfigFromOpts(opts.ContainerCfg),
+		container.Options{RepoDir: opts.RepoPath},
+		"vulture", "/scan", "--min-confidence", "80")
 	out, err := cmd.Output()
-	if err != nil {
-		// Vulture exits non-zero when dead code is found; only fail if no output.
-		if len(out) == 0 {
-			return nil, plugin.WrapExecError("vulture", err)
-		}
+	if err != nil && len(out) == 0 {
+		return nil, plugin.WrapExecError("vulture", err)
 	}
 
-	return parseVultureOutput(out)
+	findings, perr := parseVultureOutput(out)
+	if perr != nil {
+		return nil, perr
+	}
+	for i := range findings {
+		findings[i].FilePath = container.NormalizePath(findings[i].FilePath)
+	}
+	return findings, nil
 }
 
 func parseVultureOutput(data []byte) ([]models.Finding, error) {

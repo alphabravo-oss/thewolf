@@ -1,0 +1,45 @@
+# ============================================================
+# wolf-scanners-codeql — CodeQL alone (~700 MB)
+# ============================================================
+# CodeQL has a license that restricts use to open-source codebases
+# unless the operator has GitHub Enterprise Advanced Security.
+# We ship it as a SEPARATE image so operators who don't need (or
+# can't use) CodeQL don't pull it. Default wolf.yaml does not
+# include codeql in any preset.
+# ============================================================
+
+FROM debian:12-slim AS base
+
+ARG WOLF_VERSION=dev
+LABEL org.opencontainers.image.title="wolf-scanners-codeql" \
+      org.opencontainers.image.description="CodeQL CLI for the Wolf code analysis engine (license-restricted)" \
+      org.opencontainers.image.source="https://github.com/alphabravocompany/thewolf" \
+      org.opencontainers.image.vendor="AlphaBravo" \
+      org.opencontainers.image.version="${WOLF_VERSION}"
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    WOLF_SCANNERS_VARIANT=codeql
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates curl unzip git \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY versions.env       /etc/wolf-scanners/versions.env
+COPY wolf-tool-entry    /usr/local/bin/wolf-tool-entry
+COPY smoke-test.sh      /usr/local/bin/smoke-test.sh
+RUN chmod +x /usr/local/bin/wolf-tool-entry /usr/local/bin/smoke-test.sh
+
+COPY install/codeql.sh  /tmp/install/codeql.sh
+RUN  bash /tmp/install/codeql.sh
+
+RUN /usr/local/bin/smoke-test.sh
+
+RUN rm -rf /tmp/install /var/cache/apt/*
+
+RUN groupadd -g 1000 wolf && \
+    useradd  -u 1000 -g 1000 -m -d /home/wolf -s /bin/bash wolf
+
+USER wolf
+WORKDIR /scan
+ENTRYPOINT ["/usr/local/bin/wolf-tool-entry"]

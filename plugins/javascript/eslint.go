@@ -9,6 +9,7 @@ import (
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
+	"github.com/alphabravocompany/thewolf/internal/plugin/container"
 )
 
 // ESLintPlugin runs ESLint for JavaScript and TypeScript quality checks.
@@ -24,10 +25,7 @@ func (p *ESLintPlugin) Languages() []models.Language {
 	return []models.Language{models.LangJavaScript, models.LangTypeScript}
 }
 
-func (p *ESLintPlugin) CheckAvailable() bool {
-	_, err := exec.LookPath("eslint")
-	return err == nil
-}
+func (p *ESLintPlugin) CheckAvailable() bool { return container.IsScannersReady() }
 
 func (p *ESLintPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
 	if opts.Timeout > 0 {
@@ -36,7 +34,10 @@ func (p *ESLintPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]
 		defer cancel()
 	}
 
-	cmd := plugin.CommandContext(ctx, "eslint", opts.RepoPath, "-f", "json")
+	cmd := container.CommandContext(ctx,
+		container.ConfigFromOpts(opts.ContainerCfg),
+		container.Options{RepoDir: opts.RepoPath},
+		"eslint", "/scan", "-f", "json")
 	out, err := cmd.Output()
 	if err != nil {
 		// ESLint v9+ exits with code 2 when no config file is found.
@@ -52,7 +53,14 @@ func (p *ESLintPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]
 		}
 	}
 
-	return parseESLintOutput(out)
+	findings, perr := parseESLintOutput(out)
+	if perr != nil {
+		return nil, perr
+	}
+	for i := range findings {
+		findings[i].FilePath = container.NormalizePath(findings[i].FilePath)
+	}
+	return findings, nil
 }
 
 type eslintFile struct {

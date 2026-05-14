@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
+	"github.com/alphabravocompany/thewolf/internal/plugin/container"
 )
 
 // InferPlugin runs Facebook/Meta Infer for C/C++/Java/ObjC analysis.
@@ -23,10 +23,7 @@ func (p *InferPlugin) Languages() []models.Language {
 	return []models.Language{models.LangC, models.LangCPP, models.LangJava, models.LangObjC}
 }
 
-func (p *InferPlugin) CheckAvailable() bool {
-	_, err := exec.LookPath("infer")
-	return err == nil
-}
+func (p *InferPlugin) CheckAvailable() bool { return container.IsScannersReady() }
 
 func (p *InferPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
 	if !plugin.HasFile(opts.RepoPath, "Makefile") {
@@ -40,21 +37,34 @@ func (p *InferPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]m
 		defer cancel()
 	}
 
-	cmd := plugin.CommandContext(ctx, "infer", "run", "--", "make")
-	cmd.Dir = opts.RepoPath
-	if err := cmd.Run(); err != nil {
+	cfg := container.ConfigFromOpts(opts.ContainerCfg)
+	// Infer needs ReadWrite to write the infer-out/ directory during the build,
+	// and runs the build (make) so it needs network for dependency fetches and
+	// access to compiler toolchains (bundled in wolf-scanners-jvm).
+	runOpts := container.Options{
+		RepoDir:   opts.RepoPath,
+		WorkDir:   "/scan",
+		ReadWrite: true,
+	}
+	runCmd := container.CommandContext(ctx, cfg, runOpts, "infer", "run", "--", "make")
+	if err := runCmd.Run(); err != nil {
 		return nil, plugin.WrapExecError("infer", err)
 	}
 
-	// Read the report
-	reportCmd := plugin.CommandContext(ctx, "infer", "report", "--issues-json", "-")
-	reportCmd.Dir = opts.RepoPath
+	reportCmd := container.CommandContext(ctx, cfg, runOpts, "infer", "report", "--issues-json", "-")
 	out, err := reportCmd.Output()
 	if err != nil {
 		return nil, plugin.WrapExecError("infer", err)
 	}
 
-	return parseInferOutput(out)
+	findings, perr := parseInferOutput(out)
+	if perr != nil {
+		return nil, perr
+	}
+	for i := range findings {
+		findings[i].FilePath = container.NormalizePath(findings[i].FilePath)
+	}
+	return findings, nil
 }
 
 type inferIssue struct {

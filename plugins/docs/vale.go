@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
+	"github.com/alphabravocompany/thewolf/internal/plugin/container"
 )
 
 // ValePlugin runs Vale documentation style checking.
@@ -21,10 +21,7 @@ func (p *ValePlugin) Name() string               { return "vale" }
 func (p *ValePlugin) Category() models.Category   { return models.CategoryDocs }
 func (p *ValePlugin) Languages() []models.Language { return nil }
 
-func (p *ValePlugin) CheckAvailable() bool {
-	_, err := exec.LookPath("vale")
-	return err == nil
-}
+func (p *ValePlugin) CheckAvailable() bool { return container.IsScannersReady() }
 
 func (p *ValePlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
 	if !plugin.HasFilesWithExtension(opts.RepoPath, "md", "rst", "txt") {
@@ -39,16 +36,23 @@ func (p *ValePlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]mo
 		defer cancel()
 	}
 
-	args := []string{"--output", "JSON", opts.RepoPath}
-	cmd := plugin.CommandContext(ctx, "vale", args...)
+	cmd := container.CommandContext(ctx,
+		container.ConfigFromOpts(opts.ContainerCfg),
+		container.Options{RepoDir: opts.RepoPath},
+		"vale", "--output", "JSON", "/scan")
 	out, err := cmd.Output()
-	if err != nil {
-		if len(out) == 0 {
-			return nil, plugin.WrapExecError("vale", err)
-		}
+	if err != nil && len(out) == 0 {
+		return nil, plugin.WrapExecError("vale", err)
 	}
 
-	return parseValeOutput(out)
+	findings, perr := parseValeOutput(out)
+	if perr != nil {
+		return nil, perr
+	}
+	for i := range findings {
+		findings[i].FilePath = container.NormalizePath(findings[i].FilePath)
+	}
+	return findings, nil
 }
 
 // Vale outputs: { "file.md": [ { ... }, ... ] }

@@ -6,10 +6,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
+	"github.com/alphabravocompany/thewolf/internal/plugin/container"
 )
 
 // SemgrepPlugin runs Semgrep static analysis.
@@ -23,10 +23,7 @@ func (p *SemgrepPlugin) Name() string               { return "semgrep" }
 func (p *SemgrepPlugin) Category() models.Category   { return models.CategorySAST }
 func (p *SemgrepPlugin) Languages() []models.Language { return nil }
 
-func (p *SemgrepPlugin) CheckAvailable() bool {
-	_, err := exec.LookPath("semgrep")
-	return err == nil
-}
+func (p *SemgrepPlugin) CheckAvailable() bool { return container.IsScannersReady() }
 
 func (p *SemgrepPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
 	timeout := opts.Timeout
@@ -38,8 +35,11 @@ func (p *SemgrepPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([
 
 	args := []string{"scan", "--json", "--jobs", "1"}
 	args = append(args, plugin.ExcludeArgs("--exclude")...)
-	args = append(args, opts.RepoPath)
-	cmd := plugin.CommandContext(ctx, "semgrep", args...)
+	args = append(args, "/scan")
+	cmd := container.CommandContext(ctx,
+		container.ConfigFromOpts(opts.ContainerCfg),
+		container.Options{RepoDir: opts.RepoPath},
+		"semgrep", args...)
 
 	var stdout bytes.Buffer
 	cmd.Stdout = &stdout
@@ -68,7 +68,14 @@ func (p *SemgrepPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([
 		return nil, fmt.Errorf("semgrep produced no output")
 	}
 
-	return parseSemgrepOutput(out)
+	findings, perr := parseSemgrepOutput(out)
+	if perr != nil {
+		return nil, perr
+	}
+	for i := range findings {
+		findings[i].FilePath = container.NormalizePath(findings[i].FilePath)
+	}
+	return findings, nil
 }
 
 // semgrepOutput represents the JSON output from semgrep.

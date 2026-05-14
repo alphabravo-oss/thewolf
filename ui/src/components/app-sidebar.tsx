@@ -11,6 +11,7 @@ import {
   WrenchIcon,
   RepeatIcon,
   SettingsIcon,
+  ContainerIcon,
 } from "lucide-react";
 import {
   Sidebar,
@@ -32,6 +33,7 @@ const navItems = [
   { title: "Findings", href: "/findings", icon: BugIcon },
   { title: "Fixes", href: "/fixes", icon: WrenchIcon },
   { title: "Loops", href: "/loops", icon: RepeatIcon },
+  { title: "Scanners", href: "/scanners", icon: ContainerIcon },
 ];
 
 const bottomItems = [

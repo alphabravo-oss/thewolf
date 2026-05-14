@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
+	"github.com/alphabravocompany/thewolf/internal/plugin/container"
 )
 
 // CheckovPlugin runs Checkov IaC security scanning.
@@ -21,10 +21,7 @@ func (p *CheckovPlugin) Name() string               { return "checkov" }
 func (p *CheckovPlugin) Category() models.Category   { return models.CategoryContainer }
 func (p *CheckovPlugin) Languages() []models.Language { return nil }
 
-func (p *CheckovPlugin) CheckAvailable() bool {
-	_, err := exec.LookPath("checkov")
-	return err == nil
-}
+func (p *CheckovPlugin) CheckAvailable() bool { return container.IsScannersReady() }
 
 func (p *CheckovPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
 	timeout := opts.Timeout
@@ -34,16 +31,23 @@ func (p *CheckovPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([
 		defer cancel()
 	}
 
-	args := []string{"-d", opts.RepoPath, "-o", "json", "--quiet"}
-	cmd := plugin.CommandContext(ctx, "checkov", args...)
+	cmd := container.CommandContext(ctx,
+		container.ConfigFromOpts(opts.ContainerCfg),
+		container.Options{RepoDir: opts.RepoPath},
+		"checkov", "-d", "/scan", "-o", "json", "--quiet")
 	out, err := cmd.Output()
-	if err != nil {
-		if len(out) == 0 {
-			return nil, plugin.WrapExecError("checkov", err)
-		}
+	if err != nil && len(out) == 0 {
+		return nil, plugin.WrapExecError("checkov", err)
 	}
 
-	return parseCheckovOutput(out)
+	findings, perr := parseCheckovOutput(out)
+	if perr != nil {
+		return nil, perr
+	}
+	for i := range findings {
+		findings[i].FilePath = container.NormalizePath(findings[i].FilePath)
+	}
+	return findings, nil
 }
 
 type checkovOutput struct {

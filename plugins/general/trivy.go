@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
+	"github.com/alphabravocompany/thewolf/internal/plugin/container"
 )
 
 // TrivyPlugin runs Trivy vulnerability scanning.
@@ -21,10 +21,7 @@ func (p *TrivyPlugin) Name() string               { return "trivy" }
 func (p *TrivyPlugin) Category() models.Category   { return models.CategorySCA }
 func (p *TrivyPlugin) Languages() []models.Language { return nil }
 
-func (p *TrivyPlugin) CheckAvailable() bool {
-	_, err := exec.LookPath("trivy")
-	return err == nil
-}
+func (p *TrivyPlugin) CheckAvailable() bool { return container.IsScannersReady() }
 
 func (p *TrivyPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
 	timeout := opts.Timeout
@@ -34,16 +31,23 @@ func (p *TrivyPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]m
 		defer cancel()
 	}
 
-	args := []string{"fs", "--format", "json", opts.RepoPath}
-	cmd := plugin.CommandContext(ctx, "trivy", args...)
+	cmd := container.CommandContext(ctx,
+		container.ConfigFromOpts(opts.ContainerCfg),
+		container.Options{RepoDir: opts.RepoPath},
+		"trivy", "fs", "--format", "json", "/scan")
 	out, err := cmd.Output()
-	if err != nil {
-		if len(out) == 0 {
-			return nil, plugin.WrapExecError("trivy", err)
-		}
+	if err != nil && len(out) == 0 {
+		return nil, plugin.WrapExecError("trivy", err)
 	}
 
-	return parseTrivyOutput(out)
+	findings, perr := parseTrivyOutput(out)
+	if perr != nil {
+		return nil, perr
+	}
+	for i := range findings {
+		findings[i].FilePath = container.NormalizePath(findings[i].FilePath)
+	}
+	return findings, nil
 }
 
 type trivyOutput struct {

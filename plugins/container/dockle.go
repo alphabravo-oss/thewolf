@@ -10,23 +10,32 @@ import (
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
+	pkgcontainer "github.com/alphabravocompany/thewolf/internal/plugin/container"
 )
 
 // DocklePlugin runs Dockle container best practice checks.
+//
+// Note: dockle is unusual among scanner plugins because it builds and inspects
+// a docker IMAGE rather than scanning a repo directory. v1 keeps the build
+// step at the wolf-slim level (which has access to the docker daemon socket
+// already mounted in for the scanner orchestration) and runs dockle inside
+// a scanner container that mounts the same docker socket so it can pull the
+// just-built image from the local daemon.
+//
+// This is the ONE place where a scanner container needs docker socket access.
+// We document the trade-off; if it becomes a concern, v2 can move dockle to
+// wolf-fixer (which already has socket access for git push, etc.).
 type DocklePlugin struct{}
 
 func init() {
 	plugin.Register(&DocklePlugin{})
 }
 
-func (p *DocklePlugin) Name() string               { return "dockle" }
-func (p *DocklePlugin) Category() models.Category   { return models.CategoryContainer }
+func (p *DocklePlugin) Name() string                 { return "dockle" }
+func (p *DocklePlugin) Category() models.Category    { return models.CategoryContainer }
 func (p *DocklePlugin) Languages() []models.Language { return nil }
 
-func (p *DocklePlugin) CheckAvailable() bool {
-	_, err := exec.LookPath("dockle")
-	return err == nil
-}
+func (p *DocklePlugin) CheckAvailable() bool { return pkgcontainer.IsScannersReady() }
 
 func (p *DocklePlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
 	timeout := opts.Timeout
@@ -36,17 +45,15 @@ func (p *DocklePlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]
 		defer cancel()
 	}
 
-	// Dockle scans Docker images, not directories. Build a temporary image from
-	// a Dockerfile if one exists in the repo, otherwise skip.
 	dockerfile := filepath.Join(opts.RepoPath, "Dockerfile")
 	if _, err := os.Stat(dockerfile); err != nil {
 		plugin.Skipf(opts.OnOutput, "dockle", "no Dockerfile found in repository root. Add a Dockerfile to enable container image analysis.")
 		return nil, nil
 	}
 
-	// Build a temporary image for scanning.
+	// Build the image using the docker CLI mounted into wolf-slim.
 	imageName := fmt.Sprintf("wolf-dockle-scan:%d", os.Getpid())
-	buildCmd := plugin.CommandContext(ctx, "docker", "build", "-t", imageName, "-f", dockerfile, opts.RepoPath)
+	buildCmd := exec.CommandContext(ctx, "docker", "build", "-t", imageName, "-f", dockerfile, opts.RepoPath)
 	if buildOut, err := buildCmd.CombinedOutput(); err != nil {
 		return nil, fmt.Errorf("docker build failed: %s: %w", string(buildOut), err)
 	}
@@ -54,13 +61,18 @@ func (p *DocklePlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]
 		_ = exec.Command("docker", "rmi", "-f", imageName).Run()
 	}()
 
-	args := []string{"--format", "json", imageName}
-	cmd := plugin.CommandContext(ctx, "dockle", args...)
+	// Run dockle inside the scanner image, with the docker socket mounted so
+	// dockle can fetch the just-built image from the local daemon.
+	cfg := pkgcontainer.ConfigFromOpts(opts.ContainerCfg)
+	cmd := pkgcontainer.CommandContext(ctx, cfg,
+		pkgcontainer.Options{
+			NoRepoMount: true,
+			ExtraMounts: []string{"/var/run/docker.sock:/var/run/docker.sock"},
+		},
+		"dockle", "--format", "json", imageName)
 	out, err := cmd.Output()
-	if err != nil {
-		if len(out) == 0 {
-			return nil, plugin.WrapExecError("dockle", err)
-		}
+	if err != nil && len(out) == 0 {
+		return nil, plugin.WrapExecError("dockle", err)
 	}
 
 	return parseDockleOutput(out)

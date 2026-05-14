@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
+	"github.com/alphabravocompany/thewolf/internal/plugin/container"
 )
 
 // SyftPlugin runs Syft SBOM generation.
@@ -21,10 +21,7 @@ func (p *SyftPlugin) Name() string               { return "syft" }
 func (p *SyftPlugin) Category() models.Category   { return models.CategorySBOM }
 func (p *SyftPlugin) Languages() []models.Language { return nil }
 
-func (p *SyftPlugin) CheckAvailable() bool {
-	_, err := exec.LookPath("syft")
-	return err == nil
-}
+func (p *SyftPlugin) CheckAvailable() bool { return container.IsScannersReady() }
 
 func (p *SyftPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
 	timeout := opts.Timeout
@@ -34,16 +31,23 @@ func (p *SyftPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]mo
 		defer cancel()
 	}
 
-	args := []string{opts.RepoPath, "-o", "json"}
-	cmd := plugin.CommandContext(ctx, "syft", args...)
+	cmd := container.CommandContext(ctx,
+		container.ConfigFromOpts(opts.ContainerCfg),
+		container.Options{RepoDir: opts.RepoPath},
+		"syft", "/scan", "-o", "json")
 	out, err := cmd.Output()
-	if err != nil {
-		if len(out) == 0 {
-			return nil, plugin.WrapExecError("syft", err)
-		}
+	if err != nil && len(out) == 0 {
+		return nil, plugin.WrapExecError("syft", err)
 	}
 
-	return parseSyftOutput(out)
+	findings, perr := parseSyftOutput(out)
+	if perr != nil {
+		return nil, perr
+	}
+	for i := range findings {
+		findings[i].FilePath = container.NormalizePath(findings[i].FilePath)
+	}
+	return findings, nil
 }
 
 type syftOutput struct {

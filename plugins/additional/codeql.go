@@ -5,12 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
+	"github.com/alphabravocompany/thewolf/internal/plugin/container"
 )
 
 // CodeQLPlugin runs CodeQL SAST analysis with SARIF output.
@@ -24,10 +24,7 @@ func (p *CodeQLPlugin) Name() string               { return "codeql" }
 func (p *CodeQLPlugin) Category() models.Category   { return models.CategorySAST }
 func (p *CodeQLPlugin) Languages() []models.Language { return nil }
 
-func (p *CodeQLPlugin) CheckAvailable() bool {
-	_, err := exec.LookPath("codeql")
-	return err == nil
-}
+func (p *CodeQLPlugin) CheckAvailable() bool { return container.IsScannersReady() }
 
 // codeqlLanguages maps file extensions to CodeQL language identifiers.
 var codeqlLanguages = map[string]string{
@@ -93,63 +90,46 @@ func (p *CodeQLPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]
 		return nil, nil
 	}
 
-	// Create a temporary database directory
-	dbPath, err := os.MkdirTemp("", "codeql-db-*")
-	if err != nil {
-		return nil, fmt.Errorf("codeql: failed to create temp dir: %w", err)
-	}
-	defer os.RemoveAll(dbPath)
-
-	// Step 1: Create the CodeQL database
-	createArgs := []string{
-		"database", "create", dbPath,
-		"--language=" + lang,
-		"--source-root=" + opts.RepoPath,
-		"--overwrite",
-	}
-	createCmd := plugin.CommandContext(ctx, "codeql", createArgs...)
-	createCmd.Dir = opts.RepoPath
-	if createOut, err := createCmd.CombinedOutput(); err != nil {
-		return nil, fmt.Errorf("codeql database create failed: %w\n%s", err, truncateOutput(createOut))
-	}
-
-	// Step 2: Ensure query pack is available
+	cfg := container.ConfigFromOpts(opts.ContainerCfg)
+	// CodeQL's database create + analyze pipeline writes to disk (it builds an
+	// AST database in a temp directory). We run all three steps inside the
+	// scanner container, using /tmp (the 512 MB tmpfs) for the database.
+	// /scan stays read-only — codeql honors --source-root for the input.
+	dbPath := "/tmp/codeql-db"
 	packName := fmt.Sprintf("codeql/%s-queries", lang)
-	packCheck := plugin.CommandContext(ctx, "codeql", "resolve", "qlpacks")
-	if packOut, err := packCheck.CombinedOutput(); err != nil || !strings.Contains(string(packOut), packName) {
-		// Query pack not found — attempt auto-download.
-		if opts.OnOutput != nil {
-			opts.OnOutput(fmt.Sprintf("[INFO] codeql: downloading query pack %s...", packName))
-		}
-		downloadCmd := plugin.CommandContext(ctx, "codeql", "pack", "download", packName)
-		if downloadOut, downloadErr := downloadCmd.CombinedOutput(); downloadErr != nil {
-			plugin.Skipf(opts.OnOutput, "codeql",
-				"query pack %s not installed and auto-download failed. Run: codeql pack download %s\n%s",
-				packName, packName, truncateOutput(downloadOut))
-			return nil, nil // Skip gracefully, don't fail
-		}
-	}
+	sarifFile := "/tmp/codeql.sarif"
 
-	// Step 3: Analyze the database with the explicit query pack
-	sarifFile := filepath.Join(dbPath, "results.sarif")
-	analyzeArgs := []string{
-		"database", "analyze", dbPath,
-		packName,
-		"--format=sarif-latest",
-		"--output=" + sarifFile,
-	}
-	analyzeCmd := plugin.CommandContext(ctx, "codeql", analyzeArgs...)
-	if analyzeOut, err := analyzeCmd.CombinedOutput(); err != nil {
-		return nil, fmt.Errorf("codeql database analyze failed: %w\n%s", err, truncateOutput(analyzeOut))
-	}
+	// Use sh -c so we can chain the three commands and read the SARIF result
+	// in a single docker run (avoiding 3 container starts).
+	script := fmt.Sprintf(
+		"codeql database create %s --language=%s --source-root=/scan --overwrite && "+
+			"codeql resolve qlpacks | grep -q %s || codeql pack download %s && "+
+			"codeql database analyze %s %s --format=sarif-latest --output=%s && "+
+			"cat %s",
+		dbPath, lang, packName, packName, dbPath, packName, sarifFile, sarifFile)
 
-	out, err := os.ReadFile(sarifFile)
+	cmd := container.CommandContext(ctx, cfg,
+		container.Options{RepoDir: opts.RepoPath},
+		"sh", "-c", script)
+	out, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("codeql: failed to read SARIF output: %w", err)
+		return nil, fmt.Errorf("codeql failed: %w\n%s", err, truncateOutput(out))
 	}
 
-	return parseCodeQLOutput(out)
+	findings, perr := parseCodeQLOutput(out)
+	if perr != nil {
+		return nil, perr
+	}
+	for i := range findings {
+		findings[i].FilePath = container.NormalizePath(findings[i].FilePath)
+	}
+	return findings, nil
 }
+
+// _silence the unused imports warning if codeql plugin no longer needs them.
+var _ = os.Open
+var _ = filepath.Join
+var _ = strings.Contains
 
 // truncateOutput limits error output to the last 500 bytes for readability.
 func truncateOutput(out []byte) string {

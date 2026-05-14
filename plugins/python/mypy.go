@@ -3,13 +3,13 @@ package python
 import (
 	"bufio"
 	"context"
-	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
+	"github.com/alphabravocompany/thewolf/internal/plugin/container"
 )
 
 // MypyPlugin runs mypy type checker for Python.
@@ -23,10 +23,7 @@ func (p *MypyPlugin) Name() string               { return "mypy" }
 func (p *MypyPlugin) Category() models.Category   { return models.CategoryQuality }
 func (p *MypyPlugin) Languages() []models.Language { return []models.Language{models.LangPython} }
 
-func (p *MypyPlugin) CheckAvailable() bool {
-	_, err := exec.LookPath("mypy")
-	return err == nil
-}
+func (p *MypyPlugin) CheckAvailable() bool { return container.IsScannersReady() }
 
 var mypyLineRegex = regexp.MustCompile(`^(.+?):(\d+):(\d+): (error|warning|note): (.+?)(?:\s+\[(.+?)\])?$`)
 
@@ -42,17 +39,24 @@ func (p *MypyPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]mo
 		defer cancel()
 	}
 
-	cmd := plugin.CommandContext(ctx, "mypy", opts.RepoPath,
+	cmd := container.CommandContext(ctx,
+		container.ConfigFromOpts(opts.ContainerCfg),
+		container.Options{RepoDir: opts.RepoPath},
+		"mypy", "/scan",
 		"--no-error-summary", "--show-column-numbers", "--show-error-codes", "--no-color")
 	out, err := cmd.Output()
-	if err != nil {
-		// mypy exits non-zero when type errors are found; only fail if no output.
-		if len(out) == 0 {
-			return nil, plugin.WrapExecError("mypy", err)
-		}
+	if err != nil && len(out) == 0 {
+		return nil, plugin.WrapExecError("mypy", err)
 	}
 
-	return parseMypyOutput(out)
+	findings, perr := parseMypyOutput(out)
+	if perr != nil {
+		return nil, perr
+	}
+	for i := range findings {
+		findings[i].FilePath = container.NormalizePath(findings[i].FilePath)
+	}
+	return findings, nil
 }
 
 func parseMypyOutput(data []byte) ([]models.Finding, error) {

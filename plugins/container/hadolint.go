@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
+	"github.com/alphabravocompany/thewolf/internal/plugin/container"
 )
 
 // HadolintPlugin runs Hadolint Dockerfile linting.
@@ -22,10 +23,7 @@ func (p *HadolintPlugin) Name() string               { return "hadolint" }
 func (p *HadolintPlugin) Category() models.Category   { return models.CategoryContainer }
 func (p *HadolintPlugin) Languages() []models.Language { return nil }
 
-func (p *HadolintPlugin) CheckAvailable() bool {
-	_, err := exec.LookPath("hadolint")
-	return err == nil
-}
+func (p *HadolintPlugin) CheckAvailable() bool { return container.IsScannersReady() }
 
 func (p *HadolintPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
 	timeout := opts.Timeout
@@ -55,16 +53,25 @@ func (p *HadolintPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) (
 	}
 
 	var allFindings []models.Finding
+	cfg := container.ConfigFromOpts(opts.ContainerCfg)
 	for _, df := range unique {
-		args := []string{"--format", "json", df}
-		cmd := plugin.CommandContext(ctx, "hadolint", args...)
+		// Translate host path to /scan-relative container path.
+		rel := strings.TrimPrefix(df, opts.RepoPath)
+		rel = strings.TrimPrefix(rel, "/")
+		containerDF := "/scan/" + rel
+		cmd := container.CommandContext(ctx, cfg,
+			container.Options{RepoDir: opts.RepoPath},
+			"hadolint", "--format", "json", containerDF)
 		out, err := cmd.Output()
 		if err != nil && len(out) == 0 {
-			continue // Skip files that hadolint can't process.
+			continue
 		}
 		findings, err := parseHadolintOutput(out)
 		if err != nil {
 			continue
+		}
+		for i := range findings {
+			findings[i].FilePath = container.NormalizePath(findings[i].FilePath)
 		}
 		allFindings = append(allFindings, findings...)
 	}

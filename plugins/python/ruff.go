@@ -4,11 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"strings"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
+	"github.com/alphabravocompany/thewolf/internal/plugin/container"
 )
 
 // RuffPlugin runs Ruff linter for Python.
@@ -22,10 +22,7 @@ func (p *RuffPlugin) Name() string               { return "ruff" }
 func (p *RuffPlugin) Category() models.Category   { return models.CategoryQuality }
 func (p *RuffPlugin) Languages() []models.Language { return []models.Language{models.LangPython} }
 
-func (p *RuffPlugin) CheckAvailable() bool {
-	_, err := exec.LookPath("ruff")
-	return err == nil
-}
+func (p *RuffPlugin) CheckAvailable() bool { return container.IsScannersReady() }
 
 func (p *RuffPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
 	if !plugin.HasFilesWithExtension(opts.RepoPath, "py") {
@@ -39,16 +36,23 @@ func (p *RuffPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]mo
 		defer cancel()
 	}
 
-	cmd := plugin.CommandContext(ctx, "ruff", "check", opts.RepoPath, "--output-format", "json")
+	cmd := container.CommandContext(ctx,
+		container.ConfigFromOpts(opts.ContainerCfg),
+		container.Options{RepoDir: opts.RepoPath},
+		"ruff", "check", "/scan", "--output-format", "json")
 	out, err := cmd.Output()
-	if err != nil {
-		// Ruff exits non-zero when findings exist; only fail if no output.
-		if len(out) == 0 {
-			return nil, plugin.WrapExecError("ruff", err)
-		}
+	if err != nil && len(out) == 0 {
+		return nil, plugin.WrapExecError("ruff", err)
 	}
 
-	return parseRuffOutput(out)
+	findings, perr := parseRuffOutput(out)
+	if perr != nil {
+		return nil, perr
+	}
+	for i := range findings {
+		findings[i].FilePath = container.NormalizePath(findings[i].FilePath)
+	}
+	return findings, nil
 }
 
 type ruffResult struct {

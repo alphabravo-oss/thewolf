@@ -7,12 +7,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
+	"github.com/alphabravocompany/thewolf/internal/plugin/container"
 )
 
 // ClippyPlugin runs cargo clippy for Rust code quality analysis.
@@ -28,10 +28,7 @@ func (p *ClippyPlugin) Languages() []models.Language {
 	return []models.Language{models.LangRust}
 }
 
-func (p *ClippyPlugin) CheckAvailable() bool {
-	_, err := exec.LookPath("cargo")
-	return err == nil
-}
+func (p *ClippyPlugin) CheckAvailable() bool { return container.IsScannersReady() }
 
 func (p *ClippyPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
 	// Verify this is a Rust project before attempting to run clippy.
@@ -46,16 +43,34 @@ func (p *ClippyPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]
 		defer cancel()
 	}
 
-	cmd := plugin.CommandContext(ctx, "cargo", "clippy", "--message-format", "json")
-	cmd.Dir = opts.RepoPath
+	// clippy lives in the rust bucket image; the shim picks via ImageFor("clippy").
+	// cargo needs to write to target/, so we use --read-only=false (writable /scan)
+	// — actually cargo can target out-of-tree via CARGO_TARGET_DIR. Keep /scan
+	// read-only and route target into /tmp via env.
+	cmd := container.CommandContext(ctx,
+		container.ConfigFromOpts(opts.ContainerCfg),
+		container.Options{
+			RepoDir: opts.RepoPath,
+			WorkDir: "/scan",
+			ExtraEnv: map[string]string{
+				"CARGO_TARGET_DIR": "/tmp/cargo-target",
+				"CARGO_HOME":       "/tmp/cargo-home",
+			},
+		},
+		"cargo", "clippy", "--message-format", "json")
 	out, err := cmd.Output()
-	if err != nil {
-		if len(out) == 0 {
-			return nil, plugin.WrapExecError("clippy", err)
-		}
+	if err != nil && len(out) == 0 {
+		return nil, plugin.WrapExecError("clippy", err)
 	}
 
-	return parseClippyOutput(out)
+	findings, perr := parseClippyOutput(out)
+	if perr != nil {
+		return nil, perr
+	}
+	for i := range findings {
+		findings[i].FilePath = container.NormalizePath(findings[i].FilePath)
+	}
+	return findings, nil
 }
 
 type clippyLine struct {

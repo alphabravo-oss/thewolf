@@ -34,6 +34,14 @@ type RunConfig struct {
 	IncludePaths  []string
 	ExcludePaths  []string
 	Timeout       time.Duration
+
+	// ContainerCfg is the container-backend runtime config. Wolf-slim
+	// startup builds a *container.Config and threads it through here so
+	// every plugin in this scan run uses the same image, network policy,
+	// resource caps, and path translation. Typed as `any` to avoid an
+	// import cycle (see models.ExecuteOpts.ContainerCfg).
+	ContainerCfg any
+
 	OnToolsSelected func(toolNames []string) // called with the full list before any tool starts
 	OnToolStart     func(toolName string)
 	OnToolDone      func(toolName string, findings []models.Finding, err error)
@@ -276,6 +284,7 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 				IncludePaths: cfg.IncludePaths,
 				ExcludePaths: cfg.ExcludePaths,
 				Timeout:      timeout,
+				ContainerCfg: cfg.ContainerCfg,
 			}
 			if cfg.OnToolOutput != nil {
 				toolOpts.OnOutput = func(line string) {

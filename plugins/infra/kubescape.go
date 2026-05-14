@@ -9,6 +9,7 @@ import (
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
+	"github.com/alphabravocompany/thewolf/internal/plugin/container"
 )
 
 // KubescapePlugin runs Kubescape Kubernetes security scanning.
@@ -22,10 +23,7 @@ func (p *KubescapePlugin) Name() string             { return "kubescape" }
 func (p *KubescapePlugin) Category() models.Category { return models.CategoryInfra }
 func (p *KubescapePlugin) Languages() []models.Language { return nil }
 
-func (p *KubescapePlugin) CheckAvailable() bool {
-	_, err := exec.LookPath("kubescape")
-	return err == nil
-}
+func (p *KubescapePlugin) CheckAvailable() bool { return container.IsScannersReady() }
 
 func (p *KubescapePlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
 	if opts.Timeout > 0 {
@@ -34,10 +32,12 @@ func (p *KubescapePlugin) Execute(ctx context.Context, opts models.ExecuteOpts) 
 		defer cancel()
 	}
 
-	cmd := plugin.CommandContext(ctx, "kubescape", "scan", "--format", "json", "--output", "-", opts.RepoPath)
+	cmd := container.CommandContext(ctx,
+		container.ConfigFromOpts(opts.ContainerCfg),
+		container.Options{RepoDir: opts.RepoPath},
+		"kubescape", "scan", "--format", "json", "--output", "-", "/scan")
 	out, err := cmd.Output()
 	if err != nil {
-		// "no resources found" is not an error — it just means the repo has no K8s manifests.
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			stderr := string(exitErr.Stderr)
 			if strings.Contains(stderr, "no resources found") {
@@ -50,7 +50,14 @@ func (p *KubescapePlugin) Execute(ctx context.Context, opts models.ExecuteOpts) 
 		}
 	}
 
-	return parseKubescapeOutput(out)
+	findings, perr := parseKubescapeOutput(out)
+	if perr != nil {
+		return nil, perr
+	}
+	for i := range findings {
+		findings[i].FilePath = container.NormalizePath(findings[i].FilePath)
+	}
+	return findings, nil
 }
 
 type kubescapeOutput struct {

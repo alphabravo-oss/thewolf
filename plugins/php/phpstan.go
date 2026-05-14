@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
+	"github.com/alphabravocompany/thewolf/internal/plugin/container"
 )
 
 // PHPStanPlugin runs PHPStan static analysis for PHP code.
@@ -23,10 +23,7 @@ func (p *PHPStanPlugin) Languages() []models.Language {
 	return []models.Language{models.LangPHP}
 }
 
-func (p *PHPStanPlugin) CheckAvailable() bool {
-	_, err := exec.LookPath("phpstan")
-	return err == nil
-}
+func (p *PHPStanPlugin) CheckAvailable() bool { return container.IsScannersReady() }
 
 func (p *PHPStanPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
 	if !plugin.HasFilesWithExtension(opts.RepoPath, "php") {
@@ -40,15 +37,23 @@ func (p *PHPStanPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([
 		defer cancel()
 	}
 
-	cmd := plugin.CommandContext(ctx, "phpstan", "analyse", "--error-format=json", "--no-progress", opts.RepoPath)
+	cmd := container.CommandContext(ctx,
+		container.ConfigFromOpts(opts.ContainerCfg),
+		container.Options{RepoDir: opts.RepoPath},
+		"phpstan", "analyse", "--error-format=json", "--no-progress", "/scan")
 	out, err := cmd.Output()
-	if err != nil {
-		if len(out) == 0 {
-			return nil, plugin.WrapExecError("phpstan", err)
-		}
+	if err != nil && len(out) == 0 {
+		return nil, plugin.WrapExecError("phpstan", err)
 	}
 
-	return parsePHPStanOutput(out)
+	findings, perr := parsePHPStanOutput(out)
+	if perr != nil {
+		return nil, perr
+	}
+	for i := range findings {
+		findings[i].FilePath = container.NormalizePath(findings[i].FilePath)
+	}
+	return findings, nil
 }
 
 type phpstanOutput struct {

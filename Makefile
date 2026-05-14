@@ -14,15 +14,22 @@ COMMIT      ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 BUILD_DATE  ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS     := -s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.buildDate=$(BUILD_DATE)
 
-# Docker
+# Docker — wolf-slim (the orchestrator + UI)
 DOCKER_IMAGE := thewolf
 DOCKER_TAG   ?= $(VERSION)
+
+# Docker — wolf-scanners (the bundled scanner image)
+SCANNERS_IMAGE := wolf-scanners
+SCANNERS_TAG   ?= $(VERSION)
+SCANNERS_REGISTRY ?= ghcr.io/alphabravocompany
+SCANNERS_REF   := $(SCANNERS_IMAGE):$(SCANNERS_TAG)
 
 # Tools
 GOLANGCI_LINT := $(shell command -v golangci-lint 2>/dev/null)
 AIR           := $(shell command -v air 2>/dev/null || echo $(shell go env GOPATH)/bin/air)
 
-.PHONY: all build test lint vet fmt ui-build dev dev-api dev-ui docker docker-up docker-down clean help
+.PHONY: all build test lint vet fmt ui-build dev dev-api dev-ui docker docker-up docker-down clean help \
+        scanners-build scanners-smoke scanners-push dev-scanners test-integration
 
 ## all: Build everything (Go binary + UI)
 all: build ui-build
@@ -111,6 +118,82 @@ dev-ui:
 
 ## ui-dev: (alias) Start UI development server
 ui-dev: dev-ui
+
+## scanners-build: Build the DEFAULT wolf-scanners image (core + small lang tools)
+scanners-build:
+	@echo "==> Building $(SCANNERS_REF) (default)..."
+	docker build \
+		--build-arg WOLF_VERSION=$(VERSION) \
+		-f scanners/Dockerfile \
+		-t $(SCANNERS_REF) \
+		-t $(SCANNERS_IMAGE):dev \
+		scanners/
+	@echo "==> Built: $(SCANNERS_REF) (tagged also as $(SCANNERS_IMAGE):dev)"
+
+## scanners-build-jvm: Build the JVM bucket image (infer + pmd + JDK)
+scanners-build-jvm:
+	docker build \
+		--build-arg WOLF_VERSION=$(VERSION) \
+		-f scanners/Dockerfile.jvm \
+		-t $(SCANNERS_IMAGE)-jvm:$(SCANNERS_TAG) \
+		-t $(SCANNERS_IMAGE)-jvm:dev \
+		scanners/
+
+## scanners-build-rust: Build the Rust bucket image (clippy + rust toolchain)
+scanners-build-rust:
+	docker build \
+		--build-arg WOLF_VERSION=$(VERSION) \
+		-f scanners/Dockerfile.rust \
+		-t $(SCANNERS_IMAGE)-rust:$(SCANNERS_TAG) \
+		-t $(SCANNERS_IMAGE)-rust:dev \
+		scanners/
+
+## scanners-build-codeql: Build the CodeQL bucket image (license-gated)
+scanners-build-codeql:
+	docker build \
+		--build-arg WOLF_VERSION=$(VERSION) \
+		-f scanners/Dockerfile.codeql \
+		-t $(SCANNERS_IMAGE)-codeql:$(SCANNERS_TAG) \
+		-t $(SCANNERS_IMAGE)-codeql:dev \
+		scanners/
+
+## scanners-build-all: Build all four scanner images
+scanners-build-all: scanners-build scanners-build-jvm scanners-build-rust scanners-build-codeql
+
+## scanners-smoke: Run smoke-test inside each built image
+scanners-smoke:
+	@for variant in default jvm rust codeql; do \
+		image=$(SCANNERS_IMAGE); \
+		if [ "$$variant" != "default" ]; then image=$(SCANNERS_IMAGE)-$$variant; fi; \
+		if docker image inspect $$image:dev >/dev/null 2>&1; then \
+			echo "==> Smoke test: $$image:dev"; \
+			docker run --rm $$image:dev /usr/local/bin/smoke-test.sh || exit $$?; \
+		else \
+			echo "==> Skip $$image:dev (not built)"; \
+		fi \
+	done
+
+## scanners-push: Push every built scanner image to the configured registry
+scanners-push:
+	@for variant in "" -jvm -rust -codeql; do \
+		image=$(SCANNERS_IMAGE)$$variant; \
+		if docker image inspect $$image:$(SCANNERS_TAG) >/dev/null 2>&1; then \
+			docker tag  $$image:$(SCANNERS_TAG) $(SCANNERS_REGISTRY)/$$image:$(SCANNERS_TAG); \
+			docker push $(SCANNERS_REGISTRY)/$$image:$(SCANNERS_TAG); \
+		fi \
+	done
+
+## dev-scanners: Open an interactive shell inside the default wolf-scanners image
+dev-scanners:
+	docker run --rm -it \
+		--entrypoint /bin/bash \
+		-v $(PWD):/scan:ro \
+		$(SCANNERS_IMAGE):dev
+
+## test-integration: Run integration tests (require wolf-scanners:dev to be built)
+test-integration:
+	@echo "==> Running integration tests (requires $(SCANNERS_IMAGE):dev)..."
+	go test -tags=integration -race -count=1 -timeout 600s ./...
 
 ## docker: Build Docker image
 docker:

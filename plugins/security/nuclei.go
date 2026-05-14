@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"os/exec"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
+	"github.com/alphabravocompany/thewolf/internal/plugin/container"
 )
 
 // NucleiPlugin runs Nuclei template-based vulnerability scanning.
@@ -21,10 +21,7 @@ func (p *NucleiPlugin) Name() string             { return "nuclei" }
 func (p *NucleiPlugin) Category() models.Category { return models.CategoryDAST }
 func (p *NucleiPlugin) Languages() []models.Language { return nil }
 
-func (p *NucleiPlugin) CheckAvailable() bool {
-	_, err := exec.LookPath("nuclei")
-	return err == nil
-}
+func (p *NucleiPlugin) CheckAvailable() bool { return container.IsScannersReady() }
 
 func (p *NucleiPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
 	if opts.Timeout > 0 {
@@ -33,24 +30,35 @@ func (p *NucleiPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]
 		defer cancel()
 	}
 
-	// Nuclei scans targets (URLs/hosts), not local repos.
-	// When used in Wolf, it scans discovered endpoints or config files.
+	// Nuclei is a DAST scanner — it scans HTTP targets, not local repos.
+	// When a target URL is provided, no repo mount is needed.
+	// When only a target list file in the repo is provided, mount it.
 	args := []string{"-jsonl", "-silent"}
+	opt := container.Options{NoRepoMount: opts.Target != ""}
 	if opts.Target != "" {
 		args = append(args, "-u", opts.Target)
 	} else {
-		args = append(args, "-l", opts.RepoPath)
+		opt.RepoDir = opts.RepoPath
+		args = append(args, "-l", "/scan")
 	}
 
-	cmd := plugin.CommandContext(ctx, "nuclei", args...)
+	cmd := container.CommandContext(ctx,
+		container.ConfigFromOpts(opts.ContainerCfg),
+		opt,
+		"nuclei", args...)
 	out, err := cmd.Output()
-	if err != nil {
-		if len(out) == 0 {
-			return nil, plugin.WrapExecError("nuclei", err)
-		}
+	if err != nil && len(out) == 0 {
+		return nil, plugin.WrapExecError("nuclei", err)
 	}
 
-	return parseNucleiOutput(out)
+	findings, perr := parseNucleiOutput(out)
+	if perr != nil {
+		return nil, perr
+	}
+	for i := range findings {
+		findings[i].FilePath = container.NormalizePath(findings[i].FilePath)
+	}
+	return findings, nil
 }
 
 type nucleiResult struct {

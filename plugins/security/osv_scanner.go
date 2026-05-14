@@ -4,11 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"strings"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
+	"github.com/alphabravocompany/thewolf/internal/plugin/container"
 )
 
 // OSVScannerPlugin runs Google's OSV-Scanner for dependency vulnerability scanning.
@@ -22,10 +22,7 @@ func (p *OSVScannerPlugin) Name() string             { return "osv-scanner" }
 func (p *OSVScannerPlugin) Category() models.Category { return models.CategorySCA }
 func (p *OSVScannerPlugin) Languages() []models.Language { return nil }
 
-func (p *OSVScannerPlugin) CheckAvailable() bool {
-	_, err := exec.LookPath("osv-scanner")
-	return err == nil
-}
+func (p *OSVScannerPlugin) CheckAvailable() bool { return container.IsScannersReady() }
 
 func (p *OSVScannerPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
 	if opts.Timeout > 0 {
@@ -34,15 +31,23 @@ func (p *OSVScannerPlugin) Execute(ctx context.Context, opts models.ExecuteOpts)
 		defer cancel()
 	}
 
-	cmd := plugin.CommandContext(ctx, "osv-scanner", "--format", "json", "--recursive", opts.RepoPath)
+	cmd := container.CommandContext(ctx,
+		container.ConfigFromOpts(opts.ContainerCfg),
+		container.Options{RepoDir: opts.RepoPath},
+		"osv-scanner", "--format", "json", "--recursive", "/scan")
 	out, err := cmd.Output()
-	if err != nil {
-		if len(out) == 0 {
-			return nil, plugin.WrapExecError("osv-scanner", err)
-		}
+	if err != nil && len(out) == 0 {
+		return nil, plugin.WrapExecError("osv-scanner", err)
 	}
 
-	return parseOSVScannerOutput(out)
+	findings, perr := parseOSVScannerOutput(out)
+	if perr != nil {
+		return nil, perr
+	}
+	for i := range findings {
+		findings[i].FilePath = container.NormalizePath(findings[i].FilePath)
+	}
+	return findings, nil
 }
 
 type osvOutput struct {

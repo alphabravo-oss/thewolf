@@ -11,11 +11,34 @@ services:
       - "${WOLF_PORT:-8778}:8778"
     volumes:
       - wolf-data:/home/wolf/.wolf
+      # Mount the docker socket so wolf-slim can spawn scanner containers
+      # (Docker-out-of-Docker pattern). See PLAN.md §10.1 for security posture.
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Mount the host repos root read-only. Repos that wolf scans must live
+      # under this path. WOLF_REPOS_ROOT defaults to ./repos relative to the
+      # compose file. WOLF_HOST_REPOS_ROOT is what wolf-slim tells the docker
+      # daemon (same as the source side of the bind, since the daemon sees
+      # the host filesystem). They diverge in non-compose deployments.
+      - ${WOLF_REPOS_ROOT:-./repos}:/repos:ro
     environment:
       - WOLF_MASTER_KEY=${WOLF_MASTER_KEY:-}
       - WOLF_DB_DRIVER=${WOLF_DB_DRIVER:-sqlite}
       - WOLF_DB_DSN=${WOLF_DB_DSN:-}
       - WOLF_LOG_LEVEL=${WOLF_LOG_LEVEL:-info}
+      # Scanner image references (per-bucket; Option B from PLAN.md §5.1)
+      - WOLF_SCANNERS_IMAGE=${WOLF_SCANNERS_IMAGE:-ghcr.io/alphabravocompany/wolf-scanners:${WOLF_VERSION:-dev}}
+      - WOLF_SCANNERS_IMAGE_JVM=${WOLF_SCANNERS_IMAGE_JVM:-ghcr.io/alphabravocompany/wolf-scanners-jvm:${WOLF_VERSION:-dev}}
+      - WOLF_SCANNERS_IMAGE_RUST=${WOLF_SCANNERS_IMAGE_RUST:-ghcr.io/alphabravocompany/wolf-scanners-rust:${WOLF_VERSION:-dev}}
+      - WOLF_SCANNERS_IMAGE_CODEQL=${WOLF_SCANNERS_IMAGE_CODEQL:-ghcr.io/alphabravocompany/wolf-scanners-codeql:${WOLF_VERSION:-dev}}
+      - WOLF_SCANNERS_PULL_POLICY=${WOLF_SCANNERS_PULL_POLICY:-IfNotPresent}
+      - WOLF_SCANNERS_NETWORK=${WOLF_SCANNERS_NETWORK:-bridge}
+      - WOLF_SCANNERS_MEMORY=${WOLF_SCANNERS_MEMORY:-2g}
+      - WOLF_SCANNERS_CPUS=${WOLF_SCANNERS_CPUS:-1.5}
+      - WOLF_SCANNERS_DB_VOLUME=${WOLF_SCANNERS_DB_VOLUME:-wolf-scanners-db}
+      # Tell wolf-slim what host path /repos maps to on the daemon. In a
+      # compose deployment this is the absolute resolution of WOLF_REPOS_ROOT.
+      - WOLF_HOST_REPOS_ROOT=${WOLF_HOST_REPOS_ROOT:-${WOLF_REPOS_ROOT:-./repos}}
+      - WOLF_IN_CONTAINER_REPOS_ROOT=/repos
     depends_on:
       postgres:
         condition: service_healthy
@@ -73,3 +96,5 @@ networks:
 volumes:
   wolf-data:
   pg-data:
+  # Named volume for vuln-DB caches shared across all scanner-container runs.
+  wolf-scanners-db:

@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
+	"github.com/alphabravocompany/thewolf/internal/plugin/container"
 )
 
 // SQLFluffPlugin runs SQLFluff linting on SQL files.
@@ -23,10 +23,7 @@ func (p *SQLFluffPlugin) Languages() []models.Language {
 	return []models.Language{models.LangSQL}
 }
 
-func (p *SQLFluffPlugin) CheckAvailable() bool {
-	_, err := exec.LookPath("sqlfluff")
-	return err == nil
-}
+func (p *SQLFluffPlugin) CheckAvailable() bool { return container.IsScannersReady() }
 
 func (p *SQLFluffPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
 	if !plugin.HasFilesWithExtension(opts.RepoPath, "sql") {
@@ -40,15 +37,23 @@ func (p *SQLFluffPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) (
 		defer cancel()
 	}
 
-	cmd := plugin.CommandContext(ctx, "sqlfluff", "lint", "--format", "json", opts.RepoPath)
+	cmd := container.CommandContext(ctx,
+		container.ConfigFromOpts(opts.ContainerCfg),
+		container.Options{RepoDir: opts.RepoPath},
+		"sqlfluff", "lint", "--format", "json", "/scan")
 	out, err := cmd.Output()
-	if err != nil {
-		if len(out) == 0 {
-			return nil, plugin.WrapExecError("sqlfluff", err)
-		}
+	if err != nil && len(out) == 0 {
+		return nil, plugin.WrapExecError("sqlfluff", err)
 	}
 
-	return parseSQLFluffOutput(out)
+	findings, perr := parseSQLFluffOutput(out)
+	if perr != nil {
+		return nil, perr
+	}
+	for i := range findings {
+		findings[i].FilePath = container.NormalizePath(findings[i].FilePath)
+	}
+	return findings, nil
 }
 
 type sqlfluffResult struct {

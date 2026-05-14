@@ -4,11 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"strconv"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
+	"github.com/alphabravocompany/thewolf/internal/plugin/container"
 )
 
 // GosecPlugin runs gosec static analysis for Go code.
@@ -24,10 +24,7 @@ func (p *GosecPlugin) Languages() []models.Language {
 	return []models.Language{models.LangGo}
 }
 
-func (p *GosecPlugin) CheckAvailable() bool {
-	_, err := exec.LookPath("gosec")
-	return err == nil
-}
+func (p *GosecPlugin) CheckAvailable() bool { return container.IsScannersReady() }
 
 func (p *GosecPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
 	goDir := plugin.FindFile(opts.RepoPath, "go.mod")
@@ -42,16 +39,26 @@ func (p *GosecPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]m
 		defer cancel()
 	}
 
-	cmd := plugin.CommandContext(ctx, "gosec", "-fmt", "json", "./...")
-	cmd.Dir = goDir
+	cmd := container.CommandContext(ctx,
+		container.ConfigFromOpts(opts.ContainerCfg),
+		container.Options{
+			RepoDir: opts.RepoPath,
+			WorkDir: container.ContainerSubPath(opts.RepoPath, goDir),
+		},
+		"gosec", "-fmt", "json", "./...")
 	out, err := cmd.Output()
-	if err != nil {
-		if len(out) == 0 {
-			return nil, plugin.WrapExecError("gosec", err)
-		}
+	if err != nil && len(out) == 0 {
+		return nil, plugin.WrapExecError("gosec", err)
 	}
 
-	return parseGosecOutput(out)
+	findings, perr := parseGosecOutput(out)
+	if perr != nil {
+		return nil, perr
+	}
+	for i := range findings {
+		findings[i].FilePath = container.NormalizePath(findings[i].FilePath)
+	}
+	return findings, nil
 }
 
 type gosecOutput struct {

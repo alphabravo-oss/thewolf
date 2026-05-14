@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
+	"github.com/alphabravocompany/thewolf/internal/plugin/container"
 )
 
 // ScancodePlugin runs ScanCode license scanning.
@@ -21,10 +21,7 @@ func (p *ScancodePlugin) Name() string               { return "scancode" }
 func (p *ScancodePlugin) Category() models.Category   { return models.CategoryLicense }
 func (p *ScancodePlugin) Languages() []models.Language { return nil }
 
-func (p *ScancodePlugin) CheckAvailable() bool {
-	_, err := exec.LookPath("scancode")
-	return err == nil
-}
+func (p *ScancodePlugin) CheckAvailable() bool { return container.IsScannersReady() }
 
 func (p *ScancodePlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
 	timeout := opts.Timeout
@@ -34,16 +31,23 @@ func (p *ScancodePlugin) Execute(ctx context.Context, opts models.ExecuteOpts) (
 		defer cancel()
 	}
 
-	args := []string{"--json-pp", "-", "--license", opts.RepoPath}
-	cmd := plugin.CommandContext(ctx, "scancode", args...)
+	cmd := container.CommandContext(ctx,
+		container.ConfigFromOpts(opts.ContainerCfg),
+		container.Options{RepoDir: opts.RepoPath},
+		"scancode", "--json-pp", "-", "--license", "/scan")
 	out, err := cmd.Output()
-	if err != nil {
-		if len(out) == 0 {
-			return nil, plugin.WrapExecError("scancode", err)
-		}
+	if err != nil && len(out) == 0 {
+		return nil, plugin.WrapExecError("scancode", err)
 	}
 
-	return parseScancodeOutput(out)
+	findings, perr := parseScancodeOutput(out)
+	if perr != nil {
+		return nil, perr
+	}
+	for i := range findings {
+		findings[i].FilePath = container.NormalizePath(findings[i].FilePath)
+	}
+	return findings, nil
 }
 
 type scancodeOutput struct {

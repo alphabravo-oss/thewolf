@@ -518,13 +518,27 @@ export default function SettingsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
+              <div className="text-sm bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-md p-3 mb-4">
+                <p className="font-medium text-amber-900 dark:text-amber-200 mb-1">
+                  Wolf 2.0: scanners run in containers
+                </p>
+                <p className="text-amber-800 dark:text-amber-300 text-xs">
+                  Host installation of scanners is no longer used. All tools
+                  ship inside the <code>wolf-scanners</code> image family.
+                  Visit{" "}
+                  <a
+                    href="/scanners"
+                    className="underline font-medium"
+                  >
+                    Scanners
+                  </a>{" "}
+                  to see image status, pull missing images, and run health
+                  checks. The list below is informational only.
+                </p>
+              </div>
               <p className="text-sm text-muted-foreground mb-4">
                 These are the static analysis and security tools Wolf uses
-                during scans. Install missing tools directly from here, or run{" "}
-                <code className="bg-muted px-1 rounded text-xs">
-                  wolf setup
-                </code>{" "}
-                from the CLI.
+                during scans.
               </p>
               {installableCount > 0 && (
                 <p className="text-sm">

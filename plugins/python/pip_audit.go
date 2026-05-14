@@ -5,12 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
+	"github.com/alphabravocompany/thewolf/internal/plugin/container"
 )
 
 // PipAuditPlugin runs pip-audit dependency vulnerability scanner for Python.
@@ -24,10 +24,7 @@ func (p *PipAuditPlugin) Name() string               { return "pip-audit" }
 func (p *PipAuditPlugin) Category() models.Category   { return models.CategorySCA }
 func (p *PipAuditPlugin) Languages() []models.Language { return []models.Language{models.LangPython} }
 
-func (p *PipAuditPlugin) CheckAvailable() bool {
-	_, err := exec.LookPath("pip-audit")
-	return err == nil
-}
+func (p *PipAuditPlugin) CheckAvailable() bool { return container.IsScannersReady() }
 
 func (p *PipAuditPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
 	if opts.Timeout > 0 {
@@ -50,17 +47,25 @@ func (p *PipAuditPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) (
 		return nil, nil
 	}
 
-	cmd := plugin.CommandContext(ctx, "pip-audit", "-r", reqFile, "-f", "json")
-	cmd.Dir = opts.RepoPath
+	// pip-audit needs the workdir set to /scan so its -r is resolved relative
+	// to the repo root inside the container.
+	cmd := container.CommandContext(ctx,
+		container.ConfigFromOpts(opts.ContainerCfg),
+		container.Options{RepoDir: opts.RepoPath, WorkDir: "/scan"},
+		"pip-audit", "-r", reqFile, "-f", "json")
 	out, err := cmd.Output()
-	if err != nil {
-		// pip-audit exits non-zero when vulnerabilities are found; only fail if no output.
-		if len(out) == 0 {
-			return nil, plugin.WrapExecError("pip-audit", err)
-		}
+	if err != nil && len(out) == 0 {
+		return nil, plugin.WrapExecError("pip-audit", err)
 	}
 
-	return parsePipAuditOutput(out)
+	findings, perr := parsePipAuditOutput(out)
+	if perr != nil {
+		return nil, perr
+	}
+	for i := range findings {
+		findings[i].FilePath = container.NormalizePath(findings[i].FilePath)
+	}
+	return findings, nil
 }
 
 type pipAuditOutput struct {

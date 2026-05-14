@@ -4,11 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"strings"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
+	"github.com/alphabravocompany/thewolf/internal/plugin/container"
 )
 
 // RadonPlugin runs Radon cyclomatic complexity analysis for Python.
@@ -22,10 +22,7 @@ func (p *RadonPlugin) Name() string               { return "radon" }
 func (p *RadonPlugin) Category() models.Category   { return models.CategoryQuality }
 func (p *RadonPlugin) Languages() []models.Language { return []models.Language{models.LangPython} }
 
-func (p *RadonPlugin) CheckAvailable() bool {
-	_, err := exec.LookPath("radon")
-	return err == nil
-}
+func (p *RadonPlugin) CheckAvailable() bool { return container.IsScannersReady() }
 
 func (p *RadonPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
 	if !plugin.HasFilesWithExtension(opts.RepoPath, "py") {
@@ -39,15 +36,23 @@ func (p *RadonPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]m
 		defer cancel()
 	}
 
-	cmd := plugin.CommandContext(ctx, "radon", "cc", opts.RepoPath, "-j")
+	cmd := container.CommandContext(ctx,
+		container.ConfigFromOpts(opts.ContainerCfg),
+		container.Options{RepoDir: opts.RepoPath},
+		"radon", "cc", "/scan", "-j")
 	out, err := cmd.Output()
-	if err != nil {
-		if len(out) == 0 {
-			return nil, plugin.WrapExecError("radon", err)
-		}
+	if err != nil && len(out) == 0 {
+		return nil, plugin.WrapExecError("radon", err)
 	}
 
-	return parseRadonOutput(out)
+	findings, perr := parseRadonOutput(out)
+	if perr != nil {
+		return nil, perr
+	}
+	for i := range findings {
+		findings[i].FilePath = container.NormalizePath(findings[i].FilePath)
+	}
+	return findings, nil
 }
 
 type radonBlock struct {

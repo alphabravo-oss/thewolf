@@ -8,6 +8,7 @@ import (
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
+	"github.com/alphabravocompany/thewolf/internal/plugin/container"
 )
 
 // PMDPlugin runs PMD code quality analysis.
@@ -21,10 +22,7 @@ func (p *PMDPlugin) Name() string               { return "pmd" }
 func (p *PMDPlugin) Category() models.Category   { return models.CategoryQuality }
 func (p *PMDPlugin) Languages() []models.Language { return nil }
 
-func (p *PMDPlugin) CheckAvailable() bool {
-	_, err := exec.LookPath("pmd")
-	return err == nil
-}
+func (p *PMDPlugin) CheckAvailable() bool { return container.IsScannersReady() }
 
 func (p *PMDPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
 	timeout := opts.Timeout
@@ -34,28 +32,32 @@ func (p *PMDPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]mod
 		defer cancel()
 	}
 
-	args := []string{
-		"check",
+	cmd := container.CommandContext(ctx,
+		container.ConfigFromOpts(opts.ContainerCfg),
+		container.Options{RepoDir: opts.RepoPath},
+		"pmd", "check",
 		"--format", "json",
-		"-d", opts.RepoPath,
+		"-d", "/scan",
 		"--rulesets", "rulesets/java/quickstart.xml,rulesets/ecmascript/quickstart.xml",
-		"--no-progress",
-	}
-	cmd := plugin.CommandContext(ctx, "pmd", args...)
+		"--no-progress")
 	out, err := cmd.Output()
 	if err != nil {
 		// PMD exits with code 4 when violations are found — that's normal.
-		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 4 {
-			if len(out) > 0 {
-				return parsePMDOutput(out)
-			}
-		}
-		if len(out) == 0 {
+		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 4 && len(out) > 0 {
+			// fall through to parse
+		} else if len(out) == 0 {
 			return nil, plugin.WrapExecError("pmd", err)
 		}
 	}
 
-	return parsePMDOutput(out)
+	findings, perr := parsePMDOutput(out)
+	if perr != nil {
+		return nil, perr
+	}
+	for i := range findings {
+		findings[i].FilePath = container.NormalizePath(findings[i].FilePath)
+	}
+	return findings, nil
 }
 
 type pmdOutput struct {

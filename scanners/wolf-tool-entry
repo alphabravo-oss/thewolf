@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# ============================================================
+# wolf-scanners entrypoint
+# ============================================================
+# Runs as PID 1 inside the wolf-scanners container. Responsibilities:
+#   1. Normalize the environment (HOME, NO_COLOR, Python buffering).
+#   2. Validate the requested tool exists in the image.
+#   3. Exec the tool so it inherits PID 1 (signal forwarding works).
+#
+# Exit codes:
+#    64 — no tool argument supplied
+#   127 — requested tool not present in the image
+#   *   — the tool's own exit code
+# ============================================================
+set -euo pipefail
+
+# Normalize environment for headless tool invocations.
+export HOME="${HOME:-/tmp}"
+export NO_COLOR=1
+export PYTHONDONTWRITEBYTECODE=1
+export PYTHONUNBUFFERED=1
+export TERM="${TERM:-dumb}"
+
+tool="${1:-}"
+if [[ -z "$tool" ]]; then
+    echo "wolf-scanners: no tool specified (usage: <tool> [args...])" >&2
+    exit 64
+fi
+shift
+
+if ! command -v "$tool" >/dev/null 2>&1; then
+    echo "wolf-scanners: tool '$tool' not present in this image" >&2
+    echo "wolf-scanners: image build is broken or wolf version mismatch" >&2
+    exit 127
+fi
+
+# Exec so the tool becomes PID 1 — signal forwarding is then native.
+exec "$tool" "$@"

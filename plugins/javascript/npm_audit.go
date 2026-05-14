@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
+	"github.com/alphabravocompany/thewolf/internal/plugin/container"
 )
 
 // NPMAuditPlugin runs npm audit for dependency vulnerability scanning.
@@ -23,10 +23,7 @@ func (p *NPMAuditPlugin) Languages() []models.Language {
 	return []models.Language{models.LangJavaScript, models.LangTypeScript}
 }
 
-func (p *NPMAuditPlugin) CheckAvailable() bool {
-	_, err := exec.LookPath("npm")
-	return err == nil
-}
+func (p *NPMAuditPlugin) CheckAvailable() bool { return container.IsScannersReady() }
 
 func (p *NPMAuditPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
 	jsDir := plugin.FindFile(opts.RepoPath, "package-lock.json")
@@ -44,16 +41,26 @@ func (p *NPMAuditPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) (
 		defer cancel()
 	}
 
-	cmd := plugin.CommandContext(ctx, "npm", "audit", "--json")
-	cmd.Dir = jsDir
+	cmd := container.CommandContext(ctx,
+		container.ConfigFromOpts(opts.ContainerCfg),
+		container.Options{
+			RepoDir: opts.RepoPath,
+			WorkDir: container.ContainerSubPath(opts.RepoPath, jsDir),
+		},
+		"npm", "audit", "--json")
 	out, err := cmd.Output()
-	if err != nil {
-		if len(out) == 0 {
-			return nil, plugin.WrapExecError("npm-audit", err)
-		}
+	if err != nil && len(out) == 0 {
+		return nil, plugin.WrapExecError("npm-audit", err)
 	}
 
-	return parseNPMAuditOutput(out)
+	findings, perr := parseNPMAuditOutput(out)
+	if perr != nil {
+		return nil, perr
+	}
+	for i := range findings {
+		findings[i].FilePath = container.NormalizePath(findings[i].FilePath)
+	}
+	return findings, nil
 }
 
 type npmAuditOutput struct {

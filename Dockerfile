@@ -53,9 +53,11 @@ LABEL org.opencontainers.image.title="The Wolf" \
       org.opencontainers.image.source="https://github.com/alphabravocompany/thewolf" \
       org.opencontainers.image.vendor="WolfCorp"
 
-RUN apk add --no-cache ca-certificates tzdata \
+RUN apk add --no-cache ca-certificates tzdata docker-cli \
     && addgroup -S wolf \
-    && adduser -S wolf -G wolf
+    && adduser -S wolf -G wolf \
+    && addgroup -S docker \
+    && adduser wolf docker
 
 COPY --from=builder /wolf /usr/local/bin/wolf
 

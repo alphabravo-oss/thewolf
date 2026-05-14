@@ -6,10 +6,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
+	"github.com/alphabravocompany/thewolf/internal/plugin/container"
 )
 
 // StaticcheckPlugin runs staticcheck for Go code quality analysis.
@@ -25,10 +25,7 @@ func (p *StaticcheckPlugin) Languages() []models.Language {
 	return []models.Language{models.LangGo}
 }
 
-func (p *StaticcheckPlugin) CheckAvailable() bool {
-	_, err := exec.LookPath("staticcheck")
-	return err == nil
-}
+func (p *StaticcheckPlugin) CheckAvailable() bool { return container.IsScannersReady() }
 
 func (p *StaticcheckPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
 	goDir := plugin.FindFile(opts.RepoPath, "go.mod")
@@ -43,16 +40,26 @@ func (p *StaticcheckPlugin) Execute(ctx context.Context, opts models.ExecuteOpts
 		defer cancel()
 	}
 
-	cmd := plugin.CommandContext(ctx, "staticcheck", "-f", "json", "./...")
-	cmd.Dir = goDir
+	cmd := container.CommandContext(ctx,
+		container.ConfigFromOpts(opts.ContainerCfg),
+		container.Options{
+			RepoDir: opts.RepoPath,
+			WorkDir: container.ContainerSubPath(opts.RepoPath, goDir),
+		},
+		"staticcheck", "-f", "json", "./...")
 	out, err := cmd.Output()
-	if err != nil {
-		if len(out) == 0 {
-			return nil, plugin.WrapExecError("staticcheck", err)
-		}
+	if err != nil && len(out) == 0 {
+		return nil, plugin.WrapExecError("staticcheck", err)
 	}
 
-	return parseStaticcheckOutput(out)
+	findings, perr := parseStaticcheckOutput(out)
+	if perr != nil {
+		return nil, perr
+	}
+	for i := range findings {
+		findings[i].FilePath = container.NormalizePath(findings[i].FilePath)
+	}
+	return findings, nil
 }
 
 type staticcheckDiag struct {

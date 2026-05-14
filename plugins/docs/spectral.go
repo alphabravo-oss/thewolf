@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
+	"github.com/alphabravocompany/thewolf/internal/plugin/container"
 )
 
 // SpectralPlugin runs Spectral API spec linting.
@@ -21,10 +21,7 @@ func (p *SpectralPlugin) Name() string               { return "spectral" }
 func (p *SpectralPlugin) Category() models.Category   { return models.CategoryDocs }
 func (p *SpectralPlugin) Languages() []models.Language { return nil }
 
-func (p *SpectralPlugin) CheckAvailable() bool {
-	_, err := exec.LookPath("spectral")
-	return err == nil
-}
+func (p *SpectralPlugin) CheckAvailable() bool { return container.IsScannersReady() }
 
 func (p *SpectralPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
 	hasSpec := plugin.HasFile(opts.RepoPath, "openapi.yaml") ||
@@ -45,16 +42,23 @@ func (p *SpectralPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) (
 		defer cancel()
 	}
 
-	args := []string{"lint", opts.RepoPath, "-f", "json"}
-	cmd := plugin.CommandContext(ctx, "spectral", args...)
+	cmd := container.CommandContext(ctx,
+		container.ConfigFromOpts(opts.ContainerCfg),
+		container.Options{RepoDir: opts.RepoPath},
+		"spectral", "lint", "/scan", "-f", "json")
 	out, err := cmd.Output()
-	if err != nil {
-		if len(out) == 0 {
-			return nil, plugin.WrapExecError("spectral", err)
-		}
+	if err != nil && len(out) == 0 {
+		return nil, plugin.WrapExecError("spectral", err)
 	}
 
-	return parseSpectralOutput(out)
+	findings, perr := parseSpectralOutput(out)
+	if perr != nil {
+		return nil, perr
+	}
+	for i := range findings {
+		findings[i].FilePath = container.NormalizePath(findings[i].FilePath)
+	}
+	return findings, nil
 }
 
 type spectralResult struct {

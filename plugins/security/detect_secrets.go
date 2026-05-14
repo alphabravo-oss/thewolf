@@ -4,11 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"strconv"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
+	"github.com/alphabravocompany/thewolf/internal/plugin/container"
 )
 
 // DetectSecretsPlugin runs Yelp's detect-secrets baseline scanner.
@@ -22,10 +22,7 @@ func (p *DetectSecretsPlugin) Name() string             { return "detect-secrets
 func (p *DetectSecretsPlugin) Category() models.Category { return models.CategorySecrets }
 func (p *DetectSecretsPlugin) Languages() []models.Language { return nil }
 
-func (p *DetectSecretsPlugin) CheckAvailable() bool {
-	_, err := exec.LookPath("detect-secrets")
-	return err == nil
-}
+func (p *DetectSecretsPlugin) CheckAvailable() bool { return container.IsScannersReady() }
 
 func (p *DetectSecretsPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
 	if opts.Timeout > 0 {
@@ -34,15 +31,23 @@ func (p *DetectSecretsPlugin) Execute(ctx context.Context, opts models.ExecuteOp
 		defer cancel()
 	}
 
-	cmd := plugin.CommandContext(ctx, "detect-secrets", "scan", opts.RepoPath)
+	cmd := container.CommandContext(ctx,
+		container.ConfigFromOpts(opts.ContainerCfg),
+		container.Options{RepoDir: opts.RepoPath},
+		"detect-secrets", "scan", "/scan")
 	out, err := cmd.Output()
-	if err != nil {
-		if len(out) == 0 {
-			return nil, plugin.WrapExecError("detect-secrets", err)
-		}
+	if err != nil && len(out) == 0 {
+		return nil, plugin.WrapExecError("detect-secrets", err)
 	}
 
-	return parseDetectSecretsOutput(out)
+	findings, perr := parseDetectSecretsOutput(out)
+	if perr != nil {
+		return nil, perr
+	}
+	for i := range findings {
+		findings[i].FilePath = container.NormalizePath(findings[i].FilePath)
+	}
+	return findings, nil
 }
 
 type detectSecretsOutput struct {

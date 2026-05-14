@@ -6,11 +6,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
-	"os/exec"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
+	"github.com/alphabravocompany/thewolf/internal/plugin/container"
 )
 
 // TrufflehogPlugin runs TruffleHog secret detection.
@@ -24,10 +23,7 @@ func (p *TrufflehogPlugin) Name() string               { return "trufflehog" }
 func (p *TrufflehogPlugin) Category() models.Category   { return models.CategorySecrets }
 func (p *TrufflehogPlugin) Languages() []models.Language { return nil }
 
-func (p *TrufflehogPlugin) CheckAvailable() bool {
-	_, err := exec.LookPath("trufflehog")
-	return err == nil
-}
+func (p *TrufflehogPlugin) CheckAvailable() bool { return container.IsScannersReady() }
 
 func (p *TrufflehogPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
 	timeout := opts.Timeout
@@ -37,28 +33,31 @@ func (p *TrufflehogPlugin) Execute(ctx context.Context, opts models.ExecuteOpts)
 		defer cancel()
 	}
 
-	// Write exclude patterns to a temp file — trufflehog takes a single --exclude-paths file.
-	excludeFile, err := os.CreateTemp("", "trufflehog-exclude-*.txt")
-	if err != nil {
-		return nil, fmt.Errorf("trufflehog: failed to create exclude file: %w", err)
-	}
-	defer os.Remove(excludeFile.Name())
-	for _, dir := range plugin.DefaultExcludeDirs {
-		fmt.Fprintln(excludeFile, dir)
-	}
-	excludeFile.Close()
-
-	args := []string{"filesystem", "--json", "--exclude-paths", excludeFile.Name(), opts.RepoPath}
-	cmd := plugin.CommandContext(ctx, "trufflehog", args...)
-	cmd.Env = append(os.Environ(), "GOMAXPROCS=2")
+	// The wolf-scanners image bakes a standard excludes file at
+	// /etc/wolf-scanners/trufflehog-excludes.txt; passing that lets us share
+	// wolf's DefaultExcludeDirs without needing a writable scratch volume.
+	cmd := container.CommandContext(ctx,
+		container.ConfigFromOpts(opts.ContainerCfg),
+		container.Options{
+			RepoDir:  opts.RepoPath,
+			ExtraEnv: map[string]string{"GOMAXPROCS": "2"},
+		},
+		"trufflehog", "filesystem", "--json",
+		"--exclude-paths", "/etc/wolf-scanners/trufflehog-excludes.txt",
+		"/scan")
 	out, err := cmd.Output()
-	if err != nil {
-		if len(out) == 0 {
-			return nil, plugin.WrapExecError("trufflehog", err)
-		}
+	if err != nil && len(out) == 0 {
+		return nil, plugin.WrapExecError("trufflehog", err)
 	}
 
-	return parseTrufflehogOutput(out)
+	findings, perr := parseTrufflehogOutput(out)
+	if perr != nil {
+		return nil, perr
+	}
+	for i := range findings {
+		findings[i].FilePath = container.NormalizePath(findings[i].FilePath)
+	}
+	return findings, nil
 }
 
 type trufflehogResult struct {

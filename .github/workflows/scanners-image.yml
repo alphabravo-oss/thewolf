@@ -1,0 +1,122 @@
+# Build, smoke-test, and publish the four wolf-scanners images
+# (default, jvm, rust, codeql). See PLAN.md §5.9.
+#
+# Security: all event-controlled inputs are funneled through env: variables
+# rather than interpolated directly into run: blocks, per:
+#   https://github.blog/security/vulnerability-research/how-to-catch-github-actions-workflow-injections-before-attackers-do/
+name: wolf-scanners image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scanners/**"
+      - ".github/workflows/scanners-image.yml"
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Image tag override (defaults to wolf version)"
+        required: false
+        default: ""
+
+env:
+  REGISTRY: ghcr.io
+  ORG: alphabravocompany
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        variant:
+          - { name: "default", dockerfile: "Dockerfile",        image: "wolf-scanners" }
+          - { name: "jvm",     dockerfile: "Dockerfile.jvm",    image: "wolf-scanners-jvm" }
+          - { name: "rust",    dockerfile: "Dockerfile.rust",   image: "wolf-scanners-rust" }
+          - { name: "codeql",  dockerfile: "Dockerfile.codeql", image: "wolf-scanners-codeql" }
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute tags
+        id: meta
+        env:
+          RELEASE_TAG_NAME: ${{ github.event.release.tag_name }}
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+          REF_NAME: ${{ github.ref_name }}
+          IMAGE_NAME: ${{ matrix.variant.image }}
+        run: |
+          set -e
+          version="${RELEASE_TAG_NAME#v}"
+          if [ -n "$INPUT_TAG" ]; then
+            version="$INPUT_TAG"
+          fi
+          if [ -z "$version" ] && [ "$REF_NAME" = "main" ]; then
+            version="main"
+          fi
+          # Validate the version against an allowlist (semver-ish or 'main') to
+          # avoid command injection via crafted tags.
+          case "$version" in
+            main|[0-9]*) : ;;
+            *) echo "refusing unsafe version: $version" >&2; exit 1 ;;
+          esac
+          image="${REGISTRY}/${ORG}/${IMAGE_NAME}"
+          tags="${image}:${version}"
+          if [ "$version" = "main" ]; then
+            short=$(git rev-parse --short HEAD)
+            tags="${tags},${image}:main-${short}"
+          else
+            major=$(echo "$version" | cut -d. -f1)
+            majmin=$(echo "$version" | cut -d. -f1,2)
+            if [ "$majmin" != "$version" ]; then
+              tags="${tags},${image}:${majmin}"
+            fi
+            if [ "$major" != "$version" ] && [ "$major" != "$majmin" ]; then
+              tags="${tags},${image}:${major}"
+            fi
+          fi
+          echo "tags=${tags}"        >> "$GITHUB_OUTPUT"
+          echo "version=${version}"  >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build (load locally for smoke test)
+        uses: docker/build-push-action@v5
+        with:
+          context: scanners/
+          file: scanners/${{ matrix.variant.dockerfile }}
+          push: false
+          load: true
+          tags: ${{ matrix.variant.image }}:test
+          build-args: |
+            WOLF_VERSION=${{ steps.meta.outputs.version }}
+          cache-from: type=gha,scope=${{ matrix.variant.name }}
+          cache-to: type=gha,scope=${{ matrix.variant.name }},mode=max
+
+      - name: Smoke test
+        env:
+          IMAGE_NAME: ${{ matrix.variant.image }}
+        run: docker run --rm "${IMAGE_NAME}:test" /usr/local/bin/smoke-test.sh
+
+      - name: Push
+        if: github.event_name == 'release' || github.ref == 'refs/heads/main'
+        uses: docker/build-push-action@v5
+        with:
+          context: scanners/
+          file: scanners/${{ matrix.variant.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          build-args: |
+            WOLF_VERSION=${{ steps.meta.outputs.version }}
+          cache-from: type=gha,scope=${{ matrix.variant.name }}

@@ -20,6 +20,44 @@ scan:
     - "build/"
     - ".wolf/"
 
+  # Container backend (PLAN.md §5).
+  #
+  # All scanners run in short-lived containers from the wolf-scanners image
+  # set. wolf-slim spawns containers via the docker socket mounted into it.
+  # The four-image split (see PLAN.md §5.1) means light users only pull the
+  # default image (~2.5 GB); jvm/rust/codeql images are pulled lazily.
+  container:
+    # Default (cross-language + small lang tools) image.
+    image: "ghcr.io/alphabravocompany/wolf-scanners:dev"
+
+    # Per-tool image overrides. Tools NOT listed here use the default image.
+    # The Go-side container.DefaultBucketImages() populates this map at startup
+    # from the WOLF_SCANNERS_IMAGE_* env vars; the YAML form is a manual
+    # override for ops that pin to specific tags or alternate registries.
+    image_overrides:
+      infer:  "ghcr.io/alphabravocompany/wolf-scanners-jvm:dev"
+      pmd:    "ghcr.io/alphabravocompany/wolf-scanners-jvm:dev"
+      clippy: "ghcr.io/alphabravocompany/wolf-scanners-rust:dev"
+      codeql: "ghcr.io/alphabravocompany/wolf-scanners-codeql:dev"
+
+    pull_policy: "IfNotPresent"   # IfNotPresent | Always | Never
+    network:     "bridge"         # bridge | none (paranoid) | host (discouraged)
+    memory:      "2g"
+    cpus:        "1.5"
+
+    # Vuln-DB cache (trivy, grype). Set to a docker volume name to share
+    # the cache across runs (faster); set to "" to disable.
+    db_volume:   "wolf-scanners-db"
+    db_refresh:  "never"          # never | once | each
+
+    # When wolf-slim runs in a container, repos are mounted from the host
+    # into both wolf-slim (read-only) and the scanner containers (read-only).
+    # These two fields tell wolf how to translate a path it sees inside
+    # itself ("/repos/myrepo") into the host path the daemon needs for -v
+    # ("/Users/me/projects/myrepo"). Defaults match docker-compose.yml.
+    host_repos_root:         ""   # empty = dev mode, no translation
+    in_container_repos_root: "/repos"
+
 fix:
   engine: "claude-code"
   max_file_changes: 10

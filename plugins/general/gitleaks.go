@@ -4,14 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"regexp"
-	"strings"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
+	"github.com/alphabravocompany/thewolf/internal/plugin/container"
 )
 
 // GitleaksPlugin runs Gitleaks secret detection.
@@ -25,10 +21,7 @@ func (p *GitleaksPlugin) Name() string               { return "gitleaks" }
 func (p *GitleaksPlugin) Category() models.Category   { return models.CategorySecrets }
 func (p *GitleaksPlugin) Languages() []models.Language { return nil }
 
-func (p *GitleaksPlugin) CheckAvailable() bool {
-	_, err := exec.LookPath("gitleaks")
-	return err == nil
-}
+func (p *GitleaksPlugin) CheckAvailable() bool { return container.IsScannersReady() }
 
 func (p *GitleaksPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
 	timeout := opts.Timeout
@@ -38,42 +31,32 @@ func (p *GitleaksPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) (
 		defer cancel()
 	}
 
-	// Write to a temp file instead of /dev/stdout (which may not be writable in sandboxed environments).
-	reportFile := filepath.Join(os.TempDir(), fmt.Sprintf("gitleaks-%d.json", os.Getpid()))
-	defer os.Remove(reportFile)
-
-	// Generate a config that extends the default rules with path exclusions.
-	configFile := filepath.Join(os.TempDir(), fmt.Sprintf("gitleaks-config-%d.toml", os.Getpid()))
-	defer os.Remove(configFile)
-	var configBuf strings.Builder
-	configBuf.WriteString("[extend]\n# use default gitleaks rules\n\n[allowlist]\npaths = [\n")
-	for i, dir := range plugin.DefaultExcludeDirs {
-		if i > 0 {
-			configBuf.WriteString(",\n")
-		}
-		// Regex pattern to match the directory anywhere in the path.
-		configBuf.WriteString(fmt.Sprintf(`  '''(^|/)%s(/|$)'''`, regexp.QuoteMeta(dir)))
-	}
-	configBuf.WriteString("\n]\n")
-	if err := os.WriteFile(configFile, []byte(configBuf.String()), 0644); err != nil {
-		return nil, fmt.Errorf("gitleaks: failed to write config: %w", err)
-	}
-
-	args := []string{"detect", "--source", opts.RepoPath, "--report-format", "json", "--report-path", reportFile, "--no-git", "--config", configFile}
-	cmd := plugin.CommandContext(ctx, "gitleaks", args...)
-	cmd.Env = append(os.Environ(), "GOMAXPROCS=2")
-	cmd.Stderr = nil
-	// Gitleaks exits with code 1 when leaks are found — that's not an error for us.
-	_ = cmd.Run()
-
-	out, err := os.ReadFile(reportFile)
-	if err != nil {
-		// No report file means gitleaks didn't produce output (e.g. no leaks found).
+	// Use stdout for the report instead of a host temp file.
+	// gitleaks 8.x supports "-" as the report path to mean stdout.
+	// The default gitleaks ruleset already covers the patterns we want;
+	// exclude paths come from the gitleaks "allowlist" baked into a config
+	// file at /etc/wolf-scanners/gitleaks.toml in the scanners image.
+	cmd := container.CommandContext(ctx,
+		container.ConfigFromOpts(opts.ContainerCfg),
+		container.Options{RepoDir: opts.RepoPath},
+		"gitleaks", "detect", "--source", "/scan",
+		"--report-format", "json", "--report-path", "/dev/stdout",
+		"--no-git",
+		"--exit-code", "0") // suppress non-zero on findings
+	out, err := cmd.Output()
+	if err != nil && len(out) == 0 {
 		plugin.Infof(opts.OnOutput, "gitleaks", "scan completed, no secrets detected.")
 		return nil, nil
 	}
 
-	return parseGitleaksOutput(out)
+	findings, perr := parseGitleaksOutput(out)
+	if perr != nil {
+		return nil, perr
+	}
+	for i := range findings {
+		findings[i].FilePath = container.NormalizePath(findings[i].FilePath)
+	}
+	return findings, nil
 }
 
 type gitleaksFinding struct {

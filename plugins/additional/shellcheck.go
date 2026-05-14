@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
+	"github.com/alphabravocompany/thewolf/internal/plugin/container"
 )
 
 // ShellcheckPlugin runs ShellCheck shell script analysis.
@@ -24,10 +25,7 @@ func (p *ShellcheckPlugin) Languages() []models.Language {
 	return []models.Language{models.LangShell}
 }
 
-func (p *ShellcheckPlugin) CheckAvailable() bool {
-	_, err := exec.LookPath("shellcheck")
-	return err == nil
-}
+func (p *ShellcheckPlugin) CheckAvailable() bool { return container.IsScannersReady() }
 
 func (p *ShellcheckPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
 	timeout := opts.Timeout
@@ -50,16 +48,31 @@ func (p *ShellcheckPlugin) Execute(ctx context.Context, opts models.ExecuteOpts)
 		return nil, nil
 	}
 
-	args := append([]string{"-f", "json"}, shellFiles...)
-	cmd := plugin.CommandContext(ctx, "shellcheck", args...)
+	// Translate each host shell-file path to a container /scan-relative path.
+	containerFiles := make([]string, 0, len(shellFiles))
+	for _, f := range shellFiles {
+		rel := strings.TrimPrefix(f, opts.RepoPath)
+		rel = strings.TrimPrefix(rel, "/")
+		containerFiles = append(containerFiles, "/scan/"+rel)
+	}
+	args := append([]string{"-f", "json"}, containerFiles...)
+	cmd := container.CommandContext(ctx,
+		container.ConfigFromOpts(opts.ContainerCfg),
+		container.Options{RepoDir: opts.RepoPath},
+		"shellcheck", args...)
 	out, err := cmd.Output()
-	if err != nil {
-		if len(out) == 0 {
-			return nil, plugin.WrapExecError("shellcheck", err)
-		}
+	if err != nil && len(out) == 0 {
+		return nil, plugin.WrapExecError("shellcheck", err)
 	}
 
-	return parseShellcheckOutput(out)
+	findings, perr := parseShellcheckOutput(out)
+	if perr != nil {
+		return nil, perr
+	}
+	for i := range findings {
+		findings[i].FilePath = container.NormalizePath(findings[i].FilePath)
+	}
+	return findings, nil
 }
 
 type shellcheckResult struct {

@@ -6,6 +6,10 @@ import (
 )
 
 // Plugin defines the interface that all analysis tool plugins must implement.
+//
+// After the containerization migration (PLAN.md), CheckAvailable should
+// return true iff the wolf-scanners image is locally available. Plugins no
+// longer probe the host PATH.
 type Plugin interface {
 	Name() string
 	Category() Category
@@ -21,6 +25,16 @@ type ExecuteOpts struct {
 	IncludePaths []string
 	ExcludePaths []string
 	Timeout      time.Duration
-	Target       string           // URL or host for DAST scanners (nuclei, etc.)
+	Target       string            // URL or host for DAST scanners (nuclei, etc.)
 	OnOutput     func(line string) // callback for streaming tool stderr/progress lines
+
+	// ContainerCfg is the runtime container backend configuration. It is
+	// typed as `any` here to avoid a circular import (models → container →
+	// models). Plugins assert it back to `*container.Config` at the call
+	// site:
+	//
+	//	cfg, _ := opts.ContainerCfg.(*container.Config)
+	//
+	// May be nil only in unit tests that drive plugins directly.
+	ContainerCfg any
 }
