@@ -152,6 +152,7 @@ func NewServer(store db.Store, addr string) *Server {
 				r.Get("/{id}/tool-summaries", routes.GetToolSummaries)
 				r.Get("/{id}/recommendations", routes.GetScanRecommendations)
 				r.Delete("/{id}", routes.CancelScan)
+				r.Delete("/{id}/tools/{toolName}", routes.CancelScanTool)
 			})
 
 			r.Route("/findings", func(r chi.Router) {

@@ -42,6 +42,16 @@ var (
 	activeScansMu  sync.Mutex
 	activeScanCtxs = make(map[string]context.CancelFunc)
 	activeAICtxs   = make(map[string]context.CancelFunc)
+	// activeToolCtxs holds per-tool cancel funcs nested under each scan:
+	// activeToolCtxs[scanID][toolName] = cancel. Set by the runner
+	// callback OnToolCancelable, fired by CancelScanTool (the handler
+	// for DELETE /api/scans/{id}/tools/{name}), cleared on tool done.
+	activeToolCtxs = make(map[string]map[string]context.CancelFunc)
+	// cancelledTools tracks which tools were explicitly cancelled by the
+	// user so the OnToolDone bookkeeping can mark them with the right
+	// error message instead of whatever transient ctx.Err string the
+	// scanner exited with. Keyed by (scanID, toolName).
+	cancelledTools = make(map[string]map[string]bool)
 )
 
 // createScanRequest is the JSON body for POST /api/scans.
@@ -161,11 +171,15 @@ func executeScan(h *Handler, scanID, userID, repoPath, branch string, req create
 
 	activeScansMu.Lock()
 	activeScanCtxs[scanID] = cancel
+	activeToolCtxs[scanID] = make(map[string]context.CancelFunc)
+	cancelledTools[scanID] = make(map[string]bool)
 	activeScansMu.Unlock()
 
 	defer func() {
 		activeScansMu.Lock()
 		delete(activeScanCtxs, scanID)
+		delete(activeToolCtxs, scanID)
+		delete(cancelledTools, scanID)
 		activeScansMu.Unlock()
 		cancel()
 	}()
@@ -254,6 +268,14 @@ func executeScan(h *Handler, scanID, userID, repoPath, branch string, req create
 				})
 			}
 		},
+		OnToolCancelable: func(toolName string, cancel context.CancelFunc) {
+			// Register so DELETE /api/scans/{id}/tools/{name} can fire it.
+			activeScansMu.Lock()
+			if m, ok := activeToolCtxs[scanID]; ok {
+				m[toolName] = cancel
+			}
+			activeScansMu.Unlock()
+		},
 		OnToolStart: func(toolName string) {
 			log.Debug().Str("scan_id", scanID).Str("tool", toolName).Msg("tool starting")
 			if SSEBroker != nil {
@@ -267,10 +289,26 @@ func executeScan(h *Handler, scanID, userID, repoPath, branch string, req create
 			findingCount := len(toolFindings)
 			status := "completed"
 			errMsg := ""
+			// Was this tool explicitly cancelled by the user? Replace the
+			// raw ctx.Err() ("context canceled") with a clear message and
+			// clear the registry entry. The runner's defer-toolCancel
+			// also fires, but we may get here first when the cancel
+			// triggered the tool's pre-start check.
+			activeScansMu.Lock()
+			wasCancelled := cancelledTools[scanID] != nil && cancelledTools[scanID][toolName]
+			if m, ok := activeToolCtxs[scanID]; ok {
+				delete(m, toolName)
+			}
+			activeScansMu.Unlock()
+
 			if toolErr != nil {
 				status = "failed"
-				errMsg = toolErr.Error()
-				log.Warn().Str("scan_id", scanID).Str("tool", toolName).Err(toolErr).Msg("tool failed")
+				if wasCancelled {
+					errMsg = "cancelled by user"
+				} else {
+					errMsg = toolErr.Error()
+				}
+				log.Warn().Str("scan_id", scanID).Str("tool", toolName).Err(toolErr).Bool("user_cancelled", wasCancelled).Msg("tool failed")
 			} else {
 				log.Info().Str("scan_id", scanID).Str("tool", toolName).Int("findings", findingCount).Msg("tool completed")
 			}
@@ -296,7 +334,10 @@ func executeScan(h *Handler, scanID, userID, repoPath, branch string, req create
 				toolsFailed = append(toolsFailed, toolName)
 				// Trim the error to a UI-friendly size; full traces
 				// remain in the per-tool .log artifact for deep dives.
-				e := toolErr.Error()
+				e := errMsg
+				if e == "" {
+					e = toolErr.Error()
+				}
 				if len(e) > 500 {
 					e = e[:500] + "…"
 				}
@@ -363,7 +404,13 @@ func executeScan(h *Handler, scanID, userID, repoPath, branch string, req create
 		return
 	}
 
-	if runErr != nil {
+	// Cancel is "sticky": if the user (or orphan-recovery) marked the scan
+	// cancelled while runner.Run was still finishing its tail, don't
+	// flip it back to completed/failed when we land here. Findings
+	// already persisted during the run are preserved either way.
+	if scan.Status == models.ScanStatusCancelled {
+		log.Info().Str("scan_id", scanID).Msg("scan run finished but was already cancelled; preserving status")
+	} else if runErr != nil {
 		scan.Status = models.ScanStatusFailed
 		log.Error().Str("scan_id", scanID).Err(runErr).Msg("scan run failed")
 	} else {
@@ -1127,6 +1174,55 @@ func CancelScan(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: scan})
+}
+
+// CancelScanTool handles DELETE /api/scans/:id/tools/:toolName — cancel a
+// single tool that's currently running OR sitting queued behind a slot
+// limit. The rest of the scan keeps going. Findings already persisted
+// from completed tools are preserved.
+func CancelScanTool(w http.ResponseWriter, r *http.Request) {
+	claims := auth.GetUserFromContext(r.Context())
+	if claims == nil {
+		response.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing user context")
+		return
+	}
+	scanID := chi.URLParam(r, "id")
+	toolName := chi.URLParam(r, "toolName")
+	if scanID == "" || toolName == "" {
+		response.WriteError(w, http.StatusBadRequest, "validation_error", "scanId and toolName required")
+		return
+	}
+
+	activeScansMu.Lock()
+	toolCtxs, scanRegistered := activeToolCtxs[scanID]
+	if !scanRegistered {
+		activeScansMu.Unlock()
+		response.WriteError(w, http.StatusConflict, "conflict", "scan is not currently running")
+		return
+	}
+	cancel, ok := toolCtxs[toolName]
+	if !ok {
+		activeScansMu.Unlock()
+		response.WriteError(w, http.StatusNotFound, "not_found", fmt.Sprintf("tool %q is not active in scan %s (already finished or never queued)", toolName, scanID))
+		return
+	}
+	// Mark intent so OnToolDone replaces the raw "context canceled"
+	// error string with "cancelled by user" for the UI.
+	if cancelledTools[scanID] == nil {
+		cancelledTools[scanID] = make(map[string]bool)
+	}
+	cancelledTools[scanID][toolName] = true
+	activeScansMu.Unlock()
+
+	cancel()
+
+	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{
+		Data: map[string]string{
+			"scan_id":   scanID,
+			"tool_name": toolName,
+			"status":    "cancelled",
+		},
+	})
 }
 
 // ComparisonResult holds the diff between two scans.
@@ -2053,14 +2149,44 @@ func GetScanTools(w http.ResponseWriter, r *http.Request) {
 		Error        string `json:"error,omitempty"`
 	}
 
+	// Distinguish "running" from "queued" by peeking at the live tool
+	// registry — a tool with a registered cancel func is actively
+	// executing (or about to). Without this, every not-yet-done tool
+	// would show as "running" and the user can't tell which one is
+	// actually hogging the slot.
+	activeScansMu.Lock()
+	liveTools := map[string]bool{}
+	if m, ok := activeToolCtxs[scanID]; ok {
+		for n := range m {
+			liveTools[n] = true
+		}
+	}
+	activeScansMu.Unlock()
+
 	var tools []toolStatus
 	for _, name := range selected {
-		status := "running"
-		if completedSet[name] {
+		var status string
+		switch {
+		case completedSet[name]:
 			status = "completed"
-		}
-		if failedSet[name] {
-			status = "failed"
+		case failedSet[name]:
+			// Distinguish user-cancelled from natural failure so the
+			// UI can render them differently (calmer color + a Retry
+			// hint instead of an error pill).
+			if errs[name] == "cancelled by user" {
+				status = "cancelled"
+			} else {
+				status = "failed"
+			}
+		case scan.Status == models.ScanStatusCancelled:
+			// Scan was cancelled before this tool ever finished; it's
+			// neither completed nor failed — flag as cancelled so the
+			// UI doesn't show a stale "running" pill forever.
+			status = "cancelled"
+		case liveTools[name]:
+			status = "running"
+		default:
+			status = "queued"
 		}
 		tools = append(tools, toolStatus{
 			Name:         name,

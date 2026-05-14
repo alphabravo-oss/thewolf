@@ -1,7 +1,7 @@
 // Scan detail with full findings exploration: filter by tool/severity,
 // sort, paginate, export to JSON/CSV.
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeftIcon,
   BugIcon,
@@ -11,7 +11,9 @@ import {
   DownloadIcon,
   FilterXIcon,
   LoaderIcon,
+  StopCircleIcon,
   XCircleIcon,
+  XIcon,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { api } from "@/lib/api";
@@ -32,7 +34,7 @@ type SortKey = "severity" | "tool" | "file" | "title";
 // per-tool status work).
 interface ToolStatusEntry {
   name: string;
-  status: "completed" | "failed" | "running" | "pending";
+  status: "completed" | "failed" | "running" | "queued" | "cancelled" | "pending";
   finding_count: number;
   raw_count?: number;
   has_output: boolean;
@@ -267,17 +269,34 @@ function ScanDetailPage() {
         </div>
         <ScanStatusPill status={scan.status} />
         {scan.status === "running" && (
-          <Link
-            to="/scans/$scanId/live"
-            params={{ scanId }}
-            className="inline-flex items-center px-3 h-9 rounded-md bg-blue-500/15 ring-1 ring-blue-500/30 text-blue-300 text-sm hover:bg-blue-500/20"
-          >
-            Watch live →
-          </Link>
+          <>
+            <Link
+              to="/scans/$scanId/live"
+              params={{ scanId }}
+              className="inline-flex items-center px-3 h-9 rounded-md bg-blue-500/15 ring-1 ring-blue-500/30 text-blue-300 text-sm hover:bg-blue-500/20"
+            >
+              Watch live →
+            </Link>
+            <CancelScanButton scanId={scanId} />
+          </>
         )}
       </div>
 
-      <ToolsPanel tools={toolsQ.data} loading={toolsQ.isLoading} />
+      {scan.status === "cancelled" && (
+        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+          <strong>Scan cancelled.</strong>{" "}
+          Showing {scan.finding_count.toLocaleString()} findings from{" "}
+          {completed.length} of {selected.length} tools that completed before
+          cancellation.
+        </div>
+      )}
+
+      <ToolsPanel
+        tools={toolsQ.data}
+        loading={toolsQ.isLoading}
+        scanId={scanId}
+        scanStatus={scan.status}
+      />
 
       <section>
         <div className="flex items-end justify-between gap-3 mb-3">
@@ -555,6 +574,54 @@ function downloadBlob(content: string, filename: string, mime: string) {
   URL.revokeObjectURL(url);
 }
 
+// CancelScanButton — top-level "Cancel scan" with confirm. Hits
+// DELETE /api/scans/{id}; the server-side cancel is sticky, so the
+// findings persisted by tools that completed before cancellation are
+// preserved and shown in a "scan cancelled" banner.
+function CancelScanButton({ scanId }: { scanId: string }) {
+  const qc = useQueryClient();
+  const [confirming, setConfirming] = useState(false);
+  const m = useMutation({
+    mutationFn: () => api.delete(`/scans/${scanId}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["scan", scanId] });
+      qc.invalidateQueries({ queryKey: ["scan-tools", scanId] });
+    },
+  });
+  if (confirming) {
+    return (
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => m.mutate()}
+          disabled={m.isPending}
+          className="inline-flex items-center gap-1 px-3 h-9 rounded-md bg-red-500/20 ring-1 ring-red-500/40 text-red-200 text-sm hover:bg-red-500/30 disabled:opacity-50"
+        >
+          <StopCircleIcon className="size-4" />
+          {m.isPending ? "Cancelling…" : "Confirm cancel"}
+        </button>
+        <button
+          type="button"
+          onClick={() => setConfirming(false)}
+          className="text-xs text-muted-foreground hover:text-foreground"
+        >
+          back
+        </button>
+      </div>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => setConfirming(true)}
+      className="inline-flex items-center gap-1 px-3 h-9 rounded-md bg-red-500/10 ring-1 ring-red-500/30 text-red-300 text-sm hover:bg-red-500/20"
+      title="Cancel the entire scan. Findings from tools that already completed are preserved."
+    >
+      <StopCircleIcon className="size-4" /> Cancel scan
+    </button>
+  );
+}
+
 // ToolsPanel — collapsible per-tool status with finding counts and
 // expandable error details for failures. The "Tools" section is the
 // answer to "which tools actually ran, which succeeded, which failed,
@@ -562,9 +629,13 @@ function downloadBlob(content: string, filename: string, mime: string) {
 function ToolsPanel({
   tools,
   loading,
+  scanId,
+  scanStatus,
 }: {
   tools: ToolStatusEntry[] | undefined;
   loading: boolean;
+  scanId: string;
+  scanStatus: string;
 }) {
   // Collapsed by default — the findings table is the headline; the
   // tools panel is "drill in when something looks off".
@@ -579,7 +650,11 @@ function ToolsPanel({
   }
   const completed = tools.filter((t) => t.status === "completed");
   const failed = tools.filter((t) => t.status === "failed");
-  const running = tools.filter((t) => t.status === "running" || t.status === "pending");
+  const cancelled = tools.filter((t) => t.status === "cancelled");
+  const active = tools.filter(
+    (t) => t.status === "running" || t.status === "queued" || t.status === "pending",
+  );
+  const scanActive = scanStatus === "running" || scanStatus === "pending";
 
   return (
     <section className="glass-card p-5">
@@ -601,14 +676,29 @@ function ToolsPanel({
           {failed.length > 0 && (
             <span className="text-red-400 ml-2">{failed.length} failed</span>
           )}
-          {running.length > 0 && (
-            <span className="text-blue-300 ml-2">{running.length} running</span>
+          {cancelled.length > 0 && (
+            <span className="text-amber-300 ml-2">{cancelled.length} cancelled</span>
+          )}
+          {active.length > 0 && (
+            <span className="text-blue-300 ml-2">{active.length} active</span>
           )}
         </div>
       </button>
 
       {open && (
         <>
+          {active.length > 0 && (
+            <div className="mt-4">
+              <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-2">
+                Running / queued ({active.length})
+              </div>
+              <div className="space-y-1">
+                {active.map((t) => (
+                  <ToolRow key={t.name} tool={t} scanId={scanId} cancellable={scanActive} />
+                ))}
+              </div>
+            </div>
+          )}
           {failed.length > 0 && (
             <div className="mt-4">
               <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-2">
@@ -616,19 +706,19 @@ function ToolsPanel({
               </div>
               <div className="space-y-1">
                 {failed.map((t) => (
-                  <ToolRow key={t.name} tool={t} />
+                  <ToolRow key={t.name} tool={t} scanId={scanId} />
                 ))}
               </div>
             </div>
           )}
-          {running.length > 0 && (
+          {cancelled.length > 0 && (
             <div className="mt-4">
               <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-2">
-                Running / pending ({running.length})
+                Cancelled ({cancelled.length})
               </div>
               <div className="space-y-1">
-                {running.map((t) => (
-                  <ToolRow key={t.name} tool={t} />
+                {cancelled.map((t) => (
+                  <ToolRow key={t.name} tool={t} scanId={scanId} />
                 ))}
               </div>
             </div>
@@ -642,7 +732,7 @@ function ToolsPanel({
                 {completed
                   .sort((a, b) => b.finding_count - a.finding_count)
                   .map((t) => (
-                    <ToolRow key={t.name} tool={t} compact />
+                    <ToolRow key={t.name} tool={t} scanId={scanId} compact />
                   ))}
               </div>
             </div>
@@ -653,13 +743,38 @@ function ToolsPanel({
   );
 }
 
-function ToolRow({ tool, compact }: { tool: ToolStatusEntry; compact?: boolean }) {
+function ToolRow({
+  tool,
+  scanId,
+  compact,
+  cancellable,
+}: {
+  tool: ToolStatusEntry;
+  scanId: string;
+  compact?: boolean;
+  cancellable?: boolean;
+}) {
   const [showErr, setShowErr] = useState(false);
+  const qc = useQueryClient();
+  const cancel = useMutation({
+    mutationFn: () =>
+      api.delete(`/scans/${scanId}/tools/${encodeURIComponent(tool.name)}`),
+    onSuccess: () => {
+      // Refresh both the per-tool list and the scan summary so the
+      // cancelled tool flips immediately + findings totals update.
+      qc.invalidateQueries({ queryKey: ["scan-tools", scanId] });
+      qc.invalidateQueries({ queryKey: ["scan", scanId] });
+    },
+  });
   const icon =
     tool.status === "completed" ? (
       <CheckCircle2Icon className="size-3.5 text-green-400" />
     ) : tool.status === "failed" ? (
       <XCircleIcon className="size-3.5 text-red-400" />
+    ) : tool.status === "cancelled" ? (
+      <StopCircleIcon className="size-3.5 text-amber-300" />
+    ) : tool.status === "queued" ? (
+      <LoaderIcon className="size-3.5 text-muted-foreground" />
     ) : (
       <LoaderIcon className="size-3.5 text-blue-300 animate-spin" />
     );
@@ -681,18 +796,34 @@ function ToolRow({ tool, compact }: { tool: ToolStatusEntry; compact?: boolean }
       <div className="flex items-center gap-2 py-1">
         {icon}
         <span className="font-mono flex-1 min-w-0 truncate">{tool.name}</span>
+        {tool.status === "queued" && (
+          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            queued
+          </span>
+        )}
         {tool.finding_count > 0 && (
           <span className="text-xs text-muted-foreground tabular-nums">
             {tool.finding_count} findings
           </span>
         )}
-        {tool.status === "failed" && tool.error && (
+        {(tool.status === "failed" || tool.status === "cancelled") && tool.error && (
           <button
             type="button"
             onClick={() => setShowErr(!showErr)}
             className="text-[11px] underline text-muted-foreground hover:text-foreground"
           >
             {showErr ? "Hide error" : "Show error"}
+          </button>
+        )}
+        {cancellable && (tool.status === "running" || tool.status === "queued") && (
+          <button
+            type="button"
+            onClick={() => cancel.mutate()}
+            disabled={cancel.isPending}
+            title={`Cancel ${tool.name}; the rest of the scan keeps going`}
+            className="inline-flex items-center justify-center size-5 rounded hover:bg-red-500/15 text-muted-foreground hover:text-red-300 disabled:opacity-50"
+          >
+            <XIcon className="size-3.5" />
           </button>
         )}
       </div>

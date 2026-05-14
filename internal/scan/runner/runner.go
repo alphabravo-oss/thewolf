@@ -57,6 +57,14 @@ type RunConfig struct {
 	OnToolDone      func(toolName string, findings []models.Finding, err error)
 	OnToolOutput    func(toolName string, line string)
 	OnToolRaw       func(toolName string, data []byte, ext string) // optional: observe raw bytes
+	// OnToolCancelable, when set, is called once per tool — BEFORE its
+	// goroutine grabs an errgroup slot — with the per-tool cancel func.
+	// The caller (API layer) stashes the cancel func in a registry
+	// keyed by (scanID, toolName) so DELETE /api/scans/{id}/tools/{name}
+	// can fire it. Cancelling a tool that hasn't started yet still
+	// works because the goroutine checks ctx.Err() at entry and exits
+	// immediately. The runner clears the registry entry via OnToolDone.
+	OnToolCancelable func(toolName string, cancel context.CancelFunc)
 }
 
 // MissingPluginSuggestion describes a plugin that could have been used but isn't installed.
@@ -370,9 +378,35 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 
 	for _, p := range runnable {
 		p := p // capture loop variable
+		// Per-tool context, derived from the errgroup's gctx. Cancelling
+		// the per-tool ctx kills just this tool (queued or running);
+		// cancelling gctx (i.e. cancelling the scan) cascades to all
+		// per-tool ctxs. Register the cancel func via OnToolCancelable
+		// BEFORE Go-ing the closure so DELETE /api/scans/{id}/tools/{name}
+		// can land between SelectTools and goroutine start.
+		toolCtx, toolCancel := context.WithCancel(gctx)
+		if cfg.OnToolCancelable != nil {
+			cfg.OnToolCancelable(p.Name(), toolCancel)
+		}
 		g.Go(func() error {
+			defer toolCancel() // release in case the tool completes normally
 			toolName := p.Name()
 			toolStart := time.Now()
+
+			// If this tool was cancelled BEFORE it acquired a slot
+			// (e.g. waited behind a long-running peer, then user
+			// clicked X on it in the UI), exit cleanly without running.
+			if toolCtx.Err() != nil {
+				log.Info().Str("tool", toolName).Msg("tool cancelled before start; skipping")
+				if cfg.OnToolDone != nil {
+					cfg.OnToolDone(toolName, nil, toolCtx.Err())
+				}
+				mu.Lock()
+				result.ToolsRun = append(result.ToolsRun, toolName)
+				result.ToolsFailed[toolName] = toolCtx.Err()
+				mu.Unlock()
+				return nil // never fail the errgroup — sibling tools keep going
+			}
 
 			log.Info().Str("tool", toolName).Msg("tool starting")
 
@@ -414,7 +448,7 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 				}
 			}
 
-			findings, err := p.Execute(gctx, toolOpts)
+			findings, err := p.Execute(toolCtx, toolOpts)
 
 			elapsed := time.Since(toolStart)
 
