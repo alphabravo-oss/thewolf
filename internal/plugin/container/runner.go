@@ -45,6 +45,16 @@ type Options struct {
 	// Stdin, if non-empty, is set as the cmd's Stdin. Currently unused by
 	// any plugin but reserved for future tools (e.g. piping a list of files).
 	Stdin string
+
+	// EntrypointOverride, when non-empty, is passed to docker as
+	// --entrypoint <name>. This is for plugins that need to run a shell
+	// wrapper (`sh -c "tool ... && cat result"`) against an image whose
+	// declared entrypoint would otherwise execute the tool directly.
+	//
+	// This is separate from ToolImageSpec.Entrypoint (which applies to
+	// upstream-image routing); EntrypointOverride is per-invocation
+	// regardless of which image tier the tool lives in.
+	EntrypointOverride string
 }
 
 // containerCounter is monotonic; used to disambiguate container names within
@@ -154,12 +164,17 @@ func CommandContext(ctx context.Context, cfg *Config, opts Options, tool string,
 		dockerArgs = append(dockerArgs, "-e", fmt.Sprintf("%s=%s", k, envKeys[k]))
 	}
 
-	// Upstream-image path: --entrypoint override + drop the tool name from
-	// the argv (the image's entrypoint, or our explicit override, IS the tool).
+	// Per-invocation entrypoint override (e.g. plugin wraps with `sh -c`).
+	if opts.EntrypointOverride != "" {
+		dockerArgs = append(dockerArgs, "--entrypoint", opts.EntrypointOverride)
+	}
+
+	// Upstream-image path: drop the tool name from the argv (the image's
+	// entrypoint, or our explicit override, IS the tool).
 	if spec, ok := cfg.UpstreamSpec(tool); ok {
-		if spec.Entrypoint != "" {
-			// Splice --entrypoint <name> before the image ref (docker requires
-			// --entrypoint to be a flag of `docker run`, not a positional arg).
+		// Spec-level entrypoint applies only when no per-invocation override
+		// has already been set.
+		if spec.Entrypoint != "" && opts.EntrypointOverride == "" {
 			dockerArgs = append(dockerArgs, "--entrypoint", spec.Entrypoint)
 		}
 		dockerArgs = append(dockerArgs, spec.Image)
@@ -286,8 +301,11 @@ func BuildDockerArgs(cfg *Config, opts Options, tool string, args ...string) (co
 		dockerArgs = append(dockerArgs, "-e", fmt.Sprintf("%s=%s", k, envKeys[k]))
 	}
 
+	if opts.EntrypointOverride != "" {
+		dockerArgs = append(dockerArgs, "--entrypoint", opts.EntrypointOverride)
+	}
 	if spec, ok := cfg.UpstreamSpec(tool); ok {
-		if spec.Entrypoint != "" {
+		if spec.Entrypoint != "" && opts.EntrypointOverride == "" {
 			dockerArgs = append(dockerArgs, "--entrypoint", spec.Entrypoint)
 		}
 		dockerArgs = append(dockerArgs, spec.Image)

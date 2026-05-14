@@ -46,11 +46,12 @@ install_go_tool() {
 install_go_tool "github.com/securego/gosec/v2/cmd/gosec@v${GOSEC_VERSION}"          gosec
 install_go_tool "honnef.co/go/tools/cmd/staticcheck@v${STATICCHECK_VERSION}"        staticcheck
 install_go_tool "golang.org/x/vuln/cmd/govulncheck@v${GOVULNCHECK_VERSION}"         govulncheck
+install_go_tool "github.com/praetorian-inc/gokart@v${GOKART_VERSION}"               gokart
 
 # Move binaries to /usr/local/bin so we can drop the go toolchain
 # (we don't need it at runtime — staticcheck/gosec/govulncheck are
 # self-contained binaries).
-for bin in gosec staticcheck govulncheck; do
+for bin in gosec staticcheck govulncheck gokart; do
     if [[ -f "${GOBIN}/${bin}" ]]; then
         install -m 0755 "${GOBIN}/${bin}" "/usr/local/bin/${bin}"
     else

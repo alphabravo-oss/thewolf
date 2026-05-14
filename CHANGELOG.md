@@ -55,6 +55,18 @@
   Gradle / Maven / sbt — ecosystems trivy/grype/osv-scanner don't
   cover well. Severity by gap: patch→info, minor→low, major→medium,
   vulnerability→high.
+- **8 additional scanners** (36 → 44 total):
+  - **KICS** (Checkmarx, MIT) — multi-format IaC SAST.
+  - **Conftest** (OPA, Apache-2.0) — policy-as-code.
+  - **Pluto** (Fairwinds, Apache-2.0) — deprecated K8s API detection.
+  - **detekt** (Apache-2.0) — Kotlin static analyzer.
+  - **Bearer** (ELv2) — data-flow / PII / privacy scanner.
+  - **markdownlint-cli** (MIT) — Markdown style + structure.
+  - **yamllint** (GPL-3.0) — YAML structural + style.
+  - **GoKart** (Praetorian, Apache-2.0) — taint-analysis SAST for Go.
+- **`Options.EntrypointOverride`** in the shim — lets plugins wrap an
+  upstream image's entrypoint with `sh -c` for tools that write
+  results to disk (KICS, detekt, markdownlint).
 - **CI workflows**: `.github/workflows/scanners-image.yml` (matrix
   build of 4 images with smoke test) and `go.yml` (vet/build/test/
   lint).

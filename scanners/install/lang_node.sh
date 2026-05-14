@@ -9,7 +9,8 @@ set -euo pipefail
 source /etc/wolf-scanners/versions.env
 
 npm install -g --omit=dev --omit=optional \
-    "eslint@${ESLINT_VERSION}"
+    "eslint@${ESLINT_VERSION}" \
+    "markdownlint-cli@${MARKDOWNLINT_VERSION}"
 
 npm cache clean --force >/dev/null 2>&1 || true
 

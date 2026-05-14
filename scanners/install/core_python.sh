@@ -19,9 +19,10 @@ python3 -m venv /opt/wolf-scanners/py-core
 pip install --no-cache-dir --upgrade pip
 pip install --no-cache-dir \
     "detect-secrets==${DETECT_SECRETS_VERSION}" \
-    "sqlfluff==${SQLFLUFF_VERSION}"
+    "sqlfluff==${SQLFLUFF_VERSION}" \
+    "yamllint==${YAMLLINT_VERSION}"
 
-for bin in detect-secrets sqlfluff; do
+for bin in detect-secrets sqlfluff yamllint; do
     ln -sf "/opt/wolf-scanners/py-core/bin/${bin}" "/usr/local/bin/${bin}"
 done
 

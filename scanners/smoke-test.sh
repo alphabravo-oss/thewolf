@@ -61,6 +61,7 @@ if [[ "$VARIANT" == "default" ]]; then
     # Core small pure-Python.
     run check "detect-secrets $DETECT_SECRETS_VERSION" "$DETECT_SECRETS_VERSION" detect-secrets --version
     run check "sqlfluff $SQLFLUFF_VERSION"             "$SQLFLUFF_VERSION"        sqlfluff --version
+    run check "yamllint $YAMLLINT_VERSION"             "$YAMLLINT_VERSION"        yamllint --version
     # Per-language tools.
     run check "bandit $BANDIT_VERSION"                 "$BANDIT_VERSION"          bandit --version
     run check "ruff $RUFF_VERSION"                     "$RUFF_VERSION"            ruff --version
@@ -71,7 +72,9 @@ if [[ "$VARIANT" == "default" ]]; then
     run present "gosec"                                                       gosec
     run present "staticcheck"                                                 staticcheck
     run check "govulncheck $GOVULNCHECK_VERSION"       "$GOVULNCHECK_VERSION"     govulncheck -version
+    run present "gokart"                                                      gokart
     run check "eslint $ESLINT_VERSION"                 "$ESLINT_VERSION"          eslint --version
+    run check "markdownlint $MARKDOWNLINT_VERSION"     "$MARKDOWNLINT_VERSION"    markdownlint --version
     run present "npm (for npm-audit)"                                         npm
     run check "brakeman $BRAKEMAN_VERSION"             "$BRAKEMAN_VERSION"        brakeman --version
     run check "rubocop $RUBOCOP_VERSION"               "$RUBOCOP_VERSION"         rubocop --version

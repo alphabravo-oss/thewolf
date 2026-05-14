@@ -45,6 +45,14 @@ each tool's terms.
 | nuclei | MIT | Templates may have own licenses. |
 | scorecard | Apache-2.0 | OpenSSF project; some checks call GitHub API and may need GITHUB_AUTH_TOKEN. |
 | renovate | AGPL-3.0 | Mend Renovate. Wolf runs it in `--dry-run=full` (detect-only) so we never open PRs. AGPL applies the same way as trufflehog above: redistributing wolf-scanners as a hosted service requires source disclosure (we keep `scanners/` open in the wolf repo). |
+| kics | Apache-2.0 | Checkmarx KICS — multi-format IaC scanner. |
+| conftest | Apache-2.0 | OPA / Open Policy Agent project. |
+| pluto | Apache-2.0 | Fairwinds. |
+| detekt | Apache-2.0 | — |
+| bearer | ELv2 | Elastic License v2 — free for use including SaaS, but restrictions on offering Bearer-as-a-service. Wolf's use case (running it against an operator's own code) is permitted. |
+| markdownlint-cli | MIT | David Anson. |
+| yamllint | GPL-3.0 | Adrien Vergé. Same shape as cppcheck/shellcheck — bundling the binary in a container is fine. |
+| gokart | Apache-2.0 | Praetorian Inc. |
 | rust toolchain + clippy | Apache-2.0 / MIT | — |
 | **CodeQL** | **GitHub CodeQL Terms** | **Free for analysis of open-source code only.** Commercial / private-repo analysis requires a GitHub Enterprise Advanced Security license. Operators of wolf in commercial settings must confirm their CodeQL license; if you don't have one, set `disabled_tools: [codeql]` in `wolf.yaml`. |
 

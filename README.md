@@ -133,14 +133,14 @@ See `PLAN.md` for the full architecture; `scanners/README.md` for how to add or 
 
 ## Supported tools
 
-**Total: 36 scanners** across SAST, SCA, secrets, container, infrastructure, license, SBOM, docs, DAST, repo-hygiene, dependency-freshness, and per-language categories.
+**Total: 44 scanners** across SAST, SCA, secrets, container, infrastructure, IaC, policy-as-code, license, SBOM, docs, DAST, repo-hygiene, dependency-freshness, privacy/PII, deprecated-API detection, and per-language categories.
 
 ### By tier
 
 | Tier | Count | How wolf gets the binary |
 |---|---|---|
-| **Upstream-official images** | 19 | `docker pull aquasec/trivy`, etc. — maintainer-published, multi-arch |
-| **Wolf-built default image** | 14 | bundled in `wolf-scanners:<version>` via pip / npm / go install / apt / composer / github-release |
+| **Upstream-official images** | 24 | `docker pull aquasec/trivy`, etc. — maintainer-published, multi-arch |
+| **Wolf-built default image** | 17 | bundled in `wolf-scanners:<version>` via pip / npm / go install / apt / composer / github-release |
 | **Wolf-built bucket images** | 3 | bundled in `wolf-scanners-{jvm,rust,codeql}:<version>` |
 
 ### By language / category
@@ -157,6 +157,12 @@ Every tool's tier is annotated as 🌐 (upstream), 📦 (wolf-built default), �
 | **SCA** | Grype | 🌐 | `anchore/grype` | Vulnerability matcher (paired with Syft for SBOM-based scanning) |
 | **SCA** | OSV-Scanner | 🌐 | `ghcr.io/google/osv-scanner` | Multi-ecosystem dep scanner using Google's OSV database |
 | **SCA / freshness** | Renovate | 🌐 | `ghcr.io/renovatebot/renovate` | Mend Renovate in dry-run / detect-only mode — flags outdated and vulnerable deps across npm, pip, gem, composer, cargo, go.mod, Helm, GitHub Actions, Dockerfile base images, Terraform, pre-commit, GitLab CI, Bitbucket, Gradle, Maven, sbt. Severity by gap: patch → info, minor → low, major → medium, vuln → high. |
+| **IaC SAST** | KICS | 🌐 | `checkmarx/kics` | Multi-format IaC scanner — Terraform, K8s, Dockerfile, CloudFormation, Ansible, Helm, ARM, OpenAPI, Pulumi. ~3k rules. MIT, very active. |
+| **Policy-as-code** | Conftest | 🌐 | `openpolicyagent/conftest` | OPA-based config testing — operator writes Rego policies in `policy/`, conftest evaluates them against any YAML/JSON/HCL/Dockerfile. |
+| **K8s upgrade** | Pluto | 🌐 | `us-docker.pkg.dev/fairwinds-ops/oss/pluto` | Detects deprecated and removed Kubernetes API versions before they break the cluster upgrade. Removed APIs flagged as `high`. |
+| **Privacy / PII** | Bearer | 🌐 | `bearer/bearer` | Data-flow scanner for GDPR/HIPAA/PCI categories — tracks where PII is processed and flags risky patterns. |
+| **Docs (Markdown)** | markdownlint-cli | 📦 | `wolf-scanners` | Markdown style + structure linter. |
+| **Config (YAML)** | yamllint | 📦 | `wolf-scanners` | YAML structural + style linter. |
 | **Secrets** | Gitleaks | 🌐 | `zricethezav/gitleaks` | Regex-based secret detection across history + working tree |
 | **Secrets** | TruffleHog | 🌐 | `trufflesecurity/trufflehog` | Deep secret scanner with live-credential verification |
 | **Secrets** | detect-secrets | 📦 | `wolf-scanners` | Baseline-style secret scanner by Yelp |
@@ -188,6 +194,8 @@ Every tool's tier is annotated as 🌐 (upstream), 📦 (wolf-built default), �
 | **Go** | Gosec | 📦 | `wolf-scanners` | Security linter |
 | **Go** | Staticcheck | 📦 | `wolf-scanners` | Quality linter (bug detection, simplifications, deprecations) |
 | **Go** | Govulncheck | 📦 | `wolf-scanners` | Official Go vulnerability scanner with reachability analysis |
+| **Go** | GoKart | 📦 | `wolf-scanners` | Praetorian's source-to-sink taint-analysis SAST — flags actually-reachable risky calls (complements gosec's pattern matching) |
+| **Kotlin** | detekt | 🌐 | `detekt/detekt` | Kotlin static analyzer with 200+ rules across style, complexity, potential bugs |
 | **JavaScript / TypeScript** | ESLint | 📦 | `wolf-scanners` | Linter |
 | **JavaScript / TypeScript** | npm-audit | 📦 | `wolf-scanners` | Dependency vulnerability scanner (bundled with npm) |
 | **Ruby** | Brakeman | 📦 | `wolf-scanners` | Rails-focused security scanner |
@@ -298,6 +306,7 @@ Operators behind corporate proxies need outbound HTTPS to:
 
 - **docker.io** — most upstream images (`aquasec/trivy`, `semgrep/semgrep`, `zricethezav/gitleaks`, `anchore/{grype,syft}`, `trufflesecurity/trufflehog`, `hadolint/hadolint`, `goodwithtech/dockle`, `bridgecrew/checkov`, `stackrox/kube-linter`, `projectdiscovery/nuclei`, `jdkato/vale`, `stoplight/spectral`)
 - **ghcr.io** — `ghcr.io/alphabravocompany/wolf-scanners*`, `ghcr.io/terraform-linters/tflint`, `ghcr.io/nexb/scancode-toolkit`, `ghcr.io/google/osv-scanner`, `ghcr.io/renovatebot/renovate`
+- **us-docker.pkg.dev** — `us-docker.pkg.dev/fairwinds-ops/oss/pluto`
 - **quay.io** — `quay.io/kubescape/kubescape-cli`
 - **gcr.io** — `gcr.io/openssf/scorecard`
 

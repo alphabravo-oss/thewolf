@@ -110,5 +110,25 @@ func DefaultUpstreamTools() map[string]ToolImageSpec {
 		// Dockerfile base images, terraform modules, …). Used in
 		// dry-run / detect-only mode — wolf never opens PRs from it.
 		"renovate": {Image: "ghcr.io/renovatebot/renovate:39.55.0", Entrypoint: "renovate"},
+
+		// IaC SAST. KICS covers Terraform/K8s/Dockerfile/CloudFormation/
+		// Ansible/Helm/ARM/OpenAPI/Pulumi with ~3k rules — broader than
+		// Trivy/Checkov on those formats.
+		"kics": {Image: "checkmarx/kics:v2.1.3"},
+
+		// Policy-as-code. Operator writes Rego policies; conftest evaluates
+		// any YAML/JSON/HCL/Dockerfile against them. Apache-2.0.
+		"conftest": {Image: "openpolicyagent/conftest:v0.56.0"},
+
+		// Detects deprecated Kubernetes API versions — critical before a
+		// cluster upgrade. Apache-2.0.
+		"pluto": {Image: "us-docker.pkg.dev/fairwinds-ops/oss/pluto:v5.20.4"},
+
+		// Kotlin static analysis — fills the gap left by Java-focused infer/pmd.
+		"detekt": {Image: "detekt/detekt:v1.23.7"},
+
+		// Data-flow / PII / privacy scanner. Different category from
+		// CVE-focused scanners. ELv2.
+		"bearer": {Image: "bearer/bearer:1.49.0", Entrypoint: "bearer"},
 	}
 }

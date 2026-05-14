@@ -189,6 +189,11 @@ For the tools where the maintainer publishes a multi-arch image we trust, the wo
 | scancode | `ghcr.io/nexb/scancode-toolkit:v32.3.0` | avoids the pyicu/libicu-dev build complexity |
 | scorecard | `gcr.io/openssf/scorecard:v5.0.0` | OpenSSF repo-hygiene |
 | renovate | `ghcr.io/renovatebot/renovate:39.55.0` | dry-run / detect-only; flags outdated + vulnerable deps across many ecosystems (Helm, GitHub Actions, Dockerfile base images, Terraform modules — coverage trivy/grype/osv don't have) |
+| kics | `checkmarx/kics:v2.1.3` | Multi-format IaC SAST (Terraform, K8s, Dockerfile, CloudFormation, Ansible, Helm, ARM, OpenAPI, Pulumi). ~3k rules. |
+| conftest | `openpolicyagent/conftest:v0.56.0` | Policy-as-code (OPA Rego) for any YAML/JSON/HCL/Dockerfile. |
+| pluto | `us-docker.pkg.dev/fairwinds-ops/oss/pluto:v5.20.4` | Deprecated/removed Kubernetes API detection. |
+| detekt | `detekt/detekt:v1.23.7` | Kotlin static analyzer. |
+| bearer | `bearer/bearer:1.49.0` | PII / data-flow / privacy scanner (GDPR/HIPAA). |
 
 These are pulled lazily on first invocation (or eagerly via `wolf pull scanners`). Operators opt out with `WOLF_SCANNERS_DISABLE_UPSTREAM=1`.
 
