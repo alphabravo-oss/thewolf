@@ -21,11 +21,22 @@ ARCH="$(uname -m)"
 # and skips cleanly with an explanatory message on those hosts.
 case "$ARCH" in
     x86_64)
+        # Facebook changed the asset naming at v1.2.0:
+        #   v1.1.x → infer-linux64-v<ver>.tar.xz
+        #   v1.2.0+ → infer-linux-x86_64-v<ver>.tar.xz
+        # Try the new format first, fall back to the legacy one so we
+        # can still pin older versions if needed.
         tmp="$(mktemp -d)"
-        curl -fsSL -o "${tmp}/infer.tar.xz" \
-            "https://github.com/facebook/infer/releases/download/v${INFER_VERSION}/infer-linux64-v${INFER_VERSION}.tar.xz"
-        tar -xJf "${tmp}/infer.tar.xz" -C /opt
-        mv "/opt/infer-linux64-v${INFER_VERSION}" /opt/infer
+        url_new="https://github.com/facebook/infer/releases/download/v${INFER_VERSION}/infer-linux-x86_64-v${INFER_VERSION}.tar.xz"
+        url_old="https://github.com/facebook/infer/releases/download/v${INFER_VERSION}/infer-linux64-v${INFER_VERSION}.tar.xz"
+        if curl -fsSL -o "${tmp}/infer.tar.xz" "$url_new"; then
+            tar -xJf "${tmp}/infer.tar.xz" -C /opt
+            mv "/opt/infer-linux-x86_64-v${INFER_VERSION}" /opt/infer
+        else
+            curl -fsSL -o "${tmp}/infer.tar.xz" "$url_old"
+            tar -xJf "${tmp}/infer.tar.xz" -C /opt
+            mv "/opt/infer-linux64-v${INFER_VERSION}" /opt/infer
+        fi
         ln -sf /opt/infer/bin/infer /usr/local/bin/infer
         rm -rf "${tmp}"
         ;;
