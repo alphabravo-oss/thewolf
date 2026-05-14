@@ -1,5 +1,9 @@
 # Binaries
-wolf
+# Use a leading slash so this only matches the compiled binary at the
+# repo root, not the source directory cmd/wolf/. Without the slash this
+# matches any path component named "wolf" — silently excluding all
+# changes in cmd/wolf/ from commits.
+/wolf
 *.exe
 *.dll
 *.so
