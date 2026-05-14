@@ -87,5 +87,20 @@ func DefaultRules() RuleSet {
 		{PathGlob: "**/Cargo.lock", Reason: "default:lockfile"},
 		{PathGlob: "**/poetry.lock", Reason: "default:lockfile"},
 		{PathGlob: "**/go.sum", Reason: "default:lockfile"},
+
+		// --- Wolf's own outputs and scanner-config files ---
+		// FINDINGS/ holds committed scan-result JSON exports; trufflehog
+		// flags hex-like CVE IDs as "secrets" otherwise.
+		{PathGlob: "FINDINGS/**", Reason: "default:wolf-self-output"},
+		{PathGlob: "**/FINDINGS/**", Reason: "default:wolf-self-output"},
+		// Scanner config files contain rule UUIDs (KICS), regex patterns,
+		// and example payloads that detectors mistake for credentials.
+		{PathGlob: ".kics.yaml", Categories: []string{"hardcoded-secret"}, Reason: "default:scanner-config"},
+		{PathGlob: ".kics-config.yaml", Categories: []string{"hardcoded-secret"}, Reason: "default:scanner-config"},
+		{PathGlob: ".semgrepignore", Categories: []string{"hardcoded-secret"}, Reason: "default:scanner-config"},
+		{PathGlob: ".trufflehog*", Categories: []string{"hardcoded-secret"}, Reason: "default:scanner-config"},
+		// FIXES.md / FIXES2.md etc. — wolf's own triage docs; they cite
+		// CVE IDs, GHSA IDs, and KICS UUIDs.
+		{PathGlob: "FIXES*.md", Reason: "default:wolf-triage-doc"},
 	}}
 }
