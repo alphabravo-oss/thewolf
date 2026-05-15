@@ -15,7 +15,7 @@ import {
   XCircleIcon,
   XIcon,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import type { Finding, Scan, Severity } from "@/lib/types";
 import { parseToolList } from "@/lib/types";
@@ -265,6 +265,13 @@ function ScanDetailPage() {
             ) : (
               <>{scan.finding_count.toLocaleString()} findings</>
             )}
+          </p>
+          {/* When-it-ran line. Prefer started_at for the anchor (the
+              moment the runner started executing tools), fall back to
+              created_at if the scan never got past pending. Duration
+              shows once we know both endpoints. */}
+          <p className="text-xs text-muted-foreground mt-0.5">
+            <ScanTimestamps scan={scan} />
           </p>
         </div>
         <ScanStatusPill status={scan.status} />
@@ -831,4 +838,116 @@ function ToolRow({
       )}
     </div>
   );
+}
+
+// ScanTimestamps renders the "ran at … · took …" line under the scan
+// header. Hovering each value shows the precise UTC ISO timestamp so
+// operators can correlate with server logs / CI runs.
+//
+// State-machine:
+//   pending   → "queued <relative>" (created_at only)
+//   running   → "started <relative> · running <elapsed>"
+//   terminal  → "ran <relative> · took <duration>"
+function ScanTimestamps({ scan }: { scan: Scan }) {
+  const created = scan.created_at;
+  const started = scan.started_at;
+  const completed = scan.completed_at;
+  const isRunning = scan.status === "running" || scan.status === "pending";
+
+  // Pick the "primary" timestamp to show as the user-facing anchor.
+  const anchorISO = started ?? created;
+  const anchorRel = relativeTime(anchorISO);
+  const anchorAbs = formatAbsolute(anchorISO);
+
+  // Duration: prefer started→completed (real runtime); fall back to
+  // created→completed if started was never set (rare).
+  let durationMs: number | null = null;
+  if (completed && (started ?? created)) {
+    durationMs = new Date(completed).getTime() - new Date(started ?? created).getTime();
+  }
+
+  if (isRunning) {
+    return (
+      <>
+        <span title={anchorAbs}>started {anchorRel}</span>
+        {started && <RunningElapsed startedAt={started} />}
+      </>
+    );
+  }
+  return (
+    <>
+      <span title={anchorAbs}>ran {anchorRel}</span>
+      {durationMs !== null && (
+        <>
+          {" · "}
+          <span title={`${anchorAbs} → ${formatAbsolute(completed!)}`}>
+            took {formatDuration(durationMs)}
+          </span>
+        </>
+      )}
+    </>
+  );
+}
+
+// RunningElapsed shows a live ticking duration while the scan is in
+// flight. Updates every second; cleans up when the component unmounts
+// or the scan transitions to a terminal state.
+function RunningElapsed({ startedAt }: { startedAt: string }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const elapsed = now - new Date(startedAt).getTime();
+  if (elapsed < 0) return null;
+  return (
+    <>
+      {" · running "}
+      {formatDuration(elapsed)}
+    </>
+  );
+}
+
+// relativeTime formats an ISO timestamp as "5 minutes ago", "2 hours
+// ago", etc. — natural for the headline; the absolute value sits in
+// the title= so operators can copy it.
+function relativeTime(iso: string): string {
+  if (!iso) return "—";
+  const then = new Date(iso).getTime();
+  const ago = (Date.now() - then) / 1000;
+  if (ago < 0) return "just now";
+  if (ago < 60) return `${Math.floor(ago)}s ago`;
+  if (ago < 3600) return `${Math.floor(ago / 60)}m ago`;
+  if (ago < 86400) {
+    const h = Math.floor(ago / 3600);
+    return `${h}h ago`;
+  }
+  const d = Math.floor(ago / 86400);
+  if (d < 7) return `${d}d ago`;
+  return new Date(iso).toLocaleDateString();
+}
+
+// formatAbsolute returns a locale-aware "May 14, 2026, 5:50:43 PM"
+// for the title attribute / tooltip.
+function formatAbsolute(iso: string): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleString();
+}
+
+// formatDuration renders a millisecond delta as "2m 47s" or "1h 12m"
+// — whatever is most readable for the magnitude. Sub-second values
+// floor to 0s rather than emit "0.5s"; the page never refreshes
+// fast enough for fractional seconds to be meaningful.
+function formatDuration(ms: number): string {
+  if (ms < 1000) return "0s";
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) {
+    const remS = s % 60;
+    return remS === 0 ? `${m}m` : `${m}m ${remS}s`;
+  }
+  const h = Math.floor(m / 60);
+  const remM = m % 60;
+  return remM === 0 ? `${h}h` : `${h}h ${remM}m`;
 }
