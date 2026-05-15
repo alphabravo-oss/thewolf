@@ -22,6 +22,7 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/artifacts"
 	"github.com/alphabravocompany/thewolf/internal/auth"
 	"github.com/alphabravocompany/thewolf/internal/models"
+	"github.com/alphabravocompany/thewolf/internal/scan/detector"
 	"github.com/alphabravocompany/thewolf/internal/wolflog"
 	"github.com/alphabravocompany/thewolf/internal/scan/coverage"
 	"github.com/alphabravocompany/thewolf/internal/scan/enricher"
@@ -196,6 +197,23 @@ func executeScan(h *Handler, scanID, userID, repoPath, branch string, req create
 	scan.UpdatedAt = now
 	if err := h.Store.UpdateScan(ctx, scan); err != nil {
 		return
+	}
+
+	// Refresh language + framework detection at scan start. The original
+	// runDetection-on-repo-create call only fires once; deps drift, repos
+	// grow new frameworks, and we want the repo detail page to show the
+	// current truth. Cheap (one tree walk + a few file reads), runs
+	// inline so the scan picks up the same tool selection the UI shows.
+	if detResult, derr := detector.Detect(repoPath); derr == nil {
+		langs := make(map[string]int, len(detResult.Languages))
+		for l, n := range detResult.Languages {
+			langs[string(l)] = n
+		}
+		langsJSON, _ := json.Marshal(langs)
+		fwJSON, _ := json.Marshal(detResult.Frameworks)
+		if uerr := h.Store.UpdateRepoDetection(ctx, scan.RepoID, string(langsJSON), string(fwJSON)); uerr != nil {
+			log.Warn().Err(uerr).Str("repo_id", scan.RepoID).Msg("scan: failed to persist detection refresh")
+		}
 	}
 
 	topic := "scan:" + scanID
