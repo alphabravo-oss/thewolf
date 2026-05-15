@@ -395,3 +395,128 @@ func strSliceEqual(a, b []string) bool {
 	}
 	return true
 }
+
+// TestDetectFrameworks_NestedManifest verifies the detector walks into
+// subdirectories — a JS app under ui-next/ should still surface its
+// frameworks even though the repo root has no package.json.
+func TestDetectFrameworks_NestedManifest(t *testing.T) {
+	repo := t.TempDir()
+	sub := filepath.Join(repo, "ui-next")
+	if err := os.MkdirAll(sub, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	pkg := `{"dependencies":{"react":"^19","vite":"^6","@tanstack/react-router":"^1"}}`
+	if err := os.WriteFile(filepath.Join(sub, "package.json"), []byte(pkg), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	frameworks := DetectFrameworks(repo, map[models.Language]int{models.LangTypeScript: 1})
+	want := map[string]bool{"react": true, "vite": true, "tanstack-router": true}
+	for _, fw := range frameworks {
+		delete(want, fw)
+	}
+	if len(want) > 0 {
+		t.Errorf("missing nested-manifest frameworks: %v (got %v)", want, frameworks)
+	}
+}
+
+// TestDetectFrameworks_Go covers Go-side frameworks via go.mod.
+func TestDetectFrameworks_Go(t *testing.T) {
+	repo := t.TempDir()
+	gomod := `module example.com/x
+go 1.22
+require (
+  github.com/go-chi/chi/v5 v5.0.0
+  github.com/spf13/cobra v1.7.0
+  github.com/gin-gonic/gin v1.9.0
+)`
+	if err := os.WriteFile(filepath.Join(repo, "go.mod"), []byte(gomod), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	frameworks := DetectFrameworks(repo, map[models.Language]int{models.LangGo: 1})
+	want := map[string]bool{"chi": true, "cobra-cli": true, "gin": true}
+	for _, fw := range frameworks {
+		delete(want, fw)
+	}
+	if len(want) > 0 {
+		t.Errorf("missing Go frameworks: %v (got %v)", want, frameworks)
+	}
+}
+
+// TestDetectFrameworks_TestdataIgnored verifies that scanner test
+// fixtures (testdata/javascript/package.json etc.) DON'T leak into
+// the framework list — they're isolated fixtures with deliberately-
+// vulnerable dep names, not real dependencies of the parent repo.
+func TestDetectFrameworks_TestdataIgnored(t *testing.T) {
+	repo := t.TempDir()
+	sub := filepath.Join(repo, "testdata", "javascript")
+	if err := os.MkdirAll(sub, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sub, "package.json"), []byte(`{"dependencies":{"express":"4.17.1"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	frameworks := DetectFrameworks(repo, map[models.Language]int{models.LangJavaScript: 1})
+	for _, fw := range frameworks {
+		if fw == "express" {
+			t.Errorf("testdata/ fixture leaked 'express' into detected frameworks")
+		}
+	}
+}
+
+// TestDetectFrameworks_Polyglot exercises a real-world-ish layout:
+// Go backend + nested JS UI + Dockerfile. Should pick up everything.
+func TestDetectFrameworks_Polyglot(t *testing.T) {
+	repo := t.TempDir()
+	if err := os.WriteFile(filepath.Join(repo, "go.mod"), []byte(`require github.com/go-chi/chi v5
+require github.com/spf13/cobra v1`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, "Dockerfile"), []byte("FROM alpine"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ui := filepath.Join(repo, "web")
+	if err := os.MkdirAll(ui, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(ui, "package.json"), []byte(`{"dependencies":{"react":"19","tailwindcss":"3","vite":"6"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(ui, "vite.config.ts"), []byte("export default {}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	frameworks := DetectFrameworks(repo, map[models.Language]int{
+		models.LangGo:         1,
+		models.LangTypeScript: 1,
+	})
+	want := map[string]bool{
+		"chi": true, "cobra-cli": true, "react": true,
+		"vite": true, "tailwindcss": true, "docker": true,
+	}
+	for _, fw := range frameworks {
+		delete(want, fw)
+	}
+	if len(want) > 0 {
+		t.Errorf("polyglot detection missing: %v (got %v)", want, frameworks)
+	}
+}
+
+// TestDetectFrameworks_Terraform verifies infra-only signals work when
+// no source language is present — a docs/IaC repo should still get
+// terraform/helm/docker surfaced.
+func TestDetectFrameworks_Terraform(t *testing.T) {
+	repo := t.TempDir()
+	if err := os.WriteFile(filepath.Join(repo, "main.tf"), []byte(`resource "aws_s3_bucket" "x" {}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, "Chart.yaml"), []byte(`apiVersion: v2`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	frameworks := DetectFrameworks(repo, map[models.Language]int{})
+	want := map[string]bool{"terraform": true, "helm": true}
+	for _, fw := range frameworks {
+		delete(want, fw)
+	}
+	if len(want) > 0 {
+		t.Errorf("infra-only detection missing: %v (got %v)", want, frameworks)
+	}
+}
