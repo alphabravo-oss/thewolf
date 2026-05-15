@@ -63,6 +63,17 @@ func (p *StaticcheckPlugin) Execute(ctx context.Context, opts models.ExecuteOpts
 				// the container; if that's too old to parse the source,
 				// the failure message is at least diagnosable.
 				"GOTOOLCHAIN": "local",
+				// -buildvcs=false disables Go's VCS-stamping of binaries.
+				// Without it, `go list` shells out to git and fails with
+				// "error obtaining VCS status: exit status 128" inside
+				// the read-only scanner container (no writable .git, no
+				// git binary inheriting the host config). That bubbles
+				// up as a fake 'compile' finding with no file/line. The
+				// error message Go prints literally says
+				//   "Use -buildvcs=false to disable VCS stamping."
+				// GOFLAGS propagates the flag to every nested go command
+				// staticcheck runs.
+				"GOFLAGS": "-buildvcs=false",
 			},
 		},
 		"staticcheck", "-f", "json", "./...")
@@ -108,6 +119,16 @@ func parseStaticcheckOutput(data []byte) ([]models.Finding, error) {
 
 		var diag staticcheckDiag
 		if err := json.Unmarshal(line, &diag); err != nil {
+			continue
+		}
+
+		// Drop meta-errors. staticcheck emits Code="compile" entries
+		// when go itself can't parse / build the project (failed `go
+		// list`, missing tools in container, VCS-stamping failure,
+		// etc.). They have no file/line, and they're scan-environment
+		// issues — not quality findings — so they shouldn't show up
+		// in the findings table at all.
+		if diag.Code == "compile" && diag.Location.File == "" {
 			continue
 		}
 

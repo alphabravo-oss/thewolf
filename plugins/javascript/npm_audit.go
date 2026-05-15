@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
+	"strings"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
@@ -53,12 +55,34 @@ func (p *NPMAuditPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) (
 		return nil, plugin.WrapExecError("npm-audit", err)
 	}
 
+	// Compute the repo-relative package.json path so each finding has a
+	// meaningful location. npm-audit itself reports against packages,
+	// not files; without this the UI shows blank file/line for every
+	// SCA finding. For a monorepo with multiple package.json files, we
+	// use the one whose tree this audit ran in (the same jsDir we
+	// chose above).
+	relPkg := "package.json"
+	if rel, rerr := filepath.Rel(opts.RepoPath, jsDir); rerr == nil && rel != "" && rel != "." {
+		relPkg = filepath.ToSlash(filepath.Join(rel, "package.json"))
+	}
+	// container.NormalizePath strips the in-container /scan/ prefix; we
+	// already built relPkg as repo-relative so just trim any leading
+	// slash for consistency.
+	relPkg = strings.TrimPrefix(relPkg, "/")
+
 	findings, perr := parseNPMAuditOutput(out)
 	if perr != nil {
 		return nil, perr
 	}
 	for i := range findings {
-		findings[i].FilePath = container.NormalizePath(findings[i].FilePath)
+		// npm-audit emits no file_path; the package.json that declared
+		// the vulnerable dep is the right anchor for the UI's file
+		// column + the click-through to source.
+		if findings[i].FilePath == "" {
+			findings[i].FilePath = relPkg
+		} else {
+			findings[i].FilePath = container.NormalizePath(findings[i].FilePath)
+		}
 	}
 	return findings, nil
 }
