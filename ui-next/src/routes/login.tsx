@@ -48,6 +48,9 @@ function LoginPage() {
         <div className="flex flex-col items-center gap-2">
           <WolfLogo className="size-10" />
           <div className="text-lg font-semibold">Sign in to The Wolf</div>
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground -mt-1">
+            by AlphaBravo
+          </div>
         </div>
         <form
           onSubmit={(e) => {

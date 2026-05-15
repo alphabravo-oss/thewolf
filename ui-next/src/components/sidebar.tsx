@@ -102,11 +102,16 @@ export function Sidebar() {
           mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0",
         )}
       >
-        <div className="h-14 flex items-center justify-between gap-2 px-4 border-b border-sidebar-border">
-          <Link to="/" className="flex items-center gap-2">
-            <WolfLogo className="size-7" />
-            <div className="font-semibold tracking-tight text-sidebar-foreground">
-              The Wolf
+        <div className="h-16 flex items-center justify-between gap-2 px-4 border-b border-sidebar-border">
+          <Link to="/" className="flex items-center gap-2.5">
+            <WolfLogo className="size-10" />
+            <div className="flex flex-col leading-tight">
+              <span className="font-semibold tracking-tight text-sidebar-foreground">
+                The Wolf
+              </span>
+              <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                by AlphaBravo
+              </span>
             </div>
           </Link>
           <button

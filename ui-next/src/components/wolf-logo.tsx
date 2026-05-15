@@ -2,28 +2,26 @@
 // /wolf.svg + /public/icon.svg so the favicon, sidebar, and
 // auth pages all read as the same logo.
 //
-// Color treatment:
-//   light mode: black wolf inside a white rounded-square card
-//   dark mode:  white wolf on transparent (no card)
-//
-// Tailwind's `dark:` variant flips between them. The card-bg
-// styling stays on a wrapping div so the SVG itself can carry
-// just the silhouette and we never have to worry about box-on-
-// box layout collisions.
+// Color treatment is consistent across both themes: black wolf
+// inside a white rounded-square card. The white card gives the
+// mark presence against the dark sidebar AND any light-mode
+// background — one variant to maintain, recognisable anywhere.
 export function WolfLogo({ className = "size-7" }: { className?: string }) {
   return (
     <div
       className={
-        // Light: visible white card with black wolf.
-        // Dark:  no card; the white wolf sits on the sidebar.
         "inline-flex items-center justify-center rounded-md bg-white p-0.5 " +
-        "dark:bg-transparent dark:p-0 " +
         className
       }
     >
       <svg
-        viewBox="0 0 768 768"
-        className="size-full text-black dark:text-white"
+        // Tighter viewBox crops to the wolf's bounding box plus a small
+        // margin (~5%) so the silhouette fills the white card instead
+        // of floating in 20% of empty space. Original SVG path lives at
+        // roughly 199..581 × 118..646 of a 768 viewBox; this crops to a
+        // 580x580 square centered on the wolf.
+        viewBox="100 92 580 580"
+        className="size-full text-black"
         fill="currentColor"
         xmlns="http://www.w3.org/2000/svg"
         role="img"
