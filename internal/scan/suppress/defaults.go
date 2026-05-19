@@ -173,6 +173,18 @@ func DefaultRules() RuleSet {
 		{PathGlob: "**/samples/**", Reason: "default:samples"},
 		{PathGlob: "**/sample/**", Reason: "default:samples"},
 
+		// --- CI / build automation pipelines.
+		//
+		// GitHub Actions workflow YAML hosts intentional patterns that
+		// scanners read as bugs: `curl | bash` install steps, secret refs
+		// like ${{ secrets.X }} that gitleaks treats as embedded creds,
+		// shell snippets with unquoted expressions, etc. Same logic as
+		// test code — these files aren't the project's production code
+		// path. Limited to workflows/ on purpose; .github/ also holds
+		// PR templates and CODEOWNERS which aren't noise sources.
+		{PathGlob: ".github/workflows/**", Reason: "default:github-workflows"},
+		{PathGlob: "**/.github/workflows/**", Reason: "default:github-workflows"},
+
 		// --- Lockfiles ---
 		{PathGlob: "**/package-lock.json", Reason: "default:lockfile"},
 		{PathGlob: "**/pnpm-lock.yaml", Reason: "default:lockfile"},

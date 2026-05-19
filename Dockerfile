@@ -54,7 +54,7 @@ LABEL org.opencontainers.image.title="The Wolf" \
       org.opencontainers.image.source="https://github.com/alphabravocompany/thewolf" \
       org.opencontainers.image.vendor="WolfCorp"
 
-RUN apk add --no-cache ca-certificates tzdata docker-cli \
+RUN apk add --no-cache ca-certificates tzdata docker-cli git \
     && addgroup -S wolf \
     && adduser -S wolf -G wolf \
     && addgroup -S docker \
@@ -77,4 +77,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD ["wolf", "version"]
 
 ENTRYPOINT ["wolf"]
-CMD ["serve", "--bind", "0.0.0.0"]
+CMD ["serve", "--bind", "0.0.0.0:8778"]

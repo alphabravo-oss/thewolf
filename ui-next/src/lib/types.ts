@@ -10,7 +10,9 @@ export type Category =
   | "quality"
   | "docs"
   | "license"
-  | "sbom";
+  | "sbom"
+  | "infra"
+  | "dast";
 
 export type FindingStatus = "open" | "fixed" | "wont_fix" | "false_positive";
 

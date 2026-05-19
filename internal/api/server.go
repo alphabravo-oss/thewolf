@@ -195,6 +195,7 @@ func NewServer(store db.Store, addr string) *Server {
 			})
 
 			r.Get("/browse", routes.BrowseLocal)
+			r.Get("/git-info", routes.GitInfo)
 
 			r.Route("/config", func(r chi.Router) {
 				r.Get("/secrets", routes.ListSecrets)

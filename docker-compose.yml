@@ -56,11 +56,20 @@ services:
       - WOLF_SCANNERS_NETWORK=${WOLF_SCANNERS_NETWORK:-bridge}
       - WOLF_SCANNERS_MEMORY=${WOLF_SCANNERS_MEMORY:-2g}
       - WOLF_SCANNERS_CPUS=${WOLF_SCANNERS_CPUS:-1.5}
-      - WOLF_SCANNERS_DB_VOLUME=${WOLF_SCANNERS_DB_VOLUME:-wolf-scanners-db}
+      # Vuln-DB cache shared across scanner runs. Must be a HOST path (not a
+      # named docker volume) — scanner containers run as the host user UID/GID
+      # to read repo files, and a named volume's default root-owned perms
+      # would block writes to /var/lib/wolf-db. See
+      # internal/setup/scanners/scanners.go:78-84 for the rationale.
+      - WOLF_SCANNERS_DB_VOLUME=${WOLF_SCANNERS_DB_VOLUME:-${HOME}/.wolf/scanner-cache}
       # Tell wolf-slim what host path /repos maps to on the daemon. In a
       # compose deployment this is the absolute resolution of WOLF_REPOS_ROOT.
       - WOLF_HOST_REPOS_ROOT=${WOLF_HOST_REPOS_ROOT:-${WOLF_REPOS_ROOT:-./repos}}
       - WOLF_IN_CONTAINER_REPOS_ROOT=/repos
+      # Allow the "Add local repo → Browse…" picker to walk the read-only
+      # repos bind. Defaults to /repos so the UI sees the same tree the
+      # scanner does; override to expose additional roots if you mount more.
+      - WOLF_BROWSE_ROOTS=${WOLF_BROWSE_ROOTS:-/repos}
     depends_on:
       postgres:
         condition: service_healthy
@@ -140,8 +149,6 @@ networks:
 volumes:
   wolf-data:
   pg-data:
-  # Named volume for vuln-DB caches shared across all scanner-container runs.
-  wolf-scanners-db:
 
 # Compose secrets — the postgres password lands here on dev machines
 # via the POSTGRES_PASSWORD env (compose substitutes into the file at

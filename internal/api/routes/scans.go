@@ -544,6 +544,7 @@ func executeScan(h *Handler, scanID, userID, repoPath, branch string, req create
 		// the number can never drift away from what the user sees.
 		if dbFindings, ferr := h.Store.ListFindingsByScan(context.Background(), scanID); ferr == nil {
 			dbFindings, _ = suppress.Apply(dbFindings, suppress.DefaultRules())
+			suppress.ApplyGitignore(dbFindings, repoPath)
 			visible := 0
 			for _, f := range dbFindings {
 				if !f.Suppressed {
@@ -830,7 +831,7 @@ func GetScanFindings(w http.ResponseWriter, r *http.Request) {
 	scanID := chi.URLParam(r, "id")
 
 	// Verify scan exists.
-	_, err := h.Store.GetScanByID(r.Context(), scanID)
+	scan, err := h.Store.GetScanByID(r.Context(), scanID)
 	if err != nil {
 		response.WriteError(w, http.StatusNotFound, "not_found", fmt.Sprintf("scan %s not found", scanID))
 		return
@@ -851,6 +852,9 @@ func GetScanFindings(w http.ResponseWriter, r *http.Request) {
 	// the flag at scan time) so a default-rules change applies to all
 	// historical scans without a backfill.
 	findings, _ = suppress.Apply(findings, suppress.DefaultRules())
+	// Layer the repo's gitignore on top — files the user has explicitly
+	// chosen to exclude from version control are noise by definition.
+	applyGitignoreByRepoID(r.Context(), h, scan.RepoID, findings)
 	includeSuppressed := r.URL.Query().Get("include_suppressed") == "true"
 	suppressedCount := 0
 	if !includeSuppressed {
@@ -2026,6 +2030,23 @@ func paginateSlice(total, page, perPage int) (start, end int) {
 	return
 }
 
+// applyGitignoreByRepoID applies the repo's gitignore as an additional
+// suppression pass. Looks up the repo by ID, resolves its on-disk path,
+// then defers to suppress.ApplyGitignore which uses `git check-ignore`
+// for canonical semantics (negations, nested .gitignore, etc.). Silent
+// no-op when the repo can't be found or the path isn't a git repo — the
+// underlying call already degrades gracefully.
+func applyGitignoreByRepoID(ctx context.Context, h *Handler, repoID string, findings []models.Finding) {
+	if h == nil || repoID == "" || len(findings) == 0 {
+		return
+	}
+	repo, err := h.Store.GetRepoByID(ctx, repoID)
+	if err != nil || repo.SourcePath == "" {
+		return
+	}
+	suppress.ApplyGitignore(findings, repo.SourcePath)
+}
+
 // severityRank returns a numeric rank for sorting severities (higher = more severe).
 func severityRank(s models.Severity) int {
 	switch s {
@@ -2198,6 +2219,7 @@ func ScansTrends(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		findings, _ = suppress.Apply(findings, suppress.DefaultRules())
+		applyGitignoreByRepoID(r.Context(), h, s.RepoID, findings)
 
 		entry := scanTrendEntry{
 			ScanID: s.ID,
@@ -2290,6 +2312,7 @@ func GetScanTools(w http.ResponseWriter, r *http.Request) {
 	// table.
 	findings, _ := h.Store.ListFindingsByScan(r.Context(), scanID)
 	findings, _ = suppress.Apply(findings, suppress.DefaultRules())
+	applyGitignoreByRepoID(r.Context(), h, scan.RepoID, findings)
 	visibleCounts := make(map[string]int)
 	totalCounts := make(map[string]int)
 	for _, f := range findings {

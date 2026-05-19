@@ -7,8 +7,6 @@ import {
   PackageIcon,
   GitForkIcon,
   BugIcon,
-  WrenchIcon,
-  RepeatIcon,
   SettingsIcon,
   GaugeIcon,
   LogOutIcon,
@@ -32,8 +30,6 @@ const primary: NavItem[] = [
   { label: "Repos", to: "/repos", icon: GitForkIcon },
   { label: "Scans", to: "/scans", icon: GaugeIcon },
   { label: "Findings", to: "/findings", icon: BugIcon },
-  { label: "Fixes", to: "/fixes", icon: WrenchIcon },
-  { label: "Loops", to: "/loops", icon: RepeatIcon },
 ];
 
 const secondary: NavItem[] = [

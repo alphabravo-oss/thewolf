@@ -146,6 +146,77 @@ func TestRepoCRUD(t *testing.T) {
 	}
 }
 
+// TestRepoDedup verifies that adding a repo whose path already exists
+// returns the existing repo (with deduplicated=true) instead of creating
+// a second row — including trailing-slash-insensitive matching.
+func TestRepoDedup(t *testing.T) {
+	r, store, token := setupRepoRouter(t)
+	defer store.Close()
+
+	create := func(name, path string) *httptest.ResponseRecorder {
+		body, _ := json.Marshal(map[string]string{
+			"name":        name,
+			"source_type": "local",
+			"source_path": path,
+		})
+		req := httptest.NewRequest(http.MethodPost, "/api/repos", bytes.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		return w
+	}
+
+	decode := func(w *httptest.ResponseRecorder) (id string, dedup bool) {
+		var resp struct {
+			Data struct {
+				ID           string `json:"id"`
+				Deduplicated bool   `json:"deduplicated"`
+			} `json:"data"`
+		}
+		json.Unmarshal(w.Body.Bytes(), &resp)
+		return resp.Data.ID, resp.Data.Deduplicated
+	}
+
+	// First add — a fresh create.
+	w := create("pioneer", "/repos/ab/pioneer")
+	if w.Code != http.StatusCreated {
+		t.Fatalf("first add: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	firstID, dedup := decode(w)
+	if firstID == "" || dedup {
+		t.Fatalf("first add: id=%q deduplicated=%v (want id set, dedup false)", firstID, dedup)
+	}
+
+	// Second add, same path with a trailing slash + different name —
+	// should reuse the first repo, not create a new one.
+	w = create("pioneer-again", "/repos/ab/pioneer/")
+	if w.Code != http.StatusOK {
+		t.Fatalf("dup add: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	dupID, dedup := decode(w)
+	if !dedup {
+		t.Error("dup add: expected deduplicated=true")
+	}
+	if dupID != firstID {
+		t.Errorf("dup add: expected existing id %q, got %q", firstID, dupID)
+	}
+
+	// The repo list must still contain exactly one repo.
+	req := httptest.NewRequest(http.MethodGet, "/api/repos", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	var listResp struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	json.Unmarshal(w.Body.Bytes(), &listResp)
+	if len(listResp.Data) != 1 {
+		t.Fatalf("expected 1 repo after dup add, got %d", len(listResp.Data))
+	}
+}
+
 func TestRepoUnauthorized(t *testing.T) {
 	r, store, _ := setupRepoRouter(t)
 	defer store.Close()

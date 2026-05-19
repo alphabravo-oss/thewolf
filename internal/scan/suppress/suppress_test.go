@@ -145,6 +145,9 @@ func TestApply_LanguageTestPatterns(t *testing.T) {
 		{"samples/payment.json", "samples"},
 		{"app/payment.sample.json", "*.sample.*"},
 		{"app/sample_payment.json", "sample_*"},
+		// CI workflow YAML — both repo-root and nested submodule forms.
+		{".github/workflows/ci.yml", "github workflows (root)"},
+		{"submodules/proj/.github/workflows/release.yml", "github workflows (nested)"},
 	}
 	for _, tc := range cases {
 		f := models.Finding{FilePath: tc.path, FineCategory: "sql-injection"}

@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -26,6 +27,24 @@ type createRepoRequest struct {
 	SourceType    models.SourceType `json:"source_type"`
 	SourcePath    string            `json:"source_path"`
 	DefaultBranch string            `json:"default_branch"`
+}
+
+// createRepoResult is the CreateRepo response body. It embeds the repo so
+// existing clients still read `data.id`, `data.name`, etc. unchanged, and
+// adds `deduplicated` — true when an add request matched an existing repo
+// and we returned that one instead of creating a duplicate row.
+type createRepoResult struct {
+	*models.Repo
+	Deduplicated bool `json:"deduplicated,omitempty"`
+}
+
+// normalizeSourcePath trims a single trailing slash so "/repos/x" and
+// "/repos/x/" are treated as the same repo for dedup purposes.
+func normalizeSourcePath(p string) string {
+	if len(p) > 1 && strings.HasSuffix(p, "/") {
+		return p[:len(p)-1]
+	}
+	return p
 }
 
 type updateRepoRequest struct {
@@ -86,6 +105,21 @@ func CreateRepo(w http.ResponseWriter, r *http.Request) {
 		req.DefaultBranch = "main"
 	}
 
+	// Dedup: if the user already has a repo at this path, return that one
+	// instead of creating a duplicate. Match on normalized source_path
+	// (trailing-slash insensitive), scoped to the requesting user.
+	if existing, err := h.Store.ListReposByUser(r.Context(), claims.UserID); err == nil {
+		want := normalizeSourcePath(req.SourcePath)
+		for i := range existing {
+			if normalizeSourcePath(existing[i].SourcePath) == want {
+				response.WriteJSON(w, http.StatusOK, response.SuccessResponse{
+					Data: createRepoResult{Repo: &existing[i], Deduplicated: true},
+				})
+				return
+			}
+		}
+	}
+
 	now := time.Now()
 	repo := &models.Repo{
 		ID:            uuid.New().String(),
@@ -106,7 +140,9 @@ func CreateRepo(w http.ResponseWriter, r *http.Request) {
 	// Run detection asynchronously so the response isn't blocked.
 	go runDetection(h.Store, repo.ID, repo.SourcePath)
 
-	response.WriteJSON(w, http.StatusCreated, response.SuccessResponse{Data: repo})
+	response.WriteJSON(w, http.StatusCreated, response.SuccessResponse{
+		Data: createRepoResult{Repo: repo},
+	})
 }
 
 func GetRepo(w http.ResponseWriter, r *http.Request) {

@@ -5,8 +5,6 @@
 //   g c → /collections
 //   g s → /scans
 //   g f → /findings
-//   g x → /fixes
-//   g l → /loops
 //   g n → /scanners
 //   g , → /settings
 //
@@ -14,15 +12,13 @@
 import { useEffect } from "react";
 import { useNavigate } from "@tanstack/react-router";
 
-type Target = "/" | "/collections" | "/scans" | "/findings" | "/fixes" | "/loops" | "/scanners" | "/settings";
+type Target = "/" | "/collections" | "/scans" | "/findings" | "/scanners" | "/settings";
 
 const map: Record<string, Target> = {
   d: "/",
   c: "/collections",
   s: "/scans",
   f: "/findings",
-  x: "/fixes",
-  l: "/loops",
   n: "/scanners",
   ",": "/settings",
 };

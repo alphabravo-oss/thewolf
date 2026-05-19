@@ -9,16 +9,26 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeftIcon,
+  FolderOpenIcon,
+  GitBranchIcon,
   PencilIcon,
   PlusIcon,
   Trash2Icon,
   XIcon,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { api, ApiError } from "@/lib/api";
 import type { Collection, Repo, Scan } from "@/lib/types";
 import { CardSkeleton } from "@/components/skeleton";
+import { BrowsePathModal } from "@/components/browse-path-modal";
+
+type GitInfo = {
+  path: string;
+  is_git: boolean;
+  branches?: string[];
+  current_branch?: string;
+};
 
 // GetCollection returns a wrapped shape: { data: { collection, repos, scans } }
 type CollectionDetail = {
@@ -330,6 +340,37 @@ function AddRepoPanel({
   const [name, setName] = useState("");
   const [sourcePath, setSourcePath] = useState("");
   const [defaultBranch, setDefaultBranch] = useState("main");
+  const [browseOpen, setBrowseOpen] = useState(false);
+
+  // Debounce so typing into the path field doesn't fire a request per keystroke.
+  // Picks from the Browse… modal still feel instant — they overwrite sourcePath
+  // wholesale and the user isn't watching the field while typing.
+  const [debouncedPath, setDebouncedPath] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedPath(sourcePath.trim()), 350);
+    return () => clearTimeout(t);
+  }, [sourcePath]);
+
+  const gitInfo = useQuery({
+    queryKey: ["git-info", debouncedPath],
+    queryFn: async () => {
+      const r = await api.get<GitInfo>(
+        `/git-info?path=${encodeURIComponent(debouncedPath)}`,
+      );
+      return r.data;
+    },
+    enabled: mode === "local" && debouncedPath.length > 0,
+    retry: false,
+  });
+
+  // Auto-fill the branch field once we know what HEAD points to. Only run
+  // when the path/git-info changes — we don't want to clobber a manual edit
+  // the user made afterward.
+  useEffect(() => {
+    if (gitInfo.data?.is_git && gitInfo.data.current_branch) {
+      setDefaultBranch(gitInfo.data.current_branch);
+    }
+  }, [gitInfo.data?.path, gitInfo.data?.is_git, gitInfo.data?.current_branch]);
 
   const repos = useQuery({
     queryKey: ["repos", "all-for-add"],
@@ -363,16 +404,26 @@ function AddRepoPanel({
       source_path: string;
       default_branch: string;
     }) => {
-      const created = await api.post<Repo>("/repos", body);
+      // POST /repos returns the existing repo with deduplicated=true when
+      // a repo for this path already exists — linking still works on the
+      // returned id either way.
+      const created = await api.post<Repo & { deduplicated?: boolean }>(
+        "/repos",
+        body,
+      );
       await api.post(`/collections/${collectionId}/repos`, {
         repo_id: created.data.id,
       });
       return created.data;
     },
-    onSuccess: () => {
+    onSuccess: (repo) => {
       qc.invalidateQueries({ queryKey: ["collection", collectionId] });
       qc.invalidateQueries({ queryKey: ["repos"] });
-      toast.success("Repo created and added");
+      toast.success(
+        repo.deduplicated
+          ? "Repo already existed — linked the existing one"
+          : "Repo created and added",
+      );
       onClose();
     },
     onError: (e) => {
@@ -467,6 +518,22 @@ function AddRepoPanel({
         </form>
       )}
 
+      {browseOpen && (
+        <BrowsePathModal
+          initialPath={sourcePath.trim()}
+          onSelect={(p) => {
+            setSourcePath(p);
+            // Default the repo name to the folder basename if the user
+            // hasn't already typed one — minor convenience, very common.
+            if (!name.trim()) {
+              const base = p.split("/").filter(Boolean).pop() ?? "";
+              if (base) setName(base);
+            }
+          }}
+          onClose={() => setBrowseOpen(false)}
+        />
+      )}
+
       {(mode === "local" || mode === "git") && (
         <form
           onSubmit={(e) => {
@@ -496,33 +563,83 @@ function AddRepoPanel({
             <span className="text-[11px] text-muted-foreground">
               {mode === "local" ? "Absolute path on host" : "Git URL"}
             </span>
-            <input
-              type="text"
-              value={sourcePath}
-              onChange={(e) => setSourcePath(e.target.value)}
-              required
-              placeholder={
-                mode === "local"
-                  ? "/Users/you/code/myrepo"
-                  : "https://github.com/org/repo.git"
-              }
-              className="mt-0.5 w-full h-8 px-2 rounded-md bg-background border border-muted/40 text-sm font-mono"
-            />
+            <div className="mt-0.5 flex gap-2">
+              <input
+                type="text"
+                value={sourcePath}
+                onChange={(e) => setSourcePath(e.target.value)}
+                required
+                placeholder={
+                  mode === "local"
+                    ? "/Users/you/code/myrepo"
+                    : "https://github.com/org/repo.git"
+                }
+                className="flex-1 h-8 px-2 rounded-md bg-background border border-muted/40 text-sm font-mono"
+              />
+              {mode === "local" && (
+                <button
+                  type="button"
+                  onClick={() => setBrowseOpen(true)}
+                  className="h-8 px-3 rounded-md border border-muted/40 hover:bg-muted/40 text-xs inline-flex items-center gap-1.5 whitespace-nowrap"
+                >
+                  <FolderOpenIcon className="size-3.5" />
+                  Browse…
+                </button>
+              )}
+            </div>
             {mode === "local" && (
-              <span className="text-[10px] text-muted-foreground">
-                Must be under a path Docker can bind-mount (typically anywhere under /Users on macOS).
-              </span>
+              <>
+                <span className="text-[10px] text-muted-foreground">
+                  Must be under a path Docker can bind-mount (typically anywhere under /Users on macOS).
+                </span>
+                {debouncedPath.length > 0 && (
+                  <div className="mt-1 text-[11px]">
+                    {gitInfo.isFetching ? (
+                      <span className="text-muted-foreground">Checking…</span>
+                    ) : gitInfo.data?.is_git ? (
+                      <span className="inline-flex items-center gap-1 text-primary">
+                        <GitBranchIcon className="size-3" />
+                        Detected git repo · {gitInfo.data.branches?.length ?? 0} branches
+                      </span>
+                    ) : gitInfo.isError ? (
+                      <span className="text-destructive">
+                        {gitInfo.error instanceof Error
+                          ? gitInfo.error.message
+                          : "Path check failed"}
+                      </span>
+                    ) : gitInfo.data ? (
+                      <span className="text-muted-foreground">
+                        Not a git repo — branch will be free-text
+                      </span>
+                    ) : null}
+                  </div>
+                )}
+              </>
             )}
           </label>
           <label className="block">
             <span className="text-[11px] text-muted-foreground">Default branch</span>
-            <input
-              type="text"
-              value={defaultBranch}
-              onChange={(e) => setDefaultBranch(e.target.value)}
-              placeholder="main"
-              className="mt-0.5 w-full h-8 px-2 rounded-md bg-background border border-muted/40 text-sm"
-            />
+            {mode === "local" && gitInfo.data?.is_git && gitInfo.data.branches?.length ? (
+              <select
+                value={defaultBranch}
+                onChange={(e) => setDefaultBranch(e.target.value)}
+                className="mt-0.5 w-full h-8 px-2 rounded-md bg-background border border-muted/40 text-sm"
+              >
+                {gitInfo.data.branches.map((b) => (
+                  <option key={b} value={b}>
+                    {b}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type="text"
+                value={defaultBranch}
+                onChange={(e) => setDefaultBranch(e.target.value)}
+                placeholder="main"
+                className="mt-0.5 w-full h-8 px-2 rounded-md bg-background border border-muted/40 text-sm"
+              />
+            )}
           </label>
           <div className="flex justify-end">
             <button

@@ -9,6 +9,7 @@ import type { Repo, Scan } from "@/lib/types";
 import { parseToolList } from "@/lib/types";
 import { TableSkeleton } from "@/components/skeleton";
 import { EmptyState } from "@/components/empty-state";
+import { BranchSelect } from "@/components/branch-select";
 import { ScanStatusPill } from "@/components/scan-status-pill";
 
 export const Route = createFileRoute("/_authed/scans/")({
@@ -273,15 +274,13 @@ function NewScanForm({ onClose }: { onClose: () => void }) {
 
       {selectedRepo && (
         <label className="block">
-          <span className="text-xs text-muted-foreground">
-            Branch (defaults to {selectedRepo.default_branch || "main"})
-          </span>
-          <input
-            type="text"
+          <span className="text-xs text-muted-foreground">Branch</span>
+          <BranchSelect
+            repoId={selectedRepo.id}
             value={branch}
-            onChange={(e) => setBranch(e.target.value)}
-            placeholder={selectedRepo.default_branch || "main"}
-            className="mt-1 w-full h-9 px-2 rounded-md bg-background border border-muted/40 text-sm font-mono"
+            onChange={setBranch}
+            defaultBranch={selectedRepo.default_branch}
+            className="mt-1 w-full h-9 px-2 rounded-md bg-background border border-muted/40 text-sm"
           />
         </label>
       )}

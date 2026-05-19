@@ -15,6 +15,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { useState } from "react";
+import { CheckboxFilterRow } from "@/components/checkbox-filter-row";
 
 const severities: Severity[] = ["critical", "high", "medium", "low", "info"];
 const statuses: FindingStatus[] = [
@@ -27,9 +28,20 @@ const statuses: FindingStatus[] = [
 interface Props {
   selectedIds: string[];
   onClearSelection: () => void;
+  // Category filter — ephemeral, owned by FindingsPage (not the persisted
+  // saved-views store). excludedCategories tracks what's unchecked.
+  categoryCounts: Map<string, number>;
+  excludedCategories: Set<string>;
+  onToggleCategory: (category: string) => void;
 }
 
-export function FindingsToolbar({ selectedIds, onClearSelection }: Props) {
+export function FindingsToolbar({
+  selectedIds,
+  onClearSelection,
+  categoryCounts,
+  excludedCategories,
+  onToggleCategory,
+}: Props) {
   const view = useFindingsView();
   const [saveName, setSaveName] = useState("");
   const qc = useQueryClient();
@@ -145,6 +157,19 @@ export function FindingsToolbar({ selectedIds, onClearSelection }: Props) {
           </div>
         </div>
       </div>
+
+      {/* Category filter — uncheck e.g. "quality"/"docs" to drop lint noise. */}
+      {categoryCounts.size > 0 && (
+        <div className="text-xs">
+          <CheckboxFilterRow
+            label="Category"
+            options={Array.from(categoryCounts.keys()).sort()}
+            isChecked={(v) => !excludedCategories.has(v)}
+            onToggle={onToggleCategory}
+            counts={categoryCounts}
+          />
+        </div>
+      )}
 
       {/* Bulk-action bar — only visible with rows selected. */}
       {selectedIds.length > 0 && (

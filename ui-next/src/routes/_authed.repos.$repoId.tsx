@@ -25,6 +25,7 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import type { Repo, Scan } from "@/lib/types";
 import { CardSkeleton } from "@/components/skeleton";
+import { BranchSelect } from "@/components/branch-select";
 
 // One row per past scan from GET /api/scans/trends?repo_id=&branch=
 interface TrendPoint {
@@ -77,11 +78,13 @@ function RepoDetailPage() {
     refetchInterval: 30_000,
   });
 
+  const [scanBranch, setScanBranch] = useState("");
+
   const startScan = useMutation({
     mutationFn: async () => {
       const r = await api.post<Scan>("/scans", {
         repo_id: repoId,
-        branch: repoQ.data?.default_branch || "main",
+        branch: scanBranch.trim() || repoQ.data?.default_branch || "main",
       });
       return r.data;
     },
@@ -143,6 +146,12 @@ function RepoDetailPage() {
           </div>
         </div>
         <div className="flex items-center gap-1">
+          <BranchSelect
+            repoId={repoId}
+            value={scanBranch}
+            onChange={setScanBranch}
+            defaultBranch={r.default_branch}
+          />
           <button
             type="button"
             onClick={() => startScan.mutate()}

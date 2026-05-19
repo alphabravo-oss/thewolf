@@ -49,6 +49,10 @@ func WriteAll(dir string, rcfg ReportConfig, manifest Manifest) (WriteAllResult,
 	ruleset := suppress.Combine(suppress.DefaultRules(), wolfignoreRules)
 	var suppressedCount int
 	rcfg.Findings, suppressedCount = suppress.Apply(rcfg.Findings, ruleset)
+	// Layer the repo's gitignore on top of glob-based rules so files the
+	// user explicitly excludes from version control don't surface in the
+	// exported artifacts. Uses git check-ignore for canonical semantics.
+	suppressedCount += suppress.ApplyGitignore(rcfg.Findings, manifest.RepoPath)
 	manifest.Counts.Suppressed = suppressedCount
 	manifest.Counts.Visible = len(rcfg.Findings) - suppressedCount
 	// Recompute high-severity over visible findings only — that's the

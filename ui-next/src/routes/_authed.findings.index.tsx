@@ -37,12 +37,35 @@ function FindingsPage() {
 
   const view = useFindingsView();
 
+  // Category filter is ephemeral (resets each visit) and tracks what's
+  // *excluded* — empty set = show all. Kept out of the persisted
+  // useFindingsView store on purpose.
+  const [excludedCategories, setExcludedCategories] = useState<Set<string>>(
+    new Set(),
+  );
+  const toggleCategory = (c: string) => {
+    setExcludedCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(c)) next.delete(c);
+      else next.add(c);
+      return next;
+    });
+  };
+
+  // Distinct categories present across all findings, with counts.
+  const categoryCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const f of q.data ?? []) m.set(f.category, (m.get(f.category) ?? 0) + 1);
+    return m;
+  }, [q.data]);
+
   // Apply filters + sort by severity desc.
   const filtered = useMemo(() => {
     const src = q.data ?? [];
     const needle = view.search.trim().toLowerCase();
     return src
       .filter((f) => view.severities.has(f.severity))
+      .filter((f) => !excludedCategories.has(f.category))
       .filter((f) => (view.status ? f.status === view.status : true))
       .filter((f) => {
         if (!needle) return true;
@@ -53,7 +76,7 @@ function FindingsPage() {
         );
       })
       .sort((a, b) => severityRank[b.severity] - severityRank[a.severity]);
-  }, [q.data, view.search, view.severities, view.status]);
+  }, [q.data, view.search, view.severities, view.status, excludedCategories]);
 
   // ---- selection state ---------------------------------------------------
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -182,6 +205,9 @@ function FindingsPage() {
       <FindingsToolbar
         selectedIds={Array.from(selected)}
         onClearSelection={clearSelection}
+        categoryCounts={categoryCounts}
+        excludedCategories={excludedCategories}
+        onToggleCategory={toggleCategory}
       />
 
       {q.isLoading ? (

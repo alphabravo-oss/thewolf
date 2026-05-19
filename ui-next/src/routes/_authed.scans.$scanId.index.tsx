@@ -23,6 +23,7 @@ import { CardSkeleton, ListSkeleton } from "@/components/skeleton";
 import { EmptyState } from "@/components/empty-state";
 import { ScanStatusPill } from "@/components/scan-status-pill";
 import { SeverityBadge } from "@/components/severity-badge";
+import { CheckboxFilterRow } from "@/components/checkbox-filter-row";
 
 export const Route = createFileRoute("/_authed/scans/$scanId/")({
   component: ScanDetailPage,
@@ -48,6 +49,15 @@ const SEVERITY_RANK: Record<Severity, number> = {
   low: 2,
   info: 1,
 };
+
+// Severity filter pills, most-severe first.
+const SEVERITY_ORDER: Severity[] = [
+  "critical",
+  "high",
+  "medium",
+  "low",
+  "info",
+];
 
 const PAGE_SIZE = 100;
 
@@ -97,10 +107,25 @@ function ScanDetailPage() {
         suppressed: r.meta?.suppressed ?? 0,
       };
     },
+    // Poll while the scan is running so the table fills in as tools
+    // complete (findings are persisted per-tool as each scanner finishes).
+    // Stops polling once the scan reaches a terminal state.
+    refetchInterval: () => {
+      const s = scanQ.data?.status;
+      return s === "running" || s === "pending" ? 3000 : false;
+    },
   });
 
   const [filterTool, setFilterTool] = useState<string>("");
-  const [filterSeverity, setFilterSeverity] = useState<Severity | "">("");
+  // Severity/category filters track what's *excluded* (unchecked). An empty
+  // set means "show everything" — which is also the correct default before
+  // findings have loaded, so we don't need to wait for data to initialize.
+  const [excludedSeverities, setExcludedSeverities] = useState<Set<string>>(
+    new Set(),
+  );
+  const [excludedCategories, setExcludedCategories] = useState<Set<string>>(
+    new Set(),
+  );
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("severity");
   const [sortDesc, setSortDesc] = useState(true);
@@ -122,11 +147,29 @@ function ScanDetailPage() {
     return Array.from(m.entries()).sort(([a], [b]) => a.localeCompare(b));
   }, [findings]);
 
+  // Distinct categories present in this scan, with counts.
+  const categoryCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const f of findings) m.set(f.category, (m.get(f.category) ?? 0) + 1);
+    return m;
+  }, [findings]);
+  const categoryOptions = useMemo(
+    () => Array.from(categoryCounts.keys()).sort(),
+    [categoryCounts],
+  );
+
+  const severityCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const f of findings) m.set(f.severity, (m.get(f.severity) ?? 0) + 1);
+    return m;
+  }, [findings]);
+
   const visible = useMemo(() => {
     const lowerSearch = search.trim().toLowerCase();
     const out = findings.filter((f) => {
       if (filterTool && f.tool_name !== filterTool) return false;
-      if (filterSeverity && f.severity !== filterSeverity) return false;
+      if (excludedSeverities.has(f.severity)) return false;
+      if (excludedCategories.has(f.category)) return false;
       if (lowerSearch) {
         const hay = `${f.title} ${f.file_path} ${f.rule_id ?? ""}`.toLowerCase();
         if (!hay.includes(lowerSearch)) return false;
@@ -155,7 +198,15 @@ function ScanDetailPage() {
       return sortDesc ? -cmp : cmp;
     });
     return out;
-  }, [findings, filterTool, filterSeverity, search, sortKey, sortDesc]);
+  }, [
+    findings,
+    filterTool,
+    excludedSeverities,
+    excludedCategories,
+    search,
+    sortKey,
+    sortDesc,
+  ]);
 
   const totalPages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
   const pageClamped = Math.min(page, totalPages);
@@ -213,8 +264,23 @@ function ScanDetailPage() {
 
   const clearFilters = () => {
     setFilterTool("");
-    setFilterSeverity("");
+    setExcludedSeverities(new Set());
+    setExcludedCategories(new Set());
     setSearch("");
+    setPage(1);
+  };
+
+  // Toggle helpers: flip a value's membership in an "excluded" set.
+  const toggleExcluded = (
+    setter: React.Dispatch<React.SetStateAction<Set<string>>>,
+    value: string,
+  ) => {
+    setter((prev) => {
+      const next = new Set(prev);
+      if (next.has(value)) next.delete(value);
+      else next.add(value);
+      return next;
+    });
     setPage(1);
   };
 
@@ -354,61 +420,68 @@ function ScanDetailPage() {
               </div>
             )}
 
-            <div className="flex flex-wrap items-center gap-2 mb-3 text-xs">
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value);
-                  setPage(1);
-                }}
-                placeholder="Search title, file, rule…"
-                className="h-8 px-2 rounded-md bg-background border border-muted/40 w-64"
-              />
-              <select
-                value={filterTool}
-                onChange={(e) => {
-                  setFilterTool(e.target.value);
-                  setPage(1);
-                }}
-                className="h-8 px-2 rounded-md bg-background border border-muted/40"
-              >
-                <option value="">All tools ({findings.length})</option>
-                {toolCounts.map(([name, count]) => (
-                  <option key={name} value={name}>
-                    {name} ({count})
-                  </option>
-                ))}
-              </select>
-              <select
-                value={filterSeverity}
-                onChange={(e) => {
-                  setFilterSeverity(e.target.value as Severity | "");
-                  setPage(1);
-                }}
-                className="h-8 px-2 rounded-md bg-background border border-muted/40"
-              >
-                <option value="">All severities</option>
-                <option value="critical">Critical</option>
-                <option value="high">High</option>
-                <option value="medium">Medium</option>
-                <option value="low">Low</option>
-                <option value="info">Info</option>
-              </select>
-              {(filterTool || filterSeverity || search) && (
-                <button
-                  type="button"
-                  onClick={clearFilters}
-                  className="h-8 px-2 rounded-md hover:bg-muted/40 inline-flex items-center gap-1 text-muted-foreground"
+            <div className="space-y-2 mb-3 text-xs">
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(e) => {
+                    setSearch(e.target.value);
+                    setPage(1);
+                  }}
+                  placeholder="Search title, file, rule…"
+                  className="h-8 px-2 rounded-md bg-background border border-muted/40 w-64"
+                />
+                <select
+                  value={filterTool}
+                  onChange={(e) => {
+                    setFilterTool(e.target.value);
+                    setPage(1);
+                  }}
+                  className="h-8 px-2 rounded-md bg-background border border-muted/40"
                 >
-                  <FilterXIcon className="size-3.5" />
-                  Clear
-                </button>
-              )}
-              <div className="ml-auto text-muted-foreground tabular-nums">
-                {visible.length.toLocaleString()} of {findings.length.toLocaleString()}
-                {" "}shown · page {pageClamped} of {totalPages}
+                  <option value="">All tools ({findings.length})</option>
+                  {toolCounts.map(([name, count]) => (
+                    <option key={name} value={name}>
+                      {name} ({count})
+                    </option>
+                  ))}
+                </select>
+                {(filterTool ||
+                  excludedSeverities.size > 0 ||
+                  excludedCategories.size > 0 ||
+                  search) && (
+                  <button
+                    type="button"
+                    onClick={clearFilters}
+                    className="h-8 px-2 rounded-md hover:bg-muted/40 inline-flex items-center gap-1 text-muted-foreground"
+                  >
+                    <FilterXIcon className="size-3.5" />
+                    Clear
+                  </button>
+                )}
+                <div className="ml-auto text-muted-foreground tabular-nums">
+                  {visible.length.toLocaleString()} of{" "}
+                  {findings.length.toLocaleString()} shown · page {pageClamped} of{" "}
+                  {totalPages}
+                </div>
               </div>
+              <CheckboxFilterRow
+                label="Severity"
+                options={SEVERITY_ORDER.filter((s) => severityCounts.has(s))}
+                isChecked={(v) => !excludedSeverities.has(v)}
+                onToggle={(v) => toggleExcluded(setExcludedSeverities, v)}
+                counts={severityCounts}
+              />
+              {categoryOptions.length > 0 && (
+                <CheckboxFilterRow
+                  label="Category"
+                  options={categoryOptions}
+                  isChecked={(v) => !excludedCategories.has(v)}
+                  onToggle={(v) => toggleExcluded(setExcludedCategories, v)}
+                  counts={categoryCounts}
+                />
+              )}
             </div>
 
             <div className="glass-card overflow-hidden">
