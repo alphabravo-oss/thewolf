@@ -240,3 +240,50 @@ func TestSecretsCRUD(t *testing.T) {
 		t.Fatalf("expected 0 secrets after delete, got %d", len(secs))
 	}
 }
+
+// TestDeleteRepoCascadeWithAILogs is a regression test: ai_logs references
+// scans(id) without ON DELETE CASCADE, so DeleteScanCascade must delete
+// ai_logs rows explicitly. Before the fix, a repo with AI-assessed scans
+// could not be deleted — the DELETE FROM scans hit a foreign-key violation.
+func TestDeleteRepoCascadeWithAILogs(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+
+	userID := uuid.New().String()
+	store.CreateUser(ctx, &models.User{ID: userID, Email: "del@test.com", PasswordHash: "hash"})
+
+	repoID := uuid.New().String()
+	store.CreateRepo(ctx, &models.Repo{
+		ID: repoID, UserID: userID, Name: "delrepo",
+		SourceType: models.SourceTypeLocal, SourcePath: "/tmp/delrepo", DefaultBranch: "main",
+	})
+
+	scanID := uuid.New().String()
+	if err := store.CreateScan(ctx, &models.Scan{
+		ID: scanID, UserID: userID, RepoID: repoID, Branch: "main",
+		Status: models.ScanStatusCompleted,
+		ToolsSelected: "[]", ToolsCompleted: "[]", ToolsFailed: "[]", CoverageSummary: "{}",
+	}); err != nil {
+		t.Fatalf("CreateScan failed: %v", err)
+	}
+
+	// An AI log row pointing at the scan — the FK that blocked deletion.
+	if err := store.CreateAILog(ctx, &models.AILog{
+		ID: uuid.New().String(), ScanID: scanID,
+		Provider: "anthropic", Phase: "assessment", Prompt: "p",
+	}); err != nil {
+		t.Fatalf("CreateAILog failed: %v", err)
+	}
+
+	scanIDs, err := store.DeleteRepoCascade(ctx, repoID)
+	if err != nil {
+		t.Fatalf("DeleteRepoCascade failed: %v", err)
+	}
+	if len(scanIDs) != 1 || scanIDs[0] != scanID {
+		t.Fatalf("expected cascade to report scan %s, got %v", scanID, scanIDs)
+	}
+
+	if _, err := store.GetRepoByID(ctx, repoID); err == nil {
+		t.Fatal("expected repo to be gone after cascade delete")
+	}
+}

@@ -231,7 +231,8 @@ func DeleteRepo(w http.ResponseWriter, r *http.Request) {
 
 	scanIDs, err := h.Store.DeleteRepoCascade(r.Context(), id)
 	if err != nil {
-		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to delete repo")
+		wolflog.Error().Err(err).Str("repo_id", id).Msg("delete repo cascade failed")
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to delete repo: "+err.Error())
 		return
 	}
 

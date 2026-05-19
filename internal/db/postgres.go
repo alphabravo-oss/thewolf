@@ -730,7 +730,12 @@ func (s *PostgresStore) DeleteScanCascade(ctx context.Context, scanID string) er
 	if _, err := tx.ExecContext(ctx, "DELETE FROM scan_artifacts WHERE scan_id = $1", scanID); err != nil {
 		return fmt.Errorf("delete scan_artifacts: %w", err)
 	}
-	// ai_logs, tool_summaries, scan_recommendations cascade via FK, but be explicit.
+	// ai_logs references scans(id) WITHOUT ON DELETE CASCADE, so it must be
+	// deleted explicitly — otherwise the DELETE FROM scans below fails the
+	// foreign-key check. tool_summaries and scan_recommendations do cascade.
+	if _, err := tx.ExecContext(ctx, "DELETE FROM ai_logs WHERE scan_id = $1", scanID); err != nil {
+		return fmt.Errorf("delete ai_logs: %w", err)
+	}
 	if _, err := tx.ExecContext(ctx, "DELETE FROM scans WHERE id = $1", scanID); err != nil {
 		return fmt.Errorf("delete scan: %w", err)
 	}
