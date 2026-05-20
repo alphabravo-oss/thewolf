@@ -174,8 +174,12 @@ New table `api_tokens`:
 | `scopes` | TEXT | JSON array of scope strings |
 | `created_at` | TIMESTAMP | |
 | `last_used_at` | TIMESTAMP | Updated (best-effort, async) on each use |
-| `expires_at` | TIMESTAMP | Nullable; null = never expires |
+| `expires_at` | TIMESTAMP | **Defaults to created_at + 90 days**; caller may override or set "never" |
 | `revoked_at` | TIMESTAMP | Nullable; set on revoke |
+
+> **Token expiry default:** when `expires_in_days` is omitted at creation, the token
+> expires in **90 days**. The caller may pass a longer value or `0`/`never` for a
+> non-expiring token. Bounded-by-default nudges automation toward rotation hygiene.
 
 - **Token format:** `wolf_<base62(32 bytes random)>`. The `wolf_` prefix makes the
   secret greppable in logs/leak scanners (and `wolf`'s own secret scanner can detect
@@ -231,6 +235,19 @@ Content-Type: application/json
    `403 {"error":{"code":"insufficient_scope","message":"requires write:scans"}}`
    when the attached scope set doesn't satisfy the route.
 
+**Separate rate limiter for token traffic.** Token-authenticated requests use their own
+rate-limit bucket with a higher ceiling than the general (browser) limiter. Automation
+and AI agents are bursty by nature; they should not be throttled like an interactive
+browser, and a busy agent must not starve UI users out of the shared budget. The
+limiter keys on token ID so one noisy token can't exhaust another's quota.
+
+**Audit log.** Every mutating request (POST/PUT/DELETE) authenticated by a token is
+recorded to an `audit_log` table — `(id, token_id, user_id, action, method, path,
+resource_id, status_code, created_at)`. This gives a security trail of AI-driven
+activity that the best-effort `last_used_at` timestamp cannot. JWT (UI) mutations are
+recorded too, keyed by `user_id` with a null `token_id`. Writes are async/best-effort
+so audit logging never blocks or fails a request.
+
 ### 5.4 API versioning
 
 - All existing routes move from `/api/*` to `/api/v1/*`.
@@ -261,11 +278,13 @@ A per-route checklist, tracked as one task per route group:
 
 | ID | Task | Files |
 |----|------|-------|
-| P1-1 | Add `api_tokens` table + migration; SQLite + Postgres. | `internal/db/*` |
+| P1-1 | Add `api_tokens` + `audit_log` tables + migrations; SQLite + Postgres. | `internal/db/*` |
 | P1-2 | `internal/auth/apikey` package: generate, hash, format, parse, scope-set type & checks. | new pkg |
-| P1-3 | Store methods: `CreateAPIToken`, `GetAPITokenByHash`, `ListAPITokensByUser`, `RevokeAPIToken`, `TouchAPIToken`. | `internal/db/*` |
+| P1-3 | Store methods: `CreateAPIToken`, `GetAPITokenByHash`, `ListAPITokensByUser`, `RevokeAPIToken`, `TouchAPIToken`, `AppendAuditLog`. | `internal/db/*` |
 | P1-4 | Auth middleware: unified Bearer resolver (JWT vs `wolf_` token); attach scopes to context. | `internal/auth/middleware.go` |
 | P1-5 | `RequireScope` middleware. | `internal/auth/middleware.go` |
+| P1-5b | Separate higher-ceiling rate limiter for token traffic, keyed by token ID. | `internal/api/middleware/ratelimit.go` |
+| P1-5c | Audit-log middleware: async-record mutating requests. | `internal/api/middleware/audit.go` (new) |
 | P1-6 | Token endpoints: list/create/revoke handlers. | `internal/api/routes/tokens.go` (new) |
 | P1-7 | Move all routes under `/api/v1`; add deprecating `/api` alias. | `internal/api/server.go` |
 | P1-8 | Apply `RequireScope` to every route group per §3.1. | `internal/api/server.go` |
@@ -670,21 +689,20 @@ task tables (§5.6, §6.5, §7.8) into ordered, reviewable steps.
 
 ---
 
-## 10. Open Questions
+## 10. Resolved Decisions
 
-Resolved during brainstorming: token scoping (scoped), CLI offline (hybrid), versioning
-(`/api/v1`), Swagger access (public). Remaining items to confirm before/while writing
-the Phase 1 plan:
+All design questions are resolved. Confirmed during brainstorming:
 
-1. **Token expiry default** — should new tokens default to *never expires*, or to a
-   bounded default (e.g. 90 days) that the user can override? Bounded-by-default is
-   safer for automation hygiene.
-2. **Rate limiting for token auth** — should token-authenticated requests get a
-   higher/separate rate limit than the general limiter (automation is bursty by
-   nature)? Or keep one shared limiter?
-3. **`wolf` config file location** — `~/.wolf/cli.yaml` proposed. The server already
-   uses `~/.wolf/` for `wolf.db` and `artifacts/`. Confirm co-locating CLI config there
-   is fine (vs. `~/.config/wolf/`).
-4. **Audit logging** — should token *use* (which token did what) be recorded to an
-   audit log/table, beyond the best-effort `last_used_at` timestamp? Useful for
-   security review of AI-driven activity, but adds write volume.
+| Decision | Resolution |
+|----------|------------|
+| Token access control | Scoped tokens (`verb:resource`) |
+| CLI offline capability | Hybrid — management via API, `scan`/`doctor`/`pull` also local |
+| API versioning | Add `/api/v1`, deprecating `/api` alias for one release |
+| Swagger UI access | Public, no auth |
+| Token expiry default | 90 days, overridable (incl. "never") |
+| Token rate limiting | Separate, higher-ceiling limiter keyed by token ID |
+| CLI config location | `~/.wolf/cli.yaml` (co-located with `wolf.db`, `artifacts/`) |
+| Audit logging | Yes — `audit_log` table records mutating requests |
+
+No open questions remain. The plan is ready to be turned into per-phase implementation
+plans, starting with Phase 1.
