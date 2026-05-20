@@ -1,0 +1,69 @@
+PROGRESS — AI Integration: Finding Enrichment & Auto-Remediation Loop
+Spec: docs/specs/i-want-it-plan-how-to-add-an-integration-of-ai-phase-1-is-ha.md
+Finalized: 2026-05-19
+Implementation branch: ai-integration
+MVP = Phases 1-4. Phase 5 (plugins) deferred.
+
+PHASE 1 — Enrichment foundation
+  [DONE]    US-1  Deterministic enrichment template engine
+            -> internal/enrich/template.go (+ test)
+  [DONE]    US-2  enrich command with filter expression
+            -> internal/enrich/filter.go, doc.go; `wolf enrich` (+ tests)
+  [DONE]    US-3  Optional AI-generated guidance layer
+            -> internal/enrich/guidance.go (+ test)
+  Verified: go build ./... + go test ./internal/enrich/ green;
+            `wolf enrich` smoke-tested end to end.
+
+PHASE 2 — AI tool abstraction & execution environment
+  [DONE]    US-4  Hybrid AI tool registry
+            -> internal/fix/engine/registry.go (ToolDefinition,
+               ConfigEngine, Registry) (+ test)
+  [DONE]    US-5  AI runner container
+            -> Dockerfile.ai-runner; internal/loop/airunner/ (+ test)
+  [DONE]    US-6  Raw-API patch mode
+            -> internal/fix/engine/apipatch.go (+ test)
+  Verified: go build ./... + go test ./internal/fix/... +
+            ./internal/loop/airunner/ green.
+
+PHASE 3 — The auto-remediation loop
+  [PARTIAL] US-7  Loop iteration: triage, plan, fix, rescan
+            Building blocks done + tested (triage, manifest, budget,
+            registry, airunner). Existing internal/loop/controller
+            already does scan->fix->rescan. NOT yet wired: the triage
+            step, plan-artifact capture, containerized-fix execution,
+            and per-batch commits on a wolf/fix-<scanid> branch.
+  [PARTIAL] US-8  Loop stop conditions
+            Existing controller has regression + no-progress guardrails;
+            budget.Tracker (US-11) supplies the rest. NOT yet wired:
+            explicit severity-threshold exit, per-finding fix budget ->
+            ai_unfixable.
+  [DONE]    US-9  AI false-positive triage
+            -> internal/loop/triage/ (+ test)
+  [DONE]    US-10 Determinism manifest & AI I/O capture
+            -> internal/loop/manifest/ (+ test). ai_logs schema
+               extension (loop_id/iteration/applied_patch) NOT done.
+  [DONE]    US-11 Cost & time ceilings
+            -> internal/loop/budget/ (+ test)
+  Verified: go build ./... + go test ./internal/loop/... green.
+
+PHASE 4 — Surfaces
+  [PARTIAL] US-12 wolf loop CLI + loop REST API
+            `wolf loop` CLI command DONE — drives the existing
+            controller, requires git (non-git fails fast). REST API
+            (POST /api/loops, GET /api/loops/{id}/stream) NOT done.
+  [PENDING] US-13 Revive & update the Loops UI
+
+PHASE 5 — Plugin system (deferred)
+  [PENDING] US-14 Container-plugin system for paid scanners
+
+VALIDATION (branch ai-integration, 2026-05-20):
+  - go build ./...            : OK
+  - go vet (new packages)     : OK
+  - go test ./...             : 53 packages OK, 0 FAIL
+  - `wolf enrich` / `wolf loop`: smoke-tested
+
+STATUS: 9 of 14 user stories complete and tested; US-7/US-8/US-12
+partially complete; US-13/US-14 pending. All work on branch
+ai-integration; everything builds and the full test suite is green.
+Remaining work: wire triage/plan/containerized-fix into the controller,
+loop REST API + SSE, Loops UI revival, paid-tool plugin system.
