@@ -32,6 +32,7 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/api/routes"
 	"github.com/alphabravocompany/thewolf/internal/artifacts"
 	"github.com/alphabravocompany/thewolf/internal/auth"
+	"github.com/alphabravocompany/thewolf/internal/cli"
 	"github.com/alphabravocompany/thewolf/internal/db"
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
@@ -63,16 +64,26 @@ func main() {
 		},
 	}
 
+	// Global flags for the API-client commands (--server/--token/--context/-o).
+	cli.AddGlobalFlags(rootCmd)
+
+	// The local one-shot `scan` command gains the API-client scan
+	// subcommands (scan list/get/create/watch/...).
+	scanCmd := newScanCmd()
+	cli.AddScanSubcommands(scanCmd)
+
 	rootCmd.AddCommand(
 		newServeCmd(),
 		newDoctorCmd(),
 		newPullCmd(),
 		newVersionCmd(),
-		newScanCmd(),
+		scanCmd,
 	)
+	// Every API endpoint as a `wolf <resource> <verb>` command.
+	rootCmd.AddCommand(cli.NewCommandGroups()...)
 
 	if err := rootCmd.Execute(); err != nil {
-		os.Exit(1)
+		os.Exit(cli.ExitCodeFor(err))
 	}
 }
 
