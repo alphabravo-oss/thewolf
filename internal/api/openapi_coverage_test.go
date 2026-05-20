@@ -23,9 +23,10 @@ func TestOpenAPICoversEveryRoute(t *testing.T) {
 
 	// Endpoints that are intentionally not in the operation catalog.
 	exempt := map[string]bool{
-		"GET /api/v1/openapi.json": true,
-		"GET /api/v1/docs":         true,
-		"GET /api/v1/docs/redoc":   true,
+		"GET /api/v1/openapi.json":   true,
+		"GET /api/v1/docs":           true,
+		"GET /api/v1/docs/redoc":     true,
+		"GET /api/v1/docs/static/*":  true,
 	}
 
 	walkErr := chi.Walk(srv.Router, func(method, route string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {

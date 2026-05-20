@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -230,5 +231,40 @@ func TestOpenAPISpecIsServedPublicly(t *testing.T) {
 	}
 	if b, _ := io.ReadAll(docsW.Body); !bytes.Contains(b, []byte("swagger")) {
 		t.Error("/docs did not render Swagger UI")
+	}
+}
+
+// TestSwaggerUIIsFullyOffline verifies the docs page references no external
+// CDN and that its CSS/JS load from the binary's embedded assets with the
+// correct MIME types — so the page renders with no internet access.
+func TestSwaggerUIIsFullyOffline(t *testing.T) {
+	srv, _, _ := newTestServer(t)
+
+	htmlW := request(srv, http.MethodGet, "/api/v1/docs", "", nil)
+	html := htmlW.Body.String()
+	for _, cdn := range []string{"unpkg.com", "cdn.redoc.ly", "cdn.jsdelivr", "//http"} {
+		if bytes.Contains([]byte(html), []byte(cdn)) {
+			t.Errorf("Swagger UI page references external host %q — not offline", cdn)
+		}
+	}
+
+	cases := []struct {
+		path, wantType string
+	}{
+		{"/api/v1/docs/static/swagger-ui.css", "text/css"},
+		{"/api/v1/docs/static/swagger-ui-bundle.js", "application/javascript"},
+		{"/api/v1/docs/static/redoc.standalone.js", "application/javascript"},
+	}
+	for _, c := range cases {
+		w := request(srv, http.MethodGet, c.path, "", nil)
+		if w.Code != http.StatusOK {
+			t.Errorf("%s: expected 200, got %d", c.path, w.Code)
+		}
+		if ct := w.Header().Get("Content-Type"); !strings.HasPrefix(ct, c.wantType) {
+			t.Errorf("%s: expected Content-Type %s, got %q", c.path, c.wantType, ct)
+		}
+		if w.Body.Len() < 1000 {
+			t.Errorf("%s: asset suspiciously small (%d bytes)", c.path, w.Body.Len())
+		}
 	}
 }
