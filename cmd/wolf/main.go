@@ -33,6 +33,7 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/artifacts"
 	"github.com/alphabravocompany/thewolf/internal/auth"
 	"github.com/alphabravocompany/thewolf/internal/db"
+	"github.com/alphabravocompany/thewolf/internal/enrich"
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
 	"github.com/alphabravocompany/thewolf/internal/scan/detector"
@@ -69,6 +70,7 @@ func main() {
 		newPullCmd(),
 		newVersionCmd(),
 		newScanCmd(),
+		newEnrichCmd(),
 	)
 
 	if err := rootCmd.Execute(); err != nil {
@@ -543,6 +545,95 @@ func readGitCommit(repoPath string) string {
 		return sha[:7]
 	}
 	return sha
+}
+
+// --- enrich -----------------------------------------------------------------
+
+// newEnrichCmd builds `wolf enrich` — writes AI-ready remediation prompts
+// (`ai_fix_prompt`) into a scan's findings.json for the selected findings.
+func newEnrichCmd() *cobra.Command {
+	var (
+		findingsPath string
+		scanID       string
+		severities   []string
+		categories   []string
+		tools        []string
+		excludePaths []string
+		ids          []string
+		useAI        bool
+	)
+	cmd := &cobra.Command{
+		Use:   "enrich",
+		Short: "Write AI-ready fix prompts into a scan's findings.json",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			path, err := resolveFindingsPath(findingsPath, scanID)
+			if err != nil {
+				return err
+			}
+
+			doc, err := enrich.LoadDoc(path)
+			if err != nil {
+				return err
+			}
+
+			filter := enrich.Filter{
+				Severities:   severities,
+				Categories:   categories,
+				Tools:        tools,
+				IDs:          ids,
+				ExcludePaths: excludePaths,
+			}
+
+			var gen enrich.Generator = enrich.TemplateGenerator{}
+			if useAI {
+				aiGen, gerr := enrich.NewAIGenerator()
+				if gerr != nil {
+					return fmt.Errorf("--ai requested but unavailable: %w", gerr)
+				}
+				gen = aiGen
+			}
+
+			n, err := doc.Apply(filter, gen)
+			if err != nil {
+				return err
+			}
+			if err := doc.Write(path); err != nil {
+				return err
+			}
+			fmt.Printf("Enriched %d of %d findings in %s\n", n, doc.FindingCount(), path)
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&findingsPath, "findings", "", "path to a findings.json artifact")
+	cmd.Flags().StringVar(&scanID, "scan", "", "scan ID (resolves <artifacts-root>/<id>/findings.json)")
+	cmd.Flags().StringSliceVar(&severities, "severity", nil, "only enrich these severities (critical,high,...)")
+	cmd.Flags().StringSliceVar(&categories, "category", nil, "only enrich these categories (sast,sca,secrets,...)")
+	cmd.Flags().StringSliceVar(&tools, "tool", nil, "only enrich findings from these tools")
+	cmd.Flags().StringSliceVar(&excludePaths, "exclude-path", nil, "skip findings whose file path matches these globs")
+	cmd.Flags().StringSliceVar(&ids, "ids", nil, "only enrich these specific finding IDs")
+	cmd.Flags().BoolVar(&useAI, "ai", false, "use the configured AI provider for richer guidance")
+	return cmd
+}
+
+// resolveFindingsPath turns a --findings path or a --scan ID into a
+// concrete findings.json path.
+func resolveFindingsPath(findingsPath, scanID string) (string, error) {
+	if findingsPath != "" {
+		if _, err := os.Stat(findingsPath); err != nil {
+			return "", fmt.Errorf("findings file not found: %s", findingsPath)
+		}
+		return findingsPath, nil
+	}
+	if scanID == "" {
+		return "", fmt.Errorf("one of --findings or --scan is required")
+	}
+	home, _ := os.UserHomeDir()
+	root := envOr("WOLF_ARTIFACTS_ROOT", filepath.Join(home, ".wolf", "artifacts"))
+	candidate := filepath.Join(root, scanID, "findings.json")
+	if _, err := os.Stat(candidate); err != nil {
+		return "", fmt.Errorf("findings.json for scan %s not found at %s — pass --findings <path> instead", scanID, candidate)
+	}
+	return candidate, nil
 }
 
 // --- helpers ----------------------------------------------------------------
