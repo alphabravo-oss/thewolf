@@ -5,11 +5,13 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"github.com/google/uuid"
 
 	"github.com/alphabravocompany/thewolf/internal/api/middleware"
 	"github.com/alphabravocompany/thewolf/internal/api/response"
@@ -17,6 +19,7 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/api/sse"
 	"github.com/alphabravocompany/thewolf/internal/artifacts"
 	"github.com/alphabravocompany/thewolf/internal/auth"
+	"github.com/alphabravocompany/thewolf/internal/auth/apikey"
 	"github.com/alphabravocompany/thewolf/internal/db"
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
@@ -93,146 +96,190 @@ func NewServer(store db.Store, addr string) *Server {
 		})
 	}
 
-	// Mount routes
-	r.Route("/api", func(r chi.Router) {
+	// API-token authentication: wire the resolver and the audit recorder.
+	auth.SetAPITokenResolver(makeAPITokenResolver(store))
+	tokenLimiter := middleware.TokenRateLimiter()
+	auditRecorder := makeAuditRecorder(store)
+
+	// Mount the versioned API. All routes live under /api/v1; /api/* is a
+	// deprecating redirect alias kept for one release.
+	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(jsonContentType)
-		// Public endpoints
+
+		// Public endpoints — no authentication.
 		r.Group(func(r chi.Router) {
 			r.Get("/health", routes.Health)
 			r.Get("/ready", routes.Ready)
 			r.Get("/version", routes.Version)
 		})
 
-		// Auth endpoints with stricter rate limiting
+		// OpenAPI spec + Swagger UI — public by design.
+		mountDocs(r)
+
+		// Auth endpoints with stricter rate limiting.
 		r.Group(func(r chi.Router) {
 			r.Use(authLimiter.Handler)
 			r.Post("/auth/register", routes.Register)
 			r.Post("/auth/login", routes.Login)
 		})
 
-		// Protected endpoints
+		// Protected endpoints. Scope vocabulary is defined in
+		// internal/auth/apikey; JWT (UI) sessions hold every scope.
 		r.Group(func(r chi.Router) {
 			r.Use(auth.Middleware)
+			r.Use(tokenLimiter.HandlerForToken)
+			r.Use(middleware.Audit(auditRecorder))
 
+			rRepos := auth.RequireScope(apikey.ScopeReadRepos)
+			wRepos := auth.RequireScope(apikey.ScopeWriteRepos)
+			rScans := auth.RequireScope(apikey.ScopeReadScans)
+			wScans := auth.RequireScope(apikey.ScopeWriteScans)
+			rFind := auth.RequireScope(apikey.ScopeReadFindings)
+			wFind := auth.RequireScope(apikey.ScopeWriteFindings)
+			rFixes := auth.RequireScope(apikey.ScopeReadFixes)
+			wFixes := auth.RequireScope(apikey.ScopeWriteFixes)
+			rLoops := auth.RequireScope(apikey.ScopeReadLoops)
+			wLoops := auth.RequireScope(apikey.ScopeWriteLoops)
+			rConfig := auth.RequireScope(apikey.ScopeReadConfig)
+			wConfig := auth.RequireScope(apikey.ScopeWriteConfig)
+			adminOnly := auth.RequireScope(apikey.ScopeAdmin)
+
+			// Auth/session + API token self-management (no extra scope —
+			// any authenticated principal manages its own tokens).
 			r.Route("/auth", func(r chi.Router) {
 				r.Post("/logout", routes.Logout)
 				r.Get("/me", routes.Me)
 				r.Put("/password", routes.ChangePassword)
+				r.Get("/tokens", routes.ListAPITokens)
+				r.Post("/tokens", routes.CreateAPIToken)
+				r.Delete("/tokens/{id}", routes.RevokeAPIToken)
 			})
 
+			r.With(adminOnly).Get("/audit-log", routes.ListAuditLog)
+
 			r.Route("/users", func(r chi.Router) {
+				r.Use(adminOnly)
 				r.Get("/", routes.ListUsers)
 				r.Post("/", routes.CreateUserAdmin)
 				r.Delete("/{id}", routes.DeleteUser)
 			})
 
 			r.Route("/repos", func(r chi.Router) {
-				r.Get("/", routes.ListRepos)
-				r.Post("/", routes.CreateRepo)
-				r.Get("/{id}", routes.GetRepo)
-				r.Put("/{id}", routes.UpdateRepo)
-				r.Delete("/{id}", routes.DeleteRepo)
-				r.Get("/{id}/branches", routes.ListRepoBranches)
+				r.With(rRepos).Get("/", routes.ListRepos)
+				r.With(wRepos).Post("/", routes.CreateRepo)
+				r.With(rRepos).Get("/{id}", routes.GetRepo)
+				r.With(wRepos).Put("/{id}", routes.UpdateRepo)
+				r.With(wRepos).Delete("/{id}", routes.DeleteRepo)
+				r.With(rRepos).Get("/{id}/branches", routes.ListRepoBranches)
 			})
 
 			r.Route("/collections", func(r chi.Router) {
-				r.Get("/", routes.ListCollections)
-				r.Post("/", routes.CreateCollection)
-				r.Get("/{id}", routes.GetCollection)
-				r.Put("/{id}", routes.UpdateCollection)
-				r.Delete("/{id}", routes.DeleteCollection)
-				r.Post("/{id}/repos", routes.AddRepoToCollection)
-				r.Delete("/{id}/repos/{repoId}", routes.RemoveRepoFromCollection)
+				r.With(rRepos).Get("/", routes.ListCollections)
+				r.With(wRepos).Post("/", routes.CreateCollection)
+				r.With(rRepos).Get("/{id}", routes.GetCollection)
+				r.With(wRepos).Put("/{id}", routes.UpdateCollection)
+				r.With(wRepos).Delete("/{id}", routes.DeleteCollection)
+				r.With(wRepos).Post("/{id}/repos", routes.AddRepoToCollection)
+				r.With(wRepos).Delete("/{id}/repos/{repoId}", routes.RemoveRepoFromCollection)
+				r.With(rRepos).Get("/{id}/tools", routes.CollectionTools)
+				r.With(rRepos).Get("/{id}/metrics", routes.CollectionMetrics)
 			})
 
 			r.Route("/scans", func(r chi.Router) {
-				r.Get("/", routes.ListScans)
-				r.Get("/trends", routes.ScansTrends)
-				r.Post("/", routes.CreateScan)
-				r.Get("/{id}", routes.GetScan)
-				r.Get("/{id}/findings", routes.GetScanFindings)
-				r.Get("/{id}/findings/stats", routes.GetScanFindingStats)
-				r.Get("/{id}/stream", routes.StreamScan)
-				r.Get("/{id}/report", routes.GetScanReport)
-				r.Get("/{id}/sarif", routes.GetScanSARIF)
-				r.Get("/{id}/coverage", routes.GetScanCoverage)
-				r.Get("/{id}/compare/{compareId}", routes.CompareScan)
-				r.Get("/{id}/tools", routes.GetScanTools)
-				r.Get("/{id}/tools/{toolName}/output", routes.GetToolOutput)
-				r.Get("/{id}/artifacts/{artifactId}/download", routes.DownloadArtifact)
-				r.Get("/{id}/ai-logs", routes.ListAILogs)
-				r.Get("/{id}/tool-summaries", routes.GetToolSummaries)
-				r.Get("/{id}/recommendations", routes.GetScanRecommendations)
-				r.Delete("/{id}", routes.CancelScan)
-				r.Delete("/{id}/tools/{toolName}", routes.CancelScanTool)
+				r.With(rScans).Get("/", routes.ListScans)
+				r.With(rScans).Get("/trends", routes.ScansTrends)
+				r.With(wScans).Post("/", routes.CreateScan)
+				r.With(rScans).Get("/{id}", routes.GetScan)
+				r.With(rScans).Get("/{id}/findings", routes.GetScanFindings)
+				r.With(rScans).Get("/{id}/findings/stats", routes.GetScanFindingStats)
+				r.With(rScans).Get("/{id}/stream", routes.StreamScan)
+				r.With(rScans).Get("/{id}/report", routes.GetScanReport)
+				r.With(rScans).Get("/{id}/sarif", routes.GetScanSARIF)
+				r.With(rScans).Get("/{id}/coverage", routes.GetScanCoverage)
+				r.With(rScans).Get("/{id}/compare/{compareId}", routes.CompareScan)
+				r.With(rScans).Get("/{id}/tools", routes.GetScanTools)
+				r.With(rScans).Get("/{id}/tools/{toolName}/output", routes.GetToolOutput)
+				r.With(rScans).Get("/{id}/artifacts/{artifactId}/download", routes.DownloadArtifact)
+				r.With(rScans).Get("/{id}/ai-logs", routes.ListAILogs)
+				r.With(rScans).Get("/{id}/tool-summaries", routes.GetToolSummaries)
+				r.With(rScans).Get("/{id}/recommendations", routes.GetScanRecommendations)
+				r.With(wScans).Delete("/{id}", routes.CancelScan)
+				r.With(wScans).Delete("/{id}/tools/{toolName}", routes.CancelScanTool)
 			})
 
 			r.Route("/findings", func(r chi.Router) {
-				r.Get("/", routes.ListFindings)
-				r.Get("/export", routes.ExportFindings)
-				r.Get("/trends", routes.FindingTrends)
-				r.Get("/trends/export", routes.ExportFindingTrends)
-				r.Get("/{id}", routes.GetFinding)
-				r.Put("/{id}/status", routes.UpdateFindingStatus)
+				r.With(rFind).Get("/", routes.ListFindings)
+				r.With(rFind).Get("/export", routes.ExportFindings)
+				r.With(rFind).Get("/trends", routes.FindingTrends)
+				r.With(rFind).Get("/trends/export", routes.ExportFindingTrends)
+				r.With(rFind).Get("/{id}", routes.GetFinding)
+				r.With(wFind).Put("/{id}/status", routes.UpdateFindingStatus)
 			})
 
 			r.Route("/fixes", func(r chi.Router) {
-				r.Get("/", routes.ListFixes)
-				r.Post("/", routes.CreateFix)
-				r.Get("/{id}", routes.GetFix)
-				r.Get("/{id}/stream", routes.StreamFix)
-				r.Delete("/{id}", routes.CancelFix)
+				r.With(rFixes).Get("/", routes.ListFixes)
+				r.With(wFixes).Post("/", routes.CreateFix)
+				r.With(rFixes).Get("/{id}", routes.GetFix)
+				r.With(rFixes).Get("/{id}/stream", routes.StreamFix)
+				r.With(wFixes).Delete("/{id}", routes.CancelFix)
 			})
 
 			r.Route("/loops", func(r chi.Router) {
-				r.Get("/", routes.ListLoops)
-				r.Post("/", routes.CreateLoop)
-				r.Get("/{id}", routes.GetLoop)
-				r.Get("/{id}/stream", routes.StreamLoop)
-				r.Put("/{id}/pause", routes.PauseLoop)
-				r.Put("/{id}/resume", routes.ResumeLoop)
-				r.Delete("/{id}", routes.StopLoop)
+				r.With(rLoops).Get("/", routes.ListLoops)
+				r.With(wLoops).Post("/", routes.CreateLoop)
+				r.With(rLoops).Get("/{id}", routes.GetLoop)
+				r.With(rLoops).Get("/{id}/stream", routes.StreamLoop)
+				r.With(wLoops).Put("/{id}/pause", routes.PauseLoop)
+				r.With(wLoops).Put("/{id}/resume", routes.ResumeLoop)
+				r.With(wLoops).Delete("/{id}", routes.StopLoop)
 			})
 
-			r.Get("/browse", routes.BrowseLocal)
-			r.Get("/git-info", routes.GitInfo)
+			r.With(rRepos).Get("/browse", routes.BrowseLocal)
+			r.With(rRepos).Get("/git-info", routes.GitInfo)
 
 			r.Route("/config", func(r chi.Router) {
-				r.Get("/secrets", routes.ListSecrets)
-				r.Post("/secrets", routes.CreateSecret)
-				r.Delete("/secrets/{id}", routes.DeleteSecret)
-				r.Get("/plugins", routes.ListPlugins)
-				r.Post("/plugins/{name}/install", routes.InstallPlugin)
-				r.Get("/setup", routes.SetupStatus)
+				r.With(rConfig).Get("/secrets", routes.ListSecrets)
+				r.With(wConfig).Post("/secrets", routes.CreateSecret)
+				r.With(wConfig).Delete("/secrets/{id}", routes.DeleteSecret)
+				r.With(rConfig).Get("/plugins", routes.ListPlugins)
+				r.With(wConfig).Post("/plugins/{name}/install", routes.InstallPlugin)
+				r.With(rConfig).Get("/setup", routes.SetupStatus)
 			})
 
-			// Scanner backend (PLAN.md §5). The container backend status
-			// page surfaces these endpoints.
+			// Scanner backend (PLAN.md §5).
 			r.Route("/scanners", func(r chi.Router) {
-				r.Get("/images", routes.ScannersImages)
-				r.Post("/images/pull", routes.ScannersPullOne)
-				r.Get("/config", routes.ScannersConfig)
-				r.Get("/list", routes.ScannersList)
-				r.Post("/doctor", routes.ScannersDoctor)
-				r.Post("/pull", routes.ScannersPull)
+				r.With(rConfig).Get("/images", routes.ScannersImages)
+				r.With(wConfig).Post("/images/pull", routes.ScannersPullOne)
+				r.With(rConfig).Get("/config", routes.ScannersConfig)
+				r.With(rConfig).Get("/list", routes.ScannersList)
+				r.With(wConfig).Post("/doctor", routes.ScannersDoctor)
+				r.With(wConfig).Post("/pull", routes.ScannersPull)
 			})
 
-			r.Get("/settings", routes.ListSettings)
-			r.Put("/settings", routes.UpdateSettings)
+			r.With(rConfig).Get("/settings", routes.ListSettings)
+			r.With(wConfig).Put("/settings", routes.UpdateSettings)
 
 			r.Route("/ai-prompts", func(r chi.Router) {
-				r.Get("/", routes.ListPromptTemplates)
-				r.Put("/", routes.UpsertPromptTemplate)
-				r.Get("/defaults", routes.GetPromptDefaults)
-				r.Post("/preview", routes.PreviewPrompt)
-				r.Delete("/{id}", routes.DeletePromptTemplate)
+				r.With(rConfig).Get("/", routes.ListPromptTemplates)
+				r.With(wConfig).Put("/", routes.UpsertPromptTemplate)
+				r.With(rConfig).Get("/defaults", routes.GetPromptDefaults)
+				r.With(rConfig).Post("/preview", routes.PreviewPrompt)
+				r.With(wConfig).Delete("/{id}", routes.DeletePromptTemplate)
 			})
 
-			r.Get("/ai-providers", routes.ListAIProviders)
-
-			r.Get("/collections/{id}/tools", routes.CollectionTools)
-			r.Get("/collections/{id}/metrics", routes.CollectionMetrics)
+			r.With(rConfig).Get("/ai-providers", routes.ListAIProviders)
 		})
+	})
+
+	// Deprecating alias: /api/* -> /api/v1/*. 307 preserves method + body.
+	r.HandleFunc("/api/*", func(w http.ResponseWriter, req *http.Request) {
+		target := "/api/v1" + strings.TrimPrefix(req.URL.Path, "/api")
+		if req.URL.RawQuery != "" {
+			target += "?" + req.URL.RawQuery
+		}
+		w.Header().Set("Deprecation", "true")
+		w.Header().Set("Link", `</api/v1>; rel="successor-version"`)
+		http.Redirect(w, req, target, http.StatusTemporaryRedirect)
 	})
 
 	// Static UI (SPA) — mounted AFTER /api so /api/* routes always win.
@@ -282,6 +329,71 @@ func (s *Server) Start() error {
 func (s *Server) Shutdown(ctx context.Context) error {
 	wolflog.Info().Msg("API server shutting down")
 	return s.httpServer.Shutdown(ctx)
+}
+
+// makeAPITokenResolver builds the closure the auth middleware uses to turn a
+// plaintext "wolf_" token into a principal. It returns (nil, nil) for any
+// token that is unknown, revoked, or expired — the middleware treats all
+// three identically (401) so an attacker learns nothing from the response.
+func makeAPITokenResolver(store db.Store) auth.APITokenResolver {
+	return func(ctx context.Context, plaintext string) (*auth.ResolvedToken, error) {
+		tok, err := store.GetAPITokenByHash(ctx, apikey.Hash(plaintext))
+		if err != nil {
+			return nil, nil // unknown token
+		}
+		if tok.RevokedAt != nil {
+			return nil, nil
+		}
+		if tok.ExpiresAt != nil && tok.ExpiresAt.Before(time.Now()) {
+			return nil, nil
+		}
+		// Best-effort, non-blocking last-used update.
+		go func(id string) {
+			tctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_ = store.TouchAPIToken(tctx, id)
+		}(tok.ID)
+
+		email := ""
+		if u, uerr := store.GetUserByID(ctx, tok.UserID); uerr == nil && u != nil {
+			email = u.Email
+		}
+		return &auth.ResolvedToken{
+			TokenID: tok.ID,
+			UserID:  tok.UserID,
+			Email:   email,
+			Scopes:  tok.ScopeList,
+		}, nil
+	}
+}
+
+// makeAuditRecorder builds the closure the audit middleware calls for every
+// mutating request. Errors are swallowed — audit logging must never affect
+// the request it describes.
+func makeAuditRecorder(store db.Store) func(middleware.AuditEntry) {
+	return func(e middleware.AuditEntry) {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		var tokenID *string
+		if e.TokenID != "" {
+			id := e.TokenID
+			tokenID = &id
+		}
+		err := store.AppendAuditLog(ctx, &models.AuditLogEntry{
+			ID:         uuid.New().String(),
+			TokenID:    tokenID,
+			UserID:     e.UserID,
+			Action:     e.Action,
+			Method:     e.Method,
+			Path:       e.Path,
+			ResourceID: e.ResourceID,
+			StatusCode: e.StatusCode,
+			CreatedAt:  time.Now().UTC(),
+		})
+		if err != nil {
+			wolflog.Warn().Err(err).Msg("audit log append failed")
+		}
+	}
 }
 
 // recoverOrphanScans walks the scans table and cancels any rows still in

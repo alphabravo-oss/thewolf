@@ -77,6 +77,11 @@ func (s *PostgresStore) Migrate() error {
 			return err
 		}
 	}
+	if _, err := s.db.Exec(migration010SQL); err != nil {
+		if !strings.Contains(err.Error(), "duplicate column") && !strings.Contains(err.Error(), "already exists") {
+			return err
+		}
+	}
 	return nil
 }
 

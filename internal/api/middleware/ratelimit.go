@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/alphabravocompany/thewolf/internal/api/response"
+	"github.com/alphabravocompany/thewolf/internal/auth"
 	"github.com/alphabravocompany/thewolf/internal/wolflog"
 )
 
@@ -111,4 +112,32 @@ func StrictRateLimiter() *RateLimiter {
 // DefaultRateLimiter returns a limiter for general API traffic.
 func DefaultRateLimiter() *RateLimiter {
 	return NewRateLimiter(10, 60, time.Second) // 60 burst, 10/s refill
+}
+
+// TokenRateLimiter returns a limiter sized for automation traffic. API
+// tokens (CLI / CI / AI agents) are bursty by nature, so they get a higher
+// ceiling than browser traffic — and a bucket keyed per token so one noisy
+// token cannot exhaust another's quota.
+func TokenRateLimiter() *RateLimiter {
+	return NewRateLimiter(50, 300, time.Second) // 300 burst, 50/s refill
+}
+
+// HandlerForToken rate-limits token-authenticated requests, keyed by token
+// ID. Requests authenticated by JWT (no token ID) pass through untouched —
+// the general IP limiter already covers them.
+func (rl *RateLimiter) HandlerForToken(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tokenID := auth.TokenIDFromContext(r.Context())
+		if tokenID == "" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if !rl.allow("tok:" + tokenID) {
+			wolflog.Warn().Str("token_id", tokenID).Str("path", r.URL.Path).Msg("token rate limit exceeded")
+			w.Header().Set("Retry-After", "1")
+			response.WriteError(w, http.StatusTooManyRequests, "rate_limited", "too many requests for this token")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }

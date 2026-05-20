@@ -4,67 +4,176 @@ import (
 	"context"
 	"net/http"
 	"strings"
+
+	"github.com/alphabravocompany/thewolf/internal/auth/apikey"
 )
 
 type contextKey string
 
-const UserContextKey contextKey = "user"
+const (
+	// UserContextKey holds the *Claims of the authenticated principal.
+	// Kept for backward compatibility with existing handlers.
+	UserContextKey contextKey = "user"
+	// AuthInfoContextKey holds the *AuthInfo (claims + scopes + token id).
+	AuthInfoContextKey contextKey = "authinfo"
+)
 
-// Middleware returns a chi-compatible middleware that validates JWT tokens.
-// It skips authentication for /api/auth/register and /api/auth/login.
+// AuthInfo is the full authenticated principal for a request: the identity
+// (Claims) plus the effective authorization scopes and, when the request
+// was authenticated by an API token rather than a JWT, the token's ID.
+type AuthInfo struct {
+	Claims  *Claims
+	Scopes  apikey.ScopeSet
+	TokenID string // empty for JWT (UI) sessions
+}
+
+// ResolvedToken is the principal an APITokenResolver returns for a valid,
+// non-revoked, non-expired API token.
+type ResolvedToken struct {
+	TokenID string
+	UserID  string
+	Email   string
+	Scopes  []string
+}
+
+// APITokenResolver looks up a plaintext API token. It must return (nil, nil)
+// when the token is unknown, revoked, or expired — never a partial result.
+type APITokenResolver func(ctx context.Context, plaintext string) (*ResolvedToken, error)
+
+var resolveAPIToken APITokenResolver
+
+// SetAPITokenResolver wires the API-token lookup. Called once at server
+// startup. When unset, only JWT credentials are accepted.
+func SetAPITokenResolver(f APITokenResolver) { resolveAPIToken = f }
+
+// Middleware validates the request credential — either a JWT (the UI) or a
+// "wolf_"-prefixed API token (CLI / CI / AI agents) — and attaches the
+// resolved principal to the request context.
 func Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Skip auth for register and login endpoints
-		path := r.URL.Path
-		if path == "/api/auth/register" || path == "/api/auth/login" || path == "/api/health" || path == "/api/version" {
+		if isPublicPath(r.URL.Path) {
 			next.ServeHTTP(w, r)
 			return
 		}
 
-		tokenStr := extractToken(r)
-		if tokenStr == "" {
-			http.Error(w, `{"error":{"code":"unauthorized","message":"missing token"}}`, http.StatusUnauthorized)
+		cred := extractToken(r)
+		if cred == "" {
+			writeAuthError(w, http.StatusUnauthorized, "unauthorized", "missing credential")
 			return
 		}
 
-		claims, err := ValidateToken(tokenStr)
-		if err != nil {
-			http.Error(w, `{"error":{"code":"unauthorized","message":"invalid token"}}`, http.StatusUnauthorized)
-			return
+		var info *AuthInfo
+		if apikey.LooksLikeToken(cred) {
+			if resolveAPIToken == nil {
+				writeAuthError(w, http.StatusUnauthorized, "unauthorized", "API tokens are not enabled")
+				return
+			}
+			rt, err := resolveAPIToken(r.Context(), cred)
+			if err != nil || rt == nil {
+				writeAuthError(w, http.StatusUnauthorized, "unauthorized", "invalid, revoked, or expired API token")
+				return
+			}
+			info = &AuthInfo{
+				Claims:  &Claims{UserID: rt.UserID, Email: rt.Email},
+				Scopes:  apikey.ScopeSet(rt.Scopes),
+				TokenID: rt.TokenID,
+			}
+		} else {
+			claims, err := ValidateToken(cred)
+			if err != nil {
+				writeAuthError(w, http.StatusUnauthorized, "unauthorized", "invalid token")
+				return
+			}
+			// JWT = the UI = fully trusted: every scope.
+			info = &AuthInfo{Claims: claims, Scopes: apikey.AdminAll()}
 		}
 
-		ctx := context.WithValue(r.Context(), UserContextKey, claims)
+		ctx := context.WithValue(r.Context(), UserContextKey, info.Claims)
+		ctx = context.WithValue(ctx, AuthInfoContextKey, info)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
-// extractToken gets the JWT from the Authorization header or wolf_token cookie.
-func extractToken(r *http.Request) string {
-	// Check Authorization header first
-	auth := r.Header.Get("Authorization")
-	if strings.HasPrefix(auth, "Bearer ") {
-		return strings.TrimPrefix(auth, "Bearer ")
+// RequireScope returns middleware that rejects the request with 403 unless
+// the authenticated principal holds every one of the required scopes.
+func RequireScope(required ...string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			info := GetAuthInfo(r.Context())
+			if info == nil {
+				writeAuthError(w, http.StatusUnauthorized, "unauthorized", "not authenticated")
+				return
+			}
+			if !info.Scopes.HasAll(required...) {
+				writeAuthError(w, http.StatusForbidden, "insufficient_scope",
+					"this endpoint requires scope: "+strings.Join(required, ", "))
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
 	}
+}
 
-	// Check cookie
-	cookie, err := r.Cookie("wolf_token")
-	if err == nil {
+// isPublicPath reports whether a path is reachable without authentication.
+// Matched on suffix so it works regardless of the /api or /api/v1 prefix.
+func isPublicPath(path string) bool {
+	for _, suffix := range []string{
+		"/auth/register", "/auth/login",
+		"/health", "/ready", "/version",
+		"/openapi.json", "/docs",
+	} {
+		if strings.HasSuffix(path, suffix) {
+			return true
+		}
+	}
+	return strings.Contains(path, "/docs/")
+}
+
+func writeAuthError(w http.ResponseWriter, status int, code, msg string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_, _ = w.Write([]byte(`{"error":{"code":"` + code + `","message":"` + msg + `"}}`))
+}
+
+// extractToken gets the credential from the Authorization header, the
+// wolf_token cookie, or a token query parameter (for direct download links).
+func extractToken(r *http.Request) string {
+	authz := r.Header.Get("Authorization")
+	if strings.HasPrefix(authz, "Bearer ") {
+		return strings.TrimPrefix(authz, "Bearer ")
+	}
+	if cookie, err := r.Cookie("wolf_token"); err == nil {
 		return cookie.Value
 	}
-
-	// Check query parameter (used for direct download links)
 	if t := r.URL.Query().Get("token"); t != "" {
 		return t
 	}
-
 	return ""
 }
 
-// GetUserFromContext retrieves the authenticated user claims from the request context.
+// GetUserFromContext retrieves the authenticated user claims.
 func GetUserFromContext(ctx context.Context) *Claims {
 	claims, ok := ctx.Value(UserContextKey).(*Claims)
 	if !ok {
 		return nil
 	}
 	return claims
+}
+
+// GetAuthInfo retrieves the full authenticated principal (claims + scopes).
+func GetAuthInfo(ctx context.Context) *AuthInfo {
+	info, ok := ctx.Value(AuthInfoContextKey).(*AuthInfo)
+	if !ok {
+		return nil
+	}
+	return info
+}
+
+// TokenIDFromContext returns the API token ID for the request, or "" if the
+// request was authenticated with a JWT.
+func TokenIDFromContext(ctx context.Context) string {
+	if info := GetAuthInfo(ctx); info != nil {
+		return info.TokenID
+	}
+	return ""
 }

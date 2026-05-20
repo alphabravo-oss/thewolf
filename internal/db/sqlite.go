@@ -40,6 +40,9 @@ var migration008SQL string
 //go:embed migrations/009_scan_tools_errors.sql
 var migration009SQL string
 
+//go:embed migrations/010_api_tokens_and_audit.sql
+var migration010SQL string
+
 // SQLiteStore implements Store using SQLite.
 type SQLiteStore struct {
 	db *sqlx.DB
@@ -112,6 +115,11 @@ func (s *SQLiteStore) Migrate() error {
 	}
 	if _, err := s.db.Exec(migration009SQL); err != nil {
 		if !strings.Contains(err.Error(), "duplicate column") {
+			return err
+		}
+	}
+	if _, err := s.db.Exec(migration010SQL); err != nil {
+		if !strings.Contains(err.Error(), "duplicate column") && !strings.Contains(err.Error(), "already exists") {
 			return err
 		}
 	}

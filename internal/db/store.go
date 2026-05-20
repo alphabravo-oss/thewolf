@@ -120,6 +120,18 @@ type Store interface {
 	// DeleteRepoCascade deletes a repo, its scans, and all related data. Returns scan IDs for artifact cleanup.
 	DeleteRepoCascade(ctx context.Context, repoID string) ([]string, error)
 
+	// API Tokens
+	CreateAPIToken(ctx context.Context, token *models.APIToken) error
+	GetAPITokenByHash(ctx context.Context, hash string) (*models.APIToken, error)
+	GetAPITokenByID(ctx context.Context, id string) (*models.APIToken, error)
+	ListAPITokensByUser(ctx context.Context, userID string) ([]models.APIToken, error)
+	RevokeAPIToken(ctx context.Context, id string) error
+	TouchAPIToken(ctx context.Context, id string) error
+
+	// Audit Log
+	AppendAuditLog(ctx context.Context, entry *models.AuditLogEntry) error
+	ListAuditLog(ctx context.Context, limit int) ([]models.AuditLogEntry, error)
+
 	// AI Prompt Templates
 	CreatePromptTemplate(ctx context.Context, tmpl *models.AIPromptTemplate) error
 	GetPromptTemplate(ctx context.Context, id string) (*models.AIPromptTemplate, error)
