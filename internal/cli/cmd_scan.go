@@ -2,6 +2,8 @@ package cli
 
 import (
 	"fmt"
+	"net/url"
+	"strconv"
 
 	"github.com/spf13/cobra"
 )
@@ -71,6 +73,31 @@ func AddScanSubcommands(scan *cobra.Command) {
 		},
 	}
 
+	var trendRepo, trendBranch string
+	var trendLimit int
+	trends := &cobra.Command{
+		Use:   "trends",
+		Short: "Scan trends over time for a repository",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if trendRepo == "" {
+				return fmt.Errorf("--repo is required")
+			}
+			q := url.Values{}
+			q.Set("repo_id", trendRepo)
+			if trendBranch != "" {
+				q.Set("branch", trendBranch)
+			}
+			if cmd.Flags().Changed("limit") {
+				q.Set("limit", strconv.Itoa(trendLimit))
+			}
+			return runRender(cmd, "GET", "/scans/trends?"+q.Encode(), nil)
+		},
+	}
+	trends.Flags().StringVar(&trendRepo, "repo", "", "repository ID (required)")
+	trends.Flags().StringVar(&trendBranch, "branch", "", "branch filter")
+	trends.Flags().IntVar(&trendLimit, "limit", 30, "max data points")
+
 	scan.AddCommand(
 		listCmd("/scans", "List scans"),
 		getCmd("/scans", "Get a scan"),
@@ -89,9 +116,6 @@ func AddScanSubcommands(scan *cobra.Command) {
 		subGetCmd("recommendations <id>", "List a scan's recommendations", "/scans/%s/recommendations"),
 		compare,
 		toolOutput,
-		&cobra.Command{
-			Use: "trends", Short: "Scan trends over time", Args: cobra.NoArgs,
-			RunE: func(cmd *cobra.Command, _ []string) error { return runRender(cmd, "GET", "/scans/trends", nil) },
-		},
+		trends,
 	)
 }
