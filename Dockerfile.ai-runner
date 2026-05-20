@@ -1,0 +1,36 @@
+# ============================================================
+# wolf AI runner image
+#
+# A writable, networked container the auto-remediation loop uses to let
+# an agentic AI CLI edit a repo. Unlike the locked-down scanner images,
+# this one mounts the repo read-WRITE and has network access so the
+# agent can reach its LLM API and package registries.
+#
+# Ships git + Node plus the openly-installable agentic CLIs. Operators
+# add other tools (cursor-agent, opencode, antigravity, ...) by layering
+# on top of this image or installing into the bind-mounted repo's
+# toolchain — wolf resolves the tool by the config-driven registry.
+# ============================================================
+FROM node:20-alpine
+
+RUN apk add --no-cache git ca-certificates bash openssh-client \
+    && addgroup -S runner \
+    && adduser -S runner -G runner
+
+# Openly-installable agentic CLIs. Pinned-major to keep the image stable;
+# failures here are non-fatal so the image still builds for raw-API use.
+RUN npm install -g @anthropic-ai/claude-code @openai/codex 2>/dev/null || \
+    echo "note: some agentic CLIs failed to install; raw-API mode still works"
+
+# Git needs a non-empty identity for the per-iteration commits the loop
+# makes; the loop also passes --author per commit.
+RUN git config --system user.name  "wolf-ai-runner" \
+    && git config --system user.email "ai-runner@thewolf.local" \
+    && git config --system --add safe.directory '*'
+
+USER runner
+WORKDIR /repo
+
+# The loop overrides CMD with the resolved AI tool invocation.
+ENTRYPOINT ["/bin/bash", "-lc"]
+CMD ["echo 'wolf AI runner — provide a command'"]
