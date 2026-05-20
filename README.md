@@ -77,6 +77,57 @@ wolf serve --bind 0.0.0.0:8778
 wolf version
 ```
 
+## API & CLI
+
+The HTTP API and the `wolf` CLI expose the same capabilities, so humans,
+CI pipelines, and AI agents can automate every part of the product.
+
+### API
+
+- All endpoints live under `/api/v1`. The legacy `/api/*` paths still work
+  via a deprecating redirect for one release.
+- Interactive documentation: **`/api/v1/docs`** (Swagger UI) and
+  `/api/v1/docs/redoc`. The raw spec is at `/api/v1/openapi.json`. These
+  are public — no credential needed to read the docs.
+- Authenticate with either a JWT (from `POST /api/v1/auth/login`, used by
+  the web UI) or a **`wolf_` API token** for non-interactive use, both
+  sent as `Authorization: Bearer <credential>`.
+
+### API tokens & scopes
+
+API tokens are scoped, revocable credentials for automation. Scopes are
+`verb:resource` strings (`read:scans`, `write:repos`, …) plus `admin`;
+`write:X` implies `read:X`. Tokens default to a 90-day expiry.
+
+```bash
+# Mint a least-privilege token (the secret is shown once)
+wolf auth token create --name ci --scope read:scans --scope write:scans
+wolf auth token list
+wolf auth token revoke <id>
+```
+
+### CLI as an API client
+
+Beyond the local `wolf scan`, every API endpoint is a `wolf <resource>
+<verb>` command. Point the CLI at a server with flags, a saved context,
+or `WOLF_SERVER` / `WOLF_TOKEN`:
+
+```bash
+# Save a reusable context (~/.wolf/cli.yaml)
+wolf config set-context prod --server https://wolf.internal --token wolf_…
+wolf config use-context prod
+
+# Drive the API — add -o json for machine-readable output
+wolf repo create --name acme --path /repos/acme
+SCAN=$(wolf scan create --repo <repo-id> -o json | jq -r .data.id)
+wolf scan watch "$SCAN"
+wolf scan findings "$SCAN" --severity high -o json
+wolf finding set-status <finding-id> --status false_positive
+```
+
+CLI output is a table on a terminal and JSON when piped. Exit codes:
+`0` success, `1` runtime error, `3` not found, `4` auth/permission.
+
 ## Architecture
 
 ```text

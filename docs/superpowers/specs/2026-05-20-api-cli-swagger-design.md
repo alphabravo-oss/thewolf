@@ -2,8 +2,16 @@
 
 - **Date:** 2026-05-20
 - **Branch:** `api-cli-robustness`
-- **Status:** Draft for review
+- **Status:** Implemented (all three phases)
 - **Author:** brainstorming session
+
+> **Implementation note:** Phase 2 was built as a **programmatic** OpenAPI
+> spec (`internal/api/openapi`) rather than `swaggo` annotation codegen. The
+> spec is assembled from a single endpoint table that is also the source for
+> a route-coverage test — an undocumented route fails the build, so the spec
+> cannot drift. This needs no codegen step, no CI diff-check, and no new
+> dependency. The served surface (`/api/v1/docs`, `/api/v1/openapi.json`) is
+> unchanged. All other design decisions were implemented as written.
 
 ---
 
