@@ -16,17 +16,18 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/db"
 )
 
-// startServer brings up a real wolf API server backed by an in-memory DB,
-// exposed over httptest, and returns its URL plus a JWT for a fresh user.
-func startServer(t *testing.T) (url, jwt string) {
+// startServerFull brings up a real wolf API server backed by an in-memory
+// DB, exposed over httptest, and returns its URL, a JWT for a fresh user,
+// that user's ID, and the store (so tests can seed records directly).
+func startServerFull(t *testing.T) (url, jwt, userID string, store db.Store) {
 	t.Helper()
-	store, err := db.NewSQLite(":memory:")
+	st, err := db.NewSQLite(":memory:")
 	if err != nil {
 		t.Fatalf("NewSQLite: %v", err)
 	}
-	t.Cleanup(func() { _ = store.Close() })
+	t.Cleanup(func() { _ = st.Close() })
 	auth.SetJWTSecret([]byte("test-secret-key-for-jwt-signing"))
-	srv := api.NewServer(store, ":0")
+	srv := api.NewServer(st, ":0")
 	ts := httptest.NewServer(srv.Router)
 	t.Cleanup(ts.Close)
 
@@ -38,11 +39,22 @@ func startServer(t *testing.T) (url, jwt string) {
 	}
 	var data struct {
 		AccessToken string `json:"access_token"`
+		User        struct {
+			ID string `json:"id"`
+		} `json:"user"`
 	}
 	if err := json.Unmarshal(env.Data, &data); err != nil || data.AccessToken == "" {
 		t.Fatalf("register did not return a token: %v", err)
 	}
-	return ts.URL, data.AccessToken
+	return ts.URL, data.AccessToken, data.User.ID, st
+}
+
+// startServer is the lightweight variant for tests that need only a URL
+// and a JWT.
+func startServer(t *testing.T) (url, jwt string) {
+	t.Helper()
+	u, j, _, _ := startServerFull(t)
+	return u, j
 }
 
 // newRootForTest builds a root command wired with the CLI command groups.

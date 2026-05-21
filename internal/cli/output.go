@@ -20,61 +20,58 @@ const (
 )
 
 // Render writes an API response envelope to w in the requested format.
+//
+// Some endpoints (scan report, SARIF, findings export) return a raw payload
+// rather than the JSON envelope — that content is emitted verbatim so those
+// commands work regardless of the requested format.
 func Render(w io.Writer, format string, env *Envelope) error {
 	if env == nil {
 		return nil
 	}
+	var data any
+	if len(env.Data) > 0 {
+		if err := json.Unmarshal(env.Data, &data); err != nil {
+			// Non-JSON payload (markdown report, SARIF XML, CSV export).
+			if _, werr := w.Write(env.Data); werr != nil {
+				return werr
+			}
+			_, werr := w.Write([]byte("\n"))
+			return werr
+		}
+	}
 	switch format {
 	case OutputJSON:
-		return renderJSON(w, env)
+		return renderJSON(w, data, env.Meta)
 	case OutputYAML:
-		return renderYAML(w, env)
+		return renderYAML(w, data)
 	default:
-		return renderTable(w, env)
+		return renderTable(w, data)
 	}
 }
 
-func renderJSON(w io.Writer, env *Envelope) error {
+func renderJSON(w io.Writer, data any, meta *ListMeta) error {
 	// Re-emit the wire envelope so CLI JSON output is byte-compatible with
 	// what the API itself returns — a script can treat them identically.
-	out := map[string]any{}
-	if env.Data != nil {
-		var d any
-		if err := json.Unmarshal(env.Data, &d); err != nil {
-			return err
-		}
-		out["data"] = d
-	}
-	if env.Meta != nil {
-		out["meta"] = env.Meta
+	out := map[string]any{"data": data}
+	if meta != nil {
+		out["meta"] = meta
 	}
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
 	return enc.Encode(out)
 }
 
-func renderYAML(w io.Writer, env *Envelope) error {
-	var d any
-	if env.Data != nil {
-		if err := json.Unmarshal(env.Data, &d); err != nil {
-			return err
-		}
-	}
+func renderYAML(w io.Writer, data any) error {
 	enc := yaml.NewEncoder(w)
 	enc.SetIndent(2)
 	defer func() { _ = enc.Close() }()
-	return enc.Encode(d)
+	return enc.Encode(data)
 }
 
-func renderTable(w io.Writer, env *Envelope) error {
-	if env.Data == nil {
+func renderTable(w io.Writer, data any) error {
+	switch v := data.(type) {
+	case nil:
 		return nil
-	}
-	var d any
-	if err := json.Unmarshal(env.Data, &d); err != nil {
-		return err
-	}
-	switch v := d.(type) {
 	case []any:
 		return renderRows(w, v)
 	case map[string]any:
