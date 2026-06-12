@@ -36,15 +36,26 @@ type ResolvedToken struct {
 	Scopes  []string
 }
 
+type ResolvedSession struct {
+	SessionID string
+	UserID    string
+	Email     string
+}
+
 // APITokenResolver looks up a plaintext API token. It must return (nil, nil)
 // when the token is unknown, revoked, or expired — never a partial result.
 type APITokenResolver func(ctx context.Context, plaintext string) (*ResolvedToken, error)
 
+type SessionResolver func(ctx context.Context, plaintext string) (*ResolvedSession, error)
+
 var resolveAPIToken APITokenResolver
+var resolveSession SessionResolver
 
 // SetAPITokenResolver wires the API-token lookup. Called once at server
 // startup. When unset, only JWT credentials are accepted.
 func SetAPITokenResolver(f APITokenResolver) { resolveAPIToken = f }
+
+func SetSessionResolver(f SessionResolver) { resolveSession = f }
 
 // Middleware validates the request credential — either a JWT (the UI) or a
 // "wolf_"-prefixed API token (CLI / CI / AI agents) — and attaches the
@@ -56,14 +67,28 @@ func Middleware(next http.Handler) http.Handler {
 			return
 		}
 
-		cred := extractToken(r)
+		cred, source := extractToken(r)
 		if cred == "" {
 			writeAuthError(w, http.StatusUnauthorized, "unauthorized", "missing credential")
 			return
 		}
 
 		var info *AuthInfo
-		if apikey.LooksLikeToken(cred) {
+		if source == credentialCookie && LooksLikeSessionToken(cred) {
+			if resolveSession == nil {
+				writeAuthError(w, http.StatusUnauthorized, "unauthorized", "browser sessions are not enabled")
+				return
+			}
+			session, err := resolveSession(r.Context(), cred)
+			if err != nil || session == nil {
+				writeAuthError(w, http.StatusUnauthorized, "unauthorized", "invalid, revoked, or expired session")
+				return
+			}
+			info = &AuthInfo{
+				Claims: &Claims{UserID: session.UserID, Email: session.Email},
+				Scopes: apikey.AdminAll(),
+			}
+		} else if apikey.LooksLikeToken(cred) {
 			if resolveAPIToken == nil {
 				writeAuthError(w, http.StatusUnauthorized, "unauthorized", "API tokens are not enabled")
 				return
@@ -118,7 +143,7 @@ func RequireScope(required ...string) func(http.Handler) http.Handler {
 // Matched on suffix so it works regardless of the /api or /api/v1 prefix.
 func isPublicPath(path string) bool {
 	for _, suffix := range []string{
-		"/auth/register", "/auth/login",
+		"/auth/register", "/auth/login", "/auth/settings",
 		"/health", "/ready", "/version",
 		"/openapi.json", "/docs",
 	} {
@@ -137,18 +162,27 @@ func writeAuthError(w http.ResponseWriter, status int, code, msg string) {
 
 // extractToken gets the credential from the Authorization header, the
 // wolf_token cookie, or a token query parameter (for direct download links).
-func extractToken(r *http.Request) string {
+type credentialSource int
+
+const (
+	credentialNone credentialSource = iota
+	credentialBearer
+	credentialCookie
+	credentialQuery
+)
+
+func extractToken(r *http.Request) (string, credentialSource) {
 	authz := r.Header.Get("Authorization")
 	if strings.HasPrefix(authz, "Bearer ") {
-		return strings.TrimPrefix(authz, "Bearer ")
+		return strings.TrimPrefix(authz, "Bearer "), credentialBearer
 	}
 	if cookie, err := r.Cookie("wolf_token"); err == nil {
-		return cookie.Value
+		return cookie.Value, credentialCookie
 	}
 	if t := r.URL.Query().Get("token"); t != "" {
-		return t
+		return t, credentialQuery
 	}
-	return ""
+	return "", credentialNone
 }
 
 // GetUserFromContext retrieves the authenticated user claims.

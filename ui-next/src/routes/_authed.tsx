@@ -3,11 +3,11 @@
 // no token is present.
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { AppShell } from "@/components/app-shell";
-import { getToken } from "@/lib/api";
+import { hasSession } from "@/lib/api";
 
 export const Route = createFileRoute("/_authed")({
-  beforeLoad: ({ location }) => {
-    if (!getToken()) {
+  beforeLoad: async ({ location }) => {
+    if (!(await hasSession())) {
       throw redirect({
         to: "/login",
         search: { from: location.pathname },

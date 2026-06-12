@@ -25,3 +25,4 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_ai_prompt_templates_lookup
 ON ai_prompt_templates (scope, scope_id, prompt_type, section);
 
 INSERT OR IGNORE INTO settings (key, value) VALUES ('ai_enabled', 'true');
+INSERT OR IGNORE INTO settings (key, value) VALUES ('registration_enabled', 'true');

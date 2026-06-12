@@ -42,7 +42,7 @@ func setupRepoRouter(t *testing.T) (*chi.Mux, db.Store, string) {
 	// Register a user and get token
 	body, _ := json.Marshal(map[string]string{
 		"email":    "repouser@test.com",
-		"password": "password123",
+		"password": "password1234",
 	})
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/register", bytes.NewReader(body))
 	w := httptest.NewRecorder()

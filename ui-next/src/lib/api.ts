@@ -6,24 +6,23 @@
 //     Go server serving the SPA from the same origin) Just Works.
 //   - typeof document checks remain because TanStack Router can prerender
 //     route trees during build.
+//   - Browser auth is carried by the server-set HttpOnly wolf_token cookie.
 import type { ApiResponse } from "./types";
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? "/api";
 
 export function getToken(): string | null {
-  if (typeof document === "undefined") return null;
-  const m = document.cookie.match(/(?:^|;\s*)wolf_token=([^;]*)/);
-  return m ? decodeURIComponent(m[1]) : null;
+  return null;
 }
 
-export function setToken(token: string) {
-  document.cookie = `wolf_token=${encodeURIComponent(token)}; path=/; max-age=${
-    60 * 60 * 24 * 7
-  }; SameSite=Lax`;
+export function setToken(_token: string) {
+  // Compatibility no-op. The API now sets the wolf_token session cookie
+  // with HttpOnly, Secure-on-HTTPS, and SameSite=Strict.
 }
 
 export function clearToken() {
-  document.cookie = "wolf_token=; path=/; max-age=0";
+  if (typeof document === "undefined") return;
+  document.cookie = "wolf_token=; path=/; max-age=0; SameSite=Strict";
 }
 
 export class ApiError extends Error {
@@ -42,23 +41,19 @@ async function request<T>(
   path: string,
   options: RequestInit = {},
 ): Promise<ApiResponse<T>> {
-  const token = getToken();
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(options.headers as Record<string, string>),
   };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
   const res = await fetch(`${BASE_URL}${path}`, {
     ...options,
     headers,
     credentials: "include",
   });
 
-  // Hard 401 on a request that *had* a token = the token is stale (server
-  // restart rotated the JWT signing secret, or the session was revoked).
-  // Drop the cookie and bounce to /login so the user gets a clean re-auth
-  // instead of an infinite console-spamming retry loop.
-  if (res.status === 401 && token) {
+  // Hard 401 = stale/missing cookie, rotated JWT signing secret, or logout.
+  // Bounce authenticated areas to /login so the user gets a clean re-auth.
+  if (res.status === 401) {
     clearToken();
     if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
       window.location.replace("/login");
@@ -92,5 +87,18 @@ export const api = {
     }),
   delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
 };
+
+export async function hasSession(): Promise<boolean> {
+  try {
+    const res = await fetch(`${BASE_URL}/auth/me`, {
+      method: "GET",
+      credentials: "include",
+      headers: { Accept: "application/json" },
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
 
 export default api;

@@ -28,10 +28,19 @@ type changePasswordRequest struct {
 	NewPassword     string `json:"new_password"`
 }
 
+const minPasswordLength = 12
+const sessionDuration = 7 * 24 * time.Hour
+const registrationEnabledSetting = "registration_enabled"
+
 func Register(w http.ResponseWriter, r *http.Request) {
 	h := DefaultHandler
 	if h == nil {
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "handler not initialized")
+		return
+	}
+
+	if !registrationAllowed(r) {
+		response.WriteError(w, http.StatusForbidden, "registration_disabled", "self-service registration is disabled")
 		return
 	}
 
@@ -46,8 +55,8 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		response.WriteError(w, http.StatusBadRequest, "validation_error", "valid email is required")
 		return
 	}
-	if len(req.Password) < 8 {
-		response.WriteError(w, http.StatusBadRequest, "validation_error", "password must be at least 8 characters")
+	if len(req.Password) < minPasswordLength {
+		response.WriteError(w, http.StatusBadRequest, "validation_error", "password must be at least 12 characters")
 		return
 	}
 
@@ -83,6 +92,10 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to generate token")
 		return
 	}
+	if err := issueSessionCookie(w, r, user.ID); err != nil {
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to create session")
+		return
+	}
 
 	response.WriteJSON(w, http.StatusCreated, response.SuccessResponse{
 		Data: map[string]interface{}{
@@ -91,6 +104,23 @@ func Register(w http.ResponseWriter, r *http.Request) {
 			"refresh_token": tokens.RefreshToken,
 		},
 	})
+}
+
+func AuthSettings(w http.ResponseWriter, r *http.Request) {
+	h := DefaultHandler
+	if h == nil {
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "handler not initialized")
+		return
+	}
+	users, err := h.Store.ListUsers(r.Context())
+	if err != nil {
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to inspect users")
+		return
+	}
+	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: map[string]any{
+		"registration_enabled": registrationSettingEnabled(r),
+		"has_users":            len(users) > 0,
+	}})
 }
 
 func Login(w http.ResponseWriter, r *http.Request) {
@@ -129,14 +159,10 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to generate token")
 		return
 	}
-
-	// Note: we used to also set an HttpOnly wolf_token cookie here, but
-	// browsers won't let the SPA's document.cookie write overwrite an
-	// existing HttpOnly cookie with the same name. The net effect was
-	// that the SPA's setToken() silently failed, getToken() returned
-	// null, and the /_authed route guard kicked the user back to /login
-	// in an infinite loop. The SPA holds the JS-readable cookie and
-	// sends the Bearer header; both auth paths the middleware accepts.
+	if err := issueSessionCookie(w, r, user.ID); err != nil {
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to create session")
+		return
+	}
 
 	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{
 		Data: map[string]interface{}{
@@ -148,23 +174,87 @@ func Login(w http.ResponseWriter, r *http.Request) {
 }
 
 func Logout(w http.ResponseWriter, r *http.Request) {
-	// Mirror the Login change: don't write an HttpOnly cookie. If a
-	// legacy HttpOnly wolf_token cookie is in flight from a previous
-	// build, expire it so we don't leave stale credentials behind.
-	// We set Secure+SameSite even on the expiry cookie because some
-	// browsers (Chrome 80+ with SameSite=None) require Secure on every
-	// Set-Cookie targeting the same name — without it, the expiry write
-	// gets dropped and the stale cookie hangs around.
+	if h := DefaultHandler; h != nil {
+		if cookie, err := r.Cookie("wolf_token"); err == nil && auth.LooksLikeSessionToken(cookie.Value) {
+			_ = h.Store.RevokeAuthSessionByHash(r.Context(), auth.HashSessionToken(cookie.Value))
+		}
+	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     "wolf_token",
 		Value:    "",
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
+		Secure:   cookieSecure(r),
+		SameSite: http.SameSiteStrictMode,
 		MaxAge:   -1,
-	}) // nosemgrep: go.lang.security.audit.net.cookie-missing-secure.cookie-missing-secure
+	})
 	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: map[string]string{"message": "logged out"}})
+}
+
+func issueSessionCookie(w http.ResponseWriter, r *http.Request, userID string) error {
+	h := DefaultHandler
+	if h == nil {
+		return http.ErrServerClosed
+	}
+	plaintext, hash, prefix, err := auth.GenerateSessionToken()
+	if err != nil {
+		return err
+	}
+	now := time.Now().UTC()
+	if err := h.Store.CreateAuthSession(r.Context(), &models.AuthSession{
+		ID:            uuid.New().String(),
+		UserID:        userID,
+		SessionHash:   hash,
+		SessionPrefix: prefix,
+		CreatedAt:     now,
+		ExpiresAt:     now.Add(sessionDuration),
+	}); err != nil {
+		return err
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     "wolf_token",
+		Value:    plaintext,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   cookieSecure(r),
+		SameSite: http.SameSiteStrictMode,
+		MaxAge:   int(sessionDuration.Seconds()),
+	})
+	return nil
+}
+
+func cookieSecure(r *http.Request) bool {
+	if r.TLS != nil {
+		return true
+	}
+	return strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
+}
+
+func registrationAllowed(r *http.Request) bool {
+	h := DefaultHandler
+	if h == nil {
+		return false
+	}
+	users, err := h.Store.ListUsers(r.Context())
+	if err != nil {
+		return false
+	}
+	if len(users) == 0 {
+		return true
+	}
+	return registrationSettingEnabled(r)
+}
+
+func registrationSettingEnabled(r *http.Request) bool {
+	h := DefaultHandler
+	if h == nil {
+		return false
+	}
+	value, err := h.Store.GetSetting(r.Context(), registrationEnabledSetting)
+	if err != nil {
+		return true
+	}
+	return !strings.EqualFold(strings.TrimSpace(value), "false")
 }
 
 func Me(w http.ResponseWriter, r *http.Request) {
@@ -208,8 +298,8 @@ func ChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(req.NewPassword) < 8 {
-		response.WriteError(w, http.StatusBadRequest, "validation_error", "new password must be at least 8 characters")
+	if len(req.NewPassword) < minPasswordLength {
+		response.WriteError(w, http.StatusBadRequest, "validation_error", "new password must be at least 12 characters")
 		return
 	}
 

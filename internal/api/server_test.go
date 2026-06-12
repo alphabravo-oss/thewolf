@@ -30,7 +30,7 @@ func newTestServer(t *testing.T) (*api.Server, db.Store, string) {
 	auth.SetJWTSecret([]byte("test-secret-key-for-jwt-signing"))
 	srv := api.NewServer(store, ":0")
 
-	body, _ := json.Marshal(map[string]string{"email": "dev@example.com", "password": "password123"})
+	body, _ := json.Marshal(map[string]string{"email": "dev@example.com", "password": "password1234"})
 	w := request(srv, http.MethodPost, "/api/v1/auth/register", "", body)
 	if w.Code != http.StatusCreated {
 		t.Fatalf("register: expected 201, got %d: %s", w.Code, w.Body.String())
@@ -210,6 +210,28 @@ func TestLegacyAPIPathRedirectsToV1(t *testing.T) {
 	}
 	if w.Header().Get("Deprecation") != "true" {
 		t.Error("legacy alias should set the Deprecation header")
+	}
+}
+
+func TestCredentialedCORSRejectsUntrustedOrigins(t *testing.T) {
+	srv, _, _ := newTestServer(t)
+
+	allowedReq := httptest.NewRequest(http.MethodOptions, "/api/v1/auth/login", nil)
+	allowedReq.Header.Set("Origin", "http://localhost:3000")
+	allowedReq.Header.Set("Access-Control-Request-Method", "POST")
+	allowed := httptest.NewRecorder()
+	srv.Router.ServeHTTP(allowed, allowedReq)
+	if got := allowed.Header().Get("Access-Control-Allow-Origin"); got != "http://localhost:3000" {
+		t.Fatalf("trusted origin should be allowed, got %q", got)
+	}
+
+	blockedReq := httptest.NewRequest(http.MethodOptions, "/api/v1/auth/login", nil)
+	blockedReq.Header.Set("Origin", "https://evil.example")
+	blockedReq.Header.Set("Access-Control-Request-Method", "POST")
+	blocked := httptest.NewRecorder()
+	srv.Router.ServeHTTP(blocked, blockedReq)
+	if got := blocked.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Fatalf("untrusted origin should not be allowed, got %q", got)
 	}
 }
 

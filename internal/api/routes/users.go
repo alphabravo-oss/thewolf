@@ -96,8 +96,8 @@ func CreateUserAdmin(w http.ResponseWriter, r *http.Request) {
 		response.WriteError(w, http.StatusBadRequest, "validation_error", "valid email is required")
 		return
 	}
-	if len(req.Password) < 8 {
-		response.WriteError(w, http.StatusBadRequest, "validation_error", "password must be at least 8 characters")
+	if len(req.Password) < minPasswordLength {
+		response.WriteError(w, http.StatusBadRequest, "validation_error", "password must be at least 12 characters")
 		return
 	}
 

@@ -93,6 +93,12 @@ const GENERAL_KNOBS = [
     type: "bool" as const,
   },
   {
+    key: "registration_enabled",
+    label: "Self-service registration",
+    help: "When off, new accounts can only be created from the Users tab. The first account can always bootstrap the system.",
+    type: "bool" as const,
+  },
+  {
     key: "scan_concurrency",
     label: "Scan concurrency",
     help: "Maximum number of scanner containers run in parallel per scan. Lower this if your host is under-provisioned for memory or CPU.",
@@ -520,7 +526,7 @@ function NewUserForm({
       className="glass-card p-4 grid md:grid-cols-[1fr_1fr_auto] gap-2 items-end"
       onSubmit={(e) => {
         e.preventDefault();
-        if (!email.trim() || password.length < 8) return;
+        if (!email.trim() || password.length < 12) return;
         onSubmit({ email: email.trim().toLowerCase(), password });
         setEmail("");
         setPassword("");
@@ -536,19 +542,20 @@ function NewUserForm({
           className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm"
         />
       </Field>
-      <Field label="Password (≥8 chars)">
+      <Field label="Password">
         <input
           required
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          minLength={8}
+          minLength={12}
           className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm"
         />
+        <span className="text-[10px] text-muted-foreground">At least 12 characters.</span>
       </Field>
       <button
         type="submit"
-        disabled={disabled || !email.trim() || password.length < 8}
+        disabled={disabled || !email.trim() || password.length < 12}
         className="inline-flex items-center gap-1 h-9 px-3 rounded-md bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
       >
         <PlusIcon className="size-4" /> Add user

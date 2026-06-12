@@ -71,7 +71,7 @@ func setupTestEnv(t *testing.T) *testEnv {
 	// Register user
 	body, _ := json.Marshal(map[string]string{
 		"email":    "testuser@example.com",
-		"password": "password123",
+		"password": "password1234",
 	})
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/register", bytes.NewReader(body))
 	w := httptest.NewRecorder()
@@ -525,9 +525,9 @@ func TestUpdateFindingStatus(t *testing.T) {
 	})
 
 	tests := []struct {
-		name       string
-		status     string
-		wantCode   int
+		name     string
+		status   string
+		wantCode int
 	}{
 		{name: "mark wont_fix", status: "wont_fix", wantCode: http.StatusOK},
 		{name: "mark false_positive", status: "false_positive", wantCode: http.StatusOK},

@@ -128,6 +128,12 @@ type Store interface {
 	RevokeAPIToken(ctx context.Context, id string) error
 	TouchAPIToken(ctx context.Context, id string) error
 
+	// Browser Sessions
+	CreateAuthSession(ctx context.Context, session *models.AuthSession) error
+	GetAuthSessionByHash(ctx context.Context, hash string) (*models.AuthSession, error)
+	RevokeAuthSessionByHash(ctx context.Context, hash string) error
+	TouchAuthSession(ctx context.Context, id string) error
+
 	// Audit Log
 	AppendAuditLog(ctx context.Context, entry *models.AuditLogEntry) error
 	ListAuditLog(ctx context.Context, limit int) ([]models.AuditLogEntry, error)

@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -81,9 +82,9 @@ func NewServer(store db.Store, addr string) *Server {
 	r.Use(middleware.MaxBodySize(1 << 20)) // 1 MB body limit
 	r.Use(generalLimiter.Handler)
 	r.Use(cors.Handler(cors.Options{
-		AllowOriginFunc: func(r *http.Request, origin string) bool { return true },
-		AllowedMethods:  []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:  []string{"Accept", "Authorization", "Content-Type"},
+		AllowOriginFunc:  allowedCORSOrigin,
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
 		AllowCredentials: true,
 		MaxAge:           300,
 	}))
@@ -98,6 +99,7 @@ func NewServer(store db.Store, addr string) *Server {
 
 	// API-token authentication: wire the resolver and the audit recorder.
 	auth.SetAPITokenResolver(makeAPITokenResolver(store))
+	auth.SetSessionResolver(makeSessionResolver(store))
 	tokenLimiter := middleware.TokenRateLimiter()
 	auditRecorder := makeAuditRecorder(store)
 
@@ -119,6 +121,7 @@ func NewServer(store db.Store, addr string) *Server {
 		// Auth endpoints with stricter rate limiting.
 		r.Group(func(r chi.Router) {
 			r.Use(authLimiter.Handler)
+			r.Get("/auth/settings", routes.AuthSettings)
 			r.Post("/auth/register", routes.Register)
 			r.Post("/auth/login", routes.Login)
 		})
@@ -300,11 +303,45 @@ func NewServer(store db.Store, addr string) *Server {
 		// WriteTimeout matches the chi router-level Timeout above; the
 		// transport-level write deadline must outlast the slowest
 		// legitimate handler (bulk scanner pulls, SSE streams).
-		WriteTimeout:      15 * time.Minute,
-		IdleTimeout:       120 * time.Second,
+		WriteTimeout: 15 * time.Minute,
+		IdleTimeout:  120 * time.Second,
 	}
 
 	return srv
+}
+
+func allowedCORSOrigin(r *http.Request, origin string) bool {
+	if origin == "" {
+		return false
+	}
+	u, err := url.Parse(origin)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return false
+	}
+	if strings.EqualFold(u.Host, r.Host) {
+		return true
+	}
+
+	allowed := []string{
+		"http://localhost:3000",
+		"http://127.0.0.1:3000",
+		"http://localhost:5173",
+		"http://127.0.0.1:5173",
+	}
+	if configured := os.Getenv("WOLF_CORS_ORIGINS"); configured != "" {
+		allowed = nil
+		for _, item := range strings.Split(configured, ",") {
+			if trimmed := strings.TrimSpace(item); trimmed != "" {
+				allowed = append(allowed, trimmed)
+			}
+		}
+	}
+	for _, item := range allowed {
+		if strings.EqualFold(origin, item) {
+			return true
+		}
+	}
+	return false
 }
 
 // Start starts the HTTP server (blocking).
@@ -363,6 +400,29 @@ func makeAPITokenResolver(store db.Store) auth.APITokenResolver {
 			UserID:  tok.UserID,
 			Email:   email,
 			Scopes:  tok.ScopeList,
+		}, nil
+	}
+}
+
+func makeSessionResolver(store db.Store) auth.SessionResolver {
+	return func(ctx context.Context, plaintext string) (*auth.ResolvedSession, error) {
+		session, err := store.GetAuthSessionByHash(ctx, auth.HashSessionToken(plaintext))
+		if err != nil {
+			return nil, nil
+		}
+		now := time.Now().UTC()
+		if session.RevokedAt != nil || !session.ExpiresAt.After(now) {
+			return nil, nil
+		}
+		user, err := store.GetUserByID(ctx, session.UserID)
+		if err != nil {
+			return nil, nil
+		}
+		_ = store.TouchAuthSession(ctx, session.ID)
+		return &auth.ResolvedSession{
+			SessionID: session.ID,
+			UserID:    user.ID,
+			Email:     user.Email,
 		}, nil
 	}
 }

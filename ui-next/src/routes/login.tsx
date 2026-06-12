@@ -5,7 +5,7 @@ import { useForm } from "@tanstack/react-form";
 import { useState } from "react";
 import { toast } from "sonner";
 import { WolfLogo } from "@/components/wolf-logo";
-import { api, getToken, setToken } from "@/lib/api";
+import { api, hasSession } from "@/lib/api";
 import type { AuthResponse } from "@/lib/types";
 
 type LoginSearch = { from?: string };
@@ -14,8 +14,8 @@ export const Route = createFileRoute("/login")({
   validateSearch: (search): LoginSearch => ({
     from: typeof search.from === "string" ? search.from : undefined,
   }),
-  beforeLoad: () => {
-    if (getToken()) throw redirect({ to: "/" });
+  beforeLoad: async () => {
+    if (await hasSession()) throw redirect({ to: "/" });
   },
   component: LoginPage,
 });
@@ -30,8 +30,7 @@ function LoginPage() {
     onSubmit: async ({ value }) => {
       setSubmitting(true);
       try {
-        const res = await api.post<AuthResponse>("/auth/login", value);
-        setToken(res.data.access_token);
+        await api.post<AuthResponse>("/auth/login", value);
         toast.success("Welcome back");
         navigate({ to: (search.from as "/" | undefined) ?? "/" });
       } catch (e) {

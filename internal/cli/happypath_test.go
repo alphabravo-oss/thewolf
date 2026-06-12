@@ -87,7 +87,7 @@ func TestHappyPathConfigResources(t *testing.T) {
 	}
 
 	// Users.
-	userID := dataID(t, mustRun(t, cli("user", "create", "--email", "u2@example.com", "--password", "password123")...))
+	userID := dataID(t, mustRun(t, cli("user", "create", "--email", "u2@example.com", "--password", "password1234")...))
 	mustRun(t, cli("user", "list")...)
 	mustRun(t, cli("user", "delete", userID)...)
 
@@ -232,5 +232,5 @@ func TestHappyPathSystemAndAuth(t *testing.T) {
 
 	mustRun(t, cli("audit", "list")...)
 	mustRun(t, cli("auth", "whoami")...)
-	mustRun(t, cli("auth", "passwd", "--current", "password123", "--new", "password456")...)
+	mustRun(t, cli("auth", "passwd", "--current", "password1234", "--new", "password4567")...)
 }

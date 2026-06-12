@@ -35,6 +35,7 @@ func Endpoints() []Endpoint {
 		{"GET", "/version", "system", "Build version info", "", "", false},
 
 		// Auth (public).
+		{"GET", "/auth/settings", "auth", "Get public authentication settings", "", "", false},
 		{"POST", "/auth/register", "auth", "Register a new user", "", "RegisterRequest", false},
 		{"POST", "/auth/login", "auth", "Log in and receive a JWT", "", "LoginRequest", false},
 
@@ -310,9 +311,9 @@ func buildComponents() map[string]any {
 	return map[string]any{
 		"securitySchemes": map[string]any{
 			"BearerAuth": map[string]any{
-				"type":         "http",
-				"scheme":       "bearer",
-				"description":  "A JWT from POST /auth/login, or a wolf_ API token from POST /auth/tokens.",
+				"type":        "http",
+				"scheme":      "bearer",
+				"description": "A JWT from POST /auth/login, or a wolf_ API token from POST /auth/tokens.",
 			},
 		},
 		"schemas": map[string]any{

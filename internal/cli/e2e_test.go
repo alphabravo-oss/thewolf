@@ -33,7 +33,7 @@ func startServerFull(t *testing.T) (url, jwt, userID string, store db.Store) {
 
 	c := NewClient(ts.URL, "")
 	env, err := c.Do(context.Background(), "POST", "/auth/register",
-		map[string]string{"email": "cli@example.com", "password": "password123"})
+		map[string]string{"email": "cli@example.com", "password": "password1234"})
 	if err != nil {
 		t.Fatalf("register: %v", err)
 	}
