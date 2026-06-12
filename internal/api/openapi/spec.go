@@ -65,6 +65,16 @@ func Endpoints() []Endpoint {
 		{"DELETE", "/repos/{id}", "repos", "Delete a repository", "write:repos", "", false},
 		{"GET", "/repos/{id}/branches", "repos", "List a repository's branches", "read:repos", "", true},
 
+		// Remote SSH nodes.
+		{"GET", "/nodes", "nodes", "List remote SSH nodes", "read:config", "", true},
+		{"POST", "/nodes", "nodes", "Create a remote SSH node", "write:config", "RemoteNodeRequest", false},
+		{"GET", "/nodes/{id}", "nodes", "Get a remote SSH node", "read:config", "", false},
+		{"PUT", "/nodes/{id}", "nodes", "Update a remote SSH node", "write:config", "RemoteNodeRequest", false},
+		{"DELETE", "/nodes/{id}", "nodes", "Delete a remote SSH node", "write:config", "", false},
+		{"POST", "/nodes/{id}/check", "nodes", "Check SSH connectivity", "write:config", "", false},
+		{"GET", "/nodes/{id}/browse", "nodes", "Browse directories on a remote SSH node", "read:config", "", false},
+		{"GET", "/nodes/{id}/git-info", "nodes", "Inspect a remote git working tree", "read:config", "", false},
+
 		// Collections.
 		{"GET", "/collections", "collections", "List collections", "read:repos", "", true},
 		{"POST", "/collections", "collections", "Create a collection", "write:repos", "CreateCollectionRequest", false},
@@ -193,7 +203,7 @@ func SpecJSON() []byte {
 }
 
 func buildTags() []any {
-	order := []string{"system", "auth", "tokens", "audit", "users", "repos", "collections", "scans", "findings", "fixes", "loops", "config", "scanners", "ai"}
+	order := []string{"system", "auth", "tokens", "audit", "users", "repos", "nodes", "collections", "scans", "findings", "fixes", "loops", "config", "scanners", "ai"}
 	tags := make([]any, 0, len(order))
 	for _, t := range order {
 		tags = append(tags, map[string]any{"name": t})
@@ -359,9 +369,14 @@ func buildComponents() map[string]any {
 			}, "name", "scopes"),
 			"CreateUserRequest": objSchema(map[string]any{"email": str, "password": str}, "email"),
 			"CreateRepoRequest": objSchema(map[string]any{
-				"url": str, "name": str, "branch": str,
-			}, "url"),
-			"UpdateRepoRequest":       objSchema(map[string]any{"name": str, "branch": str}),
+				"name": str, "source_type": str, "source_path": str, "remote_node_id": str, "remote_path": str, "default_branch": str,
+			}, "name", "source_path"),
+			"UpdateRepoRequest": objSchema(map[string]any{"name": str, "branch": str}),
+			"RemoteNodeRequest": objSchema(map[string]any{
+				"name": str, "host": str, "port": map[string]any{"type": "integer"}, "username": str,
+				"auth_type": str, "credential_secret_id": str, "known_hosts": str, "base_path": str,
+				"enabled": map[string]any{"type": "boolean"},
+			}, "name", "host", "username"),
 			"CreateCollectionRequest": objSchema(map[string]any{"name": str}, "name"),
 			"CollectionRepoRequest":   objSchema(map[string]any{"repo_id": str}, "repo_id"),
 			"CreateScanRequest": objSchema(map[string]any{

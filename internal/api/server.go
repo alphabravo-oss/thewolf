@@ -176,6 +176,17 @@ func NewServer(store db.Store, addr string) *Server {
 				r.With(rRepos).Get("/{id}/branches", routes.ListRepoBranches)
 			})
 
+			r.Route("/nodes", func(r chi.Router) {
+				r.With(rConfig).Get("/", routes.ListRemoteNodes)
+				r.With(wConfig).Post("/", routes.CreateRemoteNode)
+				r.With(rConfig).Get("/{id}", routes.GetRemoteNode)
+				r.With(wConfig).Put("/{id}", routes.UpdateRemoteNode)
+				r.With(wConfig).Delete("/{id}", routes.DeleteRemoteNode)
+				r.With(wConfig).Post("/{id}/check", routes.CheckRemoteNode)
+				r.With(rConfig).Get("/{id}/browse", routes.BrowseRemoteNode)
+				r.With(rConfig).Get("/{id}/git-info", routes.RemoteGitInfo)
+			})
+
 			r.Route("/collections", func(r chi.Router) {
 				r.With(rRepos).Get("/", routes.ListCollections)
 				r.With(wRepos).Post("/", routes.CreateCollection)

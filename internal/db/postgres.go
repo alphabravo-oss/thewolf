@@ -71,6 +71,16 @@ func (s *PostgresStore) Migrate() error {
 			return err
 		}
 	}
+	if _, err := s.db.Exec(migration008SQL); err != nil {
+		if !strings.Contains(err.Error(), "duplicate column") && !strings.Contains(err.Error(), "already exists") {
+			return err
+		}
+	}
+	if _, err := s.db.Exec(migration009SQL); err != nil {
+		if !strings.Contains(err.Error(), "duplicate column") && !strings.Contains(err.Error(), "already exists") {
+			return err
+		}
+	}
 	// Seed default setting using Postgres-compatible syntax.
 	if _, err := s.db.Exec(`INSERT INTO settings (key, value) VALUES ('ai_enabled', 'true') ON CONFLICT(key) DO NOTHING`); err != nil {
 		if !strings.Contains(err.Error(), "already exists") && !strings.Contains(err.Error(), "does not exist") {
@@ -88,6 +98,11 @@ func (s *PostgresStore) Migrate() error {
 		}
 	}
 	if _, err := s.db.Exec(migration011SQL); err != nil {
+		if !strings.Contains(err.Error(), "duplicate column") && !strings.Contains(err.Error(), "already exists") {
+			return err
+		}
+	}
+	if _, err := s.db.Exec(migration012SQL); err != nil {
 		if !strings.Contains(err.Error(), "duplicate column") && !strings.Contains(err.Error(), "already exists") {
 			return err
 		}
@@ -151,8 +166,10 @@ func (s *PostgresStore) CreateRepo(ctx context.Context, repo *models.Repo) error
 	repo.CreatedAt = now
 	repo.UpdatedAt = now
 	_, err := s.db.NamedExecContext(ctx,
-		`INSERT INTO repos (id, user_id, name, source_type, source_path, default_branch, created_at, updated_at)
-		 VALUES (:id, :user_id, :name, :source_type, :source_path, :default_branch, :created_at, :updated_at)`, repo)
+		`INSERT INTO repos (id, user_id, name, source_type, source_path, remote_node_id, remote_path,
+		 last_commit_sha, last_dirty_state, default_branch, created_at, updated_at)
+		 VALUES (:id, :user_id, :name, :source_type, :source_path, :remote_node_id, :remote_path,
+		 :last_commit_sha, :last_dirty_state, :default_branch, :created_at, :updated_at)`, repo)
 	return err
 }
 
@@ -175,7 +192,9 @@ func (s *PostgresStore) ListReposByUser(ctx context.Context, userID string) ([]m
 func (s *PostgresStore) UpdateRepo(ctx context.Context, repo *models.Repo) error {
 	repo.UpdatedAt = time.Now().UTC()
 	_, err := s.db.NamedExecContext(ctx,
-		`UPDATE repos SET name=:name, source_type=:source_type, source_path=:source_path, default_branch=:default_branch, updated_at=:updated_at WHERE id=:id`, repo)
+		`UPDATE repos SET name=:name, source_type=:source_type, source_path=:source_path,
+		 remote_node_id=:remote_node_id, remote_path=:remote_path, last_commit_sha=:last_commit_sha,
+		 last_dirty_state=:last_dirty_state, default_branch=:default_branch, updated_at=:updated_at WHERE id=:id`, repo)
 	return err
 }
 
@@ -338,12 +357,17 @@ func (s *PostgresStore) CreateScan(ctx context.Context, scan *models.Scan) error
 	now := time.Now().UTC()
 	scan.CreatedAt = now
 	scan.UpdatedAt = now
+	if scan.ToolsErrors == "" {
+		scan.ToolsErrors = "{}"
+	}
 	_, err := s.db.NamedExecContext(ctx,
 		`INSERT INTO scans (id, user_id, repo_id, collection_id, loop_id, iteration, branch, status,
-		 tools_selected, tools_completed, tools_failed, finding_count, coverage_summary, ai_enabled, ai_summary,
+		 source_type, remote_node_id, source_path, commit_sha, dirty_state, prepared_workspace,
+		 tools_selected, tools_completed, tools_failed, tools_errors, finding_count, coverage_summary, ai_enabled, ai_summary,
 		 started_at, completed_at, created_at, updated_at)
 		 VALUES (:id, :user_id, :repo_id, :collection_id, :loop_id, :iteration, :branch, :status,
-		 :tools_selected, :tools_completed, :tools_failed, :finding_count, :coverage_summary, :ai_enabled, :ai_summary,
+		 :source_type, :remote_node_id, :source_path, :commit_sha, :dirty_state, :prepared_workspace,
+		 :tools_selected, :tools_completed, :tools_failed, :tools_errors, :finding_count, :coverage_summary, :ai_enabled, :ai_summary,
 		 :started_at, :completed_at, :created_at, :updated_at)`, scan)
 	return err
 }
@@ -386,8 +410,10 @@ func (s *PostgresStore) UpdateScan(ctx context.Context, scan *models.Scan) error
 	scan.UpdatedAt = time.Now().UTC()
 	_, err := s.db.NamedExecContext(ctx,
 		`UPDATE scans SET status=:status, tools_selected=:tools_selected, tools_completed=:tools_completed,
-		 tools_failed=:tools_failed, finding_count=:finding_count, coverage_summary=:coverage_summary,
-		 ai_enabled=:ai_enabled, ai_summary=:ai_summary, started_at=:started_at, completed_at=:completed_at, updated_at=:updated_at
+		 tools_failed=:tools_failed, tools_errors=:tools_errors, finding_count=:finding_count, coverage_summary=:coverage_summary,
+		 ai_enabled=:ai_enabled, ai_summary=:ai_summary, source_type=:source_type, remote_node_id=:remote_node_id,
+		 source_path=:source_path, commit_sha=:commit_sha, dirty_state=:dirty_state, prepared_workspace=:prepared_workspace,
+		 started_at=:started_at, completed_at=:completed_at, updated_at=:updated_at
 		 WHERE id=:id`, scan)
 	return err
 }

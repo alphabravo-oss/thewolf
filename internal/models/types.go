@@ -89,6 +89,7 @@ const (
 	SourceTypeGitHub SourceType = "github"
 	SourceTypeGitLab SourceType = "gitlab"
 	SourceTypeGit    SourceType = "git"
+	SourceTypeSSH    SourceType = "ssh"
 )
 
 // Language represents a programming language.
@@ -156,6 +157,8 @@ type KeyType string
 const (
 	KeyTypeGitHubToken  KeyType = "github_token"
 	KeyTypeGitLabToken  KeyType = "gitlab_token"
+	KeyTypeSSHPrivate   KeyType = "ssh_private_key"
+	KeyTypeSSHPassword  KeyType = "ssh_password"
 	KeyTypeAnthropicKey KeyType = "anthropic_key"
 	KeyTypeOpenAIKey    KeyType = "openai_key"
 	KeyTypeCustom       KeyType = "custom"

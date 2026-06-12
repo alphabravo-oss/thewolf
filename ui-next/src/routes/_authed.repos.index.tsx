@@ -3,7 +3,7 @@
 // multiple collections.
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { GitBranchIcon, GitForkIcon, HardDriveIcon } from "lucide-react";
+import { GitBranchIcon, GitForkIcon, HardDriveIcon, ServerIcon } from "lucide-react";
 import { api } from "@/lib/api";
 import type { Repo } from "@/lib/types";
 import { ListSkeleton } from "@/components/skeleton";
@@ -53,6 +53,8 @@ function ReposPage() {
                 <div className="size-8 rounded-md bg-muted/40 grid place-items-center">
                   {r.source_type === "local" ? (
                     <HardDriveIcon className="size-4 text-muted-foreground" />
+                  ) : r.source_type === "ssh" ? (
+                    <ServerIcon className="size-4 text-muted-foreground" />
                   ) : (
                     <GitBranchIcon className="size-4 text-muted-foreground" />
                   )}

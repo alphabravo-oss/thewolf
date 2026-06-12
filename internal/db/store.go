@@ -29,6 +29,14 @@ type Store interface {
 	UpdateRepoDetection(ctx context.Context, repoID, languages, frameworks string) error
 	DeleteRepo(ctx context.Context, id string) error
 
+	// Remote Nodes
+	CreateRemoteNode(ctx context.Context, node *models.RemoteNode) error
+	GetRemoteNodeByID(ctx context.Context, id string) (*models.RemoteNode, error)
+	ListRemoteNodesByUser(ctx context.Context, userID string) ([]models.RemoteNode, error)
+	UpdateRemoteNode(ctx context.Context, node *models.RemoteNode) error
+	DeleteRemoteNode(ctx context.Context, id string) error
+	TouchRemoteNodeCheck(ctx context.Context, id, status, checkError string) error
+
 	// Collections
 	CreateCollection(ctx context.Context, col *models.Collection) error
 	GetCollectionByID(ctx context.Context, id string) (*models.Collection, error)

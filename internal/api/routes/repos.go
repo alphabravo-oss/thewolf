@@ -18,6 +18,7 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/db"
 	gitpkg "github.com/alphabravocompany/thewolf/internal/fix/git"
 	"github.com/alphabravocompany/thewolf/internal/models"
+	"github.com/alphabravocompany/thewolf/internal/remote"
 	"github.com/alphabravocompany/thewolf/internal/scan/detector"
 	"github.com/alphabravocompany/thewolf/internal/wolflog"
 )
@@ -26,6 +27,8 @@ type createRepoRequest struct {
 	Name          string            `json:"name"`
 	SourceType    models.SourceType `json:"source_type"`
 	SourcePath    string            `json:"source_path"`
+	RemoteNodeID  *string           `json:"remote_node_id,omitempty"`
+	RemotePath    string            `json:"remote_path,omitempty"`
 	DefaultBranch string            `json:"default_branch"`
 }
 
@@ -101,6 +104,24 @@ func CreateRepo(w http.ResponseWriter, r *http.Request) {
 	if req.SourceType == "" {
 		req.SourceType = models.SourceTypeLocal
 	}
+	if req.SourceType == models.SourceTypeSSH {
+		if req.RemoteNodeID == nil || *req.RemoteNodeID == "" {
+			response.WriteError(w, http.StatusBadRequest, "validation_error", "remote_node_id is required for ssh repos")
+			return
+		}
+		if req.RemotePath == "" {
+			req.RemotePath = req.SourcePath
+		}
+		if req.RemotePath == "" {
+			response.WriteError(w, http.StatusBadRequest, "validation_error", "remote_path is required for ssh repos")
+			return
+		}
+		if _, err := h.Store.GetRemoteNodeByID(r.Context(), *req.RemoteNodeID); err != nil {
+			response.WriteError(w, http.StatusBadRequest, "validation_error", "remote_node_id does not reference a configured node")
+			return
+		}
+		req.SourcePath = req.RemotePath
+	}
 	if req.DefaultBranch == "" {
 		req.DefaultBranch = "main"
 	}
@@ -111,7 +132,11 @@ func CreateRepo(w http.ResponseWriter, r *http.Request) {
 	if existing, err := h.Store.ListReposByUser(r.Context(), claims.UserID); err == nil {
 		want := normalizeSourcePath(req.SourcePath)
 		for i := range existing {
-			if normalizeSourcePath(existing[i].SourcePath) == want {
+			sameNode := true
+			if req.SourceType == models.SourceTypeSSH {
+				sameNode = existing[i].RemoteNodeID != nil && req.RemoteNodeID != nil && *existing[i].RemoteNodeID == *req.RemoteNodeID
+			}
+			if existing[i].SourceType == req.SourceType && sameNode && normalizeSourcePath(existing[i].SourcePath) == want {
 				response.WriteJSON(w, http.StatusOK, response.SuccessResponse{
 					Data: createRepoResult{Repo: &existing[i], Deduplicated: true},
 				})
@@ -127,6 +152,8 @@ func CreateRepo(w http.ResponseWriter, r *http.Request) {
 		Name:          req.Name,
 		SourceType:    req.SourceType,
 		SourcePath:    req.SourcePath,
+		RemoteNodeID:  req.RemoteNodeID,
+		RemotePath:    req.RemotePath,
 		DefaultBranch: req.DefaultBranch,
 		CreatedAt:     now,
 		UpdatedAt:     now,
@@ -137,8 +164,11 @@ func CreateRepo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Run detection asynchronously so the response isn't blocked.
-	go runDetection(h.Store, repo.ID, repo.SourcePath)
+	// Run local detection asynchronously so the response isn't blocked.
+	// SSH repos are detected when a scan prepares a local archive workspace.
+	if repo.SourceType == models.SourceTypeLocal {
+		go runDetection(h.Store, repo.ID, repo.SourcePath)
+	}
 
 	response.WriteJSON(w, http.StatusCreated, response.SuccessResponse{
 		Data: createRepoResult{Repo: repo},
@@ -164,7 +194,6 @@ func GetRepo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-
 	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: repo})
 }
 
@@ -186,7 +215,6 @@ func UpdateRepo(w http.ResponseWriter, r *http.Request) {
 		response.WriteError(w, http.StatusNotFound, "not_found", "repo not found")
 		return
 	}
-
 
 	var req updateRepoRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -269,15 +297,35 @@ func ListRepoBranches(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	branches, err := gitpkg.ListBranches(repo.SourcePath)
-	if err != nil {
-		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to list branches: "+err.Error())
-		return
+	var branches []string
+	current := ""
+	if repo.SourceType == models.SourceTypeSSH {
+		if repo.RemoteNodeID == nil {
+			response.WriteError(w, http.StatusBadRequest, "validation_error", "ssh repo has no remote node")
+			return
+		}
+		node, err := h.Store.GetRemoteNodeByID(r.Context(), *repo.RemoteNodeID)
+		if err != nil {
+			response.WriteError(w, http.StatusNotFound, "not_found", "remote node not found")
+			return
+		}
+		info, err := (remote.Service{Store: h.Store}).GitInfo(r.Context(), node, repo.SourcePath)
+		if err != nil {
+			response.WriteError(w, http.StatusBadGateway, "ssh_git_info_failed", "failed to list remote branches: "+err.Error())
+			return
+		}
+		branches = info.Branches
+		current = info.CurrentBranch
+	} else {
+		var err error
+		branches, err = gitpkg.ListBranches(repo.SourcePath)
+		if err != nil {
+			response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to list branches: "+err.Error())
+			return
+		}
+		current, _ = gitpkg.CurrentBranch(repo.SourcePath)
 	}
 	sort.Strings(branches)
-
-	// Determine current branch
-	current, _ := gitpkg.CurrentBranch(repo.SourcePath)
 
 	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{
 		Data: map[string]interface{}{

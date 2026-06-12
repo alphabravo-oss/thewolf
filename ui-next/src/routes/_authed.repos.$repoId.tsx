@@ -9,6 +9,7 @@ import {
   Trash2Icon,
   GitBranchIcon,
   HardDriveIcon,
+  ServerIcon,
 } from "lucide-react";
 import {
   Bar,
@@ -136,6 +137,8 @@ function RepoDetailPage() {
           <h1 className="text-xl font-semibold flex items-center gap-2">
             {r.source_type === "local" ? (
               <HardDriveIcon className="size-5 text-muted-foreground" />
+            ) : r.source_type === "ssh" ? (
+              <ServerIcon className="size-5 text-muted-foreground" />
             ) : (
               <GitBranchIcon className="size-5 text-muted-foreground" />
             )}
@@ -183,6 +186,14 @@ function RepoDetailPage() {
       <section className="glass-card p-5 grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
         <Field label="Source type" value={r.source_type} mono />
         <Field label="Default branch" value={r.default_branch || "main"} />
+        {r.source_type === "ssh" && (
+          <>
+            <Field label="Remote node" value={r.remote_node_id || "—"} mono />
+            <Field label="Remote path" value={r.remote_path || r.source_path} mono />
+            <Field label="Last commit" value={r.last_commit_sha || "—"} mono />
+            <Field label="Dirty state" value={r.last_dirty_state || "unknown"} />
+          </>
+        )}
         <Field
           label="Languages"
           value={

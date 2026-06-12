@@ -12,6 +12,7 @@ import {
   KeyIcon,
   Loader2Icon,
   PlusIcon,
+  ServerIcon,
   SettingsIcon,
   ShieldIcon,
   Trash2Icon,
@@ -20,22 +21,24 @@ import {
 import { useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import type { RemoteNode } from "@/lib/types";
 
 export const Route = createFileRoute("/_authed/settings")({
   validateSearch: (s: Record<string, unknown>) => ({
     tab:
-      typeof s.tab === "string" && /^(general|secrets|users|scanners)$/.test(s.tab)
+      typeof s.tab === "string" && /^(general|secrets|nodes|users|scanners)$/.test(s.tab)
         ? (s.tab as TabKey)
         : ("general" as TabKey),
   }),
   component: SettingsPage,
 });
 
-type TabKey = "general" | "secrets" | "users" | "scanners";
+type TabKey = "general" | "secrets" | "nodes" | "users" | "scanners";
 
 const TABS: { key: TabKey; label: string; Icon: typeof SettingsIcon }[] = [
   { key: "general", label: "General", Icon: SettingsIcon },
   { key: "secrets", label: "Secrets", Icon: KeyIcon },
+  { key: "nodes", label: "Nodes", Icon: ServerIcon },
   { key: "users", label: "Users", Icon: UsersIcon },
   { key: "scanners", label: "Scanners", Icon: ShieldIcon },
 ];
@@ -69,6 +72,7 @@ function SettingsPage() {
 
       {tab === "general" && <GeneralTab />}
       {tab === "secrets" && <SecretsTab />}
+      {tab === "nodes" && <NodesTab />}
       {tab === "users" && <UsersTab />}
       {tab === "scanners" && <ScannersTab />}
     </div>
@@ -105,6 +109,13 @@ const GENERAL_KNOBS = [
     type: "int" as const,
     min: 1,
     max: 32,
+  },
+  {
+    key: "remote_scan_dirty_policy",
+    label: "Remote dirty worktrees",
+    help: "Default fail blocks SSH scans when uncommitted remote changes would be omitted from git archive. Allow records the dirty state but scans committed content only.",
+    type: "choice" as const,
+    options: ["fail", "allow"],
   },
 ];
 
@@ -153,6 +164,19 @@ function GeneralTab() {
                 onChange={(v) => m.mutate({ [knob.key]: v ? "true" : "false" })}
                 disabled={m.isPending}
               />
+            ) : knob.type === "choice" ? (
+              <select
+                value={current || knob.options[0]}
+                onChange={(e) => m.mutate({ [knob.key]: e.target.value })}
+                disabled={m.isPending}
+                className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm"
+              >
+                {knob.options.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </select>
             ) : (
               <IntInput
                 value={current}
@@ -259,6 +283,8 @@ interface MaskedSecret {
 const KEY_TYPES = [
   { value: "github_token", label: "GitHub token" },
   { value: "gitlab_token", label: "GitLab token" },
+  { value: "ssh_private_key", label: "SSH private key" },
+  { value: "ssh_password", label: "SSH password" },
   { value: "anthropic_key", label: "Anthropic API key" },
   { value: "openai_key", label: "OpenAI API key" },
   { value: "custom", label: "Custom" },
@@ -410,6 +436,244 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <span className="block text-xs text-muted-foreground mb-1">{label}</span>
       {children}
     </label>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Nodes — remote Linux hosts scanned over SSH. Credentials are encrypted
+// secrets; node records only reference the selected secret.
+// ---------------------------------------------------------------------------
+
+function NodesTab() {
+  const qc = useQueryClient();
+  const nodes = useQuery({
+    queryKey: ["remote-nodes"],
+    queryFn: async () => {
+      const r = await api.get<RemoteNode[]>("/nodes");
+      return r.data ?? [];
+    },
+  });
+  const secrets = useQuery({
+    queryKey: ["secrets"],
+    queryFn: async () => {
+      const r = await api.get<MaskedSecret[]>("/config/secrets");
+      return r.data ?? [];
+    },
+  });
+  const create = useMutation({
+    mutationFn: (body: Record<string, unknown>) => api.post("/nodes", body),
+    onSuccess: () => {
+      toast.success("Node added");
+      qc.invalidateQueries({ queryKey: ["remote-nodes"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Create failed"),
+  });
+  const update = useMutation({
+    mutationFn: ({ id, body }: { id: string; body: Record<string, unknown> }) =>
+      api.put(`/nodes/${id}`, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["remote-nodes"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Update failed"),
+  });
+  const check = useMutation({
+    mutationFn: (id: string) => api.post(`/nodes/${id}/check`),
+    onSuccess: () => {
+      toast.success("Node check passed");
+      qc.invalidateQueries({ queryKey: ["remote-nodes"] });
+    },
+    onError: (e) => {
+      toast.error(e instanceof Error ? e.message : "Node check failed");
+      qc.invalidateQueries({ queryKey: ["remote-nodes"] });
+    },
+  });
+  const del = useMutation({
+    mutationFn: (id: string) => api.delete(`/nodes/${id}`),
+    onSuccess: () => {
+      toast.success("Node deleted");
+      qc.invalidateQueries({ queryKey: ["remote-nodes"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Delete failed"),
+  });
+
+  return (
+    <section className="space-y-4">
+      <NewNodeForm
+        secrets={secrets.data ?? []}
+        disabled={create.isPending}
+        onSubmit={(body) => create.mutate(body)}
+      />
+      <div className="glass-card overflow-hidden">
+        {nodes.isLoading ? (
+          <div className="p-5 text-sm text-muted-foreground">Loading…</div>
+        ) : !nodes.data || nodes.data.length === 0 ? (
+          <div className="p-5 text-sm text-muted-foreground">No remote nodes configured.</div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="text-xs text-muted-foreground border-b border-border/30">
+              <tr>
+                <th className="text-left px-4 py-2">Name</th>
+                <th className="text-left px-4 py-2">Host</th>
+                <th className="text-left px-4 py-2">Auth</th>
+                <th className="text-left px-4 py-2">Status</th>
+                <th className="text-right px-4 py-2 w-28"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {nodes.data.map((n) => (
+                <tr key={n.id} className="border-t border-border/20">
+                  <td className="px-4 py-2">
+                    <div className="font-medium">{n.name}</div>
+                    {n.base_path && (
+                      <div className="text-xs text-muted-foreground font-mono">{n.base_path}</div>
+                    )}
+                  </td>
+                  <td className="px-4 py-2 font-mono text-xs">
+                    {n.username}@{n.host}:{n.port || 22}
+                  </td>
+                  <td className="px-4 py-2 text-xs">{n.auth_type}</td>
+                  <td className="px-4 py-2 text-xs">
+                    <span className={n.enabled ? "text-emerald-500" : "text-muted-foreground"}>
+                      {n.enabled ? "enabled" : "disabled"}
+                    </span>
+                    {n.last_check_status && (
+                      <span className="text-muted-foreground"> · {n.last_check_status}</span>
+                    )}
+                    {n.last_check_error && (
+                      <div className="text-destructive truncate max-w-[240px]" title={n.last_check_error}>
+                        {n.last_check_error}
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-4 py-2">
+                    <div className="flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => check.mutate(n.id)}
+                        disabled={check.isPending}
+                        className="size-8 grid place-items-center rounded-md hover:bg-muted/50 disabled:opacity-50"
+                        aria-label="Check node"
+                        title="Check node"
+                      >
+                        {check.isPending ? <Loader2Icon className="size-4 animate-spin" /> : <CheckIcon className="size-4" />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => update.mutate({ id: n.id, body: { enabled: !n.enabled } })}
+                        disabled={update.isPending}
+                        className="h-8 px-2 rounded-md border border-border/40 text-xs hover:bg-muted/40 disabled:opacity-50"
+                      >
+                        {n.enabled ? "Disable" : "Enable"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (window.confirm(`Delete node "${n.name}"? Repos using it must be removed first.`)) del.mutate(n.id);
+                        }}
+                        disabled={del.isPending}
+                        className="size-8 grid place-items-center rounded-md hover:bg-destructive/10 text-destructive disabled:opacity-50"
+                        aria-label="Delete node"
+                      >
+                        <Trash2Icon className="size-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function NewNodeForm({
+  secrets,
+  disabled,
+  onSubmit,
+}: {
+  secrets: MaskedSecret[];
+  disabled?: boolean;
+  onSubmit: (body: Record<string, unknown>) => void;
+}) {
+  const [name, setName] = useState("");
+  const [host, setHost] = useState("");
+  const [port, setPort] = useState("22");
+  const [username, setUsername] = useState("");
+  const [authType, setAuthType] = useState<"private_key" | "password">("private_key");
+  const [secretId, setSecretId] = useState("");
+  const [knownHosts, setKnownHosts] = useState("");
+  const [basePath, setBasePath] = useState("");
+  const allowedSecrets = secrets.filter((s) =>
+    authType === "private_key" ? s.key_type === "ssh_private_key" : s.key_type === "ssh_password",
+  );
+
+  return (
+    <form
+      className="glass-card p-4 space-y-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!name.trim() || !host.trim() || !username.trim()) return;
+        onSubmit({
+          name: name.trim(),
+          host: host.trim(),
+          port: Number.parseInt(port, 10) || 22,
+          username: username.trim(),
+          auth_type: authType,
+          credential_secret_id: secretId || undefined,
+          known_hosts: knownHosts.trim(),
+          base_path: basePath.trim(),
+          enabled: true,
+        });
+        setName("");
+        setHost("");
+        setUsername("");
+        setSecretId("");
+        setKnownHosts("");
+        setBasePath("");
+      }}
+    >
+      <div className="grid md:grid-cols-[1fr_1fr_90px_1fr] gap-2">
+        <Field label="Name">
+          <input required value={name} onChange={(e) => setName(e.target.value)} placeholder="dev-box" className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm" />
+        </Field>
+        <Field label="Host">
+          <input required value={host} onChange={(e) => setHost(e.target.value)} placeholder="dev.example.com" className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm font-mono" />
+        </Field>
+        <Field label="Port">
+          <input required value={port} onChange={(e) => setPort(e.target.value)} inputMode="numeric" className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm" />
+        </Field>
+        <Field label="Username">
+          <input required value={username} onChange={(e) => setUsername(e.target.value)} placeholder="alice" className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm" />
+        </Field>
+      </div>
+      <div className="grid md:grid-cols-[180px_1fr_1fr_auto] gap-2 items-end">
+        <Field label="Auth">
+          <select value={authType} onChange={(e) => { setAuthType(e.target.value as "private_key" | "password"); setSecretId(""); }} className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm">
+            <option value="private_key">Private key</option>
+            <option value="password">Password</option>
+          </select>
+        </Field>
+        <Field label="Credential secret">
+          <select value={secretId} onChange={(e) => setSecretId(e.target.value)} className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm">
+            <option value="">Select secret…</option>
+            {allowedSecrets.map((s) => (
+              <option key={s.id} value={s.id}>{s.key_name}</option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Base path">
+          <input value={basePath} onChange={(e) => setBasePath(e.target.value)} placeholder="/home/alice/code" className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm font-mono" />
+        </Field>
+        <button type="submit" disabled={disabled || !secretId || !name.trim() || !host.trim() || !username.trim()} className="inline-flex items-center gap-1 h-9 px-3 rounded-md bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50">
+          <PlusIcon className="size-4" /> Add
+        </button>
+      </div>
+      <Field label="Known hosts">
+        <textarea value={knownHosts} onChange={(e) => setKnownHosts(e.target.value)} placeholder="dev.example.com ssh-ed25519 AAAA…" className="w-full min-h-20 px-2 py-2 rounded-md bg-muted/40 border border-border/40 text-sm font-mono" />
+      </Field>
+    </form>
   );
 }
 

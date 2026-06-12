@@ -4,17 +4,23 @@ import "time"
 
 // Scan represents a single scan operation.
 type Scan struct {
-	ID              string     `json:"id" db:"id"`
-	UserID          string     `json:"user_id" db:"user_id"`
-	RepoID          string     `json:"repo_id" db:"repo_id"`
-	CollectionID    *string    `json:"collection_id,omitempty" db:"collection_id"`
-	LoopID          *string    `json:"loop_id,omitempty" db:"loop_id"`
-	Iteration       *int       `json:"iteration,omitempty" db:"iteration"`
-	Branch          string     `json:"branch" db:"branch"`
-	Status          ScanStatus `json:"status" db:"status"`
-	ToolsSelected   string     `json:"tools_selected" db:"tools_selected"`
-	ToolsCompleted  string     `json:"tools_completed" db:"tools_completed"`
-	ToolsFailed     string     `json:"tools_failed" db:"tools_failed"`
+	ID                string     `json:"id" db:"id"`
+	UserID            string     `json:"user_id" db:"user_id"`
+	RepoID            string     `json:"repo_id" db:"repo_id"`
+	CollectionID      *string    `json:"collection_id,omitempty" db:"collection_id"`
+	LoopID            *string    `json:"loop_id,omitempty" db:"loop_id"`
+	Iteration         *int       `json:"iteration,omitempty" db:"iteration"`
+	Branch            string     `json:"branch" db:"branch"`
+	SourceType        SourceType `json:"source_type,omitempty" db:"source_type"`
+	RemoteNodeID      *string    `json:"remote_node_id,omitempty" db:"remote_node_id"`
+	SourcePath        string     `json:"source_path,omitempty" db:"source_path"`
+	CommitSHA         string     `json:"commit_sha,omitempty" db:"commit_sha"`
+	DirtyState        string     `json:"dirty_state,omitempty" db:"dirty_state"`
+	PreparedWorkspace string     `json:"prepared_workspace,omitempty" db:"prepared_workspace"`
+	Status            ScanStatus `json:"status" db:"status"`
+	ToolsSelected     string     `json:"tools_selected" db:"tools_selected"`
+	ToolsCompleted    string     `json:"tools_completed" db:"tools_completed"`
+	ToolsFailed       string     `json:"tools_failed" db:"tools_failed"`
 	// ToolsErrors is a JSON-encoded map {toolName: errorMessage} so the
 	// UI can surface *why* a given tool failed without digging into log
 	// artifacts. Empty "{}" when no failures.

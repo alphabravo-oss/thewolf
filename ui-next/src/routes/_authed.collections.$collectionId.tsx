@@ -19,7 +19,7 @@ import {
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { api, ApiError } from "@/lib/api";
-import type { Collection, Repo, Scan } from "@/lib/types";
+import type { Collection, RemoteNode, Repo, Scan } from "@/lib/types";
 import { CardSkeleton } from "@/components/skeleton";
 import { BrowsePathModal } from "@/components/browse-path-modal";
 
@@ -323,7 +323,7 @@ function EditHeader({
 
 // ── Add-repo panel ────────────────────────────────────────────
 
-type AddMode = "existing" | "local" | "git";
+type AddMode = "existing" | "local" | "git" | "ssh";
 
 function AddRepoPanel({
   collectionId,
@@ -339,6 +339,7 @@ function AddRepoPanel({
   const [pickedRepoId, setPickedRepoId] = useState<string>("");
   const [name, setName] = useState("");
   const [sourcePath, setSourcePath] = useState("");
+  const [remoteNodeId, setRemoteNodeId] = useState("");
   const [defaultBranch, setDefaultBranch] = useState("main");
   const [browseOpen, setBrowseOpen] = useState(false);
 
@@ -352,14 +353,18 @@ function AddRepoPanel({
   }, [sourcePath]);
 
   const gitInfo = useQuery({
-    queryKey: ["git-info", debouncedPath],
+    queryKey: ["git-info", mode, remoteNodeId, debouncedPath],
     queryFn: async () => {
-      const r = await api.get<GitInfo>(
-        `/git-info?path=${encodeURIComponent(debouncedPath)}`,
-      );
+      const endpoint =
+        mode === "ssh"
+          ? `/nodes/${remoteNodeId}/git-info?path=${encodeURIComponent(debouncedPath)}`
+          : `/git-info?path=${encodeURIComponent(debouncedPath)}`;
+      const r = await api.get<GitInfo>(endpoint);
       return r.data;
     },
-    enabled: mode === "local" && debouncedPath.length > 0,
+    enabled:
+      (mode === "local" && debouncedPath.length > 0) ||
+      (mode === "ssh" && remoteNodeId.length > 0 && debouncedPath.length > 0),
     retry: false,
   });
 
@@ -381,6 +386,15 @@ function AddRepoPanel({
     enabled: mode === "existing",
   });
 
+  const nodes = useQuery({
+    queryKey: ["remote-nodes", "enabled"],
+    queryFn: async () => {
+      const r = await api.get<RemoteNode[]>("/nodes");
+      return (r.data ?? []).filter((n) => n.enabled);
+    },
+    enabled: mode === "ssh",
+  });
+
   const eligible = (repos.data ?? []).filter((r) => !existingRepoIds.has(r.id));
 
   const link = useMutation({
@@ -400,9 +414,11 @@ function AddRepoPanel({
   const createAndLink = useMutation({
     mutationFn: async (body: {
       name: string;
-      source_type: "local" | "git";
+      source_type: "local" | "git" | "ssh";
       source_path: string;
       default_branch: string;
+      remote_node_id?: string;
+      remote_path?: string;
     }) => {
       // POST /repos returns the existing repo with deduplicated=true when
       // a repo for this path already exists — linking still works on the
@@ -457,6 +473,7 @@ function AddRepoPanel({
             ["existing", "Existing repo"],
             ["local", "Local path"],
             ["git", "Remote git URL"],
+            ["ssh", "SSH node"],
           ] as const
         ).map(([m, label]) => (
           <button
@@ -488,8 +505,7 @@ function AddRepoPanel({
           ) : eligible.length === 0 ? (
             <div className="text-xs text-muted-foreground">
               No eligible repos. Either every repo is already in this collection,
-              or you haven't created any yet — try <em>Local path</em> or
-              <em> Remote git URL</em> instead.
+              or you haven't created any yet — try another source type instead.
             </div>
           ) : (
             <select
@@ -534,15 +550,18 @@ function AddRepoPanel({
         />
       )}
 
-      {(mode === "local" || mode === "git") && (
+      {(mode === "local" || mode === "git" || mode === "ssh") && (
         <form
           onSubmit={(e) => {
             e.preventDefault();
             if (!name.trim() || !sourcePath.trim()) return;
+            if (mode === "ssh" && !remoteNodeId) return;
             createAndLink.mutate({
               name: name.trim(),
               source_type: mode,
               source_path: sourcePath.trim(),
+              remote_node_id: mode === "ssh" ? remoteNodeId : undefined,
+              remote_path: mode === "ssh" ? sourcePath.trim() : undefined,
               default_branch: defaultBranch.trim() || "main",
             });
           }}
@@ -555,13 +574,31 @@ function AddRepoPanel({
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
-              placeholder={mode === "local" ? "thewolf" : "owner/repo"}
+              placeholder={mode === "local" ? "thewolf" : mode === "ssh" ? "remote-repo" : "owner/repo"}
               className="mt-0.5 w-full h-8 px-2 rounded-md bg-background border border-muted/40 text-sm"
             />
           </label>
+          {mode === "ssh" && (
+            <label className="block">
+              <span className="text-[11px] text-muted-foreground">Node</span>
+              <select
+                value={remoteNodeId}
+                onChange={(e) => setRemoteNodeId(e.target.value)}
+                required
+                className="mt-0.5 w-full h-8 px-2 rounded-md bg-background border border-muted/40 text-sm"
+              >
+                <option value="">Pick a node…</option>
+                {(nodes.data ?? []).map((n) => (
+                  <option key={n.id} value={n.id}>
+                    {n.name} — {n.username}@{n.host}:{n.port || 22}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <label className="block">
             <span className="text-[11px] text-muted-foreground">
-              {mode === "local" ? "Absolute path on host" : "Git URL"}
+              {mode === "local" ? "Absolute path on host" : mode === "ssh" ? "Absolute path on remote node" : "Git URL"}
             </span>
             <div className="mt-0.5 flex gap-2">
               <input
@@ -572,7 +609,9 @@ function AddRepoPanel({
                 placeholder={
                   mode === "local"
                     ? "/Users/you/code/myrepo"
-                    : "https://github.com/org/repo.git"
+                    : mode === "ssh"
+                      ? "/home/you/code/myrepo"
+                      : "https://github.com/org/repo.git"
                 }
                 className="flex-1 h-8 px-2 rounded-md bg-background border border-muted/40 text-sm font-mono"
               />
@@ -616,10 +655,28 @@ function AddRepoPanel({
                 )}
               </>
             )}
+            {mode === "ssh" && debouncedPath.length > 0 && (
+              <div className="mt-1 text-[11px]">
+                {gitInfo.isFetching ? (
+                  <span className="text-muted-foreground">Checking remote…</span>
+                ) : gitInfo.data?.is_git ? (
+                  <span className="inline-flex items-center gap-1 text-primary">
+                    <GitBranchIcon className="size-3" />
+                    Remote git repo · {gitInfo.data.branches?.length ?? 0} branches
+                  </span>
+                ) : gitInfo.isError ? (
+                  <span className="text-destructive">
+                    {gitInfo.error instanceof Error ? gitInfo.error.message : "Remote check failed"}
+                  </span>
+                ) : gitInfo.data ? (
+                  <span className="text-muted-foreground">Not a git repo</span>
+                ) : null}
+              </div>
+            )}
           </label>
           <label className="block">
             <span className="text-[11px] text-muted-foreground">Default branch</span>
-            {mode === "local" && gitInfo.data?.is_git && gitInfo.data.branches?.length ? (
+            {(mode === "local" || mode === "ssh") && gitInfo.data?.is_git && gitInfo.data.branches?.length ? (
               <select
                 value={defaultBranch}
                 onChange={(e) => setDefaultBranch(e.target.value)}
@@ -645,7 +702,7 @@ function AddRepoPanel({
             <button
               type="submit"
               disabled={
-                createAndLink.isPending || !name.trim() || !sourcePath.trim()
+                createAndLink.isPending || !name.trim() || !sourcePath.trim() || (mode === "ssh" && !remoteNodeId)
               }
               className="h-8 px-3 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-50"
             >

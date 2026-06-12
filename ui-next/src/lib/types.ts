@@ -46,11 +46,13 @@ export type LoopStatus =
 
 export type RescanStrategy = "full" | "targeted" | "smart";
 
-export type SourceType = "local" | "github" | "gitlab" | "git";
+export type SourceType = "local" | "github" | "gitlab" | "git" | "ssh";
 
 export type SecretKeyType =
   | "github_token"
   | "gitlab_token"
+  | "ssh_private_key"
+  | "ssh_password"
   | "anthropic_key"
   | "openai_key"
   | "custom";
@@ -74,10 +76,33 @@ export interface Repo {
   name: string;
   source_type: SourceType;
   source_path: string;
+  remote_node_id?: string;
+  remote_path?: string;
+  last_commit_sha?: string;
+  last_dirty_state?: string;
   default_branch: string;
   detected_languages: string;
   detected_frameworks: string;
   detected_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RemoteNode {
+  id: string;
+  user_id: string;
+  name: string;
+  host: string;
+  port: number;
+  username: string;
+  auth_type: "private_key" | "password";
+  credential_secret_id?: string;
+  known_hosts?: string;
+  base_path?: string;
+  enabled: boolean;
+  last_check_status?: string;
+  last_check_error?: string;
+  last_checked_at?: string;
   created_at: string;
   updated_at: string;
 }
@@ -174,6 +199,12 @@ export interface Scan {
   loop_id?: string;
   iteration?: number;
   branch: string;
+  source_type?: SourceType;
+  remote_node_id?: string;
+  source_path?: string;
+  commit_sha?: string;
+  dirty_state?: string;
+  prepared_workspace?: string;
   status: ScanStatus;
   // The API stores these as JSON-encoded strings, NOT arrays. Use
   // parseToolList() to get a real string[] for length / iteration.

@@ -22,17 +22,18 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/artifacts"
 	"github.com/alphabravocompany/thewolf/internal/auth"
 	"github.com/alphabravocompany/thewolf/internal/models"
-	"github.com/alphabravocompany/thewolf/internal/scan/detector"
-	"github.com/alphabravocompany/thewolf/internal/wolflog"
+	promptpkg "github.com/alphabravocompany/thewolf/internal/prompt"
 	"github.com/alphabravocompany/thewolf/internal/scan/coverage"
+	"github.com/alphabravocompany/thewolf/internal/scan/detector"
 	"github.com/alphabravocompany/thewolf/internal/scan/enricher"
 	"github.com/alphabravocompany/thewolf/internal/scan/mapper"
 	"github.com/alphabravocompany/thewolf/internal/scan/report"
 	"github.com/alphabravocompany/thewolf/internal/scan/runner"
-	"github.com/alphabravocompany/thewolf/internal/scan/suppress"
-	promptpkg "github.com/alphabravocompany/thewolf/internal/prompt"
 	"github.com/alphabravocompany/thewolf/internal/scan/scorer"
+	"github.com/alphabravocompany/thewolf/internal/scan/suppress"
+	"github.com/alphabravocompany/thewolf/internal/scantarget"
 	"github.com/alphabravocompany/thewolf/internal/secrets"
+	"github.com/alphabravocompany/thewolf/internal/wolflog"
 )
 
 // SSEBroker is the package-level SSE broker for scan streaming.
@@ -146,6 +147,9 @@ func CreateScan(w http.ResponseWriter, r *http.Request) {
 		RepoID:        req.RepoID,
 		CollectionID:  req.CollectionID,
 		Branch:        branch,
+		SourceType:    repo.SourceType,
+		RemoteNodeID:  repo.RemoteNodeID,
+		SourcePath:    repo.SourcePath,
 		Status:        models.ScanStatusPending,
 		ToolsSelected: string(toolsSelected),
 		AIEnabled:     req.AIEnabled,
@@ -158,15 +162,15 @@ func CreateScan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go executeScan(h, scan.ID, claims.UserID, repo.SourcePath, branch, req)
+	go executeScan(h, scan.ID, claims.UserID, repo.ID, branch, req)
 
 	response.WriteJSON(w, http.StatusCreated, response.SuccessResponse{Data: scan})
 }
 
 // executeScan runs the scan in a background goroutine.
-func executeScan(h *Handler, scanID, userID, repoPath, branch string, req createScanRequest) {
+func executeScan(h *Handler, scanID, userID, repoID, branch string, req createScanRequest) {
 	log := wolflog.Component("scan")
-	log.Info().Str("scan_id", scanID).Str("repo", repoPath).Str("branch", branch).Msg("scan starting")
+	log.Info().Str("scan_id", scanID).Str("repo_id", repoID).Str("branch", branch).Msg("scan starting")
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -199,6 +203,44 @@ func executeScan(h *Handler, scanID, userID, repoPath, branch string, req create
 		return
 	}
 
+	topic := "scan:" + scanID
+
+	repo, err := h.Store.GetRepoByID(ctx, repoID)
+	if err != nil {
+		failPreparedScan(h, scan, topic, fmt.Errorf("load repo: %w", err))
+		return
+	}
+	prepared, err := (scantarget.Resolver{Store: h.Store}).Prepare(ctx, repo, branch)
+	if err != nil {
+		failPreparedScan(h, scan, topic, err)
+		return
+	}
+	repoPath := prepared.Path
+	cleanupPrepared := prepared.Cleanup
+	if cleanupPrepared == nil {
+		cleanupPrepared = func() {}
+	}
+	cleanupAtEnd := true
+	cleanupRelease := make(chan struct{})
+	defer close(cleanupRelease)
+	defer func() {
+		if cleanupAtEnd {
+			cleanupPrepared()
+		}
+	}()
+	scan.SourceType = prepared.SourceType
+	scan.RemoteNodeID = prepared.RemoteNodeID
+	scan.SourcePath = prepared.SourcePath
+	scan.CommitSHA = prepared.CommitSHA
+	scan.DirtyState = prepared.DirtyState
+	scan.PreparedWorkspace = prepared.PreparedWorkspace
+	_ = h.Store.UpdateScan(ctx, scan)
+	if repo.SourceType == models.SourceTypeSSH {
+		repo.LastCommitSHA = prepared.CommitSHA
+		repo.LastDirtyState = prepared.DirtyState
+		_ = h.Store.UpdateRepo(ctx, repo)
+	}
+
 	// Refresh language + framework detection at scan start. The original
 	// runDetection-on-repo-create call only fires once; deps drift, repos
 	// grow new frameworks, and we want the repo detail page to show the
@@ -215,8 +257,6 @@ func executeScan(h *Handler, scanID, userID, repoPath, branch string, req create
 			log.Warn().Err(uerr).Str("repo_id", scan.RepoID).Msg("scan: failed to persist detection refresh")
 		}
 	}
-
-	topic := "scan:" + scanID
 
 	// Per-tool log files live under a project- and time-stamped directory so
 	// a host scanning many repos stays inspectable on disk. The DB still
@@ -377,7 +417,7 @@ func executeScan(h *Handler, scanID, userID, repoPath, branch string, req create
 			failedJSON, _ := json.Marshal(toolsFailed)
 			errorsJSON, _ := json.Marshal(toolsErrors)
 			toolStateMu.Unlock()
- // #nosec G104 -- intentional: response/log write errors are not actionable here
+			// #nosec G104 -- intentional: response/log write errors are not actionable here
 			// Update scan record with incremental state.
 			if s, err := h.Store.GetScanByID(context.Background(), scanID); err == nil {
 				s.ToolsCompleted = string(completedJSON)
@@ -488,7 +528,13 @@ func executeScan(h *Handler, scanID, userID, repoPath, branch string, req create
 		scan.ToolsFailed = string(failedJSON)
 
 		// Enrich findings with code context (best-effort, non-blocking).
+		enrichCleanup := cleanupPrepared
+		cleanupAtEnd = false
 		go func(findings []models.Finding, repoID, rPath, br string) {
+			defer func() {
+				<-cleanupRelease
+				enrichCleanup()
+			}()
 			repo, repoErr := h.Store.GetRepoByID(context.Background(), repoID)
 			if repoErr != nil {
 				return
@@ -696,6 +742,27 @@ func executeScan(h *Handler, scanID, userID, repoPath, branch string, req create
 	}
 }
 
+func failPreparedScan(h *Handler, scan *models.Scan, topic string, err error) {
+	now := time.Now().UTC()
+	scan.Status = models.ScanStatusFailed
+	scan.CompletedAt = &now
+	scan.UpdatedAt = now
+	errMsg := err.Error()
+	if len(errMsg) > 500 {
+		errMsg = errMsg[:500] + "…"
+	}
+	errorsJSON, _ := json.Marshal(map[string]string{"prepare": errMsg})
+	scan.ToolsErrors = string(errorsJSON)
+	_ = h.Store.UpdateScan(context.Background(), scan)
+	if SSEBroker != nil {
+		escapedErr, _ := json.Marshal(errMsg)
+		SSEBroker.Publish(topic, sse.Event{
+			Type: "scan_complete",
+			Data: fmt.Sprintf(`{"type":"scan_complete","scan_id":"%s","status":"failed","finding_count":0,"error":%s}`, scan.ID, string(escapedErr)),
+		})
+	}
+}
+
 // ListScans handles GET /api/scans — list scans for the current user.
 // Supports query params: ?repo_id=&status=&page=1&per_page=50
 func ListScans(w http.ResponseWriter, r *http.Request) {
@@ -775,7 +842,6 @@ func GetScan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-
 	// Populate repo.
 	if repo, rerr := h.Store.GetRepoByID(r.Context(), scan.RepoID); rerr == nil {
 		scan.Repo = repo
@@ -789,27 +855,33 @@ func GetScan(w http.ResponseWriter, r *http.Request) {
 
 	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{
 		Data: map[string]interface{}{
-			"id":               scan.ID,
-			"user_id":          scan.UserID,
-			"repo_id":          scan.RepoID,
-			"collection_id":    scan.CollectionID,
-			"loop_id":          scan.LoopID,
-			"iteration":        scan.Iteration,
-			"branch":           scan.Branch,
-			"status":           scan.Status,
-			"tools_selected":   scan.ToolsSelected,
-			"tools_completed":  scan.ToolsCompleted,
-			"tools_failed":     scan.ToolsFailed,
-			"tools_errors":     scan.ToolsErrors,
-			"finding_count":    scan.FindingCount,
-			"coverage_summary": scan.CoverageSummary,
-			"ai_summary":       scan.AISummary,
-			"started_at":       scan.StartedAt,
-			"completed_at":     scan.CompletedAt,
-			"created_at":       scan.CreatedAt,
-			"updated_at":       scan.UpdatedAt,
-			"repo":             scan.Repo,
-			"artifacts":        artifacts,
+			"id":                 scan.ID,
+			"user_id":            scan.UserID,
+			"repo_id":            scan.RepoID,
+			"collection_id":      scan.CollectionID,
+			"loop_id":            scan.LoopID,
+			"iteration":          scan.Iteration,
+			"branch":             scan.Branch,
+			"source_type":        scan.SourceType,
+			"remote_node_id":     scan.RemoteNodeID,
+			"source_path":        scan.SourcePath,
+			"commit_sha":         scan.CommitSHA,
+			"dirty_state":        scan.DirtyState,
+			"prepared_workspace": scan.PreparedWorkspace,
+			"status":             scan.Status,
+			"tools_selected":     scan.ToolsSelected,
+			"tools_completed":    scan.ToolsCompleted,
+			"tools_failed":       scan.ToolsFailed,
+			"tools_errors":       scan.ToolsErrors,
+			"finding_count":      scan.FindingCount,
+			"coverage_summary":   scan.CoverageSummary,
+			"ai_summary":         scan.AISummary,
+			"started_at":         scan.StartedAt,
+			"completed_at":       scan.CompletedAt,
+			"created_at":         scan.CreatedAt,
+			"updated_at":         scan.UpdatedAt,
+			"repo":               scan.Repo,
+			"artifacts":          artifacts,
 		},
 	})
 }
@@ -836,7 +908,6 @@ func GetScanFindings(w http.ResponseWriter, r *http.Request) {
 		response.WriteError(w, http.StatusNotFound, "not_found", fmt.Sprintf("scan %s not found", scanID))
 		return
 	}
-
 
 	findings, err := h.Store.ListFindingsByScan(r.Context(), scanID)
 	if err != nil {
@@ -999,7 +1070,6 @@ func StreamScan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-
 	broker := SSEBroker
 	if broker == nil {
 		// Fallback: poll-based SSE if no broker is configured.
@@ -1085,7 +1155,6 @@ func GetScanReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-
 	cfg, err := buildReportConfig(h, r, scan)
 	if err != nil {
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to build report data")
@@ -1125,7 +1194,6 @@ func GetScanSARIF(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-
 	cfg, err := buildReportConfig(h, r, scan)
 	if err != nil {
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to build report data")
@@ -1163,7 +1231,6 @@ func CancelScan(w http.ResponseWriter, r *http.Request) {
 		response.WriteError(w, http.StatusNotFound, "not_found", fmt.Sprintf("scan %s not found", id))
 		return
 	}
-
 
 	// Check if there's an active AI assessment for this scan.
 	activeScansMu.Lock()
@@ -1885,7 +1952,6 @@ func DownloadArtifact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-
 	artifacts, err := h.Store.ListScanArtifacts(r.Context(), scanID)
 	if err != nil {
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to list artifacts")
@@ -1919,8 +1985,6 @@ func DownloadArtifact(w http.ResponseWriter, r *http.Request) {
 	case models.ArtifactLog:
 		ct = "text/plain; charset=utf-8"
 	}
-
-
 
 	w.Header().Set("Content-Type", ct)
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filepath.Base(target.FilePath)))
@@ -2277,9 +2341,9 @@ func GetScanTools(w http.ResponseWriter, r *http.Request) {
 
 	// Parse tool arrays.
 	var selected, completed, failed []string
-	json.Unmarshal([]byte(scan.ToolsSelected), &selected) // #nosec G104 -- intentional: HTTP write / log errors aren't actionable in this branch
+	json.Unmarshal([]byte(scan.ToolsSelected), &selected)   // #nosec G104 -- intentional: HTTP write / log errors aren't actionable in this branch
 	json.Unmarshal([]byte(scan.ToolsCompleted), &completed) // #nosec G104 -- intentional: HTTP write / log errors aren't actionable in this branch
-	json.Unmarshal([]byte(scan.ToolsFailed), &failed) // #nosec G104 -- intentional: HTTP write / log errors aren't actionable in this branch
+	json.Unmarshal([]byte(scan.ToolsFailed), &failed)       // #nosec G104 -- intentional: HTTP write / log errors aren't actionable in this branch
 
 	// Parse the per-tool error map (added in migration 009).
 	errs := make(map[string]string)
@@ -2325,8 +2389,8 @@ func GetScanTools(w http.ResponseWriter, r *http.Request) {
 	type toolStatus struct {
 		Name         string `json:"name"`
 		Status       string `json:"status"`
-		FindingCount int    `json:"finding_count"`         // visible (post-suppression)
-		RawCount     int    `json:"raw_count,omitempty"`   // pre-suppression
+		FindingCount int    `json:"finding_count"`       // visible (post-suppression)
+		RawCount     int    `json:"raw_count,omitempty"` // pre-suppression
 		HasOutput    bool   `json:"has_output"`
 		Error        string `json:"error,omitempty"`
 	}

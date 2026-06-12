@@ -46,6 +46,9 @@ var migration010SQL string
 //go:embed migrations/011_auth_sessions.sql
 var migration011SQL string
 
+//go:embed migrations/012_remote_nodes_and_scan_targets.sql
+var migration012SQL string
+
 // SQLiteStore implements Store using SQLite.
 type SQLiteStore struct {
 	db *sqlx.DB
@@ -131,6 +134,11 @@ func (s *SQLiteStore) Migrate() error {
 			return err
 		}
 	}
+	if _, err := s.db.Exec(migration012SQL); err != nil {
+		if !strings.Contains(err.Error(), "duplicate column") && !strings.Contains(err.Error(), "already exists") {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -195,8 +203,10 @@ func (s *SQLiteStore) CreateRepo(ctx context.Context, repo *models.Repo) error {
 	repo.CreatedAt = now
 	repo.UpdatedAt = now
 	_, err := s.db.NamedExecContext(ctx,
-		`INSERT INTO repos (id, user_id, name, source_type, source_path, default_branch, created_at, updated_at)
-		 VALUES (:id, :user_id, :name, :source_type, :source_path, :default_branch, :created_at, :updated_at)`, repo)
+		`INSERT INTO repos (id, user_id, name, source_type, source_path, remote_node_id, remote_path,
+		 last_commit_sha, last_dirty_state, default_branch, created_at, updated_at)
+		 VALUES (:id, :user_id, :name, :source_type, :source_path, :remote_node_id, :remote_path,
+		 :last_commit_sha, :last_dirty_state, :default_branch, :created_at, :updated_at)`, repo)
 	return err
 }
 
@@ -219,7 +229,9 @@ func (s *SQLiteStore) ListReposByUser(ctx context.Context, userID string) ([]mod
 func (s *SQLiteStore) UpdateRepo(ctx context.Context, repo *models.Repo) error {
 	repo.UpdatedAt = time.Now().UTC()
 	_, err := s.db.NamedExecContext(ctx,
-		`UPDATE repos SET name=:name, source_type=:source_type, source_path=:source_path, default_branch=:default_branch, updated_at=:updated_at WHERE id=:id`, repo)
+		`UPDATE repos SET name=:name, source_type=:source_type, source_path=:source_path,
+		 remote_node_id=:remote_node_id, remote_path=:remote_path, last_commit_sha=:last_commit_sha,
+		 last_dirty_state=:last_dirty_state, default_branch=:default_branch, updated_at=:updated_at WHERE id=:id`, repo)
 	return err
 }
 
@@ -387,9 +399,11 @@ func (s *SQLiteStore) CreateScan(ctx context.Context, scan *models.Scan) error {
 	}
 	_, err := s.db.NamedExecContext(ctx,
 		`INSERT INTO scans (id, user_id, repo_id, collection_id, loop_id, iteration, branch, status,
+		 source_type, remote_node_id, source_path, commit_sha, dirty_state, prepared_workspace,
 		 tools_selected, tools_completed, tools_failed, tools_errors, finding_count, coverage_summary, ai_enabled, ai_summary,
 		 started_at, completed_at, created_at, updated_at)
 		 VALUES (:id, :user_id, :repo_id, :collection_id, :loop_id, :iteration, :branch, :status,
+		 :source_type, :remote_node_id, :source_path, :commit_sha, :dirty_state, :prepared_workspace,
 		 :tools_selected, :tools_completed, :tools_failed, :tools_errors, :finding_count, :coverage_summary, :ai_enabled, :ai_summary,
 		 :started_at, :completed_at, :created_at, :updated_at)`, scan)
 	return err
@@ -434,7 +448,9 @@ func (s *SQLiteStore) UpdateScan(ctx context.Context, scan *models.Scan) error {
 	_, err := s.db.NamedExecContext(ctx,
 		`UPDATE scans SET status=:status, tools_selected=:tools_selected, tools_completed=:tools_completed,
 		 tools_failed=:tools_failed, tools_errors=:tools_errors, finding_count=:finding_count, coverage_summary=:coverage_summary,
-		 ai_enabled=:ai_enabled, ai_summary=:ai_summary, started_at=:started_at, completed_at=:completed_at, updated_at=:updated_at
+		 ai_enabled=:ai_enabled, ai_summary=:ai_summary, source_type=:source_type, remote_node_id=:remote_node_id,
+		 source_path=:source_path, commit_sha=:commit_sha, dirty_state=:dirty_state, prepared_workspace=:prepared_workspace,
+		 started_at=:started_at, completed_at=:completed_at, updated_at=:updated_at
 		 WHERE id=:id`, scan)
 	return err
 }

@@ -9,11 +9,11 @@ import (
 
 // Process exit codes. AI agents and scripts branch on these.
 const (
-	ExitOK         = 0
-	ExitRuntime    = 1
-	ExitUsage      = 2
-	ExitNotFound   = 3
-	ExitAuth       = 4
+	ExitOK       = 0
+	ExitRuntime  = 1
+	ExitUsage    = 2
+	ExitNotFound = 3
+	ExitAuth     = 4
 )
 
 // AddGlobalFlags registers the persistent flags shared by every command.
@@ -123,6 +123,7 @@ func NewCommandGroups() []*cobra.Command {
 		newConfigCmd(),
 		newAuthCmd(),
 		newRepoCmd(),
+		newNodeCmd(),
 		newCollectionCmd(),
 		newFindingCmd(),
 		newFixCmd(),
