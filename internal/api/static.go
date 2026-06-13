@@ -39,7 +39,7 @@ func MountStaticUI(mount interface {
 		// don't have to set WOLF_UI_DIR explicitly.
 		for _, candidate := range []string{
 			"/usr/share/wolf/ui/dist",
-			"./ui-next/dist",
+			"./ui/dist",
 			"./dist",
 		} {
 			if st, err := os.Stat(candidate); err == nil && st.IsDir() {
@@ -62,8 +62,8 @@ func MountStaticUI(mount interface {
 
 	// Normalize before storing so the path-traversal guard in serve()
 	// compares apples to apples — filepath.Join strips a "./" prefix from
-	// its inputs, so without this, "./ui-next/dist/index.html" would fail
-	// HasPrefix("./ui-next/dist") and the handler would 404 every request.
+	// its inputs, so without this, "./ui/dist/index.html" would fail
+	// HasPrefix("./ui/dist") and the handler would 404 every request.
 	dir = filepath.Clean(dir)
 	indexPath = filepath.Join(dir, "index.html")
 

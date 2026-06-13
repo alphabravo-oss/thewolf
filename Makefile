@@ -6,8 +6,7 @@ BINARY      := wolf
 MODULE      := github.com/alphabravocompany/thewolf
 CMD         := ./cmd/wolf/
 BUILD_DIR   := ./build
-UI_DIR      := ./ui-next
-UI_LEGACY_DIR := ./ui
+UI_DIR      := ./ui
 
 # Version info
 VERSION     ?= $(shell git describe --tags --always 2>/dev/null || echo dev)
@@ -82,7 +81,7 @@ fmt:
 	gofmt -s -w .
 	@echo "==> Done"
 
-## ui-build: Build the v2 Vite UI (ui-next/)
+## ui-build: Build the v2 Vite UI (ui/)
 ui-build:
 	@echo "==> Building Wolf UI (Vite)..."
 	@if [ -f $(UI_DIR)/package.json ]; then \
@@ -266,7 +265,6 @@ clean:
 	rm -rf $(BUILD_DIR)
 	rm -f $(BINARY)
 	@if [ -d $(UI_DIR)/dist ]; then rm -rf $(UI_DIR)/dist; fi
-	@if [ -d $(UI_LEGACY_DIR)/.next ]; then rm -rf $(UI_LEGACY_DIR)/.next; fi
 	@if [ -d $(UI_DIR)/out ]; then rm -rf $(UI_DIR)/out; fi
 	@echo "==> Clean"
 

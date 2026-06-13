@@ -328,7 +328,7 @@ func NewServer(store db.Store, addr string) *Server {
 	})
 
 	// Static UI (SPA) — mounted AFTER /api so /api/* routes always win.
-	// Discovery: WOLF_UI_DIR env > /usr/share/wolf/ui/dist > ./ui-next/dist > ./dist.
+	// Discovery: WOLF_UI_DIR env > /usr/share/wolf/ui/dist > ./ui/dist > ./dist.
 	MountStaticUI(r, os.Getenv("WOLF_UI_DIR"))
 
 	srv := &Server{
