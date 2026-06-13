@@ -24,5 +24,10 @@ CREATE TABLE IF NOT EXISTS ai_prompt_templates (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_ai_prompt_templates_lookup
 ON ai_prompt_templates (scope, scope_id, prompt_type, section);
 
-INSERT OR IGNORE INTO settings (key, value) VALUES ('ai_enabled', 'true');
+-- AI features default to OFF. Admins flip this on once an AI provider is
+-- configured (Settings → "AI features" in the UI, or `wolf settings set
+-- --set ai_enabled=true`). When off, scans complete normally but no AI
+-- prompts are issued and any `ai_enabled: true` on a scan request is
+-- silently demoted to false (see internal/api/routes/scans.go).
+INSERT OR IGNORE INTO settings (key, value) VALUES ('ai_enabled', 'false');
 INSERT OR IGNORE INTO settings (key, value) VALUES ('registration_enabled', 'true');

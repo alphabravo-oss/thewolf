@@ -81,8 +81,10 @@ func (s *PostgresStore) Migrate() error {
 			return err
 		}
 	}
-	// Seed default setting using Postgres-compatible syntax.
-	if _, err := s.db.Exec(`INSERT INTO settings (key, value) VALUES ('ai_enabled', 'true') ON CONFLICT(key) DO NOTHING`); err != nil {
+	// Seed default settings using Postgres-compatible syntax. AI features
+	// default to OFF (see migration 007 for the SQLite seed and the
+	// matching scan handler at internal/api/routes/scans.go:132).
+	if _, err := s.db.Exec(`INSERT INTO settings (key, value) VALUES ('ai_enabled', 'false') ON CONFLICT(key) DO NOTHING`); err != nil {
 		if !strings.Contains(err.Error(), "already exists") && !strings.Contains(err.Error(), "does not exist") {
 			return err
 		}
