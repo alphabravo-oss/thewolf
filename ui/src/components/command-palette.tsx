@@ -1,9 +1,8 @@
-// Command palette (⌘K). Built on cmdk — the keystroke-fast popup that
-// jumps to routes, runs scans, opens the shortcuts cheatsheet, etc.
-// Pulls recent collections / scans / repos from the API so they're
-// reachable from a single keystroke + filter.
+// Command palette (⌘K). Built on shadcn's CommandDialog wrapper over cmdk —
+// the keystroke-fast popup that jumps to routes, runs scans, opens the
+// shortcuts cheatsheet, etc. Pulls recent collections / scans / repos from
+// the API so they're reachable from a single keystroke + filter.
 import { useEffect } from "react";
-import { Command } from "cmdk";
 import { useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -17,7 +16,15 @@ import {
 import { api } from "@/lib/api";
 import type { Collection, Repo, Scan } from "@/lib/types";
 import { useUIStore } from "@/lib/store-ui";
-import { cn } from "@/lib/utils";
+import {
+  CommandDialog,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandShortcut,
+} from "@/components/ui/command";
 
 export function CommandPalette() {
   const open = useUIStore((s) => s.paletteOpen);
@@ -70,119 +77,99 @@ export function CommandPalette() {
     navigate({ to });
   }
 
-  if (!open) return null;
-
   return (
-    <div
-      className="fixed inset-0 z-50 grid place-items-start pt-24 bg-black/50 backdrop-blur-sm animate-fade-in"
-      onClick={close}
-    >
-      <Command
-        label="Command palette"
-        onClick={(e) => e.stopPropagation()}
-        className="w-[min(40rem,calc(100vw-2rem))] glass-card border bg-popover/95 shadow-2xl"
-      >
-        <Command.Input
-          placeholder="Search collections, scans, repos, or jump to a page…"
-          className={cn(
-            "w-full px-4 h-12 bg-transparent border-b border-border outline-none",
-            "text-foreground placeholder:text-muted-foreground/70 text-sm",
-          )}
-          autoFocus
-        />
-        <Command.List className="max-h-[24rem] overflow-y-auto p-2 text-sm">
-          <Command.Empty className="px-3 py-6 text-center text-muted-foreground">
-            No matches.
-          </Command.Empty>
+    <CommandDialog open={open} onOpenChange={(o) => (o ? toggle() : close())}>
+      <CommandInput placeholder="Search collections, scans, repos, or jump to a page…" />
+      <CommandList>
+        <CommandEmpty>No matches.</CommandEmpty>
 
-          <Command.Group heading="Navigate">
-            <PaletteItem
-              onSelect={() => go("/")}
-              icon={LayoutDashboardIcon}
-              label="Dashboard"
-              shortcut="g d"
-            />
-            <PaletteItem
-              onSelect={() => go("/collections")}
-              icon={PackageIcon}
-              label="Collections"
-              shortcut="g c"
-            />
-            <PaletteItem
-              onSelect={() => go("/scans")}
-              icon={GaugeIcon}
-              label="Scans"
-              shortcut="g s"
-            />
-            <PaletteItem
-              onSelect={() => go("/findings")}
-              icon={BugIcon}
-              label="Findings"
-              shortcut="g f"
-            />
-            <PaletteItem
-              onSelect={() => go("/settings")}
-              icon={SettingsIcon}
-              label="Settings"
-            />
-          </Command.Group>
+        <CommandGroup heading="Navigate">
+          <PaletteItem
+            onSelect={() => go("/")}
+            icon={LayoutDashboardIcon}
+            label="Dashboard"
+            shortcut="g d"
+          />
+          <PaletteItem
+            onSelect={() => go("/collections")}
+            icon={PackageIcon}
+            label="Collections"
+            shortcut="g c"
+          />
+          <PaletteItem
+            onSelect={() => go("/scans")}
+            icon={GaugeIcon}
+            label="Scans"
+            shortcut="g s"
+          />
+          <PaletteItem
+            onSelect={() => go("/findings")}
+            icon={BugIcon}
+            label="Findings"
+            shortcut="g f"
+          />
+          <PaletteItem
+            onSelect={() => go("/settings")}
+            icon={SettingsIcon}
+            label="Settings"
+          />
+        </CommandGroup>
 
-          <Command.Group heading="Help">
-            <PaletteItem
-              onSelect={() => {
-                close();
-                openShortcuts();
-              }}
-              icon={KeyboardIcon}
-              label="Show keyboard shortcuts"
-              shortcut="?"
-            />
-          </Command.Group>
+        <CommandGroup heading="Help">
+          <PaletteItem
+            onSelect={() => {
+              close();
+              openShortcuts();
+            }}
+            icon={KeyboardIcon}
+            label="Show keyboard shortcuts"
+            shortcut="?"
+          />
+        </CommandGroup>
 
-          {collections.data && collections.data.length > 0 && (
-            <Command.Group heading="Collections">
-              {collections.data.slice(0, 8).map((c) => (
-                <PaletteItem
-                  key={c.id}
-                  onSelect={() => go(`/collections/${c.id}`)}
-                  icon={PackageIcon}
-                  label={c.name}
-                  hint={`${c.repo_count ?? 0} repos`}
-                />
-              ))}
-            </Command.Group>
-          )}
+        {collections.data && collections.data.length > 0 && (
+          <CommandGroup heading="Collections">
+            {collections.data.slice(0, 8).map((c) => (
+              <PaletteItem
+                key={c.id}
+                onSelect={() => go(`/collections/${c.id}`)}
+                icon={PackageIcon}
+                label={c.name}
+                hint={`${c.repo_count ?? 0} repos`}
+              />
+            ))}
+          </CommandGroup>
+        )}
 
-          {recentScans.data && recentScans.data.length > 0 && (
-            <Command.Group heading="Recent scans">
-              {recentScans.data.slice(0, 6).map((s) => (
-                <PaletteItem
-                  key={s.id}
-                  onSelect={() => go(`/scans/${s.id}`)}
-                  icon={GaugeIcon}
-                  label={s.repo?.name ?? s.id.slice(0, 8)}
-                  hint={`${s.status} · ${s.finding_count} findings`}
-                />
-              ))}
-            </Command.Group>
-          )}
+        {recentScans.data && recentScans.data.length > 0 && (
+          <CommandGroup heading="Recent scans">
+            {recentScans.data.slice(0, 6).map((s) => (
+              <PaletteItem
+                key={s.id}
+                onSelect={() => go(`/scans/${s.id}`)}
+                icon={GaugeIcon}
+                label={s.repo?.name ?? s.id.slice(0, 8)}
+                hint={`${s.status} · ${s.finding_count} findings`}
+              />
+            ))}
+          </CommandGroup>
+        )}
 
-          {repos.data && repos.data.length > 0 && (
-            <Command.Group heading="Repositories">
-              {repos.data.slice(0, 8).map((r) => (
-                <PaletteItem
-                  key={r.id}
-                  onSelect={() => go(`/scans?repo=${r.id}`)}
-                  icon={BugIcon}
-                  label={r.name}
-                  hint={r.default_branch}
-                />
-              ))}
-            </Command.Group>
-          )}
-        </Command.List>
-      </Command>
-    </div>
+        {repos.data && repos.data.length > 0 && (
+          <CommandGroup heading="Repositories">
+            {repos.data.slice(0, 8).map((r) => (
+              <PaletteItem
+                key={r.id}
+                onSelect={() => go(`/scans?repo=${r.id}`)}
+                icon={BugIcon}
+                label={r.name}
+                hint={r.default_branch}
+              />
+            ))}
+          </CommandGroup>
+        )}
+      </CommandList>
+    </CommandDialog>
   );
 }
 
@@ -200,24 +187,13 @@ function PaletteItem({
   shortcut?: string;
 }) {
   return (
-    <Command.Item
-      onSelect={onSelect}
-      className={cn(
-        "flex items-center gap-3 px-3 py-2 rounded-md cursor-pointer",
-        "aria-selected:bg-accent aria-selected:text-accent-foreground",
-        "data-[selected=true]:bg-accent",
-      )}
-    >
+    <CommandItem onSelect={onSelect}>
       <Icon className="size-4 text-muted-foreground" />
       <span className="flex-1 truncate">{label}</span>
       {hint && (
         <span className="text-xs text-muted-foreground truncate">{hint}</span>
       )}
-      {shortcut && (
-        <kbd className="text-2xs px-1.5 py-0.5 rounded bg-muted/70 text-muted-foreground">
-          {shortcut}
-        </kbd>
-      )}
-    </Command.Item>
+      {shortcut && <CommandShortcut>{shortcut}</CommandShortcut>}
+    </CommandItem>
   );
 }
