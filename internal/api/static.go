@@ -25,9 +25,13 @@ import (
 // Mount this after the /api router so /api/* always takes precedence:
 //
 //	api.MountStaticUI(r, os.Getenv("WOLF_UI_DIR"))
+//
+// The handler is attached via NotFound rather than a `/*` catch-all because
+// the router already has a `/api/*` deprecating-alias wildcard, and chi's
+// trie can't have two overlapping root-level wildcards — registering both
+// silently disables the SPA route.
 func MountStaticUI(mount interface {
-	Get(pattern string, h http.HandlerFunc)
-	Head(pattern string, h http.HandlerFunc)
+	NotFound(h http.HandlerFunc)
 }, dir string,
 ) {
 	if dir == "" {
@@ -56,14 +60,20 @@ func MountStaticUI(mount interface {
 		return
 	}
 
+	// Normalize before storing so the path-traversal guard in serve()
+	// compares apples to apples — filepath.Join strips a "./" prefix from
+	// its inputs, so without this, "./ui-next/dist/index.html" would fail
+	// HasPrefix("./ui-next/dist") and the handler would 404 every request.
+	dir = filepath.Clean(dir)
+	indexPath = filepath.Join(dir, "index.html")
+
 	wolflog.Info().Str("dir", dir).Msg("static-ui: serving SPA")
 
 	handler := spaHandler{dir: dir, root: root, indexPath: indexPath}
-	// Wildcard route so EVERY non-/api path lands here. GET handles
-	// normal navigation + asset loads; HEAD lets browsers (and curl -I)
-	// preflight cacheable assets without paying the body cost.
-	mount.Get("/*", handler.serve)
-	mount.Head("/*", handler.serve)
+	// NotFound runs whenever no /api/* route matches — exactly the right
+	// hook for an SPA fallback. Works for GET and HEAD (and any verb the
+	// SPA may need for asset preflight).
+	mount.NotFound(handler.serve)
 }
 
 type spaHandler struct {
