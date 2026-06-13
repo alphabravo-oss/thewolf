@@ -39,8 +39,8 @@ func newRepoCmd() *cobra.Command {
 		},
 	}
 	create.Flags().StringVar(&name, "name", "", "repository name")
-	create.Flags().StringVar(&sourceType, "type", "", "source type (e.g. local, git)")
-	create.Flags().StringVar(&sourcePath, "path", "", "source path or URL")
+	create.Flags().StringVar(&sourceType, "type", "", "source type: local (default), github, ssh")
+	create.Flags().StringVar(&sourcePath, "path", "", "local path, owner/repo for github, or remote path for ssh")
 	create.Flags().StringVar(&branch, "branch", "", "default branch")
 	create.Flags().StringVar(&remoteNodeID, "node", "", "remote SSH node ID for --type ssh")
 	create.Flags().StringVar(&remotePath, "remote-path", "", "remote repo path for --type ssh")

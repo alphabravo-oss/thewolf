@@ -20,6 +20,7 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/remote"
 	"github.com/alphabravocompany/thewolf/internal/scan/detector"
+	"github.com/alphabravocompany/thewolf/internal/scantarget"
 	"github.com/alphabravocompany/thewolf/internal/wolflog"
 )
 
@@ -121,6 +122,14 @@ func CreateRepo(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		req.SourcePath = req.RemotePath
+	}
+	if req.SourceType == models.SourceTypeGitHub {
+		// Reject malformed sources up front so the failure surfaces at
+		// create time, not on the first scan attempt.
+		if _, _, err := scantarget.ParseGitHubSource(req.SourcePath); err != nil {
+			response.WriteError(w, http.StatusBadRequest, "validation_error", err.Error())
+			return
+		}
 	}
 	if req.DefaultBranch == "" {
 		req.DefaultBranch = "main"

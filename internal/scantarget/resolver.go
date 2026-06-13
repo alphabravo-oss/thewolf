@@ -28,9 +28,15 @@ type Prepared struct {
 	Cleanup           func()
 }
 
+// GitHubCloner clones (or refreshes) a GitHub repository to a local path,
+// returning that path. Injected so tests don't hit the network; nil means
+// fall back to the production clone in internal/repo.
+type GitHubCloner func(owner, name, branch, token string) (string, error)
+
 type Resolver struct {
-	Store  db.Store
-	Runner sshclient.Runner
+	Store        db.Store
+	Runner       sshclient.Runner
+	GitHubCloner GitHubCloner
 }
 
 func (r Resolver) Prepare(ctx context.Context, repo *models.Repo, branch string) (Prepared, error) {
@@ -50,6 +56,8 @@ func (r Resolver) Prepare(ctx context.Context, repo *models.Repo, branch string)
 		}, nil
 	case models.SourceTypeSSH:
 		return r.prepareSSH(ctx, repo, branch)
+	case models.SourceTypeGitHub:
+		return r.prepareGitHub(ctx, repo, branch)
 	default:
 		return Prepared{}, fmt.Errorf("unsupported repo source_type %q", repo.SourceType)
 	}

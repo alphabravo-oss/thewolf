@@ -46,6 +46,7 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/scan/report"
 	"github.com/alphabravocompany/thewolf/internal/scan/runner"
 	scannermanifest "github.com/alphabravocompany/thewolf/internal/scannertools/manifest"
+	"github.com/alphabravocompany/thewolf/internal/secrets"
 	"github.com/alphabravocompany/thewolf/internal/setup/scanners"
 	"github.com/alphabravocompany/thewolf/internal/wolflog"
 	_ "github.com/alphabravocompany/thewolf/plugins"
@@ -220,6 +221,13 @@ func newServeCmd() *cobra.Command {
 				}
 			}
 			auth.SetJWTSecret(secret)
+
+			// Load the master encryption key for the secrets store. Without
+			// this, every `POST /config/secrets` returns 500 — and that in
+			// turn blocks GitHub-token, SSH-credential, and AI-key entry.
+			if err := secrets.LoadMasterKey(); err != nil {
+				wolflog.L().Warn().Err(err).Msg("secrets master key unavailable; the secrets store will reject writes")
+			}
 
 			srv := api.NewServer(store, addr)
 			wolflog.L().Info().Str("addr", addr).Msg("wolf serve")
