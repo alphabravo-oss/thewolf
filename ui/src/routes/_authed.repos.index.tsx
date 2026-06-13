@@ -4,12 +4,13 @@
 import { useMemo, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { GitBranchIcon, GitForkIcon, HardDriveIcon, PlusIcon, ServerIcon } from "lucide-react";
+import { GitBranchIcon, GitForkIcon, GithubIcon, HardDriveIcon, PlusIcon, ServerIcon } from "lucide-react";
 import { api } from "@/lib/api";
 import type { Collection, Repo, Scan } from "@/lib/types";
 import { ListSkeleton } from "@/components/skeleton";
 import { EmptyState } from "@/components/empty-state";
 import { AddRepoForm } from "@/components/add-repo-form";
+import { ImportGitHubModal } from "@/components/repos/import-github-modal";
 import {
   FilterBar,
   type ReposFilters,
@@ -88,6 +89,7 @@ export const Route = createFileRoute("/_authed/repos/")({
 
 function ReposPage() {
   const [showAdd, setShowAdd] = useState(false);
+  const [showImportGitHub, setShowImportGitHub] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const search = Route.useSearch();
   const navigate = useNavigate();
@@ -203,15 +205,29 @@ function ReposPage() {
             Source-code targets — local paths, GitHub, remote git URLs, or SSH nodes.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setShowAdd((v) => !v)}
-          className="inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:opacity-90"
-        >
-          <PlusIcon className="size-4" />
-          Add repo
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowImportGitHub(true)}
+            className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-background px-3 text-sm font-medium hover:bg-muted/40"
+          >
+            <GithubIcon className="size-4" />
+            Import from GitHub
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowAdd((v) => !v)}
+            className="inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:opacity-90"
+          >
+            <PlusIcon className="size-4" />
+            Add repo
+          </button>
+        </div>
       </div>
+
+      {showImportGitHub && (
+        <ImportGitHubModal onClose={() => setShowImportGitHub(false)} />
+      )}
 
       {showAdd && (
         <AddRepoForm
