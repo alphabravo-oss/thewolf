@@ -81,6 +81,69 @@ func TestFleetPostureEmptyFleet(t *testing.T) {
 	}
 }
 
+// createRepoWithSource posts a repo with an explicit source_type via the
+// API and returns its ID. The factory short-circuits when the API rejects
+// non-local source paths in tests.
+func createRepoWithSource(t *testing.T, env *testEnv, name string, sourceType models.SourceType) string {
+	t.Helper()
+	ctx := context.Background()
+	repo := &models.Repo{
+		ID:                 uuid.New().String(),
+		UserID:             env.UserID,
+		Name:               name,
+		SourceType:         sourceType,
+		SourcePath:         "/tmp/" + name,
+		DefaultBranch:      "main",
+		DetectedLanguages:  "[]",
+		DetectedFrameworks: "[]",
+	}
+	if err := env.Store.CreateRepo(ctx, repo); err != nil {
+		t.Fatalf("CreateRepo(%s): %v", name, err)
+	}
+	return repo.ID
+}
+
+func TestFleetInventoryGroupsByEverything(t *testing.T) {
+	env := setupTestEnv(t)
+	defer env.Store.Close()
+	ctx := context.Background()
+
+	rLocal := createRepoWithSource(t, env, "local-go", models.SourceTypeLocal)
+	rGit := createRepoWithSource(t, env, "github-ts", models.SourceTypeGitHub)
+	rSSH := createRepoWithSource(t, env, "ssh-py", models.SourceTypeSSH)
+
+	if err := env.Store.UpdateRepoDetection(ctx, rLocal, `["go"]`, `[]`); err != nil {
+		t.Fatalf("update detection: %v", err)
+	}
+	if err := env.Store.UpdateRepoDetection(ctx, rGit, `["typescript"]`, `[]`); err != nil {
+		t.Fatalf("update detection: %v", err)
+	}
+	if err := env.Store.UpdateRepoDetection(ctx, rSSH, `["python"]`, `[]`); err != nil {
+		t.Fatalf("update detection: %v", err)
+	}
+
+	w := env.doRequest(http.MethodGet, "/api/fleet/inventory", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var got struct {
+		Data struct {
+			BySourceType map[string]int `json:"by_source_type"`
+			ByCollection map[string]int `json:"by_collection"`
+			ByLanguage   map[string]int `json:"by_language"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.Data.BySourceType["local"] != 1 || got.Data.BySourceType["github"] != 1 || got.Data.BySourceType["ssh"] != 1 {
+		t.Errorf("inventory by_source_type wrong: %+v", got.Data.BySourceType)
+	}
+	if got.Data.ByLanguage["go"] != 1 || got.Data.ByLanguage["typescript"] != 1 || got.Data.ByLanguage["python"] != 1 {
+		t.Errorf("inventory by_language wrong: %+v", got.Data.ByLanguage)
+	}
+}
+
 func TestFleetPostureCountsOpenFindings(t *testing.T) {
 	env := setupTestEnv(t)
 	defer env.Store.Close()
