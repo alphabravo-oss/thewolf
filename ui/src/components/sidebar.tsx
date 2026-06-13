@@ -91,7 +91,7 @@ export function Sidebar() {
       {/* Backdrop for mobile drawer. */}
       {mobileOpen && (
         <div
-          className="md:hidden fixed inset-0 z-40 bg-black/50 backdrop-blur-sm animate-fade-in"
+          className="md:hidden fixed inset-0 z-40 bg-background/80 backdrop-blur-sm animate-fade-in"
           onClick={() => setMobileOpen(false)}
         />
       )}
