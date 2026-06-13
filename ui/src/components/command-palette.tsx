@@ -17,7 +17,7 @@ import {
 import { api } from "@/lib/api";
 import type { Collection, Repo, Scan } from "@/lib/types";
 import { useUIStore } from "@/lib/store-ui";
-import { cn } from "@/lib/cn";
+import { cn } from "@/lib/utils";
 
 export function CommandPalette() {
   const open = useUIStore((s) => s.paletteOpen);

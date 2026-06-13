@@ -7,7 +7,7 @@ import { XIcon, ExternalLinkIcon } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import type { Finding, FindingStatus } from "@/lib/types";
 import { SeverityBadge } from "./severity-badge";
-import { cn } from "@/lib/cn";
+import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";

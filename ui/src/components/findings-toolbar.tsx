@@ -9,7 +9,7 @@ import {
   BookmarkIcon,
 } from "lucide-react";
 import { useFindingsView } from "@/lib/store-views";
-import { cn } from "@/lib/cn";
+import { cn } from "@/lib/utils";
 import type { FindingStatus, Severity } from "@/lib/types";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";

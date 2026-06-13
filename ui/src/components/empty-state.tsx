@@ -3,7 +3,7 @@
 // "no data yet, here's what to do next".
 import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import { cn } from "@/lib/cn";
+import { cn } from "@/lib/utils";
 
 export function EmptyState({
   icon: Icon,

@@ -20,7 +20,7 @@ import {
 import { useEffect, useState } from "react";
 import { WolfLogo } from "./wolf-logo";
 import { api, clearToken } from "@/lib/api";
-import { cn } from "@/lib/cn";
+import { cn } from "@/lib/utils";
 
 type NavItem = {
   label: string;

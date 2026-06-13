@@ -2,7 +2,7 @@
 // (severity, category, etc). Model-agnostic: the parent decides what
 // "checked" means and what a toggle does, so this works whether the
 // parent tracks an included-set or an excluded-set.
-import { cn } from "@/lib/cn";
+import { cn } from "@/lib/utils";
 
 export function CheckboxFilterRow({
   label,

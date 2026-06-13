@@ -1,7 +1,7 @@
 // Shimmer skeletons. Used during initial route-load and inside TanStack
 // Query `pending` states. Always render a layout that roughly matches the
 // page it precedes — that's the trick to reducing perceived loading time.
-import { cn } from "@/lib/cn";
+import { cn } from "@/lib/utils";
 
 export function Skeleton({ className }: { className?: string }) {
   return <div className={cn("shimmer h-4 w-full", className)} />;

@@ -20,7 +20,7 @@ import { FindingsToolbar } from "@/components/findings-toolbar";
 import { FindingPreview } from "@/components/finding-preview";
 import { useFindingsView } from "@/lib/store-views";
 import { severityRank } from "@/lib/severity";
-import { cn } from "@/lib/cn";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authed/findings/")({
   component: FindingsPage,

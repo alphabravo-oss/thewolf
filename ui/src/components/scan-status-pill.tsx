@@ -1,7 +1,7 @@
 // Run-state pill with a subtle glow. Used in scan lists, dashboard,
 // live scan view.
 import type { ScanStatus } from "@/lib/types";
-import { cn } from "@/lib/cn";
+import { cn } from "@/lib/utils";
 
 const styles: Record<
   ScanStatus,
