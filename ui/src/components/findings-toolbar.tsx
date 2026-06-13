@@ -7,6 +7,7 @@ import {
   AlertOctagonIcon,
   SearchIcon,
   BookmarkIcon,
+  ChevronDownIcon,
 } from "lucide-react";
 import { useFindingsView } from "@/lib/store-views";
 import { cn } from "@/lib/utils";
@@ -16,6 +17,15 @@ import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { useState } from "react";
 import { CheckboxFilterRow } from "@/components/checkbox-filter-row";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button";
 
 const severities: Severity[] = ["critical", "high", "medium", "low", "info"];
 const statuses: FindingStatus[] = [
@@ -24,6 +34,9 @@ const statuses: FindingStatus[] = [
   "wont_fix",
   "false_positive",
 ];
+
+const statusLabel = (s: FindingStatus | null) =>
+  s === null ? "All statuses" : s.replace("_", " ");
 
 interface Props {
   selectedIds: string[];
@@ -63,6 +76,8 @@ export function FindingsToolbar({
       toast.error(e instanceof Error ? e.message : "Bulk update failed"),
   });
 
+  const activeView = view.savedViews.find((v) => v.id === view.activeViewId);
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -97,42 +112,65 @@ export function FindingsToolbar({
           ))}
         </div>
 
-        {/* Status filter */}
-        <select
-          value={view.status ?? ""}
-          onChange={(e) =>
-            view.set({
-              status: e.target.value === "" ? null : (e.target.value as FindingStatus),
-            })
-          }
-          className="h-9 px-3 rounded-md bg-muted/30 border border-border text-sm"
-        >
-          <option value="">All statuses</option>
-          {statuses.map((s) => (
-            <option key={s} value={s}>
-              {s.replace("_", " ")}
-            </option>
-          ))}
-        </select>
+        {/* Status filter — shadcn DropdownMenu */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="h-9 gap-2 capitalize">
+              {statusLabel(view.status)}
+              <ChevronDownIcon className="size-4 opacity-60" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            <DropdownMenuLabel>Filter by status</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => view.set({ status: null })}>
+              All statuses
+            </DropdownMenuItem>
+            {statuses.map((s) => (
+              <DropdownMenuItem
+                key={s}
+                className="capitalize"
+                onSelect={() => view.set({ status: s })}
+              >
+                {s.replace("_", " ")}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         <div className="flex-1" />
 
         {/* Saved views */}
         <div className="flex items-center gap-2">
-          <select
-            value={view.activeViewId ?? ""}
-            onChange={(e) =>
-              view.applyView(e.target.value === "" ? null : e.target.value)
-            }
-            className="h-9 px-3 rounded-md bg-muted/30 border border-border text-sm max-w-[12rem]"
-          >
-            <option value="">— views —</option>
-            {view.savedViews.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.name}
-              </option>
-            ))}
-          </select>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 gap-2 max-w-[12rem] truncate"
+              >
+                <span className="truncate">
+                  {activeView ? activeView.name : "— views —"}
+                </span>
+                <ChevronDownIcon className="size-4 opacity-60 shrink-0" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Saved views</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => view.applyView(null)}>
+                — none —
+              </DropdownMenuItem>
+              {view.savedViews.map((v) => (
+                <DropdownMenuItem
+                  key={v.id}
+                  onSelect={() => view.applyView(v.id)}
+                >
+                  {v.name}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
           <div className="flex items-center gap-1">
             <input
               type="text"
