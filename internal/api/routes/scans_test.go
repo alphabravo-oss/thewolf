@@ -90,6 +90,8 @@ func setupTestEnv(t *testing.T) *testEnv {
 		// Loops
 		r.Get("/api/loops", routes.ListLoops)
 		r.Get("/api/loops/{id}", routes.GetLoop)
+		// Fleet aggregates
+		r.Get("/api/fleet/posture", routes.FleetPosture)
 	})
 
 	// Register user

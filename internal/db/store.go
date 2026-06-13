@@ -6,6 +6,41 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/models"
 )
 
+// FleetPostureResult is the aggregate posture summary returned by
+// Store.FleetPosture.
+type FleetPostureResult struct {
+	OpenFindingsBySeverity map[string]int `json:"open_findings_by_severity"`
+	WeekOverWeekDelta      map[string]int `json:"week_over_week_delta"`
+	RepoCount              int            `json:"repo_count"`
+	GatesFailing           int            `json:"gates_failing"`
+}
+
+// FleetInventoryResult is the inventory breakdown returned by
+// Store.FleetInventory.
+type FleetInventoryResult struct {
+	BySourceType map[string]int `json:"by_source_type"`
+	ByCollection map[string]int `json:"by_collection"`
+	ByLanguage   map[string]int `json:"by_language"`
+}
+
+// NeedsAttentionRow is a single repository in the needs-attention list,
+// scored by Store.FleetNeedsAttention.
+type NeedsAttentionRow struct {
+	RepoID string `json:"repo_id"`
+	Name   string `json:"name"`
+	Reason string `json:"reason"`
+	Detail string `json:"detail"`
+	Score  int    `json:"score"`
+}
+
+// FindingsAggregateRow is a single (rule_id, repos, findings) tuple returned
+// by Store.FindingsAggregateByRule.
+type FindingsAggregateRow struct {
+	Key      string `json:"key"`
+	Repos    int    `json:"repos"`
+	Findings int    `json:"findings"`
+}
+
 // Store defines the interface for all database operations.
 type Store interface {
 	// Lifecycle
@@ -175,6 +210,12 @@ type Store interface {
 	// Audit Log
 	AppendAuditLog(ctx context.Context, entry *models.AuditLogEntry) error
 	ListAuditLog(ctx context.Context, limit int) ([]models.AuditLogEntry, error)
+
+	// Fleet aggregates
+	FleetPosture(ctx context.Context, userID string, fleetMode bool) (*FleetPostureResult, error)
+	FleetInventory(ctx context.Context, userID string, fleetMode bool) (*FleetInventoryResult, error)
+	FleetNeedsAttention(ctx context.Context, userID string, fleetMode bool, limit int) ([]NeedsAttentionRow, error)
+	FindingsAggregateByRule(ctx context.Context, userID string, fleetMode bool, limit int) ([]FindingsAggregateRow, error)
 
 	// AI Prompt Templates
 	CreatePromptTemplate(ctx context.Context, tmpl *models.AIPromptTemplate) error

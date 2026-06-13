@@ -114,6 +114,9 @@ func Endpoints() []Endpoint {
 		{"DELETE", "/scans/{id}", "scans", "Cancel a scan", "write:scans", "", false},
 		{"DELETE", "/scans/{id}/tools/{toolName}", "scans", "Cancel one tool of a scan", "write:scans", "", false},
 
+		// Fleet aggregates.
+		{"GET", "/fleet/posture", "fleet", "Fleet-wide posture summary", "read:scans", "", false},
+
 		// Findings.
 		{"GET", "/findings", "findings", "List findings", "read:findings", "", true},
 		{"GET", "/findings/export", "findings", "Export findings", "read:findings", "", false},

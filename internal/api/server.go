@@ -274,6 +274,10 @@ func NewServer(store db.Store, addr string) *Server {
 				r.With(wLoops).Delete("/{id}", routes.StopLoop)
 			})
 
+			r.Route("/fleet", func(r chi.Router) {
+				r.With(rScans).Get("/posture", routes.FleetPosture)
+			})
+
 			r.With(rRepos).Get("/browse", routes.BrowseLocal)
 			r.With(rRepos).Get("/git-info", routes.GitInfo)
 
