@@ -117,6 +117,7 @@ func Endpoints() []Endpoint {
 		// Fleet aggregates.
 		{"GET", "/fleet/posture", "fleet", "Fleet-wide posture summary", "read:scans", "", false},
 		{"GET", "/fleet/inventory", "fleet", "Fleet inventory grouped by source / collection / language", "read:repos", "", false},
+		{"GET", "/fleet/needs-attention", "fleet", "Top repos that need attention, scored", "read:scans", "", true},
 
 		// Findings.
 		{"GET", "/findings", "findings", "List findings", "read:findings", "", true},

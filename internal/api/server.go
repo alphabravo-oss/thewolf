@@ -277,6 +277,7 @@ func NewServer(store db.Store, addr string) *Server {
 			r.Route("/fleet", func(r chi.Router) {
 				r.With(rScans).Get("/posture", routes.FleetPosture)
 				r.With(rRepos).Get("/inventory", routes.FleetInventory)
+				r.With(rScans).Get("/needs-attention", routes.FleetNeedsAttention)
 			})
 
 			r.With(rRepos).Get("/browse", routes.BrowseLocal)

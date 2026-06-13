@@ -3,6 +3,7 @@ package routes
 import (
 	"context"
 	"net/http"
+	"strconv"
 
 	"github.com/alphabravocompany/thewolf/internal/api/response"
 	"github.com/alphabravocompany/thewolf/internal/auth"
@@ -59,4 +60,36 @@ func FleetInventory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: inv})
+}
+
+// FleetNeedsAttention handles GET /fleet/needs-attention — the top-N repos
+// scored by a composite "needs attention" formula.
+func FleetNeedsAttention(w http.ResponseWriter, r *http.Request) {
+	h := DefaultHandler
+	if h == nil {
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "handler not initialized")
+		return
+	}
+	claims := auth.GetUserFromContext(r.Context())
+	if claims == nil {
+		response.WriteError(w, http.StatusUnauthorized, "unauthorized", "not authenticated")
+		return
+	}
+
+	limit := 10
+	if v := r.URL.Query().Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			limit = n
+		}
+	}
+
+	rows, err := h.Store.FleetNeedsAttention(r.Context(), claims.UserID, fleetModeEnabled(r.Context(), h.Store), limit)
+	if err != nil {
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "compute needs-attention: "+err.Error())
+		return
+	}
+	if rows == nil {
+		rows = []db.NeedsAttentionRow{}
+	}
+	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: rows})
 }

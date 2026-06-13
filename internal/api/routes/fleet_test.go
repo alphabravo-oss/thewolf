@@ -144,6 +144,126 @@ func TestFleetInventoryGroupsByEverything(t *testing.T) {
 	}
 }
 
+func TestFleetNeedsAttentionScoresAndOrders(t *testing.T) {
+	env := setupTestEnv(t)
+	defer env.Store.Close()
+	ctx := context.Background()
+
+	// repoA: one new critical → score = 10
+	repoA := createRepoWithSource(t, env, "repo-a", models.SourceTypeLocal)
+	scanA := uuid.New().String()
+	if err := env.Store.CreateScan(ctx, &models.Scan{
+		ID: scanA, UserID: env.UserID, RepoID: repoA, Branch: "main",
+		Status: models.ScanStatusCompleted, ToolsSelected: "[]", ToolsCompleted: "[]",
+		ToolsFailed: "[]", CoverageSummary: "{}",
+	}); err != nil {
+		t.Fatalf("scanA: %v", err)
+	}
+	if err := env.Store.CreateFinding(ctx, &models.Finding{
+		ID:          uuid.New().String(),
+		ScanID:      scanA,
+		RepoID:      repoA,
+		Fingerprint: uuid.New().String(),
+		ToolName:    "test",
+		Category:    models.CategorySAST,
+		Severity:    models.SeverityCritical,
+		Title:       "t",
+		FilePath:    "x.go",
+		Status:      models.StatusOpen,
+	}); err != nil {
+		t.Fatalf("finding A: %v", err)
+	}
+
+	// repoB: two new highs → score = 10
+	repoB := createRepoWithSource(t, env, "repo-b", models.SourceTypeLocal)
+	scanB := uuid.New().String()
+	if err := env.Store.CreateScan(ctx, &models.Scan{
+		ID: scanB, UserID: env.UserID, RepoID: repoB, Branch: "main",
+		Status: models.ScanStatusCompleted, ToolsSelected: "[]", ToolsCompleted: "[]",
+		ToolsFailed: "[]", CoverageSummary: "{}",
+	}); err != nil {
+		t.Fatalf("scanB: %v", err)
+	}
+	for i := 0; i < 2; i++ {
+		if err := env.Store.CreateFinding(ctx, &models.Finding{
+			ID:          uuid.New().String(),
+			ScanID:      scanB,
+			RepoID:      repoB,
+			Fingerprint: uuid.New().String(),
+			ToolName:    "test",
+			Category:    models.CategorySAST,
+			Severity:    models.SeverityHigh,
+			Title:       "t",
+			FilePath:    "x.go",
+			Status:      models.StatusOpen,
+		}); err != nil {
+			t.Fatalf("finding B[%d]: %v", i, err)
+		}
+	}
+
+	// repoC: no findings, never scanned → score = 30 (stale)
+	repoC := createRepoWithSource(t, env, "repo-c", models.SourceTypeLocal)
+
+	// repoD: three new criticals → score = 30
+	repoD := createRepoWithSource(t, env, "repo-d", models.SourceTypeLocal)
+	scanD := uuid.New().String()
+	if err := env.Store.CreateScan(ctx, &models.Scan{
+		ID: scanD, UserID: env.UserID, RepoID: repoD, Branch: "main",
+		Status: models.ScanStatusCompleted, ToolsSelected: "[]", ToolsCompleted: "[]",
+		ToolsFailed: "[]", CoverageSummary: "{}",
+	}); err != nil {
+		t.Fatalf("scanD: %v", err)
+	}
+	for i := 0; i < 3; i++ {
+		if err := env.Store.CreateFinding(ctx, &models.Finding{
+			ID:          uuid.New().String(),
+			ScanID:      scanD,
+			RepoID:      repoD,
+			Fingerprint: uuid.New().String(),
+			ToolName:    "test",
+			Category:    models.CategorySAST,
+			Severity:    models.SeverityCritical,
+			Title:       "t",
+			FilePath:    "x.go",
+			Status:      models.StatusOpen,
+		}); err != nil {
+			t.Fatalf("finding D[%d]: %v", i, err)
+		}
+	}
+
+	_ = repoA
+	_ = repoB
+	_ = repoC
+
+	w := env.doRequest(http.MethodGet, "/api/fleet/needs-attention", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var got struct {
+		Data []struct {
+			RepoID string `json:"repo_id"`
+			Name   string `json:"name"`
+			Reason string `json:"reason"`
+			Score  int    `json:"score"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(got.Data) < 3 {
+		t.Fatalf("expected at least 3 rows, got %d: %+v", len(got.Data), got.Data)
+	}
+	// repoD (score 30, new critical) and repoC (score 30, stale never-scanned)
+	// should rank above repoA (score 10) and repoB (score 10).
+	first := got.Data[0]
+	if first.Score < 30 {
+		t.Errorf("top-ranked score should be >= 30, got %d (%+v)", first.Score, first)
+	}
+	if first.Score < got.Data[len(got.Data)-1].Score {
+		t.Errorf("results not sorted descending by score: %+v", got.Data)
+	}
+}
+
 func TestFleetPostureCountsOpenFindings(t *testing.T) {
 	env := setupTestEnv(t)
 	defer env.Store.Close()
