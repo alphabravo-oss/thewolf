@@ -27,7 +27,7 @@ The Wolf is an orchestration engine that runs **35+ static analysis, security, a
 - **Quality gates** — declarative policies that block CI on severity counts, new findings, or category thresholds (`wolf scan gate` exits 5 on failure)
 - **Finding suppressions** — durable, audit-logged hide rules with `.wolfignore` and server-side suppression policies
 - **SARIF interop** — consume external scanner output via `wolf sarif import`, export any scan as SARIF
-- **Web UI** — Next.js dashboard with collection management, scan monitoring, finding exploration, scanner-backend admin
+- **Web UI** — Vite + React 19 + TanStack Router + Tailwind 4 + shadcn/ui dashboard with collection management, scan monitoring, finding exploration, fleet posture, and scanner-backend admin
 - **CLI** — full-featured command-line interface for scripting and CI/CD integration
 - **Plugin architecture** — adding a new tool is one Dockerfile addition + one Go file
 - **SARIF & Markdown reports** — export findings in standard formats
@@ -173,7 +173,7 @@ internal/
   setup/scanners/            Container-backend bootstrap (LoadAndInstall, Doctor, Pull)
 plugins/                     Tool plugins organized by language/category
 scanners/                    Wolf-built scanner images (Dockerfile{,.jvm,.rust,.codeql})
-ui/                          Next.js frontend (incl. /scanners admin page)
+ui/                          Vite + React 19 frontend (incl. /scanners admin page)
 configs/                     Default configuration
 docs/                        MIGRATION_2_0.md, RELEASE_NOTES_2_0.md
 ```
