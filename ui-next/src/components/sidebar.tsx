@@ -12,6 +12,10 @@ import {
   LogOutIcon,
   MenuIcon,
   XIcon,
+  WrenchIcon,
+  RepeatIcon,
+  ContainerIcon,
+  ScrollTextIcon,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { WolfLogo } from "./wolf-logo";
@@ -30,6 +34,10 @@ const primary: NavItem[] = [
   { label: "Repos", to: "/repos", icon: GitForkIcon },
   { label: "Scans", to: "/scans", icon: GaugeIcon },
   { label: "Findings", to: "/findings", icon: BugIcon },
+  { label: "Fixes", to: "/fixes", icon: WrenchIcon },
+  { label: "Loops", to: "/loops", icon: RepeatIcon },
+  { label: "Scanners", to: "/scanners", icon: ContainerIcon },
+  { label: "Audit", to: "/audit", icon: ScrollTextIcon },
 ];
 
 const secondary: NavItem[] = [
