@@ -3,6 +3,7 @@ package routes
 import (
 	"encoding/json"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -13,7 +14,12 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/auth"
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/remote"
+	"github.com/alphabravocompany/thewolf/internal/sshclient"
 )
+
+// SSHRunnerOverride lets tests inject a fake SSH runner. When nil, the
+// production sshclient.Client is used.
+var SSHRunnerOverride sshclient.Runner
 
 type remoteNodeRequest struct {
 	Name               string  `json:"name"`
@@ -197,7 +203,7 @@ func CheckRemoteNode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h := DefaultHandler
-	svc := remote.Service{Store: h.Store}
+	svc := remote.Service{Store: h.Store, Runner: SSHRunnerOverride}
 	err := svc.Check(r.Context(), node)
 	status := "ok"
 	errMsg := ""
@@ -219,7 +225,7 @@ func BrowseRemoteNode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h := DefaultHandler
-	result, err := (remote.Service{Store: h.Store}).Browse(r.Context(), node, r.URL.Query().Get("path"))
+	result, err := (remote.Service{Store: h.Store, Runner: SSHRunnerOverride}).Browse(r.Context(), node, r.URL.Query().Get("path"))
 	if err != nil {
 		response.WriteError(w, http.StatusBadGateway, "ssh_browse_failed", err.Error())
 		return
@@ -238,12 +244,51 @@ func RemoteGitInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h := DefaultHandler
-	info, err := (remote.Service{Store: h.Store}).GitInfo(r.Context(), node, p)
+	info, err := (remote.Service{Store: h.Store, Runner: SSHRunnerOverride}).GitInfo(r.Context(), node, p)
 	if err != nil {
 		response.WriteError(w, http.StatusBadGateway, "ssh_git_info_failed", err.Error())
 		return
 	}
 	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: info})
+}
+
+type discoverReposRequest struct {
+	BasePath string `json:"base_path"`
+}
+
+// DiscoverNodeRepos walks a remote node looking for .git directories under
+// base_path (or node.BasePath when omitted) and returns repo metadata.
+func DiscoverNodeRepos(w http.ResponseWriter, r *http.Request) {
+	node, ok := loadRemoteNode(w, r)
+	if !ok {
+		return
+	}
+	var req discoverReposRequest
+	if r.Body != nil && r.ContentLength != 0 {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			response.WriteError(w, http.StatusBadRequest, "bad_request", "invalid JSON body")
+			return
+		}
+	}
+	base := strings.TrimSpace(req.BasePath)
+	if base == "" {
+		base = node.BasePath
+	}
+	h := DefaultHandler
+	repos, err := (remote.Service{Store: h.Store, Runner: SSHRunnerOverride}).DiscoverRepos(r.Context(), node, base)
+	if err != nil {
+		response.WriteError(w, http.StatusBadGateway, "ssh_discover_failed", err.Error())
+		return
+	}
+	// Ensure consistent stable ordering and non-nil array in JSON.
+	sort.Slice(repos, func(i, j int) bool { return repos[i].Path < repos[j].Path })
+	if repos == nil {
+		repos = []remote.DiscoveredRepo{}
+	}
+	response.WriteJSON(w, http.StatusOK, response.ListResponse{
+		Data: repos,
+		Meta: response.ListMeta{Total: len(repos), Page: 1, PerPage: len(repos)},
+	})
 }
 
 func loadRemoteNode(w http.ResponseWriter, r *http.Request) (*models.RemoteNode, bool) {

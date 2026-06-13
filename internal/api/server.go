@@ -193,6 +193,7 @@ func NewServer(store db.Store, addr string) *Server {
 				r.With(wConfig).Post("/{id}/check", routes.CheckRemoteNode)
 				r.With(rConfig).Get("/{id}/browse", routes.BrowseRemoteNode)
 				r.With(rConfig).Get("/{id}/git-info", routes.RemoteGitInfo)
+				r.With(wConfig).Post("/{id}/discover-repos", routes.DiscoverNodeRepos)
 			})
 
 			r.Route("/collections", func(r chi.Router) {

@@ -28,6 +28,13 @@ type BrowseResult struct {
 	Entries []DirEntry `json:"entries"`
 }
 
+type DiscoveredRepo struct {
+	Name      string `json:"name"`
+	Path      string `json:"path"`
+	Branch    string `json:"branch,omitempty"`
+	CommitSHA string `json:"commit_sha,omitempty"`
+}
+
 type GitInfo struct {
 	Path          string   `json:"path"`
 	IsGit         bool     `json:"is_git"`
@@ -168,6 +175,33 @@ git branch -r --format='BRANCH	%(refname:short)' 2>/dev/null | sed 's#^BRANCH	[^
 	return parseGitInfo(res.Stdout), nil
 }
 
+// DiscoverRepos walks the remote node looking for .git directories under
+// basePath (up to maxdepth 3), and for each discovered repository returns its
+// name, parent path, current branch, and commit SHA.
+func (s Service) DiscoverRepos(ctx context.Context, node *models.RemoteNode, basePath string) ([]DiscoveredRepo, error) {
+	cfg, err := s.ConfigForNode(ctx, node)
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(basePath) == "" {
+		basePath = defaultPath(node.BasePath)
+	}
+	cmd := `base=` + sshclient.ShellQuote(basePath) + `;
+if [ ! -d "$base" ]; then exit 44; fi
+find "$base" -maxdepth 3 -name .git -type d 2>/dev/null | while read -r gitdir; do
+  parent=$(dirname "$gitdir")
+  name=$(basename "$parent")
+  branch=$(git -C "$parent" rev-parse --abbrev-ref HEAD 2>/dev/null || true)
+  commit=$(git -C "$parent" rev-parse HEAD 2>/dev/null || true)
+  printf 'REPO\t%s\t%s\t%s\t%s\n' "$name" "$parent" "$branch" "$commit"
+done`
+	res, err := s.runner().Run(ctx, cfg, cmd)
+	if err != nil {
+		return nil, err
+	}
+	return parseDiscoverRepos(res.Stdout), nil
+}
+
 func (s Service) Archive(ctx context.Context, node *models.RemoteNode, repoPath, branch string) ([]byte, GitInfo, error) {
 	info, err := s.GitInfo(ctx, node, repoPath)
 	if err != nil {
@@ -232,6 +266,38 @@ func parseBrowse(out string) BrowseResult {
 		r.Parent = ""
 	}
 	return r
+}
+
+func parseDiscoverRepos(out string) []DiscoveredRepo {
+	var repos []DiscoveredRepo
+	for _, line := range strings.Split(out, "\n") {
+		parts := strings.Split(line, "\t")
+		if len(parts) == 0 || parts[0] != "REPO" {
+			continue
+		}
+		// Fields: REPO, name, path, branch, commit
+		row := DiscoveredRepo{}
+		if len(parts) > 1 {
+			row.Name = parts[1]
+		}
+		if len(parts) > 2 {
+			row.Path = parts[2]
+		}
+		if len(parts) > 3 {
+			row.Branch = parts[3]
+		}
+		if len(parts) > 4 {
+			row.CommitSHA = parts[4]
+		}
+		if row.Path == "" {
+			continue
+		}
+		repos = append(repos, row)
+	}
+	sort.Slice(repos, func(i, j int) bool {
+		return strings.ToLower(repos[i].Path) < strings.ToLower(repos[j].Path)
+	})
+	return repos
 }
 
 func parseGitInfo(out string) GitInfo {

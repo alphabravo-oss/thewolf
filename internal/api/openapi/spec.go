@@ -76,6 +76,7 @@ func Endpoints() []Endpoint {
 		{"POST", "/nodes/{id}/check", "nodes", "Check SSH connectivity", "write:config", "", false},
 		{"GET", "/nodes/{id}/browse", "nodes", "Browse directories on a remote SSH node", "read:config", "", false},
 		{"GET", "/nodes/{id}/git-info", "nodes", "Inspect a remote git working tree", "read:config", "", false},
+		{"POST", "/nodes/{id}/discover-repos", "nodes", "Discover git repositories on a remote SSH node", "write:config", "DiscoverReposRequest", false},
 
 		// Collections.
 		{"GET", "/collections", "collections", "List collections", "read:repos", "", true},
@@ -426,6 +427,9 @@ func buildComponents() map[string]any {
 			"ListOrgReposRequest": objSchema(map[string]any{
 				"org": str, "secret_id": str,
 			}, "org"),
+			"DiscoverReposRequest": objSchema(map[string]any{
+				"base_path": str,
+			}),
 		},
 	}
 }
