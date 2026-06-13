@@ -16,6 +16,17 @@ export const Route = createFileRoute("/_authed/scans/")({
   component: ScansPage,
 });
 
+function formatDuration(started?: string | null, completed?: string | null): string {
+  if (!started || !completed) return "—";
+  const ms = new Date(completed).getTime() - new Date(started).getTime();
+  if (Number.isNaN(ms) || ms < 0) return "—";
+  if (ms < 1000) return "0s";
+  if (ms < 60_000) return `${Math.round(ms / 1000)}s`;
+  const m = Math.floor(ms / 60_000);
+  const s = Math.round((ms % 60_000) / 1000);
+  return `${m}m ${s}s`;
+}
+
 function ScansPage() {
   const [showForm, setShowForm] = useState(false);
   const q = useQuery({
@@ -75,13 +86,6 @@ function ScansPage() {
                 const sel = parseToolList(s.tools_selected);
                 const done = parseToolList(s.tools_completed);
                 const failed = parseToolList(s.tools_failed);
-                const startMs = s.started_at ? new Date(s.started_at).getTime() : 0;
-                const endMs = s.completed_at
-                  ? new Date(s.completed_at).getTime()
-                  : s.status === "running"
-                    ? Date.now()
-                    : startMs;
-                const durationSec = startMs && endMs ? Math.round((endMs - startMs) / 1000) : 0;
                 return (
                   <tr key={s.id} className="border-t border-border/30 table-row-hover">
                     <td className="px-4 py-2">
@@ -124,12 +128,8 @@ function ScansPage() {
                         ? new Date(s.started_at).toLocaleString()
                         : "—"}
                     </td>
-                    <td className="px-4 py-2 text-right text-xs text-muted-foreground tabular-nums">
-                      {durationSec > 0
-                        ? durationSec < 60
-                          ? `${durationSec}s`
-                          : `${Math.floor(durationSec / 60)}m ${durationSec % 60}s`
-                        : "—"}
+                    <td className="px-3 py-2 text-xs">
+                      {formatDuration(s.started_at, s.completed_at)}
                     </td>
                   </tr>
                 );
