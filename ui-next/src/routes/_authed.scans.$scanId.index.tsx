@@ -353,6 +353,18 @@ function ScanDetailPage() {
         </div>
       )}
 
+      {scan.status === "completed" && toolsSelectedCount(scan) === 0 && (
+        <div className="mb-4 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+          <div className="font-medium">No scanners ran</div>
+          <div className="text-xs text-amber-200/80 mt-0.5">
+            This scan completed without running any tools. The container scanner
+            backend may not be configured — try{" "}
+            <code className="font-mono text-xs">wolf doctor</code> from the CLI, or
+            open the Scanners tab to install missing tools.
+          </div>
+        </div>
+      )}
+
       <ToolsPanel
         tools={toolsQ.data}
         loading={toolsQ.isLoading}
@@ -386,11 +398,13 @@ function ScanDetailPage() {
         {findingsQ.isLoading ? (
           <ListSkeleton rows={8} />
         ) : findings.length === 0 ? (
-          <EmptyState
-            icon={BugIcon}
-            title="No findings"
-            description="This scan completed without any issues. Nice."
-          />
+          toolsSelectedCount(scan) > 0 ? (
+            <EmptyState
+              icon={BugIcon}
+              title="No findings"
+              description="This scan completed without any issues. Nice."
+            />
+          ) : null
         ) : (
           <>
             {serverSuppressed > 0 && !includeSuppressed && (
@@ -596,6 +610,16 @@ function ScanDetailPage() {
       </section>
     </div>
   );
+}
+
+function toolsSelectedCount(scan: { tools_selected?: string }): number {
+  if (!scan.tools_selected) return 0;
+  try {
+    const arr = JSON.parse(scan.tools_selected);
+    return Array.isArray(arr) ? arr.length : 0;
+  } catch {
+    return 0;
+  }
 }
 
 function SortableTh({
