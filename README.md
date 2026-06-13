@@ -146,6 +146,14 @@ CLI output is a table on a terminal and JSON when piped. Exit codes:
 `0` success, `1` runtime error, `2` usage error, `3` not found,
 `4` auth/permission, `5` quality gate failed.
 
+### Web UI
+
+The Settings → "AI features" toggle is the master switch (defaults off).
+The Repositories page can create a repo of any source type — local path,
+GitHub (use a `github_token` secret for private repos), remote git URL,
+or SSH node. Loops, Fixes, Scanners, and the admin Audit log all have
+dedicated nav entries.
+
 ## Architecture
 
 ```text
