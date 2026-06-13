@@ -3,6 +3,8 @@
 // "no data yet, here's what to do next".
 import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 export function EmptyState({
@@ -21,41 +23,31 @@ export function EmptyState({
   className?: string;
 }) {
   return (
-    <div
-      className={cn(
-        "glass-card p-12 text-center max-w-xl mx-auto",
-        className,
-      )}
-    >
-      {Icon && (
-        <div className="size-12 mx-auto mb-4 rounded-full bg-muted/30 grid place-items-center">
-          <Icon className="size-6 text-muted-foreground" />
-        </div>
-      )}
-      <div className="text-base font-semibold mb-1">{title}</div>
-      {description && (
-        <div className="text-sm text-muted-foreground mb-5">{description}</div>
-      )}
+    <Card className={cn("p-12 text-center max-w-xl mx-auto", className)}>
+      <CardHeader className="p-0">
+        {Icon && (
+          <div className="size-12 mx-auto mb-4 rounded-full bg-muted/30 grid place-items-center">
+            <Icon className="size-6 text-muted-foreground" />
+          </div>
+        )}
+        <div className="text-base font-semibold">{title}</div>
+        {description && (
+          <div className="text-sm text-muted-foreground">{description}</div>
+        )}
+      </CardHeader>
       {cta && (
-        <div>
+        <CardContent className="p-0 pt-5">
           {"to" in cta ? (
-            <Link
-              to={cta.to}
-              className="inline-flex items-center px-3 h-9 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition"
-            >
-              {cta.label}
-            </Link>
+            <Button asChild>
+              <Link to={cta.to}>{cta.label}</Link>
+            </Button>
           ) : (
-            <button
-              type="button"
-              onClick={cta.onClick}
-              className="inline-flex items-center px-3 h-9 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition"
-            >
+            <Button type="button" onClick={cta.onClick}>
               {cta.label}
-            </button>
+            </Button>
           )}
-        </div>
+        </CardContent>
       )}
-    </div>
+    </Card>
   );
 }
