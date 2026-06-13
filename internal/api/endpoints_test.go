@@ -22,6 +22,7 @@ var heavyEndpoints = map[string]bool{
 	"POST /scanners/doctor":               true,
 	"POST /scanners/pull":                 true,
 	"POST /scanners/images/pull":          true,
+	"POST /scanners/tools/check-updates":  true,
 	"POST /config/plugins/{name}/install": true,
 }
 

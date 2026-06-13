@@ -15,7 +15,6 @@ each tool's terms.
 | vulture | MIT | — |
 | detect-secrets | Apache-2.0 | — |
 | checkov | Apache-2.0 | — |
-| scancode-toolkit | Apache-2.0 + various | Outputs may include findings under their own licenses. |
 | sqlfluff | MIT | — |
 | gosec | Apache-2.0 | — |
 | staticcheck | MIT | — |

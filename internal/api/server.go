@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -61,6 +62,7 @@ func NewServer(store db.Store, addr string) *Server {
 		home, _ := os.UserHomeDir()
 		artifacts.Init(filepath.Join(home, ".wolf", "artifacts")) // #nosec G104 -- intentional: response/log write errors are not actionable here
 	}
+	runArtifactRetentionCleanup(store)
 
 	r := chi.NewRouter()
 
@@ -174,6 +176,8 @@ func NewServer(store db.Store, addr string) *Server {
 				r.With(wRepos).Put("/{id}", routes.UpdateRepo)
 				r.With(wRepos).Delete("/{id}", routes.DeleteRepo)
 				r.With(rRepos).Get("/{id}/branches", routes.ListRepoBranches)
+				r.With(rScans).Get("/{id}/baselines", routes.ListRepoBaselines)
+				r.With(wScans).Post("/{id}/baselines", routes.CreateRepoBaseline)
 			})
 
 			r.Route("/nodes", func(r chi.Router) {
@@ -208,10 +212,15 @@ func NewServer(store db.Store, addr string) *Server {
 				r.With(rScans).Get("/{id}/findings/stats", routes.GetScanFindingStats)
 				r.With(rScans).Get("/{id}/stream", routes.StreamScan)
 				r.With(rScans).Get("/{id}/report", routes.GetScanReport)
+				r.With(rScans).Get("/{id}/manifest", routes.GetScanManifest)
 				r.With(rScans).Get("/{id}/sarif", routes.GetScanSARIF)
 				r.With(rScans).Get("/{id}/coverage", routes.GetScanCoverage)
+				r.With(rScans).Get("/{id}/gate", routes.GetScanGate)
+				r.With(rScans).Get("/{id}/diff", routes.GetScanDiff)
+				r.With(rScans).Post("/{id}/compare", routes.CompareScanToBaseline)
 				r.With(rScans).Get("/{id}/compare/{compareId}", routes.CompareScan)
 				r.With(rScans).Get("/{id}/tools", routes.GetScanTools)
+				r.With(rScans).Get("/{id}/scanner-runs", routes.GetScannerRunRecords)
 				r.With(rScans).Get("/{id}/tools/{toolName}/output", routes.GetToolOutput)
 				r.With(rScans).Get("/{id}/artifacts/{artifactId}/download", routes.DownloadArtifact)
 				r.With(rScans).Get("/{id}/ai-logs", routes.ListAILogs)
@@ -228,6 +237,23 @@ func NewServer(store db.Store, addr string) *Server {
 				r.With(rFind).Get("/trends/export", routes.ExportFindingTrends)
 				r.With(rFind).Get("/{id}", routes.GetFinding)
 				r.With(wFind).Put("/{id}/status", routes.UpdateFindingStatus)
+			})
+
+			r.Route("/sarif", func(r chi.Router) {
+				r.With(wScans).Post("/import", routes.ImportSARIF)
+			})
+
+			r.Route("/suppressions", func(r chi.Router) {
+				r.With(rFind).Get("/", routes.ListSuppressions)
+				r.With(wFind).Post("/", routes.CreateSuppression)
+				r.With(wFind).Post("/preview", routes.PreviewSuppression)
+				r.With(wFind).Delete("/{id}", routes.RevokeSuppression)
+			})
+
+			r.Route("/policies", func(r chi.Router) {
+				r.With(rConfig).Get("/", routes.ListPolicies)
+				r.With(wConfig).Post("/", routes.CreatePolicy)
+				r.With(wConfig).Put("/{id}", routes.UpdatePolicy)
 			})
 
 			r.Route("/fixes", func(r chi.Router) {
@@ -262,10 +288,15 @@ func NewServer(store db.Store, addr string) *Server {
 
 			// Scanner backend (PLAN.md §5).
 			r.Route("/scanners", func(r chi.Router) {
+				r.With(rConfig).Get("/tools", routes.ScannersTools)
+				r.With(rConfig).Get("/tools/{name}", routes.ScannersTool)
+				r.With(wConfig).Post("/tools/check-updates", routes.ScannersCheckUpdates)
+				r.With(wConfig).Post("/tools/{name}/check-update", routes.ScannersCheckUpdate)
 				r.With(rConfig).Get("/images", routes.ScannersImages)
 				r.With(wConfig).Post("/images/pull", routes.ScannersPullOne)
 				r.With(rConfig).Get("/config", routes.ScannersConfig)
 				r.With(rConfig).Get("/list", routes.ScannersList)
+				r.With(rConfig).Post("/plan", routes.ScannersPlan)
 				r.With(wConfig).Post("/doctor", routes.ScannersDoctor)
 				r.With(wConfig).Post("/pull", routes.ScannersPull)
 			})
@@ -465,6 +496,23 @@ func makeAuditRecorder(store db.Store) func(middleware.AuditEntry) {
 			wolflog.Warn().Err(err).Msg("audit log append failed")
 		}
 	}
+}
+
+func runArtifactRetentionCleanup(store db.Store) {
+	if store == nil || artifacts.Global == nil {
+		return
+	}
+	raw, err := store.GetSetting(context.Background(), "artifact_retention_days")
+	if err != nil || strings.TrimSpace(raw) == "" {
+		return
+	}
+	days, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil || days <= 0 {
+		return
+	}
+	go func() {
+		_, _ = artifacts.Global.CleanupOlderThan(time.Duration(days) * 24 * time.Hour)
+	}()
 }
 
 // recoverOrphanScans walks the scans table and cancels any rows still in

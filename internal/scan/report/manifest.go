@@ -64,6 +64,7 @@ func sanitizeDirComponent(s string) string {
 // understand the artifact directory without rescanning.
 type Manifest struct {
 	ScanID      string            `json:"scan_id"`
+	Source      *SourceProvenance `json:"source,omitempty"`
 	RepoName    string            `json:"repo_name,omitempty"`
 	RepoPath    string            `json:"repo_path"`
 	RepoCommit  string            `json:"repo_commit,omitempty"`
@@ -74,8 +75,22 @@ type Manifest struct {
 	Detection   DetectionSummary  `json:"detection"`
 	ScannersRun []string          `json:"scanners_run"`
 	Skipped     []ScannerSkip     `json:"scanners_skipped,omitempty"`
+	ScannerPlan *ScannerPlan      `json:"scanner_plan,omitempty"`
 	Failed      map[string]string `json:"scanners_failed,omitempty"`
 	Counts      Counts            `json:"counts"`
+}
+
+// SourceProvenance captures where the scan input came from without including
+// credentials or transient local workspace paths.
+type SourceProvenance struct {
+	Kind             string `json:"kind,omitempty"`
+	RepoID           string `json:"repo_id,omitempty"`
+	RepoPath         string `json:"repo_path,omitempty"`
+	Branch           string `json:"branch,omitempty"`
+	CommitSHA        string `json:"commit_sha,omitempty"`
+	DirtyState       string `json:"dirty_state,omitempty"`
+	RemoteNodeID     string `json:"remote_node_id,omitempty"`
+	SnapshotStrategy string `json:"snapshot_strategy,omitempty"`
 }
 
 // DetectionSummary captures the output of internal/scan/detector that drove
@@ -93,14 +108,50 @@ type ScannerSkip struct {
 	Reason string `json:"reason"`
 }
 
+// ScannerPlan records scanner-selection explainability in scan artifacts. It
+// is intentionally report-local so manifest.json stays stable even if the
+// planner package evolves.
+type ScannerPlan struct {
+	Run     []ScannerPlanDecision `json:"run,omitempty"`
+	Skip    []ScannerPlanDecision `json:"skip,omitempty"`
+	Summary ScannerPlanSummary    `json:"summary"`
+}
+
+type ScannerPlanSummary struct {
+	RunCount      int      `json:"run_count"`
+	SkipCount     int      `json:"skip_count"`
+	LanguageCount int      `json:"language_count"`
+	ExplicitTools []string `json:"explicit_tools,omitempty"`
+	DisabledTools []string `json:"disabled_tools,omitempty"`
+	AllScanners   bool     `json:"all_scanners,omitempty"`
+}
+
+type ScannerPlanDecision struct {
+	Tool            string   `json:"tool"`
+	DisplayName     string   `json:"display_name,omitempty"`
+	Category        string   `json:"category,omitempty"`
+	Languages       []string `json:"languages,omitempty"`
+	Selected        bool     `json:"selected"`
+	Available       *bool    `json:"available,omitempty"`
+	ReasonCode      string   `json:"reason_code"`
+	Reason          string   `json:"reason"`
+	IntegrationTier string   `json:"integration_tier,omitempty"`
+	Bucket          string   `json:"bucket,omitempty"`
+	Image           string   `json:"image,omitempty"`
+	ResourceClass   string   `json:"resource_class,omitempty"`
+	DefaultTimeout  string   `json:"default_timeout,omitempty"`
+	NetworkRequired bool     `json:"network_required,omitempty"`
+	Exclusive       bool     `json:"exclusive,omitempty"`
+}
+
 // Counts is the cheap-to-derive numeric summary of findings at each stage of
 // the pipeline. raw_findings is what plugins emitted before dedupe;
 // after_dedupe is what remains in findings.json.
 type Counts struct {
 	RawFindings  int `json:"raw_findings"`
 	AfterDedupe  int `json:"after_dedupe"`
-	Suppressed   int `json:"suppressed"` // filtered by defaults + .wolfignore
-	Visible      int `json:"visible"`    // after_dedupe - suppressed
+	Suppressed   int `json:"suppressed"`    // filtered by defaults + .wolfignore
+	Visible      int `json:"visible"`       // after_dedupe - suppressed
 	HighSeverity int `json:"high_severity"` // critical + high (visible only)
 }
 

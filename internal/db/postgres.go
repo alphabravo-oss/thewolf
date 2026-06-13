@@ -107,6 +107,41 @@ func (s *PostgresStore) Migrate() error {
 			return err
 		}
 	}
+	if _, err := s.db.Exec(migration013SQL); err != nil {
+		if !strings.Contains(err.Error(), "duplicate column") && !strings.Contains(err.Error(), "already exists") {
+			return err
+		}
+	}
+	if _, err := s.db.Exec(migration014SQL); err != nil {
+		if !strings.Contains(err.Error(), "duplicate column") && !strings.Contains(err.Error(), "already exists") {
+			return err
+		}
+	}
+	if _, err := s.db.Exec(migration015SQL); err != nil {
+		if !strings.Contains(err.Error(), "duplicate column") && !strings.Contains(err.Error(), "already exists") {
+			return err
+		}
+	}
+	if _, err := s.db.Exec(migration016SQL); err != nil {
+		if !strings.Contains(err.Error(), "duplicate column") && !strings.Contains(err.Error(), "already exists") {
+			return err
+		}
+	}
+	if _, err := s.db.Exec(migration017SQL); err != nil {
+		if !strings.Contains(err.Error(), "duplicate column") && !strings.Contains(err.Error(), "already exists") {
+			return err
+		}
+	}
+	if _, err := s.db.Exec(migration018SQL); err != nil {
+		if !strings.Contains(err.Error(), "duplicate column") && !strings.Contains(err.Error(), "already exists") {
+			return err
+		}
+	}
+	if _, err := s.db.Exec(migration019SQL); err != nil {
+		if !strings.Contains(err.Error(), "duplicate column") && !strings.Contains(err.Error(), "already exists") {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -429,15 +464,24 @@ func (s *PostgresStore) CreateFinding(ctx context.Context, f *models.Finding) er
 	now := time.Now().UTC()
 	f.CreatedAt = now
 	f.UpdatedAt = now
+	prepareFindingForWrite(f)
 	_, err := s.db.NamedExecContext(ctx,
-		`INSERT INTO findings (id, scan_id, repo_id, fingerprint, tool_name, category, severity,
+		`INSERT INTO findings (id, scan_id, repo_id, fingerprint, stable_fingerprint, location_fingerprint,
+		 semantic_fingerprint, evidence_fingerprint, identity_version, tool_name, category, severity,
 		 title, description, file_path, line_start, line_end, code_snippet, cwe_id, rule_id,
 		 tool_severity_score, location_weight, ai_context_score, composite_score,
-		 ai_fix_suggestion, status, sarif_data, module_name, function_name, symbol_kind, file_purpose, dependents_json, created_at, updated_at)
-		 VALUES (:id, :scan_id, :repo_id, :fingerprint, :tool_name, :category, :severity,
+		 ai_fix_suggestion, status, sarif_data, module_name, function_name, symbol_kind, file_purpose, dependents_json,
+		 fine_category, fix_strategy_id, confidence, corroborated_by_json, suppressed, suppression_id,
+		 suppressed_reason, baseline_state, introduced_in_scan_id, resolved_in_scan_id, source_kind, source_ref,
+		 created_at, updated_at)
+		 VALUES (:id, :scan_id, :repo_id, :fingerprint, :stable_fingerprint, :location_fingerprint,
+		 :semantic_fingerprint, :evidence_fingerprint, :identity_version, :tool_name, :category, :severity,
 		 :title, :description, :file_path, :line_start, :line_end, :code_snippet, :cwe_id, :rule_id,
 		 :tool_severity_score, :location_weight, :ai_context_score, :composite_score,
-		 :ai_fix_suggestion, :status, :sarif_data, :module_name, :function_name, :symbol_kind, :file_purpose, :dependents_json, :created_at, :updated_at)`, f)
+		 :ai_fix_suggestion, :status, :sarif_data, :module_name, :function_name, :symbol_kind, :file_purpose, :dependents_json,
+		 :fine_category, :fix_strategy_id, :confidence, :corroborated_by_json, :suppressed, :suppression_id,
+		 :suppressed_reason, :baseline_state, :introduced_in_scan_id, :resolved_in_scan_id, :source_kind, :source_ref,
+		 :created_at, :updated_at)`, f)
 	return err
 }
 
@@ -451,15 +495,24 @@ func (s *PostgresStore) CreateFindings(ctx context.Context, findings []models.Fi
 		now := time.Now().UTC()
 		findings[i].CreatedAt = now
 		findings[i].UpdatedAt = now
+		prepareFindingForWrite(&findings[i])
 		_, err := tx.NamedExecContext(ctx,
-			`INSERT INTO findings (id, scan_id, repo_id, fingerprint, tool_name, category, severity,
+			`INSERT INTO findings (id, scan_id, repo_id, fingerprint, stable_fingerprint, location_fingerprint,
+			 semantic_fingerprint, evidence_fingerprint, identity_version, tool_name, category, severity,
 			 title, description, file_path, line_start, line_end, code_snippet, cwe_id, rule_id,
 			 tool_severity_score, location_weight, ai_context_score, composite_score,
-			 ai_fix_suggestion, status, sarif_data, module_name, function_name, symbol_kind, file_purpose, dependents_json, created_at, updated_at)
-			 VALUES (:id, :scan_id, :repo_id, :fingerprint, :tool_name, :category, :severity,
+			 ai_fix_suggestion, status, sarif_data, module_name, function_name, symbol_kind, file_purpose, dependents_json,
+			 fine_category, fix_strategy_id, confidence, corroborated_by_json, suppressed, suppression_id,
+			 suppressed_reason, baseline_state, introduced_in_scan_id, resolved_in_scan_id, source_kind, source_ref,
+			 created_at, updated_at)
+			 VALUES (:id, :scan_id, :repo_id, :fingerprint, :stable_fingerprint, :location_fingerprint,
+			 :semantic_fingerprint, :evidence_fingerprint, :identity_version, :tool_name, :category, :severity,
 			 :title, :description, :file_path, :line_start, :line_end, :code_snippet, :cwe_id, :rule_id,
 			 :tool_severity_score, :location_weight, :ai_context_score, :composite_score,
-			 :ai_fix_suggestion, :status, :sarif_data, :module_name, :function_name, :symbol_kind, :file_purpose, :dependents_json, :created_at, :updated_at)`, &findings[i])
+			 :ai_fix_suggestion, :status, :sarif_data, :module_name, :function_name, :symbol_kind, :file_purpose, :dependents_json,
+			 :fine_category, :fix_strategy_id, :confidence, :corroborated_by_json, :suppressed, :suppression_id,
+			 :suppressed_reason, :baseline_state, :introduced_in_scan_id, :resolved_in_scan_id, :source_kind, :source_ref,
+			 :created_at, :updated_at)`, &findings[i])
 		if err != nil {
 			return err
 		}
@@ -473,6 +526,7 @@ func (s *PostgresStore) GetFindingByID(ctx context.Context, id string) (*models.
 	if err != nil {
 		return nil, err
 	}
+	hydrateFindingAfterRead(&f)
 	return &f, nil
 }
 
@@ -480,6 +534,7 @@ func (s *PostgresStore) ListFindingsByScan(ctx context.Context, scanID string) (
 	var findings []models.Finding
 	err := s.db.SelectContext(ctx, &findings,
 		"SELECT * FROM findings WHERE scan_id = $1 ORDER BY composite_score DESC", scanID)
+	hydrateFindingsAfterRead(findings)
 	return findings, err
 }
 
@@ -487,20 +542,28 @@ func (s *PostgresStore) ListFindingsByRepo(ctx context.Context, repoID string) (
 	var findings []models.Finding
 	err := s.db.SelectContext(ctx, &findings,
 		"SELECT * FROM findings WHERE repo_id = $1 ORDER BY composite_score DESC", repoID)
+	hydrateFindingsAfterRead(findings)
 	return findings, err
 }
 
 func (s *PostgresStore) UpdateFinding(ctx context.Context, f *models.Finding) error {
 	f.UpdatedAt = time.Now().UTC()
+	prepareFindingForWrite(f)
 	_, err := s.db.ExecContext(ctx,
 		`UPDATE findings SET ai_context_score = $1, ai_fix_suggestion = $2, composite_score = $3,
 		 tool_severity_score = $4, location_weight = $5,
 		 module_name = $6, function_name = $7, symbol_kind = $8, file_purpose = $9, dependents_json = $10,
-		 updated_at = $11 WHERE id = $12`,
+		 stable_fingerprint = $11, location_fingerprint = $12, semantic_fingerprint = $13, evidence_fingerprint = $14,
+		 identity_version = $15, fine_category = $16, fix_strategy_id = $17, confidence = $18, corroborated_by_json = $19,
+		 suppressed = $20, suppression_id = $21, suppressed_reason = $22, baseline_state = $23, introduced_in_scan_id = $24,
+		 resolved_in_scan_id = $25, source_kind = $26, source_ref = $27, updated_at = $28 WHERE id = $29`,
 		f.AIContextScore, f.AIFixSuggestion, f.CompositeScore,
 		f.ToolSeverityScore, f.LocationWeight,
 		f.ModuleName, f.FunctionName, f.SymbolKind, f.FilePurpose, f.DependentsJSON,
-		f.UpdatedAt, f.ID)
+		f.StableFingerprint, f.LocationFingerprint, f.SemanticFingerprint, f.EvidenceFingerprint,
+		f.IdentityVersion, f.FineCategory, f.FixStrategyID, f.Confidence, f.CorroboratedByJSON,
+		f.Suppressed, f.SuppressionID, f.SuppressedReason, f.BaselineState, f.IntroducedInScanID,
+		f.ResolvedInScanID, f.SourceKind, f.SourceRef, f.UpdatedAt, f.ID)
 	return err
 }
 
@@ -632,9 +695,12 @@ func (s *PostgresStore) CreateScanArtifact(ctx context.Context, artifact *models
 	now := time.Now().UTC()
 	artifact.CreatedAt = now
 	artifact.UpdatedAt = now
+	if artifact.RedactionLevel == "" {
+		artifact.RedactionLevel = "internal_report"
+	}
 	_, err := s.db.NamedExecContext(ctx,
-		`INSERT INTO scan_artifacts (id, scan_id, artifact_type, file_path, file_size, created_at, updated_at)
-		 VALUES (:id, :scan_id, :artifact_type, :file_path, :file_size, :created_at, :updated_at)`, artifact)
+		`INSERT INTO scan_artifacts (id, scan_id, artifact_type, file_path, file_size, checksum_sha256, redaction_level, created_at, updated_at)
+		 VALUES (:id, :scan_id, :artifact_type, :file_path, :file_size, :checksum_sha256, :redaction_level, :created_at, :updated_at)`, artifact)
 	return err
 }
 
@@ -643,6 +709,74 @@ func (s *PostgresStore) ListScanArtifacts(ctx context.Context, scanID string) ([
 	err := s.db.SelectContext(ctx, &artifacts,
 		"SELECT * FROM scan_artifacts WHERE scan_id = $1 ORDER BY created_at", scanID)
 	return artifacts, err
+}
+
+// --- SARIFImports ---
+
+func (s *PostgresStore) CreateSARIFImport(ctx context.Context, imp *models.SARIFImport) error {
+	now := time.Now().UTC()
+	imp.CreatedAt = now
+	imp.UpdatedAt = now
+	_, err := s.db.NamedExecContext(ctx,
+		`INSERT INTO sarif_imports (id, repo_id, scan_id, source, checksum_sha256, result_count, imported_count, created_by, created_at, updated_at)
+		 VALUES (:id, :repo_id, :scan_id, :source, :checksum_sha256, :result_count, :imported_count, :created_by, :created_at, :updated_at)`, imp)
+	return err
+}
+
+func (s *PostgresStore) ListSARIFImportsByRepo(ctx context.Context, repoID string) ([]models.SARIFImport, error) {
+	var imports []models.SARIFImport
+	err := s.db.SelectContext(ctx, &imports,
+		"SELECT * FROM sarif_imports WHERE repo_id = $1 ORDER BY created_at DESC", repoID)
+	return imports, err
+}
+
+// --- ScannerRunRecords ---
+
+func (s *PostgresStore) UpsertScannerRunRecord(ctx context.Context, record *models.ScannerRunRecord) error {
+	now := time.Now().UTC()
+	if record.ID == "" {
+		record.ID = record.ScanID + ":" + record.ToolName
+	}
+	if record.CommandJSON == "" {
+		record.CommandJSON = "{}"
+	}
+	record.UpdatedAt = now
+	if record.CreatedAt.IsZero() {
+		record.CreatedAt = now
+	}
+	_, err := s.db.NamedExecContext(ctx,
+		`INSERT INTO scanner_run_records (
+		 id, scan_id, tool_name, status, category, image, image_digest, version, command_json,
+		 exit_code, duration_ms, finding_count, error_message, parser_status, parser_message,
+		 started_at, finished_at, created_at, updated_at)
+		 VALUES (
+		 :id, :scan_id, :tool_name, :status, :category, :image, :image_digest, :version, :command_json,
+		 :exit_code, :duration_ms, :finding_count, :error_message, :parser_status, :parser_message,
+		 :started_at, :finished_at, :created_at, :updated_at)
+		 ON CONFLICT (scan_id, tool_name) DO UPDATE SET
+		   status=excluded.status,
+		   category=excluded.category,
+		   image=excluded.image,
+		   image_digest=excluded.image_digest,
+		   version=excluded.version,
+		   command_json=excluded.command_json,
+		   exit_code=excluded.exit_code,
+		   duration_ms=excluded.duration_ms,
+		   finding_count=excluded.finding_count,
+		   error_message=excluded.error_message,
+		   parser_status=excluded.parser_status,
+		   parser_message=excluded.parser_message,
+		   started_at=COALESCE(excluded.started_at, scanner_run_records.started_at),
+		   finished_at=excluded.finished_at,
+		   updated_at=excluded.updated_at`, record)
+	return err
+}
+
+func (s *PostgresStore) ListScannerRunRecords(ctx context.Context, scanID string) ([]models.ScannerRunRecord, error) {
+	var records []models.ScannerRunRecord
+	err := s.db.SelectContext(ctx, &records,
+		"SELECT * FROM scanner_run_records WHERE scan_id = $1 ORDER BY started_at, tool_name", scanID)
+	return records, err
 }
 
 // --- AILogs ---

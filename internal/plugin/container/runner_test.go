@@ -33,6 +33,7 @@ func TestBuildDockerArgs_Bandit(t *testing.T) {
 
 	for _, want := range []string{
 		"run", "--rm", "--name", "wolf-scan-bandit-",
+		"--pull never",
 		"--user 1000:1000",
 		"--read-only",
 		"--tmpfs /tmp:rw,size=4g,mode=1777",
@@ -46,6 +47,17 @@ func TestBuildDockerArgs_Bandit(t *testing.T) {
 		if !strings.Contains(joined, want) {
 			t.Errorf("docker args missing %q\nfull args: %s", want, joined)
 		}
+	}
+}
+
+func TestScannerFailureCommandIncludesMessage(t *testing.T) {
+	cmd := scannerFailureCommand(t.Context(), "scanner image for tool \"semgrep\" is not present locally: semgrep/semgrep:1.2.3")
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatal("expected failure command to exit non-zero")
+	}
+	if !strings.Contains(string(out), "semgrep/semgrep:1.2.3") {
+		t.Fatalf("failure output missing image: %s", out)
 	}
 }
 

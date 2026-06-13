@@ -2,11 +2,12 @@ package runner
 
 import (
 	"context"
-	"crypto/sha256"
 	"fmt"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/alphabravocompany/thewolf/internal/finding/identity"
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
 )
@@ -22,10 +23,51 @@ type mockPlugin struct {
 	execErr   error
 }
 
-func (m *mockPlugin) Name() string                  { return m.name }
-func (m *mockPlugin) Category() models.Category     { return m.category }
-func (m *mockPlugin) Languages() []models.Language   { return m.languages }
-func (m *mockPlugin) CheckAvailable() bool           { return m.available }
+type blockingPlugin struct {
+	name      string
+	category  models.Category
+	languages []models.Language
+	available bool
+	started   chan<- string
+	release   <-chan struct{}
+	active    *int32
+	maxActive *int32
+	timeouts  chan<- time.Duration
+}
+
+func (b *blockingPlugin) Name() string                 { return b.name }
+func (b *blockingPlugin) Category() models.Category    { return b.category }
+func (b *blockingPlugin) Languages() []models.Language { return b.languages }
+func (b *blockingPlugin) CheckAvailable() bool         { return b.available }
+
+func (b *blockingPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
+	if b.timeouts != nil {
+		b.timeouts <- opts.Timeout
+	}
+	current := atomic.AddInt32(b.active, 1)
+	for {
+		observed := atomic.LoadInt32(b.maxActive)
+		if current <= observed || atomic.CompareAndSwapInt32(b.maxActive, observed, current) {
+			break
+		}
+	}
+	if b.started != nil {
+		b.started <- b.name
+	}
+	defer atomic.AddInt32(b.active, -1)
+
+	select {
+	case <-b.release:
+		return nil, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+func (m *mockPlugin) Name() string                 { return m.name }
+func (m *mockPlugin) Category() models.Category    { return m.category }
+func (m *mockPlugin) Languages() []models.Language { return m.languages }
+func (m *mockPlugin) CheckAvailable() bool         { return m.available }
 
 func (m *mockPlugin) Execute(_ context.Context, _ models.ExecuteOpts) ([]models.Finding, error) {
 	if m.execErr != nil {
@@ -49,8 +91,7 @@ func newRegistry(plugins ...models.Plugin) *plugin.Registry {
 func TestFingerprint(t *testing.T) {
 	t.Run("uses rule_id when present", func(t *testing.T) {
 		fp := Fingerprint("semgrep", "no-eval", "Avoid eval()", "main.py")
-		input := "semgrep:no-eval:main.py"
-		expected := fmt.Sprintf("%x", sha256.Sum256([]byte(input)))
+		expected := identity.Build(models.Finding{ToolName: "semgrep", RuleID: "no-eval", Title: "Avoid eval()", FilePath: "main.py"}).Stable
 		if fp != expected {
 			t.Errorf("got %s, want %s", fp, expected)
 		}
@@ -58,8 +99,7 @@ func TestFingerprint(t *testing.T) {
 
 	t.Run("falls back to title when rule_id is empty", func(t *testing.T) {
 		fp := Fingerprint("semgrep", "", "Avoid eval()", "main.py")
-		input := "semgrep:Avoid eval():main.py"
-		expected := fmt.Sprintf("%x", sha256.Sum256([]byte(input)))
+		expected := identity.Build(models.Finding{ToolName: "semgrep", Title: "Avoid eval()", FilePath: "main.py"}).Stable
 		if fp != expected {
 			t.Errorf("got %s, want %s", fp, expected)
 		}
@@ -262,8 +302,8 @@ func TestSelectTools(t *testing.T) {
 	t.Run("skip-tools excludes from selection", func(t *testing.T) {
 		reg := newRegistry(goPlugin, pyPlugin, jsPlugin, allLangPlugin)
 		cfg := RunConfig{
-			Registry:  reg,
-			Languages: []models.Language{models.LangGo},
+			Registry:      reg,
+			Languages:     []models.Language{models.LangGo},
 			DisabledTools: []string{"gitleaks"},
 		}
 
@@ -281,8 +321,8 @@ func TestSelectTools(t *testing.T) {
 	t.Run("skip-tools works with explicit tools", func(t *testing.T) {
 		reg := newRegistry(goPlugin, pyPlugin, jsPlugin, allLangPlugin)
 		cfg := RunConfig{
-			Registry:  reg,
-			Tools:     []string{"gosec", "bandit", "eslint"},
+			Registry:      reg,
+			Tools:         []string{"gosec", "bandit", "eslint"},
 			DisabledTools: []string{"bandit"},
 		}
 
@@ -490,6 +530,166 @@ func TestRun(t *testing.T) {
 		}
 		if !done {
 			t.Error("OnToolDone was not called")
+		}
+	})
+
+	t.Run("limits heavy scanner concurrency", func(t *testing.T) {
+		release := make(chan struct{})
+		started := make(chan string, 3)
+		var activeHeavy int32
+		var maxActiveHeavy int32
+		var activeLight int32
+		var maxActiveLight int32
+
+		heavyA := &blockingPlugin{
+			name:      "heavy-a",
+			category:  models.CategorySCA,
+			available: true,
+			started:   started,
+			release:   release,
+			active:    &activeHeavy,
+			maxActive: &maxActiveHeavy,
+		}
+		heavyB := &blockingPlugin{
+			name:      "heavy-b",
+			category:  models.CategoryContainer,
+			available: true,
+			started:   started,
+			release:   release,
+			active:    &activeHeavy,
+			maxActive: &maxActiveHeavy,
+		}
+		light := &blockingPlugin{
+			name:      "light",
+			category:  models.CategorySecrets,
+			available: true,
+			started:   started,
+			release:   release,
+			active:    &activeLight,
+			maxActive: &maxActiveLight,
+		}
+
+		reg := newRegistry(heavyA, heavyB, light)
+		done := make(chan error, 1)
+		go func() {
+			_, err := Run(context.Background(), RunConfig{
+				Registry:         reg,
+				Tools:            []string{"heavy-a", "heavy-b", "light"},
+				Concurrency:      3,
+				HeavyConcurrency: 1,
+				Timeout:          5 * time.Second,
+			})
+			done <- err
+		}()
+
+		for i := 0; i < 2; i++ {
+			select {
+			case <-started:
+			case <-time.After(time.Second):
+				t.Fatal("timed out waiting for initial tools to start")
+			}
+		}
+
+		select {
+		case tool := <-started:
+			t.Fatalf("unexpected third tool started before heavy slot released: %s", tool)
+		case <-time.After(50 * time.Millisecond):
+		}
+
+		if got := atomic.LoadInt32(&maxActiveHeavy); got != 1 {
+			t.Fatalf("expected at most one active heavy scanner, got %d", got)
+		}
+
+		close(release)
+
+		select {
+		case err := <-done:
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		case <-time.After(time.Second):
+			t.Fatal("timed out waiting for run to finish")
+		}
+	})
+
+	t.Run("limits network scanners and applies per-tool timeout", func(t *testing.T) {
+		release := make(chan struct{})
+		started := make(chan string, 2)
+		timeouts := make(chan time.Duration, 2)
+		var activeNetwork int32
+		var maxActiveNetwork int32
+
+		networkA := &blockingPlugin{
+			name:      "network-a",
+			category:  models.CategoryQuality,
+			available: true,
+			started:   started,
+			release:   release,
+			active:    &activeNetwork,
+			maxActive: &maxActiveNetwork,
+			timeouts:  timeouts,
+		}
+		networkB := &blockingPlugin{
+			name:      "network-b",
+			category:  models.CategoryQuality,
+			available: true,
+			started:   started,
+			release:   release,
+			active:    &activeNetwork,
+			maxActive: &maxActiveNetwork,
+			timeouts:  timeouts,
+		}
+
+		reg := newRegistry(networkA, networkB)
+		done := make(chan error, 1)
+		go func() {
+			_, err := Run(context.Background(), RunConfig{
+				Registry:           reg,
+				Tools:              []string{"network-a", "network-b"},
+				Concurrency:        2,
+				NetworkConcurrency: 1,
+				Timeout:            10 * time.Second,
+				ToolResources: map[string]ResourceSpec{
+					"network-a": {Class: "network", Timeout: 3 * time.Second, NetworkRequired: true},
+					"network-b": {Class: "network", Timeout: 3 * time.Second, NetworkRequired: true},
+				},
+			})
+			done <- err
+		}()
+
+		select {
+		case <-started:
+		case <-time.After(time.Second):
+			t.Fatal("timed out waiting for first network scanner to start")
+		}
+		select {
+		case got := <-timeouts:
+			if got != 3*time.Second {
+				t.Fatalf("tool timeout = %s, want 3s", got)
+			}
+		case <-time.After(time.Second):
+			t.Fatal("timed out waiting for tool timeout")
+		}
+
+		select {
+		case tool := <-started:
+			t.Fatalf("unexpected second network tool started before slot released: %s", tool)
+		case <-time.After(50 * time.Millisecond):
+		}
+
+		if got := atomic.LoadInt32(&maxActiveNetwork); got != 1 {
+			t.Fatalf("expected at most one active network scanner, got %d", got)
+		}
+
+		close(release)
+
+		select {
+		case err := <-done:
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		case <-time.After(time.Second):
+			t.Fatal("timed out waiting for run to finish")
 		}
 	})
 }

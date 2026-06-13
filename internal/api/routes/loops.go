@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
@@ -20,13 +21,14 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
 	"github.com/alphabravocompany/thewolf/internal/scan/runner"
+	scannermanifest "github.com/alphabravocompany/thewolf/internal/scannertools/manifest"
 )
 
 // activeLoops tracks running loop controllers by loop ID.
 var (
-	activeLoopsMu   sync.RWMutex
-	activeLoops     = make(map[string]*controller.Controller)
-	activeLoopCtxs  = make(map[string]context.CancelFunc)
+	activeLoopsMu  sync.RWMutex
+	activeLoops    = make(map[string]*controller.Controller)
+	activeLoopCtxs = make(map[string]context.CancelFunc)
 )
 
 // createLoopRequest is the JSON body for POST /api/loops.
@@ -99,7 +101,6 @@ func CreateLoop(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-
 	// Defaults.
 	maxIter := req.MaxIterations
 	if maxIter <= 0 {
@@ -147,12 +148,36 @@ func CreateLoop(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	scanConcurrency := 0
+	if val, err := h.Store.GetSetting(context.Background(), "scan_concurrency"); err == nil && val != "" {
+		if n, parseErr := strconv.Atoi(val); parseErr == nil && n > 0 {
+			scanConcurrency = n
+		}
+	}
+	heavyScannerConcurrency := 1
+	if val, err := h.Store.GetSetting(context.Background(), "heavy_scanner_concurrency"); err == nil && val != "" {
+		if n, parseErr := strconv.Atoi(val); parseErr == nil && n > 0 {
+			heavyScannerConcurrency = n
+		}
+	}
+	networkScannerConcurrency := 2
+	if val, err := h.Store.GetSetting(context.Background(), "network_scanner_concurrency"); err == nil && val != "" {
+		if n, parseErr := strconv.Atoi(val); parseErr == nil && n > 0 {
+			networkScannerConcurrency = n
+		}
+	}
+
 	// Build controller config.
 	scanCfg := runner.RunConfig{
-		RepoPath:    repo.SourcePath,
-		Registry:    plugin.Global,
-		Concurrency: 0, // auto
-		Timeout:     10 * time.Minute,
+		RepoPath:           repo.SourcePath,
+		Registry:           plugin.Global,
+		Concurrency:        scanConcurrency, // zero means auto
+		HeavyConcurrency:   heavyScannerConcurrency,
+		NetworkConcurrency: networkScannerConcurrency,
+		Timeout:            10 * time.Minute,
+	}
+	if toolManifest, merr := scannermanifest.LoadDefault(); merr == nil {
+		scanCfg.ToolResources = runner.ResourceSpecsFromManifest(toolManifest)
 	}
 
 	cfg := controller.Config{
@@ -260,7 +285,6 @@ func GetLoop(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-
 	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: loop})
 }
 
@@ -285,7 +309,6 @@ func StreamLoop(w http.ResponseWriter, r *http.Request) {
 		response.WriteError(w, http.StatusNotFound, "not_found", fmt.Sprintf("loop %s not found", loopID))
 		return
 	}
-
 
 	broker := SSEBroker
 	if broker == nil {
@@ -374,7 +397,6 @@ func PauseLoop(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-
 	if loop.Status != models.LoopStatusRunning {
 		response.WriteError(w, http.StatusConflict, "conflict", "loop is not running")
 		return
@@ -424,7 +446,6 @@ func ResumeLoop(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-
 	if loop.Status != models.LoopStatusPaused {
 		response.WriteError(w, http.StatusConflict, "conflict", "loop is not paused")
 		return
@@ -473,7 +494,6 @@ func StopLoop(w http.ResponseWriter, r *http.Request) {
 		response.WriteError(w, http.StatusNotFound, "not_found", fmt.Sprintf("loop %s not found", id))
 		return
 	}
-
 
 	if loop.Status != models.LoopStatusRunning && loop.Status != models.LoopStatusPaused {
 		response.WriteError(w, http.StatusConflict, "conflict", "loop is not running or paused")

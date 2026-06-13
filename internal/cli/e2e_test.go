@@ -8,12 +8,14 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 
 	"github.com/alphabravocompany/thewolf/internal/api"
 	"github.com/alphabravocompany/thewolf/internal/auth"
 	"github.com/alphabravocompany/thewolf/internal/auth/apikey"
 	"github.com/alphabravocompany/thewolf/internal/db"
+	"github.com/alphabravocompany/thewolf/internal/models"
 )
 
 // startServerFull brings up a real wolf API server backed by an in-memory
@@ -151,6 +153,62 @@ func TestE2ETokenMintAndUse(t *testing.T) {
 	}
 	if code := ExitCodeFor(err); code != ExitAuth {
 		t.Errorf("expected ExitAuth (%d) for a 403, got %d", ExitAuth, code)
+	}
+}
+
+func TestScanGateFailExitCode(t *testing.T) {
+	url, jwt, userID, store := startServerFull(t)
+	repoID := uuid.New().String()
+	if err := store.CreateRepo(context.Background(), &models.Repo{
+		ID:            repoID,
+		UserID:        userID,
+		Name:          "gate-repo",
+		SourceType:    models.SourceTypeLocal,
+		SourcePath:    "/tmp/gate-repo",
+		DefaultBranch: "main",
+	}); err != nil {
+		t.Fatalf("CreateRepo: %v", err)
+	}
+	scanID := uuid.New().String()
+	if err := store.CreateScan(context.Background(), &models.Scan{
+		ID:              scanID,
+		UserID:          userID,
+		RepoID:          repoID,
+		Branch:          "main",
+		Status:          models.ScanStatusCompleted,
+		ToolsSelected:   `["gitleaks"]`,
+		ToolsCompleted:  `["gitleaks"]`,
+		ToolsFailed:     "[]",
+		CoverageSummary: "{}",
+	}); err != nil {
+		t.Fatalf("CreateScan: %v", err)
+	}
+	if err := store.CreateFinding(context.Background(), &models.Finding{
+		ID:                uuid.New().String(),
+		ScanID:            scanID,
+		RepoID:            repoID,
+		Fingerprint:       "secret-fp",
+		StableFingerprint: "secret-fp",
+		ToolName:          "gitleaks",
+		Category:          models.CategorySecrets,
+		Severity:          models.SeverityHigh,
+		Title:             "Hardcoded secret",
+		FilePath:          "app/config.go",
+		RuleID:            "generic-api-key",
+		Status:            models.StatusOpen,
+	}); err != nil {
+		t.Fatalf("CreateFinding: %v", err)
+	}
+
+	out, err := run(t, "scan", "gate", scanID, "--fail-exit-code", "--server", url, "--token", jwt, "-o", "json")
+	if err == nil {
+		t.Fatalf("expected gate failure error, got nil\n%s", out)
+	}
+	if code := ExitCodeFor(err); code != ExitGateFail {
+		t.Fatalf("ExitCodeFor(gate failure) = %d, want %d; err=%v\n%s", code, ExitGateFail, err, out)
+	}
+	if !strings.Contains(out, `"status": "fail"`) {
+		t.Fatalf("gate output did not include failed status:\n%s", out)
 	}
 }
 

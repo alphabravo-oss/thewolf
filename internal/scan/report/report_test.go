@@ -254,6 +254,79 @@ func TestGenerateSARIF_SeverityMapping(t *testing.T) {
 	}
 }
 
+func TestGenerateSARIF_IncludesWolfMetadata(t *testing.T) {
+	cfg := ReportConfig{
+		ScanID: "scan-sarif-metadata",
+		Findings: []models.Finding{
+			{
+				ID:                  "finding-1",
+				Fingerprint:         "legacy-fp",
+				StableFingerprint:   "stable-fp",
+				LocationFingerprint: "location-fp",
+				SemanticFingerprint: "semantic-fp",
+				EvidenceFingerprint: "evidence-fp",
+				IdentityVersion:     2,
+				ToolName:            "gosec",
+				Category:            models.CategorySAST,
+				Severity:            models.SeverityHigh,
+				Title:               "SQL Injection",
+				Description:         "Unsanitized input in SQL query",
+				FilePath:            "pkg/db/query.go",
+				LineStart:           42,
+				LineEnd:             42,
+				CWEID:               "CWE-89",
+				RuleID:              "G201",
+				FineCategory:        "sql-injection",
+				FixStrategyID:       "parameterize-query",
+				Confidence:          "high",
+				BaselineState:       "new",
+				Suppressed:          true,
+				SuppressionID:       "suppression-1",
+				SuppressedReason:    "accepted risk until migration",
+				Status:              models.StatusOpen,
+				SourceKind:          "ssh_path",
+				SourceRef:           "feature/auth",
+				CorroboratedBy:      []string{"gosec", "semgrep"},
+			},
+		},
+		ToolsRun: []string{"gosec"},
+	}
+
+	data, err := GenerateSARIF(cfg)
+	if err != nil {
+		t.Fatalf("GenerateSARIF failed: %v", err)
+	}
+	var log sarifLog
+	if err := json.Unmarshal(data, &log); err != nil {
+		t.Fatalf("SARIF parse failed: %v", err)
+	}
+	if len(log.Runs) != 1 || len(log.Runs[0].Results) != 1 {
+		t.Fatalf("unexpected SARIF shape: %+v", log.Runs)
+	}
+	result := log.Runs[0].Results[0]
+	if result.PartialFingerprints["wolfStableFingerprint"] != "stable-fp" ||
+		result.PartialFingerprints["wolfSemanticFingerprint"] != "semantic-fp" ||
+		result.PartialFingerprints["wolfLocationFingerprint"] != "location-fp" {
+		t.Fatalf("missing partial fingerprints: %+v", result.PartialFingerprints)
+	}
+	if result.Properties == nil {
+		t.Fatalf("missing result properties")
+	}
+	if result.Properties.BaselineState != "new" ||
+		!result.Properties.Suppressed ||
+		result.Properties.SuppressionID != "suppression-1" ||
+		result.Properties.FineCategory != "sql-injection" ||
+		result.Properties.Confidence != "high" {
+		t.Fatalf("unexpected result properties: %+v", *result.Properties)
+	}
+	if len(result.Suppressions) != 1 || result.Suppressions[0].Kind != "external" {
+		t.Fatalf("missing SARIF suppression: %+v", result.Suppressions)
+	}
+	if got := log.Runs[0].Tool.Driver.Rules[0].Properties; got == nil || got.CWEID != "CWE-89" || got.FineCategory != "sql-injection" {
+		t.Fatalf("unexpected rule properties: %+v", got)
+	}
+}
+
 func TestGenerateMarkdown_ContainsAllSections(t *testing.T) {
 	cfg := testConfig()
 	md, err := GenerateMarkdown(cfg)

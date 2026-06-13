@@ -137,6 +137,7 @@ const (
 	ArtifactSARIF    ArtifactType = "sarif"
 	ArtifactJSON     ArtifactType = "json"
 	ArtifactMarkdown ArtifactType = "markdown"
+	ArtifactManifest ArtifactType = "manifest"
 	ArtifactLog      ArtifactType = "log"
 	ArtifactCoverage ArtifactType = "coverage"
 )

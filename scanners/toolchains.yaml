@@ -1,0 +1,39 @@
+# Scanner image toolchain metadata.
+#
+# Tool versions live in tools.yaml + versions.env. This file tracks the
+# language/runtime toolchains and base images that scanner builds depend on.
+base_images:
+  default: debian:trixie-slim@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a0c3ccd26f436a0e
+  jvm: debian:trixie-slim@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a0c3ccd26f436a0e
+  rust: debian:trixie-slim@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a0c3ccd26f436a0e
+  codeql: debian:trixie-slim@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a0c3ccd26f436a0e
+
+toolchains:
+  go:
+    version: "1.26.3"
+    source: https://go.dev/dl/
+    install_script: scanners/install/go-tools.sh
+  nodejs:
+    major: "22"
+    source: https://deb.nodesource.com/setup_22.x
+    dockerfile: scanners/Dockerfile
+  python:
+    package: python3
+    source: debian:trixie
+    dockerfile: scanners/Dockerfile
+  ruby:
+    package: ruby
+    source: debian:trixie
+    dockerfile: scanners/Dockerfile
+  php:
+    package: php-cli
+    source: debian:trixie
+    dockerfile: scanners/Dockerfile
+  jdk:
+    package: openjdk-21-jdk-headless
+    source: debian:trixie
+    dockerfile: scanners/Dockerfile.jvm
+  rust:
+    version_variable: RUST_TOOLCHAIN
+    source: https://sh.rustup.rs
+    install_script: scanners/install/rust.sh

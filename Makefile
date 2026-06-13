@@ -30,7 +30,7 @@ GOLANGCI_LINT := $(shell command -v golangci-lint 2>/dev/null)
 AIR           := $(shell command -v air 2>/dev/null || echo $(shell go env GOPATH)/bin/air)
 
 .PHONY: all build test lint vet fmt ui-build dev dev-api dev-ui docker docker-up docker-down clean help \
-        scanners-build scanners-smoke scanners-push dev-scanners test-integration
+        scanners-build scanners-smoke scanners-push scanners-validate scanners-docs scanners-docs-check scanners-upstream-check scanners-bump dev-scanners test-integration
 
 ## all: Build everything (Go binary + UI)
 all: build ui-build
@@ -124,6 +124,34 @@ dev-ui:
 ## ui-dev: (alias) Start UI development server
 ui-dev: dev-ui
 
+## scanners-validate: Validate scanner manifest, version pins, image routing, and generated docs
+scanners-validate: scanners-docs-check
+	@echo "==> Validating scanner metadata..."
+	go run ./cmd/scannertools validate
+
+## scanners-docs: Regenerate scanner tool documentation from scanners/tools.yaml
+scanners-docs:
+	@echo "==> Regenerating scanner tool docs..."
+	go run ./cmd/scannertools docs
+
+## scanners-docs-check: Verify generated scanner docs are current
+scanners-docs-check:
+	@echo "==> Checking generated scanner tool docs..."
+	go run ./cmd/scannertools docs --check
+
+## scanners-upstream-check: Verify upstream scanner image tags resolve for amd64/arm64
+scanners-upstream-check:
+	@echo "==> Checking upstream scanner image manifests..."
+	go run ./cmd/scannertools upstream-images --platforms linux/amd64,linux/arm64
+
+## scanners-bump: Bump one scanner pin (usage: make scanners-bump TOOL=semgrep VERSION=1.94.1)
+scanners-bump:
+	@if [ -z "$(TOOL)" ] || [ -z "$(VERSION)" ]; then \
+		echo "usage: make scanners-bump TOOL=<name> VERSION=<version>"; \
+		exit 2; \
+	fi
+	go run ./cmd/scannertools bump --tool "$(TOOL)" --version "$(VERSION)"
+
 ## scanners-build: Build the DEFAULT wolf-scanners image (core + small lang tools)
 scanners-build:
 	@echo "==> Building $(SCANNERS_REF) (default)..."
@@ -172,7 +200,7 @@ scanners-smoke:
 		if [ "$$variant" != "default" ]; then image=$(SCANNERS_IMAGE)-$$variant; fi; \
 		if docker image inspect $$image:dev >/dev/null 2>&1; then \
 			echo "==> Smoke test: $$image:dev"; \
-			docker run --rm $$image:dev /usr/local/bin/smoke-test.sh || exit $$?; \
+			docker run --rm -e WOLF_SMOKE_STRICT=1 $$image:dev /usr/local/bin/smoke-test.sh || exit $$?; \
 		else \
 			echo "==> Skip $$image:dev (not built)"; \
 		fi \

@@ -36,20 +36,56 @@ type sarifDriver struct {
 }
 
 type sarifRule struct {
-	ID               string              `json:"id"`
-	ShortDescription sarifMessage        `json:"shortDescription"`
+	ID               string               `json:"id"`
+	ShortDescription sarifMessage         `json:"shortDescription"`
 	Properties       *sarifRuleProperties `json:"properties,omitempty"`
 }
 
 type sarifRuleProperties struct {
-	CWEID string `json:"cweId,omitempty"`
+	CWEID         string `json:"cweId,omitempty"`
+	Category      string `json:"category,omitempty"`
+	FineCategory  string `json:"fineCategory,omitempty"`
+	FixStrategyID string `json:"fixStrategyId,omitempty"`
 }
 
 type sarifResult struct {
-	RuleID    string           `json:"ruleId"`
-	Level     string           `json:"level"`
-	Message   sarifMessage     `json:"message"`
-	Locations []sarifLocation  `json:"locations,omitempty"`
+	RuleID              string                 `json:"ruleId"`
+	Level               string                 `json:"level"`
+	Message             sarifMessage           `json:"message"`
+	Locations           []sarifLocation        `json:"locations,omitempty"`
+	PartialFingerprints map[string]string      `json:"partialFingerprints,omitempty"`
+	Suppressions        []sarifSuppression     `json:"suppressions,omitempty"`
+	Properties          *sarifResultProperties `json:"properties,omitempty"`
+}
+
+type sarifSuppression struct {
+	Kind          string         `json:"kind"`
+	Status        string         `json:"status,omitempty"`
+	Justification sarifMessage   `json:"justification,omitempty"`
+	Properties    map[string]any `json:"properties,omitempty"`
+}
+
+type sarifResultProperties struct {
+	WolfFindingID       string   `json:"wolfFindingId,omitempty"`
+	WolfFingerprint     string   `json:"wolfFingerprint,omitempty"`
+	StableFingerprint   string   `json:"stableFingerprint,omitempty"`
+	LocationFingerprint string   `json:"locationFingerprint,omitempty"`
+	SemanticFingerprint string   `json:"semanticFingerprint,omitempty"`
+	EvidenceFingerprint string   `json:"evidenceFingerprint,omitempty"`
+	IdentityVersion     int      `json:"identityVersion,omitempty"`
+	Severity            string   `json:"severity,omitempty"`
+	Category            string   `json:"category,omitempty"`
+	FineCategory        string   `json:"fineCategory,omitempty"`
+	FixStrategyID       string   `json:"fixStrategyId,omitempty"`
+	Confidence          string   `json:"confidence,omitempty"`
+	BaselineState       string   `json:"baselineState,omitempty"`
+	Suppressed          bool     `json:"suppressed,omitempty"`
+	SuppressionID       string   `json:"suppressionId,omitempty"`
+	SuppressedReason    string   `json:"suppressedReason,omitempty"`
+	Status              string   `json:"status,omitempty"`
+	SourceKind          string   `json:"sourceKind,omitempty"`
+	SourceRef           string   `json:"sourceRef,omitempty"`
+	CorroboratedBy      []string `json:"corroboratedBy,omitempty"`
 }
 
 type sarifMessage struct {
@@ -133,13 +169,37 @@ func renderSARIF(cfg ReportConfig) ([]byte, error) {
 				if f.CWEID != "" {
 					rule.Properties = &sarifRuleProperties{CWEID: f.CWEID}
 				}
+				if f.Category != "" || f.FineCategory != "" || f.FixStrategyID != "" {
+					if rule.Properties == nil {
+						rule.Properties = &sarifRuleProperties{}
+					}
+					rule.Properties.Category = string(f.Category)
+					rule.Properties.FineCategory = f.FineCategory
+					rule.Properties.FixStrategyID = f.FixStrategyID
+				}
 				rulesMap[ruleID] = rule
 			}
 
+			message := f.Description
+			if message == "" {
+				message = f.Title
+			}
 			result := sarifResult{
-				RuleID:  ruleID,
-				Level:   severityToSARIFLevel(f.Severity),
-				Message: sarifMessage{Text: f.Description},
+				RuleID:              ruleID,
+				Level:               severityToSARIFLevel(f.Severity),
+				Message:             sarifMessage{Text: message},
+				PartialFingerprints: partialFingerprints(f),
+				Properties:          resultProperties(f),
+			}
+			if f.Suppressed {
+				result.Suppressions = []sarifSuppression{{
+					Kind:          "external",
+					Status:        "accepted",
+					Justification: sarifMessage{Text: f.SuppressedReason},
+					Properties: map[string]any{
+						"wolfSuppressionId": f.SuppressionID,
+					},
+				}}
 			}
 
 			if f.FilePath != "" {
@@ -189,4 +249,79 @@ func renderSARIF(cfg ReportConfig) ([]byte, error) {
 	}
 
 	return json.MarshalIndent(log, "", "  ")
+}
+
+func partialFingerprints(f models.Finding) map[string]string {
+	values := map[string]string{}
+	if f.StableFingerprint != "" {
+		values["wolfStableFingerprint"] = f.StableFingerprint
+	}
+	if f.SemanticFingerprint != "" {
+		values["wolfSemanticFingerprint"] = f.SemanticFingerprint
+	}
+	if f.LocationFingerprint != "" {
+		values["wolfLocationFingerprint"] = f.LocationFingerprint
+	}
+	if f.EvidenceFingerprint != "" {
+		values["wolfEvidenceFingerprint"] = f.EvidenceFingerprint
+	}
+	if f.Fingerprint != "" {
+		values["wolfLegacyFingerprint"] = f.Fingerprint
+	}
+	if len(values) == 0 {
+		return nil
+	}
+	return values
+}
+
+func resultProperties(f models.Finding) *sarifResultProperties {
+	props := &sarifResultProperties{
+		WolfFindingID:       f.ID,
+		WolfFingerprint:     f.Fingerprint,
+		StableFingerprint:   f.StableFingerprint,
+		LocationFingerprint: f.LocationFingerprint,
+		SemanticFingerprint: f.SemanticFingerprint,
+		EvidenceFingerprint: f.EvidenceFingerprint,
+		IdentityVersion:     f.IdentityVersion,
+		Severity:            string(f.Severity),
+		Category:            string(f.Category),
+		FineCategory:        f.FineCategory,
+		FixStrategyID:       f.FixStrategyID,
+		Confidence:          f.Confidence,
+		BaselineState:       f.BaselineState,
+		Suppressed:          f.Suppressed,
+		SuppressionID:       f.SuppressionID,
+		SuppressedReason:    f.SuppressedReason,
+		Status:              string(f.Status),
+		SourceKind:          f.SourceKind,
+		SourceRef:           f.SourceRef,
+		CorroboratedBy:      f.CorroboratedBy,
+	}
+	if props.isZero() {
+		return nil
+	}
+	return props
+}
+
+func (p sarifResultProperties) isZero() bool {
+	return p.WolfFindingID == "" &&
+		p.WolfFingerprint == "" &&
+		p.StableFingerprint == "" &&
+		p.LocationFingerprint == "" &&
+		p.SemanticFingerprint == "" &&
+		p.EvidenceFingerprint == "" &&
+		p.IdentityVersion == 0 &&
+		p.Severity == "" &&
+		p.Category == "" &&
+		p.FineCategory == "" &&
+		p.FixStrategyID == "" &&
+		p.Confidence == "" &&
+		p.BaselineState == "" &&
+		!p.Suppressed &&
+		p.SuppressionID == "" &&
+		p.SuppressedReason == "" &&
+		p.Status == "" &&
+		p.SourceKind == "" &&
+		p.SourceRef == "" &&
+		len(p.CorroboratedBy) == 0
 }

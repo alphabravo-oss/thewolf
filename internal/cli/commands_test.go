@@ -86,6 +86,8 @@ func TestEveryReadCommandLive(t *testing.T) {
 		{"provider", "list"},
 		{"secret", "list"},
 		{"plugin", "list"},
+		{"scanner", "tools"},
+		{"scanner", "tool", "bandit"},
 		{"audit", "list"},
 		{"system", "health"},
 		{"system", "ready"},

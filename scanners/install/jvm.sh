@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================
-# Install JVM-ecosystem scanners (Infer + PMD).
+# Install JVM-ecosystem scanners (Infer + PMD + detekt).
 # This script targets the wolf-scanners-jvm image, which has
 # openjdk-17-jdk in the base.
 # ============================================================
@@ -55,6 +55,16 @@ curl -fsSL -o "${tmp}/pmd.zip" \
 unzip -q -d /opt "${tmp}/pmd.zip"
 mv "/opt/pmd-bin-${PMD_VERSION}" /opt/pmd
 ln -sf /opt/pmd/bin/pmd /usr/local/bin/pmd
+rm -rf "${tmp}"
+
+# --- detekt ---
+tmp="$(mktemp -d)"
+curl -fsSL -o "${tmp}/detekt.zip" \
+    "https://github.com/detekt/detekt/releases/download/v${DETEKT_VERSION}/detekt-cli-${DETEKT_VERSION}.zip"
+unzip -q -d /opt "${tmp}/detekt.zip"
+mv "/opt/detekt-cli-${DETEKT_VERSION}" /opt/detekt
+ln -sf /opt/detekt/bin/detekt-cli /usr/local/bin/detekt-cli
+ln -sf /opt/detekt/bin/detekt-cli /usr/local/bin/detekt
 rm -rf "${tmp}"
 
 echo "JVM scanners installed."

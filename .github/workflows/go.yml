@@ -28,6 +28,9 @@ jobs:
       - name: go build
         run: go build ./...
 
+      - name: scanner metadata validation
+        run: make scanners-validate
+
       - name: go test (unit, no integration)
         run: go test -race -count=1 -timeout 120s ./...
 

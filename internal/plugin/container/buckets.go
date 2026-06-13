@@ -33,6 +33,7 @@ func DefaultBucketImages(bucketBase, version string) map[string]string {
 	rust := bucketBase + "-rust:" + version
 	codeql := bucketBase + "-codeql:" + version
 	return map[string]string{
+		"detekt": jvm,
 		"infer":  jvm,
 		"pmd":    jvm,
 		"clippy": rust,
@@ -101,7 +102,7 @@ func DefaultUpstreamTools() map[string]ToolImageSpec {
 		"vale":     {Image: "jdkato/vale:v3.9.1"},
 		"spectral": {Image: "stoplight/spectral:6.13.1"},
 
-// Repo-hygiene (new in 2.0).
+		// Repo-hygiene (new in 2.0).
 		"scorecard": {Image: "gcr.io/openssf/scorecard:v5.0.0", Entrypoint: "scorecard"},
 
 		// Stale/insecure-dependency detection across many ecosystems
@@ -122,9 +123,6 @@ func DefaultUpstreamTools() map[string]ToolImageSpec {
 		// Detects deprecated Kubernetes API versions — critical before a
 		// cluster upgrade. Apache-2.0.
 		"pluto": {Image: "us-docker.pkg.dev/fairwinds-ops/oss/pluto:v5.9.0"},
-
-		// Kotlin static analysis — fills the gap left by Java-focused infer/pmd.
-		"detekt": {Image: "detekt/detekt:v1.23.7"},
 
 		// Data-flow / PII / privacy scanner. Different category from
 		// CVE-focused scanners. ELv2.

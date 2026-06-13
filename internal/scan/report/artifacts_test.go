@@ -41,7 +41,18 @@ func TestWriteAll_WritesEveryArtifact(t *testing.T) {
 		StartedAt:   time.Unix(1700000000, 0).UTC(),
 		FinishedAt:  time.Unix(1700000010, 0).UTC(),
 		ScannersRun: []string{"gosec", "gitleaks"},
-		Counts:      CountFindings(0, findings),
+		ScannerPlan: &ScannerPlan{
+			Run: []ScannerPlanDecision{
+				{
+					Tool:       "gosec",
+					Selected:   true,
+					ReasonCode: "language_match",
+					Reason:     "scanner supports a detected language",
+				},
+			},
+			Summary: ScannerPlanSummary{RunCount: 1, LanguageCount: 1},
+		},
+		Counts: CountFindings(0, findings),
 	}
 
 	res, err := WriteAll(dir, rcfg, m)
@@ -82,6 +93,14 @@ func TestWriteAll_WritesEveryArtifact(t *testing.T) {
 	counts, _ := mparsed["counts"].(map[string]any)
 	if counts == nil || counts["high_severity"].(float64) != 2 {
 		t.Errorf("expected high_severity=2, got %v", counts)
+	}
+	scannerPlan, _ := mparsed["scanner_plan"].(map[string]any)
+	if scannerPlan == nil {
+		t.Fatalf("manifest missing scanner_plan: %v", mparsed)
+	}
+	summary, _ := scannerPlan["summary"].(map[string]any)
+	if summary == nil || summary["run_count"].(float64) != 1 {
+		t.Errorf("scanner_plan.summary.run_count = %v", summary)
 	}
 }
 
@@ -144,10 +163,10 @@ func TestWriteAll_SuppressionIntegration(t *testing.T) {
 		ToolsRun: []string{"gosec", "gitleaks"},
 	}
 	m := Manifest{
-		ScanID:     "scan-suppress",
-		RepoPath:   "/nonexistent",  // forces .wolfignore parse to no-op
+		ScanID:      "scan-suppress",
+		RepoPath:    "/nonexistent", // forces .wolfignore parse to no-op
 		ScannersRun: []string{"gosec", "gitleaks"},
-		Counts:     CountFindings(0, findings),
+		Counts:      CountFindings(0, findings),
 	}
 
 	res, err := WriteAll(dir, rcfg, m)

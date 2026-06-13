@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -23,6 +25,9 @@ func TestEnvDefaults(t *testing.T) {
 	if c.Image != "x:1" {
 		t.Errorf("Image = %q", c.Image)
 	}
+	if c.ImageOverrides["detekt"] != "x-jvm:1" {
+		t.Errorf("detekt override missing: %v", c.ImageOverrides)
+	}
 	if c.ImageOverrides["infer"] != "x-jvm:1" {
 		t.Errorf("infer override missing: %v", c.ImageOverrides)
 	}
@@ -34,6 +39,36 @@ func TestEnvDefaults(t *testing.T) {
 	}
 	if c.PullPolicy != "Always" {
 		t.Errorf("PullPolicy = %q", c.PullPolicy)
+	}
+}
+
+func TestProductionScannerDefaultsAvoidLatest(t *testing.T) {
+	for _, key := range []string{
+		"WOLF_SCANNERS_TAG",
+		"WOLF_SCANNERS_IMAGE",
+		"WOLF_SCANNERS_IMAGE_JVM",
+		"WOLF_SCANNERS_IMAGE_RUST",
+		"WOLF_SCANNERS_IMAGE_CODEQL",
+	} {
+		t.Setenv(key, "")
+	}
+
+	cfg := EnvDefaults()
+	if strings.Contains(cfg.Image, ":latest") {
+		t.Fatalf("EnvDefaults image uses floating latest tag: %q", cfg.Image)
+	}
+
+	root := testRepoRoot(t)
+	for _, rel := range []string{"docker-compose.yml", "configs/wolf.yaml"} {
+		data, err := os.ReadFile(filepath.Join(root, rel))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, line := range strings.Split(string(data), "\n") {
+			if strings.Contains(line, "wolf-scanners") && strings.Contains(line, ":latest") {
+				t.Fatalf("%s has production scanner latest default: %s", rel, line)
+			}
+		}
 	}
 }
 
@@ -124,6 +159,9 @@ func TestAutoDiscoverBucketImages(t *testing.T) {
 	})
 	cfg := &container.Config{Image: "wolf-scanners:dev"}
 	autoDiscoverBucketImages(cfg)
+	if cfg.ImageOverrides["detekt"] != "wolf-scanners-jvm:dev" {
+		t.Errorf("detekt override = %q, want wolf-scanners-jvm:dev", cfg.ImageOverrides["detekt"])
+	}
 	if cfg.ImageOverrides["infer"] != "wolf-scanners-jvm:dev" {
 		t.Errorf("infer override = %q, want wolf-scanners-jvm:dev", cfg.ImageOverrides["infer"])
 	}
@@ -150,6 +188,9 @@ func TestAutoDiscoverBucketImages(t *testing.T) {
 	if cfg2.ImageOverrides["infer"] != "custom:tag" {
 		t.Errorf("pre-set infer override clobbered: got %q", cfg2.ImageOverrides["infer"])
 	}
+	if cfg2.ImageOverrides["detekt"] != "wolf-scanners-jvm:dev" {
+		t.Errorf("detekt should still auto-fill: got %q", cfg2.ImageOverrides["detekt"])
+	}
 	if cfg2.ImageOverrides["pmd"] != "wolf-scanners-jvm:dev" {
 		t.Errorf("pmd should still auto-fill: got %q", cfg2.ImageOverrides["pmd"])
 	}
@@ -163,6 +204,9 @@ func TestAutoDiscoverBucketImages(t *testing.T) {
 	})
 	cfg3 := &container.Config{Image: "wolf-scanners:dev"}
 	autoDiscoverBucketImages(cfg3)
+	if _, set := cfg3.ImageOverrides["detekt"]; set {
+		t.Errorf("tag-alias: detekt override must NOT be set, got %q", cfg3.ImageOverrides["detekt"])
+	}
 	if _, set := cfg3.ImageOverrides["infer"]; set {
 		t.Errorf("tag-alias: infer override must NOT be set, got %q", cfg3.ImageOverrides["infer"])
 	}
@@ -180,4 +224,58 @@ func TestAutoDiscoverBucketImages(t *testing.T) {
 
 	// Case 5: nil cfg must not panic.
 	autoDiscoverBucketImages(nil)
+}
+
+func TestLatestTaggedScannerImages(t *testing.T) {
+	cfg := &container.Config{
+		Image: "wolf-scanners:latest",
+		ImageOverrides: map[string]string{
+			"detekt": "wolf-scanners-jvm:latest",
+			"infer":  "wolf-scanners-jvm:latest",
+			"pmd":    "wolf-scanners-jvm:2.0.0",
+			"codeql": "wolf-scanners-codeql@sha256:abc",
+		},
+		UpstreamTools: map[string]container.ToolImageSpec{
+			"semgrep": {Image: "semgrep/semgrep:latest"},
+			"trivy":   {Image: "aquasec/trivy:0.57.1"},
+		},
+	}
+
+	got := map[string]bool{}
+	for _, image := range latestTaggedScannerImages(cfg) {
+		if got[image] {
+			t.Fatalf("latestTaggedScannerImages returned duplicate %q", image)
+		}
+		got[image] = true
+	}
+	for _, want := range []string{
+		"wolf-scanners:latest",
+		"wolf-scanners-jvm:latest",
+		"semgrep/semgrep:latest",
+	} {
+		if !got[want] {
+			t.Fatalf("latestTaggedScannerImages missing %q from %v", want, got)
+		}
+	}
+	if len(got) != 3 {
+		t.Fatalf("latestTaggedScannerImages = %v, want exactly 3 latest-tagged images", got)
+	}
+}
+
+func testRepoRoot(t *testing.T) string {
+	t.Helper()
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			t.Fatal("repo root not found")
+		}
+		dir = parent
+	}
 }
