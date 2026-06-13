@@ -11,6 +11,7 @@ import { ListSkeleton } from "@/components/skeleton";
 import { EmptyState } from "@/components/empty-state";
 import { AddRepoForm } from "@/components/add-repo-form";
 import { ImportGitHubModal } from "@/components/repos/import-github-modal";
+import { DiscoverSSHModal } from "@/components/repos/discover-ssh-modal";
 import {
   FilterBar,
   type ReposFilters,
@@ -90,6 +91,7 @@ export const Route = createFileRoute("/_authed/repos/")({
 function ReposPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [showImportGitHub, setShowImportGitHub] = useState(false);
+  const [showDiscoverSSH, setShowDiscoverSSH] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const search = Route.useSearch();
   const navigate = useNavigate();
@@ -216,6 +218,14 @@ function ReposPage() {
           </button>
           <button
             type="button"
+            onClick={() => setShowDiscoverSSH(true)}
+            className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-background px-3 text-sm font-medium hover:bg-muted/40"
+          >
+            <ServerIcon className="size-4" />
+            Discover SSH
+          </button>
+          <button
+            type="button"
             onClick={() => setShowAdd((v) => !v)}
             className="inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:opacity-90"
           >
@@ -227,6 +237,10 @@ function ReposPage() {
 
       {showImportGitHub && (
         <ImportGitHubModal onClose={() => setShowImportGitHub(false)} />
+      )}
+
+      {showDiscoverSSH && (
+        <DiscoverSSHModal onClose={() => setShowDiscoverSSH(false)} />
       )}
 
       {showAdd && (
