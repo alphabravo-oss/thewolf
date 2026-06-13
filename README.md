@@ -20,9 +20,13 @@ The Wolf is an orchestration engine that runs **35+ static analysis, security, a
 - **Collection-based organization** — group repositories into collections for batch scanning and cross-repo metrics
 - **Branch-aware metrics** — track findings per branch with trend analysis over time
 - **Real-time streaming** — live scan progress via SSE with per-tool status, output logs, and finding counts
-- **AI enrichment** (optional) — AI-powered severity scoring, tool summaries, and prioritized recommendations via Anthropic or OpenAI
+- **AI enrichment** (optional) — AI-powered severity scoring, tool summaries, prioritized recommendations, and ready-to-hand-off remediation prompts via `wolf enrich`
 - **Automated fix engine** — AI-generated fix plans with PR creation via Claude Code
-- **Scan-fix-rescan loops** — iterative improvement cycles with regression guardrails
+- **Scan-fix-rescan loops** — iterative improvement cycles with regression guardrails (`wolf loop`)
+- **Baselines & diff** — pin a stable scan as a baseline and surface only `new`/`resurfaced`/`fixed` findings on the next run
+- **Quality gates** — declarative policies that block CI on severity counts, new findings, or category thresholds (`wolf scan gate` exits 5 on failure)
+- **Finding suppressions** — durable, audit-logged hide rules with `.wolfignore` and server-side suppression policies
+- **SARIF interop** — consume external scanner output via `wolf sarif import`, export any scan as SARIF
 - **Web UI** — Next.js dashboard with collection management, scan monitoring, finding exploration, scanner-backend admin
 - **CLI** — full-featured command-line interface for scripting and CI/CD integration
 - **Plugin architecture** — adding a new tool is one Dockerfile addition + one Go file
@@ -63,6 +67,12 @@ wolf scan --repo /repos/myproject --branch main
 
 # Run only specific tools
 wolf scan --repo /repos/myproject --tools semgrep,trivy,gitleaks
+
+# Write AI-ready remediation prompts into the findings.json
+wolf enrich --scan <scan-id>
+
+# Run the AI auto-remediation loop (scan → fix → rescan)
+wolf loop --repo /repos/myproject --max-iterations 5
 
 # Diagnose the scanner backend
 wolf doctor
@@ -123,10 +133,18 @@ SCAN=$(wolf scan create --repo <repo-id> -o json | jq -r .data.id)
 wolf scan watch "$SCAN"
 wolf scan findings "$SCAN" --severity high -o json
 wolf finding set-status <finding-id> --status false_positive
+
+# Quality gates and baselines for CI
+wolf baseline create --repo <repo-id> --scan "$SCAN"
+wolf scan diff "$SCAN"                       # new vs the baseline
+wolf scan gate "$SCAN" --fail-exit-code      # exits 5 on policy violation
+wolf sarif export "$SCAN" > findings.sarif   # consume in your CI dashboard
+wolf suppress create --file-glob "vendor/**" --reason "third-party code"
 ```
 
 CLI output is a table on a terminal and JSON when piped. Exit codes:
-`0` success, `1` runtime error, `3` not found, `4` auth/permission.
+`0` success, `1` runtime error, `2` usage error, `3` not found,
+`4` auth/permission, `5` quality gate failed.
 
 ## Architecture
 
