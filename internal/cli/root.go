@@ -115,9 +115,10 @@ func runRender(cmd *cobra.Command, method, path string, body any) error {
 	return Render(cmd.OutOrStdout(), resolveOutput(cmd), env)
 }
 
-// NewCommandGroups returns every API-client command group except scan,
-// whose API subcommands are attached to the existing local `scan` command
-// via AddScanSubcommands. The caller (cmd/wolf) adds these to the root.
+// NewCommandGroups returns every API-client command group except scan and
+// loop, whose API subcommands are attached to the existing local commands
+// via AddScanSubcommands and AddLoopSubcommands. The caller (cmd/wolf) adds
+// these to the root.
 func NewCommandGroups() []*cobra.Command {
 	return []*cobra.Command{
 		newConfigCmd(),
@@ -127,7 +128,6 @@ func NewCommandGroups() []*cobra.Command {
 		newCollectionCmd(),
 		newFindingCmd(),
 		newFixCmd(),
-		newLoopCmd(),
 		newUserCmd(),
 		newSettingsCmd(),
 		newPromptCmd(),

@@ -57,13 +57,18 @@ func startServer(t *testing.T) (url, jwt string) {
 	return u, j
 }
 
-// newRootForTest builds a root command wired with the CLI command groups.
+// newRootForTest builds a root command wired with the CLI command groups,
+// including the scan and loop parents whose API subcommands are attached
+// rather than registered as their own top-level groups.
 func newRootForTest() *cobra.Command {
 	root := &cobra.Command{Use: "wolf", SilenceUsage: true, SilenceErrors: true}
 	AddGlobalFlags(root)
 	scan := &cobra.Command{Use: "scan"}
 	AddScanSubcommands(scan)
 	root.AddCommand(scan)
+	loop := &cobra.Command{Use: "loop"}
+	AddLoopSubcommands(loop)
+	root.AddCommand(loop)
 	root.AddCommand(NewCommandGroups()...)
 	return root
 }

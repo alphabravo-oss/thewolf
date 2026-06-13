@@ -34,6 +34,10 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/auth"
 	"github.com/alphabravocompany/thewolf/internal/cli"
 	"github.com/alphabravocompany/thewolf/internal/db"
+	"github.com/alphabravocompany/thewolf/internal/enrich"
+	"github.com/alphabravocompany/thewolf/internal/fix/engine"
+	"github.com/alphabravocompany/thewolf/internal/loop/controller"
+	"github.com/alphabravocompany/thewolf/internal/loop/tracker"
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
 	"github.com/alphabravocompany/thewolf/internal/scan/detector"
@@ -67,10 +71,14 @@ func main() {
 	// Global flags for the API-client commands (--server/--token/--context/-o).
 	cli.AddGlobalFlags(rootCmd)
 
-	// The local one-shot `scan` command gains the API-client scan
-	// subcommands (scan list/get/create/watch/...).
+	// The local one-shot `scan` and AI auto-remediation `loop` commands
+	// gain the API-client subcommands so `wolf scan list`, `wolf loop list`,
+	// etc. drive the server. Bare `wolf scan` / `wolf loop` keep their
+	// local one-shot behavior.
 	scanCmd := newScanCmd()
 	cli.AddScanSubcommands(scanCmd)
+	loopCmd := newLoopCmd()
+	cli.AddLoopSubcommands(loopCmd)
 
 	rootCmd.AddCommand(
 		newServeCmd(),
@@ -78,8 +86,11 @@ func main() {
 		newPullCmd(),
 		newVersionCmd(),
 		scanCmd,
+		newEnrichCmd(),
+		loopCmd,
 	)
-	// Every API endpoint as a `wolf <resource> <verb>` command.
+	// Every API endpoint as a `wolf <resource> <verb>` command (loop's API
+	// subcommands attach to loopCmd above instead of registering separately).
 	rootCmd.AddCommand(cli.NewCommandGroups()...)
 
 	if err := rootCmd.Execute(); err != nil {
@@ -554,6 +565,187 @@ func readGitCommit(repoPath string) string {
 		return sha[:7]
 	}
 	return sha
+}
+
+// --- enrich -----------------------------------------------------------------
+
+// newEnrichCmd builds `wolf enrich` — writes AI-ready remediation prompts
+// (`ai_fix_prompt`) into a scan's findings.json for the selected findings.
+func newEnrichCmd() *cobra.Command {
+	var (
+		findingsPath string
+		scanID       string
+		severities   []string
+		categories   []string
+		tools        []string
+		excludePaths []string
+		ids          []string
+		useAI        bool
+	)
+	cmd := &cobra.Command{
+		Use:   "enrich",
+		Short: "Write AI-ready fix prompts into a scan's findings.json",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			path, err := resolveFindingsPath(findingsPath, scanID)
+			if err != nil {
+				return err
+			}
+
+			doc, err := enrich.LoadDoc(path)
+			if err != nil {
+				return err
+			}
+
+			filter := enrich.Filter{
+				Severities:   severities,
+				Categories:   categories,
+				Tools:        tools,
+				IDs:          ids,
+				ExcludePaths: excludePaths,
+			}
+
+			var gen enrich.Generator = enrich.TemplateGenerator{}
+			if useAI {
+				aiGen, gerr := enrich.NewAIGenerator()
+				if gerr != nil {
+					return fmt.Errorf("--ai requested but unavailable: %w", gerr)
+				}
+				gen = aiGen
+			}
+
+			n, err := doc.Apply(filter, gen)
+			if err != nil {
+				return err
+			}
+			if err := doc.Write(path); err != nil {
+				return err
+			}
+			fmt.Printf("Enriched %d of %d findings in %s\n", n, doc.FindingCount(), path)
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&findingsPath, "findings", "", "path to a findings.json artifact")
+	cmd.Flags().StringVar(&scanID, "scan", "", "scan ID (resolves <artifacts-root>/<id>/findings.json)")
+	cmd.Flags().StringSliceVar(&severities, "severity", nil, "only enrich these severities (critical,high,...)")
+	cmd.Flags().StringSliceVar(&categories, "category", nil, "only enrich these categories (sast,sca,secrets,...)")
+	cmd.Flags().StringSliceVar(&tools, "tool", nil, "only enrich findings from these tools")
+	cmd.Flags().StringSliceVar(&excludePaths, "exclude-path", nil, "skip findings whose file path matches these globs")
+	cmd.Flags().StringSliceVar(&ids, "ids", nil, "only enrich these specific finding IDs")
+	cmd.Flags().BoolVar(&useAI, "ai", false, "use the configured AI provider for richer guidance")
+	return cmd
+}
+
+// resolveFindingsPath turns a --findings path or a --scan ID into a
+// concrete findings.json path.
+func resolveFindingsPath(findingsPath, scanID string) (string, error) {
+	if findingsPath != "" {
+		if _, err := os.Stat(findingsPath); err != nil {
+			return "", fmt.Errorf("findings file not found: %s", findingsPath)
+		}
+		return findingsPath, nil
+	}
+	if scanID == "" {
+		return "", fmt.Errorf("one of --findings or --scan is required")
+	}
+	home, _ := os.UserHomeDir()
+	root := envOr("WOLF_ARTIFACTS_ROOT", filepath.Join(home, ".wolf", "artifacts"))
+	candidate := filepath.Join(root, scanID, "findings.json")
+	if _, err := os.Stat(candidate); err != nil {
+		return "", fmt.Errorf("findings.json for scan %s not found at %s — pass --findings <path> instead", scanID, candidate)
+	}
+	return candidate, nil
+}
+
+// --- loop -------------------------------------------------------------------
+
+// newLoopCmd builds `wolf loop` — runs the scan -> AI fix -> rescan
+// auto-remediation loop against a git repository.
+func newLoopCmd() *cobra.Command {
+	var (
+		repoPath      string
+		branch        string
+		maxIterations int
+		aiTool        string
+		severities    []string
+		fixTimeout    time.Duration
+	)
+	cmd := &cobra.Command{
+		Use:   "loop",
+		Short: "Run the AI auto-remediation loop (scan -> fix -> rescan)",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if repoPath == "" {
+				return fmt.Errorf("--repo is required")
+			}
+			absRepo, err := filepath.Abs(repoPath)
+			if err != nil {
+				return fmt.Errorf("resolve --repo: %w", err)
+			}
+			// The loop requires git — fail fast with an actionable error.
+			if _, err := os.Stat(filepath.Join(absRepo, ".git")); err != nil {
+				return fmt.Errorf("%s is not a git repository — run `git init` or add it as a git source; scan and enrich still work on non-git paths", absRepo)
+			}
+
+			eng, err := engine.NewEngine(aiTool)
+			if err != nil {
+				return err
+			}
+			if !eng.Available() {
+				return fmt.Errorf("AI tool %q is not available on PATH", eng.Name())
+			}
+
+			ctx := cmd.Context()
+			if err := installScannerBackend(ctx); err != nil {
+				return fmt.Errorf("scanner backend: %w", err)
+			}
+
+			sevs := make([]models.Severity, 0, len(severities))
+			for _, s := range severities {
+				sevs = append(sevs, models.Severity(strings.ToLower(strings.TrimSpace(s))))
+			}
+
+			cfg := controller.Config{
+				RepoPath:      absRepo,
+				MaxIterations: maxIterations,
+				Severities:    sevs,
+				FixEngine:     eng,
+				FixTimeout:    fixTimeout,
+				ScanConfig: runner.RunConfig{
+					RepoPath: absRepo,
+					Branch:   branch,
+					Registry: plugin.Global,
+				},
+				OnIterationStart: func(it int) {
+					fmt.Printf("\n=== iteration %d ===\n", it)
+				},
+				OnIterationDone: func(it int, diff *tracker.IterationDiff, warnings []string) {
+					if diff != nil {
+						fmt.Printf("iteration %d: %d fixed, %d new, %d remaining\n",
+							it, diff.FixedCount, diff.NewCount, diff.RemainingCount)
+					}
+					for _, w := range warnings {
+						fmt.Printf("  ! %s\n", w)
+					}
+				},
+			}
+
+			fmt.Printf("Starting loop: repo=%s tool=%s max-iterations=%d\n",
+				absRepo, eng.Name(), cfg.MaxIterations)
+			loop, err := controller.New(cfg).Run(ctx)
+			if err != nil {
+				return err
+			}
+			fmt.Printf("\nLoop %s: status=%s  fixed=%d  remaining=%d\n",
+				loop.ID, loop.Status, loop.TotalFindingsFixed, loop.TotalFindingsRemaining)
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&repoPath, "repo", "", "path to the git repository (required)")
+	cmd.Flags().StringVar(&branch, "branch", "", "branch to scan (defaults to the checked-out branch)")
+	cmd.Flags().IntVar(&maxIterations, "max-iterations", 5, "maximum loop iterations")
+	cmd.Flags().StringVar(&aiTool, "ai-tool", "auto", "AI fix engine (auto, claude-code, codex, custom:<cmd>)")
+	cmd.Flags().StringSliceVar(&severities, "severity", nil, "only target these severities")
+	cmd.Flags().DurationVar(&fixTimeout, "fix-timeout", 5*time.Minute, "per-finding fix timeout")
+	return cmd
 }
 
 // --- helpers ----------------------------------------------------------------

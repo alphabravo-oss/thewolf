@@ -377,14 +377,16 @@ func newFixCmd() *cobra.Command {
 
 // --- loops ------------------------------------------------------------------
 
-func newLoopCmd() *cobra.Command {
-	cmd := group("loop", "Manage scan/fix loops")
-
+// AddLoopSubcommands attaches the API-client loop subcommands to the
+// existing local `loop` command. After this, `wolf loop` (with --repo)
+// runs the local AI auto-remediation loop, while `wolf loop list`,
+// `wolf loop create`, etc. drive the server's loop API.
+func AddLoopSubcommands(loop *cobra.Command) {
 	var repoID, severity, strategy, engine string
 	var maxIter int
 	create := &cobra.Command{
 		Use:   "create",
-		Short: "Start a loop",
+		Short: "Start a server-managed loop",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if repoID == "" {
@@ -412,7 +414,7 @@ func newLoopCmd() *cobra.Command {
 	create.Flags().StringVar(&strategy, "strategy", "", "rescan strategy")
 	create.Flags().StringVar(&engine, "engine", "", "AI engine")
 
-	cmd.AddCommand(
+	loop.AddCommand(
 		listCmd("/loops", "List loops"),
 		getCmd("/loops", "Get a loop"),
 		create,
@@ -421,7 +423,6 @@ func newLoopCmd() *cobra.Command {
 		actionCmd("resume <id>", "Resume a loop", "PUT", "/loops/%s/resume"),
 		deleteCmd("stop <id>", "Stop a loop", "/loops/%s"),
 	)
-	return cmd
 }
 
 // --- users ------------------------------------------------------------------

@@ -69,4 +69,21 @@ type Finding struct {
 	// rule fired (e.g. "default:vendor", "default:test-file",
 	// ".wolfignore:**/legacy/**"). Empty when Suppressed is false.
 	SuppressedReason string `json:"suppressed_reason,omitempty" db:"-"`
+
+	// --- AI integration fields (Phase 1+). In-memory / on-disk only. ---
+
+	// AIFixPrompt is the remediation prompt produced by `wolf enrich` —
+	// a ready-to-hand-to-an-AI-agent description of the finding and how
+	// to fix it. Deterministically templated by default; optionally
+	// AI-authored. Empty until the finding is enriched.
+	AIFixPrompt string `json:"ai_fix_prompt,omitempty" db:"-"`
+
+	// TriagedBy records who set the current Status: "" (untriaged),
+	// "ai" (AI auto-remediation triage), or "human". Lets the UI flag
+	// AI-dismissed findings for human review.
+	TriagedBy string `json:"triaged_by,omitempty" db:"-"`
+
+	// AIUnfixable is true when the auto-fix loop exhausted a finding's
+	// per-finding fix budget without clearing it.
+	AIUnfixable bool `json:"ai_unfixable,omitempty" db:"-"`
 }
