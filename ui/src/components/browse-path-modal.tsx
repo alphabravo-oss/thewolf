@@ -3,16 +3,23 @@
 // user click into folders, then "Select" a directory. Folders that contain
 // a .git directory are flagged with a "git" badge so it's obvious where the
 // repos live without diving in.
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowUpIcon,
   FolderIcon,
   GitBranchIcon,
   Loader2Icon,
-  XIcon,
 } from "lucide-react";
 import { api } from "@/lib/api";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 type Entry = {
   name: string;
@@ -42,17 +49,6 @@ export function BrowsePathModal({
     initialPath?.trim() ? initialPath : undefined,
   );
 
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onClose();
-      }
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
   const q = useQuery({
     queryKey: ["browse", path ?? ""],
     queryFn: async () => {
@@ -63,38 +59,28 @@ export function BrowsePathModal({
   });
 
   return (
-    <div
-      role="dialog"
-      aria-label="Browse for local repository"
-      className="fixed inset-0 z-50 grid place-items-center bg-black/50 backdrop-blur-sm animate-fade-in p-4"
-      onClick={onClose}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="w-[min(48rem,100%)] max-h-[80vh] glass-card bg-popover/95 shadow-2xl border p-5 flex flex-col"
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent
+        aria-label="Browse for local repository"
+        className="max-w-3xl max-h-[80vh] flex flex-col"
       >
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-base font-semibold">Pick a local folder</h2>
-          <button
-            onClick={onClose}
-            className="size-7 grid place-items-center rounded-md hover:bg-muted/50"
-            aria-label="Close"
-          >
-            <XIcon className="size-4" />
-          </button>
-        </div>
+        <DialogHeader>
+          <DialogTitle>Pick a local folder</DialogTitle>
+        </DialogHeader>
 
-        <div className="flex items-center gap-2 mb-3 text-xs">
-          <button
+        <div className="flex items-center gap-2 text-xs">
+          <Button
             type="button"
+            variant="ghost"
+            size="sm"
             onClick={() => q.data?.parent && setPath(q.data.parent)}
             disabled={!q.data?.parent}
-            className="h-7 px-2 rounded-md hover:bg-muted/40 disabled:opacity-30 inline-flex items-center gap-1"
             aria-label="Go up"
+            className="h-7 px-2 gap-1"
           >
             <ArrowUpIcon className="size-3.5" />
             Up
-          </button>
+          </Button>
           <span className="font-mono text-muted-foreground truncate flex-1 min-w-0">
             {q.data?.current ?? "Loading…"}
           </span>
@@ -149,15 +135,11 @@ export function BrowsePathModal({
           )}
         </div>
 
-        <div className="flex justify-end gap-2 mt-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="h-8 px-3 rounded-md text-sm hover:bg-muted/40"
-          >
+        <DialogFooter>
+          <Button type="button" variant="ghost" onClick={onClose}>
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
             onClick={() => {
               if (q.data?.current) {
@@ -166,12 +148,11 @@ export function BrowsePathModal({
               }
             }}
             disabled={!q.data?.current}
-            className="h-8 px-3 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-50"
           >
             Select this folder
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
