@@ -5,7 +5,7 @@
 # Built only when wolf detects Rust code. Pulled lazily.
 # ============================================================
 
-FROM debian:trixie-slim AS base
+FROM debian:trixie-slim@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a0c3ccd26f436a0e AS base
 
 ARG WOLF_VERSION=dev
 LABEL org.opencontainers.image.title="wolf-scanners-rust" \
@@ -30,7 +30,7 @@ RUN chmod +x /usr/local/bin/wolf-tool-entry /usr/local/bin/smoke-test.sh
 COPY install/rust.sh    /tmp/install/rust.sh
 RUN  bash /tmp/install/rust.sh
 
-RUN /usr/local/bin/smoke-test.sh
+RUN WOLF_SMOKE_STRICT=1 /usr/local/bin/smoke-test.sh
 
 # Keep build-essential + libssl-dev — cargo needs them at scan time
 # when clippy compiles user code. Just trim docs/man dirs (~30MB).

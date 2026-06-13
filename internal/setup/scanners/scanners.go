@@ -68,13 +68,14 @@ type Config struct {
 // applying sensible defaults for any unset value. Callers can either use the
 // result directly or merge it with a yaml-loaded Config.
 func EnvDefaults() Config {
+	tag := envOr("WOLF_SCANNERS_TAG", "2.0.0")
 	return Config{
-		Image:                envOr("WOLF_SCANNERS_IMAGE", "alphabravodevops/wolf-scanners:latest"),
-		ImageOverrides:       envBucketOverrides(),
-		PullPolicy:           envOr("WOLF_SCANNERS_PULL_POLICY", "IfNotPresent"),
-		Network:              envOr("WOLF_SCANNERS_NETWORK", "bridge"),
-		Memory:               envOr("WOLF_SCANNERS_MEMORY", "2g"),
-		CPUs:                 envOr("WOLF_SCANNERS_CPUS", "1.5"),
+		Image:          envOr("WOLF_SCANNERS_IMAGE", "alphabravodevops/wolf-scanners:"+tag),
+		ImageOverrides: envBucketOverrides(),
+		PullPolicy:     envOr("WOLF_SCANNERS_PULL_POLICY", "IfNotPresent"),
+		Network:        envOr("WOLF_SCANNERS_NETWORK", "bridge"),
+		Memory:         envOr("WOLF_SCANNERS_MEMORY", "2g"),
+		CPUs:           envOr("WOLF_SCANNERS_CPUS", "1.5"),
 		// Default to a host bind-mount under ~/.wolf/scanner-cache so
 		// vulnerability DBs (grype, trivy, etc.) persist across scan
 		// runs without permission issues (the path inherits the host
@@ -94,6 +95,7 @@ func EnvDefaults() Config {
 func envBucketOverrides() map[string]string {
 	out := map[string]string{}
 	if v := os.Getenv("WOLF_SCANNERS_IMAGE_JVM"); v != "" {
+		out["detekt"] = v
 		out["infer"] = v
 		out["pmd"] = v
 	}
@@ -142,6 +144,7 @@ func (c Config) ToContainerConfig() (*container.Config, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
+	warnFloatingLatestImages(cfg)
 	return cfg, nil
 }
 
@@ -178,9 +181,45 @@ func LoadAndInstall(ctx context.Context) (*container.Config, error) {
 // image. Keys match the SCANNERS_IMAGE-{name} convention used by the
 // Makefile targets (scanners-build-jvm, etc.).
 var bucketImageTools = map[string][]string{
-	"jvm":    {"infer", "pmd"},
+	"jvm":    {"detekt", "infer", "pmd"},
 	"rust":   {"clippy"},
 	"codeql": {"codeql"},
+}
+
+func warnFloatingLatestImages(cfg *container.Config) {
+	for _, image := range latestTaggedScannerImages(cfg) {
+		wolflog.Warn().
+			Str("image", image).
+			Msg("scanner image uses floating :latest tag; pin a release tag or digest for reproducible scans")
+	}
+}
+
+func latestTaggedScannerImages(cfg *container.Config) []string {
+	if cfg == nil {
+		return nil
+	}
+	seen := map[string]struct{}{}
+	var out []string
+	for _, image := range cfg.AllImages() {
+		if !usesLatestTag(image) {
+			continue
+		}
+		if _, ok := seen[image]; ok {
+			continue
+		}
+		seen[image] = struct{}{}
+		out = append(out, image)
+	}
+	return out
+}
+
+func usesLatestTag(ref string) bool {
+	if ref == "" || strings.Contains(ref, "@sha256:") {
+		return false
+	}
+	slash := strings.LastIndex(ref, "/")
+	colon := strings.LastIndex(ref, ":")
+	return colon > slash && ref[colon+1:] == "latest"
 }
 
 // autoDiscoverBucketImages probes docker for locally-available bucket

@@ -4,7 +4,7 @@
 #
 # As of wolf 2.0, the well-supported multi-arch tools (trivy, grype,
 # syft, osv-scanner, gitleaks, trufflehog, hadolint, dockle, checkov,
-# tflint, kubescape, kube-linter, nuclei, vale, spectral, scancode,
+# tflint, kubescape, kube-linter, nuclei, vale, spectral,
 # scorecard) are NOT installed here — wolf's container shim uses the
 # maintainers' upstream-official images for those (see
 # internal/plugin/container/buckets.go DefaultUpstreamTools).

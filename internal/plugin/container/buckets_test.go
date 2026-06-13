@@ -6,6 +6,7 @@ func TestDefaultBucketImages(t *testing.T) {
 	m := DefaultBucketImages("ghcr.io/x/wolf-scanners", "2.0")
 
 	cases := map[string]string{
+		"detekt": "ghcr.io/x/wolf-scanners-jvm:2.0",
 		"infer":  "ghcr.io/x/wolf-scanners-jvm:2.0",
 		"pmd":    "ghcr.io/x/wolf-scanners-jvm:2.0",
 		"clippy": "ghcr.io/x/wolf-scanners-rust:2.0",

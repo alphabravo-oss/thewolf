@@ -3,13 +3,15 @@
 This directory builds the **four images** that together bundle every scanner that `thewolf` orchestrates. Wolf-slim spawns one short-lived container per tool invocation, picking the right image per tool.
 
 See `../PLAN.md` §5.1 for the full design rationale.
+See `tools.yaml` for the source manifest, `toolchains.yaml` for scanner image
+runtime/toolchain metadata, and `TOOLS.md` for the generated scanner table.
 
 ## Image matrix
 
 | Image | Build with | Tools | Approx size |
 |---|---|---|---|
-| `wolf-scanners` | `Dockerfile` | Cross-language + small lang tools (semgrep, bandit, ruff, gosec, eslint, trivy, gitleaks, …) | ~2–2.5 GB |
-| `wolf-scanners-jvm` | `Dockerfile.jvm` | infer, pmd, OpenJDK | ~2 GB |
+| `wolf-scanners` | `Dockerfile` | Small bundled tools (bandit, ruff, gosec, eslint, detect-secrets, sqlfluff, …) | ~2–2.5 GB |
+| `wolf-scanners-jvm` | `Dockerfile.jvm` | detekt, infer, pmd, OpenJDK | ~2 GB |
 | `wolf-scanners-rust` | `Dockerfile.rust` | clippy + rust toolchain | ~1.2 GB |
 | `wolf-scanners-codeql` | `Dockerfile.codeql` | CodeQL CLI (license-restricted) | ~700 MB |
 
@@ -23,12 +25,14 @@ scanners/
 ├── Dockerfile.jvm       # JVM bucket
 ├── Dockerfile.rust      # Rust bucket
 ├── Dockerfile.codeql    # CodeQL (license-gated)
-├── versions.env         # PINNED versions for every tool (source of truth)
+├── tools.yaml           # authoritative scanner manifest
+├── toolchains.yaml      # scanner image base/runtime toolchain metadata
+├── versions.env         # pinned versions consumed by scanner builds
 ├── wolf-tool-entry      # PID-1 entrypoint for every image
 ├── smoke-test.sh        # variant-aware smoke test (WOLF_SCANNERS_VARIANT env)
 ├── install/
-│   ├── core_python.sh   # semgrep, checkov, scancode, sqlfluff, detect-secrets
-│   ├── core_node.sh     # spectral
+│   ├── core_python.sh   # sqlfluff, detect-secrets, yamllint
+│   ├── core_node.sh     # currently empty; spectral is upstream
 │   ├── core_native.sh   # shellcheck (apt)
 │   ├── downloads.sh     # github release tars (trivy, grype, syft, ...)
 │   ├── lang_python.sh   # bandit, ruff, mypy, pip-audit, radon, vulture
@@ -38,7 +42,7 @@ scanners/
 │   ├── ruby.sh          # brakeman, rubocop
 │   ├── php.sh           # phpstan
 │   ├── swift.sh         # swiftlint
-│   ├── jvm.sh           # infer + pmd (Dockerfile.jvm only)
+│   ├── jvm.sh           # detekt + infer + pmd (Dockerfile.jvm only)
 │   ├── rust.sh          # rust toolchain + clippy (Dockerfile.rust only)
 │   ├── codeql.sh        # codeql bundle (Dockerfile.codeql only)
 │   ├── vuln-db-bake.sh  # build-time vuln DB cache (default image)
@@ -52,6 +56,9 @@ scanners/
 
 ```shell
 # From repo root
+make scanners-validate         # validates manifest, docs, version pins, routing
+make scanners-bump TOOL=semgrep VERSION=1.94.1
+
 make scanners-build            # builds default wolf-scanners:dev
 make scanners-build-jvm        # builds wolf-scanners-jvm:dev
 make scanners-build-rust       # builds wolf-scanners-rust:dev
@@ -79,13 +86,15 @@ The default override map is built by `container.DefaultBucketImages(base, versio
 
 ## Adding a new tool
 
-1. Pin a version in `versions.env`.
-2. Add an install line in the appropriate `install/<file>.sh`. Use a `core_*` script if the tool is cross-language, `lang_*` for language-specific small tools, or write a new script + Dockerfile if the tool needs a new heavy toolchain.
-3. Add a smoke-test line in `smoke-test.sh` under the right `want_*` block.
-4. If the tool lives in a non-default image, add it to `internal/plugin/container/buckets.go`'s `DefaultBucketImages` map.
-5. Build + smoke: `make scanners-build && make scanners-smoke` (and the matching variant if applicable).
-6. Write the wolf plugin under `../plugins/<bucket>/<tool>.go` using `container.CommandContext` (see `plugins/python/bandit.go` for the canonical pattern).
-7. Update `LICENSES.md` with the tool's license.
+1. Add the Wolf plugin under `../plugins/<bucket>/<tool>.go` using `container.CommandContext` (see `plugins/python/bandit.go` for the canonical pattern).
+2. Add a `tools.yaml` entry with the tool's category, integration tier, pinned version, update source, and docs metadata.
+3. Pin the matching version variable in `versions.env`.
+4. Add an install line in the appropriate `install/<file>.sh`. Use a `core_*` script if the tool is cross-language, `lang_*` for language-specific small tools, or write a new script + Dockerfile if the tool needs a new heavy toolchain.
+5. Add a smoke-test line in `smoke-test.sh` under the right variant block.
+6. If the tool lives in a non-default image, add it to `internal/plugin/container/buckets.go`.
+7. Regenerate docs and validate: `make scanners-docs && make scanners-validate`.
+8. Build + smoke: `make scanners-build && make scanners-smoke` (and the matching variant if applicable).
+9. Update `LICENSES.md` with the tool's license.
 
 ## Smoke test contract
 

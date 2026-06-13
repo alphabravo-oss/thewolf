@@ -2,8 +2,8 @@
 # ============================================================
 # Install Python-based scanners that are bundled in the default image.
 #
-# In wolf 2.0, the heavy/cross-language python tools (semgrep, checkov,
-# scancode) are run from upstream-official images via the shim's
+# In wolf 2.0, the heavy/cross-language python tools (semgrep, checkov)
+# are run from upstream-official images via the shim's
 # UpstreamTools map. What remains here are the small pure-Python
 # scanners we couldn't find a maintained upstream image for.
 # ============================================================

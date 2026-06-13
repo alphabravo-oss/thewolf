@@ -158,7 +158,7 @@ Wolf doesn't install scanners on the host. Every tool invocation is a `docker ru
 
 ### Tier 1 — Upstream-official images (no wolf rebuild)
 
-For tools where the maintainer publishes a multi-arch image, wolf routes invocations directly to their published image. We pin the version in `scanners/versions.env`. **18 tools currently use this tier** — see "Supported tools" below.
+For tools where the maintainer publishes a usable image, wolf routes invocations directly to their published image. We pin the version in `scanners/tools.yaml` and `scanners/versions.env`. **22 tools currently use this tier** — see "Supported tools" below.
 
 ### Tier 2 — Wolf-built default image (`wolf-scanners`)
 
@@ -170,7 +170,7 @@ Heavy toolchains that don't make sense in the default image and don't have a cle
 
 | Image | Tools | Approx size | Pulled when |
 |---|---|---|---|
-| `wolf-scanners-jvm` | infer, pmd (+ JDK) | ~2 GB | when a Java/Kotlin/C/C++ tool runs |
+| `wolf-scanners-jvm` | detekt, infer, pmd (+ JDK) | ~2 GB | when a Java/Kotlin/C/C++ tool runs |
 | `wolf-scanners-rust` | clippy (+ rust toolchain) | ~1.2 GB | when a Rust scan runs |
 | `wolf-scanners-codeql` | codeql + query packs | ~700 MB | only when codeql is explicitly enabled (license-gated) |
 
@@ -180,19 +180,19 @@ The shim's `Config.ImageFor(toolName)` walks: `UpstreamTools` → `ImageOverride
 
 Disable the upstream tier entirely (e.g. air-gapped, internal-mirror-only) with `WOLF_SCANNERS_DISABLE_UPSTREAM=1`.
 
-See `PLAN.md` for the full architecture; `scanners/README.md` for how to add or upgrade tools; `docs/MIGRATION_2_0.md` for the upgrade path from wolf 1.x.
+See `PLAN.md` for the full architecture; `scanners/tools.yaml` for the authoritative scanner manifest; `scanners/TOOLS.md` for the generated scanner table; `scanners/README.md` for how to add or upgrade tools; `docs/MIGRATION_2_0.md` for the upgrade path from wolf 1.x.
 
 ## Supported tools
 
-**Total: 44 scanners** across SAST, SCA, secrets, container, infrastructure, IaC, policy-as-code, license, SBOM, docs, DAST, repo-hygiene, dependency-freshness, privacy/PII, deprecated-API detection, and per-language categories.
+**Total: 49 scanners** across SAST, SCA, secrets, container, infrastructure, IaC, policy-as-code, license, SBOM, docs, DAST, repo-hygiene, dependency-freshness, privacy/PII, deprecated-API detection, and per-language categories.
 
 ### By tier
 
 | Tier | Count | How wolf gets the binary |
 |---|---|---|
-| **Upstream-official images** | 24 | `docker pull aquasec/trivy`, etc. — maintainer-published, multi-arch |
-| **Wolf-built default image** | 17 | bundled in `wolf-scanners:<version>` via pip / npm / go install / apt / composer / github-release |
-| **Wolf-built bucket images** | 3 | bundled in `wolf-scanners-{jvm,rust,codeql}:<version>` |
+| **Upstream-official images** | 22 | `docker pull aquasec/trivy`, etc. — maintainer-published |
+| **Wolf-built default image** | 22 | bundled in `wolf-scanners:<version>` via pip / npm / go install / apt / composer / github-release |
+| **Wolf-built bucket images** | 5 | bundled in `wolf-scanners-{jvm,rust,codeql}:<version>` |
 
 ### By language / category
 

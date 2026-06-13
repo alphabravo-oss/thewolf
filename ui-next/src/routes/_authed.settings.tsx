@@ -12,6 +12,7 @@ import {
   KeyIcon,
   Loader2Icon,
   PlusIcon,
+  RefreshCwIcon,
   ServerIcon,
   SettingsIcon,
   ShieldIcon,
@@ -873,6 +874,37 @@ interface ImageStatus {
   remote_error?: string;
 }
 
+interface ScannerToolStatus {
+  name: string;
+  display_name: string;
+  category: string;
+  integration_tier: "default" | "bucket" | "upstream" | string;
+  bucket?: string;
+  pinned_version?: string;
+  latest_version?: string;
+  latest_reference?: string;
+  freshness_status?: string;
+  version_check_error?: string;
+  version_checked_at?: string;
+  canonical_image?: string;
+  configured_image?: string;
+  image_present?: boolean;
+  overridden: boolean;
+  uses_latest_tag: boolean;
+}
+
+interface ScannerVersionCheck {
+  tool_name: string;
+  pinned_version: string;
+  latest_version?: string;
+  latest_reference?: string;
+  status: string;
+  checked_at: string;
+  error?: string;
+  source_type: string;
+  source_url?: string;
+}
+
 function ScannersTab() {
   const qc = useQueryClient();
   const cfgQ = useQuery({
@@ -1058,6 +1090,7 @@ function ScannersTab() {
       </div>
 
       <ImagesPanel />
+      <ScannerToolsPanel />
 
       <div className="glass-card p-5">
         <p className="text-xs text-muted-foreground mb-3">
@@ -1087,6 +1120,207 @@ function ScannersTab() {
         </div>
       )}
     </section>
+  );
+}
+
+function ScannerToolsPanel() {
+  const qc = useQueryClient();
+  const q = useQuery({
+    queryKey: ["scanner-tools"],
+    queryFn: async () =>
+      (await api.get<ScannerToolStatus[]>("/scanners/tools")).data ?? [],
+    refetchOnWindowFocus: false,
+  });
+  const checkAll = useMutation({
+    mutationFn: async () =>
+      (
+        await api.post<ScannerVersionCheck[]>("/scanners/tools/check-updates", {
+          force: true,
+        })
+      ).data ?? [],
+    onSuccess: (rows) => {
+      toast.success(`Checked ${rows.length} scanner tool(s)`);
+      qc.invalidateQueries({ queryKey: ["scanner-tools"] });
+    },
+    onError: (e) =>
+      toast.error(e instanceof Error ? e.message : "Version check failed"),
+  });
+  const checkOne = useMutation({
+    mutationFn: async (name: string) =>
+      (
+        await api.post<ScannerVersionCheck>(
+          `/scanners/tools/${encodeURIComponent(name)}/check-update`,
+        )
+      ).data,
+    onSuccess: (_, name) => {
+      toast.success(`Checked ${name}`);
+      qc.invalidateQueries({ queryKey: ["scanner-tools"] });
+    },
+    onError: (e) =>
+      toast.error(e instanceof Error ? e.message : "Version check failed"),
+  });
+
+  const tools = q.data ?? [];
+  const updateCount = tools.filter(
+    (t) => t.freshness_status === "update_available",
+  ).length;
+
+  return (
+    <div className="glass-card p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+        <div>
+          <h3 className="text-sm font-medium">Scanner tools</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {tools.length} tools
+            {updateCount > 0 && (
+              <span className="text-amber-300"> · {updateCount} update available</span>
+            )}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => checkAll.mutate()}
+          disabled={checkAll.isPending}
+          className="inline-flex items-center gap-1 h-8 px-2.5 rounded-md border border-border/60 text-xs hover:bg-muted/30 disabled:opacity-50"
+        >
+          {checkAll.isPending ? (
+            <Loader2Icon className="size-3.5 animate-spin" />
+          ) : (
+            <RefreshCwIcon className="size-3.5" />
+          )}
+          Check tool versions
+        </button>
+      </div>
+
+      {q.isLoading ? (
+        <p className="text-xs text-muted-foreground">Loading scanner tools…</p>
+      ) : q.isError ? (
+        <p className="text-xs text-destructive">Failed to load scanner tools.</p>
+      ) : tools.length > 0 ? (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-xs text-muted-foreground border-b border-border/30">
+              <tr>
+                <th className="text-left font-medium py-2 pr-3">Tool</th>
+                <th className="text-left font-medium py-2 pr-3">Tier</th>
+                <th className="text-left font-medium py-2 pr-3">Pinned</th>
+                <th className="text-left font-medium py-2 pr-3">Latest</th>
+                <th className="text-left font-medium py-2 pr-3">Status</th>
+                <th className="text-left font-medium py-2 pr-3">Image</th>
+                <th className="text-right font-medium py-2 pl-3">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tools.map((tool) => (
+                <tr key={tool.name} className="border-b border-border/15 last:border-0">
+                  <td className="py-2 pr-3">
+                    <div className="font-medium">{tool.display_name || tool.name}</div>
+                    <div className="text-[11px] text-muted-foreground">
+                      {tool.name} · {tool.category}
+                    </div>
+                  </td>
+                  <td className="py-2 pr-3">
+                    <TierPill tool={tool} />
+                  </td>
+                  <td className="py-2 pr-3 font-mono text-xs">
+                    {tool.pinned_version || "—"}
+                  </td>
+                  <td className="py-2 pr-3 font-mono text-xs">
+                    {tool.latest_version || "—"}
+                  </td>
+                  <td className="py-2 pr-3">
+                    <FreshnessPill tool={tool} />
+                  </td>
+                  <td className="py-2 pr-3 max-w-[260px]">
+                    <div
+                      className="font-mono text-xs truncate"
+                      title={tool.configured_image || tool.canonical_image || ""}
+                    >
+                      {tool.configured_image || tool.canonical_image || "—"}
+                    </div>
+                    {(tool.image_present !== undefined || tool.overridden || tool.uses_latest_tag) && (
+                      <div className="mt-1 flex gap-1">
+                        {tool.image_present !== undefined && (
+                          <span
+                            className={
+                              "text-[10px] uppercase tracking-wide border rounded px-1.5 py-0.5 " +
+                              (tool.image_present
+                                ? "text-emerald-300 bg-emerald-500/10 border-emerald-500/30"
+                                : "text-rose-300 bg-rose-500/10 border-rose-500/30")
+                            }
+                          >
+                            {tool.image_present ? "pulled" : "missing"}
+                          </span>
+                        )}
+                        {tool.overridden && (
+                          <span className="text-[10px] uppercase tracking-wide text-sky-300 bg-sky-500/10 border border-sky-500/30 rounded px-1.5 py-0.5">
+                            override
+                          </span>
+                        )}
+                        {tool.uses_latest_tag && (
+                          <span className="text-[10px] uppercase tracking-wide text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded px-1.5 py-0.5">
+                            latest
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </td>
+                  <td className="py-2 pl-3 text-right">
+                    <button
+                      type="button"
+                      onClick={() => checkOne.mutate(tool.name)}
+                      disabled={checkOne.isPending}
+                      className="inline-flex items-center justify-center h-7 w-7 rounded-md border border-border/60 hover:bg-muted/30 disabled:opacity-50"
+                      title={`Check ${tool.name}`}
+                    >
+                      {checkOne.isPending && checkOne.variables === tool.name ? (
+                        <Loader2Icon className="size-3.5 animate-spin" />
+                      ) : (
+                        <RefreshCwIcon className="size-3.5" />
+                      )}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground">No scanner tools found.</p>
+      )}
+    </div>
+  );
+}
+
+function TierPill({ tool }: { tool: ScannerToolStatus }) {
+  const label =
+    tool.integration_tier === "bucket" && tool.bucket
+      ? `${tool.bucket} bucket`
+      : tool.integration_tier;
+  return (
+    <span className="text-[10px] uppercase tracking-wide text-muted-foreground bg-muted/30 border border-border/30 rounded px-1.5 py-0.5">
+      {label}
+    </span>
+  );
+}
+
+function FreshnessPill({ tool }: { tool: ScannerToolStatus }) {
+  const status = tool.freshness_status || "not checked";
+  const className =
+    status === "update_available"
+      ? "text-amber-300 bg-amber-500/10 border-amber-500/30"
+      : status === "current"
+        ? "text-emerald-300 bg-emerald-500/10 border-emerald-500/30"
+        : status === "check_failed"
+          ? "text-red-300 bg-red-500/10 border-red-500/30"
+          : "text-muted-foreground bg-muted/20 border-border/30";
+  return (
+    <span
+      className={`text-[10px] uppercase tracking-wide border rounded px-1.5 py-0.5 ${className}`}
+      title={tool.version_check_error || tool.version_checked_at || status}
+    >
+      {status.replaceAll("_", " ")}
+    </span>
   );
 }
 

@@ -46,13 +46,21 @@ jobs:
       fail-fast: false
       matrix:
         variant:
-          - { name: "default", dockerfile: "Dockerfile",        image: "wolf-scanners" }
-          - { name: "jvm",     dockerfile: "Dockerfile.jvm",    image: "wolf-scanners-jvm" }
-          - { name: "rust",    dockerfile: "Dockerfile.rust",   image: "wolf-scanners-rust" }
-          - { name: "codeql",  dockerfile: "Dockerfile.codeql", image: "wolf-scanners-codeql" }
+          - { name: "default", dockerfile: "Dockerfile",        image: "wolf-scanners",        platforms: "linux/amd64,linux/arm64" }
+          - { name: "jvm",     dockerfile: "Dockerfile.jvm",    image: "wolf-scanners-jvm",    platforms: "linux/amd64,linux/arm64" }
+          - { name: "rust",    dockerfile: "Dockerfile.rust",   image: "wolf-scanners-rust",   platforms: "linux/amd64,linux/arm64" }
+          - { name: "codeql",  dockerfile: "Dockerfile.codeql", image: "wolf-scanners-codeql", platforms: "linux/amd64" }
 
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Validate scanner metadata
+        run: make scanners-validate
 
       - name: Compute tags
         id: meta
@@ -117,9 +125,12 @@ jobs:
       # even with multi-platform requested.
       - uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3
         with:
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ matrix.variant.platforms }}
 
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Validate upstream scanner images
+        run: make scanners-upstream-check
 
       # ghcr login — always present (GITHUB_TOKEN is automatic).
       - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3

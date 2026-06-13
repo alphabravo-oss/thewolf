@@ -35,6 +35,10 @@ func (p *DetektPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]
 		defer cancel()
 	}
 	cfg := container.ConfigFromOpts(opts.ContainerCfg)
+	if !cfg.HasDedicatedImage("detekt") {
+		plugin.Skipf(opts.OnOutput, "detekt", "detekt requires the wolf-scanners-jvm bucket image; skipping.")
+		return nil, nil
+	}
 	// detekt writes the report to a path; we use sh -c to read it back.
 	script := "detekt --input /scan --report xml:/tmp/detekt.xml >/dev/null 2>&1 || true; " +
 		"cat /tmp/detekt.xml 2>/dev/null || echo '<checkstyle/>'"
@@ -63,13 +67,13 @@ func (p *DetektPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]
 
 // Checkstyle XML schema (subset used by detekt).
 type detektCheckstyle struct {
-	XMLName xml.Name      `xml:"checkstyle"`
-	Files   []detektFile  `xml:"file"`
+	XMLName xml.Name     `xml:"checkstyle"`
+	Files   []detektFile `xml:"file"`
 }
 
 type detektFile struct {
-	Name   string         `xml:"name,attr"`
-	Errors []detektError  `xml:"error"`
+	Name   string        `xml:"name,attr"`
+	Errors []detektError `xml:"error"`
 }
 
 type detektError struct {

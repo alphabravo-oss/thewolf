@@ -2,8 +2,12 @@ package routes
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -21,16 +25,20 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/api/sse"
 	"github.com/alphabravocompany/thewolf/internal/artifacts"
 	"github.com/alphabravocompany/thewolf/internal/auth"
+	findingdiff "github.com/alphabravocompany/thewolf/internal/finding/diff"
+	findingsuppression "github.com/alphabravocompany/thewolf/internal/finding/suppression"
 	"github.com/alphabravocompany/thewolf/internal/models"
 	promptpkg "github.com/alphabravocompany/thewolf/internal/prompt"
 	"github.com/alphabravocompany/thewolf/internal/scan/coverage"
 	"github.com/alphabravocompany/thewolf/internal/scan/detector"
 	"github.com/alphabravocompany/thewolf/internal/scan/enricher"
 	"github.com/alphabravocompany/thewolf/internal/scan/mapper"
+	"github.com/alphabravocompany/thewolf/internal/scan/planner"
 	"github.com/alphabravocompany/thewolf/internal/scan/report"
 	"github.com/alphabravocompany/thewolf/internal/scan/runner"
 	"github.com/alphabravocompany/thewolf/internal/scan/scorer"
 	"github.com/alphabravocompany/thewolf/internal/scan/suppress"
+	scannermanifest "github.com/alphabravocompany/thewolf/internal/scannertools/manifest"
 	"github.com/alphabravocompany/thewolf/internal/scantarget"
 	"github.com/alphabravocompany/thewolf/internal/secrets"
 	"github.com/alphabravocompany/thewolf/internal/wolflog"
@@ -246,7 +254,9 @@ func executeScan(h *Handler, scanID, userID, repoID, branch string, req createSc
 	// grow new frameworks, and we want the repo detail page to show the
 	// current truth. Cheap (one tree walk + a few file reads), runs
 	// inline so the scan picks up the same tool selection the UI shows.
+	var detectedLanguages []models.Language
 	if detResult, derr := detector.Detect(repoPath); derr == nil {
+		detectedLanguages = languagesFromModelCounts(detResult.Languages)
 		langs := make(map[string]int, len(detResult.Languages))
 		for l, n := range detResult.Languages {
 			langs[string(l)] = n
@@ -256,6 +266,8 @@ func executeScan(h *Handler, scanID, userID, repoID, branch string, req createSc
 		if uerr := h.Store.UpdateRepoDetection(ctx, scan.RepoID, string(langsJSON), string(fwJSON)); uerr != nil {
 			log.Warn().Err(uerr).Str("repo_id", scan.RepoID).Msg("scan: failed to persist detection refresh")
 		}
+	} else {
+		log.Warn().Err(derr).Str("scan_id", scanID).Msg("scan: language detection failed; runner will use fallback selection")
 	}
 
 	// Per-tool log files live under a project- and time-stamped directory so
@@ -295,6 +307,12 @@ func executeScan(h *Handler, scanID, userID, repoID, branch string, req createSc
 	// always shows "0s" because the SSE payload hardcoded elapsed.
 	toolStartTimes := make(map[string]time.Time)
 	cumulativeFindingCount := 0
+	activeSuppressions, suppressionErr := h.Store.ListFindingSuppressions(context.Background(), scan.RepoID, false)
+	if suppressionErr != nil {
+		log.Warn().Str("scan_id", scanID).Err(suppressionErr).Msg("failed to load durable suppressions")
+		activeSuppressions = nil
+	}
+	scanBranches := map[string]string{scanID: branch}
 
 	// Read scan concurrency from settings (default: 8).
 	scanConcurrency := 8
@@ -303,16 +321,36 @@ func executeScan(h *Handler, scanID, userID, repoID, branch string, req createSc
 			scanConcurrency = n
 		}
 	}
-	log.Info().Str("scan_id", scanID).Int("concurrency", scanConcurrency).Msg("scan concurrency configured")
+	heavyScannerConcurrency := 1
+	if val, err := h.Store.GetSetting(context.Background(), "heavy_scanner_concurrency"); err == nil && val != "" {
+		if n, parseErr := strconv.Atoi(val); parseErr == nil && n > 0 {
+			heavyScannerConcurrency = n
+		}
+	}
+	networkScannerConcurrency := 2
+	if val, err := h.Store.GetSetting(context.Background(), "network_scanner_concurrency"); err == nil && val != "" {
+		if n, parseErr := strconv.Atoi(val); parseErr == nil && n > 0 {
+			networkScannerConcurrency = n
+		}
+	}
+	log.Info().
+		Str("scan_id", scanID).
+		Int("concurrency", scanConcurrency).
+		Int("heavy_concurrency", heavyScannerConcurrency).
+		Int("network_concurrency", networkScannerConcurrency).
+		Msg("scan concurrency configured")
 
+	var scannerPlan *report.ScannerPlan
 	cfg := runner.RunConfig{
-		RepoPath:      repoPath,
-		Branch:        branch,
-		Registry:      h.Registry,
-		Tools:         req.Tools,
-		DisabledTools: req.DisabledTools,
-		Concurrency:   scanConcurrency,
-		RawOutputDir:  rawDir,
+		RepoPath:           repoPath,
+		Branch:             branch,
+		Registry:           h.Registry,
+		Tools:              req.Tools,
+		DisabledTools:      req.DisabledTools,
+		Concurrency:        scanConcurrency,
+		HeavyConcurrency:   heavyScannerConcurrency,
+		NetworkConcurrency: networkScannerConcurrency,
+		RawOutputDir:       rawDir,
 		OnToolsSelected: func(toolNames []string) {
 			log.Info().Str("scan_id", scanID).Int("count", len(toolNames)).Strs("tools", toolNames).Msg("tools selected")
 			// Persist selected tools immediately so the live page can show all cards. // #nosec G104 -- intentional: response/log write errors are not actionable here
@@ -341,9 +379,11 @@ func executeScan(h *Handler, scanID, userID, repoID, branch string, req createSc
 		},
 		OnToolStart: func(toolName string) {
 			log.Debug().Str("scan_id", scanID).Str("tool", toolName).Msg("tool starting")
+			startedAt := time.Now().UTC()
 			toolStateMu.Lock()
-			toolStartTimes[toolName] = time.Now()
+			toolStartTimes[toolName] = startedAt
 			toolStateMu.Unlock()
+			upsertScannerRunRecord(context.Background(), h, scannerRunRecordStart(scanID, toolName, scannerPlan, startedAt))
 			if SSEBroker != nil {
 				SSEBroker.Publish(topic, sse.Event{
 					Type: "scan_progress",
@@ -386,9 +426,11 @@ func executeScan(h *Handler, scanID, userID, repoID, branch string, req createSc
 					toolFindings[i].ID = uuid.New().String()
 					toolFindings[i].ScanID = scanID
 					toolFindings[i].RepoID = scan.RepoID
+					applyScanSourceToFinding(&toolFindings[i], scan, branch)
 					toolFindings[i].CreatedAt = persistAt
 					toolFindings[i].UpdatedAt = persistAt
 				}
+				toolFindings, _ = findingsuppression.Apply(toolFindings, activeSuppressions, scanBranches, persistAt)
 				if createErr := h.Store.CreateFindings(context.Background(), toolFindings); createErr != nil {
 					log.Error().Str("scan_id", scanID).Str("tool", toolName).Err(createErr).Msg("failed to persist tool findings")
 				}
@@ -432,13 +474,21 @@ func executeScan(h *Handler, scanID, userID, repoID, branch string, req createSc
 			// zero duration on the tool card. Without this every tool
 			// shows 0s forever; both OnToolStart and OnToolDone were
 			// hardcoding elapsed_ms=0 in the SSE payload.
+			finishedAt := time.Now().UTC()
 			elapsedMs := int64(0)
+			var recordStartedAt *time.Time
 			toolStateMu.Lock()
 			if startedAt, ok := toolStartTimes[toolName]; ok {
-				elapsedMs = time.Since(startedAt).Milliseconds()
+				elapsedMs = finishedAt.Sub(startedAt).Milliseconds()
+				recordStartedAt = &startedAt
 				delete(toolStartTimes, toolName)
 			}
 			toolStateMu.Unlock()
+			recordStatus := status
+			if wasCancelled {
+				recordStatus = "cancelled"
+			}
+			upsertScannerRunRecord(context.Background(), h, scannerRunRecordDone(scanID, toolName, scannerPlan, recordStatus, findingCount, errMsg, elapsedMs, recordStartedAt, finishedAt))
 
 			// Broadcast SSE with per-tool count and cumulative total.
 			if SSEBroker != nil {
@@ -471,8 +521,29 @@ func executeScan(h *Handler, scanID, userID, repoID, branch string, req createSc
 			logMu.Unlock()
 		},
 	}
+	if len(req.Tools) == 0 {
+		cfg.Languages = detectedLanguages
+	}
+
+	if toolManifest, merr := scannermanifest.LoadDefault(); merr == nil {
+		cfg.ToolResources = runner.ResourceSpecsFromManifest(toolManifest)
+		scannerPlan = planner.ToReportPlan(planner.Build(planner.Config{
+			Registry:      h.Registry,
+			Manifest:      toolManifest,
+			Languages:     detectedLanguages,
+			Tools:         req.Tools,
+			DisabledTools: req.DisabledTools,
+		}))
+	} else {
+		log.Warn().Err(merr).Str("scan_id", scanID).Msg("scanner tool manifest unavailable; manifest scanner plan omitted")
+	}
 
 	result, runErr := runner.Run(ctx, cfg)
+	if result != nil {
+		for _, toolName := range result.ToolsSkipped {
+			upsertScannerRunRecord(context.Background(), h, scannerRunRecordSkipped(scanID, toolName, scannerPlan, "tool unavailable"))
+		}
+	}
 
 	// Update scan with results.
 	completedAt := time.Now()
@@ -499,6 +570,7 @@ func executeScan(h *Handler, scanID, userID, repoID, branch string, req createSc
 	scan.UpdatedAt = completedAt
 
 	if result != nil {
+		applyScanSourceToFindings(result.Findings, scan, branch)
 		failedNames := make(map[string]bool, len(result.ToolsFailed))
 		for name := range result.ToolsFailed {
 			failedNames[name] = true
@@ -617,16 +689,7 @@ func executeScan(h *Handler, scanID, userID, repoID, branch string, req createSc
 		f.Close() // #nosec G104 -- intentional: HTTP write / log errors aren't actionable in this branch
 		info, err := os.Stat(f.Name())
 		if err == nil && info.Size() > 0 {
-			artifact := &models.ScanArtifact{
-				ID:           uuid.New().String(),
-				ScanID:       scanID,
-				ArtifactType: models.ArtifactLog,
-				FilePath:     f.Name(),
-				FileSize:     info.Size(),
-				CreatedAt:    time.Now(),
-				UpdatedAt:    time.Now(),
-			}
-			h.Store.CreateScanArtifact(context.Background(), artifact) // #nosec G104 -- intentional: HTTP write / log errors aren't actionable in this branch
+			recordScanArtifact(context.Background(), h, scanID, models.ArtifactLog, f.Name())
 		}
 	}
 
@@ -645,16 +708,7 @@ func executeScan(h *Handler, scanID, userID, repoID, branch string, req createSc
 			if err := os.WriteFile(fpath, data, 0o600); err != nil {
 				continue
 			}
-			artifact := &models.ScanArtifact{
-				ID:           uuid.New().String(),
-				ScanID:       scanID,
-				ArtifactType: models.ArtifactJSON,
-				FilePath:     fpath,
-				FileSize:     int64(len(data)),
-				CreatedAt:    time.Now(),
-				UpdatedAt:    time.Now(),
-			}
-			h.Store.CreateScanArtifact(context.Background(), artifact) // #nosec G104 -- intentional: HTTP write / log errors aren't actionable in this branch
+			recordScanArtifact(context.Background(), h, scanID, models.ArtifactJSON, fpath)
 		}
 	}
 
@@ -674,12 +728,14 @@ func executeScan(h *Handler, scanID, userID, repoID, branch string, req createSc
 		}
 		mfst := report.Manifest{
 			ScanID:      scanID,
+			Source:      scanSourceProvenance(scan),
 			RepoName:    filepath.Base(repoPath),
 			RepoPath:    repoPath,
 			Branch:      branch,
 			StartedAt:   now,
 			FinishedAt:  completedAt,
 			ScannersRun: result.ToolsRun,
+			ScannerPlan: scannerPlan,
 			Failed: func() map[string]string {
 				if len(result.ToolsFailed) == 0 {
 					return nil
@@ -695,6 +751,12 @@ func executeScan(h *Handler, scanID, userID, repoID, branch string, req createSc
 		if w, werr := report.WriteAll(logDir, rcfg, mfst); werr != nil {
 			log.Warn().Str("scan_id", scanID).Err(werr).Msg("artifact bundle write failed")
 		} else {
+			recordScanArtifact(context.Background(), h, scanID, models.ArtifactJSON, w.FindingsJSON)
+			recordScanArtifact(context.Background(), h, scanID, models.ArtifactMarkdown, w.RawMarkdown)
+			recordScanArtifact(context.Background(), h, scanID, models.ArtifactSARIF, w.CombinedSARIF)
+			recordScanArtifact(context.Background(), h, scanID, models.ArtifactManifest, w.Manifest)
+			recordScanArtifact(context.Background(), h, scanID, models.ArtifactMarkdown, w.FixHigh)
+			recordScanArtifact(context.Background(), h, scanID, models.ArtifactMarkdown, w.FixAll)
 			log.Info().Str("scan_id", scanID).
 				Str("findings_json", w.FindingsJSON).
 				Str("manifest", w.Manifest).
@@ -704,6 +766,12 @@ func executeScan(h *Handler, scanID, userID, repoID, branch string, req createSc
 
 	// Mark scan complete NOW — tools are done. AI assessment runs in background.
 	_ = h.Store.UpdateScan(context.Background(), scan)
+	if gateResult, eval, policy, findingCount, gateErr := evaluateAndPersistGateContext(context.Background(), h, scanID, userID); gateErr != nil {
+		log.Warn().Str("scan_id", scanID).Err(gateErr).Msg("quality gate evaluation failed")
+	} else {
+		_ = writeGateResultArtifact(context.Background(), h, scan, gateResult, eval, policy, findingCount, logDir)
+		log.Info().Str("scan_id", scanID).Str("gate_status", eval.Status).Msg("quality gate evaluated")
+	}
 
 	if SSEBroker != nil {
 		SSEBroker.Publish(topic, sse.Event{
@@ -908,6 +976,9 @@ func GetScanFindings(w http.ResponseWriter, r *http.Request) {
 		response.WriteError(w, http.StatusNotFound, "not_found", fmt.Sprintf("scan %s not found", scanID))
 		return
 	}
+	if !ensureScanOwner(w, scan, claims) {
+		return
+	}
 
 	findings, err := h.Store.ListFindingsByScan(r.Context(), scanID)
 	if err != nil {
@@ -1026,6 +1097,14 @@ func GetScanFindingStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	scanID := chi.URLParam(r, "id")
+	scan, err := h.Store.GetScanByID(r.Context(), scanID)
+	if err != nil {
+		response.WriteError(w, http.StatusNotFound, "not_found", fmt.Sprintf("scan %s not found", scanID))
+		return
+	}
+	if !ensureScanOwner(w, scan, claims) {
+		return
+	}
 	findings, err := h.Store.ListFindingsByScan(r.Context(), scanID)
 	if err != nil {
 		response.WriteError(w, http.StatusNotFound, "not_found", fmt.Sprintf("scan %s not found", scanID))
@@ -1154,6 +1233,9 @@ func GetScanReport(w http.ResponseWriter, r *http.Request) {
 		response.WriteError(w, http.StatusNotFound, "not_found", fmt.Sprintf("scan %s not found", scanID)) // #nosec G104 -- intentional: response/log write errors are not actionable here
 		return
 	}
+	if !ensureScanOwner(w, scan, claims) {
+		return
+	}
 
 	cfg, err := buildReportConfig(h, r, scan)
 	if err != nil {
@@ -1171,6 +1253,57 @@ func GetScanReport(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="scan-%s-report.md"`, scanID))
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(md)) // nosemgrep: go.lang.security.audit.xss.no-direct-write-to-responsewriter.no-direct-write-to-responsewriter // #nosec G104 -- intentional: HTTP write / log errors aren't actionable in this branch
+}
+
+// GetScanManifest handles GET /api/scans/:id/manifest.
+func GetScanManifest(w http.ResponseWriter, r *http.Request) {
+	claims := auth.GetUserFromContext(r.Context())
+	if claims == nil {
+		response.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing user context")
+		return
+	}
+	h := DefaultHandler
+	if h == nil {
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "handler not initialized")
+		return
+	}
+
+	scanID := chi.URLParam(r, "id")
+	scan, err := h.Store.GetScanByID(r.Context(), scanID)
+	if err != nil {
+		response.WriteError(w, http.StatusNotFound, "not_found", fmt.Sprintf("scan %s not found", scanID))
+		return
+	}
+	if scan.UserID != "" && scan.UserID != claims.UserID {
+		response.WriteError(w, http.StatusForbidden, "forbidden", "scan does not belong to current user")
+		return
+	}
+
+	if artifact, ok := findScanArtifactByType(r.Context(), h, scanID, models.ArtifactManifest); ok {
+		content, err := os.ReadFile(artifact.FilePath)
+		if err == nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="scan-%s-manifest.json"`, scanID))
+			w.WriteHeader(http.StatusOK)
+			w.Write(content) // nosemgrep: go.lang.security.audit.xss.no-direct-write-to-responsewriter.no-direct-write-to-responsewriter // #nosec G104 -- intentional: HTTP write / log errors aren't actionable in this branch
+			return
+		}
+	}
+
+	mfst, err := buildFallbackManifest(h, r, scan)
+	if err != nil {
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to build manifest")
+		return
+	}
+	data, err := report.MarshalManifest(mfst)
+	if err != nil {
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to marshal manifest")
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="scan-%s-manifest.json"`, scanID))
+	w.WriteHeader(http.StatusOK)
+	w.Write(data) // nosemgrep: go.lang.security.audit.xss.no-direct-write-to-responsewriter.no-direct-write-to-responsewriter // #nosec G104 -- intentional: HTTP write / log errors aren't actionable in this branch
 }
 
 // GetScanSARIF handles GET /api/scans/:id/sarif — generate and return SARIF report.
@@ -1191,6 +1324,9 @@ func GetScanSARIF(w http.ResponseWriter, r *http.Request) {
 	scan, err := h.Store.GetScanByID(r.Context(), scanID)
 	if err != nil {
 		response.WriteError(w, http.StatusNotFound, "not_found", fmt.Sprintf("scan %s not found", scanID)) // #nosec G104 -- intentional: response/log write errors are not actionable here
+		return
+	}
+	if !ensureScanOwner(w, scan, claims) {
 		return
 	}
 
@@ -1358,6 +1494,10 @@ type ComparisonSummary struct {
 	DeltaPercent   float64 `json:"delta_percent"`
 }
 
+type compareScanRequest struct {
+	BaselineScanID string `json:"baseline_scan_id"`
+}
+
 // CompareScan handles GET /api/scans/{id}/compare/{compareId} — compare two scans.
 func CompareScan(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetUserFromContext(r.Context())
@@ -1374,56 +1514,121 @@ func CompareScan(w http.ResponseWriter, r *http.Request) {
 	id1 := chi.URLParam(r, "id")
 	id2 := chi.URLParam(r, "compareId")
 
-	scan1, err := h.Store.GetScanByID(r.Context(), id1)
+	result, scan2, err := compareScanPair(r.Context(), h, claims.UserID, id1, id2)
 	if err != nil {
-		response.WriteError(w, http.StatusNotFound, "not_found", fmt.Sprintf("scan %s not found", id1))
+		writeCompareError(w, err)
 		return
 	}
-	scan2, err := h.Store.GetScanByID(r.Context(), id2)
-	if err != nil {
-		response.WriteError(w, http.StatusNotFound, "not_found", fmt.Sprintf("scan %s not found", id2))
+	_, _ = writeJSONScanArtifact(r.Context(), h, scan2.ID, artifactDirForScan(r.Context(), h, scan2), "diff.json", result)
+	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: result})
+}
+
+// CompareScanToBaseline handles POST /api/scans/{id}/compare.
+func CompareScanToBaseline(w http.ResponseWriter, r *http.Request) {
+	claims := auth.GetUserFromContext(r.Context())
+	if claims == nil {
+		response.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing user context")
 		return
 	}
-	findings1, err := h.Store.ListFindingsByScan(r.Context(), id1)
-	if err != nil {
-		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to list findings for scan1")
+	h := DefaultHandler
+	if h == nil {
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "handler not initialized")
 		return
 	}
-	findings2, err := h.Store.ListFindingsByScan(r.Context(), id2)
-	if err != nil {
-		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to list findings for scan2")
+	var req compareScanRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.WriteError(w, http.StatusBadRequest, "bad_request", "invalid JSON body")
 		return
+	}
+	if req.BaselineScanID == "" {
+		response.WriteError(w, http.StatusBadRequest, "bad_request", "baseline_scan_id is required")
+		return
+	}
+	currentID := chi.URLParam(r, "id")
+	result, scan, err := compareScanPair(r.Context(), h, claims.UserID, req.BaselineScanID, currentID)
+	if err != nil {
+		writeCompareError(w, err)
+		return
+	}
+	_, _ = writeJSONScanArtifact(r.Context(), h, scan.ID, artifactDirForScan(r.Context(), h, scan), "diff.json", result)
+	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: result})
+}
+
+// GetScanDiff handles GET /api/scans/{id}/diff?baseline_scan_id=...
+func GetScanDiff(w http.ResponseWriter, r *http.Request) {
+	claims := auth.GetUserFromContext(r.Context())
+	if claims == nil {
+		response.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing user context")
+		return
+	}
+	h := DefaultHandler
+	if h == nil {
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "handler not initialized")
+		return
+	}
+	baselineID := r.URL.Query().Get("baseline_scan_id")
+	if baselineID == "" {
+		response.WriteError(w, http.StatusBadRequest, "bad_request", "baseline_scan_id is required")
+		return
+	}
+	currentID := chi.URLParam(r, "id")
+	result, scan, err := compareScanPair(r.Context(), h, claims.UserID, baselineID, currentID)
+	if err != nil {
+		writeCompareError(w, err)
+		return
+	}
+	_, _ = writeJSONScanArtifact(r.Context(), h, scan.ID, artifactDirForScan(r.Context(), h, scan), "diff.json", result)
+	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: result})
+}
+
+func compareScanPair(ctx context.Context, h *Handler, userID, baselineScanID, currentScanID string) (ComparisonResult, *models.Scan, error) {
+	scan1, err := h.Store.GetScanByID(ctx, baselineScanID)
+	if err != nil {
+		return ComparisonResult{}, nil, fmt.Errorf("baseline scan %s not found", baselineScanID)
+	}
+	scan2, err := h.Store.GetScanByID(ctx, currentScanID)
+	if err != nil {
+		return ComparisonResult{}, nil, fmt.Errorf("current scan %s not found", currentScanID)
+	}
+	if scan1.UserID != userID || scan2.UserID != userID {
+		return ComparisonResult{}, nil, errForbidden()
+	}
+	if err := validateScanSourceCompatibility(scan1, scan2); err != nil {
+		return ComparisonResult{}, nil, err
+	}
+	findings1, err := h.Store.ListFindingsByScan(ctx, baselineScanID)
+	if err != nil {
+		return ComparisonResult{}, nil, fmt.Errorf("failed to list findings for baseline scan: %w", err)
+	}
+	findings2, err := h.Store.ListFindingsByScan(ctx, currentScanID)
+	if err != nil {
+		return ComparisonResult{}, nil, fmt.Errorf("failed to list findings for current scan: %w", err)
 	}
 
-	// Index findings by fingerprint.
-	map1 := make(map[string]models.Finding, len(findings1))
-	for _, f := range findings1 {
-		map1[f.Fingerprint] = f
-	}
-	map2 := make(map[string]models.Finding, len(findings2))
-	for _, f := range findings2 {
-		map2[f.Fingerprint] = f
-	}
-
-	var newFindings []models.Finding
-	var fixedFindings []models.Finding
+	diffResult := findingdiff.Compare(findings1, findings2)
+	newFindings := diffResult.New
+	fixedFindings := diffResult.Fixed
 	var changedFindings []ChangedFinding
-	unchangedCount := 0
+	unchangedCount := len(diffResult.Existing)
 
-	for fp, f2 := range map2 {
-		f1, exists := map1[fp]
-		if !exists {
-			newFindings = append(newFindings, f2)
-		} else if f1.Severity != f2.Severity || f1.Status != f2.Status {
-			changedFindings = append(changedFindings, ChangedFinding{Before: f1, After: f2})
-		} else {
-			unchangedCount++
+	baselineByStable := make(map[string]models.Finding, len(findings1))
+	for _, f := range findings1 {
+		key := f.StableFingerprint
+		if key == "" {
+			key = f.Fingerprint
+		}
+		if key != "" {
+			baselineByStable[key] = f
 		}
 	}
-
-	for fp, f1 := range map1 {
-		if _, exists := map2[fp]; !exists {
-			fixedFindings = append(fixedFindings, f1)
+	for _, f2 := range diffResult.Existing {
+		key := f2.StableFingerprint
+		if key == "" {
+			key = f2.Fingerprint
+		}
+		if f1, exists := baselineByStable[key]; exists && (f1.Severity != f2.Severity || f1.Status != f2.Status) {
+			changedFindings = append(changedFindings, ChangedFinding{Before: f1, After: f2})
+			unchangedCount--
 		}
 	}
 
@@ -1462,7 +1667,35 @@ func CompareScan(w http.ResponseWriter, r *http.Request) {
 		result.ChangedFindings = []ChangedFinding{}
 	}
 
-	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: result})
+	if summaryJSON, err := json.Marshal(result.Summary); err == nil {
+		_ = h.Store.UpsertScanComparison(ctx, &models.ScanComparison{
+			ID:             uuid.New().String(),
+			RepoID:         scan2.RepoID,
+			BaselineScanID: scan1.ID,
+			CurrentScanID:  scan2.ID,
+			SummaryJSON:    string(summaryJSON),
+		})
+	}
+
+	return result, scan2, nil
+}
+
+func writeCompareError(w http.ResponseWriter, err error) {
+	var forbidden forbiddenError
+	if errors.As(err, &forbidden) {
+		response.WriteError(w, http.StatusForbidden, "forbidden", "scan does not belong to current user")
+		return
+	}
+	var validation validationError
+	if errors.As(err, &validation) {
+		response.WriteError(w, http.StatusBadRequest, "validation_error", validation.Error())
+		return
+	}
+	if strings.Contains(err.Error(), "not found") {
+		response.WriteError(w, http.StatusNotFound, "not_found", err.Error())
+		return
+	}
+	response.WriteError(w, http.StatusInternalServerError, "server_error", err.Error())
 }
 
 // GetScanCoverage handles GET /api/scans/:id/coverage — return coverage analysis.
@@ -1946,9 +2179,12 @@ func DownloadArtifact(w http.ResponseWriter, r *http.Request) {
 	scanID := chi.URLParam(r, "id")
 	artifactID := chi.URLParam(r, "artifactId")
 
-	_, err := h.Store.GetScanByID(r.Context(), scanID)
+	scan, err := h.Store.GetScanByID(r.Context(), scanID)
 	if err != nil {
 		response.WriteError(w, http.StatusNotFound, "not_found", "scan not found")
+		return
+	}
+	if !ensureScanOwner(w, scan, claims) {
 		return
 	}
 
@@ -1978,7 +2214,7 @@ func DownloadArtifact(w http.ResponseWriter, r *http.Request) {
 
 	ct := "application/octet-stream"
 	switch target.ArtifactType {
-	case models.ArtifactJSON, models.ArtifactSARIF:
+	case models.ArtifactJSON, models.ArtifactSARIF, models.ArtifactManifest:
 		ct = "application/json"
 	case models.ArtifactMarkdown:
 		ct = "text/markdown; charset=utf-8"
@@ -1993,6 +2229,381 @@ func DownloadArtifact(w http.ResponseWriter, r *http.Request) {
 }
 
 // --- helpers ---
+
+func recordScanArtifact(ctx context.Context, h *Handler, scanID string, artifactType models.ArtifactType, path string) {
+	if h == nil || h.Store == nil || path == "" {
+		return
+	}
+	info, err := os.Stat(path)
+	if err != nil || info.IsDir() {
+		return
+	}
+	checksum, _ := fileSHA256(path)
+	now := time.Now()
+	_ = h.Store.CreateScanArtifact(ctx, &models.ScanArtifact{
+		ID:             uuid.New().String(),
+		ScanID:         scanID,
+		ArtifactType:   artifactType,
+		FilePath:       path,
+		FileSize:       info.Size(),
+		ChecksumSHA256: checksum,
+		RedactionLevel: artifactRedactionLevel(artifactType, path),
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	})
+}
+
+func writeJSONScanArtifact(ctx context.Context, h *Handler, scanID, dir, filename string, payload any) (string, error) {
+	if dir == "" {
+		return "", fmt.Errorf("artifact directory is empty")
+	}
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		return "", err
+	}
+	data, err := json.MarshalIndent(payload, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	path := filepath.Join(dir, filename)
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		return "", err
+	}
+	recordScanArtifact(ctx, h, scanID, models.ArtifactJSON, path)
+	return path, nil
+}
+
+func artifactDirForScan(ctx context.Context, h *Handler, scan *models.Scan) string {
+	if h == nil || h.Store == nil || scan == nil {
+		return ""
+	}
+	if existing, err := h.Store.ListScanArtifacts(ctx, scan.ID); err == nil {
+		for _, artifact := range existing {
+			if artifact.FilePath != "" {
+				return filepath.Dir(artifact.FilePath)
+			}
+		}
+	}
+	ts := scan.CreatedAt
+	if scan.StartedAt != nil {
+		ts = *scan.StartedAt
+	}
+	repoPath := scan.SourcePath
+	if repoPath == "" && scan.RepoID != "" {
+		if repo, err := h.Store.GetRepoByID(ctx, scan.RepoID); err == nil && repo != nil {
+			repoPath = repo.SourcePath
+		}
+	}
+	if repoPath == "" {
+		repoPath = scan.ID
+	}
+	if artifacts.Global != nil {
+		return filepath.Join(artifacts.Global.Root(), report.ScanDirName(repoPath, ts.UTC(), scan.ID))
+	}
+	return filepath.Join(os.TempDir(), "wolf-scans", report.ScanDirName(repoPath, ts.UTC(), scan.ID))
+}
+
+func fileSHA256(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close() // #nosec G104 -- checksum best effort
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+func artifactRedactionLevel(artifactType models.ArtifactType, path string) string {
+	switch artifactType {
+	case models.ArtifactLog:
+		return "raw_evidence"
+	case models.ArtifactJSON:
+		switch filepath.Base(path) {
+		case "findings.json", "diff.json", "gate-result.json":
+			return "internal_report"
+		default:
+			return "raw_evidence"
+		}
+	case models.ArtifactSARIF, models.ArtifactMarkdown, models.ArtifactManifest, models.ArtifactCoverage:
+		return "internal_report"
+	default:
+		return "internal_report"
+	}
+}
+
+func scannerRunRecordStart(scanID, toolName string, plan *report.ScannerPlan, startedAt time.Time) *models.ScannerRunRecord {
+	meta := scannerRunPlanDecision(plan, toolName)
+	return &models.ScannerRunRecord{
+		ID:           uuid.New().String(),
+		ScanID:       scanID,
+		ToolName:     toolName,
+		Status:       "running",
+		Category:     meta.Category,
+		Image:        meta.Image,
+		ImageDigest:  imageDigestFromRef(meta.Image),
+		CommandJSON:  "{}",
+		ParserStatus: "pending",
+		StartedAt:    &startedAt,
+	}
+}
+
+func scannerRunRecordDone(scanID, toolName string, plan *report.ScannerPlan, status string, findingCount int, errMsg string, durationMS int64, startedAt *time.Time, finishedAt time.Time) *models.ScannerRunRecord {
+	meta := scannerRunPlanDecision(plan, toolName)
+	exitCode := 0
+	parserStatus := "parsed"
+	if status == "failed" || status == "cancelled" {
+		exitCode = 1
+		parserStatus = "failed"
+	}
+	return &models.ScannerRunRecord{
+		ID:            uuid.New().String(),
+		ScanID:        scanID,
+		ToolName:      toolName,
+		Status:        status,
+		Category:      meta.Category,
+		Image:         meta.Image,
+		ImageDigest:   imageDigestFromRef(meta.Image),
+		CommandJSON:   "{}",
+		ExitCode:      exitCode,
+		DurationMS:    durationMS,
+		FindingCount:  findingCount,
+		ErrorMessage:  errMsg,
+		ParserStatus:  parserStatus,
+		ParserMessage: errMsg,
+		StartedAt:     startedAt,
+		FinishedAt:    &finishedAt,
+	}
+}
+
+func scannerRunRecordSkipped(scanID, toolName string, plan *report.ScannerPlan, reason string) *models.ScannerRunRecord {
+	meta := scannerRunPlanDecision(plan, toolName)
+	return &models.ScannerRunRecord{
+		ID:            uuid.New().String(),
+		ScanID:        scanID,
+		ToolName:      toolName,
+		Status:        "skipped",
+		Category:      meta.Category,
+		Image:         meta.Image,
+		ImageDigest:   imageDigestFromRef(meta.Image),
+		CommandJSON:   "{}",
+		ErrorMessage:  reason,
+		ParserStatus:  "not_run",
+		ParserMessage: reason,
+	}
+}
+
+func upsertScannerRunRecord(ctx context.Context, h *Handler, record *models.ScannerRunRecord) {
+	if h == nil || h.Store == nil || record == nil {
+		return
+	}
+	_ = h.Store.UpsertScannerRunRecord(ctx, record)
+}
+
+func scannerRunPlanDecision(plan *report.ScannerPlan, toolName string) report.ScannerPlanDecision {
+	if plan == nil {
+		return report.ScannerPlanDecision{}
+	}
+	for _, decision := range plan.Run {
+		if decision.Tool == toolName {
+			return decision
+		}
+	}
+	for _, decision := range plan.Skip {
+		if decision.Tool == toolName {
+			return decision
+		}
+	}
+	return report.ScannerPlanDecision{}
+}
+
+func imageDigestFromRef(ref string) string {
+	if _, digest, ok := strings.Cut(ref, "@"); ok {
+		return digest
+	}
+	return ""
+}
+
+func findScanArtifactByType(ctx context.Context, h *Handler, scanID string, artifactType models.ArtifactType) (models.ScanArtifact, bool) {
+	if h == nil || h.Store == nil {
+		return models.ScanArtifact{}, false
+	}
+	artifacts, err := h.Store.ListScanArtifacts(ctx, scanID)
+	if err != nil {
+		return models.ScanArtifact{}, false
+	}
+	for _, artifact := range artifacts {
+		if artifact.ArtifactType == artifactType {
+			return artifact, true
+		}
+	}
+	return models.ScanArtifact{}, false
+}
+
+func buildFallbackManifest(h *Handler, r *http.Request, scan *models.Scan) (report.Manifest, error) {
+	cfg, err := buildReportConfig(h, r, scan)
+	if err != nil {
+		return report.Manifest{}, err
+	}
+	startedAt := scan.CreatedAt
+	if scan.StartedAt != nil {
+		startedAt = *scan.StartedAt
+	}
+	finishedAt := time.Now()
+	if scan.CompletedAt != nil {
+		finishedAt = *scan.CompletedAt
+	}
+	langs := make([]string, 0, len(cfg.Languages))
+	for lang := range cfg.Languages {
+		langs = append(langs, lang)
+	}
+	sort.Strings(langs)
+	failed := make(map[string]string, len(cfg.ToolsFailed))
+	for tool, err := range cfg.ToolsFailed {
+		failed[tool] = err.Error()
+	}
+	if len(failed) == 0 {
+		failed = nil
+	}
+	return report.Manifest{
+		ScanID:     scan.ID,
+		Source:     scanSourceProvenance(scan),
+		RepoName:   cfg.RepoName,
+		RepoPath:   scan.SourcePath,
+		RepoCommit: scan.CommitSHA,
+		Branch:     scan.Branch,
+		StartedAt:  startedAt,
+		FinishedAt: finishedAt,
+		Detection: report.DetectionSummary{
+			Languages:  langs,
+			Frameworks: cfg.Frameworks,
+		},
+		ScannersRun: cfg.ToolsRun,
+		Failed:      failed,
+		Counts:      report.CountFindings(0, cfg.Findings),
+	}, nil
+}
+
+type validationError struct {
+	msg string
+}
+
+func (e validationError) Error() string { return e.msg }
+
+func validateScanSourceCompatibility(a, b *models.Scan) error {
+	if a.RepoID != b.RepoID {
+		return validationError{msg: "cannot compare scans from different repositories"}
+	}
+	aKind := scanSourceKind(a)
+	bKind := scanSourceKind(b)
+	if aKind != "" && bKind != "" && aKind != bKind {
+		return validationError{msg: fmt.Sprintf("cannot compare scans from incompatible source kinds: %s vs %s", aKind, bKind)}
+	}
+	if aKind == "ssh_path" || bKind == "ssh_path" {
+		aNode := scanRemoteNodeID(a)
+		bNode := scanRemoteNodeID(b)
+		if aNode != "" && bNode != "" && aNode != bNode {
+			return validationError{msg: "cannot compare SSH scans from different remote nodes"}
+		}
+	}
+	return nil
+}
+
+func scanSourceProvenance(scan *models.Scan) *report.SourceProvenance {
+	if scan == nil {
+		return nil
+	}
+	source := &report.SourceProvenance{
+		Kind:       scanSourceKind(scan),
+		RepoID:     scan.RepoID,
+		RepoPath:   scan.SourcePath,
+		Branch:     scan.Branch,
+		CommitSHA:  scan.CommitSHA,
+		DirtyState: scan.DirtyState,
+	}
+	source.RemoteNodeID = scanRemoteNodeID(scan)
+	switch source.Kind {
+	case "ssh_path":
+		source.SnapshotStrategy = "remote_archive"
+	case "local_path":
+		source.SnapshotStrategy = "working_tree"
+	case "github", "git_clone":
+		source.SnapshotStrategy = "git_checkout"
+	}
+	return source
+}
+
+func applyScanSourceToFindings(findings []models.Finding, scan *models.Scan, branch string) {
+	for i := range findings {
+		applyScanSourceToFinding(&findings[i], scan, branch)
+	}
+}
+
+func applyScanSourceToFinding(f *models.Finding, scan *models.Scan, branch string) {
+	if f == nil || scan == nil {
+		return
+	}
+	if f.SourceKind == "" {
+		f.SourceKind = scanSourceKind(scan)
+	}
+	if f.SourceRef == "" {
+		f.SourceRef = scanSourceRef(scan, branch)
+	}
+}
+
+func scanSourceKind(scan *models.Scan) string {
+	if scan == nil {
+		return ""
+	}
+	switch scan.SourceType {
+	case models.SourceTypeLocal, "":
+		return "local_path"
+	case models.SourceTypeSSH:
+		return "ssh_path"
+	case models.SourceTypeGitHub:
+		return "github"
+	case models.SourceTypeGit, models.SourceTypeGitLab:
+		return "git_clone"
+	default:
+		return string(scan.SourceType)
+	}
+}
+
+func scanSourceRef(scan *models.Scan, branch string) string {
+	if scan == nil {
+		return branch
+	}
+	if branch == "" {
+		branch = scan.Branch
+	}
+	if scan.CommitSHA != "" {
+		if branch != "" {
+			return branch + "@" + scan.CommitSHA
+		}
+		return scan.CommitSHA
+	}
+	return branch
+}
+
+func scanRemoteNodeID(scan *models.Scan) string {
+	if scan == nil || scan.RemoteNodeID == nil {
+		return ""
+	}
+	return *scan.RemoteNodeID
+}
+
+func ensureScanOwner(w http.ResponseWriter, scan *models.Scan, claims *auth.Claims) bool {
+	if scan == nil || claims == nil {
+		response.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing user context")
+		return false
+	}
+	if scan.UserID != "" && scan.UserID != claims.UserID {
+		response.WriteError(w, http.StatusForbidden, "forbidden", "scan does not belong to current user")
+		return false
+	}
+	return true
+}
 
 // buildReportConfig assembles a ReportConfig from DB data for on-demand report generation.
 func buildReportConfig(h *Handler, r *http.Request, scan *models.Scan) (report.ReportConfig, error) {
@@ -2145,9 +2756,12 @@ func GetToolOutput(w http.ResponseWriter, r *http.Request) {
 	scanID := chi.URLParam(r, "id")
 	toolName := chi.URLParam(r, "toolName")
 
-	_, err := h.Store.GetScanByID(r.Context(), scanID)
+	scan, err := h.Store.GetScanByID(r.Context(), scanID)
 	if err != nil { // #nosec G104 -- intentional: response/log write errors are not actionable here
 		response.WriteError(w, http.StatusNotFound, "not_found", fmt.Sprintf("scan %s not found", scanID))
+		return
+	}
+	if !ensureScanOwner(w, scan, claims) {
 		return
 	}
 
@@ -2338,6 +2952,9 @@ func GetScanTools(w http.ResponseWriter, r *http.Request) {
 		response.WriteError(w, http.StatusNotFound, "not_found", fmt.Sprintf("scan %s not found", scanID))
 		return
 	}
+	if !ensureScanOwner(w, scan, claims) {
+		return
+	}
 
 	// Parse tool arrays.
 	var selected, completed, failed []string
@@ -2387,12 +3004,13 @@ func GetScanTools(w http.ResponseWriter, r *http.Request) {
 	}
 
 	type toolStatus struct {
-		Name         string `json:"name"`
-		Status       string `json:"status"`
-		FindingCount int    `json:"finding_count"`       // visible (post-suppression)
-		RawCount     int    `json:"raw_count,omitempty"` // pre-suppression
-		HasOutput    bool   `json:"has_output"`
-		Error        string `json:"error,omitempty"`
+		Name         string                   `json:"name"`
+		Status       string                   `json:"status"`
+		FindingCount int                      `json:"finding_count"`       // visible (post-suppression)
+		RawCount     int                      `json:"raw_count,omitempty"` // pre-suppression
+		HasOutput    bool                     `json:"has_output"`
+		Error        string                   `json:"error,omitempty"`
+		Run          *models.ScannerRunRecord `json:"run,omitempty"`
 	}
 
 	// Distinguish "running" from "queued" by peeking at the live tool
@@ -2409,8 +3027,16 @@ func GetScanTools(w http.ResponseWriter, r *http.Request) {
 	}
 	activeScansMu.Unlock()
 
+	runRecords, _ := h.Store.ListScannerRunRecords(r.Context(), scanID)
+	runByTool := make(map[string]models.ScannerRunRecord, len(runRecords))
+	for _, record := range runRecords {
+		runByTool[record.ToolName] = record
+	}
+
 	var tools []toolStatus
+	selectedSet := make(map[string]bool, len(selected))
 	for _, name := range selected {
+		selectedSet[name] = true
 		var status string
 		switch {
 		case completedSet[name]:
@@ -2434,6 +3060,10 @@ func GetScanTools(w http.ResponseWriter, r *http.Request) {
 		default:
 			status = "queued"
 		}
+		var run *models.ScannerRunRecord
+		if record, ok := runByTool[name]; ok {
+			run = &record
+		}
 		tools = append(tools, toolStatus{
 			Name:         name,
 			Status:       status,
@@ -2441,12 +3071,64 @@ func GetScanTools(w http.ResponseWriter, r *http.Request) {
 			RawCount:     totalCounts[name],
 			HasOutput:    hasOutput[name],
 			Error:        errs[name],
+			Run:          run,
+		})
+	}
+	for _, record := range runRecords {
+		if selectedSet[record.ToolName] {
+			continue
+		}
+		record := record
+		tools = append(tools, toolStatus{
+			Name:         record.ToolName,
+			Status:       record.Status,
+			FindingCount: visibleCounts[record.ToolName],
+			RawCount:     totalCounts[record.ToolName],
+			HasOutput:    hasOutput[record.ToolName],
+			Error:        record.ErrorMessage,
+			Run:          &record,
 		})
 	}
 
 	response.WriteJSON(w, http.StatusOK, response.ListResponse{
 		Data: tools,
 		Meta: response.ListMeta{Total: len(tools), Page: 1, PerPage: len(tools)},
+	})
+}
+
+// GetScannerRunRecords handles GET /api/scans/{id}/scanner-runs.
+func GetScannerRunRecords(w http.ResponseWriter, r *http.Request) {
+	claims := auth.GetUserFromContext(r.Context())
+	if claims == nil {
+		response.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing user context")
+		return
+	}
+	h := DefaultHandler
+	if h == nil {
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "handler not initialized")
+		return
+	}
+
+	scanID := chi.URLParam(r, "id")
+	scan, err := h.Store.GetScanByID(r.Context(), scanID)
+	if err != nil {
+		response.WriteError(w, http.StatusNotFound, "not_found", fmt.Sprintf("scan %s not found", scanID))
+		return
+	}
+	if !ensureScanOwner(w, scan, claims) {
+		return
+	}
+	records, err := h.Store.ListScannerRunRecords(r.Context(), scanID)
+	if err != nil {
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to list scanner run records")
+		return
+	}
+	if records == nil {
+		records = []models.ScannerRunRecord{}
+	}
+	response.WriteJSON(w, http.StatusOK, response.ListResponse{
+		Data: records,
+		Meta: response.ListMeta{Total: len(records), Page: 1, PerPage: len(records)},
 	})
 }
 

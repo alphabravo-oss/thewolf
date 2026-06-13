@@ -64,6 +64,8 @@ func Endpoints() []Endpoint {
 		{"PUT", "/repos/{id}", "repos", "Update a repository", "write:repos", "UpdateRepoRequest", false},
 		{"DELETE", "/repos/{id}", "repos", "Delete a repository", "write:repos", "", false},
 		{"GET", "/repos/{id}/branches", "repos", "List a repository's branches", "read:repos", "", true},
+		{"GET", "/repos/{id}/baselines", "repos", "List repository scan baselines", "read:scans", "", true},
+		{"POST", "/repos/{id}/baselines", "repos", "Create a repository scan baseline", "write:scans", "CreateBaselineRequest", false},
 
 		// Remote SSH nodes.
 		{"GET", "/nodes", "nodes", "List remote SSH nodes", "read:config", "", true},
@@ -95,10 +97,15 @@ func Endpoints() []Endpoint {
 		{"GET", "/scans/{id}/findings/stats", "scans", "Finding statistics for a scan", "read:scans", "", false},
 		{"GET", "/scans/{id}/stream", "scans", "Stream scan progress (SSE)", "read:scans", "", false},
 		{"GET", "/scans/{id}/report", "scans", "Get a scan's report", "read:scans", "", false},
+		{"GET", "/scans/{id}/manifest", "scans", "Get a scan's manifest", "read:scans", "", false},
 		{"GET", "/scans/{id}/sarif", "scans", "Get a scan's SARIF output", "read:scans", "", false},
 		{"GET", "/scans/{id}/coverage", "scans", "Get a scan's coverage", "read:scans", "", false},
+		{"GET", "/scans/{id}/gate", "scans", "Get a scan's quality gate result", "read:scans", "", false},
+		{"GET", "/scans/{id}/diff", "scans", "Get a scan's baseline diff", "read:scans", "", false},
+		{"POST", "/scans/{id}/compare", "scans", "Compare a scan to a baseline scan", "read:scans", "CompareScanRequest", false},
 		{"GET", "/scans/{id}/compare/{compareId}", "scans", "Compare two scans", "read:scans", "", false},
 		{"GET", "/scans/{id}/tools", "scans", "List a scan's tools", "read:scans", "", true},
+		{"GET", "/scans/{id}/scanner-runs", "scans", "List scanner run records", "read:scans", "", true},
 		{"GET", "/scans/{id}/tools/{toolName}/output", "scans", "Get a tool's raw output", "read:scans", "", false},
 		{"GET", "/scans/{id}/artifacts/{artifactId}/download", "scans", "Download a scan artifact", "read:scans", "", false},
 		{"GET", "/scans/{id}/ai-logs", "scans", "List a scan's AI logs", "read:scans", "", true},
@@ -114,6 +121,20 @@ func Endpoints() []Endpoint {
 		{"GET", "/findings/trends/export", "findings", "Export finding trends", "read:findings", "", false},
 		{"GET", "/findings/{id}", "findings", "Get a finding", "read:findings", "", false},
 		{"PUT", "/findings/{id}/status", "findings", "Change a finding's status", "write:findings", "FindingStatusRequest", false},
+
+		// SARIF.
+		{"POST", "/sarif/import", "sarif", "Import SARIF findings", "write:scans", "SARIFImportRequest", false},
+
+		// Suppressions.
+		{"GET", "/suppressions", "suppressions", "List finding suppressions", "read:findings", "", true},
+		{"POST", "/suppressions", "suppressions", "Create a finding suppression", "write:findings", "SuppressionRequest", false},
+		{"POST", "/suppressions/preview", "suppressions", "Preview a finding suppression", "write:findings", "SuppressionRequest", false},
+		{"DELETE", "/suppressions/{id}", "suppressions", "Revoke a finding suppression", "write:findings", "", false},
+
+		// Policies.
+		{"GET", "/policies", "policies", "List quality policies", "read:config", "", true},
+		{"POST", "/policies", "policies", "Create a quality policy", "write:config", "PolicyRequest", false},
+		{"PUT", "/policies/{id}", "policies", "Update a quality policy", "write:config", "PolicyRequest", false},
 
 		// Fixes.
 		{"GET", "/fixes", "fixes", "List fixes", "read:fixes", "", true},
@@ -144,10 +165,15 @@ func Endpoints() []Endpoint {
 		{"GET", "/config/setup", "config", "Get setup status", "read:config", "", false},
 
 		// Scanners.
+		{"GET", "/scanners/tools", "scanners", "List scanner tools", "read:config", "", true},
+		{"GET", "/scanners/tools/{name}", "scanners", "Get scanner tool", "read:config", "", false},
+		{"POST", "/scanners/tools/check-updates", "scanners", "Check scanner tool updates", "write:config", "", true},
+		{"POST", "/scanners/tools/{name}/check-update", "scanners", "Check one scanner tool update", "write:config", "", false},
 		{"GET", "/scanners/images", "scanners", "List scanner images", "read:config", "", true},
 		{"POST", "/scanners/images/pull", "scanners", "Pull one scanner image", "write:config", "", false},
 		{"GET", "/scanners/config", "scanners", "Get scanner config", "read:config", "", false},
 		{"GET", "/scanners/list", "scanners", "List scanners", "read:config", "", true},
+		{"POST", "/scanners/plan", "scanners", "Explain scanner run and skip decisions", "read:config", "ScannerPlanRequest", false},
 		{"POST", "/scanners/doctor", "scanners", "Run scanner diagnostics", "write:config", "", false},
 		{"POST", "/scanners/pull", "scanners", "Pull all scanner images", "write:config", "", false},
 

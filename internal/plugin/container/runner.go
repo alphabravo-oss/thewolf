@@ -91,8 +91,17 @@ func CommandContext(ctx context.Context, cfg *Config, opts Options, tool string,
 	if cfg == nil || cfg.Disabled {
 		// Returning a guaranteed-failure command lets callers surface a clean
 		// error instead of nil-deref. Operators should never hit this path.
-		cmd := exec.CommandContext(ctx, "false")
-		return cmd
+		return scannerFailureCommand(ctx, "scanner container backend is not configured")
+	}
+	image := cfg.ImageFor(tool)
+	if image == "" {
+		return scannerFailureCommand(ctx, fmt.Sprintf("scanner image for tool %q is empty", tool))
+	}
+	if !scannerImageReady(ctx, cfg, image) {
+		return scannerFailureCommand(ctx, fmt.Sprintf(
+			"scanner image for tool %q is not present locally: %s (pull it with `docker pull %s` or `wolf scanner pull-image %s`)",
+			tool, image, image, image,
+		))
 	}
 
 	id := atomic.AddUint64(&containerCounter, 1)
@@ -101,6 +110,7 @@ func CommandContext(ctx context.Context, cfg *Config, opts Options, tool string,
 	dockerArgs := []string{
 		"run",
 		"--rm",
+		"--pull", "never",
 		"--name", name,
 		"--user", fmt.Sprintf("%d:%d", cfg.UID, cfg.GID),
 		"--read-only",
@@ -116,8 +126,7 @@ func CommandContext(ctx context.Context, cfg *Config, opts Options, tool string,
 		if opts.RepoDir == "" {
 			// Returning a failing command keeps the type signature simple and
 			// lets the runner's normal error pathway surface this to the user.
-			cmd := exec.CommandContext(ctx, "false")
-			return cmd
+			return scannerFailureCommand(ctx, "scanner repo mount path is empty")
 		}
 		hostPath := cfg.TranslateRepoPath(opts.RepoDir)
 		mountFlag := fmt.Sprintf("%s:%s:ro", hostPath, ScanMountPoint)
@@ -203,10 +212,10 @@ func CommandContext(ctx context.Context, cfg *Config, opts Options, tool string,
 		// becomes `<entrypoint> <tool> <args...>`, so plugins setting
 		// EntrypointOverride="sh" end up with `sh sh -c "..."` which
 		// fails with `sh: 0: cannot open sh: No such file`.
-		dockerArgs = append(dockerArgs, cfg.ImageFor(tool))
+		dockerArgs = append(dockerArgs, image)
 		dockerArgs = append(dockerArgs, args...)
 	} else {
-		dockerArgs = append(dockerArgs, cfg.ImageFor(tool), tool)
+		dockerArgs = append(dockerArgs, image, tool)
 		dockerArgs = append(dockerArgs, args...)
 	}
 
@@ -233,6 +242,17 @@ func CommandContext(ctx context.Context, cfg *Config, opts Options, tool string,
 	cmd.WaitDelay = 5 * time.Second
 
 	return cmd
+}
+
+func scannerImageReady(ctx context.Context, cfg *Config, image string) bool {
+	if cfg != nil && image == cfg.Image && ImageReady(cfg) {
+		return true
+	}
+	return imageInspect(ctx, image) == nil
+}
+
+func scannerFailureCommand(ctx context.Context, msg string) *exec.Cmd {
+	return exec.CommandContext(ctx, "sh", "-c", "printf '%s\n' \"$1\" >&2; exit 127", "wolf-scanner-error", msg)
 }
 
 // sanitizeName replaces characters disallowed in docker container names so
@@ -275,7 +295,7 @@ func BuildDockerArgs(cfg *Config, opts Options, tool string, args ...string) (co
 	containerName = fmt.Sprintf("wolf-scan-%s-%d-%d", sanitizeName(tool), time.Now().UnixNano(), id)
 
 	dockerArgs = []string{
-		"run", "--rm", "--name", containerName,
+		"run", "--rm", "--pull", "never", "--name", containerName,
 		"--user", fmt.Sprintf("%d:%d", cfg.UID, cfg.GID),
 		"--read-only",
 		// 4 GiB headroom: trivy + grype each unpack ~1GB vulnerability

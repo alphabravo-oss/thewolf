@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"net/url"
+	"os"
 
 	"github.com/spf13/cobra"
 )
@@ -295,6 +296,134 @@ func newCollectionCmd() *cobra.Command {
 	return cmd
 }
 
+// --- baselines --------------------------------------------------------------
+
+func newBaselineCmd() *cobra.Command {
+	cmd := group("baseline", "Manage scan baselines")
+
+	var listRepo, listBranch string
+	list := &cobra.Command{
+		Use:   "list",
+		Short: "List repository baselines",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if listRepo == "" {
+				return fmt.Errorf("--repo is required")
+			}
+			q := url.Values{}
+			if listBranch != "" {
+				q.Set("branch", listBranch)
+			}
+			path := "/repos/" + listRepo + "/baselines"
+			if encoded := q.Encode(); encoded != "" {
+				path += "?" + encoded
+			}
+			return runRender(cmd, "GET", path, nil)
+		},
+	}
+	list.Flags().StringVar(&listRepo, "repo", "", "repository ID")
+	list.Flags().StringVar(&listBranch, "branch", "", "branch filter")
+
+	var createRepo, createName, createScan, createBranch, createStrategy string
+	create := &cobra.Command{
+		Use:   "create",
+		Short: "Create a repository baseline from a scan",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if createRepo == "" || createName == "" || createScan == "" {
+				return fmt.Errorf("--repo, --name, and --scan are required")
+			}
+			body := map[string]any{"name": createName, "scan_id": createScan}
+			if createBranch != "" {
+				body["branch"] = createBranch
+			}
+			if createStrategy != "" {
+				body["strategy"] = createStrategy
+			}
+			return runRender(cmd, "POST", "/repos/"+createRepo+"/baselines", body)
+		},
+	}
+	create.Flags().StringVar(&createRepo, "repo", "", "repository ID")
+	create.Flags().StringVar(&createName, "name", "", "baseline name")
+	create.Flags().StringVar(&createScan, "scan", "", "source scan ID")
+	create.Flags().StringVar(&createBranch, "branch", "", "baseline branch")
+	create.Flags().StringVar(&createStrategy, "strategy", "", "baseline strategy label")
+
+	cmd.AddCommand(list, create)
+	return cmd
+}
+
+// --- comparisons ------------------------------------------------------------
+
+func newCompareCmd() *cobra.Command {
+	var scanID, baselineID string
+	cmd := &cobra.Command{
+		Use:   "compare",
+		Short: "Compare a scan to a baseline scan",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if scanID == "" || baselineID == "" {
+				return fmt.Errorf("--scan and --baseline are required")
+			}
+			return runRender(cmd, "POST", "/scans/"+scanID+"/compare", map[string]any{
+				"baseline_scan_id": baselineID,
+			})
+		},
+	}
+	cmd.Flags().StringVar(&scanID, "scan", "", "current scan ID")
+	cmd.Flags().StringVar(&baselineID, "baseline", "", "baseline scan ID")
+	return cmd
+}
+
+// --- SARIF ------------------------------------------------------------------
+
+func newSarifCmd() *cobra.Command {
+	cmd := group("sarif", "Import and export SARIF")
+
+	var importRepo, importFile, importBranch, importSource string
+	importCmd := &cobra.Command{
+		Use:   "import",
+		Short: "Import SARIF findings as a completed scan",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if importRepo == "" || importFile == "" {
+				return fmt.Errorf("--repo and --file are required")
+			}
+			data, err := os.ReadFile(importFile)
+			if err != nil {
+				return fmt.Errorf("read --file: %w", err)
+			}
+			body := map[string]any{
+				"repo_id": importRepo,
+				"sarif":   string(data),
+			}
+			if importBranch != "" {
+				body["branch"] = importBranch
+			}
+			if importSource != "" {
+				body["source"] = importSource
+			}
+			return runRender(cmd, "POST", "/sarif/import", body)
+		},
+	}
+	importCmd.Flags().StringVar(&importRepo, "repo", "", "repository ID")
+	importCmd.Flags().StringVar(&importFile, "file", "", "SARIF file path")
+	importCmd.Flags().StringVar(&importBranch, "branch", "", "branch label for the imported scan")
+	importCmd.Flags().StringVar(&importSource, "source", "", "import source label")
+
+	exportCmd := &cobra.Command{
+		Use:   "export <scan-id>",
+		Short: "Export a scan as SARIF",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runRender(cmd, "GET", "/scans/"+args[0]+"/sarif", nil)
+		},
+	}
+
+	cmd.AddCommand(importCmd, exportCmd)
+	return cmd
+}
+
 // --- findings ---------------------------------------------------------------
 
 func newFindingCmd() *cobra.Command {
@@ -333,6 +462,215 @@ func newFindingCmd() *cobra.Command {
 			},
 		},
 	)
+	return cmd
+}
+
+// --- suppressions -----------------------------------------------------------
+
+func newSuppressCmd() *cobra.Command {
+	cmd := group("suppress", "Manage durable finding suppressions")
+
+	var listRepo string
+	var includeInactive bool
+	list := &cobra.Command{
+		Use:   "list",
+		Short: "List repository suppressions",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if listRepo == "" {
+				return fmt.Errorf("--repo is required")
+			}
+			q := url.Values{}
+			q.Set("repo_id", listRepo)
+			if includeInactive {
+				q.Set("include_inactive", "true")
+			}
+			return runRender(cmd, "GET", "/suppressions?"+q.Encode(), nil)
+		},
+	}
+	list.Flags().StringVar(&listRepo, "repo", "", "repository ID")
+	list.Flags().BoolVar(&includeInactive, "include-inactive", false, "include expired or revoked suppressions")
+
+	buildSuppressionBody := func(findingID, repoID, scopeType, scopeValue, branch, reason, expiresAt string) (map[string]any, error) {
+		if reason == "" {
+			return nil, fmt.Errorf("--reason is required")
+		}
+		if findingID == "" && (repoID == "" || scopeType == "" || scopeValue == "") {
+			return nil, fmt.Errorf("--repo, --scope-type, and --scope-value are required unless --finding is set")
+		}
+		body := map[string]any{"reason": reason}
+		if findingID != "" {
+			body["finding_id"] = findingID
+		}
+		if repoID != "" {
+			body["repo_id"] = repoID
+		}
+		if scopeType != "" {
+			body["scope_type"] = scopeType
+		}
+		if scopeValue != "" {
+			body["scope_value"] = scopeValue
+		}
+		if branch != "" {
+			body["branch"] = branch
+		}
+		if expiresAt != "" {
+			body["expires_at"] = expiresAt
+		}
+		return body, nil
+	}
+
+	var addFinding, addRepo, addScopeType, addScopeValue, addBranch, addReason, addExpires string
+	add := &cobra.Command{
+		Use:   "add",
+		Short: "Create a durable suppression",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			body, err := buildSuppressionBody(addFinding, addRepo, addScopeType, addScopeValue, addBranch, addReason, addExpires)
+			if err != nil {
+				return err
+			}
+			return runRender(cmd, "POST", "/suppressions", body)
+		},
+	}
+	add.Flags().StringVar(&addFinding, "finding", "", "finding ID to suppress")
+	add.Flags().StringVar(&addRepo, "repo", "", "repository ID for scoped suppression")
+	add.Flags().StringVar(&addScopeType, "scope-type", "", "scope type (stable_fingerprint, fingerprint, rule, fine_category, path_glob, package_advisory)")
+	add.Flags().StringVar(&addScopeValue, "scope-value", "", "scope value")
+	add.Flags().StringVar(&addBranch, "branch", "", "optional branch scope")
+	add.Flags().StringVar(&addReason, "reason", "", "required suppression reason")
+	add.Flags().StringVar(&addExpires, "expires", "", "RFC3339 expiration timestamp")
+
+	var prevFinding, prevRepo, prevScopeType, prevScopeValue, prevBranch, prevReason, prevExpires string
+	preview := &cobra.Command{
+		Use:   "preview",
+		Short: "Preview suppression impact",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			body, err := buildSuppressionBody(prevFinding, prevRepo, prevScopeType, prevScopeValue, prevBranch, prevReason, prevExpires)
+			if err != nil {
+				return err
+			}
+			return runRender(cmd, "POST", "/suppressions/preview", body)
+		},
+	}
+	preview.Flags().StringVar(&prevFinding, "finding", "", "finding ID to suppress")
+	preview.Flags().StringVar(&prevRepo, "repo", "", "repository ID for scoped suppression")
+	preview.Flags().StringVar(&prevScopeType, "scope-type", "", "scope type")
+	preview.Flags().StringVar(&prevScopeValue, "scope-value", "", "scope value")
+	preview.Flags().StringVar(&prevBranch, "branch", "", "optional branch scope")
+	preview.Flags().StringVar(&prevReason, "reason", "", "required suppression reason")
+	preview.Flags().StringVar(&prevExpires, "expires", "", "RFC3339 expiration timestamp")
+
+	cmd.AddCommand(
+		list,
+		add,
+		preview,
+		deleteCmd("revoke <id>", "Revoke a suppression", "/suppressions/%s"),
+	)
+	return cmd
+}
+
+// --- policies ---------------------------------------------------------------
+
+func newPolicyCmd() *cobra.Command {
+	cmd := group("policy", "Manage quality gate policies")
+
+	var listScope, listScopeID string
+	list := &cobra.Command{
+		Use:   "list",
+		Short: "List quality policies",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			q := url.Values{}
+			if listScope != "" {
+				q.Set("scope", listScope)
+			}
+			if listScopeID != "" {
+				q.Set("scope_id", listScopeID)
+			}
+			path := "/policies"
+			if encoded := q.Encode(); encoded != "" {
+				path += "?" + encoded
+			}
+			return runRender(cmd, "GET", path, nil)
+		},
+	}
+	list.Flags().StringVar(&listScope, "scope", "", "policy scope filter")
+	list.Flags().StringVar(&listScopeID, "scope-id", "", "policy scope ID filter")
+
+	addPolicyFlags := func(c *cobra.Command, name, scope, scopeID, mode, rulesJSON, rulesFile *string, enabled *bool) {
+		c.Flags().StringVar(name, "name", "", "policy name")
+		c.Flags().StringVar(scope, "scope", "", "policy scope")
+		c.Flags().StringVar(scopeID, "scope-id", "", "policy scope ID")
+		c.Flags().StringVar(mode, "mode", "", "policy mode")
+		c.Flags().StringVar(rulesJSON, "rules-json", "", "policy rules JSON")
+		c.Flags().StringVar(rulesFile, "rules-file", "", "file containing policy rules JSON")
+		c.Flags().BoolVar(enabled, "enabled", true, "policy enabled")
+	}
+	buildPolicyBody := func(cmd *cobra.Command, name, scope, scopeID, mode, rulesJSON, rulesFile string, enabled bool) (map[string]any, error) {
+		if name == "" {
+			return nil, fmt.Errorf("--name is required")
+		}
+		if rulesFile != "" {
+			data, err := os.ReadFile(rulesFile)
+			if err != nil {
+				return nil, fmt.Errorf("read --rules-file: %w", err)
+			}
+			rulesJSON = string(data)
+		}
+		body := map[string]any{"name": name}
+		if scope != "" {
+			body["scope"] = scope
+		}
+		if scopeID != "" {
+			body["scope_id"] = scopeID
+		}
+		if mode != "" {
+			body["mode"] = mode
+		}
+		if rulesJSON != "" {
+			body["rules_json"] = rulesJSON
+		}
+		if cmd.Flags().Changed("enabled") {
+			body["enabled"] = enabled
+		}
+		return body, nil
+	}
+
+	var createName, createScope, createScopeID, createMode, createRulesJSON, createRulesFile string
+	var createEnabled bool
+	create := &cobra.Command{
+		Use:   "create",
+		Short: "Create or replace a quality policy",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			body, err := buildPolicyBody(cmd, createName, createScope, createScopeID, createMode, createRulesJSON, createRulesFile, createEnabled)
+			if err != nil {
+				return err
+			}
+			return runRender(cmd, "POST", "/policies", body)
+		},
+	}
+	addPolicyFlags(create, &createName, &createScope, &createScopeID, &createMode, &createRulesJSON, &createRulesFile, &createEnabled)
+
+	var updateName, updateScope, updateScopeID, updateMode, updateRulesJSON, updateRulesFile string
+	var updateEnabled bool
+	update := &cobra.Command{
+		Use:   "update <id>",
+		Short: "Update a quality policy",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			body, err := buildPolicyBody(cmd, updateName, updateScope, updateScopeID, updateMode, updateRulesJSON, updateRulesFile, updateEnabled)
+			if err != nil {
+				return err
+			}
+			return runRender(cmd, "PUT", "/policies/"+args[0], body)
+		},
+	}
+	addPolicyFlags(update, &updateName, &updateScope, &updateScopeID, &updateMode, &updateRulesJSON, &updateRulesFile, &updateEnabled)
+
+	cmd.AddCommand(list, create, update)
 	return cmd
 }
 
@@ -600,9 +938,80 @@ func newPluginCmd() *cobra.Command {
 
 func newScannerCmd() *cobra.Command {
 	cmd := group("scanner", "Manage the container scanner backend")
+	var planRepo string
+	var planLanguages []string
+	var planTools []string
+	var planDisabledTools []string
+	var planCheckAvailability bool
+	planCmd := &cobra.Command{
+		Use:   "plan",
+		Short: "Explain which scanners would run or skip",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			body := map[string]any{}
+			if planRepo != "" {
+				body["repo_id"] = planRepo
+			}
+			if len(planLanguages) > 0 {
+				body["languages"] = planLanguages
+			}
+			if len(planTools) > 0 {
+				body["tools"] = planTools
+			}
+			if len(planDisabledTools) > 0 {
+				body["disabled_tools"] = planDisabledTools
+			}
+			if planCheckAvailability {
+				body["check_availability"] = true
+			}
+			return runRender(cmd, "POST", "/scanners/plan", body)
+		},
+	}
+	planCmd.Flags().StringVar(&planRepo, "repo", "", "repository ID for cached/local language detection")
+	planCmd.Flags().StringSliceVar(&planLanguages, "language", nil, "detected language override")
+	planCmd.Flags().StringSliceVar(&planTools, "tools", nil, "explicit tool list")
+	planCmd.Flags().StringSliceVar(&planDisabledTools, "disabled-tools", nil, "tools to disable")
+	planCmd.Flags().BoolVar(&planCheckAvailability, "check-availability", false, "check local scanner availability")
 	cmd.AddCommand(
+		listCmd("/scanners/tools", "List scanner tools"),
 		listCmd("/scanners/images", "List scanner images"),
 		listCmd("/scanners/list", "List scanners"),
+		planCmd,
+		&cobra.Command{
+			Use: "tool <name>", Short: "Show scanner tool metadata", Args: cobra.ExactArgs(1),
+			RunE: func(cmd *cobra.Command, args []string) error {
+				return runRender(cmd, "GET", "/scanners/tools/"+args[0], nil)
+			},
+		},
+		&cobra.Command{
+			Use: "check-updates", Short: "Refresh scanner tool version checks", Args: cobra.NoArgs,
+			RunE: func(cmd *cobra.Command, _ []string) error {
+				return runRender(cmd, "POST", "/scanners/tools/check-updates", nil)
+			},
+		},
+		&cobra.Command{
+			Use: "check-update <name>", Short: "Refresh one scanner tool version check", Args: cobra.ExactArgs(1),
+			RunE: func(cmd *cobra.Command, args []string) error {
+				return runRender(cmd, "POST", "/scanners/tools/"+args[0]+"/check-update", nil)
+			},
+		},
+		&cobra.Command{
+			Use: "plan-upgrades", Short: "Refresh and list scanner tool upgrade status", Args: cobra.NoArgs,
+			RunE: func(cmd *cobra.Command, _ []string) error {
+				c, err := resolveClient(cmd)
+				if err != nil {
+					return err
+				}
+				if _, err := c.Do(cmd.Context(), "POST", "/scanners/tools/check-updates", map[string]any{"force": true}); err != nil {
+					return err
+				}
+				env, err := c.Do(cmd.Context(), "GET", "/scanners/tools", nil)
+				if err != nil {
+					return err
+				}
+				return Render(cmd.OutOrStdout(), resolveOutput(cmd), env)
+			},
+		},
 		&cobra.Command{
 			Use: "config", Short: "Show scanner config", Args: cobra.NoArgs,
 			RunE: func(cmd *cobra.Command, _ []string) error { return runRender(cmd, "GET", "/scanners/config", nil) },
@@ -618,7 +1027,7 @@ func newScannerCmd() *cobra.Command {
 		&cobra.Command{
 			Use: "pull-image <name>", Short: "Pull one scanner image", Args: cobra.ExactArgs(1),
 			RunE: func(cmd *cobra.Command, args []string) error {
-				return runRender(cmd, "POST", "/scanners/images/pull", map[string]any{"name": args[0]})
+				return runRender(cmd, "POST", "/scanners/images/pull", map[string]any{"image": args[0]})
 			},
 		},
 	)

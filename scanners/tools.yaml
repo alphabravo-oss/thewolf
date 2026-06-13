@@ -1,0 +1,874 @@
+# Scanner tool manifest.
+#
+# This is the scanner metadata source of truth. The plugin registry remains
+# authoritative for executable behavior; this manifest owns version, image tier,
+# image routing, and update-source metadata.
+tools:
+  bandit:
+    display_name: Bandit
+    category: sast
+    resource_class: medium
+    default_timeout: 10m
+    plugin_package: plugins/python
+    integration_tier: default
+    pinned_version: "1.7.10"
+    version_variable: BANDIT_VERSION
+    install:
+      manager: pip
+      package: bandit
+    update_source:
+      type: pypi
+      package: bandit
+    smoke:
+      command: ["bandit", "--version"]
+      expected_pattern: "1.7.10"
+
+  bearer:
+    display_name: Bearer
+    category: sast
+    resource_class: medium
+    default_timeout: 10m
+    plugin_package: plugins/security
+    integration_tier: upstream
+    pinned_version: "1.49.0"
+    version_variable: BEARER_VERSION
+    image:
+      pinned_reference: bearer/bearer:1.49.0
+      entrypoint: bearer
+      platforms: ["linux/amd64"]
+    update_source:
+      type: docker_registry
+      repository: bearer/bearer
+      tag_pattern: '^\d+\.\d+\.\d+$'
+
+  brakeman:
+    display_name: Brakeman
+    category: sast
+    resource_class: medium
+    default_timeout: 10m
+    plugin_package: plugins/ruby
+    integration_tier: default
+    pinned_version: "6.2.2"
+    version_variable: BRAKEMAN_VERSION
+    install:
+      manager: gem
+      package: brakeman
+    update_source:
+      type: rubygems
+      package: brakeman
+    smoke:
+      command: ["brakeman", "--version"]
+      expected_pattern: "6.2.2"
+
+  checkov:
+    display_name: Checkov
+    category: container
+    resource_class: heavy
+    default_timeout: 20m
+    plugin_package: plugins/container
+    integration_tier: upstream
+    pinned_version: "3.2.527"
+    version_variable: CHECKOV_VERSION
+    image:
+      pinned_reference: bridgecrew/checkov:3.2.527
+    update_source:
+      type: docker_registry
+      repository: bridgecrew/checkov
+      tag_pattern: '^\d+\.\d+\.\d+$'
+
+  clippy:
+    display_name: Clippy
+    category: quality
+    resource_class: light
+    default_timeout: 5m
+    plugin_package: plugins/rust
+    integration_tier: bucket
+    bucket: rust
+    pinned_version: "1.82.0"
+    version_variable: RUST_TOOLCHAIN
+    update_source:
+      type: rust_channel
+      channel: stable
+    smoke:
+      command: ["cargo-clippy", "--version"]
+
+  codeql:
+    display_name: CodeQL
+    category: sast
+    resource_class: exclusive
+    default_timeout: 45m
+    exclusive: true
+    plugin_package: plugins/additional
+    integration_tier: bucket
+    bucket: codeql
+    pinned_version: "2.19.3"
+    version_variable: CODEQL_VERSION
+    update_source:
+      type: github_releases
+      owner: github
+      repo: codeql-cli-binaries
+      tag_pattern: '^v\d+\.\d+\.\d+$'
+    smoke:
+      command: ["codeql", "--version"]
+      expected_pattern: "2.19.3"
+
+  conftest:
+    display_name: Conftest
+    category: infra
+    resource_class: heavy
+    default_timeout: 20m
+    plugin_package: plugins/infra
+    integration_tier: upstream
+    pinned_version: "0.56.0"
+    version_variable: CONFTEST_VERSION
+    image:
+      pinned_reference: openpolicyagent/conftest:v0.56.0
+    update_source:
+      type: docker_registry
+      repository: openpolicyagent/conftest
+      tag_pattern: '^v\d+\.\d+\.\d+$'
+
+  cppcheck:
+    display_name: Cppcheck
+    category: sast
+    resource_class: medium
+    default_timeout: 10m
+    plugin_package: plugins/cpp
+    integration_tier: default
+    install:
+      manager: apt
+      package: cppcheck
+    update_source:
+      type: debian_package
+      package: cppcheck
+    smoke:
+      command: ["cppcheck", "--version"]
+
+  detect-secrets:
+    display_name: detect-secrets
+    category: secrets
+    resource_class: light
+    default_timeout: 5m
+    plugin_package: plugins/security
+    integration_tier: default
+    pinned_version: "1.5.0"
+    version_variable: DETECT_SECRETS_VERSION
+    install:
+      manager: pip
+      package: detect-secrets
+    update_source:
+      type: pypi
+      package: detect-secrets
+    smoke:
+      command: ["detect-secrets", "--version"]
+      expected_pattern: "1.5.0"
+
+  detekt:
+    display_name: detekt
+    category: sast
+    resource_class: medium
+    default_timeout: 10m
+    plugin_package: plugins/additional
+    integration_tier: bucket
+    bucket: jvm
+    pinned_version: "1.23.7"
+    version_variable: DETEKT_VERSION
+    update_source:
+      type: github_releases
+      owner: detekt
+      repo: detekt
+      tag_pattern: '^v\d+\.\d+\.\d+$'
+    smoke:
+      command: ["detekt", "--version"]
+      expected_pattern: "1.23.7"
+
+  dockle:
+    display_name: Dockle
+    category: container
+    resource_class: heavy
+    default_timeout: 20m
+    plugin_package: plugins/container
+    integration_tier: upstream
+    pinned_version: "0.4.14"
+    version_variable: DOCKLE_VERSION
+    image:
+      pinned_reference: goodwithtech/dockle:v0.4.14
+    update_source:
+      type: docker_registry
+      repository: goodwithtech/dockle
+      tag_pattern: '^v\d+\.\d+\.\d+$'
+
+  eslint:
+    display_name: ESLint
+    category: quality
+    resource_class: light
+    default_timeout: 5m
+    plugin_package: plugins/javascript
+    integration_tier: default
+    pinned_version: "9.13.0"
+    version_variable: ESLINT_VERSION
+    install:
+      manager: npm
+      package: eslint
+    update_source:
+      type: npm
+      package: eslint
+    smoke:
+      command: ["eslint", "--version"]
+      expected_pattern: "9.13.0"
+
+  gitleaks:
+    display_name: Gitleaks
+    category: secrets
+    resource_class: light
+    default_timeout: 5m
+    plugin_package: plugins/general
+    integration_tier: upstream
+    pinned_version: "8.21.2"
+    version_variable: GITLEAKS_VERSION
+    image:
+      pinned_reference: zricethezav/gitleaks:v8.21.2
+    update_source:
+      type: docker_registry
+      repository: zricethezav/gitleaks
+      tag_pattern: '^v\d+\.\d+\.\d+$'
+
+  gokart:
+    display_name: GoKart
+    category: sast
+    resource_class: medium
+    default_timeout: 10m
+    plugin_package: plugins/go
+    integration_tier: default
+    pinned_version: "0.5.1"
+    version_variable: GOKART_VERSION
+    install:
+      manager: go
+      package: github.com/praetorian-inc/gokart
+    update_source:
+      type: go_module
+      module: github.com/praetorian-inc/gokart
+    smoke:
+      command: ["gokart", "--version"]
+
+  gosec:
+    display_name: gosec
+    category: sast
+    resource_class: medium
+    default_timeout: 10m
+    plugin_package: plugins/go
+    integration_tier: default
+    pinned_version: "2.22.5"
+    version_variable: GOSEC_VERSION
+    install:
+      manager: go
+      package: github.com/securego/gosec/v2/cmd/gosec
+    update_source:
+      type: go_module
+      module: github.com/securego/gosec/v2
+    smoke:
+      command: ["gosec", "--version"]
+
+  govulncheck:
+    display_name: govulncheck
+    category: sca
+    resource_class: heavy
+    default_timeout: 20m
+    network_required: true
+    plugin_package: plugins/go
+    integration_tier: default
+    pinned_version: "1.3.0"
+    version_variable: GOVULNCHECK_VERSION
+    install:
+      manager: go
+      package: golang.org/x/vuln/cmd/govulncheck
+    update_source:
+      type: go_module
+      module: golang.org/x/vuln
+    smoke:
+      command: ["govulncheck", "-version"]
+      expected_pattern: "1.3.0"
+
+  grype:
+    display_name: Grype
+    category: sca
+    resource_class: heavy
+    default_timeout: 20m
+    network_required: true
+    plugin_package: plugins/general
+    integration_tier: upstream
+    pinned_version: "0.84.0"
+    version_variable: GRYPE_VERSION
+    image:
+      pinned_reference: anchore/grype:v0.84.0
+    update_source:
+      type: docker_registry
+      repository: anchore/grype
+      tag_pattern: '^v\d+\.\d+\.\d+$'
+
+  hadolint:
+    display_name: Hadolint
+    category: container
+    resource_class: heavy
+    default_timeout: 20m
+    plugin_package: plugins/container
+    integration_tier: upstream
+    pinned_version: "2.12.0"
+    version_variable: HADOLINT_VERSION
+    image:
+      pinned_reference: hadolint/hadolint:v2.12.0-alpine
+    update_source:
+      type: docker_registry
+      repository: hadolint/hadolint
+      tag_pattern: '^v\d+\.\d+\.\d+(-alpine)?$'
+
+  infer:
+    display_name: Infer
+    category: sast
+    resource_class: exclusive
+    default_timeout: 30m
+    exclusive: true
+    plugin_package: plugins/cpp
+    integration_tier: bucket
+    bucket: jvm
+    pinned_version: "1.2.0"
+    version_variable: INFER_VERSION
+    update_source:
+      type: github_releases
+      owner: facebook
+      repo: infer
+      tag_pattern: '^v\d+\.\d+\.\d+$'
+    smoke:
+      command: ["infer", "--version"]
+      expected_pattern: "1.2.0"
+
+  kics:
+    display_name: KICS
+    category: infra
+    resource_class: heavy
+    default_timeout: 20m
+    plugin_package: plugins/infra
+    integration_tier: upstream
+    pinned_version: "2.1.3"
+    version_variable: KICS_VERSION
+    image:
+      pinned_reference: checkmarx/kics:v2.1.3
+    update_source:
+      type: docker_registry
+      repository: checkmarx/kics
+      tag_pattern: '^v\d+\.\d+\.\d+$'
+
+  kube-linter:
+    display_name: kube-linter
+    category: infra
+    resource_class: heavy
+    default_timeout: 20m
+    plugin_package: plugins/infra
+    integration_tier: upstream
+    pinned_version: "0.7.1"
+    version_variable: KUBE_LINTER_VERSION
+    image:
+      pinned_reference: stackrox/kube-linter:v0.7.1
+      platforms: ["linux/amd64"]
+    update_source:
+      type: docker_registry
+      repository: stackrox/kube-linter
+      tag_pattern: '^v\d+\.\d+\.\d+$'
+
+  kubescape:
+    display_name: Kubescape
+    category: infra
+    resource_class: heavy
+    default_timeout: 20m
+    plugin_package: plugins/infra
+    integration_tier: upstream
+    pinned_version: "3.0.22"
+    version_variable: KUBESCAPE_VERSION
+    image:
+      pinned_reference: quay.io/kubescape/kubescape-cli:v3.0.22
+    update_source:
+      type: docker_registry
+      repository: quay.io/kubescape/kubescape-cli
+      tag_pattern: '^v\d+\.\d+\.\d+$'
+
+  markdownlint:
+    display_name: markdownlint
+    category: docs
+    resource_class: light
+    default_timeout: 5m
+    plugin_package: plugins/docs
+    integration_tier: default
+    pinned_version: "0.42.0"
+    version_variable: MARKDOWNLINT_VERSION
+    install:
+      manager: npm
+      package: markdownlint-cli
+    update_source:
+      type: npm
+      package: markdownlint-cli
+    smoke:
+      command: ["markdownlint", "--version"]
+      expected_pattern: "0.42.0"
+
+  mypy:
+    display_name: mypy
+    category: quality
+    resource_class: light
+    default_timeout: 5m
+    plugin_package: plugins/python
+    integration_tier: default
+    pinned_version: "1.13.0"
+    version_variable: MYPY_VERSION
+    install:
+      manager: pip
+      package: mypy
+    update_source:
+      type: pypi
+      package: mypy
+    smoke:
+      command: ["mypy", "--version"]
+      expected_pattern: "1.13.0"
+
+  npm-audit:
+    display_name: npm audit
+    category: sca
+    resource_class: heavy
+    default_timeout: 20m
+    network_required: true
+    plugin_package: plugins/javascript
+    integration_tier: default
+    install:
+      manager: nodejs
+      package: npm
+    update_source:
+      type: toolchain
+      package: npm
+    smoke:
+      command: ["npm", "--version"]
+
+  nuclei:
+    display_name: Nuclei
+    category: dast
+    resource_class: network
+    default_timeout: 15m
+    network_required: true
+    plugin_package: plugins/security
+    integration_tier: upstream
+    pinned_version: "3.3.5"
+    version_variable: NUCLEI_VERSION
+    image:
+      pinned_reference: projectdiscovery/nuclei:v3.3.5
+    update_source:
+      type: docker_registry
+      repository: projectdiscovery/nuclei
+      tag_pattern: '^v\d+\.\d+\.\d+$'
+
+  osv-scanner:
+    display_name: OSV-Scanner
+    category: sca
+    resource_class: heavy
+    default_timeout: 20m
+    network_required: true
+    plugin_package: plugins/security
+    integration_tier: upstream
+    pinned_version: "1.9.1"
+    version_variable: OSV_SCANNER_VERSION
+    image:
+      pinned_reference: ghcr.io/google/osv-scanner:v1.9.1
+    update_source:
+      type: docker_registry
+      repository: ghcr.io/google/osv-scanner
+      tag_pattern: '^v\d+\.\d+\.\d+$'
+
+  phpstan:
+    display_name: PHPStan
+    category: sast
+    resource_class: medium
+    default_timeout: 10m
+    plugin_package: plugins/php
+    integration_tier: default
+    pinned_version: "1.12.7"
+    version_variable: PHPSTAN_VERSION
+    install:
+      manager: composer
+      package: phpstan/phpstan
+    update_source:
+      type: packagist
+      package: phpstan/phpstan
+    smoke:
+      command: ["phpstan", "--version"]
+      expected_pattern: "1.12.7"
+
+  pip-audit:
+    display_name: pip-audit
+    category: sca
+    resource_class: heavy
+    default_timeout: 20m
+    network_required: true
+    plugin_package: plugins/python
+    integration_tier: default
+    pinned_version: "2.7.3"
+    version_variable: PIP_AUDIT_VERSION
+    install:
+      manager: pip
+      package: pip-audit
+    update_source:
+      type: pypi
+      package: pip-audit
+    smoke:
+      command: ["pip-audit", "--version"]
+      expected_pattern: "2.7.3"
+
+  pluto:
+    display_name: Pluto
+    category: infra
+    resource_class: heavy
+    default_timeout: 20m
+    plugin_package: plugins/infra
+    integration_tier: upstream
+    pinned_version: "5.9.0"
+    version_variable: PLUTO_VERSION
+    image:
+      pinned_reference: us-docker.pkg.dev/fairwinds-ops/oss/pluto:v5.9.0
+    update_source:
+      type: docker_registry
+      repository: us-docker.pkg.dev/fairwinds-ops/oss/pluto
+      tag_pattern: '^v\d+\.\d+\.\d+$'
+
+  pmd:
+    display_name: PMD
+    category: quality
+    resource_class: light
+    default_timeout: 5m
+    plugin_package: plugins/additional
+    integration_tier: bucket
+    bucket: jvm
+    pinned_version: "7.7.0"
+    version_variable: PMD_VERSION
+    update_source:
+      type: github_releases
+      owner: pmd
+      repo: pmd
+      tag_pattern: '^pmd_releases/\d+\.\d+\.\d+$'
+    smoke:
+      command: ["pmd", "--version"]
+      expected_pattern: "7.7.0"
+
+  radon:
+    display_name: Radon
+    category: quality
+    resource_class: light
+    default_timeout: 5m
+    plugin_package: plugins/python
+    integration_tier: default
+    pinned_version: "6.0.1"
+    version_variable: RADON_VERSION
+    install:
+      manager: pip
+      package: radon
+    update_source:
+      type: pypi
+      package: radon
+    smoke:
+      command: ["radon", "--version"]
+      expected_pattern: "6.0.1"
+
+  renovate:
+    display_name: Renovate
+    category: sca
+    resource_class: heavy
+    default_timeout: 20m
+    network_required: true
+    plugin_package: plugins/security
+    integration_tier: upstream
+    pinned_version: "39.55.0"
+    version_variable: RENOVATE_VERSION
+    image:
+      pinned_reference: ghcr.io/renovatebot/renovate:39.55.0
+      entrypoint: renovate
+    update_source:
+      type: docker_registry
+      repository: ghcr.io/renovatebot/renovate
+      tag_pattern: '^\d+\.\d+\.\d+$'
+
+  rubocop:
+    display_name: RuboCop
+    category: quality
+    resource_class: light
+    default_timeout: 5m
+    plugin_package: plugins/ruby
+    integration_tier: default
+    pinned_version: "1.66.1"
+    version_variable: RUBOCOP_VERSION
+    install:
+      manager: gem
+      package: rubocop
+    update_source:
+      type: rubygems
+      package: rubocop
+    smoke:
+      command: ["rubocop", "--version"]
+      expected_pattern: "1.66.1"
+
+  ruff:
+    display_name: Ruff
+    category: quality
+    resource_class: light
+    default_timeout: 5m
+    plugin_package: plugins/python
+    integration_tier: default
+    pinned_version: "0.7.1"
+    version_variable: RUFF_VERSION
+    install:
+      manager: pip
+      package: ruff
+    update_source:
+      type: pypi
+      package: ruff
+    smoke:
+      command: ["ruff", "--version"]
+      expected_pattern: "0.7.1"
+
+  scorecard:
+    display_name: Scorecard
+    category: sast
+    resource_class: medium
+    default_timeout: 10m
+    plugin_package: plugins/security
+    integration_tier: upstream
+    pinned_version: "5.0.0"
+    version_variable: SCORECARD_VERSION
+    image:
+      pinned_reference: gcr.io/openssf/scorecard:v5.0.0
+      entrypoint: scorecard
+      platforms: ["linux/amd64"]
+    update_source:
+      type: docker_registry
+      repository: gcr.io/openssf/scorecard
+      tag_pattern: '^v\d+\.\d+\.\d+$'
+
+  semgrep:
+    display_name: Semgrep
+    category: sast
+    resource_class: heavy
+    default_timeout: 15m
+    plugin_package: plugins/general
+    integration_tier: upstream
+    pinned_version: "1.92.0"
+    version_variable: SEMGREP_VERSION
+    image:
+      pinned_reference: semgrep/semgrep:1.92.0
+      entrypoint: semgrep
+    update_source:
+      type: docker_registry
+      repository: semgrep/semgrep
+      tag_pattern: '^\d+\.\d+\.\d+$'
+
+  shellcheck:
+    display_name: ShellCheck
+    category: quality
+    resource_class: light
+    default_timeout: 5m
+    plugin_package: plugins/additional
+    integration_tier: default
+    install:
+      manager: apt
+      package: shellcheck
+    update_source:
+      type: debian_package
+      package: shellcheck
+    smoke:
+      command: ["shellcheck", "--version"]
+
+  spectral:
+    display_name: Spectral
+    category: docs
+    resource_class: light
+    default_timeout: 5m
+    plugin_package: plugins/docs
+    integration_tier: upstream
+    pinned_version: "6.13.1"
+    version_variable: SPECTRAL_VERSION
+    image:
+      pinned_reference: stoplight/spectral:6.13.1
+      platforms: ["linux/amd64"]
+    update_source:
+      type: docker_registry
+      repository: stoplight/spectral
+      tag_pattern: '^\d+\.\d+\.\d+$'
+
+  sqlfluff:
+    display_name: SQLFluff
+    category: quality
+    resource_class: light
+    default_timeout: 5m
+    plugin_package: plugins/sql
+    integration_tier: default
+    pinned_version: "3.2.5"
+    version_variable: SQLFLUFF_VERSION
+    install:
+      manager: pip
+      package: sqlfluff
+    update_source:
+      type: pypi
+      package: sqlfluff
+    smoke:
+      command: ["sqlfluff", "--version"]
+      expected_pattern: "3.2.5"
+
+  staticcheck:
+    display_name: Staticcheck
+    category: quality
+    resource_class: light
+    default_timeout: 5m
+    plugin_package: plugins/go
+    integration_tier: default
+    pinned_version: "0.7.0"
+    version_variable: STATICCHECK_VERSION
+    install:
+      manager: go
+      package: honnef.co/go/tools/cmd/staticcheck
+    update_source:
+      type: go_module
+      module: honnef.co/go/tools
+    smoke:
+      command: ["staticcheck", "--version"]
+
+  swiftlint:
+    display_name: SwiftLint
+    category: quality
+    resource_class: light
+    default_timeout: 5m
+    plugin_package: plugins/swift
+    integration_tier: default
+    pinned_version: "0.57.0"
+    version_variable: SWIFTLINT_VERSION
+    install:
+      manager: github_release
+      package: realm/SwiftLint
+    update_source:
+      type: github_releases
+      owner: realm
+      repo: SwiftLint
+      tag_pattern: '^\d+\.\d+\.\d+$'
+    smoke:
+      command: ["swiftlint", "--version"]
+
+  syft:
+    display_name: Syft
+    category: sbom
+    resource_class: heavy
+    default_timeout: 20m
+    plugin_package: plugins/sbom
+    integration_tier: upstream
+    pinned_version: "1.17.0"
+    version_variable: SYFT_VERSION
+    image:
+      pinned_reference: anchore/syft:v1.17.0
+    update_source:
+      type: docker_registry
+      repository: anchore/syft
+      tag_pattern: '^v\d+\.\d+\.\d+$'
+
+  tflint:
+    display_name: TFLint
+    category: infra
+    resource_class: heavy
+    default_timeout: 20m
+    plugin_package: plugins/infra
+    integration_tier: upstream
+    pinned_version: "0.54.0"
+    version_variable: TFLINT_VERSION
+    image:
+      pinned_reference: ghcr.io/terraform-linters/tflint:v0.54.0
+    update_source:
+      type: docker_registry
+      repository: ghcr.io/terraform-linters/tflint
+      tag_pattern: '^v\d+\.\d+\.\d+$'
+
+  trivy:
+    display_name: Trivy
+    category: sca
+    resource_class: heavy
+    default_timeout: 20m
+    network_required: true
+    plugin_package: plugins/general
+    integration_tier: upstream
+    pinned_version: "0.57.0"
+    version_variable: TRIVY_VERSION
+    image:
+      pinned_reference: aquasec/trivy:0.57.0
+    update_source:
+      type: docker_registry
+      repository: aquasec/trivy
+      tag_pattern: '^\d+\.\d+\.\d+$'
+
+  trufflehog:
+    display_name: TruffleHog
+    category: secrets
+    resource_class: light
+    default_timeout: 5m
+    plugin_package: plugins/general
+    integration_tier: upstream
+    pinned_version: "3.83.5"
+    version_variable: TRUFFLEHOG_VERSION
+    image:
+      pinned_reference: trufflesecurity/trufflehog:3.83.5
+    update_source:
+      type: docker_registry
+      repository: trufflesecurity/trufflehog
+      tag_pattern: '^\d+\.\d+\.\d+$'
+
+  vale:
+    display_name: Vale
+    category: docs
+    resource_class: light
+    default_timeout: 5m
+    plugin_package: plugins/docs
+    integration_tier: upstream
+    pinned_version: "3.9.1"
+    version_variable: VALE_VERSION
+    image:
+      pinned_reference: jdkato/vale:v3.9.1
+    update_source:
+      type: docker_registry
+      repository: jdkato/vale
+      tag_pattern: '^v\d+\.\d+\.\d+$'
+
+  vulture:
+    display_name: Vulture
+    category: quality
+    resource_class: light
+    default_timeout: 5m
+    plugin_package: plugins/python
+    integration_tier: default
+    pinned_version: "2.13"
+    version_variable: VULTURE_VERSION
+    install:
+      manager: pip
+      package: vulture
+    update_source:
+      type: pypi
+      package: vulture
+    smoke:
+      command: ["vulture", "--version"]
+      expected_pattern: "2.13"
+
+  yamllint:
+    display_name: yamllint
+    category: quality
+    resource_class: light
+    default_timeout: 5m
+    plugin_package: plugins/additional
+    integration_tier: default
+    pinned_version: "1.35.1"
+    version_variable: YAMLLINT_VERSION
+    install:
+      manager: pip
+      package: yamllint
+    update_source:
+      type: pypi
+      package: yamllint
+    smoke:
+      command: ["yamllint", "--version"]
+      expected_pattern: "1.35.1"

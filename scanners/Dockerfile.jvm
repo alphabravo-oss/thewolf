@@ -6,7 +6,7 @@
 # Infer needs to analyze. Wolf pulls this lazily.
 # ============================================================
 
-FROM debian:trixie-slim AS base
+FROM debian:trixie-slim@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a0c3ccd26f436a0e AS base
 
 ARG WOLF_VERSION=dev
 LABEL org.opencontainers.image.title="wolf-scanners-jvm" \
@@ -35,7 +35,7 @@ RUN chmod +x /usr/local/bin/wolf-tool-entry /usr/local/bin/smoke-test.sh
 COPY install/jvm.sh     /tmp/install/jvm.sh
 RUN  bash /tmp/install/jvm.sh
 
-RUN /usr/local/bin/smoke-test.sh
+RUN WOLF_SMOKE_STRICT=1 /usr/local/bin/smoke-test.sh
 
 RUN rm -rf /tmp/install /var/cache/apt/* /usr/share/doc/* /usr/share/man/*
 

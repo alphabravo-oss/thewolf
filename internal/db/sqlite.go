@@ -49,6 +49,27 @@ var migration011SQL string
 //go:embed migrations/012_remote_nodes_and_scan_targets.sql
 var migration012SQL string
 
+//go:embed migrations/013_scanner_version_checks.sql
+var migration013SQL string
+
+//go:embed migrations/014_scan_quality_foundation.sql
+var migration014SQL string
+
+//go:embed migrations/015_finding_suppressions.sql
+var migration015SQL string
+
+//go:embed migrations/016_quality_gates.sql
+var migration016SQL string
+
+//go:embed migrations/017_scan_artifact_metadata.sql
+var migration017SQL string
+
+//go:embed migrations/018_sarif_imports.sql
+var migration018SQL string
+
+//go:embed migrations/019_scanner_run_records.sql
+var migration019SQL string
+
 // SQLiteStore implements Store using SQLite.
 type SQLiteStore struct {
 	db *sqlx.DB
@@ -135,6 +156,41 @@ func (s *SQLiteStore) Migrate() error {
 		}
 	}
 	if _, err := s.db.Exec(migration012SQL); err != nil {
+		if !strings.Contains(err.Error(), "duplicate column") && !strings.Contains(err.Error(), "already exists") {
+			return err
+		}
+	}
+	if _, err := s.db.Exec(migration013SQL); err != nil {
+		if !strings.Contains(err.Error(), "duplicate column") && !strings.Contains(err.Error(), "already exists") {
+			return err
+		}
+	}
+	if _, err := s.db.Exec(migration014SQL); err != nil {
+		if !strings.Contains(err.Error(), "duplicate column") && !strings.Contains(err.Error(), "already exists") {
+			return err
+		}
+	}
+	if _, err := s.db.Exec(migration015SQL); err != nil {
+		if !strings.Contains(err.Error(), "duplicate column") && !strings.Contains(err.Error(), "already exists") {
+			return err
+		}
+	}
+	if _, err := s.db.Exec(migration016SQL); err != nil {
+		if !strings.Contains(err.Error(), "duplicate column") && !strings.Contains(err.Error(), "already exists") {
+			return err
+		}
+	}
+	if _, err := s.db.Exec(migration017SQL); err != nil {
+		if !strings.Contains(err.Error(), "duplicate column") && !strings.Contains(err.Error(), "already exists") {
+			return err
+		}
+	}
+	if _, err := s.db.Exec(migration018SQL); err != nil {
+		if !strings.Contains(err.Error(), "duplicate column") && !strings.Contains(err.Error(), "already exists") {
+			return err
+		}
+	}
+	if _, err := s.db.Exec(migration019SQL); err != nil {
 		if !strings.Contains(err.Error(), "duplicate column") && !strings.Contains(err.Error(), "already exists") {
 			return err
 		}
@@ -466,15 +522,24 @@ func (s *SQLiteStore) CreateFinding(ctx context.Context, f *models.Finding) erro
 	now := time.Now().UTC()
 	f.CreatedAt = now
 	f.UpdatedAt = now
+	prepareFindingForWrite(f)
 	_, err := s.db.NamedExecContext(ctx,
-		`INSERT INTO findings (id, scan_id, repo_id, fingerprint, tool_name, category, severity,
+		`INSERT INTO findings (id, scan_id, repo_id, fingerprint, stable_fingerprint, location_fingerprint,
+		 semantic_fingerprint, evidence_fingerprint, identity_version, tool_name, category, severity,
 		 title, description, file_path, line_start, line_end, code_snippet, cwe_id, rule_id,
 		 tool_severity_score, location_weight, ai_context_score, composite_score,
-		 ai_fix_suggestion, status, sarif_data, module_name, function_name, symbol_kind, file_purpose, dependents_json, created_at, updated_at)
-		 VALUES (:id, :scan_id, :repo_id, :fingerprint, :tool_name, :category, :severity,
+		 ai_fix_suggestion, status, sarif_data, module_name, function_name, symbol_kind, file_purpose, dependents_json,
+		 fine_category, fix_strategy_id, confidence, corroborated_by_json, suppressed, suppression_id,
+		 suppressed_reason, baseline_state, introduced_in_scan_id, resolved_in_scan_id, source_kind, source_ref,
+		 created_at, updated_at)
+		 VALUES (:id, :scan_id, :repo_id, :fingerprint, :stable_fingerprint, :location_fingerprint,
+		 :semantic_fingerprint, :evidence_fingerprint, :identity_version, :tool_name, :category, :severity,
 		 :title, :description, :file_path, :line_start, :line_end, :code_snippet, :cwe_id, :rule_id,
 		 :tool_severity_score, :location_weight, :ai_context_score, :composite_score,
-		 :ai_fix_suggestion, :status, :sarif_data, :module_name, :function_name, :symbol_kind, :file_purpose, :dependents_json, :created_at, :updated_at)`, f)
+		 :ai_fix_suggestion, :status, :sarif_data, :module_name, :function_name, :symbol_kind, :file_purpose, :dependents_json,
+		 :fine_category, :fix_strategy_id, :confidence, :corroborated_by_json, :suppressed, :suppression_id,
+		 :suppressed_reason, :baseline_state, :introduced_in_scan_id, :resolved_in_scan_id, :source_kind, :source_ref,
+		 :created_at, :updated_at)`, f)
 	return err
 }
 
@@ -488,15 +553,24 @@ func (s *SQLiteStore) CreateFindings(ctx context.Context, findings []models.Find
 		now := time.Now().UTC()
 		findings[i].CreatedAt = now
 		findings[i].UpdatedAt = now
+		prepareFindingForWrite(&findings[i])
 		_, err := tx.NamedExecContext(ctx,
-			`INSERT INTO findings (id, scan_id, repo_id, fingerprint, tool_name, category, severity,
+			`INSERT INTO findings (id, scan_id, repo_id, fingerprint, stable_fingerprint, location_fingerprint,
+			 semantic_fingerprint, evidence_fingerprint, identity_version, tool_name, category, severity,
 			 title, description, file_path, line_start, line_end, code_snippet, cwe_id, rule_id,
 			 tool_severity_score, location_weight, ai_context_score, composite_score,
-			 ai_fix_suggestion, status, sarif_data, module_name, function_name, symbol_kind, file_purpose, dependents_json, created_at, updated_at)
-			 VALUES (:id, :scan_id, :repo_id, :fingerprint, :tool_name, :category, :severity,
+			 ai_fix_suggestion, status, sarif_data, module_name, function_name, symbol_kind, file_purpose, dependents_json,
+			 fine_category, fix_strategy_id, confidence, corroborated_by_json, suppressed, suppression_id,
+			 suppressed_reason, baseline_state, introduced_in_scan_id, resolved_in_scan_id, source_kind, source_ref,
+			 created_at, updated_at)
+			 VALUES (:id, :scan_id, :repo_id, :fingerprint, :stable_fingerprint, :location_fingerprint,
+			 :semantic_fingerprint, :evidence_fingerprint, :identity_version, :tool_name, :category, :severity,
 			 :title, :description, :file_path, :line_start, :line_end, :code_snippet, :cwe_id, :rule_id,
 			 :tool_severity_score, :location_weight, :ai_context_score, :composite_score,
-			 :ai_fix_suggestion, :status, :sarif_data, :module_name, :function_name, :symbol_kind, :file_purpose, :dependents_json, :created_at, :updated_at)`, &findings[i])
+			 :ai_fix_suggestion, :status, :sarif_data, :module_name, :function_name, :symbol_kind, :file_purpose, :dependents_json,
+			 :fine_category, :fix_strategy_id, :confidence, :corroborated_by_json, :suppressed, :suppression_id,
+			 :suppressed_reason, :baseline_state, :introduced_in_scan_id, :resolved_in_scan_id, :source_kind, :source_ref,
+			 :created_at, :updated_at)`, &findings[i])
 		if err != nil {
 			return err
 		}
@@ -510,6 +584,7 @@ func (s *SQLiteStore) GetFindingByID(ctx context.Context, id string) (*models.Fi
 	if err != nil {
 		return nil, err
 	}
+	hydrateFindingAfterRead(&f)
 	return &f, nil
 }
 
@@ -517,6 +592,7 @@ func (s *SQLiteStore) ListFindingsByScan(ctx context.Context, scanID string) ([]
 	var findings []models.Finding
 	err := s.db.SelectContext(ctx, &findings,
 		"SELECT * FROM findings WHERE scan_id = ? ORDER BY composite_score DESC", scanID)
+	hydrateFindingsAfterRead(findings)
 	return findings, err
 }
 
@@ -524,20 +600,28 @@ func (s *SQLiteStore) ListFindingsByRepo(ctx context.Context, repoID string) ([]
 	var findings []models.Finding
 	err := s.db.SelectContext(ctx, &findings,
 		"SELECT * FROM findings WHERE repo_id = ? ORDER BY composite_score DESC", repoID)
+	hydrateFindingsAfterRead(findings)
 	return findings, err
 }
 
 func (s *SQLiteStore) UpdateFinding(ctx context.Context, f *models.Finding) error {
 	f.UpdatedAt = time.Now().UTC()
+	prepareFindingForWrite(f)
 	_, err := s.db.ExecContext(ctx,
 		`UPDATE findings SET ai_context_score = ?, ai_fix_suggestion = ?, composite_score = ?,
 		 tool_severity_score = ?, location_weight = ?,
 		 module_name = ?, function_name = ?, symbol_kind = ?, file_purpose = ?, dependents_json = ?,
-		 updated_at = ? WHERE id = ?`,
+		 stable_fingerprint = ?, location_fingerprint = ?, semantic_fingerprint = ?, evidence_fingerprint = ?,
+		 identity_version = ?, fine_category = ?, fix_strategy_id = ?, confidence = ?, corroborated_by_json = ?,
+		 suppressed = ?, suppression_id = ?, suppressed_reason = ?, baseline_state = ?, introduced_in_scan_id = ?,
+		 resolved_in_scan_id = ?, source_kind = ?, source_ref = ?, updated_at = ? WHERE id = ?`,
 		f.AIContextScore, f.AIFixSuggestion, f.CompositeScore,
 		f.ToolSeverityScore, f.LocationWeight,
 		f.ModuleName, f.FunctionName, f.SymbolKind, f.FilePurpose, f.DependentsJSON,
-		f.UpdatedAt, f.ID)
+		f.StableFingerprint, f.LocationFingerprint, f.SemanticFingerprint, f.EvidenceFingerprint,
+		f.IdentityVersion, f.FineCategory, f.FixStrategyID, f.Confidence, f.CorroboratedByJSON,
+		f.Suppressed, f.SuppressionID, f.SuppressedReason, f.BaselineState, f.IntroducedInScanID,
+		f.ResolvedInScanID, f.SourceKind, f.SourceRef, f.UpdatedAt, f.ID)
 	return err
 }
 
@@ -669,9 +753,12 @@ func (s *SQLiteStore) CreateScanArtifact(ctx context.Context, artifact *models.S
 	now := time.Now().UTC()
 	artifact.CreatedAt = now
 	artifact.UpdatedAt = now
+	if artifact.RedactionLevel == "" {
+		artifact.RedactionLevel = "internal_report"
+	}
 	_, err := s.db.NamedExecContext(ctx,
-		`INSERT INTO scan_artifacts (id, scan_id, artifact_type, file_path, file_size, created_at, updated_at)
-		 VALUES (:id, :scan_id, :artifact_type, :file_path, :file_size, :created_at, :updated_at)`, artifact)
+		`INSERT INTO scan_artifacts (id, scan_id, artifact_type, file_path, file_size, checksum_sha256, redaction_level, created_at, updated_at)
+		 VALUES (:id, :scan_id, :artifact_type, :file_path, :file_size, :checksum_sha256, :redaction_level, :created_at, :updated_at)`, artifact)
 	return err
 }
 
@@ -680,6 +767,74 @@ func (s *SQLiteStore) ListScanArtifacts(ctx context.Context, scanID string) ([]m
 	err := s.db.SelectContext(ctx, &artifacts,
 		"SELECT * FROM scan_artifacts WHERE scan_id = ? ORDER BY created_at", scanID)
 	return artifacts, err
+}
+
+// --- SARIFImports ---
+
+func (s *SQLiteStore) CreateSARIFImport(ctx context.Context, imp *models.SARIFImport) error {
+	now := time.Now().UTC()
+	imp.CreatedAt = now
+	imp.UpdatedAt = now
+	_, err := s.db.NamedExecContext(ctx,
+		`INSERT INTO sarif_imports (id, repo_id, scan_id, source, checksum_sha256, result_count, imported_count, created_by, created_at, updated_at)
+		 VALUES (:id, :repo_id, :scan_id, :source, :checksum_sha256, :result_count, :imported_count, :created_by, :created_at, :updated_at)`, imp)
+	return err
+}
+
+func (s *SQLiteStore) ListSARIFImportsByRepo(ctx context.Context, repoID string) ([]models.SARIFImport, error) {
+	var imports []models.SARIFImport
+	err := s.db.SelectContext(ctx, &imports,
+		"SELECT * FROM sarif_imports WHERE repo_id = ? ORDER BY created_at DESC", repoID)
+	return imports, err
+}
+
+// --- ScannerRunRecords ---
+
+func (s *SQLiteStore) UpsertScannerRunRecord(ctx context.Context, record *models.ScannerRunRecord) error {
+	now := time.Now().UTC()
+	if record.ID == "" {
+		record.ID = record.ScanID + ":" + record.ToolName
+	}
+	if record.CommandJSON == "" {
+		record.CommandJSON = "{}"
+	}
+	record.UpdatedAt = now
+	if record.CreatedAt.IsZero() {
+		record.CreatedAt = now
+	}
+	_, err := s.db.NamedExecContext(ctx,
+		`INSERT INTO scanner_run_records (
+		 id, scan_id, tool_name, status, category, image, image_digest, version, command_json,
+		 exit_code, duration_ms, finding_count, error_message, parser_status, parser_message,
+		 started_at, finished_at, created_at, updated_at)
+		 VALUES (
+		 :id, :scan_id, :tool_name, :status, :category, :image, :image_digest, :version, :command_json,
+		 :exit_code, :duration_ms, :finding_count, :error_message, :parser_status, :parser_message,
+		 :started_at, :finished_at, :created_at, :updated_at)
+		 ON CONFLICT (scan_id, tool_name) DO UPDATE SET
+		   status=excluded.status,
+		   category=excluded.category,
+		   image=excluded.image,
+		   image_digest=excluded.image_digest,
+		   version=excluded.version,
+		   command_json=excluded.command_json,
+		   exit_code=excluded.exit_code,
+		   duration_ms=excluded.duration_ms,
+		   finding_count=excluded.finding_count,
+		   error_message=excluded.error_message,
+		   parser_status=excluded.parser_status,
+		   parser_message=excluded.parser_message,
+		   started_at=COALESCE(excluded.started_at, scanner_run_records.started_at),
+		   finished_at=excluded.finished_at,
+		   updated_at=excluded.updated_at`, record)
+	return err
+}
+
+func (s *SQLiteStore) ListScannerRunRecords(ctx context.Context, scanID string) ([]models.ScannerRunRecord, error) {
+	var records []models.ScannerRunRecord
+	err := s.db.SelectContext(ctx, &records,
+		"SELECT * FROM scanner_run_records WHERE scan_id = ? ORDER BY started_at, tool_name", scanID)
+	return records, err
 }
 
 // --- AILogs ---

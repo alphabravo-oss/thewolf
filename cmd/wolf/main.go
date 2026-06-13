@@ -16,6 +16,7 @@ package main
 import (
 	"context"
 	cryptorand "crypto/rand"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/signal"
@@ -41,8 +42,10 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
 	"github.com/alphabravocompany/thewolf/internal/scan/detector"
+	"github.com/alphabravocompany/thewolf/internal/scan/planner"
 	"github.com/alphabravocompany/thewolf/internal/scan/report"
 	"github.com/alphabravocompany/thewolf/internal/scan/runner"
+	scannermanifest "github.com/alphabravocompany/thewolf/internal/scannertools/manifest"
 	"github.com/alphabravocompany/thewolf/internal/setup/scanners"
 	"github.com/alphabravocompany/thewolf/internal/wolflog"
 	_ "github.com/alphabravocompany/thewolf/plugins"
@@ -148,7 +151,7 @@ func installScannerBackend(ctx context.Context) error {
 
 func newServeCmd() *cobra.Command {
 	var (
-		addr        string
+		addr         string
 		skipScanInit bool
 	)
 	cmd := &cobra.Command{
@@ -295,13 +298,16 @@ func newVersionCmd() *cobra.Command {
 
 func newScanCmd() *cobra.Command {
 	var (
-		repoPath     string
-		branch       string
-		tools        []string
-		concurrency  int
-		allScanners  bool
-		detectOnly   bool
-		outDir       string
+		repoPath           string
+		branch             string
+		tools              []string
+		concurrency        int
+		heavyConcurrency   int
+		networkConcurrency int
+		allScanners        bool
+		detectOnly         bool
+		planOnly           bool
+		outDir             string
 	)
 	cmd := &cobra.Command{
 		Use:   "scan",
@@ -323,6 +329,24 @@ func newScanCmd() *cobra.Command {
 				return fmt.Errorf("language detection: %w", derr)
 			}
 			langs := languagesFromDetection(detResult)
+			if planOnly {
+				scannerPlan, err := buildLocalScannerPlan(langs, tools, allScanners)
+				if err != nil {
+					return err
+				}
+				payload := struct {
+					planner.Result
+					DetectionSource string   `json:"detection_source"`
+					Languages       []string `json:"languages"`
+				}{
+					Result:          scannerPlan,
+					DetectionSource: "local",
+					Languages:       langs2strings(langs),
+				}
+				enc := json.NewEncoder(cmd.OutOrStdout())
+				enc.SetIndent("", "  ")
+				return enc.Encode(payload)
+			}
 			fmt.Printf("Detected languages: %v\n", langs)
 			if len(detResult.Frameworks) > 0 {
 				fmt.Printf("Detected frameworks: %v\n", detResult.Frameworks)
@@ -364,13 +388,15 @@ func newScanCmd() *cobra.Command {
 
 			startedAt := time.Now().UTC()
 			cfg := runner.RunConfig{
-				RepoPath:     absRepo,
-				Branch:       branch,
-				Registry:     plugin.Global,
-				Tools:        tools,
-				Concurrency:  concurrency,
-				RawOutputDir: rawDir,
-				ContainerCfg: nil, // shim falls back to container.Default()
+				RepoPath:           absRepo,
+				Branch:             branch,
+				Registry:           plugin.Global,
+				Tools:              tools,
+				Concurrency:        concurrency,
+				HeavyConcurrency:   heavyConcurrency,
+				NetworkConcurrency: networkConcurrency,
+				RawOutputDir:       rawDir,
+				ContainerCfg:       nil, // shim falls back to container.Default()
 				OnToolOutput: func(toolName, line string) {
 					fmt.Printf("[%s] %s\n", toolName, line)
 				},
@@ -379,11 +405,40 @@ func newScanCmd() *cobra.Command {
 				cfg.Languages = langs
 			}
 
+			var scannerPlan *report.ScannerPlan
+			if toolManifest, merr := scannermanifest.LoadDefault(); merr == nil {
+				cfg.ToolResources = runner.ResourceSpecsFromManifest(toolManifest)
+				scannerPlan = planner.ToReportPlan(planner.Build(planner.Config{
+					Registry:    plugin.Global,
+					Manifest:    toolManifest,
+					Languages:   langs,
+					Tools:       tools,
+					AllScanners: allScanners,
+				}))
+			}
+
 			result, err := runner.Run(ctx, cfg)
 			if err != nil {
 				return err
 			}
 			finishedAt := time.Now().UTC()
+			commitSHA := readGitCommit(absRepo)
+			sourceRef := branch
+			if commitSHA != "" {
+				if sourceRef != "" {
+					sourceRef += "@" + commitSHA
+				} else {
+					sourceRef = commitSHA
+				}
+			}
+			for i := range result.Findings {
+				if result.Findings[i].SourceKind == "" {
+					result.Findings[i].SourceKind = "local_path"
+				}
+				if result.Findings[i].SourceRef == "" {
+					result.Findings[i].SourceRef = sourceRef
+				}
+			}
 
 			// Build report + manifest and persist all artifacts.
 			rcfg := report.ReportConfig{
@@ -399,9 +454,10 @@ func newScanCmd() *cobra.Command {
 			}
 			manifest := report.Manifest{
 				ScanID:      scanID,
+				Source:      localSourceProvenance(absRepo, branch, commitSHA),
 				RepoName:    filepath.Base(absRepo),
 				RepoPath:    absRepo,
-				RepoCommit:  readGitCommit(absRepo),
+				RepoCommit:  commitSHA,
 				Branch:      branch,
 				StartedAt:   startedAt,
 				FinishedAt:  finishedAt,
@@ -414,6 +470,7 @@ func newScanCmd() *cobra.Command {
 				},
 				ScannersRun: result.ToolsRun,
 				Skipped:     skippedFrom(result),
+				ScannerPlan: scannerPlan,
 				Failed:      failedFrom(result.ToolsFailed),
 				Counts:      report.CountFindings(0, result.Findings),
 			}
@@ -457,10 +514,27 @@ func newScanCmd() *cobra.Command {
 	cmd.Flags().StringVar(&branch, "branch", "main", "branch label for the scan record")
 	cmd.Flags().StringSliceVar(&tools, "tools", nil, "explicit tool list (default: auto-detect by language)")
 	cmd.Flags().IntVar(&concurrency, "concurrency", 4, "parallel tool execution cap")
+	cmd.Flags().IntVar(&heavyConcurrency, "heavy-concurrency", 1, "parallel heavy scanner execution cap")
+	cmd.Flags().IntVar(&networkConcurrency, "network-concurrency", 2, "parallel network scanner execution cap")
 	cmd.Flags().BoolVar(&allScanners, "all-scanners", false, "run every registered scanner regardless of detected languages")
 	cmd.Flags().BoolVar(&detectOnly, "detect-only", false, "report detected languages/frameworks and exit without scanning")
+	cmd.Flags().BoolVar(&planOnly, "plan-only", false, "emit scanner run/skip plan and exit without scanning")
 	cmd.Flags().StringVar(&outDir, "out", "", "artifacts root directory (default ~/.wolf/artifacts)")
 	return cmd
+}
+
+func buildLocalScannerPlan(langs []models.Language, tools []string, allScanners bool) (planner.Result, error) {
+	toolManifest, err := scannermanifest.LoadDefault()
+	if err != nil {
+		return planner.Result{}, err
+	}
+	return planner.Build(planner.Config{
+		Registry:    plugin.Global,
+		Manifest:    toolManifest,
+		Languages:   langs,
+		Tools:       tools,
+		AllScanners: allScanners,
+	}), nil
 }
 
 // languagesFromDetection extracts the non-zero language keys from a
@@ -746,6 +820,19 @@ func newLoopCmd() *cobra.Command {
 	cmd.Flags().StringSliceVar(&severities, "severity", nil, "only target these severities")
 	cmd.Flags().DurationVar(&fixTimeout, "fix-timeout", 5*time.Minute, "per-finding fix timeout")
 	return cmd
+}
+
+// localSourceProvenance describes a scan of an on-disk working tree —
+// captured in the manifest so audits can tie findings back to a specific
+// repository state.
+func localSourceProvenance(repoPath, branch, commitSHA string) *report.SourceProvenance {
+	return &report.SourceProvenance{
+		Kind:             "local_path",
+		RepoPath:         repoPath,
+		Branch:           branch,
+		CommitSHA:        commitSHA,
+		SnapshotStrategy: "working_tree",
+	}
 }
 
 // --- helpers ----------------------------------------------------------------

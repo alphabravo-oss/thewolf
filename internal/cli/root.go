@@ -14,6 +14,9 @@ const (
 	ExitUsage    = 2
 	ExitNotFound = 3
 	ExitAuth     = 4
+	// ExitGateFail is its own code so CI can distinguish a failed quality
+	// gate (your scan found policy violations) from a usage error (exit 2).
+	ExitGateFail = 5
 )
 
 // AddGlobalFlags registers the persistent flags shared by every command.
@@ -40,7 +43,22 @@ func ExitCodeFor(err error) int {
 			return ExitRuntime
 		}
 	}
+	if _, ok := err.(*GateFailedError); ok {
+		return ExitGateFail
+	}
 	return ExitRuntime
+}
+
+type GateFailedError struct {
+	ScanID string
+	Status string
+}
+
+func (e *GateFailedError) Error() string {
+	if e.ScanID == "" {
+		return "quality gate failed"
+	}
+	return fmt.Sprintf("quality gate failed for scan %s", e.ScanID)
 }
 
 // resolveClient builds an API client from, in precedence order: explicit
@@ -126,7 +144,12 @@ func NewCommandGroups() []*cobra.Command {
 		newRepoCmd(),
 		newNodeCmd(),
 		newCollectionCmd(),
+		newBaselineCmd(),
+		newCompareCmd(),
 		newFindingCmd(),
+		newSarifCmd(),
+		newSuppressCmd(),
+		newPolicyCmd(),
 		newFixCmd(),
 		newUserCmd(),
 		newSettingsCmd(),

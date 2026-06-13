@@ -5,7 +5,7 @@
 # Slim bundle of the tools that don't have a usable upstream image.
 # Heavy / cross-language tools (semgrep, trivy, grype, syft, gitleaks,
 # trufflehog, hadolint, checkov, tflint, kubescape, kube-linter, nuclei,
-# vale, spectral, scancode, scorecard, osv-scanner, dockle) run from
+# vale, spectral, scorecard, osv-scanner, dockle) run from
 # the maintainer's official image via the wolf shim's UpstreamTools map.
 #
 # What this image carries:
@@ -22,7 +22,7 @@
 #   docker build -t wolf-scanners:dev -f scanners/Dockerfile scanners/
 # ============================================================
 
-FROM debian:trixie-slim AS base
+FROM debian:trixie-slim@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a0c3ccd26f436a0e AS base
 
 ARG WOLF_VERSION=dev
 LABEL org.opencontainers.image.title="wolf-scanners" \
@@ -34,8 +34,7 @@ LABEL org.opencontainers.image.title="wolf-scanners" \
 ENV DEBIAN_FRONTEND=noninteractive \
     WOLF_SCANNERS_VARIANT=default
 
-# Base packages. Note we no longer need libicu-dev (scancode is upstream)
-# or libxml2-dev (semgrep is upstream).
+# Base packages. Note we no longer need libxml2-dev because semgrep is upstream.
 #
 # Node is installed from the NodeSource apt repo because Debian 13
 # (trixie) dropped the standalone `npm` package, and the bundled
@@ -111,6 +110,8 @@ RUN apt-get update && apt-get purge -y --auto-remove \
     && rm -rf /var/lib/apt/lists/* /var/cache/apt/* \
               /tmp/install /root/.npm /root/.cache \
               /usr/share/doc/* /usr/share/man/*
+
+RUN WOLF_SMOKE_STRICT=1 /usr/local/bin/smoke-test.sh
 
 RUN groupadd -g 1000 wolf && \
     useradd  -u 1000 -g 1000 -m -d /home/wolf -s /bin/bash wolf

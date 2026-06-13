@@ -78,6 +78,28 @@ type Store interface {
 	UpdateFinding(ctx context.Context, f *models.Finding) error
 	UpdateFindingStatus(ctx context.Context, id string, status models.Status) error
 
+	// Baselines and Comparisons
+	CreateScanBaseline(ctx context.Context, baseline *models.ScanBaseline) error
+	ListScanBaselines(ctx context.Context, repoID, branch string) ([]models.ScanBaseline, error)
+	GetScanBaselineByName(ctx context.Context, repoID, branch, name string) (*models.ScanBaseline, error)
+	UpsertScanComparison(ctx context.Context, comparison *models.ScanComparison) error
+	GetScanComparison(ctx context.Context, baselineScanID, currentScanID string) (*models.ScanComparison, error)
+
+	// Durable finding suppressions
+	CreateFindingSuppression(ctx context.Context, suppression *models.FindingSuppression) error
+	GetFindingSuppressionByID(ctx context.Context, id string) (*models.FindingSuppression, error)
+	ListFindingSuppressions(ctx context.Context, repoID string, includeInactive bool) ([]models.FindingSuppression, error)
+	RevokeFindingSuppression(ctx context.Context, id string) error
+	CreateFindingSuppressionAudit(ctx context.Context, entry *models.FindingSuppressionAudit) error
+
+	// Quality policies and gate results
+	UpsertQualityPolicy(ctx context.Context, policy *models.QualityPolicy) error
+	GetQualityPolicyByID(ctx context.Context, id string) (*models.QualityPolicy, error)
+	ListQualityPolicies(ctx context.Context, scope, scopeID string) ([]models.QualityPolicy, error)
+	UpsertQualityGateResult(ctx context.Context, result *models.QualityGateResult) error
+	GetQualityGateResult(ctx context.Context, scanID, policyID string) (*models.QualityGateResult, error)
+	ListQualityGateResults(ctx context.Context, scanID string) ([]models.QualityGateResult, error)
+
 	// Fixes
 	CreateFix(ctx context.Context, fix *models.Fix) error
 	GetFixByID(ctx context.Context, id string) (*models.Fix, error)
@@ -98,6 +120,14 @@ type Store interface {
 	// ScanArtifacts
 	CreateScanArtifact(ctx context.Context, artifact *models.ScanArtifact) error
 	ListScanArtifacts(ctx context.Context, scanID string) ([]models.ScanArtifact, error)
+
+	// SARIF imports
+	CreateSARIFImport(ctx context.Context, imp *models.SARIFImport) error
+	ListSARIFImportsByRepo(ctx context.Context, repoID string) ([]models.SARIFImport, error)
+
+	// Scanner run records
+	UpsertScannerRunRecord(ctx context.Context, record *models.ScannerRunRecord) error
+	ListScannerRunRecords(ctx context.Context, scanID string) ([]models.ScannerRunRecord, error)
 
 	// AILogs
 	CreateAILog(ctx context.Context, log *models.AILog) error

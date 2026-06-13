@@ -28,17 +28,17 @@ scan:
   # default image (~2.5 GB); jvm/rust/codeql images are pulled lazily.
   container:
     # Default (cross-language + small lang tools) image.
-    image: "alphabravodevops/wolf-scanners:latest"
+    image: "alphabravodevops/wolf-scanners:2.0.0"
 
     # Per-tool image overrides. Tools NOT listed here use the default image.
     # The Go-side container.DefaultBucketImages() populates this map at startup
     # from the WOLF_SCANNERS_IMAGE_* env vars; the YAML form is a manual
     # override for ops that pin to specific tags or alternate registries.
     image_overrides:
-      infer: "alphabravodevops/wolf-scanners-jvm:latest"
-      pmd: "alphabravodevops/wolf-scanners-jvm:latest"
-      clippy: "alphabravodevops/wolf-scanners-rust:latest"
-      codeql: "alphabravodevops/wolf-scanners-codeql:latest"
+      infer: "alphabravodevops/wolf-scanners-jvm:2.0.0"
+      pmd: "alphabravodevops/wolf-scanners-jvm:2.0.0"
+      clippy: "alphabravodevops/wolf-scanners-rust:2.0.0"
+      codeql: "alphabravodevops/wolf-scanners-codeql:2.0.0"
 
     pull_policy: "IfNotPresent"   # IfNotPresent | Always | Never
     network: "bridge"         # bridge | none (paranoid) | host (discouraged)

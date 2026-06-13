@@ -96,6 +96,7 @@ if [[ "$VARIANT" == "jvm" ]]; then
         *) run check "infer $INFER_VERSION" "$INFER_VERSION" infer --version ;;
     esac
     run check "pmd $PMD_VERSION" "$PMD_VERSION" pmd --version
+    run check "detekt $DETEKT_VERSION" "$DETEKT_VERSION" detekt --version
 fi
 
 if [[ "$VARIANT" == "rust" ]]; then

@@ -2,18 +2,41 @@ package routes
 
 import (
 	"bytes"
+	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"os/exec"
 	"runtime"
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/alphabravocompany/thewolf/internal/api/response"
+	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
 	"github.com/alphabravocompany/thewolf/internal/plugin/container"
+	"github.com/alphabravocompany/thewolf/internal/scan/detector"
+	"github.com/alphabravocompany/thewolf/internal/scan/planner"
+	"github.com/alphabravocompany/thewolf/internal/scannertools/latest"
+	"github.com/alphabravocompany/thewolf/internal/scannertools/manifest"
+	scstatus "github.com/alphabravocompany/thewolf/internal/scannertools/status"
 	"github.com/alphabravocompany/thewolf/internal/setup/scanners"
+	"github.com/go-chi/chi/v5"
+)
+
+type scannerVersionStore interface {
+	UpsertScannerVersionCheck(rctx context.Context, check *models.ScannerVersionCheck) error
+	GetScannerVersionCheck(rctx context.Context, toolName string) (*models.ScannerVersionCheck, error)
+	ListScannerVersionChecks(rctx context.Context) ([]models.ScannerVersionCheck, error)
+}
+
+const (
+	scannerVersionCheckTimeout = 15 * time.Second
+	scannerVersionSuccessTTL   = 24 * time.Hour
+	scannerVersionFailureTTL   = time.Hour
 )
 
 // scannerSummary is the lightweight per-plugin payload returned by
@@ -24,6 +47,20 @@ type scannerSummary struct {
 	Name      string   `json:"name"`
 	Category  string   `json:"category"`
 	Languages []string `json:"languages"`
+}
+
+type scannerPlanRequest struct {
+	RepoID            string   `json:"repo_id,omitempty"`
+	Languages         []string `json:"languages,omitempty"`
+	Tools             []string `json:"tools,omitempty"`
+	DisabledTools     []string `json:"disabled_tools,omitempty"`
+	CheckAvailability bool     `json:"check_availability,omitempty"`
+}
+
+type scannerPlanResponse struct {
+	planner.Result
+	DetectionSource string   `json:"detection_source"`
+	Languages       []string `json:"languages"`
 }
 
 // ScannersList returns every registered scanner plugin sorted by name.
@@ -50,6 +87,309 @@ func ScannersList(w http.ResponseWriter, r *http.Request) {
 		Data: out,
 		Meta: response.ListMeta{Total: len(out), Page: 1, PerPage: len(out)},
 	})
+}
+
+// ScannersPlan explains which scanners would run or skip for a requested scan.
+//
+// Route: POST /api/scanners/plan
+func ScannersPlan(w http.ResponseWriter, r *http.Request) {
+	h := DefaultHandler
+	if h == nil {
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "handler not initialized")
+		return
+	}
+	var req scannerPlanRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.WriteError(w, http.StatusBadRequest, "bad_request", "invalid JSON body")
+		return
+	}
+
+	languages, source, err := scannerPlanLanguages(r.Context(), h, req)
+	if err != nil {
+		response.WriteError(w, http.StatusBadRequest, "bad_request", err.Error())
+		return
+	}
+	m, err := manifest.LoadDefault()
+	if err != nil {
+		response.WriteError(w, http.StatusInternalServerError, "scanner_manifest_error", err.Error())
+		return
+	}
+	reg := h.Registry
+	if reg == nil {
+		reg = plugin.Global
+	}
+	result := planner.Build(planner.Config{
+		Registry:          reg,
+		Manifest:          m,
+		Languages:         languages,
+		Tools:             req.Tools,
+		DisabledTools:     req.DisabledTools,
+		CheckAvailability: req.CheckAvailability,
+	})
+	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: scannerPlanResponse{
+		Result:          result,
+		DetectionSource: source,
+		Languages:       languageNames(languages),
+	}})
+}
+
+func scannerPlanLanguages(ctx context.Context, h *Handler, req scannerPlanRequest) ([]models.Language, string, error) {
+	if len(req.Languages) > 0 {
+		return parsePlanLanguages(req.Languages), "request", nil
+	}
+	if req.RepoID == "" {
+		return nil, "none", nil
+	}
+	repo, err := h.Store.GetRepoByID(ctx, req.RepoID)
+	if err != nil {
+		return nil, "", err
+	}
+	if repo.DetectedLanguages != "" {
+		var counts map[string]int
+		if json.Unmarshal([]byte(repo.DetectedLanguages), &counts) == nil && len(counts) > 0 {
+			return languagesFromCounts(counts), "repo_cache", nil
+		}
+	}
+	if repo.SourceType == models.SourceTypeLocal && repo.SourcePath != "" {
+		det, err := detector.Detect(repo.SourcePath)
+		if err == nil {
+			return languagesFromModelCounts(det.Languages), "local_detection", nil
+		}
+	}
+	return nil, "none", nil
+}
+
+// ScannersTools returns every scanner tool with manifest-backed metadata,
+// configured image routing, and reproducibility flags.
+//
+// Route: GET /api/scanners/tools
+func ScannersTools(w http.ResponseWriter, r *http.Request) {
+	m, err := manifest.LoadDefault()
+	if err != nil {
+		response.WriteError(w, http.StatusInternalServerError, "scanner_manifest_error", err.Error())
+		return
+	}
+	cfg := container.Default()
+	rows := scstatus.BuildWithChecksAndImages(m, cfg, scannerVersionChecksByTool(r.Context()), localScannerImagePresence(cfg))
+	response.WriteJSON(w, http.StatusOK, response.ListResponse{
+		Data: rows,
+		Meta: response.ListMeta{Total: len(rows), Page: 1, PerPage: len(rows)},
+	})
+}
+
+// ScannersTool returns manifest-backed metadata for one scanner tool.
+//
+// Route: GET /api/scanners/tools/{name}
+func ScannersTool(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	m, err := manifest.LoadDefault()
+	if err != nil {
+		response.WriteError(w, http.StatusInternalServerError, "scanner_manifest_error", err.Error())
+		return
+	}
+	cfg := container.Default()
+	row, ok := scstatus.Find(scstatus.BuildWithChecksAndImages(m, cfg, scannerVersionChecksByTool(r.Context()), localScannerImagePresence(cfg)), name)
+	if !ok {
+		response.WriteError(w, http.StatusNotFound, "scanner_tool_not_found", "scanner tool not found")
+		return
+	}
+	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: row})
+}
+
+// ScannersCheckUpdates refreshes cached latest-version metadata for every
+// manifest tool. It never changes scanner pins or configured images.
+//
+// Route: POST /api/scanners/tools/check-updates
+func ScannersCheckUpdates(w http.ResponseWriter, r *http.Request) {
+	m, err := manifest.LoadDefault()
+	if err != nil {
+		response.WriteError(w, http.StatusInternalServerError, "scanner_manifest_error", err.Error())
+		return
+	}
+	store, ok := scannerVersionCache()
+	if !ok {
+		response.WriteError(w, http.StatusServiceUnavailable, "scanner_version_cache_unavailable", "scanner version cache is not available")
+		return
+	}
+
+	checker := latest.Checker{}
+	force := scannerUpdateForce(r)
+	out := make([]models.ScannerVersionCheck, 0, len(m.Tools))
+	for _, name := range m.Names() {
+		tool := m.Tools[name]
+		if !force {
+			if cached, ok := freshScannerVersionCheck(r.Context(), store, name, tool); ok {
+				out = append(out, *cached)
+				continue
+			}
+		}
+		checkCtx, cancel := context.WithTimeout(r.Context(), scannerVersionCheckTimeout)
+		check := checker.Check(checkCtx, name, tool)
+		cancel()
+		if err := store.UpsertScannerVersionCheck(r.Context(), &check); err != nil {
+			response.WriteError(w, http.StatusInternalServerError, "scanner_version_cache_error", err.Error())
+			return
+		}
+		out = append(out, check)
+	}
+	response.WriteJSON(w, http.StatusOK, response.ListResponse{
+		Data: out,
+		Meta: response.ListMeta{Total: len(out), Page: 1, PerPage: len(out)},
+	})
+}
+
+// ScannersCheckUpdate refreshes cached latest-version metadata for one tool.
+//
+// Route: POST /api/scanners/tools/{name}/check-update
+func ScannersCheckUpdate(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	m, err := manifest.LoadDefault()
+	if err != nil {
+		response.WriteError(w, http.StatusInternalServerError, "scanner_manifest_error", err.Error())
+		return
+	}
+	tool, ok := m.Tools[name]
+	if !ok {
+		response.WriteError(w, http.StatusNotFound, "scanner_tool_not_found", "scanner tool not found")
+		return
+	}
+	store, ok := scannerVersionCache()
+	if !ok {
+		response.WriteError(w, http.StatusServiceUnavailable, "scanner_version_cache_unavailable", "scanner version cache is not available")
+		return
+	}
+	checkCtx, cancel := context.WithTimeout(r.Context(), scannerVersionCheckTimeout)
+	check := latest.Checker{}.Check(checkCtx, name, tool)
+	cancel()
+	if err := store.UpsertScannerVersionCheck(r.Context(), &check); err != nil {
+		response.WriteError(w, http.StatusInternalServerError, "scanner_version_cache_error", err.Error())
+		return
+	}
+	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: check})
+}
+
+func scannerVersionCache() (scannerVersionStore, bool) {
+	if DefaultHandler == nil || DefaultHandler.Store == nil {
+		return nil, false
+	}
+	store, ok := DefaultHandler.Store.(scannerVersionStore)
+	return store, ok
+}
+
+func parsePlanLanguages(values []string) []models.Language {
+	langs := make([]models.Language, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			langs = append(langs, models.Language(value))
+		}
+	}
+	sort.Slice(langs, func(i, j int) bool { return langs[i] < langs[j] })
+	return langs
+}
+
+func languagesFromCounts(counts map[string]int) []models.Language {
+	langs := make([]models.Language, 0, len(counts))
+	for value := range counts {
+		if strings.TrimSpace(value) != "" {
+			langs = append(langs, models.Language(value))
+		}
+	}
+	sort.Slice(langs, func(i, j int) bool { return langs[i] < langs[j] })
+	return langs
+}
+
+func languagesFromModelCounts(counts map[models.Language]int) []models.Language {
+	langs := make([]models.Language, 0, len(counts))
+	for value := range counts {
+		if value != "" {
+			langs = append(langs, value)
+		}
+	}
+	sort.Slice(langs, func(i, j int) bool { return langs[i] < langs[j] })
+	return langs
+}
+
+func languageNames(langs []models.Language) []string {
+	names := make([]string, 0, len(langs))
+	for _, lang := range langs {
+		names = append(names, string(lang))
+	}
+	sort.Strings(names)
+	return names
+}
+
+func scannerUpdateForce(r *http.Request) bool {
+	if r.URL.Query().Get("force") == "true" || r.URL.Query().Get("force") == "1" {
+		return true
+	}
+	if r.Body == nil {
+		return false
+	}
+	var req struct {
+		Force bool `json:"force"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		return false
+	}
+	return req.Force
+}
+
+func freshScannerVersionCheck(ctx context.Context, store scannerVersionStore, name string, tool manifest.Tool) (*models.ScannerVersionCheck, bool) {
+	check, err := store.GetScannerVersionCheck(ctx, name)
+	if err != nil {
+		return nil, false
+	}
+	if check == nil || check.PinnedVersion != tool.PinnedVersion || check.SourceType != tool.UpdateSource.Type {
+		return nil, false
+	}
+	if scannerVersionCheckFresh(*check, time.Now().UTC()) {
+		return check, true
+	}
+	return nil, false
+}
+
+func scannerVersionCheckFresh(check models.ScannerVersionCheck, now time.Time) bool {
+	if check.CheckedAt.IsZero() {
+		return false
+	}
+	ttl := scannerVersionSuccessTTL
+	if check.Status == models.ScannerVersionCheckFailed {
+		ttl = scannerVersionFailureTTL
+	}
+	return now.Sub(check.CheckedAt.UTC()) < ttl
+}
+
+func scannerVersionChecksByTool(ctx context.Context) map[string]models.ScannerVersionCheck {
+	store, ok := scannerVersionCache()
+	if !ok {
+		return nil
+	}
+	checks, err := store.ListScannerVersionChecks(ctx)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
+		return nil
+	}
+	out := make(map[string]models.ScannerVersionCheck, len(checks))
+	for _, check := range checks {
+		out[check.ToolName] = check
+	}
+	return out
+}
+
+func localScannerImagePresence(cfg *container.Config) map[string]bool {
+	if cfg == nil {
+		return nil
+	}
+	images := cfg.AllImages()
+	out := make(map[string]bool, len(images))
+	for _, image := range images {
+		_, err := dockerImageDigest(image)
+		out[image] = err == nil
+	}
+	return out
 }
 
 // ScannersConfig returns the live container.Config the wolf-slim process is
@@ -290,7 +630,7 @@ func ScannersImages(w http.ResponseWriter, r *http.Request) {
 //
 // Route: POST /api/scanners/images/pull
 //
-//	{"image": "alphabravodevops/wolf-scanners:latest"}
+//	{"image": "alphabravodevops/wolf-scanners:2.0.0"}
 func ScannersPullOne(w http.ResponseWriter, r *http.Request) {
 	cfg := container.Default()
 	if cfg == nil {

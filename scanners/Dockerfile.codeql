@@ -17,7 +17,7 @@
 # (or run under emulation) on arm64 hosts.
 # ============================================================
 
-FROM --platform=linux/amd64 debian:trixie-slim AS base
+FROM --platform=linux/amd64 debian:trixie-slim@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a0c3ccd26f436a0e AS base
 
 ARG WOLF_VERSION=dev
 LABEL org.opencontainers.image.title="wolf-scanners-codeql" \
@@ -42,7 +42,7 @@ RUN chmod +x /usr/local/bin/wolf-tool-entry /usr/local/bin/smoke-test.sh
 COPY install/codeql.sh  /tmp/install/codeql.sh
 RUN  bash /tmp/install/codeql.sh
 
-RUN /usr/local/bin/smoke-test.sh
+RUN WOLF_SMOKE_STRICT=1 /usr/local/bin/smoke-test.sh
 
 RUN rm -rf /tmp/install /var/cache/apt/* /usr/share/doc/* /usr/share/man/*
 

@@ -223,6 +223,7 @@ func TestArtifactTypeConstants(t *testing.T) {
 		{ArtifactSARIF, "sarif"},
 		{ArtifactJSON, "json"},
 		{ArtifactMarkdown, "markdown"},
+		{ArtifactManifest, "manifest"},
 		{ArtifactLog, "log"},
 		{ArtifactCoverage, "coverage"},
 	}
@@ -420,15 +421,15 @@ func TestFixJSONSerialization(t *testing.T) {
 func TestLoopJSONSerialization(t *testing.T) {
 	now := time.Now().Truncate(time.Second)
 	l := Loop{
-		ID:              "loop-1",
-		UserID:          "u-1",
-		RepoID:          "r-1",
-		Status:          LoopStatusRunning,
-		MaxIterations:   5,
-		RescanStrategy:  RescanSmart,
-		SeverityFilter:  "critical,high",
-		CreatedAt:       now,
-		UpdatedAt:       now,
+		ID:             "loop-1",
+		UserID:         "u-1",
+		RepoID:         "r-1",
+		Status:         LoopStatusRunning,
+		MaxIterations:  5,
+		RescanStrategy: RescanSmart,
+		SeverityFilter: "critical,high",
+		CreatedAt:      now,
+		UpdatedAt:      now,
 	}
 
 	data, err := json.Marshal(l)

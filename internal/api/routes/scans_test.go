@@ -7,6 +7,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -47,17 +50,38 @@ func setupTestEnv(t *testing.T) *testEnv {
 		r.Use(auth.Middleware)
 		// Repos
 		r.Post("/api/repos", routes.CreateRepo)
+		r.Get("/api/repos/{id}/baselines", routes.ListRepoBaselines)
+		r.Post("/api/repos/{id}/baselines", routes.CreateRepoBaseline)
 		// Scans
 		r.Post("/api/scans", routes.CreateScan)
 		r.Get("/api/scans", routes.ListScans)
 		r.Get("/api/scans/{id}", routes.GetScan)
 		r.Get("/api/scans/{id}/findings", routes.GetScanFindings)
+		r.Get("/api/scans/{id}/manifest", routes.GetScanManifest)
+		r.Get("/api/scans/{id}/gate", routes.GetScanGate)
+		r.Get("/api/scans/{id}/diff", routes.GetScanDiff)
+		r.Post("/api/scans/{id}/compare", routes.CompareScanToBaseline)
+		r.Get("/api/scans/{id}/compare/{compareId}", routes.CompareScan)
+		r.Get("/api/scans/{id}/artifacts/{artifactId}/download", routes.DownloadArtifact)
+		r.Get("/api/scans/{id}/tools", routes.GetScanTools)
+		r.Get("/api/scans/{id}/scanner-runs", routes.GetScannerRunRecords)
 		r.Delete("/api/scans/{id}", routes.CancelScan)
 		// Findings
 		r.Get("/api/findings", routes.ListFindings)
 		r.Get("/api/findings/{id}", routes.GetFinding)
 		r.Put("/api/findings/{id}/status", routes.UpdateFindingStatus)
 		r.Get("/api/findings/trends", routes.FindingTrends)
+		// SARIF
+		r.Post("/api/sarif/import", routes.ImportSARIF)
+		// Suppressions
+		r.Get("/api/suppressions", routes.ListSuppressions)
+		r.Post("/api/suppressions", routes.CreateSuppression)
+		r.Post("/api/suppressions/preview", routes.PreviewSuppression)
+		r.Delete("/api/suppressions/{id}", routes.RevokeSuppression)
+		// Policies
+		r.Get("/api/policies", routes.ListPolicies)
+		r.Post("/api/policies", routes.CreatePolicy)
+		r.Put("/api/policies/{id}", routes.UpdatePolicy)
 		// Fixes
 		r.Post("/api/fixes", routes.CreateFix)
 		r.Get("/api/fixes", routes.ListFixes)
@@ -127,6 +151,799 @@ func (e *testEnv) createRepo(t *testing.T) string {
 	}
 	json.Unmarshal(w.Body.Bytes(), &resp)
 	return resp.Data.ID
+}
+
+func TestRepoBaselinesAPI(t *testing.T) {
+	env := setupTestEnv(t)
+	repoID := env.createRepo(t)
+	scanID := uuid.New().String()
+	if err := env.Store.CreateScan(context.Background(), &models.Scan{
+		ID:              scanID,
+		UserID:          env.UserID,
+		RepoID:          repoID,
+		Branch:          "main",
+		Status:          models.ScanStatusCompleted,
+		ToolsSelected:   "[]",
+		ToolsCompleted:  "[]",
+		ToolsFailed:     "[]",
+		CoverageSummary: "{}",
+	}); err != nil {
+		t.Fatalf("CreateScan failed: %v", err)
+	}
+
+	w := env.doRequest(http.MethodPost, "/api/repos/"+repoID+"/baselines", map[string]string{
+		"name":    "last-good",
+		"scan_id": scanID,
+	})
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create baseline: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var createResp struct {
+		Data models.ScanBaseline `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &createResp); err != nil {
+		t.Fatalf("decode create response: %v", err)
+	}
+	if createResp.Data.Branch != "main" || createResp.Data.Strategy != "named" {
+		t.Fatalf("unexpected baseline response: %+v", createResp.Data)
+	}
+
+	w = env.doRequest(http.MethodGet, "/api/repos/"+repoID+"/baselines?branch=main", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("list baselines: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var listResp struct {
+		Data []models.ScanBaseline `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &listResp); err != nil {
+		t.Fatalf("decode list response: %v", err)
+	}
+	if len(listResp.Data) != 1 || listResp.Data[0].Name != "last-good" {
+		t.Fatalf("unexpected baselines: %+v", listResp.Data)
+	}
+}
+
+func TestGetScanManifestFromArtifact(t *testing.T) {
+	env := setupTestEnv(t)
+	repoID := env.createRepo(t)
+	scanID := uuid.New().String()
+	if err := env.Store.CreateScan(context.Background(), &models.Scan{
+		ID:              scanID,
+		UserID:          env.UserID,
+		RepoID:          repoID,
+		Branch:          "main",
+		Status:          models.ScanStatusCompleted,
+		ToolsSelected:   "[]",
+		ToolsCompleted:  "[]",
+		ToolsFailed:     "[]",
+		CoverageSummary: "{}",
+	}); err != nil {
+		t.Fatalf("CreateScan failed: %v", err)
+	}
+	manifestPath := filepath.Join(t.TempDir(), "manifest.json")
+	if err := os.WriteFile(manifestPath, []byte(`{"scan_id":"`+scanID+`","scanner_plan":{"summary":{"run_count":1}}}`), 0o600); err != nil {
+		t.Fatalf("write manifest fixture: %v", err)
+	}
+	now := time.Now()
+	if err := env.Store.CreateScanArtifact(context.Background(), &models.ScanArtifact{
+		ID:           uuid.New().String(),
+		ScanID:       scanID,
+		ArtifactType: models.ArtifactManifest,
+		FilePath:     manifestPath,
+		FileSize:     64,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}); err != nil {
+		t.Fatalf("CreateScanArtifact failed: %v", err)
+	}
+
+	w := env.doRequest(http.MethodGet, "/api/scans/"+scanID+"/manifest", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("manifest: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var got map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("manifest response is not JSON: %v", err)
+	}
+	if got["scan_id"] != scanID {
+		t.Fatalf("scan_id = %v, want %s", got["scan_id"], scanID)
+	}
+	if w.Header().Get("Content-Type") != "application/json" {
+		t.Fatalf("content-type = %q", w.Header().Get("Content-Type"))
+	}
+}
+
+func TestGetScanManifestFallback(t *testing.T) {
+	env := setupTestEnv(t)
+	repoID := env.createRepo(t)
+	scanID := uuid.New().String()
+	if err := env.Store.CreateScan(context.Background(), &models.Scan{
+		ID:              scanID,
+		UserID:          env.UserID,
+		RepoID:          repoID,
+		Branch:          "main",
+		SourceType:      models.SourceTypeLocal,
+		SourcePath:      "/tmp/test-repo",
+		CommitSHA:       "abc123",
+		DirtyState:      "clean",
+		Status:          models.ScanStatusCompleted,
+		ToolsSelected:   `["gosec"]`,
+		ToolsCompleted:  `["gosec"]`,
+		ToolsFailed:     "[]",
+		CoverageSummary: "{}",
+	}); err != nil {
+		t.Fatalf("CreateScan failed: %v", err)
+	}
+	if err := env.Store.CreateFinding(context.Background(), &models.Finding{
+		ID:                uuid.New().String(),
+		ScanID:            scanID,
+		RepoID:            repoID,
+		Fingerprint:       "legacy-fp",
+		StableFingerprint: "stable-fp",
+		ToolName:          "gosec",
+		Category:          models.CategorySAST,
+		Severity:          models.SeverityHigh,
+		Title:             "SQL injection",
+		FilePath:          "app/db.go",
+		LineStart:         10,
+		RuleID:            "G201",
+		Status:            models.StatusOpen,
+	}); err != nil {
+		t.Fatalf("CreateFinding failed: %v", err)
+	}
+
+	w := env.doRequest(http.MethodGet, "/api/scans/"+scanID+"/manifest", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("manifest fallback: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var got struct {
+		ScanID      string   `json:"scan_id"`
+		ScannersRun []string `json:"scanners_run"`
+		Source      struct {
+			Kind             string `json:"kind"`
+			RepoID           string `json:"repo_id"`
+			RepoPath         string `json:"repo_path"`
+			Branch           string `json:"branch"`
+			CommitSHA        string `json:"commit_sha"`
+			DirtyState       string `json:"dirty_state"`
+			SnapshotStrategy string `json:"snapshot_strategy"`
+		} `json:"source"`
+		Counts struct {
+			AfterDedupe  int `json:"after_dedupe"`
+			HighSeverity int `json:"high_severity"`
+		} `json:"counts"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("manifest response is not JSON: %v", err)
+	}
+	if got.ScanID != scanID || len(got.ScannersRun) != 1 || got.ScannersRun[0] != "gosec" {
+		t.Fatalf("unexpected manifest fallback: %+v", got)
+	}
+	if got.Counts.AfterDedupe != 1 || got.Counts.HighSeverity != 1 {
+		t.Fatalf("unexpected counts: %+v", got.Counts)
+	}
+	if got.Source.Kind != "local_path" || got.Source.RepoID != repoID || got.Source.CommitSHA != "abc123" || got.Source.SnapshotStrategy != "working_tree" {
+		t.Fatalf("unexpected source provenance: %+v", got.Source)
+	}
+}
+
+func TestImportSARIFAPI(t *testing.T) {
+	env := setupTestEnv(t)
+	repoID := env.createRepo(t)
+	sarif := `{
+	  "version": "2.1.0",
+	  "runs": [{
+	    "tool": {"driver": {"name": "semgrep", "rules": [{
+	      "id": "go.sql",
+	      "shortDescription": {"text": "SQL Injection"},
+	      "properties": {"cweId": "CWE-89", "category": "sast", "fineCategory": "sql-injection"}
+	    }]}},
+	    "results": [{
+	      "ruleId": "go.sql",
+	      "level": "error",
+	      "message": {"text": "unsafe query"},
+	      "locations": [{"physicalLocation": {"artifactLocation": {"uri": "app/db.go"}, "region": {"startLine": 42}}}],
+	      "partialFingerprints": {"wolfStableFingerprint": "stable-import"}
+	    }]
+	  }]
+	}`
+
+	w := env.doRequest(http.MethodPost, "/api/sarif/import", map[string]string{
+		"repo_id": repoID,
+		"branch":  "feature/sarif",
+		"source":  "fixture",
+		"sarif":   sarif,
+	})
+	if w.Code != http.StatusCreated {
+		t.Fatalf("sarif import: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Data struct {
+			Import models.SARIFImport `json:"import"`
+			Scan   models.Scan        `json:"scan"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode import response: %v", err)
+	}
+	if resp.Data.Scan.Status != models.ScanStatusCompleted || resp.Data.Import.ImportedCount != 1 {
+		t.Fatalf("unexpected import response: %+v", resp.Data)
+	}
+	findings, err := env.Store.ListFindingsByScan(context.Background(), resp.Data.Scan.ID)
+	if err != nil {
+		t.Fatalf("ListFindingsByScan failed: %v", err)
+	}
+	if len(findings) != 1 || findings[0].StableFingerprint != "stable-import" || findings[0].SourceKind != "sarif_import" {
+		t.Fatalf("unexpected imported findings: %+v", findings)
+	}
+	imports, err := env.Store.ListSARIFImportsByRepo(context.Background(), repoID)
+	if err != nil {
+		t.Fatalf("ListSARIFImportsByRepo failed: %v", err)
+	}
+	if len(imports) != 1 || imports[0].ScanID != resp.Data.Scan.ID || imports[0].ChecksumSHA256 == "" {
+		t.Fatalf("unexpected import metadata: %+v", imports)
+	}
+	runs, err := env.Store.ListScannerRunRecords(context.Background(), resp.Data.Scan.ID)
+	if err != nil {
+		t.Fatalf("ListScannerRunRecords failed: %v", err)
+	}
+	if len(runs) != 1 || runs[0].ToolName != "semgrep" || runs[0].Status != "imported" || runs[0].FindingCount != 1 || runs[0].ParserStatus != "parsed" {
+		t.Fatalf("unexpected SARIF scanner run records: %+v", runs)
+	}
+	artifacts, err := env.Store.ListScanArtifacts(context.Background(), resp.Data.Scan.ID)
+	if err != nil {
+		t.Fatalf("ListScanArtifacts failed: %v", err)
+	}
+	hasSARIF := false
+	hasManifest := false
+	for _, artifact := range artifacts {
+		if artifact.ArtifactType == models.ArtifactSARIF && filepath.Base(artifact.FilePath) == "imported.sarif" {
+			hasSARIF = artifact.ChecksumSHA256 != ""
+		}
+		if artifact.ArtifactType == models.ArtifactManifest {
+			hasManifest = true
+		}
+	}
+	if !hasSARIF || !hasManifest {
+		t.Fatalf("expected SARIF and manifest artifacts, got %+v", artifacts)
+	}
+}
+
+func TestScannerRunRecordsAPI(t *testing.T) {
+	env := setupTestEnv(t)
+	repoID := env.createRepo(t)
+	scanID := uuid.New().String()
+	started := time.Now().UTC()
+	finished := started.Add(1500 * time.Millisecond)
+	if err := env.Store.CreateScan(context.Background(), &models.Scan{
+		ID:              scanID,
+		UserID:          env.UserID,
+		RepoID:          repoID,
+		Branch:          "main",
+		Status:          models.ScanStatusCompleted,
+		ToolsSelected:   `["gosec"]`,
+		ToolsCompleted:  `["gosec"]`,
+		ToolsFailed:     "[]",
+		CoverageSummary: "{}",
+	}); err != nil {
+		t.Fatalf("CreateScan failed: %v", err)
+	}
+	if err := env.Store.UpsertScannerRunRecord(context.Background(), &models.ScannerRunRecord{
+		ID:           uuid.New().String(),
+		ScanID:       scanID,
+		ToolName:     "gosec",
+		Status:       "completed",
+		Category:     "sast",
+		Image:        "ghcr.io/alphabravo/scanner-gosec@sha256:abc",
+		ImageDigest:  "sha256:abc",
+		CommandJSON:  `{"argv":["gosec","./..."]}`,
+		DurationMS:   1500,
+		FindingCount: 2,
+		ParserStatus: "parsed",
+		StartedAt:    &started,
+		FinishedAt:   &finished,
+	}); err != nil {
+		t.Fatalf("UpsertScannerRunRecord failed: %v", err)
+	}
+	if err := env.Store.UpsertScannerRunRecord(context.Background(), &models.ScannerRunRecord{
+		ID:            uuid.New().String(),
+		ScanID:        scanID,
+		ToolName:      "trivy",
+		Status:        "skipped",
+		Category:      "sca",
+		CommandJSON:   "{}",
+		ErrorMessage:  "tool unavailable",
+		ParserStatus:  "not_run",
+		ParserMessage: "tool unavailable",
+	}); err != nil {
+		t.Fatalf("UpsertScannerRunRecord skipped failed: %v", err)
+	}
+
+	w := env.doRequest(http.MethodGet, "/api/scans/"+scanID+"/scanner-runs", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("scanner-runs: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var runsResp struct {
+		Data []models.ScannerRunRecord `json:"data"`
+		Meta struct {
+			Total int `json:"total"`
+		} `json:"meta"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &runsResp); err != nil {
+		t.Fatalf("decode scanner-runs response: %v", err)
+	}
+	if runsResp.Meta.Total != 2 || len(runsResp.Data) != 2 {
+		t.Fatalf("unexpected scanner-runs response: %+v", runsResp)
+	}
+
+	w = env.doRequest(http.MethodGet, "/api/scans/"+scanID+"/tools", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("scan tools: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var toolsResp struct {
+		Data []struct {
+			Name   string                   `json:"name"`
+			Status string                   `json:"status"`
+			Run    *models.ScannerRunRecord `json:"run"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &toolsResp); err != nil {
+		t.Fatalf("decode tools response: %v", err)
+	}
+	seen := map[string]string{}
+	for _, tool := range toolsResp.Data {
+		if tool.Run == nil {
+			t.Fatalf("expected run record for tool %+v", tool)
+		}
+		seen[tool.Name] = tool.Status
+	}
+	if seen["gosec"] != "completed" || seen["trivy"] != "skipped" {
+		t.Fatalf("unexpected tool statuses: %+v", seen)
+	}
+}
+
+func TestDownloadArtifactRejectsCrossUserScan(t *testing.T) {
+	env := setupTestEnv(t)
+	otherUserID := uuid.New().String()
+	if err := env.Store.CreateUser(context.Background(), &models.User{
+		ID:           otherUserID,
+		Email:        "other@example.com",
+		PasswordHash: "hash",
+	}); err != nil {
+		t.Fatalf("CreateUser other failed: %v", err)
+	}
+	repoID := uuid.New().String()
+	if err := env.Store.CreateRepo(context.Background(), &models.Repo{
+		ID:            repoID,
+		UserID:        otherUserID,
+		Name:          "other-repo",
+		SourceType:    models.SourceTypeLocal,
+		SourcePath:    "/tmp/other-repo",
+		DefaultBranch: "main",
+	}); err != nil {
+		t.Fatalf("CreateRepo other failed: %v", err)
+	}
+	scanID := uuid.New().String()
+	if err := env.Store.CreateScan(context.Background(), &models.Scan{
+		ID:              scanID,
+		UserID:          otherUserID,
+		RepoID:          repoID,
+		Branch:          "main",
+		Status:          models.ScanStatusCompleted,
+		ToolsSelected:   "[]",
+		ToolsCompleted:  "[]",
+		ToolsFailed:     "[]",
+		CoverageSummary: "{}",
+	}); err != nil {
+		t.Fatalf("CreateScan other failed: %v", err)
+	}
+	artifactPath := filepath.Join(t.TempDir(), "raw.log")
+	if err := os.WriteFile(artifactPath, []byte("secret raw output"), 0o600); err != nil {
+		t.Fatalf("write artifact fixture: %v", err)
+	}
+	artifactID := uuid.New().String()
+	if err := env.Store.CreateScanArtifact(context.Background(), &models.ScanArtifact{
+		ID:           artifactID,
+		ScanID:       scanID,
+		ArtifactType: models.ArtifactLog,
+		FilePath:     artifactPath,
+		FileSize:     17,
+		CreatedAt:    time.Now().UTC(),
+		UpdatedAt:    time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("CreateScanArtifact failed: %v", err)
+	}
+
+	w := env.doRequest(http.MethodGet, "/api/scans/"+scanID+"/artifacts/"+artifactID+"/download", nil)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("download cross-user artifact: expected 403, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestSuppressionsAPI(t *testing.T) {
+	env := setupTestEnv(t)
+	repoID := env.createRepo(t)
+	scanID := uuid.New().String()
+	findingID := uuid.New().String()
+	if err := env.Store.CreateScan(context.Background(), &models.Scan{
+		ID:              scanID,
+		UserID:          env.UserID,
+		RepoID:          repoID,
+		Branch:          "main",
+		Status:          models.ScanStatusCompleted,
+		ToolsSelected:   "[]",
+		ToolsCompleted:  "[]",
+		ToolsFailed:     "[]",
+		CoverageSummary: "{}",
+	}); err != nil {
+		t.Fatalf("CreateScan failed: %v", err)
+	}
+	if err := env.Store.CreateFinding(context.Background(), &models.Finding{
+		ID:                findingID,
+		ScanID:            scanID,
+		RepoID:            repoID,
+		Fingerprint:       "legacy-fp",
+		StableFingerprint: "stable-fp",
+		ToolName:          "gosec",
+		Category:          models.CategorySAST,
+		Severity:          models.SeverityHigh,
+		Title:             "SQL injection",
+		FilePath:          "app/db.go",
+		LineStart:         10,
+		RuleID:            "G201",
+		FineCategory:      "sql-injection",
+		Status:            models.StatusOpen,
+		SARIFData:         "{}",
+	}); err != nil {
+		t.Fatalf("CreateFinding failed: %v", err)
+	}
+
+	w := env.doRequest(http.MethodPost, "/api/suppressions/preview", map[string]string{
+		"repo_id":     repoID,
+		"scope_type":  "fine_category",
+		"scope_value": "sql-injection",
+		"reason":      "legacy accepted risk",
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("preview suppression: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var previewResp struct {
+		Data struct {
+			Count int `json:"count"`
+		} `json:"data"`
+	}
+	json.Unmarshal(w.Body.Bytes(), &previewResp)
+	if previewResp.Data.Count != 1 {
+		t.Fatalf("preview count = %d, want 1", previewResp.Data.Count)
+	}
+
+	w = env.doRequest(http.MethodPost, "/api/suppressions", map[string]string{
+		"finding_id": findingID,
+		"reason":     "accepted during migration",
+	})
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create suppression: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var createResp struct {
+		Data models.FindingSuppression `json:"data"`
+	}
+	json.Unmarshal(w.Body.Bytes(), &createResp)
+	if createResp.Data.ScopeType != models.SuppressionScopeStableFingerprint || createResp.Data.ScopeValue != "stable-fp" {
+		t.Fatalf("unexpected suppression: %+v", createResp.Data)
+	}
+
+	finding, err := env.Store.GetFindingByID(context.Background(), findingID)
+	if err != nil {
+		t.Fatalf("GetFindingByID failed: %v", err)
+	}
+	if !finding.Suppressed || finding.SuppressionID != createResp.Data.ID {
+		t.Fatalf("finding was not marked suppressed: %+v", finding)
+	}
+
+	w = env.doRequest(http.MethodGet, "/api/suppressions?repo_id="+repoID, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("list suppressions: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	w = env.doRequest(http.MethodDelete, "/api/suppressions/"+createResp.Data.ID, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("revoke suppression: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	finding, err = env.Store.GetFindingByID(context.Background(), findingID)
+	if err != nil {
+		t.Fatalf("GetFindingByID after revoke failed: %v", err)
+	}
+	if finding.Suppressed || finding.SuppressionID != "" {
+		t.Fatalf("finding suppression was not cleared: %+v", finding)
+	}
+}
+
+func TestScanGateAPI(t *testing.T) {
+	env := setupTestEnv(t)
+	repoID := env.createRepo(t)
+	scanID := uuid.New().String()
+	if err := env.Store.CreateScan(context.Background(), &models.Scan{
+		ID:              scanID,
+		UserID:          env.UserID,
+		RepoID:          repoID,
+		Branch:          "main",
+		Status:          models.ScanStatusCompleted,
+		ToolsSelected:   "[]",
+		ToolsCompleted:  "[]",
+		ToolsFailed:     "[]",
+		CoverageSummary: "{}",
+	}); err != nil {
+		t.Fatalf("CreateScan failed: %v", err)
+	}
+	if err := env.Store.CreateFinding(context.Background(), &models.Finding{
+		ID:          uuid.New().String(),
+		ScanID:      scanID,
+		RepoID:      repoID,
+		Fingerprint: "gate-fp",
+		ToolName:    "trivy",
+		Category:    models.CategorySCA,
+		Severity:    models.SeverityHigh,
+		Title:       "Critical package vulnerability",
+		FilePath:    "package-lock.json",
+		RuleID:      "GHSA-test",
+		Status:      models.StatusOpen,
+		SARIFData:   "{}",
+	}); err != nil {
+		t.Fatalf("CreateFinding failed: %v", err)
+	}
+
+	w := env.doRequest(http.MethodGet, "/api/scans/"+scanID+"/gate", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("gate eval: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var gateResp struct {
+		Data struct {
+			Evaluation struct {
+				Status string `json:"status"`
+			} `json:"evaluation"`
+			Result models.QualityGateResult `json:"result"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &gateResp); err != nil {
+		t.Fatalf("decode gate response: %v", err)
+	}
+	if gateResp.Data.Evaluation.Status != "fail" || gateResp.Data.Result.Status != "fail" {
+		t.Fatalf("expected fail gate, got %+v", gateResp.Data)
+	}
+
+	results, err := env.Store.ListQualityGateResults(context.Background(), scanID)
+	if err != nil {
+		t.Fatalf("ListQualityGateResults failed: %v", err)
+	}
+	if len(results) != 1 || results[0].Status != "fail" {
+		t.Fatalf("gate result was not persisted: %+v", results)
+	}
+	artifacts, err := env.Store.ListScanArtifacts(context.Background(), scanID)
+	if err != nil {
+		t.Fatalf("ListScanArtifacts failed: %v", err)
+	}
+	var gateArtifact *models.ScanArtifact
+	for i := range artifacts {
+		if filepath.Base(artifacts[i].FilePath) == "gate-result.json" {
+			gateArtifact = &artifacts[i]
+			break
+		}
+	}
+	if gateArtifact == nil {
+		t.Fatalf("gate-result.json artifact was not recorded: %+v", artifacts)
+	}
+	if gateArtifact.ChecksumSHA256 == "" || gateArtifact.RedactionLevel != "internal_report" {
+		t.Fatalf("gate artifact metadata missing: %+v", gateArtifact)
+	}
+	if _, err := os.Stat(gateArtifact.FilePath); err != nil {
+		t.Fatalf("gate artifact missing on disk: %v", err)
+	}
+}
+
+func TestCompareScanWritesDiffArtifact(t *testing.T) {
+	env := setupTestEnv(t)
+	repoID := env.createRepo(t)
+	baselineID := uuid.New().String()
+	currentID := uuid.New().String()
+	for _, scanID := range []string{baselineID, currentID} {
+		if err := env.Store.CreateScan(context.Background(), &models.Scan{
+			ID:              scanID,
+			UserID:          env.UserID,
+			RepoID:          repoID,
+			Branch:          "main",
+			Status:          models.ScanStatusCompleted,
+			ToolsSelected:   `["gosec"]`,
+			ToolsCompleted:  `["gosec"]`,
+			ToolsFailed:     "[]",
+			CoverageSummary: "{}",
+		}); err != nil {
+			t.Fatalf("CreateScan failed: %v", err)
+		}
+	}
+	if err := env.Store.CreateFinding(context.Background(), &models.Finding{
+		ID:                uuid.New().String(),
+		ScanID:            baselineID,
+		RepoID:            repoID,
+		Fingerprint:       "fixed-fp",
+		StableFingerprint: "fixed-fp",
+		ToolName:          "gosec",
+		Category:          models.CategorySAST,
+		Severity:          models.SeverityHigh,
+		Title:             "Fixed issue",
+		FilePath:          "app/old.go",
+		LineStart:         10,
+		RuleID:            "G201",
+		Status:            models.StatusOpen,
+	}); err != nil {
+		t.Fatalf("CreateFinding baseline failed: %v", err)
+	}
+	if err := env.Store.CreateFinding(context.Background(), &models.Finding{
+		ID:                uuid.New().String(),
+		ScanID:            currentID,
+		RepoID:            repoID,
+		Fingerprint:       "new-fp",
+		StableFingerprint: "new-fp",
+		ToolName:          "gosec",
+		Category:          models.CategorySAST,
+		Severity:          models.SeverityHigh,
+		Title:             "New issue",
+		FilePath:          "app/new.go",
+		LineStart:         20,
+		RuleID:            "G202",
+		Status:            models.StatusOpen,
+	}); err != nil {
+		t.Fatalf("CreateFinding current failed: %v", err)
+	}
+
+	w := env.doRequest(http.MethodPost, "/api/scans/"+currentID+"/compare", map[string]string{
+		"baseline_scan_id": baselineID,
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("compare: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	artifacts, err := env.Store.ListScanArtifacts(context.Background(), currentID)
+	if err != nil {
+		t.Fatalf("ListScanArtifacts failed: %v", err)
+	}
+	var diffArtifact *models.ScanArtifact
+	for i := range artifacts {
+		if filepath.Base(artifacts[i].FilePath) == "diff.json" {
+			diffArtifact = &artifacts[i]
+			break
+		}
+	}
+	if diffArtifact == nil {
+		t.Fatalf("diff.json artifact was not recorded: %+v", artifacts)
+	}
+	if diffArtifact.ChecksumSHA256 == "" || diffArtifact.RedactionLevel != "internal_report" {
+		t.Fatalf("diff artifact metadata missing: %+v", diffArtifact)
+	}
+	data, err := os.ReadFile(diffArtifact.FilePath)
+	if err != nil {
+		t.Fatalf("read diff artifact: %v", err)
+	}
+	var diffBody struct {
+		Summary struct {
+			NewCount   int `json:"new_count"`
+			FixedCount int `json:"fixed_count"`
+		} `json:"summary"`
+	}
+	if err := json.Unmarshal(data, &diffBody); err != nil {
+		t.Fatalf("diff artifact is not JSON: %v", err)
+	}
+	if diffBody.Summary.NewCount != 1 || diffBody.Summary.FixedCount != 1 {
+		t.Fatalf("unexpected diff summary: %+v", diffBody.Summary)
+	}
+
+	w = env.doRequest(http.MethodGet, "/api/scans/"+currentID+"/diff?baseline_scan_id="+baselineID, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("diff: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var diffResp struct {
+		Data struct {
+			Summary struct {
+				NewCount   int `json:"new_count"`
+				FixedCount int `json:"fixed_count"`
+			} `json:"summary"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &diffResp); err != nil {
+		t.Fatalf("decode diff response: %v", err)
+	}
+	if diffResp.Data.Summary.NewCount != 1 || diffResp.Data.Summary.FixedCount != 1 {
+		t.Fatalf("unexpected diff response: %+v", diffResp.Data.Summary)
+	}
+}
+
+func TestCompareScanRejectsIncompatibleSources(t *testing.T) {
+	env := setupTestEnv(t)
+	repo1 := env.createRepo(t)
+	w := env.doRequest(http.MethodPost, "/api/repos", map[string]string{
+		"name":        "other-repo",
+		"source_type": "local",
+		"source_path": "/tmp/other-repo",
+	})
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create second repo: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var repoResp struct {
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &repoResp); err != nil {
+		t.Fatalf("decode repo response: %v", err)
+	}
+	repo2 := repoResp.Data.ID
+	baselineID := uuid.New().String()
+	currentID := uuid.New().String()
+	for _, scan := range []struct {
+		id     string
+		repoID string
+		path   string
+	}{
+		{id: baselineID, repoID: repo1, path: "/tmp/test-repo"},
+		{id: currentID, repoID: repo2, path: "/tmp/other-repo"},
+	} {
+		if err := env.Store.CreateScan(context.Background(), &models.Scan{
+			ID:              scan.id,
+			UserID:          env.UserID,
+			RepoID:          scan.repoID,
+			Branch:          "main",
+			SourceType:      models.SourceTypeLocal,
+			SourcePath:      scan.path,
+			Status:          models.ScanStatusCompleted,
+			ToolsSelected:   "[]",
+			ToolsCompleted:  "[]",
+			ToolsFailed:     "[]",
+			CoverageSummary: "{}",
+		}); err != nil {
+			t.Fatalf("CreateScan failed: %v", err)
+		}
+	}
+
+	w = env.doRequest(http.MethodPost, "/api/scans/"+currentID+"/compare", map[string]string{
+		"baseline_scan_id": baselineID,
+	})
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("compare incompatible sources: expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "different repositories") {
+		t.Fatalf("unexpected incompatible-source response: %s", w.Body.String())
+	}
+}
+
+func TestPoliciesAPI(t *testing.T) {
+	env := setupTestEnv(t)
+	w := env.doRequest(http.MethodPost, "/api/policies", map[string]any{
+		"name":  "warn-medium",
+		"scope": "global",
+		"mode":  "warn",
+		"rules": []map[string]any{
+			{
+				"id":       "warn-medium",
+				"severity": []string{"medium"},
+				"action":   "warn",
+			},
+		},
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("create policy: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	w = env.doRequest(http.MethodGet, "/api/policies?scope=global", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("list policies: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var listResp struct {
+		Data []models.QualityPolicy `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &listResp); err != nil {
+		t.Fatalf("decode list response: %v", err)
+	}
+	if len(listResp.Data) != 1 || listResp.Data[0].Name != "warn-medium" {
+		t.Fatalf("unexpected policies: %+v", listResp.Data)
+	}
 }
 
 // --- Scan tests ---

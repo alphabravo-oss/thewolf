@@ -3,9 +3,10 @@ package db
 import (
 	"context"
 	"testing"
+	"time"
 
-	"github.com/google/uuid"
 	"github.com/alphabravocompany/thewolf/internal/models"
+	"github.com/google/uuid"
 )
 
 func newTestStore(t *testing.T) *SQLiteStore {
@@ -128,14 +129,14 @@ func TestCreateAndGetScan(t *testing.T) {
 	store.CreateRepo(ctx, &models.Repo{ID: repoID, UserID: userID, Name: "scanrepo", SourceType: models.SourceTypeLocal, SourcePath: "/tmp", DefaultBranch: "main"})
 
 	scan := &models.Scan{
-		ID:             uuid.New().String(),
-		UserID:         userID,
-		RepoID:         repoID,
-		Branch:         "main",
-		Status:         models.ScanStatusPending,
-		ToolsSelected:  `["semgrep","trivy"]`,
-		ToolsCompleted: "[]",
-		ToolsFailed:    "[]",
+		ID:              uuid.New().String(),
+		UserID:          userID,
+		RepoID:          repoID,
+		Branch:          "main",
+		Status:          models.ScanStatusPending,
+		ToolsSelected:   `["semgrep","trivy"]`,
+		ToolsCompleted:  "[]",
+		ToolsFailed:     "[]",
 		CoverageSummary: "{}",
 	}
 
@@ -207,6 +208,198 @@ func TestCreateAndGetFinding(t *testing.T) {
 	}
 }
 
+func TestScanBaselinesAndComparisons(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+
+	userID := uuid.New().String()
+	repoID := uuid.New().String()
+	baseScanID := uuid.New().String()
+	currentScanID := uuid.New().String()
+	store.CreateUser(ctx, &models.User{ID: userID, Email: "baseline@test.com", PasswordHash: "hash"})
+	store.CreateRepo(ctx, &models.Repo{ID: repoID, UserID: userID, Name: "baseline-repo", SourceType: models.SourceTypeLocal, SourcePath: "/tmp", DefaultBranch: "main"})
+	store.CreateScan(ctx, &models.Scan{ID: baseScanID, UserID: userID, RepoID: repoID, Branch: "main", Status: models.ScanStatusCompleted, ToolsSelected: "[]", ToolsCompleted: "[]", ToolsFailed: "[]", CoverageSummary: "{}"})
+	store.CreateScan(ctx, &models.Scan{ID: currentScanID, UserID: userID, RepoID: repoID, Branch: "main", Status: models.ScanStatusCompleted, ToolsSelected: "[]", ToolsCompleted: "[]", ToolsFailed: "[]", CoverageSummary: "{}"})
+
+	baseline := &models.ScanBaseline{
+		ID:        uuid.New().String(),
+		RepoID:    repoID,
+		Branch:    "main",
+		Name:      "last-good",
+		ScanID:    baseScanID,
+		CreatedBy: userID,
+	}
+	if err := store.CreateScanBaseline(ctx, baseline); err != nil {
+		t.Fatalf("CreateScanBaseline failed: %v", err)
+	}
+
+	got, err := store.GetScanBaselineByName(ctx, repoID, "main", "last-good")
+	if err != nil {
+		t.Fatalf("GetScanBaselineByName failed: %v", err)
+	}
+	if got.ScanID != baseScanID || got.Strategy != "named" {
+		t.Fatalf("unexpected baseline: %+v", got)
+	}
+
+	baselines, err := store.ListScanBaselines(ctx, repoID, "main")
+	if err != nil {
+		t.Fatalf("ListScanBaselines failed: %v", err)
+	}
+	if len(baselines) != 1 {
+		t.Fatalf("expected 1 baseline, got %d", len(baselines))
+	}
+
+	comparison := &models.ScanComparison{
+		ID:             uuid.New().String(),
+		RepoID:         repoID,
+		BaselineScanID: baseScanID,
+		CurrentScanID:  currentScanID,
+		SummaryJSON:    `{"new":1}`,
+	}
+	if err := store.UpsertScanComparison(ctx, comparison); err != nil {
+		t.Fatalf("UpsertScanComparison failed: %v", err)
+	}
+	comparison.SummaryJSON = `{"new":2}`
+	if err := store.UpsertScanComparison(ctx, comparison); err != nil {
+		t.Fatalf("second UpsertScanComparison failed: %v", err)
+	}
+
+	gotComparison, err := store.GetScanComparison(ctx, baseScanID, currentScanID)
+	if err != nil {
+		t.Fatalf("GetScanComparison failed: %v", err)
+	}
+	if gotComparison.SummaryJSON != `{"new":2}` {
+		t.Fatalf("summary = %s", gotComparison.SummaryJSON)
+	}
+}
+
+func TestFindingSuppressionsCRUD(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+
+	userID := uuid.New().String()
+	repoID := uuid.New().String()
+	store.CreateUser(ctx, &models.User{ID: userID, Email: "suppress@test.com", PasswordHash: "hash"})
+	store.CreateRepo(ctx, &models.Repo{ID: repoID, UserID: userID, Name: "suppress-repo", SourceType: models.SourceTypeLocal, SourcePath: "/tmp", DefaultBranch: "main"})
+
+	suppression := &models.FindingSuppression{
+		ID:         uuid.New().String(),
+		RepoID:     repoID,
+		CreatedBy:  userID,
+		ScopeType:  models.SuppressionScopeRule,
+		ScopeValue: "G201",
+		Reason:     "legacy accepted risk",
+	}
+	if err := store.CreateFindingSuppression(ctx, suppression); err != nil {
+		t.Fatalf("CreateFindingSuppression failed: %v", err)
+	}
+	got, err := store.GetFindingSuppressionByID(ctx, suppression.ID)
+	if err != nil {
+		t.Fatalf("GetFindingSuppressionByID failed: %v", err)
+	}
+	if got.Status != models.SuppressionStatusActive {
+		t.Fatalf("status = %q, want active", got.Status)
+	}
+
+	suppressions, err := store.ListFindingSuppressions(ctx, repoID, false)
+	if err != nil {
+		t.Fatalf("ListFindingSuppressions failed: %v", err)
+	}
+	if len(suppressions) != 1 {
+		t.Fatalf("expected 1 active suppression, got %d", len(suppressions))
+	}
+
+	if err := store.CreateFindingSuppressionAudit(ctx, &models.FindingSuppressionAudit{
+		ID:            uuid.New().String(),
+		SuppressionID: suppression.ID,
+		Action:        "created",
+		ActorID:       userID,
+		DetailsJSON:   "{}",
+	}); err != nil {
+		t.Fatalf("CreateFindingSuppressionAudit failed: %v", err)
+	}
+	if err := store.RevokeFindingSuppression(ctx, suppression.ID); err != nil {
+		t.Fatalf("RevokeFindingSuppression failed: %v", err)
+	}
+	suppressions, err = store.ListFindingSuppressions(ctx, repoID, false)
+	if err != nil {
+		t.Fatalf("ListFindingSuppressions after revoke failed: %v", err)
+	}
+	if len(suppressions) != 0 {
+		t.Fatalf("expected 0 active suppressions after revoke, got %d", len(suppressions))
+	}
+	suppressions, err = store.ListFindingSuppressions(ctx, repoID, true)
+	if err != nil {
+		t.Fatalf("ListFindingSuppressions include inactive failed: %v", err)
+	}
+	if len(suppressions) != 1 || suppressions[0].Status != models.SuppressionStatusRevoked {
+		t.Fatalf("unexpected inactive suppressions: %+v", suppressions)
+	}
+}
+
+func TestQualityPoliciesAndGateResults(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+
+	userID := uuid.New().String()
+	repoID := uuid.New().String()
+	scanID := uuid.New().String()
+	store.CreateUser(ctx, &models.User{ID: userID, Email: "gate@test.com", PasswordHash: "hash"})
+	store.CreateRepo(ctx, &models.Repo{ID: repoID, UserID: userID, Name: "gate-repo", SourceType: models.SourceTypeLocal, SourcePath: "/tmp", DefaultBranch: "main"})
+	store.CreateScan(ctx, &models.Scan{ID: scanID, UserID: userID, RepoID: repoID, Branch: "main", Status: models.ScanStatusCompleted, ToolsSelected: "[]", ToolsCompleted: "[]", ToolsFailed: "[]", CoverageSummary: "{}"})
+
+	policy := &models.QualityPolicy{
+		ID:        uuid.New().String(),
+		Name:      "default-security-gate",
+		Scope:     "global",
+		Mode:      "warn",
+		RulesJSON: "[]",
+		Enabled:   true,
+		CreatedBy: userID,
+	}
+	if err := store.UpsertQualityPolicy(ctx, policy); err != nil {
+		t.Fatalf("UpsertQualityPolicy failed: %v", err)
+	}
+	policies, err := store.ListQualityPolicies(ctx, "global", "")
+	if err != nil {
+		t.Fatalf("ListQualityPolicies failed: %v", err)
+	}
+	if len(policies) != 1 {
+		t.Fatalf("expected 1 policy, got %d", len(policies))
+	}
+
+	result := &models.QualityGateResult{
+		ID:               uuid.New().String(),
+		ScanID:           scanID,
+		PolicyID:         policy.ID,
+		Status:           "fail",
+		SummaryJSON:      `{"status":"fail"}`,
+		MatchedRulesJSON: "[]",
+	}
+	if err := store.UpsertQualityGateResult(ctx, result); err != nil {
+		t.Fatalf("UpsertQualityGateResult failed: %v", err)
+	}
+	result.Status = "warn"
+	result.SummaryJSON = `{"status":"warn"}`
+	if err := store.UpsertQualityGateResult(ctx, result); err != nil {
+		t.Fatalf("second UpsertQualityGateResult failed: %v", err)
+	}
+	got, err := store.GetQualityGateResult(ctx, scanID, policy.ID)
+	if err != nil {
+		t.Fatalf("GetQualityGateResult failed: %v", err)
+	}
+	if got.Status != "warn" {
+		t.Fatalf("status = %q, want warn", got.Status)
+	}
+	results, err := store.ListQualityGateResults(ctx, scanID)
+	if err != nil {
+		t.Fatalf("ListQualityGateResults failed: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 gate result, got %d", len(results))
+	}
+}
+
 func TestSecretsCRUD(t *testing.T) {
 	store := newTestStore(t)
 	ctx := context.Background()
@@ -241,6 +434,201 @@ func TestSecretsCRUD(t *testing.T) {
 	}
 }
 
+func TestScanArtifactMetadataRoundTrip(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+
+	userID := uuid.New().String()
+	store.CreateUser(ctx, &models.User{ID: userID, Email: "artifact@test.com", PasswordHash: "hash"})
+	repoID := uuid.New().String()
+	store.CreateRepo(ctx, &models.Repo{
+		ID:            repoID,
+		UserID:        userID,
+		Name:          "artifact-repo",
+		SourceType:    models.SourceTypeLocal,
+		SourcePath:    "/tmp/artifact-repo",
+		DefaultBranch: "main",
+	})
+	scanID := uuid.New().String()
+	if err := store.CreateScan(ctx, &models.Scan{
+		ID:              scanID,
+		UserID:          userID,
+		RepoID:          repoID,
+		Branch:          "main",
+		Status:          models.ScanStatusCompleted,
+		ToolsSelected:   "[]",
+		ToolsCompleted:  "[]",
+		ToolsFailed:     "[]",
+		CoverageSummary: "{}",
+	}); err != nil {
+		t.Fatalf("CreateScan failed: %v", err)
+	}
+
+	if err := store.CreateScanArtifact(ctx, &models.ScanArtifact{
+		ID:             uuid.New().String(),
+		ScanID:         scanID,
+		ArtifactType:   models.ArtifactSARIF,
+		FilePath:       "/tmp/combined.sarif",
+		FileSize:       123,
+		ChecksumSHA256: "abc123",
+		RedactionLevel: "internal_report",
+	}); err != nil {
+		t.Fatalf("CreateScanArtifact failed: %v", err)
+	}
+	if err := store.CreateScanArtifact(ctx, &models.ScanArtifact{
+		ID:           uuid.New().String(),
+		ScanID:       scanID,
+		ArtifactType: models.ArtifactLog,
+		FilePath:     "/tmp/gosec.log",
+		FileSize:     456,
+	}); err != nil {
+		t.Fatalf("CreateScanArtifact with default redaction failed: %v", err)
+	}
+
+	artifacts, err := store.ListScanArtifacts(ctx, scanID)
+	if err != nil {
+		t.Fatalf("ListScanArtifacts failed: %v", err)
+	}
+	if len(artifacts) != 2 {
+		t.Fatalf("expected 2 artifacts, got %d", len(artifacts))
+	}
+	byType := map[models.ArtifactType]models.ScanArtifact{}
+	for _, artifact := range artifacts {
+		byType[artifact.ArtifactType] = artifact
+	}
+	if byType[models.ArtifactSARIF].ChecksumSHA256 != "abc123" ||
+		byType[models.ArtifactSARIF].RedactionLevel != "internal_report" {
+		t.Fatalf("artifact metadata not preserved: %+v", byType[models.ArtifactSARIF])
+	}
+	if byType[models.ArtifactLog].RedactionLevel != "internal_report" {
+		t.Fatalf("default redaction level not applied: %+v", byType[models.ArtifactLog])
+	}
+}
+
+func TestSARIFImportMetadataRoundTrip(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+
+	userID := uuid.New().String()
+	store.CreateUser(ctx, &models.User{ID: userID, Email: "sarif@test.com", PasswordHash: "hash"})
+	repoID := uuid.New().String()
+	store.CreateRepo(ctx, &models.Repo{
+		ID:            repoID,
+		UserID:        userID,
+		Name:          "sarif-repo",
+		SourceType:    models.SourceTypeLocal,
+		SourcePath:    "/tmp/sarif-repo",
+		DefaultBranch: "main",
+	})
+	scanID := uuid.New().String()
+	store.CreateScan(ctx, &models.Scan{
+		ID:              scanID,
+		UserID:          userID,
+		RepoID:          repoID,
+		Branch:          "main",
+		Status:          models.ScanStatusCompleted,
+		ToolsSelected:   "[]",
+		ToolsCompleted:  "[]",
+		ToolsFailed:     "[]",
+		CoverageSummary: "{}",
+	})
+
+	imp := &models.SARIFImport{
+		ID:             uuid.New().String(),
+		RepoID:         repoID,
+		ScanID:         scanID,
+		Source:         "github-code-scanning",
+		ChecksumSHA256: "sha256",
+		ResultCount:    2,
+		ImportedCount:  2,
+		CreatedBy:      userID,
+	}
+	if err := store.CreateSARIFImport(ctx, imp); err != nil {
+		t.Fatalf("CreateSARIFImport failed: %v", err)
+	}
+	imports, err := store.ListSARIFImportsByRepo(ctx, repoID)
+	if err != nil {
+		t.Fatalf("ListSARIFImportsByRepo failed: %v", err)
+	}
+	if len(imports) != 1 || imports[0].ScanID != scanID || imports[0].ChecksumSHA256 != "sha256" {
+		t.Fatalf("unexpected imports: %+v", imports)
+	}
+}
+
+func TestScannerRunRecordUpsertRoundTrip(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+
+	userID := uuid.New().String()
+	store.CreateUser(ctx, &models.User{ID: userID, Email: "scanner-run@test.com", PasswordHash: "hash"})
+	repoID := uuid.New().String()
+	store.CreateRepo(ctx, &models.Repo{
+		ID:            repoID,
+		UserID:        userID,
+		Name:          "scanner-run-repo",
+		SourceType:    models.SourceTypeLocal,
+		SourcePath:    "/tmp/scanner-run-repo",
+		DefaultBranch: "main",
+	})
+	scanID := uuid.New().String()
+	store.CreateScan(ctx, &models.Scan{
+		ID:              scanID,
+		UserID:          userID,
+		RepoID:          repoID,
+		Branch:          "main",
+		Status:          models.ScanStatusCompleted,
+		ToolsSelected:   "[]",
+		ToolsCompleted:  "[]",
+		ToolsFailed:     "[]",
+		CoverageSummary: "{}",
+	})
+	started := time.Now().UTC()
+	if err := store.UpsertScannerRunRecord(ctx, &models.ScannerRunRecord{
+		ID:           uuid.New().String(),
+		ScanID:       scanID,
+		ToolName:     "gosec",
+		Status:       "running",
+		Category:     "sast",
+		Image:        "wolf-scanners:latest",
+		CommandJSON:  "{}",
+		ParserStatus: "pending",
+		StartedAt:    &started,
+	}); err != nil {
+		t.Fatalf("UpsertScannerRunRecord running failed: %v", err)
+	}
+	finished := started.Add(2 * time.Second)
+	if err := store.UpsertScannerRunRecord(ctx, &models.ScannerRunRecord{
+		ID:           uuid.New().String(),
+		ScanID:       scanID,
+		ToolName:     "gosec",
+		Status:       "completed",
+		Category:     "sast",
+		Image:        "wolf-scanners:latest",
+		CommandJSON:  "{}",
+		DurationMS:   2000,
+		FindingCount: 3,
+		ParserStatus: "parsed",
+		StartedAt:    &started,
+		FinishedAt:   &finished,
+	}); err != nil {
+		t.Fatalf("UpsertScannerRunRecord completed failed: %v", err)
+	}
+	records, err := store.ListScannerRunRecords(ctx, scanID)
+	if err != nil {
+		t.Fatalf("ListScannerRunRecords failed: %v", err)
+	}
+	if len(records) != 1 {
+		t.Fatalf("expected 1 record, got %d", len(records))
+	}
+	got := records[0]
+	if got.Status != "completed" || got.DurationMS != 2000 || got.FindingCount != 3 || got.ParserStatus != "parsed" {
+		t.Fatalf("unexpected scanner run record: %+v", got)
+	}
+	if got.StartedAt == nil || got.FinishedAt == nil {
+		t.Fatalf("expected start and finish timestamps: %+v", got)
+	}
+}
+
 // TestDeleteRepoCascadeWithAILogs is a regression test: ai_logs references
 // scans(id) without ON DELETE CASCADE, so DeleteScanCascade must delete
 // ai_logs rows explicitly. Before the fix, a repo with AI-assessed scans
@@ -261,7 +649,7 @@ func TestDeleteRepoCascadeWithAILogs(t *testing.T) {
 	scanID := uuid.New().String()
 	if err := store.CreateScan(ctx, &models.Scan{
 		ID: scanID, UserID: userID, RepoID: repoID, Branch: "main",
-		Status: models.ScanStatusCompleted,
+		Status:        models.ScanStatusCompleted,
 		ToolsSelected: "[]", ToolsCompleted: "[]", ToolsFailed: "[]", CoverageSummary: "{}",
 	}); err != nil {
 		t.Fatalf("CreateScan failed: %v", err)

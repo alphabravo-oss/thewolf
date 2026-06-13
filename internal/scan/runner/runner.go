@@ -6,7 +6,6 @@ package runner
 
 import (
 	"context"
-	"crypto/sha256"
 	"errors"
 	"fmt"
 	"os"
@@ -19,9 +18,11 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
+	"github.com/alphabravocompany/thewolf/internal/finding/identity"
 	"github.com/alphabravocompany/thewolf/internal/finding/knowledge"
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
+	"github.com/alphabravocompany/thewolf/internal/scannertools/manifest"
 	"github.com/alphabravocompany/thewolf/internal/wolflog"
 )
 
@@ -34,9 +35,16 @@ type RunConfig struct {
 	Tools         []string // explicit tool list (overrides auto-detection)
 	DisabledTools []string // tools to exclude from the auto-detected set
 	Concurrency   int
-	IncludePaths  []string
-	ExcludePaths  []string
-	Timeout       time.Duration
+	// HeavyConcurrency limits scanners that are expensive enough to contend
+	// heavily for CPU, memory, disk, Docker, or network resources. Defaults to 1.
+	HeavyConcurrency int
+	// NetworkConcurrency limits scanners that need external network access.
+	// Defaults to 2.
+	NetworkConcurrency int
+	ToolResources      map[string]ResourceSpec
+	IncludePaths       []string
+	ExcludePaths       []string
+	Timeout            time.Duration
 
 	// ContainerCfg is the container-backend runtime config. Wolf-slim
 	// startup builds a *container.Config and threads it through here so
@@ -67,11 +75,18 @@ type RunConfig struct {
 	OnToolCancelable func(toolName string, cancel context.CancelFunc)
 }
 
+type ResourceSpec struct {
+	Class           string
+	Timeout         time.Duration
+	NetworkRequired bool
+	Exclusive       bool
+}
+
 // MissingPluginSuggestion describes a plugin that could have been used but isn't installed.
 type MissingPluginSuggestion struct {
-	PluginName string           `json:"plugin_name"`
+	PluginName string            `json:"plugin_name"`
 	Languages  []models.Language `json:"languages,omitempty"`
-	Category   models.Category  `json:"category"`
+	Category   models.Category   `json:"category"`
 }
 
 // RunResult contains the aggregated results of a scan run.
@@ -103,17 +118,17 @@ func severityRank(s models.Severity) int {
 	}
 }
 
-// Fingerprint computes a stable SHA256 fingerprint for a finding.
-// It uses tool_name + ":" + identifier + ":" + file_path, where identifier
-// is rule_id if non-empty, otherwise title.
+// Fingerprint computes the v1 stable fingerprint for legacy callers that only
+// have the old helper arguments. New code should prefer identity.Apply so all
+// fingerprint variants are populated.
 func Fingerprint(toolName, ruleID, title, filePath string) string {
-	identifier := ruleID
-	if identifier == "" {
-		identifier = title
+	f := models.Finding{
+		ToolName: toolName,
+		RuleID:   ruleID,
+		Title:    title,
+		FilePath: filePath,
 	}
-	input := toolName + ":" + identifier + ":" + filePath
-	hash := sha256.Sum256([]byte(input))
-	return fmt.Sprintf("%x", hash)
+	return identity.Build(f).Stable
 }
 
 // dedupKey returns the deduplication key for a finding. When a fine_category
@@ -281,6 +296,103 @@ func defaultConcurrency() int {
 	return 4
 }
 
+// defaultHeavyConcurrency returns the default worker count for expensive tools.
+func defaultHeavyConcurrency() int {
+	return 1
+}
+
+// defaultNetworkConcurrency returns the default worker count for networked scanners.
+func defaultNetworkConcurrency() int {
+	return 2
+}
+
+func ResourceSpecsFromManifest(m *manifest.Manifest) map[string]ResourceSpec {
+	if m == nil {
+		return nil
+	}
+	out := make(map[string]ResourceSpec, len(m.Tools))
+	for name, tool := range m.Tools {
+		var timeout time.Duration
+		if tool.DefaultTimeout != "" {
+			timeout, _ = time.ParseDuration(tool.DefaultTimeout)
+		}
+		out[name] = ResourceSpec{
+			Class:           tool.ResourceClass,
+			Timeout:         timeout,
+			NetworkRequired: tool.NetworkRequired,
+			Exclusive:       tool.Exclusive,
+		}
+	}
+	return out
+}
+
+func resourceSpecFor(p models.Plugin, resources map[string]ResourceSpec) ResourceSpec {
+	if resources != nil {
+		if spec, ok := resources[p.Name()]; ok {
+			return spec
+		}
+	}
+	return ResourceSpec{Class: resourceClassFromCategory(p)}
+}
+
+func resourceClassFromCategory(p models.Plugin) string {
+	switch p.Category() {
+	case models.CategorySCA, models.CategoryContainer, models.CategoryInfra, models.CategoryDAST:
+		return "heavy"
+	case models.CategorySecrets, models.CategoryQuality, models.CategoryDocs:
+		return "light"
+	default:
+		return "medium"
+	}
+}
+
+func acquireResourceSlots(ctx context.Context, spec ResourceSpec, slots resourceSlots) (func(), error) {
+	var releases []func()
+	acquire := func(sem chan struct{}, enabled bool) error {
+		if !enabled || sem == nil {
+			return nil
+		}
+		select {
+		case sem <- struct{}{}:
+			releases = append(releases, func() { <-sem })
+			return nil
+		case <-ctx.Done():
+			for i := len(releases) - 1; i >= 0; i-- {
+				releases[i]()
+			}
+			return ctx.Err()
+		}
+	}
+
+	if err := acquire(slots.exclusive, spec.Exclusive || spec.Class == "exclusive"); err != nil {
+		return func() {}, err
+	}
+	if err := acquire(slots.network, spec.NetworkRequired || spec.Class == "network"); err != nil {
+		return func() {}, err
+	}
+	if err := acquire(slots.heavy, spec.Class == "heavy"); err != nil {
+		return func() {}, err
+	}
+	return func() {
+		for i := len(releases) - 1; i >= 0; i-- {
+			releases[i]()
+		}
+	}, nil
+}
+
+func timeoutForTool(defaultTimeout time.Duration, spec ResourceSpec) time.Duration {
+	if spec.Timeout > 0 {
+		return spec.Timeout
+	}
+	return defaultTimeout
+}
+
+type resourceSlots struct {
+	heavy     chan struct{}
+	network   chan struct{}
+	exclusive chan struct{}
+}
+
 // sniffExt looks at the first non-whitespace bytes of data and returns a best-
 // guess canonical extension ("json", "sarif", "xml", "txt"). SARIF is reported
 // as "sarif" only if a top-level "$schema" mentions sarif; otherwise generic
@@ -321,6 +433,19 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	concurrency := cfg.Concurrency
 	if concurrency <= 0 {
 		concurrency = defaultConcurrency()
+	}
+	heavyConcurrency := cfg.HeavyConcurrency
+	if heavyConcurrency <= 0 {
+		heavyConcurrency = defaultHeavyConcurrency()
+	}
+	networkConcurrency := cfg.NetworkConcurrency
+	if networkConcurrency <= 0 {
+		networkConcurrency = defaultNetworkConcurrency()
+	}
+	slots := resourceSlots{
+		heavy:     make(chan struct{}, heavyConcurrency),
+		network:   make(chan struct{}, networkConcurrency),
+		exclusive: make(chan struct{}, 1),
 	}
 
 	result := &RunResult{
@@ -408,7 +533,22 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 				return nil // never fail the errgroup — sibling tools keep going
 			}
 
-			log.Info().Str("tool", toolName).Msg("tool starting")
+			spec := resourceSpecFor(p, cfg.ToolResources)
+			releaseResources, acquireErr := acquireResourceSlots(toolCtx, spec, slots)
+			if acquireErr != nil {
+				log.Info().Str("tool", toolName).Err(acquireErr).Msg("tool cancelled before acquiring scanner resource slot; skipping")
+				if cfg.OnToolDone != nil {
+					cfg.OnToolDone(toolName, nil, acquireErr)
+				}
+				mu.Lock()
+				result.ToolsRun = append(result.ToolsRun, toolName)
+				result.ToolsFailed[toolName] = acquireErr
+				mu.Unlock()
+				return nil
+			}
+			defer releaseResources()
+
+			log.Info().Str("tool", toolName).Str("resource_class", spec.Class).Msg("tool starting")
 
 			if cfg.OnToolStart != nil {
 				cfg.OnToolStart(toolName)
@@ -419,7 +559,7 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 				Branch:       cfg.Branch,
 				IncludePaths: cfg.IncludePaths,
 				ExcludePaths: cfg.ExcludePaths,
-				Timeout:      timeout,
+				Timeout:      timeoutForTool(timeout, spec),
 				ContainerCfg: cfg.ContainerCfg,
 			}
 			if cfg.OnToolOutput != nil {
@@ -457,10 +597,8 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 			// cross-tool matches by canonical category.
 			for i := range findings {
 				f := &findings[i]
-				if f.Fingerprint == "" {
-					f.Fingerprint = Fingerprint(f.ToolName, f.RuleID, f.Title, f.FilePath)
-				}
 				applyKnowledge(f)
+				identity.Apply(f)
 			}
 
 			mu.Lock()
