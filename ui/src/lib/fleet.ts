@@ -1,4 +1,11 @@
 // ui/src/lib/fleet.ts
+//
+// Wolf's api.get<T>() already unwraps the API envelope and returns
+// `{ data: T, meta?, error? }` to the caller. Earlier versions of this
+// file passed `<{ data: FleetPosture }>` to api.get, which double-wraps
+// the type and makes `data.data` undefined at runtime — every fleet
+// component then returned null, the dashboard rendered blank cards.
+// Type the value type directly and read `.data` once.
 import { useQuery } from "@tanstack/react-query";
 import { api } from "./api";
 
@@ -16,8 +23,8 @@ export function useFleetPosture(collectionId?: string) {
       const url = collectionId
         ? `/fleet/posture?collection_id=${encodeURIComponent(collectionId)}`
         : "/fleet/posture";
-      const { data } = await api.get<{ data: FleetPosture }>(url);
-      return data.data;
+      const r = await api.get<FleetPosture>(url);
+      return r.data;
     },
     staleTime: 30_000,
   });
@@ -33,8 +40,8 @@ export function useFleetInventory() {
   return useQuery({
     queryKey: ["fleet", "inventory"],
     queryFn: async () => {
-      const { data } = await api.get<{ data: FleetInventory }>("/fleet/inventory");
-      return data.data;
+      const r = await api.get<FleetInventory>("/fleet/inventory");
+      return r.data;
     },
     staleTime: 60_000,
   });
@@ -52,8 +59,8 @@ export function useNeedsAttention() {
   return useQuery({
     queryKey: ["fleet", "needs-attention"],
     queryFn: async () => {
-      const { data } = await api.get<{ data: NeedsAttentionRow[] }>("/fleet/needs-attention");
-      return data.data;
+      const r = await api.get<NeedsAttentionRow[]>("/fleet/needs-attention");
+      return r.data;
     },
     staleTime: 30_000,
   });
@@ -65,10 +72,10 @@ export function useTopVulnerableRules(limit = 10) {
   return useQuery({
     queryKey: ["findings", "aggregate", "rule_id", limit],
     queryFn: async () => {
-      const { data } = await api.get<{ data: AggregateRow[] }>(
+      const r = await api.get<AggregateRow[]>(
         `/findings/aggregate?group_by=rule_id&limit=${limit}`,
       );
-      return data.data;
+      return r.data;
     },
     staleTime: 60_000,
   });
