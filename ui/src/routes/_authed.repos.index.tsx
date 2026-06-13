@@ -16,8 +16,10 @@ import {
   type RepoSourceFilter,
   type RepoStatusFilter,
 } from "@/components/repos/filter-bar";
+import { GroupToggle, type RepoGroupBy } from "@/components/repos/group-toggle";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-type GroupBy = "none" | "source_type" | "collection" | "language";
+type GroupBy = RepoGroupBy;
 
 interface ReposSearch {
   source?: RepoSourceFilter[];
@@ -211,11 +213,17 @@ function ReposPage() {
         />
       )}
 
-      <FilterBar
-        filters={filters}
-        onChange={onFiltersChange}
-        collections={(collectionsQ.data ?? []).map((c) => ({ id: c.id, name: c.name }))}
-      />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <FilterBar
+          filters={filters}
+          onChange={onFiltersChange}
+          collections={(collectionsQ.data ?? []).map((c) => ({ id: c.id, name: c.name }))}
+        />
+        <GroupToggle
+          value={search.group ?? "none"}
+          onChange={(v) => updateSearch({ group: v === "none" ? undefined : v })}
+        />
+      </div>
 
       {reposQ.isLoading ? (
         <ListSkeleton rows={5} />
@@ -232,7 +240,7 @@ function ReposPage() {
           title="No repositories match"
           description="Try clearing one of the filter chips above."
         />
-      ) : (
+      ) : (search.group ?? "none") === "none" ? (
         <ul className="space-y-2">
           {filtered.map((r) => (
             <li key={r.id}>
@@ -240,9 +248,127 @@ function ReposPage() {
             </li>
           ))}
         </ul>
+      ) : (
+        <GroupedRepos
+          repos={filtered}
+          groupBy={search.group ?? "none"}
+          collections={collectionsQ.data ?? []}
+        />
       )}
     </div>
   );
+}
+
+function GroupedRepos({
+  repos,
+  groupBy,
+  collections,
+}: {
+  repos: Repo[];
+  groupBy: GroupBy;
+  collections: Collection[];
+}) {
+  const groups = useMemo(() => groupRepos(repos, groupBy, collections), [
+    repos,
+    groupBy,
+    collections,
+  ]);
+  return (
+    <div className="space-y-3">
+      {groups.map((g) => (
+        <Card key={g.key}>
+          <CardHeader className="py-3">
+            <CardTitle className="flex items-center justify-between text-sm font-medium">
+              <span>{g.label}</span>
+              <span className="text-xs text-muted-foreground">{g.repos.length}</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <ul className="space-y-2">
+              {g.repos.map((r) => (
+                <li key={r.id}>
+                  <RepoRow repo={r} />
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+interface RepoGroup {
+  key: string;
+  label: string;
+  repos: Repo[];
+}
+
+function groupRepos(repos: Repo[], by: GroupBy, collections: Collection[]): RepoGroup[] {
+  if (by === "none") return [{ key: "all", label: "All", repos }];
+
+  const groups = new Map<string, RepoGroup>();
+  const ensure = (key: string, label: string): RepoGroup => {
+    let g = groups.get(key);
+    if (!g) {
+      g = { key, label, repos: [] };
+      groups.set(key, g);
+    }
+    return g;
+  };
+
+  if (by === "source_type") {
+    const LABELS: Record<string, string> = {
+      local: "Local",
+      github: "GitHub",
+      gitlab: "GitLab",
+      git: "Git URL",
+      ssh: "SSH",
+    };
+    for (const r of repos) {
+      const key = r.source_type || "other";
+      ensure(key, LABELS[key] ?? key).repos.push(r);
+    }
+  } else if (by === "language") {
+    for (const r of repos) {
+      const primary = primaryLanguage(r.detected_languages);
+      const key = primary || "unknown";
+      const label = primary ? capitalize(primary) : "Unknown language";
+      ensure(key, label).repos.push(r);
+    }
+  } else if (by === "collection") {
+    // Build membership map. A repo may belong to multiple collections; we
+    // emit one row per (collection, repo) pair so each card lists the
+    // members the user expects.
+    for (const c of collections) {
+      const members = (c.repos ?? []).map((cr) => cr.id);
+      const subset = repos.filter((r) => members.includes(r.id));
+      if (subset.length === 0) continue;
+      ensure(c.id, c.name).repos.push(...subset);
+    }
+    const grouped = new Set<string>();
+    for (const g of groups.values()) for (const r of g.repos) grouped.add(r.id);
+    const ungrouped = repos.filter((r) => !grouped.has(r.id));
+    if (ungrouped.length > 0) ensure("__none", "Ungrouped").repos.push(...ungrouped);
+  }
+
+  return Array.from(groups.values()).sort((a, b) => b.repos.length - a.repos.length);
+}
+
+function primaryLanguage(s: string | undefined): string {
+  if (!s) return "";
+  try {
+    const obj = JSON.parse(s) as Record<string, number>;
+    const sorted = Object.entries(obj).sort(([, a], [, b]) => b - a);
+    return sorted[0]?.[0] ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function capitalize(s: string): string {
+  if (!s) return s;
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 function RepoRow({ repo: r }: { repo: Repo }) {
