@@ -4,8 +4,8 @@ import { useFleetPosture } from "@/lib/fleet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TrendingUpIcon, TrendingDownIcon, MinusIcon } from "lucide-react";
 
-export function PostureCards() {
-  const q = useFleetPosture();
+export function PostureCards({ collectionId }: { collectionId?: string } = {}) {
+  const q = useFleetPosture(collectionId);
   if (q.isLoading) {
     return (
       <div className="grid grid-cols-4 gap-3">

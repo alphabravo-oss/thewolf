@@ -20,6 +20,7 @@ import { api } from "@/lib/api";
 import type { Collection, Repo, Scan } from "@/lib/types";
 import { CardSkeleton } from "@/components/skeleton";
 import { AddRepoForm } from "@/components/add-repo-form";
+import { PostureCards } from "@/components/fleet/posture-cards";
 
 // GetCollection returns a wrapped shape: { data: { collection, repos, scans } }
 type CollectionDetail = {
@@ -158,6 +159,8 @@ function CollectionDetailPage() {
           </div>
         )}
       </div>
+
+      <PostureCards collectionId={collectionId} />
 
       <section className="glass-card p-5">
         <div className="flex items-center justify-between mb-3">

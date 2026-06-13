@@ -30,7 +30,8 @@ func FleetPosture(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	posture, err := h.Store.FleetPosture(r.Context(), claims.UserID, fleetModeEnabled(r.Context(), h.Store))
+	collectionID := r.URL.Query().Get("collection_id")
+	posture, err := h.Store.FleetPosture(r.Context(), claims.UserID, fleetModeEnabled(r.Context(), h.Store), collectionID)
 	if err != nil {
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "compute posture: "+err.Error())
 		return

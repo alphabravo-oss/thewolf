@@ -7,8 +7,9 @@ import (
 	"time"
 )
 
-// FleetPosture aggregates fleet-wide posture for the Postgres backend.
-func (s *PostgresStore) FleetPosture(ctx context.Context, userID string, fleetMode bool) (*FleetPostureResult, error) {
+// FleetPosture aggregates fleet-wide posture for the Postgres backend. When
+// collectionID is non-empty, results are scoped to repos in that collection.
+func (s *PostgresStore) FleetPosture(ctx context.Context, userID string, fleetMode bool, collectionID string) (*FleetPostureResult, error) {
 	out := &FleetPostureResult{
 		OpenFindingsBySeverity: map[string]int{"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0},
 		WeekOverWeekDelta:      map[string]int{"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0},
@@ -17,8 +18,12 @@ func (s *PostgresStore) FleetPosture(ctx context.Context, userID string, fleetMo
 	sevQ := `SELECT severity, COUNT(*) FROM findings f WHERE status = 'open'`
 	sevArgs := []any{}
 	if !fleetMode {
-		sevQ += ` AND f.repo_id IN (SELECT id FROM repos WHERE user_id = $1)`
 		sevArgs = append(sevArgs, userID)
+		sevQ += fmt.Sprintf(` AND f.repo_id IN (SELECT id FROM repos WHERE user_id = $%d)`, len(sevArgs))
+	}
+	if collectionID != "" {
+		sevArgs = append(sevArgs, collectionID)
+		sevQ += fmt.Sprintf(` AND f.repo_id IN (SELECT repo_id FROM collection_repos WHERE collection_id = $%d)`, len(sevArgs))
 	}
 	sevQ += ` GROUP BY severity`
 	rows, err := s.db.QueryContext(ctx, sevQ, sevArgs...)
@@ -47,8 +52,12 @@ func (s *PostgresStore) FleetPosture(ctx context.Context, userID string, fleetMo
 	recentQ := `SELECT severity, COUNT(*) FROM findings f WHERE created_at >= $1`
 	recentArgs := []any{weekAgo}
 	if !fleetMode {
-		recentQ += ` AND f.repo_id IN (SELECT id FROM repos WHERE user_id = $2)`
 		recentArgs = append(recentArgs, userID)
+		recentQ += fmt.Sprintf(` AND f.repo_id IN (SELECT id FROM repos WHERE user_id = $%d)`, len(recentArgs))
+	}
+	if collectionID != "" {
+		recentArgs = append(recentArgs, collectionID)
+		recentQ += fmt.Sprintf(` AND f.repo_id IN (SELECT repo_id FROM collection_repos WHERE collection_id = $%d)`, len(recentArgs))
 	}
 	recentQ += ` GROUP BY severity`
 	if rows, err := s.db.QueryContext(ctx, recentQ, recentArgs...); err == nil {
@@ -67,8 +76,12 @@ func (s *PostgresStore) FleetPosture(ctx context.Context, userID string, fleetMo
 	priorQ := `SELECT severity, COUNT(*) FROM findings f WHERE created_at >= $1 AND created_at < $2`
 	priorArgs := []any{twoWeeksAgo, weekAgo}
 	if !fleetMode {
-		priorQ += ` AND f.repo_id IN (SELECT id FROM repos WHERE user_id = $3)`
 		priorArgs = append(priorArgs, userID)
+		priorQ += fmt.Sprintf(` AND f.repo_id IN (SELECT id FROM repos WHERE user_id = $%d)`, len(priorArgs))
+	}
+	if collectionID != "" {
+		priorArgs = append(priorArgs, collectionID)
+		priorQ += fmt.Sprintf(` AND f.repo_id IN (SELECT repo_id FROM collection_repos WHERE collection_id = $%d)`, len(priorArgs))
 	}
 	priorQ += ` GROUP BY severity`
 	if rows, err := s.db.QueryContext(ctx, priorQ, priorArgs...); err == nil {
@@ -88,11 +101,15 @@ func (s *PostgresStore) FleetPosture(ctx context.Context, userID string, fleetMo
 		out.WeekOverWeekDelta[sev] = recent[sev] - prior[sev]
 	}
 
-	repoQ := `SELECT COUNT(*) FROM repos`
+	repoQ := `SELECT COUNT(*) FROM repos r WHERE 1=1`
 	repoArgs := []any{}
 	if !fleetMode {
-		repoQ += ` WHERE user_id = $1`
 		repoArgs = append(repoArgs, userID)
+		repoQ += fmt.Sprintf(` AND r.user_id = $%d`, len(repoArgs))
+	}
+	if collectionID != "" {
+		repoArgs = append(repoArgs, collectionID)
+		repoQ += fmt.Sprintf(` AND r.id IN (SELECT repo_id FROM collection_repos WHERE collection_id = $%d)`, len(repoArgs))
 	}
 	if err := s.db.QueryRowContext(ctx, repoQ, repoArgs...).Scan(&out.RepoCount); err != nil {
 		return nil, fmt.Errorf("count repos: %w", err)
@@ -104,8 +121,12 @@ func (s *PostgresStore) FleetPosture(ctx context.Context, userID string, fleetMo
 	          WHERE g.status = 'fail'`
 	gateArgs := []any{}
 	if !fleetMode {
-		gateQ += ` AND s.repo_id IN (SELECT id FROM repos WHERE user_id = $1)`
 		gateArgs = append(gateArgs, userID)
+		gateQ += fmt.Sprintf(` AND s.repo_id IN (SELECT id FROM repos WHERE user_id = $%d)`, len(gateArgs))
+	}
+	if collectionID != "" {
+		gateArgs = append(gateArgs, collectionID)
+		gateQ += fmt.Sprintf(` AND s.repo_id IN (SELECT repo_id FROM collection_repos WHERE collection_id = $%d)`, len(gateArgs))
 	}
 	_ = s.db.QueryRowContext(ctx, gateQ, gateArgs...).Scan(&out.GatesFailing)
 

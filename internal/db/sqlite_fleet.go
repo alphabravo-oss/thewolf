@@ -10,8 +10,9 @@ import (
 
 // FleetPosture aggregates fleet-wide posture for the dashboard. When fleetMode
 // is false, queries are scoped to userID via the owning repo. When true, the
-// query covers every repo in the system.
-func (s *SQLiteStore) FleetPosture(ctx context.Context, userID string, fleetMode bool) (*FleetPostureResult, error) {
+// query covers every repo in the system. When collectionID is non-empty, the
+// query is further scoped to repos that belong to that collection.
+func (s *SQLiteStore) FleetPosture(ctx context.Context, userID string, fleetMode bool, collectionID string) (*FleetPostureResult, error) {
 	out := &FleetPostureResult{
 		OpenFindingsBySeverity: map[string]int{"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0},
 		WeekOverWeekDelta:      map[string]int{"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0},
@@ -23,6 +24,10 @@ func (s *SQLiteStore) FleetPosture(ctx context.Context, userID string, fleetMode
 	if !fleetMode {
 		sevQ += ` AND f.repo_id IN (SELECT id FROM repos WHERE user_id = ?)`
 		sevArgs = append(sevArgs, userID)
+	}
+	if collectionID != "" {
+		sevQ += ` AND f.repo_id IN (SELECT repo_id FROM collection_repos WHERE collection_id = ?)`
+		sevArgs = append(sevArgs, collectionID)
 	}
 	sevQ += ` GROUP BY severity`
 	rows, err := s.db.QueryContext(ctx, sevQ, sevArgs...)
@@ -56,6 +61,10 @@ func (s *SQLiteStore) FleetPosture(ctx context.Context, userID string, fleetMode
 		recentQ += ` AND f.repo_id IN (SELECT id FROM repos WHERE user_id = ?)`
 		recentArgs = append(recentArgs, userID)
 	}
+	if collectionID != "" {
+		recentQ += ` AND f.repo_id IN (SELECT repo_id FROM collection_repos WHERE collection_id = ?)`
+		recentArgs = append(recentArgs, collectionID)
+	}
 	recentQ += ` GROUP BY severity`
 	if rows, err := s.db.QueryContext(ctx, recentQ, recentArgs...); err == nil {
 		for rows.Next() {
@@ -76,6 +85,10 @@ func (s *SQLiteStore) FleetPosture(ctx context.Context, userID string, fleetMode
 		priorQ += ` AND f.repo_id IN (SELECT id FROM repos WHERE user_id = ?)`
 		priorArgs = append(priorArgs, userID)
 	}
+	if collectionID != "" {
+		priorQ += ` AND f.repo_id IN (SELECT repo_id FROM collection_repos WHERE collection_id = ?)`
+		priorArgs = append(priorArgs, collectionID)
+	}
 	priorQ += ` GROUP BY severity`
 	if rows, err := s.db.QueryContext(ctx, priorQ, priorArgs...); err == nil {
 		for rows.Next() {
@@ -95,11 +108,15 @@ func (s *SQLiteStore) FleetPosture(ctx context.Context, userID string, fleetMode
 	}
 
 	// Repo count.
-	repoQ := `SELECT COUNT(*) FROM repos`
+	repoQ := `SELECT COUNT(*) FROM repos r WHERE 1=1`
 	repoArgs := []any{}
 	if !fleetMode {
-		repoQ += ` WHERE user_id = ?`
+		repoQ += ` AND r.user_id = ?`
 		repoArgs = append(repoArgs, userID)
+	}
+	if collectionID != "" {
+		repoQ += ` AND r.id IN (SELECT repo_id FROM collection_repos WHERE collection_id = ?)`
+		repoArgs = append(repoArgs, collectionID)
 	}
 	if err := s.db.QueryRowContext(ctx, repoQ, repoArgs...).Scan(&out.RepoCount); err != nil {
 		return nil, fmt.Errorf("count repos: %w", err)
@@ -115,6 +132,10 @@ func (s *SQLiteStore) FleetPosture(ctx context.Context, userID string, fleetMode
 	if !fleetMode {
 		gateQ += ` AND s.repo_id IN (SELECT id FROM repos WHERE user_id = ?)`
 		gateArgs = append(gateArgs, userID)
+	}
+	if collectionID != "" {
+		gateQ += ` AND s.repo_id IN (SELECT repo_id FROM collection_repos WHERE collection_id = ?)`
+		gateArgs = append(gateArgs, collectionID)
 	}
 	// Tolerate the case where no rows match (Scan into out.GatesFailing
 	// returns 0). Ignore errors here so a missing table never breaks the

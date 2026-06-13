@@ -214,7 +214,7 @@ type Store interface {
 	ListAuditLog(ctx context.Context, limit int) ([]models.AuditLogEntry, error)
 
 	// Fleet aggregates
-	FleetPosture(ctx context.Context, userID string, fleetMode bool) (*FleetPostureResult, error)
+	FleetPosture(ctx context.Context, userID string, fleetMode bool, collectionID string) (*FleetPostureResult, error)
 	FleetInventory(ctx context.Context, userID string, fleetMode bool) (*FleetInventoryResult, error)
 	FleetNeedsAttention(ctx context.Context, userID string, fleetMode bool, limit int) ([]NeedsAttentionRow, error)
 	FindingsAggregateByRule(ctx context.Context, userID string, fleetMode bool, limit int) ([]FindingsAggregateRow, error)

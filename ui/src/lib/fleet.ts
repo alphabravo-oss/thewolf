@@ -9,11 +9,14 @@ export type FleetPosture = {
   gates_failing: number;
 };
 
-export function useFleetPosture() {
+export function useFleetPosture(collectionId?: string) {
   return useQuery({
-    queryKey: ["fleet", "posture"],
+    queryKey: ["fleet", "posture", collectionId ?? null],
     queryFn: async () => {
-      const { data } = await api.get<{ data: FleetPosture }>("/fleet/posture");
+      const url = collectionId
+        ? `/fleet/posture?collection_id=${encodeURIComponent(collectionId)}`
+        : "/fleet/posture";
+      const { data } = await api.get<{ data: FleetPosture }>(url);
       return data.data;
     },
     staleTime: 30_000,
