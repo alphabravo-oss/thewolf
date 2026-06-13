@@ -17,7 +17,9 @@ import {
   type RepoStatusFilter,
 } from "@/components/repos/filter-bar";
 import { GroupToggle, type RepoGroupBy } from "@/components/repos/group-toggle";
+import { BulkToolbar } from "@/components/repos/bulk-toolbar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 
 type GroupBy = RepoGroupBy;
 
@@ -86,8 +88,19 @@ export const Route = createFileRoute("/_authed/repos/")({
 
 function ReposPage() {
   const [showAdd, setShowAdd] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const search = Route.useSearch();
   const navigate = useNavigate();
+
+  const toggleSelected = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  const clearSelected = () => setSelected(new Set());
 
   const filters: ReposFilters = {
     source: search.source ?? [],
@@ -218,6 +231,8 @@ function ReposPage() {
           filters={filters}
           onChange={onFiltersChange}
           collections={(collectionsQ.data ?? []).map((c) => ({ id: c.id, name: c.name }))}
+          visibleCount={filtered.length}
+          onSelectAllVisible={() => setSelected(new Set(filtered.map((r) => r.id)))}
         />
         <GroupToggle
           value={search.group ?? "none"}
@@ -244,7 +259,11 @@ function ReposPage() {
         <ul className="space-y-2">
           {filtered.map((r) => (
             <li key={r.id}>
-              <RepoRow repo={r} />
+              <RepoRow
+                repo={r}
+                selected={selected.has(r.id)}
+                onToggleSelect={() => toggleSelected(r.id)}
+              />
             </li>
           ))}
         </ul>
@@ -253,8 +272,16 @@ function ReposPage() {
           repos={filtered}
           groupBy={search.group ?? "none"}
           collections={collectionsQ.data ?? []}
+          selected={selected}
+          onToggleSelect={toggleSelected}
         />
       )}
+
+      <BulkToolbar
+        selectedIds={selected}
+        repos={reposQ.data ?? []}
+        onClear={clearSelected}
+      />
     </div>
   );
 }
@@ -263,10 +290,14 @@ function GroupedRepos({
   repos,
   groupBy,
   collections,
+  selected,
+  onToggleSelect,
 }: {
   repos: Repo[];
   groupBy: GroupBy;
   collections: Collection[];
+  selected: Set<string>;
+  onToggleSelect: (id: string) => void;
 }) {
   const groups = useMemo(() => groupRepos(repos, groupBy, collections), [
     repos,
@@ -287,7 +318,11 @@ function GroupedRepos({
             <ul className="space-y-2">
               {g.repos.map((r) => (
                 <li key={r.id}>
-                  <RepoRow repo={r} />
+                  <RepoRow
+                    repo={r}
+                    selected={selected.has(r.id)}
+                    onToggleSelect={() => onToggleSelect(r.id)}
+                  />
                 </li>
               ))}
             </ul>
@@ -371,32 +406,58 @@ function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-function RepoRow({ repo: r }: { repo: Repo }) {
+function RepoRow({
+  repo: r,
+  selected,
+  onToggleSelect,
+}: {
+  repo: Repo;
+  selected: boolean;
+  onToggleSelect: () => void;
+}) {
   return (
-    <Link
-      to="/repos/$repoId"
-      params={{ repoId: r.id }}
-      className="glass-card px-4 py-3 flex items-center gap-3 hover:bg-muted/30 transition"
+    <div
+      className={
+        "glass-card flex items-center gap-3 pl-3 pr-4 py-3 transition " +
+        (selected ? "bg-accent/50" : "hover:bg-muted/30")
+      }
     >
-      <div className="size-8 rounded-md bg-muted/40 grid place-items-center">
-        {r.source_type === "local" ? (
-          <HardDriveIcon className="size-4 text-muted-foreground" />
-        ) : r.source_type === "ssh" ? (
-          <ServerIcon className="size-4 text-muted-foreground" />
-        ) : (
-          <GitBranchIcon className="size-4 text-muted-foreground" />
-        )}
+      <div
+        // Stop link navigation when clicking the checkbox region.
+        onClick={(e) => e.stopPropagation()}
+        className="flex items-center"
+      >
+        <Checkbox
+          checked={selected}
+          onCheckedChange={onToggleSelect}
+          aria-label={`Select ${r.name}`}
+        />
       </div>
-      <div className="flex-1 min-w-0">
-        <div className="text-sm font-medium truncate">{r.name}</div>
-        <div className="text-xs text-muted-foreground truncate font-mono">
-          {r.source_path}
+      <Link
+        to="/repos/$repoId"
+        params={{ repoId: r.id }}
+        className="flex flex-1 items-center gap-3 min-w-0"
+      >
+        <div className="size-8 rounded-md bg-muted/40 grid place-items-center">
+          {r.source_type === "local" ? (
+            <HardDriveIcon className="size-4 text-muted-foreground" />
+          ) : r.source_type === "ssh" ? (
+            <ServerIcon className="size-4 text-muted-foreground" />
+          ) : (
+            <GitBranchIcon className="size-4 text-muted-foreground" />
+          )}
         </div>
-      </div>
-      <div className="text-xs text-muted-foreground">
-        {r.default_branch || "main"}
-      </div>
-    </Link>
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-medium truncate">{r.name}</div>
+          <div className="text-xs text-muted-foreground truncate font-mono">
+            {r.source_path}
+          </div>
+        </div>
+        <div className="text-xs text-muted-foreground">
+          {r.default_branch || "main"}
+        </div>
+      </Link>
+    </div>
   );
 }
 
