@@ -8,6 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import type { Scan } from "@/lib/types";
 import { Link } from "@tanstack/react-router";
+import { Input } from "@/components/ui/input";
 
 export function Topbar() {
   const crumbs = useBreadcrumbs();
@@ -46,17 +47,29 @@ export function Topbar() {
 
       <div className="flex-1" />
 
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={0}
         onClick={openPalette}
-        className="hidden md:flex items-center gap-2 px-3 h-9 rounded-md border border-border bg-muted/30 hover:bg-muted/60 text-sm text-muted-foreground transition-colors min-w-[18rem]"
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            openPalette();
+          }
+        }}
+        className="relative hidden md:flex items-center min-w-[18rem] cursor-pointer"
       >
-        <SearchIcon className="size-4" />
-        <span>Search…</span>
-        <span className="ml-auto text-2xs px-1.5 py-0.5 rounded bg-muted/70 text-muted-foreground">
+        <SearchIcon className="absolute left-3 size-4 text-muted-foreground pointer-events-none" />
+        <Input
+          readOnly
+          tabIndex={-1}
+          placeholder="Search…"
+          className="pl-9 pr-12 h-9 cursor-pointer bg-muted/30 hover:bg-muted/60"
+        />
+        <span className="absolute right-2 text-2xs px-1.5 py-0.5 rounded bg-muted/70 text-muted-foreground pointer-events-none">
           ⌘K
         </span>
-      </button>
+      </div>
 
       {running && running.length > 0 && (
         <Link
