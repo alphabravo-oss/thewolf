@@ -94,6 +94,7 @@ func setupTestEnv(t *testing.T) *testEnv {
 		r.Get("/api/fleet/posture", routes.FleetPosture)
 		r.Get("/api/fleet/inventory", routes.FleetInventory)
 		r.Get("/api/fleet/needs-attention", routes.FleetNeedsAttention)
+		r.Get("/api/findings/aggregate", routes.FindingsAggregate)
 	})
 
 	// Register user

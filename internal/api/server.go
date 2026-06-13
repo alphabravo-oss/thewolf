@@ -235,6 +235,7 @@ func NewServer(store db.Store, addr string) *Server {
 				r.With(rFind).Get("/export", routes.ExportFindings)
 				r.With(rFind).Get("/trends", routes.FindingTrends)
 				r.With(rFind).Get("/trends/export", routes.ExportFindingTrends)
+				r.With(rFind).Get("/aggregate", routes.FindingsAggregate)
 				r.With(rFind).Get("/{id}", routes.GetFinding)
 				r.With(wFind).Put("/{id}/status", routes.UpdateFindingStatus)
 			})

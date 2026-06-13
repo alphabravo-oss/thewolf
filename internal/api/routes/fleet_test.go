@@ -3,6 +3,7 @@ package routes_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"testing"
 
@@ -261,6 +262,76 @@ func TestFleetNeedsAttentionScoresAndOrders(t *testing.T) {
 	}
 	if first.Score < got.Data[len(got.Data)-1].Score {
 		t.Errorf("results not sorted descending by score: %+v", got.Data)
+	}
+}
+
+func TestFindingsAggregateByRule(t *testing.T) {
+	env := setupTestEnv(t)
+	defer env.Store.Close()
+	ctx := context.Background()
+
+	seedRule := func(repoID, rule string, severity models.Severity) {
+		scanID := uuid.New().String()
+		if err := env.Store.CreateScan(ctx, &models.Scan{
+			ID: scanID, UserID: env.UserID, RepoID: repoID, Branch: "main",
+			Status: models.ScanStatusCompleted, ToolsSelected: "[]", ToolsCompleted: "[]",
+			ToolsFailed: "[]", CoverageSummary: "{}",
+		}); err != nil {
+			t.Fatalf("seedRule scan: %v", err)
+		}
+		if err := env.Store.CreateFinding(ctx, &models.Finding{
+			ID:          uuid.New().String(),
+			ScanID:      scanID,
+			RepoID:      repoID,
+			Fingerprint: uuid.New().String(),
+			ToolName:    "test",
+			Category:    models.CategorySAST,
+			Severity:    severity,
+			Title:       "t",
+			FilePath:    "x.go",
+			RuleID:      rule,
+			Status:      models.StatusOpen,
+		}); err != nil {
+			t.Fatalf("seedRule finding: %v", err)
+		}
+	}
+
+	// log4j-1.2 across 4 repos
+	for i := 0; i < 4; i++ {
+		r := createRepoWithSource(t, env, fmt.Sprintf("log4j-%d", i), models.SourceTypeLocal)
+		seedRule(r, "log4j-1.2", models.SeverityHigh)
+	}
+	// openssl-1.0.2k across 2 repos
+	for i := 0; i < 2; i++ {
+		r := createRepoWithSource(t, env, fmt.Sprintf("openssl-%d", i), models.SourceTypeLocal)
+		seedRule(r, "openssl-1.0.2k", models.SeverityMedium)
+	}
+	// internal-only in 1 repo
+	r := createRepoWithSource(t, env, "internal-1", models.SourceTypeLocal)
+	seedRule(r, "internal-only", models.SeverityLow)
+
+	w := env.doRequest(http.MethodGet, "/api/findings/aggregate?group_by=rule_id&limit=10", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var got struct {
+		Data []struct {
+			Key      string `json:"key"`
+			Repos    int    `json:"repos"`
+			Findings int    `json:"findings"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(got.Data) != 3 {
+		t.Fatalf("expected 3 rule_ids, got %d: %+v", len(got.Data), got.Data)
+	}
+	if got.Data[0].Key != "log4j-1.2" || got.Data[0].Repos != 4 {
+		t.Errorf("expected log4j-1.2 first with repos=4, got %+v", got.Data[0])
+	}
+	if got.Data[1].Key != "openssl-1.0.2k" || got.Data[1].Repos != 2 {
+		t.Errorf("expected openssl-1.0.2k second with repos=2, got %+v", got.Data[1])
 	}
 }
 

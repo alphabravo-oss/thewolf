@@ -124,6 +124,7 @@ func Endpoints() []Endpoint {
 		{"GET", "/findings/export", "findings", "Export findings", "read:findings", "", false},
 		{"GET", "/findings/trends", "findings", "Finding trends over time", "read:findings", "", false},
 		{"GET", "/findings/trends/export", "findings", "Export finding trends", "read:findings", "", false},
+		{"GET", "/findings/aggregate", "findings", "Aggregate findings (e.g. top vulnerable rules)", "read:findings", "", true},
 		{"GET", "/findings/{id}", "findings", "Get a finding", "read:findings", "", false},
 		{"PUT", "/findings/{id}/status", "findings", "Change a finding's status", "write:findings", "FindingStatusRequest", false},
 
