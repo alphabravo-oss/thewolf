@@ -144,6 +144,20 @@ func (s *PostgresStore) Migrate() error {
 			return err
 		}
 	}
+	// Migration 020 seeds fleet_mode=false. The SQL file uses
+	// INSERT OR IGNORE for SQLite; for Postgres we issue the
+	// equivalent ON CONFLICT form here. See migration 007 above
+	// for the same pattern with ai_enabled / registration_enabled.
+	if _, err := s.db.Exec(migration020SQL); err != nil {
+		if !strings.Contains(err.Error(), "already exists") && !strings.Contains(err.Error(), "syntax error") {
+			return err
+		}
+	}
+	if _, err := s.db.Exec(`INSERT INTO settings (key, value) VALUES ('fleet_mode', 'false') ON CONFLICT(key) DO NOTHING`); err != nil {
+		if !strings.Contains(err.Error(), "already exists") && !strings.Contains(err.Error(), "does not exist") {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -221,7 +235,16 @@ func (s *PostgresStore) GetRepoByID(ctx context.Context, id string) (*models.Rep
 
 func (s *PostgresStore) ListReposByUser(ctx context.Context, userID string) ([]models.Repo, error) {
 	var repos []models.Repo
-	// No RBAC yet — all authenticated users see all repos.
+	// Scoped to the caller's repos. Use ListAllRepos for fleet_mode=true.
+	err := s.db.SelectContext(ctx, &repos,
+		"SELECT * FROM repos WHERE user_id = $1 ORDER BY created_at DESC", userID)
+	return repos, err
+}
+
+// ListAllRepos returns every repo regardless of owner. Used by the
+// handlers when fleet_mode=true.
+func (s *PostgresStore) ListAllRepos(ctx context.Context) ([]models.Repo, error) {
+	var repos []models.Repo
 	err := s.db.SelectContext(ctx, &repos, "SELECT * FROM repos ORDER BY created_at DESC")
 	return repos, err
 }
@@ -280,7 +303,21 @@ func (s *PostgresStore) GetCollectionByName(ctx context.Context, name string) (*
 
 func (s *PostgresStore) ListCollectionsByUser(ctx context.Context, userID string) ([]models.Collection, error) {
 	var cols []models.Collection
-	// No RBAC yet — all authenticated users see all collections.
+	// Scoped to the caller's collections. Use ListAllCollections for fleet_mode=true.
+	err := s.db.SelectContext(ctx, &cols,
+		`SELECT c.*, COUNT(cr.repo_id) AS repo_count
+		 FROM collections c
+		 LEFT JOIN collection_repos cr ON cr.collection_id = c.id
+		 WHERE c.user_id = $1
+		 GROUP BY c.id
+		 ORDER BY c.created_at DESC`, userID)
+	return cols, err
+}
+
+// ListAllCollections returns every collection regardless of owner.
+// Used by the handlers when fleet_mode=true.
+func (s *PostgresStore) ListAllCollections(ctx context.Context) ([]models.Collection, error) {
+	var cols []models.Collection
 	err := s.db.SelectContext(ctx, &cols,
 		`SELECT c.*, COUNT(cr.repo_id) AS repo_count
 		 FROM collections c
@@ -426,8 +463,9 @@ func (s *PostgresStore) ListAllScans(ctx context.Context) ([]models.Scan, error)
 
 func (s *PostgresStore) ListScansByUser(ctx context.Context, userID string) ([]models.Scan, error) {
 	var scans []models.Scan
-	// No RBAC yet — all authenticated users see all scans.
-	err := s.db.SelectContext(ctx, &scans, "SELECT * FROM scans ORDER BY created_at DESC")
+	// Scoped to the caller's scans. Use ListAllScans for fleet_mode=true.
+	err := s.db.SelectContext(ctx, &scans,
+		"SELECT * FROM scans WHERE user_id = $1 ORDER BY created_at DESC", userID)
 	return scans, err
 }
 

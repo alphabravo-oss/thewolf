@@ -70,6 +70,9 @@ var migration018SQL string
 //go:embed migrations/019_scanner_run_records.sql
 var migration019SQL string
 
+//go:embed migrations/020_fleet_mode.sql
+var migration020SQL string
+
 // SQLiteStore implements Store using SQLite.
 type SQLiteStore struct {
 	db *sqlx.DB
@@ -195,6 +198,11 @@ func (s *SQLiteStore) Migrate() error {
 			return err
 		}
 	}
+	if _, err := s.db.Exec(migration020SQL); err != nil {
+		if !strings.Contains(err.Error(), "duplicate column") && !strings.Contains(err.Error(), "already exists") {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -277,7 +285,17 @@ func (s *SQLiteStore) GetRepoByID(ctx context.Context, id string) (*models.Repo,
 
 func (s *SQLiteStore) ListReposByUser(ctx context.Context, userID string) ([]models.Repo, error) {
 	var repos []models.Repo
-	// No RBAC yet — all authenticated users see all repos.
+	// Scoped to the caller's repos. Use ListAllRepos for fleet_mode=true.
+	err := s.db.SelectContext(ctx, &repos,
+		"SELECT * FROM repos WHERE user_id = ? ORDER BY created_at DESC", userID)
+	return repos, err
+}
+
+// ListAllRepos returns every repo regardless of owner. Used by the
+// handlers when fleet_mode=true so an org-wide installation can browse
+// the whole fleet without RBAC scoping.
+func (s *SQLiteStore) ListAllRepos(ctx context.Context) ([]models.Repo, error) {
+	var repos []models.Repo
 	err := s.db.SelectContext(ctx, &repos, "SELECT * FROM repos ORDER BY created_at DESC")
 	return repos, err
 }
@@ -336,7 +354,22 @@ func (s *SQLiteStore) GetCollectionByName(ctx context.Context, name string) (*mo
 
 func (s *SQLiteStore) ListCollectionsByUser(ctx context.Context, userID string) ([]models.Collection, error) {
 	var cols []models.Collection
-	// No RBAC yet — all authenticated users see all collections.
+	// Scoped to the caller's collections. Use ListAllCollections for fleet_mode=true.
+	err := s.db.SelectContext(ctx, &cols,
+		`SELECT c.*, COUNT(cr.repo_id) AS repo_count
+		 FROM collections c
+		 LEFT JOIN collection_repos cr ON cr.collection_id = c.id
+		 WHERE c.user_id = ?
+		 GROUP BY c.id
+		 ORDER BY c.created_at DESC`, userID)
+	return cols, err
+}
+
+// ListAllCollections returns every collection regardless of owner.
+// Used by the handlers when fleet_mode=true so an org-wide installation
+// can browse the whole fleet without RBAC scoping.
+func (s *SQLiteStore) ListAllCollections(ctx context.Context) ([]models.Collection, error) {
+	var cols []models.Collection
 	err := s.db.SelectContext(ctx, &cols,
 		`SELECT c.*, COUNT(cr.repo_id) AS repo_count
 		 FROM collections c
@@ -482,8 +515,9 @@ func (s *SQLiteStore) ListAllScans(ctx context.Context) ([]models.Scan, error) {
 
 func (s *SQLiteStore) ListScansByUser(ctx context.Context, userID string) ([]models.Scan, error) {
 	var scans []models.Scan
-	// No RBAC yet — all authenticated users see all scans.
-	err := s.db.SelectContext(ctx, &scans, "SELECT * FROM scans ORDER BY created_at DESC")
+	// Scoped to the caller's scans. Use ListAllScans for fleet_mode=true.
+	err := s.db.SelectContext(ctx, &scans,
+		"SELECT * FROM scans WHERE user_id = ? ORDER BY created_at DESC", userID)
 	return scans, err
 }
 

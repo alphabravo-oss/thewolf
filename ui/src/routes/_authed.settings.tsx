@@ -104,6 +104,12 @@ const GENERAL_KNOBS = [
     type: "bool" as const,
   },
   {
+    key: "fleet_mode",
+    label: "Fleet mode",
+    help: "When on, Repos / Scans / Findings / Collections are visible to anyone in the org with the matching read scope, not just their creator. Recommended for installs with multiple users sharing a fleet of >20 repos. Default off preserves single-user privacy.",
+    type: "bool" as const,
+  },
+  {
     key: "scan_concurrency",
     label: "Scan concurrency",
     help: "Maximum number of scanner containers run in parallel per scan. Lower this if your host is under-provisioned for memory or CPU.",

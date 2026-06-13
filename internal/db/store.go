@@ -60,6 +60,7 @@ type Store interface {
 	CreateRepo(ctx context.Context, repo *models.Repo) error
 	GetRepoByID(ctx context.Context, id string) (*models.Repo, error)
 	ListReposByUser(ctx context.Context, userID string) ([]models.Repo, error)
+	ListAllRepos(ctx context.Context) ([]models.Repo, error)
 	UpdateRepo(ctx context.Context, repo *models.Repo) error
 	UpdateRepoDetection(ctx context.Context, repoID, languages, frameworks string) error
 	DeleteRepo(ctx context.Context, id string) error
@@ -77,6 +78,7 @@ type Store interface {
 	GetCollectionByID(ctx context.Context, id string) (*models.Collection, error)
 	GetCollectionByName(ctx context.Context, name string) (*models.Collection, error)
 	ListCollectionsByUser(ctx context.Context, userID string) ([]models.Collection, error)
+	ListAllCollections(ctx context.Context) ([]models.Collection, error)
 	UpdateCollection(ctx context.Context, col *models.Collection) error
 	DeleteCollection(ctx context.Context, id string) error
 	AddRepoToCollection(ctx context.Context, collectionID, repoID string) error

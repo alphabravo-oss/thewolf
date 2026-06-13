@@ -53,7 +53,15 @@ func ListCollections(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cols, err := h.Store.ListCollectionsByUser(r.Context(), claims.UserID)
+	var (
+		cols []models.Collection
+		err  error
+	)
+	if fleetModeEnabled(r.Context(), h.Store) {
+		cols, err = h.Store.ListAllCollections(r.Context())
+	} else {
+		cols, err = h.Store.ListCollectionsByUser(r.Context(), claims.UserID)
+	}
 	if err != nil {
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to list collections")
 		return
@@ -144,7 +152,6 @@ func GetCollection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-
 	repos, _ := h.Store.ListReposInCollection(r.Context(), id)
 
 	// Build repo lookup for populating scan.Repo.
@@ -191,7 +198,6 @@ func UpdateCollection(w http.ResponseWriter, r *http.Request) {
 		response.WriteError(w, http.StatusNotFound, "not_found", "collection not found")
 		return
 	}
-
 
 	var req updateCollectionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -287,7 +293,6 @@ func AddRepoToCollection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-
 	var req addRepoToCollectionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		response.WriteError(w, http.StatusBadRequest, "bad_request", "invalid JSON body")
@@ -330,7 +335,6 @@ func RemoveRepoFromCollection(w http.ResponseWriter, r *http.Request) {
 		response.WriteError(w, http.StatusNotFound, "not_found", "collection not found")
 		return
 	}
-
 
 	repoID := chi.URLParam(r, "repoId")
 	if err := h.Store.RemoveRepoFromCollection(r.Context(), collectionID, repoID); err != nil {
@@ -393,7 +397,6 @@ func CollectionTools(w http.ResponseWriter, r *http.Request) {
 		response.WriteError(w, http.StatusNotFound, "not_found", "collection not found")
 		return
 	}
-
 
 	// Parse collection's scan config to get disabled_tools.
 	var scanConfig models.ScanConfig
@@ -548,12 +551,12 @@ func CollectionTools(w http.ResponseWriter, r *http.Request) {
 
 // metricsSnapshot holds the current-state aggregation of a collection.
 type metricsSnapshot struct {
-	TotalFindings   int                     `json:"total_findings"`
-	BySeverity      map[string]int          `json:"by_severity"`
-	ByStatus        map[string]int          `json:"by_status"`
-	ReposScanned    int                     `json:"repos_scanned"`
-	BranchesScanned int                     `json:"branches_scanned"`
-	LatestScans     []latestScanSummary     `json:"latest_scans"`
+	TotalFindings   int                 `json:"total_findings"`
+	BySeverity      map[string]int      `json:"by_severity"`
+	ByStatus        map[string]int      `json:"by_status"`
+	ReposScanned    int                 `json:"repos_scanned"`
+	BranchesScanned int                 `json:"branches_scanned"`
+	LatestScans     []latestScanSummary `json:"latest_scans"`
 }
 
 type latestScanSummary struct {
@@ -576,10 +579,10 @@ type resolutionRate struct {
 }
 
 type collectionMetricsResponse struct {
-	Snapshot       metricsSnapshot    `json:"snapshot"`
-	Trends         []trendEntry       `json:"trends"`
-	ResolutionRate resolutionRate     `json:"resolution_rate"`
-	Branches       []string           `json:"branches"`
+	Snapshot       metricsSnapshot `json:"snapshot"`
+	Trends         []trendEntry    `json:"trends"`
+	ResolutionRate resolutionRate  `json:"resolution_rate"`
+	Branches       []string        `json:"branches"`
 }
 
 // CollectionMetrics handles GET /api/collections/{id}/metrics.

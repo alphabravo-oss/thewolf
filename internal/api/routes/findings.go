@@ -86,11 +86,11 @@ func ListFindings(w http.ResponseWriter, r *http.Request) {
 
 	// Filter.
 	filtered := filterFindings(findings, findingFilter{
-		severities:       severityFilter,
-		categories:       categoryFilter,
-		tools:            toolFilter,
-		repoID:           repoIDFilter,
-		statuses:         statusFilter,
+		severities:        severityFilter,
+		categories:        categoryFilter,
+		tools:             toolFilter,
+		repoID:            repoIDFilter,
+		statuses:          statusFilter,
 		collectionRepoIDs: collectionRepoIDs,
 	})
 
@@ -206,8 +206,17 @@ type trendEntry struct {
 }
 
 // computeTrends builds trend data from the user's scans and findings.
+// When fleet_mode is on, scope widens to every scan in the org.
 func computeTrends(ctx context.Context, h *Handler, userID, collectionID string) ([]trendEntry, error) {
-	scans, err := h.Store.ListScansByUser(ctx, userID)
+	var (
+		scans []models.Scan
+		err   error
+	)
+	if fleetModeEnabled(ctx, h.Store) {
+		scans, err = h.Store.ListAllScans(ctx)
+	} else {
+		scans, err = h.Store.ListScansByUser(ctx, userID)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -332,7 +341,7 @@ func ExportFindingTrends(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Content-Disposition", `attachment; filename="findings-trends.json"`)
 		w.WriteHeader(http.StatusOK) // #nosec G104 -- intentional: response/log write errors are not actionable here
-		w.Write(data) // nosemgrep: go.lang.security.audit.xss.no-direct-write-to-responsewriter.no-direct-write-to-responsewriter // #nosec G104 -- intentional: response/log write errors are not actionable here
+		w.Write(data)                // nosemgrep: go.lang.security.audit.xss.no-direct-write-to-responsewriter.no-direct-write-to-responsewriter // #nosec G104 -- intentional: response/log write errors are not actionable here
 
 	default: // csv
 		w.Header().Set("Content-Type", "text/csv")
@@ -435,7 +444,7 @@ func ExportFindings(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Content-Disposition", `attachment; filename="findings.json"`)
 		w.WriteHeader(http.StatusOK) // #nosec G104 -- intentional: response/log write errors are not actionable here
-		w.Write(data) // nosemgrep: go.lang.security.audit.xss.no-direct-write-to-responsewriter.no-direct-write-to-responsewriter // #nosec G104 -- intentional: response/log write errors are not actionable here
+		w.Write(data)                // nosemgrep: go.lang.security.audit.xss.no-direct-write-to-responsewriter.no-direct-write-to-responsewriter // #nosec G104 -- intentional: response/log write errors are not actionable here
 
 	default: // csv
 		w.Header().Set("Content-Type", "text/csv")
@@ -485,9 +494,18 @@ type findingFilter struct {
 	collectionRepoIDs map[string]bool
 }
 
-// gatherUserFindings loads all findings across the user's scans.
+// gatherUserFindings loads all findings across the user's scans. When
+// fleet_mode is on, scope widens to every scan in the org.
 func gatherUserFindings(ctx context.Context, h *Handler, userID string) ([]models.Finding, error) {
-	scans, err := h.Store.ListScansByUser(ctx, userID)
+	var (
+		scans []models.Scan
+		err   error
+	)
+	if fleetModeEnabled(ctx, h.Store) {
+		scans, err = h.Store.ListAllScans(ctx)
+	} else {
+		scans, err = h.Store.ListScansByUser(ctx, userID)
+	}
 	if err != nil {
 		return nil, err
 	}

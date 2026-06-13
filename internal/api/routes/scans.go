@@ -845,7 +845,15 @@ func ListScans(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	scans, err := h.Store.ListAllScans(r.Context())
+	var (
+		scans []models.Scan
+		err   error
+	)
+	if fleetModeEnabled(r.Context(), h.Store) {
+		scans, err = h.Store.ListAllScans(r.Context())
+	} else {
+		scans, err = h.Store.ListScansByUser(r.Context(), claims.UserID)
+	}
 	if err != nil {
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to list scans")
 		return

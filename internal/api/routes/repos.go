@@ -68,7 +68,15 @@ func ListRepos(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	repos, err := h.Store.ListReposByUser(r.Context(), claims.UserID)
+	var (
+		repos []models.Repo
+		err   error
+	)
+	if fleetModeEnabled(r.Context(), h.Store) {
+		repos, err = h.Store.ListAllRepos(r.Context())
+	} else {
+		repos, err = h.Store.ListReposByUser(r.Context(), claims.UserID)
+	}
 	if err != nil {
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to list repos")
 		return
