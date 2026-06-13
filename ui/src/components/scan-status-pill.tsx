@@ -1,50 +1,39 @@
-// Run-state pill with a subtle glow. Used in scan lists, dashboard,
-// live scan view.
+// Run-state pill. Used in scan lists, dashboard, live scan view.
+import { cva, type VariantProps } from "class-variance-authority";
 import type { ScanStatus } from "@/lib/types";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
-const styles: Record<
-  ScanStatus,
-  { label: string; cls: string; glow: string }
-> = {
-  pending: {
-    label: "Pending",
-    cls: "bg-indigo-500/15 text-indigo-300 ring-indigo-500/25",
-    glow: "glow-pending",
+const scanStatusVariants = cva("", {
+  variants: {
+    status: {
+      pending:   "border-indigo-500/40 bg-indigo-500/15 text-indigo-300",
+      running:   "border-blue-500/40 bg-blue-500/15 text-blue-300 animate-pulse-glow",
+      completed: "border-emerald-500/40 bg-emerald-500/15 text-emerald-300",
+      failed:    "border-red-500/40 bg-red-500/15 text-red-300",
+      cancelled: "border-zinc-500/40 bg-zinc-500/15 text-zinc-300",
+    },
   },
-  running: {
-    label: "Running",
-    cls: "bg-blue-500/15 text-blue-300 ring-blue-500/25 animate-pulse-glow",
-    glow: "glow-info",
-  },
-  completed: {
-    label: "Completed",
-    cls: "bg-emerald-500/15 text-emerald-300 ring-emerald-500/25",
-    glow: "glow-success",
-  },
-  failed: {
-    label: "Failed",
-    cls: "bg-red-500/15 text-red-300 ring-red-500/25",
-    glow: "glow-error",
-  },
-  cancelled: {
-    label: "Cancelled",
-    cls: "bg-zinc-500/15 text-zinc-300 ring-zinc-500/25",
-    glow: "",
-  },
+  defaultVariants: { status: "pending" },
+});
+
+const labels: Record<ScanStatus, string> = {
+  pending: "Pending",
+  running: "Running",
+  completed: "Completed",
+  failed: "Failed",
+  cancelled: "Cancelled",
 };
 
-export function ScanStatusPill({ status }: { status: ScanStatus }) {
-  const s = styles[status] ?? styles.pending;
+type Props = VariantProps<typeof scanStatusVariants> & {
+  className?: string;
+  children?: React.ReactNode;
+};
+
+export function ScanStatusPill({ status, className, children }: Props) {
   return (
-    <span
-      className={cn(
-        "inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ring-1 ring-inset whitespace-nowrap",
-        s.cls,
-        s.glow,
-      )}
-    >
-      {s.label}
-    </span>
+    <Badge variant="outline" className={cn(scanStatusVariants({ status }), className)}>
+      {children ?? labels[(status ?? "pending") as ScanStatus]}
+    </Badge>
   );
 }
