@@ -166,15 +166,16 @@
      never set their own padding. Pair with .stack for vertical rhythm. */
   .page {
     width: 100%;
-    max-width: 88rem;
+    max-width: 100rem; /* 1600px — fills wide monitors; centers only on ultra-wide */
     margin-inline: auto;
     padding: 1.75rem 1.5rem 4rem;
   }
   @media (min-width: 768px) {
     .page { padding: 2rem 2.25rem 5rem; }
   }
-  .page--narrow { max-width: 56rem; }
-  .page--mid { max-width: 72rem; }
+  /* Reading / form columns. Still generous on big screens. */
+  .page--narrow { max-width: 66rem; } /* 1056px — forms, settings */
+  .page--mid { max-width: 84rem; }    /* 1344px — detail pages with tables/grids */
 
   /* Vertical rhythm — a drop-in for `space-y-*` (margin-based, no flex needed) */
   .stack > * + * { margin-top: 1.5rem; }

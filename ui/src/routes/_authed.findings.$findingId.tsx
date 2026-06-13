@@ -24,7 +24,7 @@ function FindingDetailPage() {
 
   if (q.isLoading || !q.data) {
     return (
-      <div className="page stack page--narrow">
+      <div className="page stack page--mid">
         <CardSkeleton />
         <CardSkeleton />
       </div>
@@ -33,7 +33,7 @@ function FindingDetailPage() {
   const f = q.data;
 
   return (
-    <div className="page stack page--narrow">
+    <div className="page stack page--mid">
       <div className="flex items-start gap-3">
         <Link
           to="/findings"
