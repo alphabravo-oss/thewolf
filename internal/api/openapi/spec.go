@@ -114,6 +114,9 @@ func Endpoints() []Endpoint {
 		{"DELETE", "/scans/{id}", "scans", "Cancel a scan", "write:scans", "", false},
 		{"DELETE", "/scans/{id}/tools/{toolName}", "scans", "Cancel one tool of a scan", "write:scans", "", false},
 
+		// Source discovery.
+		{"POST", "/sources/github/list-org-repos", "sources", "List repos in a GitHub org / user via the caller's github_token secret", "write:repos", "ListOrgReposRequest", true},
+
 		// Fleet aggregates.
 		{"GET", "/fleet/posture", "fleet", "Fleet-wide posture summary", "read:scans", "", false},
 		{"GET", "/fleet/inventory", "fleet", "Fleet inventory grouped by source / collection / language", "read:repos", "", false},
@@ -420,6 +423,9 @@ func buildComponents() map[string]any {
 			"CreateSecretRequest": objSchema(map[string]any{
 				"key_type": str, "key_name": str, "value": str,
 			}, "key_name", "value"),
+			"ListOrgReposRequest": objSchema(map[string]any{
+				"org": str, "secret_id": str,
+			}, "org"),
 		},
 	}
 }

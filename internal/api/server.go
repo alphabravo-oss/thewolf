@@ -180,6 +180,10 @@ func NewServer(store db.Store, addr string) *Server {
 				r.With(wScans).Post("/{id}/baselines", routes.CreateRepoBaseline)
 			})
 
+			r.Route("/sources", func(r chi.Router) {
+				r.With(wRepos).Post("/github/list-org-repos", routes.ListOrgGitHubRepos)
+			})
+
 			r.Route("/nodes", func(r chi.Router) {
 				r.With(rConfig).Get("/", routes.ListRemoteNodes)
 				r.With(wConfig).Post("/", routes.CreateRemoteNode)
