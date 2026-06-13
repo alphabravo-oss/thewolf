@@ -148,6 +148,42 @@ func installScannerBackend(ctx context.Context) error {
 	return err
 }
 
+// bootstrapAdmin creates the WOLF_ADMIN_EMAIL user on startup when both
+// WOLF_ADMIN_EMAIL and WOLF_ADMIN_PASSWORD are set and no user with that
+// email exists yet. Idempotent on subsequent restarts. Lets fresh dev
+// installs log in without a manual /auth/register step.
+func bootstrapAdmin(ctx context.Context, store db.Store) error {
+	email := strings.TrimSpace(strings.ToLower(os.Getenv("WOLF_ADMIN_EMAIL")))
+	password := os.Getenv("WOLF_ADMIN_PASSWORD")
+	if email == "" || password == "" {
+		return nil
+	}
+	if len(password) < 8 {
+		return fmt.Errorf("WOLF_ADMIN_PASSWORD must be at least 8 characters")
+	}
+	if existing, _ := store.GetUserByEmail(ctx, email); existing != nil {
+		wolflog.L().Debug().Str("email", email).Msg("admin bootstrap: user already exists")
+		return nil
+	}
+	hash, err := auth.HashPassword(password)
+	if err != nil {
+		return fmt.Errorf("hash admin password: %w", err)
+	}
+	now := time.Now().UTC()
+	user := &models.User{
+		ID:           uuid.New().String(),
+		Email:        email,
+		PasswordHash: hash,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}
+	if err := store.CreateUser(ctx, user); err != nil {
+		return fmt.Errorf("create admin user: %w", err)
+	}
+	wolflog.L().Info().Str("email", email).Msg("admin bootstrap: created default admin from WOLF_ADMIN_EMAIL / WOLF_ADMIN_PASSWORD")
+	return nil
+}
+
 // --- serve ------------------------------------------------------------------
 
 func newServeCmd() *cobra.Command {
@@ -227,6 +263,14 @@ func newServeCmd() *cobra.Command {
 			// turn blocks GitHub-token, SSH-credential, and AI-key entry.
 			if err := secrets.LoadMasterKey(); err != nil {
 				wolflog.L().Warn().Err(err).Msg("secrets master key unavailable; the secrets store will reject writes")
+			}
+
+			// Bootstrap a default admin from WOLF_ADMIN_EMAIL + WOLF_ADMIN_PASSWORD
+			// when both are set. Idempotent — only creates the user if no row
+			// with that email exists. Lets fresh dev installs log in without
+			// a manual /auth/register step.
+			if err := bootstrapAdmin(ctx, store); err != nil {
+				wolflog.L().Warn().Err(err).Msg("admin bootstrap skipped")
 			}
 
 			srv := api.NewServer(store, addr)
