@@ -154,6 +154,14 @@ GitHub (use a `github_token` secret for private repos), remote git URL,
 or SSH node. Loops, Fixes, Scanners, and the admin Audit log all have
 dedicated nav entries.
 
+### Fleet mode
+
+When you're managing 20+ repos across multiple hosts:
+- Flip the `fleet_mode` setting in Settings → General. All Repos / Scans / Findings / Collections become visible org-wide.
+- Use **Import from GitHub** on the Repos page to pull every repo from an org via your `github_token` secret.
+- Use **Discover repos** on a node detail page to multi-select git directories on that SSH host.
+- The **/** Fleet dashboard shows posture, vulnerable components, attention list, and inventory across the whole fleet.
+
 ## Architecture
 
 ```text
