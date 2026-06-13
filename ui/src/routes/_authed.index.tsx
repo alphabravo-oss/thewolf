@@ -11,20 +11,26 @@ export const Route = createFileRoute("/_authed/")({ component: FleetDashboard })
 
 function FleetDashboard() {
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Fleet</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Open findings, posture, and inventory across every repository wolf manages.
-        </p>
+    <div className="page stack">
+      <header className="page-header reveal reveal-1">
+        <div>
+          <h1 className="page-title">Fleet</h1>
+          <p className="page-subtitle">
+            Open findings, posture, and inventory across every repository wolf manages.
+          </p>
+        </div>
+      </header>
+      <div className="reveal reveal-2">
+        <PostureCards />
       </div>
-      <PostureCards />
-      <SeverityTrend />
-      <div className="grid grid-cols-2 gap-6">
+      <div className="reveal reveal-3">
+        <SeverityTrend />
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 reveal reveal-4">
         <TopComponents />
         <NeedsAttention />
       </div>
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 reveal reveal-5">
         <InventoryBreakdown />
         <RecentActivity />
       </div>

@@ -188,7 +188,7 @@ function FindingsPage() {
   }, [cursor]);
 
   return (
-    <div className="p-6 space-y-4 max-w-7xl">
+    <div className="page stack">
       <header>
         <h1 className="text-2xl font-semibold tracking-tight">Findings</h1>
         <p className="text-sm text-muted-foreground mt-1">

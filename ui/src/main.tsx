@@ -8,6 +8,12 @@ import {
 import { Toaster } from "sonner";
 
 import { routeTree } from "./routeTree.gen";
+
+// Self-hosted variable fonts (bundled into dist → fully offline, no CDN).
+// Hanken Grotesk for UI, JetBrains Mono for data/IDs/paths.
+import "@fontsource-variable/hanken-grotesk";
+import "@fontsource-variable/jetbrains-mono";
+
 import "./styles/globals.css";
 
 // One QueryClient for the entire app; persists across route changes.

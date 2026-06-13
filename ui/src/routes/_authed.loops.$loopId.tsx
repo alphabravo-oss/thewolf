@@ -23,7 +23,7 @@ function LoopDetailPage() {
   if (q.isLoading || !q.data) return <CardSkeleton />;
   const l = q.data;
   return (
-    <div className="p-6 space-y-6 max-w-5xl">
+    <div className="page stack page--mid">
       <div className="flex items-center gap-3">
         <Link to="/loops" className="size-9 grid place-items-center rounded-md hover:bg-muted/50">
           <ArrowLeftIcon className="size-4" />

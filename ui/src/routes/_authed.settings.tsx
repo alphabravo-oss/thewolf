@@ -48,7 +48,7 @@ function SettingsPage() {
   const { tab } = Route.useSearch();
   const navigate = useNavigate();
   return (
-    <div className="p-6 space-y-6 max-w-4xl">
+    <div className="page stack page--narrow">
       <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
       <nav className="flex gap-1 border-b border-border/40">
         {TABS.map(({ key, label, Icon }) => {

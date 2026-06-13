@@ -286,7 +286,7 @@ function ScanDetailPage() {
 
   if (scanQ.isLoading || !scanQ.data) {
     return (
-      <div className="p-6 space-y-3">
+      <div className="page stack">
         <CardSkeleton />
       </div>
     );
@@ -297,7 +297,7 @@ function ScanDetailPage() {
   const failed = parseToolList(scan.tools_failed);
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl">
+    <div className="page stack">
       <div className="flex items-center gap-3">
         <Link
           to="/scans"

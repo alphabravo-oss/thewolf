@@ -93,7 +93,7 @@ function CollectionDetailPage() {
 
   if (q.isLoading || !q.data) {
     return (
-      <div className="p-6 space-y-3 max-w-5xl">
+      <div className="page stack page--mid">
         <CardSkeleton />
       </div>
     );
@@ -101,7 +101,7 @@ function CollectionDetailPage() {
   const { collection: c, repos, scans } = q.data;
 
   return (
-    <div className="p-6 space-y-6 max-w-5xl">
+    <div className="page stack page--mid">
       <div className="flex items-start gap-3">
         <Link
           to="/collections"

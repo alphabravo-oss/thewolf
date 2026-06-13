@@ -108,12 +108,12 @@ export function Sidebar() {
       >
         <div className="h-16 flex items-center justify-between gap-2 px-4 border-b border-sidebar-border">
           <Link to="/" className="flex items-center gap-2.5">
-            <WolfLogo className="size-10" />
-            <div className="flex flex-col leading-tight">
-              <span className="font-semibold tracking-tight text-sidebar-foreground">
+            <WolfLogo className="size-9" />
+            <div className="flex flex-col leading-none gap-1">
+              <span className="text-[0.9rem] font-semibold tracking-tight text-foreground">
                 The Wolf
               </span>
-              <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              <span className="text-3xs uppercase tracking-[0.16em] text-faint">
                 by AlphaBravo
               </span>
             </div>
@@ -128,13 +128,14 @@ export function Sidebar() {
           </button>
         </div>
 
-        <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto">
+        <nav className="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto">
+          <div className="nav-section">Platform</div>
           {primary.map((item) => (
             <NavLink key={item.to} item={item} active={isActive(item.to)} />
           ))}
         </nav>
 
-        <div className="px-2 py-3 border-t border-sidebar-border space-y-0.5">
+        <div className="px-3 py-3 border-t border-sidebar-border space-y-0.5">
           {secondary.map((item) => (
             <NavLink key={item.to} item={item} active={isActive(item.to)} />
           ))}
@@ -144,7 +145,7 @@ export function Sidebar() {
             className="nav-item w-full text-left"
             aria-label="Sign out"
           >
-            <LogOutIcon className="size-4 shrink-0" />
+            <LogOutIcon />
             <span className="truncate">Sign out</span>
           </button>
         </div>
@@ -157,7 +158,7 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
   const Icon = item.icon;
   return (
     <Link to={item.to} className={cn("nav-item", active && "active")}>
-      <Icon className="size-4 shrink-0" />
+      <Icon />
       <span className="truncate">{item.label}</span>
     </Link>
   );

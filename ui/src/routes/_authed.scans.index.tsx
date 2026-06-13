@@ -39,7 +39,7 @@ function ScansPage() {
   });
 
   return (
-    <div className="p-6 space-y-4 max-w-7xl">
+    <div className="page stack">
       <header className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold tracking-tight">Scans</h1>
         {!showForm && (

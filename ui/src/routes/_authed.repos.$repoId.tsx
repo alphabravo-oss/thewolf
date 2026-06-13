@@ -116,7 +116,7 @@ function RepoDetailPage() {
 
   if (repoQ.isLoading || !repoQ.data) {
     return (
-      <div className="p-6 max-w-5xl">
+      <div className="page stack page--mid">
         <CardSkeleton />
       </div>
     );
@@ -125,7 +125,7 @@ function RepoDetailPage() {
   const langs = parseLanguages(r.detected_languages);
 
   return (
-    <div className="p-6 space-y-6 max-w-5xl">
+    <div className="page stack page--mid">
       <div className="flex items-start gap-3">
         <Link
           to="/repos"

@@ -21,7 +21,7 @@ function LoopsPage() {
     refetchInterval: 10_000,
   });
   return (
-    <div className="p-6 space-y-4 max-w-7xl">
+    <div className="page stack">
       <h1 className="text-2xl font-semibold tracking-tight">Loops</h1>
       {q.isLoading ? (
         <TableSkeleton rows={6} />

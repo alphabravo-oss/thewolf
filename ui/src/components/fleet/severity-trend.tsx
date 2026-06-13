@@ -48,23 +48,23 @@ export function SeverityTrend() {
       </CardHeader>
       <CardContent>
         {q.isLoading ? (
-          <Skeleton className="h-64 w-full" />
+          <Skeleton className="h-56 w-full" />
         ) : !q.data || q.data.length === 0 ? (
-          <div className="h-64 grid place-items-center text-sm text-muted-foreground">
-            No trend data yet.
+          <div className="h-32 grid place-items-center text-sm text-muted-foreground">
+            No trend data yet — run scans over time to see the curve.
           </div>
         ) : (
-          <div className="h-64">
+          <div className="h-56">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={toChartRows(q.data)} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" fontSize={11} />
-                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} allowDecimals={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                <XAxis dataKey="date" stroke="var(--color-muted-foreground)" fontSize={11} tickLine={false} />
+                <YAxis stroke="var(--color-muted-foreground)" fontSize={11} allowDecimals={false} tickLine={false} axisLine={false} width={28} />
                 <Tooltip
                   contentStyle={{
-                    background: "hsl(var(--popover))",
-                    border: "1px solid hsl(var(--border))",
-                    borderRadius: 6,
+                    background: "var(--color-popover)",
+                    border: "1px solid var(--color-border)",
+                    borderRadius: 8,
                     fontSize: 12,
                   }}
                 />
