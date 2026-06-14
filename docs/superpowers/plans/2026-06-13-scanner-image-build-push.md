@@ -28,15 +28,24 @@
 
 ---
 
+## Core principle — local build needs no credentials
+
+**Building and *using* images locally never requires DockerHub credentials.** Credentials gate *publishing* only.
+
+- `push=false` → `docker buildx build --load` builds the image and loads it into the **local Docker daemon**. The scanner backend's pull policy is `IfNotPresent`, so the next scan finds the freshly-loaded image present and runs it with **no registry round-trip**.
+- `push=true` → `docker login` + `--push` to DockerHub. This is the **only** path that needs the `dockerhub_token` secret.
+
+So a fresh wolf install with zero creds can rebuild every image locally and scan with them; DockerHub is an opt-in *publish* step.
+
 ## Definition of Done
 
-1. `docker login` to DockerHub succeeds from a `dockerhub_token` secret (username + PAT) stored via the existing secrets store.
-2. `POST /api/v1/scanners/images/{variant}/build` builds the named variant (`default|jvm|rust|codeql`) from the embedded context and streams `docker buildx` output over SSE; `POST /api/v1/scanners/images/build-all` does all four.
-3. With `push=true`, the freshly built image is tagged `:<wolf-version>` **and** `:latest` and pushed to `docker.io/<configured-namespace>/<image>`; the response reports the pushed refs + digests.
+1. With **no** DockerHub credentials configured, `POST /api/v1/scanners/images/{variant}/build` with `{push:false}` builds the variant from the embedded context, `--load`s it into the local daemon, and a subsequent scan uses it (pull policy `IfNotPresent`, no pull attempt). Verified end-to-end.
+2. `POST /api/v1/scanners/images/{variant}/build` builds the named variant (`default|jvm|rust|codeql`) from the embedded context and streams `docker buildx` output over SSE; `POST /api/v1/scanners/images/build-all` does all four. The request body is `{push: bool}`; `push=false` is the default and requires no credentials.
+3. With `push=true`, `docker login` from a `dockerhub_token` secret succeeds, the freshly built image is tagged `:<wolf-version>` **and** `:latest` and pushed to `docker.io/<configured-namespace>/<image>`; the response reports the pushed refs + digests. `push=true` with no `dockerhub_token` secret returns 404 with a clear hint — but `push=false` is unaffected.
 4. The default image's Go layer is slimmed: `go-tools.sh` removes `$GOPATH/pkg` (module/build cache) and strips the toolchain's `test/`, `doc/`, `api/`, `misc/` dirs, while gosec + govulncheck still pass a smoke `go list`/`go env` against a sample module. Net: default unpacked size drops by ≥600 MB with no tool regressions (verified by `scanners/smoke-test.sh`).
 5. The runtime default tag mismatch is fixed: a build/push tags the running wolf version, and the `WOLF_SCANNERS_TAG` resolution + a startup log line make the active tag obvious. A documented `WOLF_SCANNERS_TAG=latest` fallback works today.
-6. Settings → **Scanner Images** shows, per wolf-built variant: local digest, remote digest, "update available", last-built, and a **Rebuild & push** button (plus **Rebuild all**); clicking streams live logs into a console panel and ends with success/failure + the pushed tag.
-7. A **DockerHub credential** card in Settings → Secrets (or the Scanner Images page) lets the operator save username + PAT; absent credentials disable the push toggle with a clear hint.
+6. Settings → **Scanner Images** shows, per wolf-built variant: local digest, remote digest, "update available", last-built, and a **Rebuild (local)** button (plus **Rebuild all**) that is *always available regardless of credentials*; clicking streams live logs into a console panel and ends with success/failure. When a `dockerhub_token` secret exists, a **"push to DockerHub"** toggle appears next to the button, turning it into **Rebuild & push**. Missing credentials never disable the build — only the push toggle is hidden, with a hint linking to the credential card.
+7. A **DockerHub credential** card in the Scanner Images page lets the operator save username + PAT; it is clearly labelled *optional — only needed to publish*. Absent credentials hide the push toggle but never block local builds.
 8. Build/push is admin-scoped (`write:config`) and audit-logged.
 9. `go build ./...`, `go vet ./...`, `go test ./...` green; `pnpm test`, `pnpm build`, `pnpm typecheck` green.
 10. End-to-end: store a DockerHub PAT → Rebuild default with push → watch logs → image appears on DockerHub with the version tag → Scanners tab shows it `up to date`.
@@ -139,17 +148,17 @@
 - [ ] **Step 2:** `type BuildRequest struct { Variant, Namespace, Version string; Push bool; DockerHubUser, DockerHubPAT string }`.
 - [ ] **Step 3:** `Build(ctx, req, onLine func(string)) (BuildResult, error)`:
   1. Materialize context to a temp dir (defer cleanup).
-  2. If `Push`, `docker login -u <user> --password-stdin` (PAT on stdin; never in argv/logs).
-  3. `docker buildx build --file <dockerfile> -t <ns>/<img>:<version> -t <ns>/<img>:latest --build-arg WOLF_VERSION=<version> [--push|--load] <ctxdir>` — stream combined stdout/stderr line-by-line to `onLine`.
-  4. Return pushed refs + (if available) the digest parsed from buildx output.
+  2. **Only if `req.Push`**, `docker login -u <user> --password-stdin` (PAT on stdin; never in argv/logs). A `push=false` build performs **no login and needs no credentials**.
+  3. `docker buildx build --file <dockerfile> --build-arg WOLF_VERSION=<version> -t <ns>/<img>:<version> -t <ns>/<img>:latest -t <ns>/<img>:<active-runtime-tag> <flag> <ctxdir>` where `<flag>` is `--push` when `req.Push` else **`--load`** (loads into the local daemon). The third tag is the tag the runtime currently resolves (from `WOLF_SCANNERS_TAG`/default) so a freshly-built-local image is immediately picked up by the next scan without any registry round-trip — dedupe if it equals `:version` or `:latest`.
+  4. Return refs (and, if available, the digest parsed from buildx output) plus a `LoadedLocally bool`.
   Redact the PAT from any echoed command line.
-- [ ] **Step 4:** Tests (no docker): assert the constructed argv for push vs load, tag list (`:version` + `:latest`), and that the PAT never appears in the argv or the echoed command string.
+- [ ] **Step 4:** Tests (no docker): assert the constructed argv for **push (`--push`) vs local (`--load`)**, the tag list (`:version` + `:latest` + active-runtime-tag, deduped), that a `push=false` build constructs **no `docker login`** invocation, and that the PAT never appears in the argv or the echoed command string.
 - [ ] **Step 5:** Commit: `feat(scannerbuild): buildx build/push runner with streamed output`.
 
 ### Task 5: API endpoints (SSE)
 **Files:** `internal/api/routes/scanner_build.go`, `_test.go`, `server.go`, `openapi/spec.go`
 
-- [ ] **Step 1:** `BuildScannerImage` (`POST /scanners/images/{variant}/build`): parse `{push: bool}`; resolve namespace (setting `scanner_registry_namespace`, default `alphabravodevops`) + version (running wolf version); if `push`, load the `dockerhub_token` secret (404-with-hint if absent); set SSE headers; call `scannerbuild.Build` with `onLine` writing `data: <line>\n\n` + flush; emit a terminal `event: done` / `event: error`.
+- [ ] **Step 1:** `BuildScannerImage` (`POST /scanners/images/{variant}/build`): parse `{push: bool}` (default false); resolve namespace (setting `scanner_registry_namespace`, default `alphabravodevops`) + version (running wolf version); **only if `push`**, load the `dockerhub_token` secret (404-with-hint if absent) and pass the creds — a `push=false` build never reads the secret and never 404s on missing creds; set SSE headers; call `scannerbuild.Build` with `onLine` writing `data: <line>\n\n` + flush; emit a terminal `event: done` / `event: error`.
 - [ ] **Step 2:** `BuildAllScannerImages` (`POST /scanners/images/build-all`): loop the four variants, prefixing each line with `[variant]`.
 - [ ] **Step 3:** Register both under `r.With(auth.RequireScope(apikey.ScopeWriteConfig))`; add to the OpenAPI catalog.
 - [ ] **Step 4:** Tests: 401 without creds, 403 with read-only token, 404 push-without-dockerhub-secret, and a happy path with `scannerbuild.Build` stubbed via an interface so no real docker runs.
@@ -182,8 +191,8 @@
 ### Task 9: Scanner Images panel + build console
 **Files:** `ui/src/components/scanners/build-console.tsx`, Scanners-tab section
 
-- [ ] **Step 1:** Per-variant rows: name, local vs remote digest, up-to-date / update-available, last-built, **Rebuild & push** (disabled if no DockerHub secret, with hint) + a header **Rebuild all**.
-- [ ] **Step 2:** `BuildConsole`: a monospace, auto-scrolling log panel fed by `streamBuild`; shows a running spinner, final success (pushed tag) or error. Uses `.glass-card` / `.path` / mono styling.
+- [ ] **Step 1:** Per-variant rows: name, local vs remote digest, up-to-date / update-available, last-built, and a **Rebuild (local)** button that is **always enabled regardless of credentials** + a header **Rebuild all**. When a `dockerhub_token` secret exists, render a small **"push to DockerHub"** checkbox/toggle beside the button; checking it makes the action **Rebuild & push** (`push:true`). With no secret, the toggle is replaced by a one-line hint ("Add a DockerHub token to publish") linking to the credential card — the build button stays active. `streamBuild(variant, push, …)` passes the toggle state.
+- [ ] **Step 2:** `BuildConsole`: a monospace, auto-scrolling log panel fed by `streamBuild`; shows a running spinner, final success (loaded-locally, or pushed tag) or error. Uses `.glass-card` / `.path` / mono styling.
 - [ ] **Step 3:** Commit: `feat(ui): Scanner Images panel with live build console`.
 
 ### Task 10: README + smoke + push
