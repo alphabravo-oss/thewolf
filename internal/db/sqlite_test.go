@@ -427,6 +427,45 @@ func TestSecretsCRUD(t *testing.T) {
 		t.Fatalf("expected 1 secret, got %d", len(secs))
 	}
 
+	// DockerHub credential: PAT stored as the encrypted value, the username
+	// reuses KeyName. Confirm the dockerhub_token key_type round-trips.
+	dockerSecret := &models.Secret{
+		ID:             uuid.New().String(),
+		UserID:         userID,
+		KeyType:        models.KeyTypeDockerHubToken,
+		KeyName:        "alphabravodevops",
+		EncryptedValue: "encrypted-dockerhub-pat",
+	}
+	if err := store.CreateSecret(ctx, dockerSecret); err != nil {
+		t.Fatalf("CreateSecret (dockerhub) failed: %v", err)
+	}
+
+	secs, err = store.ListSecretsByUser(ctx, userID)
+	if err != nil {
+		t.Fatalf("ListSecretsByUser failed: %v", err)
+	}
+	if len(secs) != 2 {
+		t.Fatalf("expected 2 secrets, got %d", len(secs))
+	}
+
+	var found *models.Secret
+	for i := range secs {
+		if secs[i].ID == dockerSecret.ID {
+			found = &secs[i]
+			break
+		}
+	}
+	if found == nil {
+		t.Fatal("dockerhub secret not returned by ListSecretsByUser")
+	}
+	if found.KeyType != models.KeyTypeDockerHubToken {
+		t.Fatalf("key_type did not round-trip: got %q, want %q", found.KeyType, models.KeyTypeDockerHubToken)
+	}
+	if found.KeyName != "alphabravodevops" {
+		t.Fatalf("key_name did not round-trip: got %q, want %q", found.KeyName, "alphabravodevops")
+	}
+
+	store.DeleteSecret(ctx, dockerSecret.ID)
 	store.DeleteSecret(ctx, secret.ID)
 	secs, _ = store.ListSecretsByUser(ctx, userID)
 	if len(secs) != 0 {

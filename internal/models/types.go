@@ -162,5 +162,8 @@ const (
 	KeyTypeSSHPassword  KeyType = "ssh_password"
 	KeyTypeAnthropicKey KeyType = "anthropic_key"
 	KeyTypeOpenAIKey    KeyType = "openai_key"
-	KeyTypeCustom       KeyType = "custom"
+	// KeyTypeDockerHubToken stores a DockerHub credential: the encrypted
+	// value is the PAT, and KeyName holds the DockerHub username.
+	KeyTypeDockerHubToken KeyType = "dockerhub_token"
+	KeyTypeCustom         KeyType = "custom"
 )
