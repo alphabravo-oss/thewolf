@@ -216,6 +216,47 @@ Disable the upstream tier entirely (e.g. air-gapped, internal-mirror-only) with 
 
 See `PLAN.md` for the full architecture; `scanners/tools.yaml` for the authoritative scanner manifest; `scanners/TOOLS.md` for the generated scanner table; `scanners/README.md` for how to add or upgrade tools; `docs/MIGRATION_2_0.md` for the upgrade path from wolf 1.x.
 
+## Rebuilding the wolf-built images (server-side)
+
+The four wolf-built images (`wolf-scanners`, `-jvm`, `-rust`, `-codeql`) can be rebuilt directly from the wolf server — no repo checkout, no host toolchains. The full `scanners/` build context is `go:embed`-ed into the binary, so the server runs `docker buildx build` itself (Docker is already a hard dependency for scanning). Rebuild from **Settings → Scanner Images** in the UI, or via the API:
+
+```bash
+# Rebuild one variant locally (no credentials needed) — loads into the local daemon
+curl -X POST .../api/v1/scanners/images/default/build -d '{"push": false}'
+
+# Rebuild all four
+curl -X POST .../api/v1/scanners/images/build-all -d '{"push": false}'
+```
+
+Both endpoints stream the live `docker buildx` output over SSE and are admin-scoped (`write:config`, audit-logged). Server-local builds are **single-arch** (the host's platform); CI (`scanners-image.yml`) remains the multi-arch (amd64 + arm64) publisher.
+
+**Local builds need no credentials.** With `push: false` (the default) the server builds with `docker buildx build --load`, loading the image straight into the local Docker daemon. The scanner backend's pull policy is `IfNotPresent`, so the next scan finds the freshly-built image present and runs it with no registry round-trip. A fresh wolf install with zero credentials can rebuild every image and scan with it.
+
+### Optional — publishing to DockerHub
+
+Credentials gate **publishing only**. To push a rebuilt image to DockerHub, store a PAT as an *optional* `dockerhub_token` secret (username in `key_name`, the PAT as the encrypted value):
+
+```bash
+curl -X POST .../api/v1/config/secrets \
+  -d '{"key_type": "dockerhub_token", "key_name": "<dockerhub-username>", "value": "<PAT>"}'
+```
+
+With the secret present, a `push: true` build logs in via `--password-stdin` (the PAT never reaches argv, logs, or the SSE stream), tags the image `:<wolf-version>` **and** `:latest`, and pushes to `docker.io/<namespace>/<image>` (namespace from the `scanner_registry_namespace` setting, default `alphabravodevops`). In the UI, a **"push to DockerHub"** toggle appears beside the Rebuild button only when the secret exists; absent credentials hide the toggle but never block local builds. A `push: true` request with no `dockerhub_token` secret returns `404` with a hint.
+
+### Selecting which tag the runtime pulls — `WOLF_SCANNERS_TAG`
+
+The runtime resolves each image ref as `<namespace>/<image>:<tag>`, where `<tag>` comes from `WOLF_SCANNERS_TAG` (default `2.0.0`). The active resolved tag is logged at startup. CI publishes `latest` and `dev`, so until a versioned release is cut, set `WOLF_SCANNERS_TAG=latest` to track the published images:
+
+```bash
+WOLF_SCANNERS_TAG=latest wolf serve
+```
+
+A server-side build/push tags the running wolf version automatically, so once you publish from the UI the default tag resolves cleanly.
+
+### Slimmer Go layer
+
+The default image's Go-toolchain layer (gosec/govulncheck need `go list`/`go env` at runtime) is slimmed by `scanners/install/go-tools.sh`: it drops `$GOPATH/pkg` (module/build cache) and `$GOPATH/bin`, and strips the toolchain's `test/`, `doc/`, `api/`, and `misc/` dirs. The Go tools still resolve modules (validated by `scanners/smoke-test.sh`), and the default image's unpacked size drops by ≥600 MB with no tool regressions.
+
 ## Supported tools
 
 **Total: 49 scanners** across SAST, SCA, secrets, container, infrastructure, IaC, policy-as-code, license, SBOM, docs, DAST, repo-hygiene, dependency-freshness, privacy/PII, deprecated-API detection, and per-language categories.
