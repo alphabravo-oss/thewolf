@@ -64,4 +64,11 @@ done
 # repos that need module resolution. (See plugins/go/*.go for usage.)
 rm -rf "$GOCACHE"
 
+# Drop the module + build cache used only to compile the tools — not
+# needed at runtime. gosec/govulncheck use `go list`/`go env`, which
+# need GOROOT (src + bin), not GOPATH modules.
+rm -rf "${GOPATH}/pkg" "${GOPATH}/bin"
+# Strip toolchain dirs unused at runtime (docs, tests, api, examples).
+rm -rf /usr/local/go-toolchain/{test,doc,api,misc}
+
 echo "Go scanners installed."

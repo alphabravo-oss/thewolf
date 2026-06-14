@@ -74,6 +74,13 @@ if [[ "$VARIANT" == "default" ]]; then
     run present "staticcheck"                                                 staticcheck
     run check "govulncheck $GOVULNCHECK_VERSION"       "$GOVULNCHECK_VERSION"     govulncheck -version
     run present "gokart"                                                      gokart
+    # The Go toolchain is retained (not the GOPATH module cache) so that
+    # gosec/govulncheck can resolve std-lib modules at runtime via the
+    # stripped toolchain. Prove GOROOT (src + bin) still resolves the
+    # standard library after the slimming in go-tools.sh.
+    GO_BIN="$(command -v go || echo /usr/local/go-toolchain/bin/go)"
+    run check "go env GOROOT" "/usr/local/go-toolchain" "$GO_BIN" env GOROOT
+    run check "go list std (toolchain resolves modules)" "fmt" "$GO_BIN" list std
     run check "eslint $ESLINT_VERSION"                 "$ESLINT_VERSION"          eslint --version
     run check "markdownlint $MARKDOWNLINT_VERSION"     "$MARKDOWNLINT_VERSION"    markdownlint --version
     run present "npm (for npm-audit)"                                         npm
