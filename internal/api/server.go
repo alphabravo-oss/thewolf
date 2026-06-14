@@ -306,6 +306,8 @@ func NewServer(store db.Store, addr string) *Server {
 				r.With(wConfig).Post("/tools/{name}/check-update", routes.ScannersCheckUpdate)
 				r.With(rConfig).Get("/images", routes.ScannersImages)
 				r.With(wConfig).Post("/images/pull", routes.ScannersPullOne)
+				r.With(wConfig).Post("/images/{variant}/build", routes.BuildScannerImage)
+				r.With(wConfig).Post("/images/build-all", routes.BuildAllScannerImages)
 				r.With(rConfig).Get("/config", routes.ScannersConfig)
 				r.With(rConfig).Get("/list", routes.ScannersList)
 				r.With(rConfig).Post("/plan", routes.ScannersPlan)

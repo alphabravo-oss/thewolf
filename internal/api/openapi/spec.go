@@ -181,6 +181,8 @@ func Endpoints() []Endpoint {
 		{"POST", "/scanners/tools/{name}/check-update", "scanners", "Check one scanner tool update", "write:config", "", false},
 		{"GET", "/scanners/images", "scanners", "List scanner images", "read:config", "", true},
 		{"POST", "/scanners/images/pull", "scanners", "Pull one scanner image", "write:config", "", false},
+		{"POST", "/scanners/images/{variant}/build", "scanners", "Build one scanner image (SSE)", "write:config", "", false},
+		{"POST", "/scanners/images/build-all", "scanners", "Build all scanner images (SSE)", "write:config", "", false},
 		{"GET", "/scanners/config", "scanners", "Get scanner config", "read:config", "", false},
 		{"GET", "/scanners/list", "scanners", "List scanners", "read:config", "", true},
 		{"POST", "/scanners/plan", "scanners", "Explain scanner run and skip decisions", "read:config", "ScannerPlanRequest", false},

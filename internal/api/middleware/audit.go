@@ -87,3 +87,20 @@ func (s *statusRecorder) Write(b []byte) (int, error) {
 	s.wrote = true
 	return s.ResponseWriter.Write(b)
 }
+
+// Unwrap exposes the wrapped writer to http.ResponseController so streaming
+// handlers (SSE on a POST, e.g. scanner image builds) can reach the
+// underlying Flusher/Hijacker even though this recorder only overrides
+// WriteHeader/Write.
+func (s *statusRecorder) Unwrap() http.ResponseWriter {
+	return s.ResponseWriter
+}
+
+// Flush forwards to the wrapped writer's Flusher when present, so SSE frames
+// reach the client immediately. A plain type assertion on the recorder would
+// fail because the embedded interface doesn't promote Flush.
+func (s *statusRecorder) Flush() {
+	if f, ok := s.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
