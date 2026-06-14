@@ -1,0 +1,44 @@
+# ============================================================
+# checkov:skip=CKV_DOCKER_2 — bucket images are one-shot scanner containers, not long-lived services
+# wolf-scanners-rust — Rust toolchain + clippy (~1.2 GB)
+# ============================================================
+# Built only when wolf detects Rust code. Pulled lazily.
+# ============================================================
+
+FROM debian:trixie-slim@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a0c3ccd26f436a0e AS base
+
+ARG WOLF_VERSION=dev
+LABEL org.opencontainers.image.title="wolf-scanners-rust" \
+      org.opencontainers.image.description="Rust toolchain + clippy for the Wolf code analysis engine" \
+      org.opencontainers.image.source="https://github.com/alphabravocompany/thewolf" \
+      org.opencontainers.image.vendor="AlphaBravo" \
+      org.opencontainers.image.version="${WOLF_VERSION}"
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    WOLF_SCANNERS_VARIANT=rust
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates curl build-essential pkg-config libssl-dev \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY versions.env       /etc/wolf-scanners/versions.env
+COPY wolf-tool-entry    /usr/local/bin/wolf-tool-entry
+COPY smoke-test.sh      /usr/local/bin/smoke-test.sh
+RUN chmod +x /usr/local/bin/wolf-tool-entry /usr/local/bin/smoke-test.sh
+
+COPY install/rust.sh    /tmp/install/rust.sh
+RUN  bash /tmp/install/rust.sh
+
+RUN WOLF_SMOKE_STRICT=1 /usr/local/bin/smoke-test.sh
+
+# Keep build-essential + libssl-dev — cargo needs them at scan time
+# when clippy compiles user code. Just trim docs/man dirs (~30MB).
+RUN rm -rf /tmp/install /var/cache/apt/* /usr/share/doc/* /usr/share/man/*
+
+RUN groupadd -g 1000 wolf && \
+    useradd  -u 1000 -g 1000 -m -d /home/wolf -s /bin/bash wolf
+
+USER wolf
+WORKDIR /scan
+ENTRYPOINT ["/usr/local/bin/wolf-tool-entry"]

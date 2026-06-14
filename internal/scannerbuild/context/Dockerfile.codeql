@@ -1,0 +1,54 @@
+# ============================================================
+# checkov:skip=CKV_DOCKER_2 — bucket images are one-shot scanner containers, not long-lived services
+# wolf-scanners-codeql — CodeQL alone (~700 MB)
+# ============================================================
+# CodeQL has a license that restricts use to open-source codebases
+# unless the operator has GitHub Enterprise Advanced Security.
+# We ship it as a SEPARATE image so operators who don't need (or
+# can't use) CodeQL don't pull it. Default wolf.yaml does not
+# include codeql in any preset.
+#
+# AMD64-ONLY: GitHub's CodeQL CLI ships a linux/amd64 binary only —
+# there is no published linux/arm64 build. Building a multi-arch
+# manifest produces an arm64 image with an amd64 binary inside,
+# which QEMU-translates with a ld-linux-x86-64.so.2 failure at
+# scan time. The Makefile + workflow restrict this image to
+# linux/amd64; the wolf codeql plugin should also skip cleanly
+# (or run under emulation) on arm64 hosts.
+# ============================================================
+
+FROM --platform=linux/amd64 debian:trixie-slim@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a0c3ccd26f436a0e AS base
+
+ARG WOLF_VERSION=dev
+LABEL org.opencontainers.image.title="wolf-scanners-codeql" \
+      org.opencontainers.image.description="CodeQL CLI for the Wolf code analysis engine (license-restricted)" \
+      org.opencontainers.image.source="https://github.com/alphabravocompany/thewolf" \
+      org.opencontainers.image.vendor="AlphaBravo" \
+      org.opencontainers.image.version="${WOLF_VERSION}"
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    WOLF_SCANNERS_VARIANT=codeql
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates curl unzip git \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY versions.env       /etc/wolf-scanners/versions.env
+COPY wolf-tool-entry    /usr/local/bin/wolf-tool-entry
+COPY smoke-test.sh      /usr/local/bin/smoke-test.sh
+RUN chmod +x /usr/local/bin/wolf-tool-entry /usr/local/bin/smoke-test.sh
+
+COPY install/codeql.sh  /tmp/install/codeql.sh
+RUN  bash /tmp/install/codeql.sh
+
+RUN WOLF_SMOKE_STRICT=1 /usr/local/bin/smoke-test.sh
+
+RUN rm -rf /tmp/install /var/cache/apt/* /usr/share/doc/* /usr/share/man/*
+
+RUN groupadd -g 1000 wolf && \
+    useradd  -u 1000 -g 1000 -m -d /home/wolf -s /bin/bash wolf
+
+USER wolf
+WORKDIR /scan
+ENTRYPOINT ["/usr/local/bin/wolf-tool-entry"]
