@@ -9,6 +9,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CheckIcon,
   DownloadIcon,
+  HammerIcon,
   KeyIcon,
   Loader2Icon,
   PlusIcon,
@@ -17,12 +18,19 @@ import {
   SettingsIcon,
   ShieldIcon,
   Trash2Icon,
+  UploadCloudIcon,
   UsersIcon,
 } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import type { RemoteNode } from "@/lib/types";
+import { BuildConsole, type BuildTarget } from "@/components/scanners/build-console";
+import { DockerHubCredentialCard } from "@/components/scanners/dockerhub-credential";
+import {
+  useScannerImages,
+  type ScannerImageStatus,
+} from "@/lib/scanner-build";
 
 export const Route = createFileRoute("/_authed/settings")({
   validateSearch: (s: Record<string, unknown>) => ({
@@ -1095,6 +1103,7 @@ function ScannersTab() {
         )}
       </div>
 
+      <ScannerImagesPanel />
       <ImagesPanel />
       <ScannerToolsPanel />
 
@@ -1327,6 +1336,192 @@ function FreshnessPill({ tool }: { tool: ScannerToolStatus }) {
     >
       {status.replaceAll("_", " ")}
     </span>
+  );
+}
+
+// The four wolf-built scanner image variants, in build order. Each maps onto a
+// row in ScannerImagesPanel with a Rebuild button. `suffix` is appended to the
+// default repo (wolf-scanners) to find the variant's image in GET
+// /scanners/images so we can show its local vs. remote digest.
+const SCANNER_VARIANTS: {
+  name: string;
+  label: string;
+  suffix: string;
+}[] = [
+  { name: "default", label: "Default", suffix: "" },
+  { name: "jvm", label: "JVM", suffix: "-jvm" },
+  { name: "rust", label: "Rust", suffix: "-rust" },
+  { name: "codeql", label: "CodeQL", suffix: "-codeql" },
+];
+
+// Match a variant to its image-status row. The status list is keyed by full
+// image ref (e.g. alphabravodevops/wolf-scanners-jvm:2.0.0). We strip the tag,
+// then match the repo's trailing suffix — being careful that "" (default) only
+// matches a ref whose repo has none of the other variant suffixes.
+function statusForVariant(
+  images: ScannerImageStatus[],
+  suffix: string,
+): ScannerImageStatus | undefined {
+  const repoOf = (ref: string) => ref.split(":")[0];
+  if (suffix === "") {
+    return images.find((img) => {
+      const repo = repoOf(img.image);
+      return (
+        /wolf-scanners$/.test(repo) ||
+        (!/-jvm$|-rust$|-codeql$/.test(repo) && /wolf-scanners/.test(repo))
+      );
+    });
+  }
+  return images.find((img) => repoOf(img.image).endsWith(suffix));
+}
+
+// ScannerImagesPanel — per-variant rebuild rows + a live build console.
+//
+// Every variant always shows a "Rebuild (local)" button (a `--load` build into
+// the local Docker daemon) regardless of whether DockerHub credentials exist —
+// local builds never need credentials. When a `dockerhub_token` secret is
+// configured, a small "push to DockerHub" toggle appears beside each button,
+// turning the action into "Rebuild & push". With no secret, the toggle is
+// replaced by a one-line hint linking to the DockerHub credential card below;
+// the build button stays active either way. A header "Rebuild all" action runs
+// all four variants in sequence.
+function ScannerImagesPanel() {
+  const imagesQ = useScannerImages();
+  const images = imagesQ.data ?? [];
+
+  // Whether a DockerHub token secret exists — gates the push toggle only.
+  const secretsQ = useQuery({
+    queryKey: ["config", "secrets", "all"],
+    queryFn: async () =>
+      (await api.get<{ key_type: string }[]>("/config/secrets")).data ?? [],
+  });
+  const hasDockerHubToken = useMemo(
+    () => (secretsQ.data ?? []).some((s) => s.key_type === "dockerhub_token"),
+    [secretsQ.data],
+  );
+
+  // Per-variant push-toggle state. Only consulted when hasDockerHubToken.
+  const [pushVariants, setPushVariants] = useState<Record<string, boolean>>({});
+  const togglePush = (name: string) =>
+    setPushVariants((prev) => ({ ...prev, [name]: !prev[name] }));
+
+  // The build the console should stream. Bumping `nonce` re-runs the same one.
+  const [target, setTarget] = useState<BuildTarget | null>(null);
+  const startBuild = (variant: string, push: boolean) =>
+    setTarget((prev) => ({ variant, push, nonce: (prev?.nonce ?? 0) + 1 }));
+
+  return (
+    <div className="space-y-4">
+      <div className="glass-card p-5 space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <HammerIcon className="size-4 text-muted-foreground" />
+            <h3 className="text-sm font-medium">Scanner images</h3>
+            <span className="chip">wolf-built</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => startBuild("all", false)}
+            className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md border border-border/60 text-xs hover:bg-muted/30"
+            title="Rebuild all four variants in sequence (local --load; never needs credentials)"
+          >
+            <HammerIcon className="size-3.5" /> Rebuild all
+          </button>
+        </div>
+
+        <p className="text-xs text-muted-foreground max-w-prose">
+          Rebuild the wolf-built scanner images from the embedded build context.
+          Local rebuilds load straight into the Docker daemon and{" "}
+          <strong>never require credentials</strong>. Publishing to DockerHub is
+          opt-in.
+        </p>
+
+        <ul className="space-y-2 text-sm">
+          {SCANNER_VARIANTS.map((v) => {
+            const status = statusForVariant(images, v.suffix);
+            const push = hasDockerHubToken && !!pushVariants[v.name];
+            return (
+              <li
+                key={v.name}
+                className="flex flex-wrap items-center gap-3 border-b border-border/20 pb-2 last:border-0 last:pb-0"
+              >
+                <div className="min-w-24 font-medium">{v.label}</div>
+                <div className="path flex-1 min-w-0 break-all">
+                  {status?.image ?? `wolf-scanners${v.suffix}`}
+                </div>
+                <DigestPill
+                  label="local"
+                  value={status?.local_digest}
+                  err={status?.local_error}
+                />
+                <DigestPill
+                  label="remote"
+                  value={status?.remote_digest}
+                  err={status?.remote_error}
+                />
+                {status?.updates_available ? (
+                  <span className="text-[10px] uppercase tracking-wide font-medium text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded px-1.5 py-0.5">
+                    update available
+                  </span>
+                ) : status?.local_digest ? (
+                  <span className="text-[10px] uppercase tracking-wide font-medium text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 rounded px-1.5 py-0.5">
+                    up to date
+                  </span>
+                ) : null}
+
+                {hasDockerHubToken && (
+                  <label className="inline-flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={!!pushVariants[v.name]}
+                      onChange={() => togglePush(v.name)}
+                      className="size-3.5 accent-primary"
+                    />
+                    push to DockerHub
+                  </label>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => startBuild(v.name, push)}
+                  className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md bg-primary text-primary-foreground text-xs font-medium"
+                  title={
+                    push
+                      ? "Rebuild from the embedded context and push to DockerHub"
+                      : "Rebuild from the embedded context and load into the local Docker daemon (no credentials needed)"
+                  }
+                >
+                  {push ? (
+                    <UploadCloudIcon className="size-3.5" />
+                  ) : (
+                    <HammerIcon className="size-3.5" />
+                  )}
+                  {push ? "Rebuild & push" : "Rebuild (local)"}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+
+        {!hasDockerHubToken && (
+          <p className="text-xs text-muted-foreground">
+            <a
+              href="#dockerhub-credential"
+              className="text-primary hover:underline"
+            >
+              Add a DockerHub token
+            </a>{" "}
+            to publish images. Local rebuilds work without it.
+          </p>
+        )}
+      </div>
+
+      <BuildConsole target={target} />
+
+      <div id="dockerhub-credential">
+        <DockerHubCredentialCard />
+      </div>
+    </div>
   );
 }
 
