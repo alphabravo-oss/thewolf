@@ -273,6 +273,14 @@ func newServeCmd() *cobra.Command {
 				wolflog.L().Warn().Err(err).Msg("admin bootstrap skipped")
 			}
 
+			// Surface the resolved default scanner image tag at startup so the
+			// runtime default (2.0.0) vs. WOLF_SCANNERS_TAG override is obvious
+			// in the logs. The active refs are what a scan will actually pull.
+			wolflog.L().Info().
+				Str("tag", scanners.ResolvedTag()).
+				Str("default_image", scanners.ActiveImageRefs()["default"]).
+				Msg("resolved scanner image tag (override with WOLF_SCANNERS_TAG)")
+
 			srv := api.NewServer(store, addr)
 			wolflog.L().Info().Str("addr", addr).Msg("wolf serve")
 

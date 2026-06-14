@@ -68,7 +68,7 @@ type Config struct {
 // applying sensible defaults for any unset value. Callers can either use the
 // result directly or merge it with a yaml-loaded Config.
 func EnvDefaults() Config {
-	tag := envOr("WOLF_SCANNERS_TAG", "2.0.0")
+	tag := ResolvedTag()
 	return Config{
 		Image:          envOr("WOLF_SCANNERS_IMAGE", "alphabravodevops/wolf-scanners:"+tag),
 		ImageOverrides: envBucketOverrides(),
@@ -88,6 +88,71 @@ func EnvDefaults() Config {
 		HostReposRoot:        envOr("WOLF_HOST_REPOS_ROOT", ""),
 		InContainerReposRoot: envOr("WOLF_IN_CONTAINER_REPOS_ROOT", ""),
 	}
+}
+
+// DefaultScannersTag is the runtime default tag for the wolf-built scanner
+// images. CI historically only published :latest and :dev; a build/push from
+// the scanner-image feature is what cuts this versioned tag. Operators can
+// override with WOLF_SCANNERS_TAG (e.g. WOLF_SCANNERS_TAG=latest) until a
+// release publishes this tag.
+const DefaultScannersTag = "2.0.0"
+
+// ResolvedTag returns the scanner image tag the runtime resolves: the
+// WOLF_SCANNERS_TAG override if set, else DefaultScannersTag.
+func ResolvedTag() string {
+	return envOr("WOLF_SCANNERS_TAG", DefaultScannersTag)
+}
+
+// bucketVariantEnv maps each bucket variant name to its dedicated
+// WOLF_SCANNERS_IMAGE_* override env var.
+var bucketVariantEnv = map[string]string{
+	"jvm":    "WOLF_SCANNERS_IMAGE_JVM",
+	"rust":   "WOLF_SCANNERS_IMAGE_RUST",
+	"codeql": "WOLF_SCANNERS_IMAGE_CODEQL",
+}
+
+// bucketVariantSuffix maps each bucket variant name to the suffix appended to
+// the default image repo (matching scannerbuild.Variants and the Makefile
+// scanners-build-<variant> targets).
+var bucketVariantSuffix = map[string]string{
+	"jvm":    "-jvm",
+	"rust":   "-rust",
+	"codeql": "-codeql",
+}
+
+// ActiveImageRefs returns, per wolf-built variant, the fully-qualified
+// "<ns>/<img>:<tag>" reference the runtime will resolve and pull. It honors
+// the same env overrides the runtime config uses:
+//
+//   - WOLF_SCANNERS_IMAGE overrides the "default" ref outright (repo + tag).
+//   - WOLF_SCANNERS_TAG sets the tag for refs derived from the default repo.
+//   - WOLF_SCANNERS_IMAGE_{JVM,RUST,CODEQL} override a bucket variant outright.
+//
+// Bucket variants without an explicit override are derived from the default
+// image's repo base by appending the variant suffix and the resolved tag, so
+// the UI shows exactly what a scan would pull. Keys are the variant names
+// "default", "jvm", "rust", "codeql".
+func ActiveImageRefs() map[string]string {
+	tag := ResolvedTag()
+	defaultImage := envOr("WOLF_SCANNERS_IMAGE", "alphabravodevops/wolf-scanners:"+tag)
+
+	refs := map[string]string{"default": defaultImage}
+
+	// Derive bucket refs from the default image's repo base so a custom
+	// WOLF_SCANNERS_IMAGE flows through to the buckets, while an explicit
+	// per-bucket override still wins.
+	base, _ := splitImageTag(defaultImage)
+	for _, variant := range []string{"jvm", "rust", "codeql"} {
+		if override := strings.TrimSpace(os.Getenv(bucketVariantEnv[variant])); override != "" {
+			refs[variant] = override
+			continue
+		}
+		if base == "" {
+			continue
+		}
+		refs[variant] = base + bucketVariantSuffix[variant] + ":" + tag
+	}
+	return refs
 }
 
 // envBucketOverrides reads WOLF_SCANNERS_IMAGE_{JVM,RUST,CODEQL} and produces

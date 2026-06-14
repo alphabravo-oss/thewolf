@@ -262,6 +262,87 @@ func TestLatestTaggedScannerImages(t *testing.T) {
 	}
 }
 
+func TestActiveImageRefsDefaults(t *testing.T) {
+	// No overrides: the default tag (2.0.0) drives every ref, with bucket
+	// variants derived from the default repo base + suffix.
+	for _, k := range []string{
+		"WOLF_SCANNERS_TAG", "WOLF_SCANNERS_IMAGE",
+		"WOLF_SCANNERS_IMAGE_JVM", "WOLF_SCANNERS_IMAGE_RUST", "WOLF_SCANNERS_IMAGE_CODEQL",
+	} {
+		t.Setenv(k, "")
+	}
+
+	refs := ActiveImageRefs()
+	want := map[string]string{
+		"default": "alphabravodevops/wolf-scanners:2.0.0",
+		"jvm":     "alphabravodevops/wolf-scanners-jvm:2.0.0",
+		"rust":    "alphabravodevops/wolf-scanners-rust:2.0.0",
+		"codeql":  "alphabravodevops/wolf-scanners-codeql:2.0.0",
+	}
+	for variant, w := range want {
+		if refs[variant] != w {
+			t.Errorf("ActiveImageRefs()[%q] = %q, want %q", variant, refs[variant], w)
+		}
+	}
+}
+
+func TestActiveImageRefsHonorsTag(t *testing.T) {
+	// WOLF_SCANNERS_TAG flows through to the default ref and every derived
+	// bucket ref.
+	t.Setenv("WOLF_SCANNERS_TAG", "latest")
+	t.Setenv("WOLF_SCANNERS_IMAGE", "")
+	for _, k := range []string{"WOLF_SCANNERS_IMAGE_JVM", "WOLF_SCANNERS_IMAGE_RUST", "WOLF_SCANNERS_IMAGE_CODEQL"} {
+		t.Setenv(k, "")
+	}
+
+	refs := ActiveImageRefs()
+	if refs["default"] != "alphabravodevops/wolf-scanners:latest" {
+		t.Errorf("default = %q, want :latest", refs["default"])
+	}
+	if refs["jvm"] != "alphabravodevops/wolf-scanners-jvm:latest" {
+		t.Errorf("jvm = %q, want -jvm:latest", refs["jvm"])
+	}
+	if refs["codeql"] != "alphabravodevops/wolf-scanners-codeql:latest" {
+		t.Errorf("codeql = %q, want -codeql:latest", refs["codeql"])
+	}
+}
+
+func TestActiveImageRefsHonorsImageOverride(t *testing.T) {
+	// WOLF_SCANNERS_IMAGE replaces the default ref outright; bucket variants
+	// are derived from its repo base, honoring WOLF_SCANNERS_TAG for their tag.
+	t.Setenv("WOLF_SCANNERS_TAG", "9.9")
+	t.Setenv("WOLF_SCANNERS_IMAGE", "ghcr.io/acme/wolf-scanners:custom")
+	for _, k := range []string{"WOLF_SCANNERS_IMAGE_JVM", "WOLF_SCANNERS_IMAGE_RUST", "WOLF_SCANNERS_IMAGE_CODEQL"} {
+		t.Setenv(k, "")
+	}
+
+	refs := ActiveImageRefs()
+	if refs["default"] != "ghcr.io/acme/wolf-scanners:custom" {
+		t.Errorf("default = %q, want the WOLF_SCANNERS_IMAGE value", refs["default"])
+	}
+	if refs["rust"] != "ghcr.io/acme/wolf-scanners-rust:9.9" {
+		t.Errorf("rust = %q, want derived from override repo base + tag", refs["rust"])
+	}
+}
+
+func TestActiveImageRefsHonorsBucketOverride(t *testing.T) {
+	// An explicit per-bucket override wins over the derived ref.
+	t.Setenv("WOLF_SCANNERS_TAG", "")
+	t.Setenv("WOLF_SCANNERS_IMAGE", "")
+	t.Setenv("WOLF_SCANNERS_IMAGE_JVM", "myrepo/custom-jvm:edge")
+	t.Setenv("WOLF_SCANNERS_IMAGE_RUST", "")
+	t.Setenv("WOLF_SCANNERS_IMAGE_CODEQL", "")
+
+	refs := ActiveImageRefs()
+	if refs["jvm"] != "myrepo/custom-jvm:edge" {
+		t.Errorf("jvm = %q, want the explicit WOLF_SCANNERS_IMAGE_JVM override", refs["jvm"])
+	}
+	// Non-overridden buckets still derive from the default.
+	if refs["rust"] != "alphabravodevops/wolf-scanners-rust:2.0.0" {
+		t.Errorf("rust = %q, want derived default", refs["rust"])
+	}
+}
+
 func testRepoRoot(t *testing.T) string {
 	t.Helper()
 	dir, err := os.Getwd()
