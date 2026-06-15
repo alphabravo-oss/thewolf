@@ -1079,24 +1079,48 @@ func TestListScansFilterByStatus(t *testing.T) {
 	defer env.Store.Close()
 
 	repoID := env.createRepo(t)
-	env.doRequest(http.MethodPost, "/api/scans", map[string]string{"repo_id": repoID})
 
-	w := env.doRequest(http.MethodGet, "/api/scans?status=pending", nil)
-	var resp struct {
-		Meta struct {
-			Total int `json:"total"`
-		} `json:"meta"`
+	// Seed scans with explicit statuses directly. Going through POST
+	// /api/scans would spawn the async executeScan goroutine, which both
+	// transitions the scan pending→running (racing a status-filter assert)
+	// and can write to the store after the deferred Close() — surfacing as a
+	// flaky "sql: database is closed" that bleeds into sibling tests.
+	mkScan := func(status models.ScanStatus) {
+		if err := env.Store.CreateScan(context.Background(), &models.Scan{
+			ID:              uuid.New().String(),
+			UserID:          env.UserID,
+			RepoID:          repoID,
+			Branch:          "main",
+			Status:          status,
+			ToolsSelected:   "[]",
+			ToolsCompleted:  "[]",
+			ToolsFailed:     "[]",
+			CoverageSummary: "{}",
+		}); err != nil {
+			t.Fatalf("CreateScan(%s): %v", status, err)
+		}
 	}
-	json.Unmarshal(w.Body.Bytes(), &resp)
-	if resp.Meta.Total != 1 {
-		t.Errorf("expected 1 pending scan, got %d", resp.Meta.Total)
-	}
+	mkScan(models.ScanStatusPending)
+	mkScan(models.ScanStatusCompleted)
 
-	w = env.doRequest(http.MethodGet, "/api/scans?status=completed", nil)
-	json.Unmarshal(w.Body.Bytes(), &resp)
-	if resp.Meta.Total != 0 {
-		t.Errorf("expected 0 completed scans, got %d", resp.Meta.Total)
+	assertTotal := func(status string, want int) {
+		t.Helper()
+		w := env.doRequest(http.MethodGet, "/api/scans?status="+status, nil)
+		var resp struct {
+			Meta struct {
+				Total int `json:"total"`
+			} `json:"meta"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("decode status=%s: %v", status, err)
+		}
+		if resp.Meta.Total != want {
+			t.Errorf("status=%s: expected %d scan(s), got %d", status, want, resp.Meta.Total)
+		}
 	}
+	assertTotal("pending", 1)
+	assertTotal("completed", 1)
+	assertTotal("running", 0)
 }
 
 func TestGetScan(t *testing.T) {
