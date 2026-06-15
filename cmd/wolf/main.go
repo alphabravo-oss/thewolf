@@ -92,6 +92,7 @@ func main() {
 		scanCmd,
 		newEnrichCmd(),
 		loopCmd,
+		newFixerCmd(),
 	)
 	// Every API endpoint as a `wolf <resource> <verb>` command (loop's API
 	// subcommands attach to loopCmd above instead of registering separately).
