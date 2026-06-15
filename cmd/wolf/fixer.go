@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/alphabravocompany/thewolf/internal/fix/fixstore"
+	"github.com/alphabravocompany/thewolf/internal/fix/wiring"
 	"github.com/alphabravocompany/thewolf/internal/fix/worker"
 	"github.com/alphabravocompany/thewolf/internal/wolflog"
 )
@@ -57,6 +58,14 @@ func newFixerCmd() *cobra.Command {
 				return fmt.Errorf("create artifacts root: %w", err)
 			}
 
+			// The verification gate re-runs scanners against the changed file, so
+			// the container backend must be ready. Best-effort: if it can't be
+			// installed (e.g. no docker), the worker still starts but fixes will
+			// fail verification and be rolled back — safe, just unproductive.
+			if err := installScannerBackend(ctx); err != nil {
+				wolflog.L().Warn().Err(err).Msg("scanner backend unavailable; fix verification will fail until it is")
+			}
+
 			w, err := worker.New(worker.Config{
 				Store:        store,
 				Fixstore:     fixstore.New(root),
@@ -65,6 +74,10 @@ func newFixerCmd() *cobra.Command {
 				PollInterval: pollEvery,
 				Heartbeat:    heartbeat,
 				StaleAfter:   staleAfter,
+				// The production collaborators that make a real job run: writability
+				// preflight, workspace preparer, engine chain, verification gate,
+				// git-apply. Without these orchestrator.Run fails fast.
+				Deps: wiring.Deps(store),
 			})
 			if err != nil {
 				return err
