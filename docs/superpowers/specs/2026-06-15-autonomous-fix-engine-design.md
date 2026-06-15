@@ -145,7 +145,7 @@ v1: STOP here (branch-only, no push/PR). Emit the branch + diff for review.
 5. **Orchestration** — per-finding attempt→verify→keep/rollback→escalate; assemble branch; persist diff artifact + summary (branch-only).
 6. **API + dispatch + SSE** — `/fixes` (and a gated `/loops`) enqueue jobs; worker claims; server relays streamed logs; status endpoints.
 7. **UI** — Fixes page: fixable indicator, dry-run Fix action, job/attempt status, proposed-diff viewer, live build console (reuse the SSE console from the scanner-image work).
-8. **Engine containers + auth flow + docs** — `wolf-fixer-{claude,codex,api}` Dockerfiles built/pushed via the existing scanner-image subsystem; document the `claude login` → "ready" flow and the k8s shape (Deployment + PVC for the session, or Job-per-task).
+8. **Engine containers + auth flow + docs** — `wolf-fixer-{claude,codex,api}` Dockerfiles ([`fixer/`](../../../fixer/)) built/pushed via the existing scanner-image subsystem (`internal/scannerbuild` `FixerVariants`); document the `claude login` → "ready" flow and the k8s shape (Deployment + PVC for the session, or Job-per-task). The operator-facing writeup ships in the README's **Autonomous remediation** section.
 
 ## 13. Risks & mitigations
 

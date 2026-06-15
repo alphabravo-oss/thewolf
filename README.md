@@ -241,6 +241,73 @@ The Wolf also maps source to tests across **13 languages** for coverage-aware sc
 
 ---
 
+## Autonomous remediation
+
+The Wolf can go past *finding* a problem to *proposing the fix* — autonomously, but on a short leash. The autonomous fix engine takes a single finding, has an AI coding agent write a patch, **proves the patch is good**, and hands you a review-ready branch and diff. It never trusts the agent's word for it. Architecture and rationale: [`docs/superpowers/specs/2026-06-15-autonomous-fix-engine-design.md`](docs/superpowers/specs/2026-06-15-autonomous-fix-engine-design.md).
+
+**Off by default.** The entire surface is gated behind one master setting, `autofix_enabled` (default **`false`**). With it off, the execute path returns `403 autofix_disabled`, the worker processes nothing, and the UI surface is dark. Flip it on in **Settings → General** or with `wolf settings set autofix_enabled true`.
+
+**v1 is dry-run, per-finding, verified, branch-only.** No push. No PR. Your working tree is never touched — the worker operates in an isolated worktree/clone on a fresh fix branch and leaves the result as an artifact for a human to review and merge.
+
+### The verify gate (why you can trust it)
+
+The load-bearing principle is **never use an engine's self-report to decide success** — every fix is judged by the diff on disk and a verification gate, not by what the agent claims it did. A proposed fix is **rolled back** unless it clears every step:
+
+1. **Files actually changed** — an empty or no-op diff fails.
+2. **It still builds** — a language-aware build (`go build ./...`, `tsc --noEmit`, …), parse-only at minimum.
+3. **The finding is gone** — a **targeted rescan** re-runs *only* that finding's scanner/rule against the changed file and confirms it no longer fires.
+4. **No regressions** — the rescan introduces no new findings.
+5. **Optional tests** — a configured test command, if you supply one.
+
+Anything that fails is rolled back and the orchestrator escalates (more context, then the next engine) up to a bounded `max_attempts`, all under per-finding, wall-clock, and cost budgets. A finding that can't be fixed cleanly is recorded as `unfixable` — not silently "done".
+
+### The worker
+
+The server **runs no agents**. It enqueues durable jobs onto a `fix_jobs` queue; a separable **`wolf fixer`** worker atomically claims them, runs the orchestration inside an engine container, streams logs + status back over SSE, and updates the job. Run one or many — the atomic claim guarantees two workers never double-claim a job, and a heartbeat + stale-reclaim recovers jobs from a crashed worker.
+
+```bash
+wolf fixer            # long-running worker: claim → fix → repeat
+wolf fixer --once     # claim exactly one job, then exit (k8s Job-per-task)
+```
+
+### The engine containers
+
+The worker runs inside one of three independently versioned **engine containers**, built and pushed through the same scanner-image build subsystem as the scanner images (see [`internal/scannerbuild`](internal/scannerbuild) `FixerVariants` and [`fixer/`](fixer/)). All share a base with `git`, `gh`/`glab`, and the language build tools the verify gate needs (`go`, `node`/`tsc`):
+
+| Image | Engine | Auth |
+|---|---|---|
+| `wolf-fixer-claude` | Anthropic **Claude Code** CLI | one-time interactive `claude login` (session persisted) |
+| `wolf-fixer-codex`  | OpenAI **Codex** CLI | one-time interactive `codex login` (session persisted) |
+| `wolf-fixer-api`    | **API** engine via `internal/ai` — CLI-free | none; uses a provider key from the secret store |
+
+The engine chain prefers an available, **authenticated** CLI and falls back to the API engine otherwise. The API engine returns a unified diff that wolf applies with `git apply` — it never edits files in place.
+
+### Auth-then-ready flow
+
+The CLI variants need a **one-time interactive login**; the API variant is the zero-auth fallback for environments where you can't provision a CLI session.
+
+```bash
+# 1. Start the worker container with a volume for the agent session.
+docker run -d --name wolf-fixer \
+  -v wolf-fixer-session:/home/wolf/.config \
+  -e WOLF_API_URL=https://wolf.internal \
+  alphabravodevops/wolf-fixer-claude:latest
+
+# 2. Authenticate once — interactively — into that volume.
+docker exec -it wolf-fixer claude login    # opens an auth URL; paste the token
+
+# 3. The session now lives on the volume; restarts come up "ready" with no re-auth.
+```
+
+### Kubernetes shape
+
+Two supported shapes — persist the agent session on a **PVC** mounted at `/home/wolf/.config`:
+
+- **Deployment + PVC** — a long-running worker (or a few) that loop on the queue. Authenticate once with `kubectl exec -it deploy/wolf-fixer -- claude login`; the PVC keeps the session across rollouts.
+- **Job-per-task** — `wolf fixer --once` as a Kubernetes `Job` that claims one job and exits, scaled by the queue depth. Pair the CLI variants with the same session PVC, or use `wolf-fixer-api` (no session needed) for fully ephemeral runs.
+
+---
+
 ## Enterprise & deployment
 
 The Wolf is designed to live inside your perimeter and your governance model.
@@ -271,13 +338,14 @@ internal/
   ai/            Pluggable AI providers (Anthropic, OpenAI)
   auth/          Sessions, scoped API tokens, RBAC
   db/            SQLite + PostgreSQL persistence
-  fix/  loop/    AI fix engine + autonomous remediation loops
+  fix/  loop/    AI fix engine, autonomous remediation loops + fix worker/orchestrator
   finding/       Identity, diff, baselines, quality gates, suppressions, SARIF
   scan/          Detection, orchestration, scoring, reporting
-  scannerbuild/  Server-side scanner image build & publish
+  scannerbuild/  Server-side scanner & fixer image build & publish
   setup/scanners/ Container backend
 plugins/         49 tool plugins, by language/category
 scanners/        Wolf-built scanner images + manifests
+fixer/           Autonomous-fix engine container images (claude / codex / api)
 ui/              Vite + React 19 + Tailwind 4 console
 ```
 
