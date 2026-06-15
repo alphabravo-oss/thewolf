@@ -13,10 +13,12 @@ import (
 // version pins — embedded so the server can build without a checkout.
 //
 // The files under context/ mirror scanners/ (Dockerfiles, install/,
-// versions.env, toolchains.yaml, tools.yaml). To refresh them after
-// editing scanners/, run `go generate ./internal/scannerbuild/...`.
+// versions.env, toolchains.yaml, tools.yaml) at the root, plus the
+// autonomous-fix engine Dockerfiles under context/fixer/ (mirroring the
+// repo's fixer/ directory). To refresh them after editing scanners/ or
+// fixer/, run `go generate ./internal/scannerbuild/...`.
 //
-//go:generate sh -c "rm -rf context && mkdir -p context && cp -R ../../scanners/Dockerfile* ../../scanners/install ../../scanners/versions.env ../../scanners/toolchains.yaml ../../scanners/tools.yaml context/"
+//go:generate sh -c "rm -rf context && mkdir -p context/fixer && cp -R ../../scanners/Dockerfile* ../../scanners/install ../../scanners/versions.env ../../scanners/toolchains.yaml ../../scanners/tools.yaml context/ && cp -R ../../fixer/Dockerfile* context/fixer/"
 //go:embed all:context
 var contextFS embed.FS
 

@@ -7,23 +7,54 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
-// Variant describes one of the four wolf-built scanner images: which
-// Dockerfile builds it and what suffix its DockerHub image repo carries.
-type Variant struct{ Name, Dockerfile, ImageSuffix string }
-
-// Variants is the build table. "default" has no image suffix; the bucket
-// images append "-jvm"/"-rust"/"-codeql" to the repo name.
-var Variants = []Variant{
-	{"default", "Dockerfile", ""},
-	{"jvm", "Dockerfile.jvm", "-jvm"},
-	{"rust", "Dockerfile.rust", "-rust"},
-	{"codeql", "Dockerfile.codeql", "-codeql"},
+// Variant describes one wolf-built image: which Dockerfile builds it
+// (relative to its ContextSubdir inside the embedded build context), what
+// DockerHub repo base it uses, and what suffix that repo carries. The two
+// build tables — Variants (scanners) and FixerVariants (the autonomous-fix
+// engine containers) — share this shape and the same Build path.
+type Variant struct {
+	// Name is the variant selector used by callers and routes.
+	Name string
+	// Dockerfile is the Dockerfile filename relative to the build context
+	// root for this variant (see ContextSubdir).
+	Dockerfile string
+	// ImageBase is the DockerHub repo base (e.g. "wolf-scanners" or
+	// "wolf-fixer"). Bucket/engine suffixes are appended to it.
+	ImageBase string
+	// ImageSuffix is appended to ImageBase to form the repo (e.g. "-jvm",
+	// "-claude"); empty for the primary image of a set.
+	ImageSuffix string
+	// ContextSubdir is the subdirectory of the materialized build context
+	// the Dockerfile is resolved against. "" means the context root
+	// (scanners); "fixer" means the fixer/ subtree.
+	ContextSubdir string
 }
 
-// VariantByName returns the Variant with the given name, or false.
+// Variants is the scanner build table. "default" has no image suffix; the
+// bucket images append "-jvm"/"-rust"/"-codeql" to the repo name.
+var Variants = []Variant{
+	{Name: "default", Dockerfile: "Dockerfile", ImageBase: imageBase, ImageSuffix: ""},
+	{Name: "jvm", Dockerfile: "Dockerfile.jvm", ImageBase: imageBase, ImageSuffix: "-jvm"},
+	{Name: "rust", Dockerfile: "Dockerfile.rust", ImageBase: imageBase, ImageSuffix: "-rust"},
+	{Name: "codeql", Dockerfile: "Dockerfile.codeql", ImageBase: imageBase, ImageSuffix: "-codeql"},
+}
+
+// FixerVariants is the parallel build table for the autonomous-fix engine
+// containers. They live under fixer/ and share the wolf-fixer repo base.
+// "base" is the shared image the engine variants FROM; "claude"/"codex"
+// add the respective agent CLI; "api" is CLI-free (the zero-auth fallback).
+var FixerVariants = []Variant{
+	{Name: "base", Dockerfile: "Dockerfile.base", ImageBase: fixerImageBase, ImageSuffix: "", ContextSubdir: fixerContextSubdir},
+	{Name: "claude", Dockerfile: "Dockerfile.claude", ImageBase: fixerImageBase, ImageSuffix: "-claude", ContextSubdir: fixerContextSubdir},
+	{Name: "codex", Dockerfile: "Dockerfile.codex", ImageBase: fixerImageBase, ImageSuffix: "-codex", ContextSubdir: fixerContextSubdir},
+	{Name: "api", Dockerfile: "Dockerfile.api", ImageBase: fixerImageBase, ImageSuffix: "-api", ContextSubdir: fixerContextSubdir},
+}
+
+// VariantByName returns the scanner Variant with the given name, or false.
 func VariantByName(name string) (Variant, bool) {
 	for _, v := range Variants {
 		if v.Name == name {
@@ -33,9 +64,28 @@ func VariantByName(name string) (Variant, bool) {
 	return Variant{}, false
 }
 
-// imageBase is the DockerHub repo for the default image; bucket suffixes are
-// appended to this. Kept here so the build path and the runtime resolver agree.
+// FixerVariantByName returns the fixer Variant with the given name, or false.
+func FixerVariantByName(name string) (Variant, bool) {
+	for _, v := range FixerVariants {
+		if v.Name == name {
+			return v, true
+		}
+	}
+	return Variant{}, false
+}
+
+// imageBase is the DockerHub repo for the default scanner image; bucket
+// suffixes are appended to this. Kept here so the build path and the runtime
+// resolver agree.
 const imageBase = "wolf-scanners"
+
+// fixerImageBase is the DockerHub repo base for the autonomous-fix engine
+// containers; engine suffixes ("-claude"/"-codex"/"-api") are appended.
+const fixerImageBase = "wolf-fixer"
+
+// fixerContextSubdir is the materialized build-context subtree the fixer
+// Dockerfiles are resolved against (mirrors the repo's fixer/ directory).
+const fixerContextSubdir = "fixer"
 
 // defaultNamespace is the DockerHub namespace used when a build request
 // leaves Namespace empty.
@@ -84,9 +134,11 @@ func activeRuntimeTag() string {
 	return "2.0.0"
 }
 
-// imageRepo returns "<namespace>/<base><suffix>" for a variant.
+// imageRepo returns "<namespace>/<base><suffix>" for a variant. The base is
+// carried on the variant (wolf-scanners for scanners, wolf-fixer for fixer
+// engine containers).
 func imageRepo(namespace string, v Variant) string {
-	return namespace + "/" + imageBase + v.ImageSuffix
+	return namespace + "/" + v.ImageBase + v.ImageSuffix
 }
 
 // tagList returns the deduped tag list for a build: the version, "latest",
@@ -151,6 +203,9 @@ func Build(ctx context.Context, req BuildRequest, onLine func(string)) (BuildRes
 	}
 	v, ok := VariantByName(req.Variant)
 	if !ok {
+		v, ok = FixerVariantByName(req.Variant)
+	}
+	if !ok {
 		return BuildResult{}, fmt.Errorf("unknown variant %q", req.Variant)
 	}
 	namespace := strings.TrimSpace(req.Namespace)
@@ -176,8 +231,15 @@ func Build(ctx context.Context, req BuildRequest, onLine func(string)) (BuildRes
 
 	repo := imageRepo(namespace, v)
 	tags := tagList(req.Version, activeRuntimeTagFn())
+	// Scanner variants resolve their Dockerfile + context at the root of the
+	// materialized dir; fixer variants resolve against the fixer/ subtree.
+	contextDir := dir
 	dockerfile := v.Dockerfile
-	argv := buildArgs(req, dir, dockerfile, tags, repo)
+	if v.ContextSubdir != "" {
+		contextDir = filepath.Join(dir, v.ContextSubdir)
+		dockerfile = filepath.Join(contextDir, v.Dockerfile)
+	}
+	argv := buildArgs(req, contextDir, dockerfile, tags, repo)
 
 	onLine(echoCommand(argv))
 	if err := runStreamingFn(ctx, "docker", argv, onLine); err != nil {

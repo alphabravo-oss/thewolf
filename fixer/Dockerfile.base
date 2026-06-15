@@ -1,0 +1,126 @@
+# ============================================================
+# checkov:skip=CKV_DOCKER_2 — fixer images are worker containers driven by
+#   `wolf fixer`, not network services with their own healthcheck.
+# checkov:skip=CKV_DOCKER_3 — a non-root `wolf` user is created and selected
+#   below; the agent CLI variants add their own per-user session dir.
+#
+# wolf-fixer — SHARED BASE for the autonomous remediation worker
+# ============================================================
+# This base carries everything the `wolf fixer` worker needs to run a fix
+# job regardless of which engine drives it:
+#
+#   - git + gh (GitHub) + glab (GitLab)   : branch/clone/inspect a repo
+#   - go toolchain                         : `go build ./...` verify gate
+#   - node + npm + typescript (tsc)        : `tsc --noEmit` verify gate
+#   - python3                              : misc tooling / venvs
+#   - the `wolf` binary itself             : the worker entrypoint
+#
+# The three concrete images extend this base:
+#   - Dockerfile.claude : + the Claude Code CLI   (interactive `claude login`)
+#   - Dockerfile.codex  : + the Codex CLI         (interactive `codex login`)
+#   - Dockerfile.api    : CLI-free; uses an API key from the secret store
+#
+# The CLI variants persist their auth session under /home/wolf/.config
+# (mount a volume / k8s PVC there) so a one-time `docker exec -it … claude
+# login` keeps every restart "ready". See the README "Autonomous
+# remediation" section for the auth-then-ready flow and the k8s shape.
+#
+# Build (via the scanner-image build subsystem):
+#   wolf-built; see internal/scannerbuild FixerVariants. Manual:
+#   docker build -t wolf-fixer:dev -f fixer/Dockerfile.base fixer/
+# ============================================================
+
+FROM debian:trixie-slim@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a0c3ccd26f436a0e AS base
+
+ARG WOLF_VERSION=dev
+LABEL org.opencontainers.image.title="wolf-fixer" \
+      org.opencontainers.image.description="Autonomous remediation worker base for The Wolf" \
+      org.opencontainers.image.source="https://github.com/alphabravocompany/thewolf" \
+      org.opencontainers.image.vendor="AlphaBravo" \
+      org.opencontainers.image.version="${WOLF_VERSION}"
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    WOLF_FIXER_VARIANT=base \
+    GOTOOLCHAIN=local \
+    PATH=/usr/local/go/bin:/home/wolf/go/bin:/usr/local/bin:/usr/bin:/bin
+
+# Base packages + Node (from NodeSource, same rationale as the scanner image:
+# Debian trixie dropped the standalone npm package).
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates curl wget gnupg \
+    && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get update && apt-get install -y --no-install-recommends \
+        unzip tar gzip xz-utils \
+        git jq openssh-client \
+        python3 python3-venv \
+        nodejs \
+        build-essential pkg-config \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Go toolchain — needed for the `go build ./...` verification gate.
+ARG GO_VERSION=1.26.0
+RUN set -eux; \
+    arch="$(dpkg --print-architecture)"; \
+    case "$arch" in \
+      amd64) goarch=amd64 ;; \
+      arm64) goarch=arm64 ;; \
+      *) echo "unsupported arch $arch" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-${goarch}.tar.gz" -o /tmp/go.tgz; \
+    tar -C /usr/local -xzf /tmp/go.tgz; \
+    rm /tmp/go.tgz; \
+    /usr/local/go/bin/go version
+
+# TypeScript (tsc) for the `tsc --noEmit` verification gate, installed
+# globally so it resolves for any uid.
+RUN npm install -g typescript@5 && tsc --version
+
+# GitHub CLI (gh).
+RUN set -eux; \
+    mkdir -p -m 0755 /etc/apt/keyrings; \
+    curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+      -o /etc/apt/keyrings/githubcli-archive-keyring.gpg; \
+    chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg; \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+      > /etc/apt/sources.list.d/github-cli.list; \
+    apt-get update && apt-get install -y --no-install-recommends gh; \
+    apt-get clean && rm -rf /var/lib/apt/lists/*; \
+    gh --version
+
+# GitLab CLI (glab) — released as a static binary.
+ARG GLAB_VERSION=1.45.0
+RUN set -eux; \
+    arch="$(dpkg --print-architecture)"; \
+    case "$arch" in \
+      amd64) glabarch=amd64 ;; \
+      arm64) glabarch=arm64 ;; \
+      *) echo "unsupported arch $arch" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL "https://gitlab.com/gitlab-org/cli/-/releases/v${GLAB_VERSION}/downloads/glab_${GLAB_VERSION}_linux_${glabarch}.tar.gz" \
+      -o /tmp/glab.tgz; \
+    tar -C /tmp -xzf /tmp/glab.tgz bin/glab; \
+    install -m 0755 /tmp/bin/glab /usr/local/bin/glab; \
+    rm -rf /tmp/glab.tgz /tmp/bin; \
+    glab --version
+
+# The wolf binary — the worker entrypoint. Build context provides it as
+# ./wolf (the scannerbuild materializer / CI stages it next to the
+# Dockerfile). A missing binary fails the build loudly rather than
+# producing a silently broken image.
+COPY wolf /usr/local/bin/wolf
+RUN chmod +x /usr/local/bin/wolf && /usr/local/bin/wolf --version || true
+
+# Non-root worker user. The agent CLI variants persist their auth session
+# under /home/wolf/.config — mount a volume / PVC there to keep it.
+RUN groupadd -g 1000 wolf \
+    && useradd -u 1000 -g 1000 -m -d /home/wolf -s /bin/bash wolf \
+    && mkdir -p /home/wolf/.config /workspace \
+    && chown -R wolf:wolf /home/wolf /workspace
+
+USER wolf
+WORKDIR /workspace
+ENV HOME=/home/wolf
+
+# Default: run the worker loop. k8s Job-per-task overrides with `--once`.
+ENTRYPOINT ["/usr/local/bin/wolf", "fixer"]

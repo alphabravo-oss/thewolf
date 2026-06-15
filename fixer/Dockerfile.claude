@@ -1,0 +1,37 @@
+# ============================================================
+# checkov:skip=CKV_DOCKER_2 — worker container, not a service.
+#
+# wolf-fixer-claude — CLAUDE CODE engine variant
+# ============================================================
+# Extends the wolf-fixer base with Anthropic's Claude Code CLI. The CLI
+# requires a one-time interactive login:
+#
+#   docker exec -it <container> claude login    # opens an auth URL
+#
+# The resulting session is written under /home/wolf/.config (Claude Code
+# stores its credentials there). Mount a volume / k8s PVC at
+# /home/wolf/.config so the session survives restarts — the worker then
+# comes up "ready" without re-auth. The engine chain (internal/fix/engine)
+# probes `claude` on PATH + a fast auth check before selecting it, and
+# falls back to the API engine when no session is present.
+#
+# Build via internal/scannerbuild FixerVariants ("claude").
+# ============================================================
+
+FROM alphabravodevops/wolf-fixer:latest AS base
+
+ENV WOLF_FIXER_VARIANT=claude \
+    WOLF_FIXER_ENGINE=claude
+
+USER root
+
+# Claude Code CLI (npm-distributed). Pinned major; refresh via versions.
+RUN npm install -g @anthropic-ai/claude-code \
+    && command -v claude \
+    && claude --version || true
+
+USER wolf
+WORKDIR /workspace
+ENV HOME=/home/wolf
+
+ENTRYPOINT ["/usr/local/bin/wolf", "fixer"]

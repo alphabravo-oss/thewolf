@@ -1,0 +1,31 @@
+# ============================================================
+# checkov:skip=CKV_DOCKER_2 — worker container, not a service.
+#
+# wolf-fixer-api — API (CLI-free) engine variant
+# ============================================================
+# The zero-auth fallback. No agent CLI is installed; the worker drives the
+# APIEngine (internal/fix/engine) which calls the configured provider
+# (Anthropic / OpenAI) through internal/ai using a key from the secret
+# store. Because there is nothing to `login` to, this image needs no
+# interactive auth and no persisted session volume — it is "ready" the
+# moment it starts and a provider key exists.
+#
+# Use this variant where you cannot provision an interactive CLI session
+# (locked-down clusters, ephemeral Job-per-task runs, CI).
+#
+# Build via internal/scannerbuild FixerVariants ("api").
+# ============================================================
+
+FROM alphabravodevops/wolf-fixer:latest AS base
+
+ENV WOLF_FIXER_VARIANT=api \
+    WOLF_FIXER_ENGINE=api
+
+# Nothing to install: the base already carries git, gh/glab, go, node/tsc
+# and the wolf binary. The API engine returns a unified diff that wolf
+# applies with `git apply` — no in-place agent edits.
+
+WORKDIR /workspace
+ENV HOME=/home/wolf
+
+ENTRYPOINT ["/usr/local/bin/wolf", "fixer"]

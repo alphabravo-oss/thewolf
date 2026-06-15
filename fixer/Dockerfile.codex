@@ -1,0 +1,36 @@
+# ============================================================
+# checkov:skip=CKV_DOCKER_2 — worker container, not a service.
+#
+# wolf-fixer-codex — CODEX engine variant
+# ============================================================
+# Extends the wolf-fixer base with OpenAI's Codex CLI. Like the claude
+# variant it requires a one-time interactive login:
+#
+#   docker exec -it <container> codex login     # opens an auth URL
+#
+# The session is written under /home/wolf/.config (and ~/.codex). Mount a
+# volume / k8s PVC at /home/wolf so the session survives restarts and the
+# worker comes up "ready". The engine chain probes `codex` on PATH + a
+# fast auth check before selecting it, falling back to the API engine when
+# no session is present.
+#
+# Build via internal/scannerbuild FixerVariants ("codex").
+# ============================================================
+
+FROM alphabravodevops/wolf-fixer:latest AS base
+
+ENV WOLF_FIXER_VARIANT=codex \
+    WOLF_FIXER_ENGINE=codex
+
+USER root
+
+# Codex CLI (npm-distributed). Pinned major; refresh via versions.
+RUN npm install -g @openai/codex \
+    && command -v codex \
+    && codex --version || true
+
+USER wolf
+WORKDIR /workspace
+ENV HOME=/home/wolf
+
+ENTRYPOINT ["/usr/local/bin/wolf", "fixer"]
