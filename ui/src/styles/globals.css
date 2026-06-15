@@ -515,3 +515,90 @@
   font-size: 0.625rem;
   line-height: 0.9rem;
 }
+
+/* ============================================================================
+   Light theme. next-themes sets <html class="light">; these overrides win by
+   being unlayered (plain CSS beats @layer). The dark palette lives in @theme
+   as the :root default, so absence of any class = dark (no-flash default).
+
+   A clean cool light theme tuned to match Nocturne's quality — cool off-white
+   surfaces, dark slate text, the same ice-blue accent darkened for contrast,
+   and severity colours re-tuned to read on white.
+   ============================================================================ */
+.light {
+  color-scheme: light;
+
+  --color-background: hsl(220 22% 98%);
+  --color-foreground: hsl(225 25% 14%);
+
+  --color-card: hsl(0 0% 100%);
+  --color-card-foreground: hsl(225 25% 14%);
+
+  --color-popover: hsl(0 0% 100%);
+  --color-popover-foreground: hsl(225 25% 14%);
+
+  --color-elevated: hsl(220 18% 95%);
+
+  --color-primary: hsl(225 28% 16%);
+  --color-primary-foreground: hsl(0 0% 100%);
+
+  --color-secondary: hsl(220 16% 93%);
+  --color-secondary-foreground: hsl(225 25% 18%);
+
+  --color-muted: hsl(220 16% 94%);
+  --color-muted-foreground: hsl(220 10% 40%);
+  --color-faint: hsl(220 10% 52%);
+
+  --color-accent: hsl(220 16% 93%);
+  --color-accent-foreground: hsl(225 25% 18%);
+
+  --color-destructive: hsl(0 72% 48%);
+  --color-destructive-foreground: hsl(0 0% 100%);
+
+  --color-border: hsl(220 16% 89%);
+  --color-border-strong: hsl(220 14% 76%);
+  --color-input: hsl(220 16% 89%);
+  --color-ring: hsl(199 89% 45%);
+
+  --color-brand: hsl(199 85% 42%);
+  --color-brand-muted: hsl(199 60% 40%);
+  --color-brand-foreground: hsl(0 0% 100%);
+
+  --color-sidebar: hsl(220 24% 96%);
+  --color-sidebar-foreground: hsl(225 16% 30%);
+  --color-sidebar-border: hsl(220 16% 88%);
+  --color-sidebar-accent: hsl(220 16% 91%);
+  --color-sidebar-accent-foreground: hsl(225 25% 16%);
+}
+
+/* Component classes that hardcode dark hsl() need light-mode overrides. */
+.light body {
+  background-image:
+    radial-gradient(120% 80% at 50% -20%, hsl(210 45% 93% / 0.7), transparent 60%),
+    radial-gradient(80% 50% at 100% 0%, hsl(199 70% 90% / 0.4), transparent 55%);
+}
+.light .stat-card {
+  background: linear-gradient(180deg, hsl(0 0% 100%), hsl(220 22% 98%));
+}
+.light .glass-card {
+  background: linear-gradient(180deg, hsl(0 0% 100% / 0.92), hsl(220 24% 99% / 0.92));
+}
+.light .nav-item { color: hsl(225 14% 34%); }
+.light .nav-item svg { color: hsl(220 12% 48%); }
+.light .nav-item:hover { color: hsl(225 28% 16%); }
+.light .nav-item:hover svg { color: hsl(225 25% 22%); }
+.light .nav-item.active { color: hsl(225 28% 14%); }
+.light .nav-item.active {
+  background: linear-gradient(90deg, hsl(199 85% 50% / 0.14), hsl(199 85% 50% / 0.02));
+}
+.light .data-table tbody td { border-bottom-color: hsl(220 16% 92%); }
+.light .data-table tbody tr:hover { background: hsl(220 20% 96% / 0.8); }
+.light *::-webkit-scrollbar-thumb { background: hsl(220 14% 82%); }
+.light *::-webkit-scrollbar-thumb:hover { background: hsl(220 12% 72%); }
+
+/* Severity badges re-tuned for white backgrounds (darker text). */
+.light .badge-critical { color: hsl(0 74% 44%);  background: hsl(0 72% 56% / 0.10);  border-color: hsl(0 72% 56% / 0.28); }
+.light .badge-high     { color: hsl(22 88% 40%);  background: hsl(28 90% 55% / 0.12); border-color: hsl(28 90% 55% / 0.30); }
+.light .badge-medium   { color: hsl(35 90% 35%);  background: hsl(40 92% 52% / 0.14); border-color: hsl(40 92% 52% / 0.32); }
+.light .badge-low      { color: hsl(205 82% 40%); background: hsl(205 85% 56% / 0.12); border-color: hsl(205 85% 56% / 0.30); }
+.light .badge-info     { color: hsl(220 14% 38%); background: hsl(220 12% 50% / 0.12); border-color: hsl(220 12% 50% / 0.28); }

@@ -5,7 +5,8 @@ import {
   RouterProvider,
   createRouter,
 } from "@tanstack/react-router";
-import { Toaster } from "sonner";
+import { Toaster } from "@/components/ui/sonner";
+import { ThemeProvider } from "next-themes";
 
 import { routeTree } from "./routeTree.gen";
 
@@ -52,15 +53,20 @@ declare module "@tanstack/react-router" {
 const rootEl = document.getElementById("root")!;
 createRoot(rootEl).render(
   <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
-      <Toaster
-        position="bottom-right"
-        theme="dark"
-        toastOptions={{
-          className: "glass-card",
-        }}
-      />
-    </QueryClientProvider>
+    {/* next-themes manages the `dark`/`light` class on <html> + localStorage.
+        defaultTheme dark keeps the Nocturne dark look as the default; the
+        sidebar toggle flips it. enableSystem lets it follow the OS the very
+        first time if the user hasn't chosen yet. */}
+    <ThemeProvider
+      attribute="class"
+      defaultTheme="dark"
+      enableSystem
+      disableTransitionOnChange
+    >
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+        <Toaster position="bottom-right" toastOptions={{ className: "glass-card" }} />
+      </QueryClientProvider>
+    </ThemeProvider>
   </StrictMode>,
 );

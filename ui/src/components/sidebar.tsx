@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { WolfLogo } from "./wolf-logo";
+import { ThemeToggle } from "./theme-toggle";
 import { api, clearToken } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -139,6 +140,7 @@ export function Sidebar() {
           {secondary.map((item) => (
             <NavLink key={item.to} item={item} active={isActive(item.to)} />
           ))}
+          <ThemeToggle />
           <button
             type="button"
             onClick={handleLogout}
