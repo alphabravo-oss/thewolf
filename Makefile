@@ -18,10 +18,14 @@ LDFLAGS     := -s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main
 DOCKER_IMAGE := thewolf
 DOCKER_TAG   ?= $(VERSION)
 
-# Docker — wolf-scanners (the bundled scanner image)
+# Docker — wolf-scanners (the bundled scanner image).
+# SCANNERS_REGISTRY must match the registry the runtime pulls from
+# (internal/setup/scanners: alphabravodevops/wolf-scanners on Docker Hub),
+# so `make scanners-push` feeds the default the app resolves. Override for
+# a mirror (e.g. SCANNERS_REGISTRY=ghcr.io/alphabravocompany).
 SCANNERS_IMAGE := wolf-scanners
 SCANNERS_TAG   ?= $(VERSION)
-SCANNERS_REGISTRY ?= ghcr.io/alphabravocompany
+SCANNERS_REGISTRY ?= alphabravodevops
 SCANNERS_REF   := $(SCANNERS_IMAGE):$(SCANNERS_TAG)
 
 # Tools
