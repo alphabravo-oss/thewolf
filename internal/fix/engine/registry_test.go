@@ -28,8 +28,8 @@ func TestParseToolDefinitions(t *testing.T) {
 
 	// Missing required fields error out.
 	for _, bad := range []string{
-		`[{"command":"x"}]`,                       // no name
-		`[{"name":"x"}]`,                          // no command
+		`[{"command":"x"}]`, // no name
+		`[{"name":"x"}]`,    // no command
 		`[{"name":"x","command":"y","success_rule":"bogus"}]`, // bad rule
 	} {
 		if _, err := ParseToolDefinitions([]byte(bad)); err == nil {

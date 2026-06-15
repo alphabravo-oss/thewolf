@@ -80,6 +80,9 @@ func (e *APIPatchEngine) Fix(ctx context.Context, req FixRequest) (*FixResult, e
 				Diff:         diff,
 				FilesChanged: diffFiles(diff),
 				Output:       transcript.String(),
+				// APIPatchEngine applies the diff itself, so the worktree is
+				// already mutated when it reports success.
+				EditsInPlace: true,
 			}, nil
 		}
 		lastErr = applyErr.Error()

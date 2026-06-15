@@ -143,11 +143,11 @@ func TestBuildPrompt(t *testing.T) {
 
 func TestParseClaudeOutput(t *testing.T) {
 	tests := []struct {
-		name         string
-		input        []byte
-		wantSuccess  bool
-		wantFiles    int
-		wantErr      bool
+		name        string
+		input       []byte
+		wantSuccess bool
+		wantFiles   int
+		wantErr     bool
 	}{
 		{
 			name:        "valid JSON with files_changed",
@@ -225,7 +225,7 @@ type mockEngine struct {
 	fixCalled bool
 }
 
-func (m *mockEngine) Name() string { return m.name }
+func (m *mockEngine) Name() string    { return m.name }
 func (m *mockEngine) Available() bool { return m.available }
 func (m *mockEngine) Fix(ctx context.Context, req FixRequest) (*FixResult, error) {
 	m.fixCalled = true

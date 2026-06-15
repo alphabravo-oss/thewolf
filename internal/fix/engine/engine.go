@@ -20,12 +20,26 @@ type FixRequest struct {
 }
 
 // FixResult holds the outcome of a fix attempt.
+//
+// EditsInPlace records how the change was delivered, which the orchestrator
+// needs to know how to handle the result:
+//
+//   - true  (CLI engines: claude-code, codex, custom, config) — the engine
+//     already edited the files in the worktree; the diff is informational and
+//     the orchestrator should verify what landed on disk.
+//   - false (the API engine) — the engine did NOT touch the filesystem; it
+//     returned a unified diff in Diff that the orchestrator must apply
+//     (git apply) before verifying.
 type FixResult struct {
 	Success      bool
 	FilesChanged []string
 	Diff         string
 	Output       string
 	Error        string
+	// EditsInPlace is true when the engine mutated the worktree directly.
+	// It is false for diff-returning engines (the API engine) whose Diff the
+	// caller must apply itself.
+	EditsInPlace bool
 }
 
 // SubprocessEngine defines the interface for AI-powered fix engines.
@@ -128,8 +142,9 @@ func (c *Codex) Fix(ctx context.Context, req FixRequest) (*FixResult, error) {
 	}
 
 	return &FixResult{
-		Success: true,
-		Output:  string(output),
+		Success:      true,
+		Output:       string(output),
+		EditsInPlace: true,
 	}, nil
 }
 
@@ -212,8 +227,9 @@ func (c *Custom) Fix(ctx context.Context, req FixRequest) (*FixResult, error) {
 	}
 
 	return &FixResult{
-		Success: true,
-		Output:  string(output),
+		Success:      true,
+		Output:       string(output),
+		EditsInPlace: true,
 	}, nil
 }
 
@@ -242,14 +258,16 @@ func parseClaudeOutput(output []byte) (*FixResult, error) {
 	if err := json.Unmarshal(output, &raw); err != nil {
 		// If not valid JSON, treat as plain text success
 		return &FixResult{
-			Success: true,
-			Output:  string(output),
+			Success:      true,
+			Output:       string(output),
+			EditsInPlace: true,
 		}, nil
 	}
 
 	result := &FixResult{
-		Success: true,
-		Output:  string(output),
+		Success:      true,
+		Output:       string(output),
+		EditsInPlace: true,
 	}
 
 	// Try to extract files_changed from the output

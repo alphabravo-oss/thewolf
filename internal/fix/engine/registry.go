@@ -110,7 +110,7 @@ func (e *ConfigEngine) Fix(ctx context.Context, req FixRequest) (*FixResult, err
 	}
 
 	output, runErr := cmd.CombinedOutput()
-	res := &FixResult{Output: string(output)}
+	res := &FixResult{Output: string(output), EditsInPlace: true}
 	if runErr != nil {
 		res.Error = runErr.Error()
 	}

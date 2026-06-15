@@ -130,7 +130,10 @@ func TestAPIPatchEngine_FailsAfterBudgetExhausted(t *testing.T) {
 
 func TestExtractDiff(t *testing.T) {
 	plain := "diff --git a/x b/x\n--- a/x\n+++ b/x\n"
-	cases := []struct{ name, in string; wantDiff bool }{
+	cases := []struct {
+		name, in string
+		wantDiff bool
+	}{
 		{"fenced", "Here is the fix:\n```diff\n" + plain + "```\nDone.", true},
 		{"bare", plain, true},
 		{"prose only", "I cannot produce a diff.", false},
