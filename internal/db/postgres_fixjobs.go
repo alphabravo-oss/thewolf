@@ -56,6 +56,25 @@ func (s *PostgresStore) ListFixJobs(ctx context.Context, repoID string) ([]model
 	return jobs, err
 }
 
+// ListFixJobsByUser returns only jobs owned by userID, optionally narrowed to
+// one repo. The tenant-scoped counterpart to ListFixJobs — the API uses this so
+// one user can never enumerate another's fix jobs (and their diffs/logs).
+func (s *PostgresStore) ListFixJobsByUser(ctx context.Context, userID, repoID string) ([]models.FixJob, error) {
+	var jobs []models.FixJob
+	var err error
+	if repoID == "" {
+		err = s.db.SelectContext(ctx, &jobs,
+			"SELECT * FROM fix_jobs WHERE user_id = $1 ORDER BY created_at DESC", userID)
+	} else {
+		err = s.db.SelectContext(ctx, &jobs,
+			"SELECT * FROM fix_jobs WHERE user_id = $1 AND repo_id = $2 ORDER BY created_at DESC", userID, repoID)
+	}
+	for i := range jobs {
+		jobs[i].FindingIDList = decodeStrings(jobs[i].FindingIDs)
+	}
+	return jobs, err
+}
+
 // ClaimNextFixJob uses FOR UPDATE SKIP LOCKED — the canonical concurrent
 // queue claim. Multiple workers each grab a different job without blocking,
 // and a job is never double-claimed. Returns (nil, nil) when empty.

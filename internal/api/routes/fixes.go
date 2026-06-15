@@ -129,7 +129,7 @@ func ListFixes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jobs, err := h.Store.ListFixJobs(r.Context(), r.URL.Query().Get("repo_id"))
+	jobs, err := h.Store.ListFixJobsByUser(r.Context(), claims.UserID, r.URL.Query().Get("repo_id"))
 	if err != nil {
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to list fix jobs")
 		return
@@ -157,7 +157,9 @@ func GetFix(w http.ResponseWriter, r *http.Request) {
 
 	id := chi.URLParam(r, "id")
 	job, err := h.Store.GetFixJobByID(r.Context(), id)
-	if err != nil || job == nil {
+	if err != nil || job == nil || !ownsFixJob(job, claims) {
+		// Not-owned is reported as 404 (not 403) so a caller can't enumerate
+		// which job IDs exist for other tenants.
 		response.WriteError(w, http.StatusNotFound, "not_found", fmt.Sprintf("fix %s not found", id))
 		return
 	}
@@ -195,7 +197,9 @@ func GetFixDiff(w http.ResponseWriter, r *http.Request) {
 
 	id := chi.URLParam(r, "id")
 	job, err := h.Store.GetFixJobByID(r.Context(), id)
-	if err != nil || job == nil {
+	if err != nil || job == nil || !ownsFixJob(job, claims) {
+		// Not-owned is reported as 404 (not 403) so a caller can't enumerate
+		// which job IDs exist for other tenants.
 		response.WriteError(w, http.StatusNotFound, "not_found", fmt.Sprintf("fix %s not found", id))
 		return
 	}
@@ -237,7 +241,9 @@ func StreamFix(w http.ResponseWriter, r *http.Request) {
 
 	id := chi.URLParam(r, "id")
 	job, err := h.Store.GetFixJobByID(r.Context(), id)
-	if err != nil || job == nil {
+	if err != nil || job == nil || !ownsFixJob(job, claims) {
+		// Not-owned is reported as 404 (not 403) so a caller can't enumerate
+		// which job IDs exist for other tenants.
 		response.WriteError(w, http.StatusNotFound, "not_found", fmt.Sprintf("fix %s not found", id))
 		return
 	}
@@ -341,7 +347,9 @@ func CancelFix(w http.ResponseWriter, r *http.Request) {
 
 	id := chi.URLParam(r, "id")
 	job, err := h.Store.GetFixJobByID(r.Context(), id)
-	if err != nil || job == nil {
+	if err != nil || job == nil || !ownsFixJob(job, claims) {
+		// Not-owned is reported as 404 (not 403) so a caller can't enumerate
+		// which job IDs exist for other tenants.
 		response.WriteError(w, http.StatusNotFound, "not_found", fmt.Sprintf("fix %s not found", id))
 		return
 	}
@@ -374,6 +382,13 @@ func fixStatusJSON(job *models.FixJob) string {
 		"diff_artifact_id": job.DiffArtifactID,
 	})
 	return string(payload)
+}
+
+// ownsFixJob reports whether the job belongs to the caller. Jobs with an empty
+// UserID (legacy/system-created) are treated as accessible, matching the scans
+// ownership model (scan.UserID != "" && scan.UserID != claims.UserID).
+func ownsFixJob(job *models.FixJob, claims *auth.Claims) bool {
+	return job.UserID == "" || job.UserID == claims.UserID
 }
 
 // isTerminal reports whether a fix job has reached a final state.

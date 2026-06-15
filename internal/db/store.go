@@ -200,6 +200,9 @@ type Store interface {
 	EnqueueFixJob(ctx context.Context, job *models.FixJob) error
 	GetFixJobByID(ctx context.Context, id string) (*models.FixJob, error)
 	ListFixJobs(ctx context.Context, repoID string) ([]models.FixJob, error)
+	// ListFixJobsByUser is the tenant-scoped list: only the caller's jobs,
+	// optionally narrowed to one repo. Used by the API to prevent IDOR.
+	ListFixJobsByUser(ctx context.Context, userID, repoID string) ([]models.FixJob, error)
 	// ClaimNextFixJob atomically claims the oldest queued job for a worker.
 	// Returns (nil, nil) when the queue is empty — never double-claims.
 	ClaimNextFixJob(ctx context.Context, workerID string) (*models.FixJob, error)
