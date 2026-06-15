@@ -17,8 +17,10 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/alphabravocompany/thewolf/internal/api/routes"
+	"github.com/alphabravocompany/thewolf/internal/artifacts"
 	"github.com/alphabravocompany/thewolf/internal/auth"
 	"github.com/alphabravocompany/thewolf/internal/db"
+	"github.com/alphabravocompany/thewolf/internal/fix/fixstore"
 	"github.com/alphabravocompany/thewolf/internal/models"
 )
 
@@ -86,6 +88,7 @@ func setupTestEnv(t *testing.T) *testEnv {
 		r.Post("/api/fixes", routes.CreateFix)
 		r.Get("/api/fixes", routes.ListFixes)
 		r.Get("/api/fixes/{id}", routes.GetFix)
+		r.Get("/api/fixes/{id}/diff", routes.GetFixDiff)
 		r.Delete("/api/fixes/{id}", routes.CancelFix)
 		// Loops
 		r.Get("/api/loops", routes.ListLoops)
@@ -1465,47 +1468,17 @@ func TestFindingTrends(t *testing.T) {
 	}
 }
 
-// --- Fix tests ---
+// --- Fix tests (autonomous fix engine) ---
+//
+// The /fixes execute path is gated by the autofix_enabled setting (default
+// off). With it off, POST /fixes returns 403 autofix_disabled. With it on,
+// POST enqueues a durable fix job (no real fixing happens here — the worker
+// claims and runs it out-of-process).
 
-func TestCreateFix(t *testing.T) {
-	env := setupTestEnv(t)
-	defer env.Store.Close()
-
-	repoID := env.createRepo(t)
-	now := time.Now()
-	scan := &models.Scan{
-		ID: uuid.New().String(), UserID: env.UserID, RepoID: repoID,
-		Status: models.ScanStatusCompleted, CreatedAt: now, UpdatedAt: now,
-	}
-	env.Store.CreateScan(context.Background(), scan)
-
-	w := env.doRequest(http.MethodPost, "/api/fixes", map[string]interface{}{
-		"scan_id":  scan.ID,
-		"severity": []string{"high", "critical"},
-	})
-	if w.Code != http.StatusCreated {
-		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
-	}
-
-	var resp struct {
-		Data struct {
-			ID     string `json:"id"`
-			Status string `json:"status"`
-		} `json:"data"`
-	}
-	json.Unmarshal(w.Body.Bytes(), &resp)
-	if resp.Data.Status != "pending" {
-		t.Errorf("expected pending status, got %s", resp.Data.Status)
-	}
-}
-
-func TestCreateFixMissingRequired(t *testing.T) {
-	env := setupTestEnv(t)
-	defer env.Store.Close()
-
-	w := env.doRequest(http.MethodPost, "/api/fixes", map[string]string{})
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", w.Code)
+func (e *testEnv) enableAutofix(t *testing.T) {
+	t.Helper()
+	if err := e.Store.SetSetting(context.Background(), "autofix_enabled", "true"); err != nil {
+		t.Fatalf("enable autofix: %v", err)
 	}
 }
 
@@ -1522,42 +1495,146 @@ func (e *testEnv) createScan(t *testing.T, repoID string) string {
 	return scan.ID
 }
 
+func TestCreateFixFlagOffReturns403(t *testing.T) {
+	env := setupTestEnv(t)
+	defer env.Store.Close()
+
+	repoID := env.createRepo(t)
+	scanID := env.createScan(t, repoID)
+
+	w := env.doRequest(http.MethodPost, "/api/fixes", map[string]interface{}{
+		"repo_id": repoID,
+		"scan_id": scanID,
+	})
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("flag off: expected 403, got %d: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "autofix_disabled") {
+		t.Errorf("expected autofix_disabled error code, got %s", w.Body.String())
+	}
+}
+
+func TestCreateFixEnqueuesJob(t *testing.T) {
+	env := setupTestEnv(t)
+	defer env.Store.Close()
+	env.enableAutofix(t)
+
+	repoID := env.createRepo(t)
+	scanID := env.createScan(t, repoID)
+
+	w := env.doRequest(http.MethodPost, "/api/fixes", map[string]interface{}{
+		"repo_id":        repoID,
+		"scan_id":        scanID,
+		"severity_floor": "high",
+	})
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp struct {
+		Data struct {
+			ID     string `json:"id"`
+			Status string `json:"status"`
+			Mode   string `json:"mode"`
+			Engine string `json:"engine"`
+		} `json:"data"`
+	}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp.Data.Status != models.FixJobQueued {
+		t.Errorf("expected queued status, got %s", resp.Data.Status)
+	}
+	if resp.Data.Mode != models.FixModeDryRun {
+		t.Errorf("expected dry_run mode default, got %s", resp.Data.Mode)
+	}
+	if resp.Data.Engine != "auto" {
+		t.Errorf("expected auto engine default, got %s", resp.Data.Engine)
+	}
+
+	// The job is durable: it exists in the queue.
+	job, err := env.Store.GetFixJobByID(context.Background(), resp.Data.ID)
+	if err != nil || job == nil {
+		t.Fatalf("enqueued job not found in store: %v", err)
+	}
+	if job.RepoID != repoID {
+		t.Errorf("job repo_id = %s, want %s", job.RepoID, repoID)
+	}
+}
+
+func TestCreateFixMissingRepoID(t *testing.T) {
+	env := setupTestEnv(t)
+	defer env.Store.Close()
+	env.enableAutofix(t)
+
+	w := env.doRequest(http.MethodPost, "/api/fixes", map[string]string{})
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+}
+
 func TestListFixes(t *testing.T) {
 	env := setupTestEnv(t)
 	defer env.Store.Close()
 
 	repoID := env.createRepo(t)
-	scanID := env.createScan(t, repoID)
 
-	now := time.Now()
-	env.Store.CreateFix(context.Background(), &models.Fix{
-		ID: uuid.New().String(), UserID: env.UserID, ScanID: scanID,
-		Status: models.FixStatusPending, CreatedAt: now, UpdatedAt: now,
-	})
+	now := time.Now().UTC()
+	if err := env.Store.EnqueueFixJob(context.Background(), &models.FixJob{
+		ID: uuid.New().String(), UserID: env.UserID, Type: "fix", RepoID: repoID,
+		Status: models.FixJobQueued, Mode: models.FixModeDryRun,
+		CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
 
 	w := env.doRequest(http.MethodGet, "/api/fixes", nil)
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
+	var resp struct {
+		Meta struct{ Total int } `json:"meta"`
+	}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp.Meta.Total != 1 {
+		t.Errorf("expected 1 job, got %d", resp.Meta.Total)
+	}
 }
 
-func TestGetFix(t *testing.T) {
+func TestGetFixWithAttempts(t *testing.T) {
 	env := setupTestEnv(t)
 	defer env.Store.Close()
 
 	repoID := env.createRepo(t)
-	scanID := env.createScan(t, repoID)
+	now := time.Now().UTC()
+	jobID := uuid.New().String()
+	if err := env.Store.EnqueueFixJob(context.Background(), &models.FixJob{
+		ID: jobID, UserID: env.UserID, Type: "fix", RepoID: repoID,
+		Status: models.FixJobSucceeded, Mode: models.FixModeDryRun,
+		CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+	if err := env.Store.CreateFixAttempt(context.Background(), &models.FixAttempt{
+		ID: uuid.New().String(), JobID: jobID, FindingID: "f1", AttemptNo: 1,
+		EngineUsed: "api", Outcome: models.FixOutcomeKept, CreatedAt: now,
+	}); err != nil {
+		t.Fatalf("create attempt: %v", err)
+	}
 
-	now := time.Now()
-	fixID := uuid.New().String()
-	env.Store.CreateFix(context.Background(), &models.Fix{
-		ID: fixID, UserID: env.UserID, ScanID: scanID,
-		Status: models.FixStatusPending, CreatedAt: now, UpdatedAt: now,
-	})
-
-	w := env.doRequest(http.MethodGet, "/api/fixes/"+fixID, nil)
+	w := env.doRequest(http.MethodGet, "/api/fixes/"+jobID, nil)
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Data struct {
+			ID       string `json:"id"`
+			Attempts []struct {
+				Outcome string `json:"outcome"`
+			} `json:"attempts"`
+		} `json:"data"`
+	}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	if len(resp.Data.Attempts) != 1 || resp.Data.Attempts[0].Outcome != models.FixOutcomeKept {
+		t.Errorf("expected one kept attempt, got %+v", resp.Data.Attempts)
 	}
 }
 
@@ -1571,51 +1648,114 @@ func TestGetFixNotFound(t *testing.T) {
 	}
 }
 
+func TestGetFixDiff(t *testing.T) {
+	env := setupTestEnv(t)
+	defer env.Store.Close()
+
+	// Point the artifact store at a temp dir and seed a diff for the job.
+	root := t.TempDir()
+	if err := artifacts.Init(root); err != nil {
+		t.Fatalf("artifacts init: %v", err)
+	}
+
+	repoID := env.createRepo(t)
+	now := time.Now().UTC()
+	jobID := uuid.New().String()
+	if err := env.Store.EnqueueFixJob(context.Background(), &models.FixJob{
+		ID: jobID, UserID: env.UserID, Type: "fix", RepoID: repoID,
+		Status: models.FixJobSucceeded, Mode: models.FixModeDryRun,
+		CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+
+	want := "--- a/x.go\n+++ b/x.go\n@@ -1 +1 @@\n-bad\n+good\n"
+	fs := fixstore.New(root)
+	if _, err := fs.SaveDiff(context.Background(), jobID, want); err != nil {
+		t.Fatalf("save diff: %v", err)
+	}
+
+	w := env.doRequest(http.MethodGet, "/api/fixes/"+jobID+"/diff", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if w.Body.String() != want {
+		t.Errorf("diff body mismatch:\n got %q\nwant %q", w.Body.String(), want)
+	}
+}
+
+func TestGetFixDiffNotYetAvailable(t *testing.T) {
+	env := setupTestEnv(t)
+	defer env.Store.Close()
+
+	root := t.TempDir()
+	if err := artifacts.Init(root); err != nil {
+		t.Fatalf("artifacts init: %v", err)
+	}
+
+	repoID := env.createRepo(t)
+	now := time.Now().UTC()
+	jobID := uuid.New().String()
+	if err := env.Store.EnqueueFixJob(context.Background(), &models.FixJob{
+		ID: jobID, UserID: env.UserID, Type: "fix", RepoID: repoID,
+		Status: models.FixJobRunning, Mode: models.FixModeDryRun,
+		CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+
+	w := env.doRequest(http.MethodGet, "/api/fixes/"+jobID+"/diff", nil)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for missing diff, got %d", w.Code)
+	}
+}
+
 func TestCancelFix(t *testing.T) {
 	env := setupTestEnv(t)
 	defer env.Store.Close()
 
 	repoID := env.createRepo(t)
-	scanID := env.createScan(t, repoID)
+	now := time.Now().UTC()
+	jobID := uuid.New().String()
+	if err := env.Store.EnqueueFixJob(context.Background(), &models.FixJob{
+		ID: jobID, UserID: env.UserID, Type: "fix", RepoID: repoID,
+		Status: models.FixJobQueued, Mode: models.FixModeDryRun,
+		CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
 
-	now := time.Now()
-	fixID := uuid.New().String()
-	env.Store.CreateFix(context.Background(), &models.Fix{
-		ID: fixID, UserID: env.UserID, ScanID: scanID,
-		Status: models.FixStatusPending, CreatedAt: now, UpdatedAt: now,
-	})
-
-	w := env.doRequest(http.MethodDelete, "/api/fixes/"+fixID, nil)
+	w := env.doRequest(http.MethodDelete, "/api/fixes/"+jobID, nil)
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
-
 	var resp struct {
 		Data struct {
 			Status string `json:"status"`
 		} `json:"data"`
 	}
 	json.Unmarshal(w.Body.Bytes(), &resp)
-	if resp.Data.Status != "cancelled" {
+	if resp.Data.Status != models.FixJobCancelled {
 		t.Errorf("expected cancelled, got %s", resp.Data.Status)
 	}
 }
 
-func TestCancelFixAlreadyCompleted(t *testing.T) {
+func TestCancelFixAlreadyFinished(t *testing.T) {
 	env := setupTestEnv(t)
 	defer env.Store.Close()
 
 	repoID := env.createRepo(t)
-	scanID := env.createScan(t, repoID)
+	now := time.Now().UTC()
+	jobID := uuid.New().String()
+	if err := env.Store.EnqueueFixJob(context.Background(), &models.FixJob{
+		ID: jobID, UserID: env.UserID, Type: "fix", RepoID: repoID,
+		Status: models.FixJobSucceeded, Mode: models.FixModeDryRun,
+		CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
 
-	now := time.Now()
-	fixID := uuid.New().String()
-	env.Store.CreateFix(context.Background(), &models.Fix{
-		ID: fixID, UserID: env.UserID, ScanID: scanID,
-		Status: models.FixStatusCompleted, CreatedAt: now, UpdatedAt: now,
-	})
-
-	w := env.doRequest(http.MethodDelete, "/api/fixes/"+fixID, nil)
+	w := env.doRequest(http.MethodDelete, "/api/fixes/"+jobID, nil)
 	if w.Code != http.StatusConflict {
 		t.Fatalf("expected 409, got %d", w.Code)
 	}

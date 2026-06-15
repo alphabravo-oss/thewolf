@@ -147,12 +147,13 @@ func Endpoints() []Endpoint {
 		{"POST", "/policies", "policies", "Create a quality policy", "write:config", "PolicyRequest", false},
 		{"PUT", "/policies/{id}", "policies", "Update a quality policy", "write:config", "PolicyRequest", false},
 
-		// Fixes.
-		{"GET", "/fixes", "fixes", "List fixes", "read:fixes", "", true},
-		{"POST", "/fixes", "fixes", "Start a fix", "write:fixes", "CreateFixRequest", false},
-		{"GET", "/fixes/{id}", "fixes", "Get a fix", "read:fixes", "", false},
-		{"GET", "/fixes/{id}/stream", "fixes", "Stream fix progress (SSE)", "read:fixes", "", false},
-		{"DELETE", "/fixes/{id}", "fixes", "Cancel a fix", "write:fixes", "", false},
+		// Fixes (autonomous fix engine — gated by the autofix_enabled setting).
+		{"GET", "/fixes", "fixes", "List fix jobs", "read:fixes", "", true},
+		{"POST", "/fixes", "fixes", "Enqueue an autonomous fix job (dry-run, branch-only)", "write:fixes", "CreateFixRequest", false},
+		{"GET", "/fixes/{id}", "fixes", "Get a fix job and its attempts", "read:fixes", "", false},
+		{"GET", "/fixes/{id}/diff", "fixes", "Get the proposed diff for a fix job", "read:fixes", "", false},
+		{"GET", "/fixes/{id}/stream", "fixes", "Stream fix worker logs (SSE)", "read:fixes", "", false},
+		{"DELETE", "/fixes/{id}", "fixes", "Cancel a fix job", "write:fixes", "", false},
 
 		// Loops.
 		{"GET", "/loops", "loops", "List loops", "read:loops", "", true},
@@ -422,8 +423,12 @@ func buildComponents() map[string]any {
 				"repo_id": str, "collection_id": str, "branch": str, "tools": strArr,
 			}),
 			"FindingStatusRequest": objSchema(map[string]any{"status": str}, "status"),
-			"CreateFixRequest":     objSchema(map[string]any{"finding_id": str, "scan_id": str}),
-			"CreateLoopRequest":    objSchema(map[string]any{"repo_id": str}),
+			"CreateFixRequest": objSchema(map[string]any{
+				"repo_id": str, "scan_id": str, "finding_ids": strArr,
+				"target_branch": str, "engine": str, "mode": str,
+				"severity_floor": str, "max_attempts": map[string]any{"type": "integer"},
+			}, "repo_id"),
+			"CreateLoopRequest": objSchema(map[string]any{"repo_id": str}),
 			"CreateSecretRequest": objSchema(map[string]any{
 				"key_type": str, "key_name": str, "value": str,
 			}, "key_name", "value"),

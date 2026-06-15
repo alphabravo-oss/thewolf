@@ -679,36 +679,79 @@ func newPolicyCmd() *cobra.Command {
 func newFixCmd() *cobra.Command {
 	cmd := group("fix", "Manage AI fix runs")
 
-	var scanID string
-	var findingIDs, severity []string
+	var repoID, scanID, engine, mode, severityFloor, targetBranch string
+	var findingIDs []string
+	var maxAttempts int
 	create := &cobra.Command{
 		Use:   "create",
-		Short: "Start a fix run",
+		Short: "Enqueue an autonomous fix job (dry-run, branch-only)",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if scanID == "" {
-				return fmt.Errorf("--scan is required")
+			if repoID == "" {
+				return fmt.Errorf("--repo is required")
 			}
-			body := map[string]any{"scan_id": scanID}
+			if scanID == "" && len(findingIDs) == 0 {
+				return fmt.Errorf("one of --scan or --finding is required")
+			}
+			body := map[string]any{"repo_id": repoID}
+			if scanID != "" {
+				body["scan_id"] = scanID
+			}
 			if len(findingIDs) > 0 {
 				body["finding_ids"] = findingIDs
 			}
-			if len(severity) > 0 {
-				body["severity"] = severity
+			if engine != "" {
+				body["engine"] = engine
+			}
+			if mode != "" {
+				body["mode"] = mode
+			}
+			if severityFloor != "" {
+				body["severity_floor"] = severityFloor
+			}
+			if targetBranch != "" {
+				body["target_branch"] = targetBranch
+			}
+			if maxAttempts > 0 {
+				body["max_attempts"] = maxAttempts
 			}
 			return runRender(cmd, "POST", "/fixes", body)
 		},
 	}
+	create.Flags().StringVar(&repoID, "repo", "", "repository ID to fix (required)")
 	create.Flags().StringVar(&scanID, "scan", "", "scan ID to fix findings from")
 	create.Flags().StringArrayVar(&findingIDs, "finding", nil, "specific finding ID (repeatable)")
-	create.Flags().StringArrayVar(&severity, "severity", nil, "severity filter (repeatable)")
+	create.Flags().StringVar(&engine, "engine", "", "fix engine (auto, claude-code, codex, api, custom)")
+	create.Flags().StringVar(&mode, "mode", "", "fix mode (dry_run)")
+	create.Flags().StringVar(&severityFloor, "severity-floor", "", "only fix findings at or above this severity")
+	create.Flags().StringVar(&targetBranch, "branch", "", "target fix branch name")
+	create.Flags().IntVar(&maxAttempts, "max-attempts", 0, "max engine attempts per finding")
+
+	diff := &cobra.Command{
+		Use:   "diff <id>",
+		Short: "Print the proposed diff for a fix job",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			c, err := resolveClient(cmd)
+			if err != nil {
+				return err
+			}
+			raw, err := c.Raw(cmd.Context(), "/fixes/"+args[0]+"/diff")
+			if err != nil {
+				return err
+			}
+			_, err = cmd.OutOrStdout().Write(raw)
+			return err
+		},
+	}
 
 	cmd.AddCommand(
-		listCmd("/fixes", "List fixes"),
-		getCmd("/fixes", "Get a fix"),
+		listCmd("/fixes", "List fix jobs"),
+		getCmd("/fixes", "Get a fix job and its attempts"),
 		create,
-		watchCmd("Stream a fix's progress", "/fixes/%s/stream"),
-		deleteCmd("cancel <id>", "Cancel a fix", "/fixes/%s"),
+		diff,
+		watchCmd("Stream a fix job's worker logs", "/fixes/%s/stream"),
+		deleteCmd("cancel <id>", "Cancel a fix job", "/fixes/%s"),
 	)
 	return cmd
 }

@@ -267,6 +267,7 @@ func NewServer(store db.Store, addr string) *Server {
 				r.With(rFixes).Get("/", routes.ListFixes)
 				r.With(wFixes).Post("/", routes.CreateFix)
 				r.With(rFixes).Get("/{id}", routes.GetFix)
+				r.With(rFixes).Get("/{id}/diff", routes.GetFixDiff)
 				r.With(rFixes).Get("/{id}/stream", routes.StreamFix)
 				r.With(wFixes).Delete("/{id}", routes.CancelFix)
 			})

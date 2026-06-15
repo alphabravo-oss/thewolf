@@ -192,8 +192,15 @@ func TestHappyPathFixAndLoop(t *testing.T) {
 		t.Fatalf("seed scan: %v", err)
 	}
 
-	// Fix create just records a pending fix — no execution goroutine.
-	fixID := dataID(t, mustRun(t, cli("fix", "create", "--scan", scan.ID)...))
+	// The autonomous fix engine is gated by autofix_enabled (default off).
+	// Enable it so the enqueue path is reachable; the worker runs out of band,
+	// so no real fixing happens in this test.
+	if err := store.SetSetting(ctx, "autofix_enabled", "true"); err != nil {
+		t.Fatalf("enable autofix: %v", err)
+	}
+
+	// Fix create enqueues a durable job — no execution goroutine here.
+	fixID := dataID(t, mustRun(t, cli("fix", "create", "--repo", repoID, "--scan", scan.ID)...))
 	mustRun(t, cli("fix", "list")...)
 	mustRun(t, cli("fix", "get", fixID)...)
 	mustRun(t, cli("fix", "cancel", fixID)...)

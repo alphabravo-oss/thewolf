@@ -127,6 +127,28 @@ func (c *Client) Do(ctx context.Context, method, path string, body any) (*Envelo
 	return &env, nil
 }
 
+// Raw issues a GET and returns the response body verbatim, for endpoints that
+// serve a non-JSON payload (e.g. a fix diff as text/plain or a SARIF report).
+func (c *Client) Raw(ctx context.Context, path string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+path, nil)
+	if err != nil {
+		return nil, err
+	}
+	if c.Token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.Token)
+	}
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request GET %s: %w", path, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	raw, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode >= 400 {
+		return nil, &APIError{StatusCode: resp.StatusCode, Message: strings.TrimSpace(string(raw))}
+	}
+	return raw, nil
+}
+
 // Stream consumes a Server-Sent-Events endpoint, invoking onLine for every
 // non-empty data line until the stream closes or the context is cancelled.
 func (c *Client) Stream(ctx context.Context, path string, onLine func(string)) error {
