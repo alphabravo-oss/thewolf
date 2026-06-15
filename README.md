@@ -3,504 +3,290 @@
 </p>
 
 <h1 align="center">The Wolf</h1>
-<p align="center"><strong>Multi Tool Code Analysis Engine</strong></p>
+<p align="center"><strong>The self-hosted application security &amp; code-quality platform that hunts, prioritizes, and <em>fixes</em> — across your entire fleet.</strong></p>
 <p align="center">by <a href="https://alphabravo.io">AlphaBravo</a></p>
+
+<p align="center">
+  <img alt="Scanners" src="https://img.shields.io/badge/scanners-49-1f6feb?style=flat-square" />
+  <img alt="Self-hosted" src="https://img.shields.io/badge/deployment-self--hosted-2ea043?style=flat-square" />
+  <img alt="AI" src="https://img.shields.io/badge/AI-assisted%20remediation-8957e5?style=flat-square" />
+  <img alt="API" src="https://img.shields.io/badge/API-OpenAPI%203.0-0969da?style=flat-square" />
+  <img alt="License" src="https://img.shields.io/badge/license-proprietary-6e7681?style=flat-square" />
+</p>
 
 ---
 
-The Wolf is an orchestration engine that runs **35+ static analysis, security, and code-quality tools in parallel** across your repositories. Tools run in isolated Docker containers — wolf doesn't install anything on the host beyond Docker itself. It aggregates findings, deduplicates results, scores severity, and optionally uses AI to enrich and prioritize issues.
+> **One platform. Every scanner. Your infrastructure.**
+>
+> The Wolf unifies **49 best-in-class security and quality scanners** behind a single console, API, and CLI — then goes further than any point tool: it manages your whole **fleet** of repositories, scores and prioritizes what actually matters, and uses **AI to write and ship the fix**. No per-seat licensing. No code leaving your perimeter. No forty tools to install and babysit. Just Docker, and a platform that runs entirely on your terms.
 
-## Features
+---
 
-- **Containerized scanners** — every tool runs in its own short-lived Docker container; no `pip install bandit`, no `go install gosec`, no `npm i -g eslint`
-- **Three-tier image strategy** — slim wolf-built image for per-language tools, upstream-official images for well-maintained scanners (trivy, semgrep, gitleaks, …), opt-in heavy-toolchain bucket images for JVM / Rust / CodeQL
-- **Multi-tool orchestration** — runs 35+ analysis tools in parallel with configurable concurrency
-- **Reproducible findings** — every tool is version-pinned in `scanners/versions.env`; identical scans on two hosts produce identical findings
-- **Host isolation** — scanned code runs with `--user $(id -u)`, read-only `/scan` bind mount, read-only root filesystem, no inbound network
-- **Collection-based organization** — group repositories into collections for batch scanning and cross-repo metrics
-- **Branch-aware metrics** — track findings per branch with trend analysis over time
-- **Real-time streaming** — live scan progress via SSE with per-tool status, output logs, and finding counts
-- **AI enrichment** (optional) — AI-powered severity scoring, tool summaries, prioritized recommendations, and ready-to-hand-off remediation prompts via `wolf enrich`
-- **Automated fix engine** — AI-generated fix plans with PR creation via Claude Code
-- **Scan-fix-rescan loops** — iterative improvement cycles with regression guardrails (`wolf loop`)
-- **Baselines & diff** — pin a stable scan as a baseline and surface only `new`/`resurfaced`/`fixed` findings on the next run
-- **Quality gates** — declarative policies that block CI on severity counts, new findings, or category thresholds (`wolf scan gate` exits 5 on failure)
-- **Finding suppressions** — durable, audit-logged hide rules with `.wolfignore` and server-side suppression policies
-- **SARIF interop** — consume external scanner output via `wolf sarif import`, export any scan as SARIF
-- **Web UI** — Vite + React 19 + TanStack Router + Tailwind 4 + shadcn/ui dashboard with collection management, scan monitoring, finding exploration, fleet posture, and scanner-backend admin
-- **CLI** — full-featured command-line interface for scripting and CI/CD integration
-- **Plugin architecture** — adding a new tool is one Dockerfile addition + one Go file
-- **SARIF & Markdown reports** — export findings in standard formats
+## Why teams choose The Wolf
 
-## Quick Start
+Security tooling sprawl is the problem. Every team ends up juggling a dozen scanners, each with its own CLI, output format, container, update cadence, and dashboard — and *none* of them tell you which of the 4,000 findings to fix first, or fix it for you.
 
-### Prerequisites
+The Wolf collapses that sprawl into one platform:
 
-- **Docker** (the only runtime requirement for scanners — wolf no longer needs ~40 tools installed on the host)
-- Go 1.23+ *(only if building wolf from source)*
-- Node.js 18+ *(only if building the UI from source)*
+| The old way | With The Wolf |
+|---|---|
+| 12 scanners, 12 CLIs, 12 dashboards | **One console, one API, one CLI** |
+| "Install bandit, gosec, eslint, trivy…" on every box | **Zero host install** — every tool runs in an isolated container |
+| A wall of 4,000 undifferentiated findings | **Composite severity scoring** + AI prioritization |
+| Findings you have to fix by hand | **AI fix engine** opens the PR for you |
+| Per-repo tools that can't see the forest | **Fleet posture** across 100+ repos on any host |
+| SaaS that ingests your source | **Self-hosted** — your data never leaves |
+| Per-developer seat pricing | **No seat tax** |
 
-### Build & Run
+---
+
+## The platform at a glance
+
+<table>
+<tr>
+<td width="33%" valign="top">
+
+### 🐺 Unified Scanning
+**49 scanners, one engine.** SAST, SCA, secrets, containers, IaC, DAST, SBOM, license, privacy/PII, K8s, and more — running in parallel, version-pinned, and fully reproducible.
+
+</td>
+<td width="33%" valign="top">
+
+### 🛰️ Fleet Management
+**See and steer everything.** Manage 100+ repos across local, GitHub, and remote SSH hosts from a single fleet dashboard — posture, trends, top risks, and what needs attention today.
+
+</td>
+<td width="33%" valign="top">
+
+### 🤖 AI Remediation
+**Find *and* fix.** AI enriches findings with ready-to-ship guidance, opens fix PRs, and runs autonomous scan→fix→rescan loops with budget and regression guardrails.
+
+</td>
+</tr>
+<tr>
+<td width="33%" valign="top">
+
+### 🛡️ Governance & Policy
+**Ship with confidence.** Quality gates that block CI, baselines that surface only what's *new*, audit-logged suppressions, and SARIF in and out of every system you already run.
+
+</td>
+<td width="33%" valign="top">
+
+### 🔌 Built for Platforms
+**Automate all of it.** A complete REST API with live OpenAPI docs, a CLI that mirrors it 1:1, scoped tokens, SSE streaming, SQLite or PostgreSQL — self-hosted and air-gap friendly.
+
+</td>
+<td width="33%" valign="top">
+
+### 🔗 Source Anywhere
+**Scan it wherever it lives.** Local checkouts, public and private GitHub, generic git, or code sitting on remote SSH hosts — no agents to deploy, bulk-imported in seconds.
+
+</td>
+</tr>
+</table>
+
+---
+
+## Capabilities
+
+### 🐺 One platform, every scanner
+
+The Wolf orchestrates **49 industry-standard tools** across every major category — and it doesn't ask you to install a single one. Each tool runs in its own short-lived, locked-down container; the only thing on your host is Docker.
+
+- **Comprehensive coverage** — SAST, software composition analysis (SCA), secret detection, container & image hardening, infrastructure-as-code, Kubernetes, policy-as-code, DAST, SBOM generation, license compliance, privacy/PII data-flow, dependency freshness, repository hygiene, and per-language linting for Python, Go, JavaScript/TypeScript, Java, Kotlin, Ruby, PHP, Rust, C/C++, Swift, and more.
+- **Parallel by design** — every applicable tool runs concurrently with configurable concurrency, so a full multi-tool scan finishes in the time of your slowest scanner, not the sum of all of them.
+- **Reproducible & auditable** — every tool is version-pinned. Identical scans on two hosts produce identical findings. Reproducibility you can put in front of an auditor.
+- **Hardened isolation** — scanned code runs unprivileged, on a read-only mount, with a read-only root filesystem and no inbound network. Your scanners never become your attack surface.
+- **Smart deduplication & scoring** — findings from overlapping tools are merged, fingerprinted, and ranked by a composite severity score (tool severity × code location × AI context), so the critical handful rises to the top of the noise.
+
+### 🛰️ Fleet management & posture
+
+Built for the reality of modern engineering orgs: dozens or hundreds of services, spread across laptops, build hosts, and Git providers.
+
+- **The Fleet dashboard** — open findings by severity with week-over-week trend, your most vulnerable shared components ("14 repos still depend on log4j 1.2"), a prioritized *needs-attention* list (failing gates, stale scans, new criticals), and a live inventory by source, collection, and language.
+- **Org-wide visibility** — flip on Fleet Mode and the whole organization shares one view of every repo, scan, and finding — governed by role and scope, not siloed per user.
+- **Bulk onboarding** — import an entire GitHub organization in one flow, or point at an SSH host and auto-discover every git repository on it. Go from zero to a fully-mapped fleet in minutes.
+- **Collections** — group repositories by team, environment, or tier; scan them as a batch and track cross-repo metrics and posture per collection.
+- **Branch-aware trends** — track findings per branch over time and prove your security posture is improving.
+
+### 🤖 AI-assisted remediation
+
+Most tools tell you what's wrong. The Wolf fixes it.
+
+- **Finding enrichment** — every finding can be enriched with an AI-authored, ready-to-hand-off remediation prompt: what's wrong, why it matters, and exactly how to fix it.
+- **Automated fix engine** — point it at a finding or a whole scan and it generates the patch and opens the pull request, driven by your choice of agent (Claude Code, Codex, or a custom engine).
+- **Autonomous remediation loops** — run scan → fix → rescan cycles that iterate until clean, governed by per-finding budgets, wall-clock and cost ceilings, and regression guardrails so a fix never makes things worse.
+- **AI triage** — automatically separate real issues from false positives before they ever reach a human queue.
+- **Your model, your keys, your call** — pluggable providers (Anthropic, OpenAI), and **AI is off by default** — a single master switch, opt-in when you're ready, with full cost and token accounting.
+
+### 🛡️ Governance, compliance & policy
+
+The controls that turn scanning into a program.
+
+- **Quality gates** — declarative, scoped policies that fail a build on severity counts, new findings, or category thresholds. One CLI exit code wires The Wolf into any CI system.
+- **Baselines & diff** — pin a known-good scan as a baseline and surface only what's `new`, `resurfaced`, or `fixed` — so developers see *their* regressions, not the backlog.
+- **Durable suppressions** — audit-logged, expiring, scoped hide rules (by fingerprint, rule, category, or path) plus `.wolfignore` support — accepted risk that's tracked, not lost.
+- **SARIF in and out** — import findings from any external scanner and export any scan as SARIF for your dashboards, code-scanning views, and compliance pipelines.
+- **Complete audit trail** — every mutating action — who, what token, which resource, what result — is recorded for security review of both human and AI-driven activity.
+
+### 🔌 Built for platform & security teams
+
+- **A complete REST API** — every capability is an endpoint, documented with live, interactive OpenAPI/Swagger docs served right from the product (fully offline). If a human can do it in the UI, a pipeline can do it through the API.
+- **A CLI that mirrors the API 1:1** — `wolf <resource> <verb>` for everything, with table output for humans and JSON for machines, kubeconfig-style contexts for multiple environments, and CI-friendly exit codes.
+- **Scoped, revocable credentials** — least-privilege API tokens with `verb:resource` scopes and configurable expiry, alongside session-based UI auth — role-appropriate access for every actor.
+- **Run it your way** — single-binary or Docker, SQLite for a team or **PostgreSQL** for the enterprise, on your servers, in your cloud, or fully **air-gapped**.
+- **Live everything** — real-time scan, fix, and loop progress streamed over SSE to the console and the CLI.
+- **Self-managed scanner images** — rebuild and publish your own scanner images directly from the console with streamed build logs; no external registry dependency required to run.
+
+### 🔗 Scan code wherever it lives
+
+- **Local paths** — point at any checkout on the host.
+- **GitHub, public and private** — token-authenticated, with whole-org bulk import.
+- **Generic git** — any HTTPS or SSH git remote.
+- **Remote SSH hosts** — scan code sitting on other machines with no agent to install: The Wolf archives the working tree over SSH and scans it locally.
+
+---
+
+## What you get
+
+- **Faster mean-time-to-remediate** — prioritized findings plus AI that opens the fix PR.
+- **One pane of glass** — fleet-wide posture instead of a dozen disconnected dashboards.
+- **Lower tooling cost** — replace a stack of point products and per-seat SaaS with one self-hosted platform.
+- **Audit-ready evidence** — reproducible scans, full audit logs, and SARIF exports out of the box.
+- **No vendor lock-in** — your data, your infrastructure, standard formats, open scanners.
+
+---
+
+## Get started in 60 seconds
+
+The only prerequisite is **Docker**. No scanners to install — they're pulled or built on demand.
 
 ```bash
-# Start wolf — scanners pulled lazily on first use
+# Launch the platform (API + web console)
 docker compose up -d
 
-# Pre-pull all scanner images (optional; otherwise pulled on first scan)
+# Open the console
+open http://localhost:8778
+
+# (optional) Pre-pull every scanner image
 docker compose exec wolf wolf pull scanners
 
-# Health-check everything (docker, image presence, repos mount, uid/gid)
+# Health-check the environment
 docker compose exec wolf wolf doctor
 
-# Run a scan against a repo placed under ./repos/
+# Scan a repository
 docker compose exec wolf wolf scan --repo /repos/myproject
-
-# Open the UI
-open http://localhost:8778
 ```
 
-### CLI Usage
+Prefer the API or CI? Everything the console does is one call away:
 
 ```bash
-# Scan a local repository
-wolf scan --repo /repos/myproject --branch main
-
-# Run only specific tools
-wolf scan --repo /repos/myproject --tools semgrep,trivy,gitleaks
-
-# Write AI-ready remediation prompts into the findings.json
-wolf enrich --scan <scan-id>
-
-# Run the AI auto-remediation loop (scan → fix → rescan)
-wolf loop --repo /repos/myproject --max-iterations 5
-
-# Diagnose the scanner backend
-wolf doctor
-
-# Pre-pull every configured scanner image
-wolf pull scanners
-
-# Start the API server (also auto-runs in docker-compose)
-wolf serve --bind 0.0.0.0:8778
-
-# Print version info
-wolf version
-```
-
-## API & CLI
-
-The HTTP API and the `wolf` CLI expose the same capabilities, so humans,
-CI pipelines, and AI agents can automate every part of the product.
-
-### API
-
-- All endpoints live under `/api/v1`. The legacy `/api/*` paths still work
-  via a deprecating redirect for one release.
-- Interactive documentation: **`/api/v1/docs`** (Swagger UI) and
-  `/api/v1/docs/redoc`. The raw spec is at `/api/v1/openapi.json`. These
-  are public — no credential needed to read the docs.
-- Authenticate with either a JWT (from `POST /api/v1/auth/login`, used by
-  the web UI) or a **`wolf_` API token** for non-interactive use, both
-  sent as `Authorization: Bearer <credential>`.
-
-### API tokens & scopes
-
-API tokens are scoped, revocable credentials for automation. Scopes are
-`verb:resource` strings (`read:scans`, `write:repos`, …) plus `admin`;
-`write:X` implies `read:X`. Tokens default to a 90-day expiry.
-
-```bash
-# Mint a least-privilege token (the secret is shown once)
-wolf auth token create --name ci --scope read:scans --scope write:scans
-wolf auth token list
-wolf auth token revoke <id>
-```
-
-### CLI as an API client
-
-Beyond the local `wolf scan`, every API endpoint is a `wolf <resource>
-<verb>` command. Point the CLI at a server with flags, a saved context,
-or `WOLF_SERVER` / `WOLF_TOKEN`:
-
-```bash
-# Save a reusable context (~/.wolf/cli.yaml)
+# Authenticate once, then drive the whole platform from the CLI
 wolf config set-context prod --server https://wolf.internal --token wolf_…
-wolf config use-context prod
 
-# Drive the API — add -o json for machine-readable output
-wolf repo create --name acme --path /repos/acme
+wolf repo create --name acme --type github --path acme/payments
 SCAN=$(wolf scan create --repo <repo-id> -o json | jq -r .data.id)
-wolf scan watch "$SCAN"
-wolf scan findings "$SCAN" --severity high -o json
-wolf finding set-status <finding-id> --status false_positive
-
-# Quality gates and baselines for CI
-wolf baseline create --repo <repo-id> --scan "$SCAN"
-wolf scan diff "$SCAN"                       # new vs the baseline
-wolf scan gate "$SCAN" --fail-exit-code      # exits 5 on policy violation
-wolf sarif export "$SCAN" > findings.sarif   # consume in your CI dashboard
-wolf suppress create --file-glob "vendor/**" --reason "third-party code"
+wolf scan watch "$SCAN"                       # live progress
+wolf scan gate "$SCAN" --fail-exit-code       # block the pipeline on policy
+wolf sarif export "$SCAN" > findings.sarif    # feed your dashboards
 ```
 
-CLI output is a table on a terminal and JSON when piped. Exit codes:
-`0` success, `1` runtime error, `2` usage error, `3` not found,
-`4` auth/permission, `5` quality gate failed.
+Interactive API docs ship with the product at **`/api/v1/docs`** (Swagger UI) and **`/api/v1/docs/redoc`** — no internet required.
 
-### Web UI
+---
 
-The Settings → "AI features" toggle is the master switch (defaults off).
-The Repositories page can create a repo of any source type — local path,
-GitHub (use a `github_token` secret for private repos), remote git URL,
-or SSH node. Loops, Fixes, Scanners, and the admin Audit log all have
-dedicated nav entries.
+## The scanner catalog
 
-### Fleet mode
+**49 scanners. One console.** Every tool is either pulled from its maintainer's official image (🌐), bundled in The Wolf's slim default image (📦), or available in an opt-in heavyweight bucket (🔧) — all orchestrated identically.
 
-When you're managing 20+ repos across multiple hosts:
-- Flip the `fleet_mode` setting in Settings → General. All Repos / Scans / Findings / Collections become visible org-wide.
-- Use **Import from GitHub** on the Repos page to pull every repo from an org via your `github_token` secret.
-- Use **Discover repos** on a node detail page to multi-select git directories on that SSH host.
-- The **/** Fleet dashboard shows posture, vulnerable components, attention list, and inventory across the whole fleet.
+### Cross-language & security
+
+| Category | Tool | Source | What it does |
+|---|---|---|---|
+| **SAST** | Semgrep | 🌐 | Pattern + semantic static analysis across every language |
+| **SAST** | CodeQL | 🔧 | GitHub's semantic SAST engine |
+| **SCA** | Trivy | 🌐 | Filesystem, container & IaC vulnerability scanning |
+| **SCA** | Grype + Syft | 🌐 | SBOM-driven vulnerability matching |
+| **SCA** | OSV-Scanner | 🌐 | Multi-ecosystem scanning on Google's OSV database |
+| **Dependency freshness** | Renovate | 🌐 | Flags outdated & vulnerable deps across 15+ ecosystems |
+| **IaC** | KICS | 🌐 | ~3k rules across Terraform, K8s, CloudFormation, Ansible, Helm |
+| **IaC** | Checkov | 🌐 | Terraform / Helm / K8s / CloudFormation security |
+| **Policy-as-code** | Conftest | 🌐 | OPA/Rego policy evaluation over any config |
+| **Kubernetes** | Kubescape · Kube-linter · Pluto | 🌐 | Security, compliance & deprecated-API detection |
+| **Secrets** | Gitleaks · TruffleHog · detect-secrets | 🌐 📦 | History + working-tree secret detection, with live verification |
+| **Containers** | Hadolint · Dockle | 🌐 | Dockerfile linting & CIS image hardening |
+| **Infrastructure** | TFLint | 🌐 | Provider-aware Terraform linting |
+| **DAST** | Nuclei | 🌐 | Template-based HTTP/DNS/TCP vulnerability scanning |
+| **Privacy / PII** | Bearer | 🌐 | GDPR/HIPAA/PCI data-flow analysis |
+| **Repo hygiene** | OpenSSF Scorecard | 🌐 | Supply-chain security posture scoring |
+| **SBOM** | Syft | 🌐 | Software bill-of-materials generation |
+| **Docs / API** | Spectral · Vale | 🌐 | OpenAPI/AsyncAPI linting & prose style |
+| **Shell / SQL / Config** | ShellCheck · SQLFluff · yamllint · markdownlint | 📦 | Language-specific linting |
+
+### Per-language depth
+
+| Language | Tools |
+|---|---|
+| **Python** | Bandit · Ruff · Mypy · pip-audit · Radon · Vulture |
+| **Go** | Gosec · Staticcheck · Govulncheck · GoKart |
+| **JavaScript / TypeScript** | ESLint · npm-audit |
+| **Java / Kotlin** | detekt · PMD · Infer |
+| **Ruby** | Brakeman · RuboCop |
+| **PHP** | PHPStan |
+| **Rust** | Clippy |
+| **C / C++** | Cppcheck · Infer |
+| **Swift** | SwiftLint |
+
+The Wolf also maps source to tests across **13 languages** for coverage-aware scoring, and adds new tools with a single plugin file. The full annotated manifest lives in [`scanners/tools.yaml`](scanners/tools.yaml) and [`scanners/TOOLS.md`](scanners/TOOLS.md).
+
+---
+
+## Enterprise & deployment
+
+The Wolf is designed to live inside your perimeter and your governance model.
+
+| | |
+|---|---|
+| **Deployment** | Single Go binary or Docker Compose. Runs on your servers, your cloud, or fully air-gapped. |
+| **Data store** | SQLite for a team; **PostgreSQL** for scale and high availability. |
+| **Access control** | Session-based console auth + scoped, revocable API tokens (`verb:resource` + `admin`). |
+| **Audit** | Every mutating action recorded with actor, token, resource, and result. |
+| **Secrets** | Encrypted at rest with a master key; GitHub, SSH, AI-provider, and registry credentials managed in-product. |
+| **Air-gapped** | Pre-load images and run with `pull_policy=Never`, or disable upstream images entirely and run everything from images you build and host yourself. |
+| **Supply chain** | Version-pinned, reproducible scanner images you can build, sign, and publish from the console to your own registry. |
+| **Data residency** | Self-hosted by design — source code and findings never leave your infrastructure. |
+
+The scanner backend is a **three-tier image strategy** — official upstream images where maintainers publish them, a slim Wolf-built image for the long tail of per-language tools, and opt-in heavyweight buckets (JVM, Rust, CodeQL) pulled only when needed — so a typical Python + JavaScript shop runs on **well under a gigabyte** of images.
+
+For the full operations reference — air-gapped installs, network allowlists, registry mirroring, scanner DB caching, and the `WOLF_SCANNERS_*` knobs — see [`scanners/README.md`](scanners/README.md) and [`docs/`](docs/).
+
+---
 
 ## Architecture
 
 ```text
-cmd/wolf/                    CLI entrypoint (cobra; serve / scan / doctor / pull / version)
+cmd/wolf/        CLI + server entrypoint
 internal/
-  api/                       HTTP server, routes (incl. /api/scanners/*), SSE broker, middleware
-  ai/                        AI provider abstraction (Anthropic, OpenAI, noop)
-  artifacts/                 Durable scan artifact storage
-  auth/                      JWT authentication middleware
-  db/                        Database layer (SQLite + PostgreSQL)
-  fix/                       Automated fix engine (planner, git, PR)
-  loop/                      Scan-fix-rescan loop orchestration
-  models/                    Domain models
-  plugin/                    Plugin registry
-    container/               ★ Docker-backed shim that runs every plugin
-  scan/                      Scan pipeline (runner, detector, scorer, mapper, reporter)
-  setup/scanners/            Container-backend bootstrap (LoadAndInstall, Doctor, Pull)
-plugins/                     Tool plugins organized by language/category
-scanners/                    Wolf-built scanner images (Dockerfile{,.jvm,.rust,.codeql})
-ui/                          Vite + React 19 frontend (incl. /scanners admin page)
-configs/                     Default configuration
-docs/                        MIGRATION_2_0.md, RELEASE_NOTES_2_0.md
+  api/           HTTP API, OpenAPI docs, SSE streaming, auth & audit middleware
+  ai/            Pluggable AI providers (Anthropic, OpenAI)
+  auth/          Sessions, scoped API tokens, RBAC
+  db/            SQLite + PostgreSQL persistence
+  fix/  loop/    AI fix engine + autonomous remediation loops
+  finding/       Identity, diff, baselines, quality gates, suppressions, SARIF
+  scan/          Detection, orchestration, scoring, reporting
+  scannerbuild/  Server-side scanner image build & publish
+  setup/scanners/ Container backend
+plugins/         49 tool plugins, by language/category
+scanners/        Wolf-built scanner images + manifests
+ui/              Vite + React 19 + Tailwind 4 console
 ```
 
-## Scanner backend — the three-tier hybrid
+A single Go binary serves the API, the web console, and the embedded documentation; the only runtime dependency is Docker for the scanner containers.
 
-Wolf doesn't install scanners on the host. Every tool invocation is a `docker run` from one of three image tiers:
-
-### Tier 1 — Upstream-official images (no wolf rebuild)
-
-For tools where the maintainer publishes a usable image, wolf routes invocations directly to their published image. We pin the version in `scanners/tools.yaml` and `scanners/versions.env`. **22 tools currently use this tier** — see "Supported tools" below.
-
-### Tier 2 — Wolf-built default image (`wolf-scanners`)
-
-A slim image (~600–900 MB on amd64) carrying the per-language tools that don't have a maintained upstream image — mostly small pip / npm / go / gem / composer installs.
-
-### Tier 3 — Wolf-built bucket images
-
-Heavy toolchains that don't make sense in the default image and don't have a clean upstream:
-
-| Image | Tools | Approx size | Pulled when |
-|---|---|---|---|
-| `wolf-scanners-jvm` | detekt, infer, pmd (+ JDK) | ~2 GB | when a Java/Kotlin/C/C++ tool runs |
-| `wolf-scanners-rust` | clippy (+ rust toolchain) | ~1.2 GB | when a Rust scan runs |
-| `wolf-scanners-codeql` | codeql + query packs | ~700 MB | only when codeql is explicitly enabled (license-gated) |
-
-A typical Python+JS shop pulls **~700 MB plus a few small upstream images** (semgrep, trivy, gitleaks, etc.). A polyglot shop adds the relevant bucket images on demand.
-
-The shim's `Config.ImageFor(toolName)` walks: `UpstreamTools` → `ImageOverrides` → default `Image`. Operators override either map via `scan.container.upstream_tools` / `scan.container.image_overrides` in wolf.yaml.
-
-Disable the upstream tier entirely (e.g. air-gapped, internal-mirror-only) with `WOLF_SCANNERS_DISABLE_UPSTREAM=1`.
-
-See `PLAN.md` for the full architecture; `scanners/tools.yaml` for the authoritative scanner manifest; `scanners/TOOLS.md` for the generated scanner table; `scanners/README.md` for how to add or upgrade tools; `docs/MIGRATION_2_0.md` for the upgrade path from wolf 1.x.
-
-## Rebuilding the wolf-built images (server-side)
-
-The four wolf-built images (`wolf-scanners`, `-jvm`, `-rust`, `-codeql`) can be rebuilt directly from the wolf server — no repo checkout, no host toolchains. The full `scanners/` build context is `go:embed`-ed into the binary, so the server runs `docker buildx build` itself (Docker is already a hard dependency for scanning). Rebuild from **Settings → Scanner Images** in the UI, or via the API:
-
-```bash
-# Rebuild one variant locally (no credentials needed) — loads into the local daemon
-curl -X POST .../api/v1/scanners/images/default/build -d '{"push": false}'
-
-# Rebuild all four
-curl -X POST .../api/v1/scanners/images/build-all -d '{"push": false}'
-```
-
-Both endpoints stream the live `docker buildx` output over SSE and are admin-scoped (`write:config`, audit-logged). Server-local builds are **single-arch** (the host's platform); CI (`scanners-image.yml`) remains the multi-arch (amd64 + arm64) publisher.
-
-**Local builds need no credentials.** With `push: false` (the default) the server builds with `docker buildx build --load`, loading the image straight into the local Docker daemon. The scanner backend's pull policy is `IfNotPresent`, so the next scan finds the freshly-built image present and runs it with no registry round-trip. A fresh wolf install with zero credentials can rebuild every image and scan with it.
-
-### Optional — publishing to DockerHub
-
-Credentials gate **publishing only**. To push a rebuilt image to DockerHub, store a PAT as an *optional* `dockerhub_token` secret (username in `key_name`, the PAT as the encrypted value):
-
-```bash
-curl -X POST .../api/v1/config/secrets \
-  -d '{"key_type": "dockerhub_token", "key_name": "<dockerhub-username>", "value": "<PAT>"}'
-```
-
-With the secret present, a `push: true` build logs in via `--password-stdin` (the PAT never reaches argv, logs, or the SSE stream), tags the image `:<wolf-version>` **and** `:latest`, and pushes to `docker.io/<namespace>/<image>` (namespace from the `scanner_registry_namespace` setting, default `alphabravodevops`). In the UI, a **"push to DockerHub"** toggle appears beside the Rebuild button only when the secret exists; absent credentials hide the toggle but never block local builds. A `push: true` request with no `dockerhub_token` secret returns `404` with a hint.
-
-### Selecting which tag the runtime pulls — `WOLF_SCANNERS_TAG`
-
-The runtime resolves each image ref as `<namespace>/<image>:<tag>`, where `<tag>` comes from `WOLF_SCANNERS_TAG` (default `2.0.0`). The active resolved tag is logged at startup. CI publishes `latest` and `dev`, so until a versioned release is cut, set `WOLF_SCANNERS_TAG=latest` to track the published images:
-
-```bash
-WOLF_SCANNERS_TAG=latest wolf serve
-```
-
-A server-side build/push tags the running wolf version automatically, so once you publish from the UI the default tag resolves cleanly.
-
-### Slimmer Go layer
-
-The default image's Go-toolchain layer (gosec/govulncheck need `go list`/`go env` at runtime) is slimmed by `scanners/install/go-tools.sh`: it drops `$GOPATH/pkg` (module/build cache) and `$GOPATH/bin`, and strips the toolchain's `test/`, `doc/`, `api/`, and `misc/` dirs. The Go tools still resolve modules (validated by `scanners/smoke-test.sh`), and the default image's unpacked size drops by ≥600 MB with no tool regressions.
-
-## Supported tools
-
-**Total: 49 scanners** across SAST, SCA, secrets, container, infrastructure, IaC, policy-as-code, license, SBOM, docs, DAST, repo-hygiene, dependency-freshness, privacy/PII, deprecated-API detection, and per-language categories.
-
-### By tier
-
-| Tier | Count | How wolf gets the binary |
-|---|---|---|
-| **Upstream-official images** | 22 | `docker pull aquasec/trivy`, etc. — maintainer-published |
-| **Wolf-built default image** | 22 | bundled in `wolf-scanners:<version>` via pip / npm / go install / apt / composer / github-release |
-| **Wolf-built bucket images** | 5 | bundled in `wolf-scanners-{jvm,rust,codeql}:<version>` |
-
-### By language / category
-
-Every tool's tier is annotated as 🌐 (upstream), 📦 (wolf-built default), 🔧 (wolf-built bucket).
-
-#### Cross-language
-
-| Category | Tool | Tier | Image | Description |
-|---|---|---|---|---|
-| **SAST** | Semgrep | 🌐 | `semgrep/semgrep` | Pattern-based + semantic static analysis across all languages |
-| **SAST** | CodeQL | 🔧 | `wolf-scanners-codeql` | GitHub's semantic SAST engine (license-restricted to OSS or GHAS) |
-| **SCA** | Trivy | 🌐 | `aquasec/trivy` | Filesystem + container + IaC vulnerability scanner |
-| **SCA** | Grype | 🌐 | `anchore/grype` | Vulnerability matcher (paired with Syft for SBOM-based scanning) |
-| **SCA** | OSV-Scanner | 🌐 | `ghcr.io/google/osv-scanner` | Multi-ecosystem dep scanner using Google's OSV database |
-| **SCA / freshness** | Renovate | 🌐 | `ghcr.io/renovatebot/renovate` | Mend Renovate in dry-run / detect-only mode — flags outdated and vulnerable deps across npm, pip, gem, composer, cargo, go.mod, Helm, GitHub Actions, Dockerfile base images, Terraform, pre-commit, GitLab CI, Bitbucket, Gradle, Maven, sbt. Severity by gap: patch → info, minor → low, major → medium, vuln → high. |
-| **IaC SAST** | KICS | 🌐 | `checkmarx/kics` | Multi-format IaC scanner — Terraform, K8s, Dockerfile, CloudFormation, Ansible, Helm, ARM, OpenAPI, Pulumi. ~3k rules. MIT, very active. |
-| **Policy-as-code** | Conftest | 🌐 | `openpolicyagent/conftest` | OPA-based config testing — operator writes Rego policies in `policy/`, conftest evaluates them against any YAML/JSON/HCL/Dockerfile. |
-| **K8s upgrade** | Pluto | 🌐 | `us-docker.pkg.dev/fairwinds-ops/oss/pluto` | Detects deprecated and removed Kubernetes API versions before they break the cluster upgrade. Removed APIs flagged as `high`. |
-| **Privacy / PII** | Bearer | 🌐 | `bearer/bearer` | Data-flow scanner for GDPR/HIPAA/PCI categories — tracks where PII is processed and flags risky patterns. |
-| **Docs (Markdown)** | markdownlint-cli | 📦 | `wolf-scanners` | Markdown style + structure linter. |
-| **Config (YAML)** | yamllint | 📦 | `wolf-scanners` | YAML structural + style linter. |
-| **Secrets** | Gitleaks | 🌐 | `zricethezav/gitleaks` | Regex-based secret detection across history + working tree |
-| **Secrets** | TruffleHog | 🌐 | `trufflesecurity/trufflehog` | Deep secret scanner with live-credential verification |
-| **Secrets** | detect-secrets | 📦 | `wolf-scanners` | Baseline-style secret scanner by Yelp |
-| **Container** | Hadolint | 🌐 | `hadolint/hadolint` | Dockerfile linter |
-| **Container** | Dockle | 🌐 | `goodwithtech/dockle` | Container-image best-practice checker (CIS-style) |
-| **Container** | Checkov | 🌐 | `bridgecrew/checkov` | IaC security scanner (Terraform / Helm / K8s / CloudFormation / …) |
-| **Infrastructure** | TFLint | 🌐 | `ghcr.io/terraform-linters/tflint` | Terraform-specific linter and provider-aware checks |
-| **Infrastructure** | Kubescape | 🌐 | `quay.io/kubescape/kubescape-cli` | Kubernetes security/compliance scanner |
-| **Infrastructure** | Kube-linter | 🌐 | `stackrox/kube-linter` | Static analysis for K8s manifests and Helm charts |
-| **SBOM** | Syft | 🌐 | `anchore/syft` | SBOM generator (paired with Grype) |
-| **Docs** | Spectral | 🌐 | `stoplight/spectral` | OpenAPI / AsyncAPI / JSON-Schema linter |
-| **Docs** | Vale | 🌐 | `jdkato/vale` | Prose / documentation style linter |
-| **DAST** | Nuclei | 🌐 | `projectdiscovery/nuclei` | Template-based HTTP/DNS/TCP vulnerability scanner |
-| **Hygiene** | OpenSSF Scorecard | 🌐 | `gcr.io/openssf/scorecard` | Repository security-posture scoring (branch protection, signed releases, …) |
-| **Shell** | ShellCheck | 📦 | `wolf-scanners` | Shell-script linter (`*.sh`, `bash`, `dash`, `ksh`) |
-| **SQL** | SQLFluff | 📦 | `wolf-scanners` | SQL linter + formatter |
-
-#### Per-language
-
-| Language | Tool | Tier | Image | Description |
-|---|---|---|---|---|
-| **Python** | Bandit | 📦 | `wolf-scanners` | Security-focused SAST |
-| **Python** | Ruff | 📦 | `wolf-scanners` | Fast linter + formatter (replaces flake8/isort/etc.) |
-| **Python** | Mypy | 📦 | `wolf-scanners` | Static type checker |
-| **Python** | pip-audit | 📦 | `wolf-scanners` | Dependency vulnerability scanner (PyPA) |
-| **Python** | Radon | 📦 | `wolf-scanners` | Cyclomatic complexity analyzer |
-| **Python** | Vulture | 📦 | `wolf-scanners` | Dead-code finder |
-| **Go** | Gosec | 📦 | `wolf-scanners` | Security linter |
-| **Go** | Staticcheck | 📦 | `wolf-scanners` | Quality linter (bug detection, simplifications, deprecations) |
-| **Go** | Govulncheck | 📦 | `wolf-scanners` | Official Go vulnerability scanner with reachability analysis |
-| **Go** | GoKart | 📦 | `wolf-scanners` | Praetorian's source-to-sink taint-analysis SAST — flags actually-reachable risky calls (complements gosec's pattern matching) |
-| **Kotlin** | detekt | 🌐 | `detekt/detekt` | Kotlin static analyzer with 200+ rules across style, complexity, potential bugs |
-| **JavaScript / TypeScript** | ESLint | 📦 | `wolf-scanners` | Linter |
-| **JavaScript / TypeScript** | npm-audit | 📦 | `wolf-scanners` | Dependency vulnerability scanner (bundled with npm) |
-| **Ruby** | Brakeman | 📦 | `wolf-scanners` | Rails-focused security scanner |
-| **Ruby** | RuboCop | 📦 | `wolf-scanners` | Ruby linter + formatter |
-| **PHP** | PHPStan | 📦 | `wolf-scanners` | Static analyzer with progressive strictness |
-| **Swift** | SwiftLint | 📦 | `wolf-scanners` | Style + correctness linter (best-effort on Linux) |
-| **C / C++** | Cppcheck | 📦 | `wolf-scanners` | Static analyzer for C/C++ |
-| **C / C++ / Java / Kotlin** | Infer | 🔧 | `wolf-scanners-jvm` | Facebook/Meta's static analyzer for null derefs, leaks, etc. |
-| **Java / Kotlin** | PMD | 🔧 | `wolf-scanners-jvm` | Multi-language source analyzer (Java, Kotlin, Apex, JS, …) |
-| **Rust** | Clippy | 🔧 | `wolf-scanners-rust` | Official Rust linter |
-
-### Coverage detection
-
-Wolf maps source files to test files for coverage scoring:
-
-| Language | Test patterns |
-|---|---|
-| **Go** | `*_test.go` — package-level coverage |
-| **Python** | `test_*.py`, `*_test.py`, `tests/` |
-| **JavaScript / TypeScript** | `.test.{js,ts,jsx,tsx}`, `.spec.{js,ts,jsx,tsx}`, `__tests__/` |
-| **Rust** | `*_test.rs`, `test_*`, `tests/` |
-| **Java / Kotlin** | `*Test.java`, `*Tests.java`, `*IT.java`, `*ITCase.java`, `src/test/` → `src/main/` mapping |
-| **C / C++** | `*_test.{c,cpp,cc}`, `test_*`, `test/` → `src/` mapping |
-| **C#** | `*Test.cs`, `*Tests.cs`, `.Tests/` → project mapping |
-| **Ruby** | `*_spec.rb`, `*_test.rb`, `spec/` → `lib/` mapping |
-| **Swift** | `*Test.swift`, `*Tests.swift`, `Tests/` → `Sources/` mapping |
-| **PHP** | `*Test.php`, `tests/` → `src/` mapping |
-| **Scala** | `*Test.scala`, `*Spec.scala`, `*Suite.scala`, `src/test/` → `src/main/` mapping |
-| **Dart** | `*_test.dart`, `test/` → `lib/` mapping |
-| **Elixir** | `*_test.exs`, `test/` → `lib/` mapping |
-
-## Configuration
-
-Default configuration is in `configs/wolf.yaml`. Key settings:
-
-```yaml
-scan:
-  concurrency: 8                       # parallel tool execution
-  timeout: "30m"                       # per-tool timeout
-  default_preset: "standard"
-  exclude_patterns: [vendor/, node_modules/, .git/, ...]
-
-  # Container backend (PLAN.md §5)
-  container:
-    image: "ghcr.io/alphabravocompany/wolf-scanners:dev"
-    image_overrides:                   # wolf-built bucket images
-      infer:  "ghcr.io/alphabravocompany/wolf-scanners-jvm:dev"
-      pmd:    "ghcr.io/alphabravocompany/wolf-scanners-jvm:dev"
-      clippy: "ghcr.io/alphabravocompany/wolf-scanners-rust:dev"
-      codeql: "ghcr.io/alphabravocompany/wolf-scanners-codeql:dev"
-    # upstream_tools is auto-populated from DefaultUpstreamTools();
-    # override here to pin specific upstream versions or mirrors.
-    pull_policy: "IfNotPresent"        # IfNotPresent | Always | Never
-    network:     "bridge"              # bridge | none (paranoid) | host
-    memory:      "2g"
-    cpus:        "1.5"
-    db_volume:   "wolf-scanners-db"
-
-ai:
-  provider: "anthropic"                # or "openai", "noop"
-  model: "claude-sonnet-4-20250514"
-
-database:
-  driver: "sqlite"                     # or "postgres"
-  dsn: "~/.wolf/wolf.db"
-```
-
-Environment overrides (12-factor) — see `PLAN.md` §5.6 for the full list.
-
-## Operations
-
-### Activating optional bucket scanners (PMD, CodeQL)
-
-The default `wolf-scanners` image is kept lean — heavy JVM and CodeQL
-toolchains are not included so the base image stays under ~3 GB. To
-enable `pmd` (Java) or `codeql`, build the bucket image and point wolf
-at it:
-
-```bash
-# PMD lives in the JVM bucket (with infer)
-make scanners-build-jvm
-export WOLF_SCANNERS_IMAGE_JVM=wolf-scanners-jvm:dev
-
-# CodeQL has its own ~800MB bucket
-make scanners-build-codeql
-export WOLF_SCANNERS_IMAGE_CODEQL=wolf-scanners-codeql:dev
-```
-
-Without these env vars wolf will list `pmd` and `codeql` among the
-selected scanners but they exit with `tool not present in this image`.
-This is intentional — operators opt in to the heavyweight buckets.
-
-### Scanner DB cache (auto-configured)
-
-Vulnerability-database scanners (`grype`, `trivy`) cache their DBs on
-the host at `~/.wolf/scanner-cache/` and reuse them across runs. The
-first scan downloads (~30s); subsequent scans are instant.
-
-Override with `WOLF_SCANNERS_DB_VOLUME=<host-path>` (or `=""` to disable
-caching entirely and re-download each run).
-
-### Scanners that are skipped on arm64 hosts
-
-A few upstream images are published amd64-only and crash under qemu
-emulation on Apple Silicon / arm64 Linux. Wolf detects this and skips
-them cleanly with a `[SKIP]` message rather than surfacing the
-qemu-induced crash:
-
-- `bearer` — Go runtime panics under emulation
-- `scorecard` — image fails to find its entrypoint under emulation
-
-To use these scanners, run wolf from an amd64 host (CI, x86_64 server,
-etc.) or omit them from `--tools`.
-
-### Scanners that need a target argument
-
-Two scanners don't apply to source code and require an explicit target:
-
-- `nuclei` — DAST tool; pass `--target https://example.com` (an HTTP
-  endpoint to probe). Skips cleanly when no target is provided.
-- `dockle` — scans built container images; pass `--target <image:tag>`
-  for an image the operator has already built or pulled. Skips cleanly
-  when no target is provided.
-
-### Diagnostics
-
-```bash
-wolf doctor
-# OK    docker reachable
-# OK    scanners image present
-# OK    uid/gid mapped
-# OK    repos-root pairing
-# OK    override images known
-```
-
-### Air-gapped install
-
-```bash
-# On a connected host
-docker pull ghcr.io/alphabravocompany/wolf-scanners:1.0
-docker pull aquasec/trivy:0.57.0
-docker pull semgrep/semgrep:1.92.0
-# ... pull every upstream image you'll use (see "Supported tools" above) ...
-docker save -o wolf-scanners.tar \
-    ghcr.io/alphabravocompany/wolf-scanners:1.0 \
-    aquasec/trivy:0.57.0 \
-    semgrep/semgrep:1.92.0
-gzip wolf-scanners.tar
-
-# On the air-gapped target
-gunzip < wolf-scanners.tar.gz | docker load
-export WOLF_SCANNERS_PULL_POLICY=Never
-docker compose up -d
-```
-
-Or set `WOLF_SCANNERS_DISABLE_UPSTREAM=1` to force everything through wolf-built bucket images (no docker.io / ghcr.io / quay.io / gcr.io reachability needed).
-
-### Network allowlist
-
-Operators behind corporate proxies need outbound HTTPS to:
-
-- **docker.io** — most upstream images (`aquasec/trivy`, `semgrep/semgrep`, `zricethezav/gitleaks`, `anchore/{grype,syft}`, `trufflesecurity/trufflehog`, `hadolint/hadolint`, `goodwithtech/dockle`, `bridgecrew/checkov`, `stackrox/kube-linter`, `projectdiscovery/nuclei`, `jdkato/vale`, `stoplight/spectral`)
-- **ghcr.io** — `ghcr.io/alphabravocompany/wolf-scanners*`, `ghcr.io/terraform-linters/tflint`, `ghcr.io/google/osv-scanner`, `ghcr.io/renovatebot/renovate`
-- **us-docker.pkg.dev** — `us-docker.pkg.dev/fairwinds-ops/oss/pluto`
-- **quay.io** — `quay.io/kubescape/kubescape-cli`
-- **gcr.io** — `gcr.io/openssf/scorecard`
-
-Mirror these to an internal registry for tighter control.
-
-## Adding a new tool
-
-See `scanners/README.md` for the full how-to. Short version:
-
-1. **Decide the tier**: if the maintainer publishes a multi-arch image, prefer Tier 1 (no wolf rebuild).
-2. **Pin the version** in `scanners/versions.env`.
-3. For **Tier 1**: add the tool → `ToolImageSpec` entry in `internal/plugin/container/buckets.go`'s `DefaultUpstreamTools()`.
-4. For **Tier 2** (default image): add an install line in the appropriate `scanners/install/*.sh`, and a smoke-test line in `scanners/smoke-test.sh`.
-5. **Write the wolf plugin** at `plugins/<bucket>/<tool>.go` using `container.CommandContext`. See `plugins/python/bandit.go` for the canonical pattern.
-6. **Update `scanners/LICENSES.md`** with the tool's license.
+---
 
 ## License
 
-Proprietary. Copyright AlphaBravo, Inc. All rights reserved.
+Proprietary. Copyright © AlphaBravo, Inc. All rights reserved.
+
+<p align="center"><sub>The Wolf — built by <a href="https://alphabravo.io">AlphaBravo</a>.</sub></p>
