@@ -64,6 +64,7 @@ func Endpoints() []Endpoint {
 		{"PUT", "/repos/{id}", "repos", "Update a repository", "write:repos", "UpdateRepoRequest", false},
 		{"DELETE", "/repos/{id}", "repos", "Delete a repository", "write:repos", "", false},
 		{"GET", "/repos/{id}/branches", "repos", "List a repository's branches", "read:repos", "", true},
+		{"GET", "/repos/{id}/fixable", "repos", "Writability preflight: can wolf write a fix branch to this repo?", "read:repos", "", false},
 		{"GET", "/repos/{id}/baselines", "repos", "List repository scan baselines", "read:scans", "", true},
 		{"POST", "/repos/{id}/baselines", "repos", "Create a repository scan baseline", "write:scans", "CreateBaselineRequest", false},
 

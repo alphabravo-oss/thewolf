@@ -176,6 +176,7 @@ func NewServer(store db.Store, addr string) *Server {
 				r.With(wRepos).Put("/{id}", routes.UpdateRepo)
 				r.With(wRepos).Delete("/{id}", routes.DeleteRepo)
 				r.With(rRepos).Get("/{id}/branches", routes.ListRepoBranches)
+				r.With(rRepos).Get("/{id}/fixable", routes.GetRepoFixable)
 				r.With(rScans).Get("/{id}/baselines", routes.ListRepoBaselines)
 				r.With(wScans).Post("/{id}/baselines", routes.CreateRepoBaseline)
 			})

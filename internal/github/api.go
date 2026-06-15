@@ -87,6 +87,50 @@ func (c *Client) ListOrgRepos(ctx context.Context, org string) ([]Repo, error) {
 	return all, nil
 }
 
+// PushInfo is the slice of a repo's metadata the writability preflight needs:
+// whether the authenticated token can push, and whether the repo is archived.
+type PushInfo struct {
+	CanPush  bool
+	Archived bool
+}
+
+// RepoPushInfo fetches GET /repos/{owner}/{repo} and reports whether the
+// authenticated token has push permission and whether the repo is archived.
+// The "permissions" object is only present (and populated) for an
+// authenticated request, which is exactly the writability question we want to
+// answer.
+func (c *Client) RepoPushInfo(ctx context.Context, owner, repo string) (PushInfo, error) {
+	url := fmt.Sprintf("%s/repos/%s/%s", c.BaseURL, owner, repo)
+	req, _ := http.NewRequestWithContext(ctx, "GET", url, nil)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	if c.Token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.Token)
+	}
+	resp, err := c.httpClient().Do(req)
+	if err != nil {
+		return PushInfo{}, err
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return PushInfo{}, fmt.Errorf("github %d: %s", resp.StatusCode, string(body))
+	}
+	var payload struct {
+		Archived    bool `json:"archived"`
+		Permissions struct {
+			Push  bool `json:"push"`
+			Admin bool `json:"admin"`
+		} `json:"permissions"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return PushInfo{}, err
+	}
+	return PushInfo{
+		CanPush:  payload.Permissions.Push || payload.Permissions.Admin,
+		Archived: payload.Archived,
+	}, nil
+}
+
 // ListUserRepos lists every repository for the given user, paging through
 // results.
 func (c *Client) ListUserRepos(ctx context.Context, user string) ([]Repo, error) {

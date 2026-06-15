@@ -17,6 +17,7 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/auth"
 	"github.com/alphabravocompany/thewolf/internal/db"
 	gitpkg "github.com/alphabravocompany/thewolf/internal/fix/git"
+	"github.com/alphabravocompany/thewolf/internal/fix/writability"
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/remote"
 	"github.com/alphabravocompany/thewolf/internal/scan/detector"
@@ -350,6 +351,37 @@ func ListRepoBranches(w http.ResponseWriter, r *http.Request) {
 			"default_branch": repo.DefaultBranch,
 			"current_branch": current,
 		},
+	})
+}
+
+// GetRepoFixable handles GET /api/repos/{id}/fixable — the writability
+// preflight for the autonomous fix engine. It returns the derived
+// {writable, reason} verdict so the UI can show a fixable indicator and disable
+// the Fix action (with a reason) for repos wolf can't write a branch to. This
+// is a read-only probe; it does not require autofix_enabled (the *execute* path
+// is what's gated). read:repos scope.
+func GetRepoFixable(w http.ResponseWriter, r *http.Request) {
+	claims := auth.GetUserFromContext(r.Context())
+	if claims == nil {
+		response.WriteError(w, http.StatusUnauthorized, "unauthorized", "not authenticated")
+		return
+	}
+	h := DefaultHandler
+	if h == nil {
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "handler not initialized")
+		return
+	}
+
+	id := chi.URLParam(r, "id")
+	repo, err := h.Store.GetRepoByID(r.Context(), id)
+	if err != nil {
+		response.WriteError(w, http.StatusNotFound, "not_found", "repo not found")
+		return
+	}
+
+	res := writability.Check(r.Context(), repo, h.Store, writability.DefaultProbes(h.Store))
+	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{
+		Data: models.RepoFixable{Writable: res.Writable, Reason: res.Reason},
 	})
 }
 

@@ -19,6 +19,21 @@ type Repo struct {
 	DetectedAt         *time.Time `json:"detected_at" db:"detected_at"`
 	CreatedAt          time.Time  `json:"created_at" db:"created_at"`
 	UpdatedAt          time.Time  `json:"updated_at" db:"updated_at"`
+
+	// Fixable is the derived writability verdict for the autonomous fix engine:
+	// can wolf actually write a fix branch to this repo's source? It is never
+	// persisted (db:"-") — it is computed on demand by the writability
+	// preflight (GET /repos/{id}/fixable) and surfaced in the UI so the Fix
+	// action can be disabled with a clear reason instead of failing mid-job.
+	Fixable *RepoFixable `json:"fixable,omitempty" db:"-"`
+}
+
+// RepoFixable is the derived "can we write a fix here?" indicator attached to a
+// Repo. It mirrors writability.Result; it lives in models so the Repo struct can
+// carry it without a models→fix/writability import cycle.
+type RepoFixable struct {
+	Writable bool   `json:"writable"`
+	Reason   string `json:"reason"`
 }
 
 // Collection represents a group of repositories.

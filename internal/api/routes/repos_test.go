@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
@@ -35,6 +37,7 @@ func setupRepoRouter(t *testing.T) (*chi.Mux, db.Store, string) {
 		r.Get("/api/repos", routes.ListRepos)
 		r.Post("/api/repos", routes.CreateRepo)
 		r.Get("/api/repos/{id}", routes.GetRepo)
+		r.Get("/api/repos/{id}/fixable", routes.GetRepoFixable)
 		r.Put("/api/repos/{id}", routes.UpdateRepo)
 		r.Delete("/api/repos/{id}", routes.DeleteRepo)
 	})
@@ -214,6 +217,77 @@ func TestRepoDedup(t *testing.T) {
 	json.Unmarshal(w.Body.Bytes(), &listResp)
 	if len(listResp.Data) != 1 {
 		t.Fatalf("expected 1 repo after dup add, got %d", len(listResp.Data))
+	}
+}
+
+// TestRepoFixable exercises GET /repos/{id}/fixable end to end against the real
+// local writability probe: a temp git work tree reports writable=true, and a
+// path with no .git reports writable=false with a reason.
+func TestRepoFixable(t *testing.T) {
+	r, store, token := setupRepoRouter(t)
+	defer store.Close()
+
+	createRepo := func(path string) string {
+		body, _ := json.Marshal(map[string]string{
+			"name":        "fixme",
+			"source_type": "local",
+			"source_path": path,
+		})
+		req := httptest.NewRequest(http.MethodPost, "/api/repos", bytes.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		if w.Code != http.StatusCreated && w.Code != http.StatusOK {
+			t.Fatalf("create repo: got %d: %s", w.Code, w.Body.String())
+		}
+		var resp struct {
+			Data struct {
+				ID string `json:"id"`
+			} `json:"data"`
+		}
+		json.Unmarshal(w.Body.Bytes(), &resp)
+		return resp.Data.ID
+	}
+
+	fixable := func(id string) (int, bool, string) {
+		req := httptest.NewRequest(http.MethodGet, "/api/repos/"+id+"/fixable", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		var resp struct {
+			Data struct {
+				Writable bool   `json:"writable"`
+				Reason   string `json:"reason"`
+			} `json:"data"`
+		}
+		json.Unmarshal(w.Body.Bytes(), &resp)
+		return w.Code, resp.Data.Writable, resp.Data.Reason
+	}
+
+	// A writable git work tree → fixable.
+	gitDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(gitDir, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	code, writable, reason := fixable(createRepo(gitDir))
+	if code != http.StatusOK || !writable {
+		t.Fatalf("git work tree: got code=%d writable=%v reason=%q", code, writable, reason)
+	}
+
+	// A plain dir (no .git) → not fixable, with a reason.
+	plainDir := t.TempDir()
+	code, writable, reason = fixable(createRepo(plainDir))
+	if code != http.StatusOK || writable || reason == "" {
+		t.Fatalf("plain dir: got code=%d writable=%v reason=%q", code, writable, reason)
+	}
+
+	// Unknown repo → 404.
+	req := httptest.NewRequest(http.MethodGet, "/api/repos/does-not-exist/fixable", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("unknown repo: expected 404, got %d", w.Code)
 	}
 }
 
