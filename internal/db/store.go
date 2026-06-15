@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"time"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 )
@@ -194,6 +195,20 @@ type Store interface {
 	DeleteCollectionCascade(ctx context.Context, collectionID string) ([]string, error)
 	// DeleteRepoCascade deletes a repo, its scans, and all related data. Returns scan IDs for artifact cleanup.
 	DeleteRepoCascade(ctx context.Context, repoID string) ([]string, error)
+
+	// Fix jobs (autonomous fix engine — gated by autofix_enabled)
+	EnqueueFixJob(ctx context.Context, job *models.FixJob) error
+	GetFixJobByID(ctx context.Context, id string) (*models.FixJob, error)
+	ListFixJobs(ctx context.Context, repoID string) ([]models.FixJob, error)
+	// ClaimNextFixJob atomically claims the oldest queued job for a worker.
+	// Returns (nil, nil) when the queue is empty — never double-claims.
+	ClaimNextFixJob(ctx context.Context, workerID string) (*models.FixJob, error)
+	UpdateFixJob(ctx context.Context, job *models.FixJob) error
+	// ReclaimStaleJobs requeues claimed/running jobs whose worker stopped
+	// heartbeating before the cutoff (crashed/killed worker recovery).
+	ReclaimStaleJobs(ctx context.Context, cutoff time.Time) (int, error)
+	CreateFixAttempt(ctx context.Context, attempt *models.FixAttempt) error
+	ListFixAttempts(ctx context.Context, jobID string) ([]models.FixAttempt, error)
 
 	// API Tokens
 	CreateAPIToken(ctx context.Context, token *models.APIToken) error

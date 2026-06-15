@@ -158,6 +158,20 @@ func (s *PostgresStore) Migrate() error {
 			return err
 		}
 	}
+	// Migration 021 — autofix job queue + the autofix_enabled flag (default
+	// OFF). The .sql seeds the flag with SQLite's INSERT OR IGNORE; Postgres
+	// gets the ON CONFLICT form here. The CREATE TABLE statements run from
+	// the shared .sql below.
+	if _, err := s.db.Exec(migration021SQL); err != nil {
+		if !strings.Contains(err.Error(), "already exists") && !strings.Contains(err.Error(), "syntax error") {
+			return err
+		}
+	}
+	if _, err := s.db.Exec(`INSERT INTO settings (key, value) VALUES ('autofix_enabled', 'false') ON CONFLICT(key) DO NOTHING`); err != nil {
+		if !strings.Contains(err.Error(), "already exists") && !strings.Contains(err.Error(), "does not exist") {
+			return err
+		}
+	}
 	return nil
 }
 
