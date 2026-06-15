@@ -28,6 +28,7 @@ import type { Repo, Scan } from "@/lib/types";
 import { CardSkeleton } from "@/components/skeleton";
 import { BranchSelect } from "@/components/branch-select";
 import { FrameworksChips } from "@/components/frameworks-chips";
+import { FixableBadge } from "@/components/fixes/fixable-badge";
 
 // One row per past scan from GET /api/scans/trends?repo_id=&branch=
 interface TrendPoint {
@@ -144,6 +145,7 @@ function RepoDetailPage() {
               <GitBranchIcon className="size-5 text-muted-foreground" />
             )}
             {r.name}
+            <FixableBadge repoId={repoId} />
           </h1>
           <div className="text-sm text-muted-foreground font-mono break-all mt-1">
             {r.source_path}

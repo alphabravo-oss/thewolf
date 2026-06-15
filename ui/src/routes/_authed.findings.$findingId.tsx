@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 import type { Finding } from "@/lib/types";
 import { CardSkeleton } from "@/components/skeleton";
 import { SeverityBadge } from "@/components/severity-badge";
+import { FixFindingButton } from "@/components/fixes/fix-finding-button";
 
 export const Route = createFileRoute("/_authed/findings/$findingId")({
   component: FindingDetailPage,
@@ -59,6 +60,11 @@ function FindingDetailPage() {
             {f.line_start ? `:${f.line_start}` : ""}
           </p>
         </div>
+        <FixFindingButton
+          findingId={f.id}
+          repoId={f.repo_id}
+          scanId={f.scan_id}
+        />
       </div>
 
       {f.description && (

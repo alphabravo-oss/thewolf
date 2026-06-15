@@ -106,6 +106,12 @@ const GENERAL_KNOBS = [
     type: "bool" as const,
   },
   {
+    key: "autofix_enabled",
+    label: "Autonomous fixing",
+    help: "Master switch for the autonomous fix engine. v1 is dry-run, per-finding, verified, and branch-only — it produces a fix branch + diff for review and never pushes or opens a PR. When off, the Fixes surface, the worker, and the execute API are all dark. Default off.",
+    type: "bool" as const,
+  },
+  {
     key: "registration_enabled",
     label: "Self-service registration",
     help: "When off, new accounts can only be created from the Users tab. The first account can always bootstrap the system.",
