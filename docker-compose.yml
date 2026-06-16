@@ -44,6 +44,12 @@ services:
       - ${WOLF_REPOS_ROOT:-./repos}:/repos:ro
     environment:
       - WOLF_MASTER_KEY=${WOLF_MASTER_KEY:-}
+      # First-run admin. Bootstrapped only when BOTH are set and no user with
+      # that email exists yet. Set these in your .env (see .env.example) so the
+      # first `docker compose up` has a login. Leave the password empty to skip
+      # bootstrap and use self-service registration instead.
+      - WOLF_ADMIN_EMAIL=${WOLF_ADMIN_EMAIL:-admin@wolf.local}
+      - WOLF_ADMIN_PASSWORD=${WOLF_ADMIN_PASSWORD:-}
       - WOLF_DB_DRIVER=${WOLF_DB_DRIVER:-sqlite}
       - WOLF_DB_DSN=${WOLF_DB_DSN:-}
       - WOLF_LOG_LEVEL=${WOLF_LOG_LEVEL:-info}

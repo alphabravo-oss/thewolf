@@ -30,19 +30,21 @@ RUN CGO_ENABLED=1 go build \
     -o /wolf ./cmd/wolf/
 
 # ============================================================
-# Stage 2: Build the v2 Vite UI (ui-next/)
+# Stage 2: Build the Vite UI (ui/, pnpm)
 # ============================================================
-FROM node:20-alpine AS ui-builder
+FROM node:22-alpine AS ui-builder
 
-WORKDIR /app/ui-next
+RUN npm install -g pnpm@9
+
+WORKDIR /app/ui
 
 # Install deps from the lockfile first for caching.
-COPY ui-next/package.json ui-next/package-lock.json ./
-RUN npm ci --prefer-offline --no-audit --no-fund
+COPY ui/package.json ui/pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
 
 # Build the SPA.
-COPY ui-next/ ./
-RUN npm run build
+COPY ui/ ./
+RUN pnpm build
 
 # ============================================================
 # Stage 3: Minimal runtime
@@ -64,7 +66,7 @@ COPY --from=builder /wolf /usr/local/bin/wolf
 
 # Copy the SPA build output. The Go server's MountStaticUI auto-discovers
 # this path; WOLF_UI_DIR can override it.
-COPY --from=ui-builder /app/ui-next/dist /usr/share/wolf/ui/dist
+COPY --from=ui-builder /app/ui/dist /usr/share/wolf/ui/dist
 
 RUN mkdir -p /home/wolf/.wolf \
     && chown -R wolf:wolf /home/wolf/.wolf
