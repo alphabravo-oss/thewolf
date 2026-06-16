@@ -111,7 +111,15 @@ RUN apt-get update && apt-get purge -y --auto-remove \
               /tmp/install /root/.npm /root/.cache \
               /usr/share/doc/* /usr/share/man/*
 
-RUN WOLF_SMOKE_STRICT=1 /usr/local/bin/smoke-test.sh
+# Smoke test. buildx injects TARGETPLATFORM/BUILDPLATFORM: run STRICT (full
+# version assertions) on the native arch, but lenient on a cross-built /
+# QEMU-emulated arch where some binaries (e.g. ruff, a Rust binary) crash under
+# emulation. Plain `docker build` leaves both empty -> strict, so non-buildx
+# single-arch builds are unchanged.
+ARG TARGETPLATFORM
+ARG BUILDPLATFORM
+RUN STRICT=1; [ -n "$TARGETPLATFORM" ] && [ "$TARGETPLATFORM" != "$BUILDPLATFORM" ] && STRICT=0; \
+    WOLF_SMOKE_STRICT="$STRICT" /usr/local/bin/smoke-test.sh
 
 RUN groupadd -g 1000 wolf && \
     useradd  -u 1000 -g 1000 -m -d /home/wolf -s /bin/bash wolf

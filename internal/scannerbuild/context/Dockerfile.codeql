@@ -42,7 +42,15 @@ RUN chmod +x /usr/local/bin/wolf-tool-entry /usr/local/bin/smoke-test.sh
 COPY install/codeql.sh  /tmp/install/codeql.sh
 RUN  bash /tmp/install/codeql.sh
 
-RUN WOLF_SMOKE_STRICT=1 /usr/local/bin/smoke-test.sh
+# Smoke test. buildx injects TARGETPLATFORM/BUILDPLATFORM: run STRICT (full
+# version assertions) on the native arch, but lenient on a cross-built /
+# QEMU-emulated arch where some binaries (e.g. ruff, a Rust binary) crash under
+# emulation. Plain `docker build` leaves both empty -> strict, so non-buildx
+# single-arch builds are unchanged.
+ARG TARGETPLATFORM
+ARG BUILDPLATFORM
+RUN STRICT=1; [ -n "$TARGETPLATFORM" ] && [ "$TARGETPLATFORM" != "$BUILDPLATFORM" ] && STRICT=0; \
+    WOLF_SMOKE_STRICT="$STRICT" /usr/local/bin/smoke-test.sh
 
 RUN rm -rf /tmp/install /var/cache/apt/* /usr/share/doc/* /usr/share/man/*
 

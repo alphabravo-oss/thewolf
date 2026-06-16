@@ -33,7 +33,7 @@ GOLANGCI_LINT := $(shell command -v golangci-lint 2>/dev/null)
 AIR           := $(shell command -v air 2>/dev/null || echo $(shell go env GOPATH)/bin/air)
 
 .PHONY: all build test lint vet fmt ui-build dev dev-api dev-ui docker docker-up docker-down clean help \
-        scanners-build scanners-smoke scanners-push scanners-validate scanners-docs scanners-docs-check scanners-upstream-check scanners-bump dev-scanners test-integration
+        scanners-build scanners-buildx scanners-buildx-all scanners-buildx-setup scanners-smoke scanners-push scanners-validate scanners-docs scanners-docs-check scanners-upstream-check scanners-bump dev-scanners test-integration
 
 ## all: Build everything (Go binary + UI)
 all: build ui-build
@@ -195,6 +195,34 @@ scanners-build-codeql:
 
 ## scanners-build-all: Build all four scanner images
 scanners-build-all: scanners-build scanners-build-jvm scanners-build-rust scanners-build-codeql
+
+# Multi-arch (buildx). Builds for both arches and PUSHES (a manifest list can't
+# be --load'ed into the local docker). Requires a buildx builder with QEMU for
+# the non-native arch and a logged-in registry. The Dockerfiles run the smoke
+# test strict on the native arch and lenient on the emulated arch, so a single
+# Linux host can cross-build without QEMU-flaky tools (ruff) failing the build.
+# Override PLATFORMS, SCANNERS_REGISTRY, or SCANNERS_TAG as needed.
+PLATFORMS ?= linux/amd64,linux/arm64
+
+## scanners-buildx-setup: Create+use a buildx builder with QEMU (run once per host)
+scanners-buildx-setup:
+	docker run --privileged --rm tonistiigi/binfmt --install all
+	-docker buildx create --name wolf-multiarch --driver docker-container --use
+	docker buildx inspect --bootstrap
+
+## scanners-buildx: Multi-arch build+push of the DEFAULT image (amd64+arm64)
+scanners-buildx:
+	docker buildx build --platform $(PLATFORMS) --build-arg WOLF_VERSION=$(VERSION) \
+		-f scanners/Dockerfile -t $(SCANNERS_REGISTRY)/$(SCANNERS_IMAGE):$(SCANNERS_TAG) --push scanners/
+
+## scanners-buildx-all: Multi-arch build+push of default + jvm + rust (amd64+arm64); codeql is amd64-only
+scanners-buildx-all: scanners-buildx
+	docker buildx build --platform $(PLATFORMS) --build-arg WOLF_VERSION=$(VERSION) \
+		-f scanners/Dockerfile.jvm  -t $(SCANNERS_REGISTRY)/$(SCANNERS_IMAGE)-jvm:$(SCANNERS_TAG)  --push scanners/
+	docker buildx build --platform $(PLATFORMS) --build-arg WOLF_VERSION=$(VERSION) \
+		-f scanners/Dockerfile.rust -t $(SCANNERS_REGISTRY)/$(SCANNERS_IMAGE)-rust:$(SCANNERS_TAG) --push scanners/
+	docker buildx build --platform linux/amd64 --build-arg WOLF_VERSION=$(VERSION) \
+		-f scanners/Dockerfile.codeql -t $(SCANNERS_REGISTRY)/$(SCANNERS_IMAGE)-codeql:$(SCANNERS_TAG) --push scanners/
 
 ## scanners-smoke: Run smoke-test inside each built image
 scanners-smoke:
