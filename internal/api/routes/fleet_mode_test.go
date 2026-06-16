@@ -105,45 +105,58 @@ func metaTotal(t *testing.T, body []byte) int {
 	return got.Meta.Total
 }
 
-// TestFleetModeOffHidesOtherUsersRepos confirms the default fleet_mode=false
-// posture: a foreign user's repos / collections / scans do not surface to the
-// test caller.
-func TestFleetModeOffHidesOtherUsersRepos(t *testing.T) {
+// TestAdminSeesAllUsersRepos: fleet visibility is now role-based. The env user
+// is the first registered account (an admin), so a foreign user's repos /
+// scans / collections all surface to them.
+func TestAdminSeesAllUsersRepos(t *testing.T) {
 	env := setupTestEnv(t)
 	defer env.Store.Close()
 
 	_, _, _, _ = seedOtherUserRepo(t, env)
 
 	for _, path := range []string{"/api/repos", "/api/scans", "/api/collections"} {
-		w := doFleetRequest(t, env, path)
-		if w.Code != http.StatusOK {
-			t.Fatalf("GET %s: expected 200, got %d: %s", path, w.Code, w.Body.String())
-		}
-		if got := metaTotal(t, w.Body.Bytes()); got != 0 {
-			t.Errorf("fleet_mode=false: expected 0 rows at %s, got %d", path, got)
-		}
-	}
-}
-
-// TestFleetModeOnExposesOtherUsersRepos flips fleet_mode and confirms that
-// the foreign user's repo, collection, and scan all become visible.
-func TestFleetModeOnExposesOtherUsersRepos(t *testing.T) {
-	env := setupTestEnv(t)
-	defer env.Store.Close()
-
-	_, _, _, _ = seedOtherUserRepo(t, env)
-
-	if err := env.Store.SetSetting(context.Background(), "fleet_mode", "true"); err != nil {
-		t.Fatalf("SetSetting fleet_mode=true: %v", err)
-	}
-
-	for _, path := range []string{"/api/repos", "/api/scans", "/api/collections"} {
-		w := doFleetRequest(t, env, path)
+		w := doFleetRequest(t, env, path) // env.Token = the admin
 		if w.Code != http.StatusOK {
 			t.Fatalf("GET %s: expected 200, got %d: %s", path, w.Code, w.Body.String())
 		}
 		if got := metaTotal(t, w.Body.Bytes()); got < 1 {
-			t.Errorf("fleet_mode=true: expected >=1 row at %s, got %d", path, got)
+			t.Errorf("admin should see other users' %s, got %d", path, got)
 		}
+	}
+}
+
+// TestRegularUserSeesOnlyOwnRepos: a non-admin sees only what they created, not
+// the other user's items (no global fleet_mode toggle exists any more).
+func TestRegularUserSeesOnlyOwnRepos(t *testing.T) {
+	env := setupTestEnv(t)
+	defer env.Store.Close()
+	ctx := context.Background()
+
+	// Another user (regular) owns one repo + collection + scan.
+	otherID, _, _, _ := seedOtherUserRepo(t, env)
+
+	// And the admin owns a repo too, which the regular user must NOT see.
+	if err := env.Store.CreateRepo(ctx, &models.Repo{
+		ID: uuid.New().String(), UserID: env.UserID, Name: "admin-repo",
+		SourceType: models.SourceTypeLocal, SourcePath: "/tmp/admin-repo", DefaultBranch: "main",
+	}); err != nil {
+		t.Fatalf("CreateRepo admin: %v", err)
+	}
+
+	// A token for the regular user (role resolves to "user" via the middleware).
+	tokens, err := auth.GenerateToken(otherID, "other-fleet@example.com")
+	if err != nil {
+		t.Fatalf("GenerateToken: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/repos", nil)
+	req.Header.Set("Authorization", "Bearer "+tokens.AccessToken)
+	w := httptest.NewRecorder()
+	fleetTestRouter(env).ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET /api/repos: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if got := metaTotal(t, w.Body.Bytes()); got != 1 {
+		t.Errorf("regular user should see only their own repo (1), got %d", got)
 	}
 }

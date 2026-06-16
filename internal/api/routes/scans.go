@@ -862,7 +862,7 @@ func ListScans(w http.ResponseWriter, r *http.Request) {
 		scans []models.Scan
 		err   error
 	)
-	if fleetModeEnabled(r.Context(), h.Store) {
+	if fleetVisible(r.Context(), h.Store, claims.UserID) {
 		scans, err = h.Store.ListAllScans(r.Context())
 	} else {
 		scans, err = h.Store.ListScansByUser(r.Context(), claims.UserID)

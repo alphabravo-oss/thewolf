@@ -73,7 +73,7 @@ func ListRepos(w http.ResponseWriter, r *http.Request) {
 		repos []models.Repo
 		err   error
 	)
-	if fleetModeEnabled(r.Context(), h.Store) {
+	if fleetVisible(r.Context(), h.Store, claims.UserID) {
 		repos, err = h.Store.ListAllRepos(r.Context())
 	} else {
 		repos, err = h.Store.ListReposByUser(r.Context(), claims.UserID)

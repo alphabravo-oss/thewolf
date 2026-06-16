@@ -22,6 +22,7 @@ import { WolfLogo } from "./wolf-logo";
 import { ThemeToggle } from "./theme-toggle";
 import { api, clearToken } from "@/lib/api";
 import { useFlag } from "@/lib/flags";
+import { useIsAdmin } from "@/lib/me";
 import { cn } from "@/lib/utils";
 
 type NavItem = {
@@ -36,12 +37,14 @@ type NavItem = {
 // view, and the agentic surface (Fixes, Loops) only when autonomous fixing is
 // on, so both groups are gated by their feature flag.
 function usePrimaryNav(): NavItem[] {
-  const fleet = useFlag("fleet_mode");
   const autofix = useFlag("autofix_enabled");
+  const isAdmin = useIsAdmin();
   return [
     { label: "Dashboard", to: "/", icon: LayoutDashboardIcon },
     { label: "Collections", to: "/collections", icon: PackageIcon },
-    ...(fleet.enabled
+    // The cross-repo fleet lists are the admin view; regular users browse
+    // their own work via Collections.
+    ...(isAdmin
       ? [
           { label: "Scans", to: "/scans", icon: GaugeIcon },
           { label: "Findings", to: "/findings", icon: BugIcon },
@@ -53,8 +56,13 @@ function usePrimaryNav(): NavItem[] {
           { label: "Loops", to: "/loops", icon: RepeatIcon },
         ]
       : []),
-    { label: "Scanners", to: "/scanners", icon: ContainerIcon },
-    { label: "Audit", to: "/audit", icon: ScrollTextIcon },
+    // Scanner-image management and the audit log are admin-only.
+    ...(isAdmin
+      ? [
+          { label: "Scanners", to: "/scanners", icon: ContainerIcon },
+          { label: "Audit", to: "/audit", icon: ScrollTextIcon },
+        ]
+      : []),
   ];
 }
 

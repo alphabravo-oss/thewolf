@@ -212,7 +212,7 @@ func computeTrends(ctx context.Context, h *Handler, userID, collectionID string)
 		scans []models.Scan
 		err   error
 	)
-	if fleetModeEnabled(ctx, h.Store) {
+	if fleetVisible(ctx, h.Store, userID) {
 		scans, err = h.Store.ListAllScans(ctx)
 	} else {
 		scans, err = h.Store.ListScansByUser(ctx, userID)
@@ -501,7 +501,7 @@ func gatherUserFindings(ctx context.Context, h *Handler, userID string) ([]model
 		scans []models.Scan
 		err   error
 	)
-	if fleetModeEnabled(ctx, h.Store) {
+	if fleetVisible(ctx, h.Store, userID) {
 		scans, err = h.Store.ListAllScans(ctx)
 	} else {
 		scans, err = h.Store.ListScansByUser(ctx, userID)

@@ -10,10 +10,14 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/db"
 )
 
-// fleetModeEnabled reads the fleet_mode setting; on error or absence, false.
-func fleetModeEnabled(ctx context.Context, store db.Store) bool {
-	v, err := store.GetSetting(ctx, "fleet_mode")
-	return err == nil && v == "true"
+// fleetVisible reports whether a user sees the whole fleet (every user's
+// repos / scans / findings / collections) in the list and aggregate views.
+// Admins do; regular users see only what they created. This replaces the old
+// global fleet_mode toggle with role-based visibility — modification is already
+// owner-scoped (canModifyOwned), and now visibility follows the role too.
+func fleetVisible(ctx context.Context, store db.Store, userID string) bool {
+	u, err := store.GetUserByID(ctx, userID)
+	return err == nil && u != nil && u.IsAdmin()
 }
 
 // FleetPosture handles GET /fleet/posture — aggregates open findings by
@@ -31,7 +35,7 @@ func FleetPosture(w http.ResponseWriter, r *http.Request) {
 	}
 
 	collectionID := r.URL.Query().Get("collection_id")
-	posture, err := h.Store.FleetPosture(r.Context(), claims.UserID, fleetModeEnabled(r.Context(), h.Store), collectionID)
+	posture, err := h.Store.FleetPosture(r.Context(), claims.UserID, fleetVisible(r.Context(), h.Store, claims.UserID), collectionID)
 	if err != nil {
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "compute posture: "+err.Error())
 		return
@@ -54,7 +58,7 @@ func FleetInventory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	inv, err := h.Store.FleetInventory(r.Context(), claims.UserID, fleetModeEnabled(r.Context(), h.Store))
+	inv, err := h.Store.FleetInventory(r.Context(), claims.UserID, fleetVisible(r.Context(), h.Store, claims.UserID))
 	if err != nil {
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "compute inventory: "+err.Error())
 		return
@@ -84,7 +88,7 @@ func FleetNeedsAttention(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	rows, err := h.Store.FleetNeedsAttention(r.Context(), claims.UserID, fleetModeEnabled(r.Context(), h.Store), limit)
+	rows, err := h.Store.FleetNeedsAttention(r.Context(), claims.UserID, fleetVisible(r.Context(), h.Store, claims.UserID), limit)
 	if err != nil {
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "compute needs-attention: "+err.Error())
 		return
@@ -125,7 +129,7 @@ func FindingsAggregate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	rows, err := h.Store.FindingsAggregateByRule(r.Context(), claims.UserID, fleetModeEnabled(r.Context(), h.Store), limit)
+	rows, err := h.Store.FindingsAggregateByRule(r.Context(), claims.UserID, fleetVisible(r.Context(), h.Store, claims.UserID), limit)
 	if err != nil {
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "aggregate findings: "+err.Error())
 		return

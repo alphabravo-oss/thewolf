@@ -57,7 +57,7 @@ func ListCollections(w http.ResponseWriter, r *http.Request) {
 		cols []models.Collection
 		err  error
 	)
-	if fleetModeEnabled(r.Context(), h.Store) {
+	if fleetVisible(r.Context(), h.Store, claims.UserID) {
 		cols, err = h.Store.ListAllCollections(r.Context())
 	} else {
 		cols, err = h.Store.ListCollectionsByUser(r.Context(), claims.UserID)
