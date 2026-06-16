@@ -164,6 +164,6 @@ const (
 	KeyTypeOpenAIKey    KeyType = "openai_key"
 	// KeyTypeDockerHubToken stores a DockerHub credential: the encrypted
 	// value is the PAT, and KeyName holds the DockerHub username.
-	KeyTypeDockerHubToken KeyType = "dockerhub_token"
+	KeyTypeDockerHubToken KeyType = "dockerhub_token" // #nosec G101 -- this is a key-type identifier name, not a credential value
 	KeyTypeCustom         KeyType = "custom"
 )

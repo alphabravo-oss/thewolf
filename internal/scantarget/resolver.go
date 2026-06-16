@@ -136,7 +136,7 @@ func extractTar(r io.Reader, dest string) error {
 			if err := os.MkdirAll(filepath.Dir(target), 0o750); err != nil {
 				return err
 			}
-			f, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(hdr.Mode)&0o777)
+			f, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(hdr.Mode)&0o777) // #nosec G115 -- masked with &0o777, so the value is bounded to valid permission bits; conversion is safe
 			if err != nil {
 				return err
 			}
