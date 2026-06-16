@@ -220,7 +220,12 @@ func newServeCmd() *cobra.Command {
 			}
 			defer store.Close()
 
-			routes.AppVersion = version
+			// Only override the declared version (routes.AppVersion) when the
+			// build actually stamped one via ldflags; a plain `go build` leaves
+			// version="dev", and we'd rather show the declared release.
+			if version != "" && version != "dev" {
+				routes.AppVersion = version
+			}
 			routes.BuildCommit = commit
 			routes.BuildDate = buildDate
 
