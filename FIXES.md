@@ -104,6 +104,7 @@ All 54 findings are in `internal/db/migrations/*.sql`. Top rule **LT01** (whites
 ### Configs to add
 
 **`.markdownlint.json`** (repo root):
+
 ```json
 {
   "default": true,
@@ -115,6 +116,7 @@ All 54 findings are in `internal/db/migrations/*.sql`. Top rule **LT01** (whites
 ```
 
 **`.markdownlintignore`** (repo root):
+
 ```
 PLAN.md
 docs/PLAN-*.md
@@ -124,6 +126,7 @@ scanners/LICENSES.md
 ```
 
 **`.yamllint`** (repo root):
+
 ```yaml
 extends: default
 rules:
@@ -138,6 +141,7 @@ ignore: |
 ```
 
 **`.sqlfluff`** (repo root):
+
 ```ini
 [sqlfluff]
 dialect = sqlite     # verify against internal/db driver — likely sqlite

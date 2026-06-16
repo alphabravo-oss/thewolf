@@ -44,4 +44,3 @@ Run:
 ```sh
 go test ./internal/finding/suppression ./internal/api/routes ./internal/db
 ```
-

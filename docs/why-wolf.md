@@ -1,6 +1,6 @@
 # The Wolf
 
-### The unified code security and remediation engine, built by AlphaBravo
+## The unified code security and remediation engine, built by AlphaBravo
 
 > This document is a marketing content library, not a single fixed pitch. It is organized so that any section can be lifted on its own for a landing page, a one-pager, a slide, an email, or a sales conversation. Start at the top for high-level positioning, then pull from the deep dives, persona pages, use cases, and proof points as the audience requires.
 
@@ -107,6 +107,7 @@ Each pillar below is written to stand alone. Every one includes what it is, the 
 **What it is.** The Wolf runs an entire arsenal of best-in-class open source scanners through one engine, and presents everything they find as a single, consistent result. One scan covers application code, dependencies, secrets, containers, infrastructure as code, and documentation quality, across the many languages a real codebase contains.
 
 **Key features.**
+
 - A deep catalog of scanners spanning static analysis, dependency and vulnerability checks, secret detection, infrastructure and container analysis, supply chain inspection, and code quality.
 - Coverage across Go, Python, JavaScript and TypeScript, Ruby, PHP, Java, Kotlin, Rust, Swift, C and C++, shell, YAML, Dockerfiles, Terraform, Kubernetes, SQL, and prose.
 - Automatic language and framework detection, so the right scanners run for each repository without manual setup.
@@ -122,6 +123,7 @@ Each pillar below is written to stand alone. Every one includes what it is, the 
 **What it is.** Every scanner runs inside containers that the Wolf manages. The images are built from sources you can inspect and rebuild yourself, organized so the common tools live in a lean default image and heavier specialized toolchains live in their own images that are pulled only when needed.
 
 **Key features.**
+
 - Scanners packaged into maintained, versioned container images.
 - A lean default image for common tools, with separate images for heavier toolchains so you never carry weight you do not use.
 - Pinned tool versions, so a scan today and a scan next quarter are comparable.
@@ -137,6 +139,7 @@ Each pillar below is written to stand alone. Every one includes what it is, the 
 **What it is.** Raw scanner output is messy and repetitive. The same issue gets reported three different ways by three different tools, and the same backlog reappears scan after scan. The Wolf turns that raw output into findings you can trust.
 
 **Key features.**
+
 - Deduplication that collapses the same issue reported by multiple tools into one finding.
 - Stable fingerprinting, so a finding keeps its identity across scans even as the file around it changes.
 - Scoring and corroboration, so the findings most likely to matter rise to the top.
@@ -152,6 +155,7 @@ Each pillar below is written to stand alone. Every one includes what it is, the 
 **What it is.** This is what sets the Wolf apart. Most tools hand you a list of problems and walk away. The Wolf includes an engine that takes a finding, prepares an isolated working branch, writes a fix, and then proves the fix is real by rebuilding the code and rescanning the exact file to confirm the issue is gone and nothing new broke.
 
 **Key features.**
+
 - Per-finding work in isolated branches, so changes are contained and reviewable.
 - A verification gate that judges a fix by what landed on disk, by a successful rebuild, and by a targeted rescan, never by trusting that the change looks correct.
 - A regression check, so a fix that clears one issue but introduces another is rejected.
@@ -168,6 +172,7 @@ Each pillar below is written to stand alone. Every one includes what it is, the 
 **What it is.** Beyond fixing a single finding, the Wolf can run the full loop: scan, fix, rescan, and repeat, driving a repository toward a cleaner state across iterations within the bounds you set.
 
 **Key features.**
+
 - A closed loop of scan, remediate, and verify, run automatically.
 - Bounded by iteration, time, and cost limits you control.
 - Severity floors, so the loop spends effort where it matters first.
@@ -182,6 +187,7 @@ Each pillar below is written to stand alone. Every one includes what it is, the 
 **What it is.** Define the standard once, then let the Wolf enforce it on every scan. A gate evaluates a scan against your policy and returns a clear pass or fail that your pipeline can act on.
 
 **Key features.**
+
 - Policies scoped where you need them, applied consistently across scans.
 - Rules such as no new high-severity findings, no committed secrets, and dependency risk under a set threshold.
 - A clear pass or fail result for continuous integration.
@@ -196,6 +202,7 @@ Each pillar below is written to stand alone. Every one includes what it is, the 
 **What it is.** When you run dozens or hundreds of repositories, per-repository scanning is not enough. Fleet mode rolls everything up: posture across the whole estate, which repositories need attention, where risk is concentrated, and how it is trending over time.
 
 **Key features.**
+
 - Aggregate posture across every repository, broken down by severity.
 - A needs-attention view that ranks repositories by real risk.
 - Inventory views by source type, language, and collection.
@@ -211,6 +218,7 @@ Each pillar below is written to stand alone. Every one includes what it is, the 
 **What it is.** The Wolf scans code wherever it lives. Point it at a local path, connect a GitHub repository whether public or private, or reach a remote host over SSH.
 
 **Key features.**
+
 - Local path scanning for code already on the machine.
 - GitHub repositories, public and private, with credentials managed as encrypted secrets.
 - Remote scanning over SSH to reach code on other hosts.
@@ -226,6 +234,7 @@ Each pillar below is written to stand alone. Every one includes what it is, the 
 **What it is.** Repositories can be grouped into collections that reflect how your organization actually works, by team, by environment, by product, or by any boundary that matters to you.
 
 **Key features.**
+
 - Group repositories into named collections.
 - Scan and report at the collection level.
 - Collection-scoped configuration and tool selection.
@@ -240,6 +249,7 @@ Each pillar below is written to stand alone. Every one includes what it is, the 
 **What it is.** Everything the Wolf can do is exposed through a documented API and a complete command line, with full parity between them and the web interface. Anything a person can do in the UI, an automation or an AI agent can do through the API or CLI.
 
 **Key features.**
+
 - A full HTTP API with versioned endpoints.
 - A command line that covers the entire feature set, suitable for humans and for scripts.
 - Offline API documentation, so the reference works even in disconnected environments.
@@ -255,6 +265,7 @@ Each pillar below is written to stand alone. Every one includes what it is, the 
 **What it is.** Every scan produces durable, portable output: normalized findings, a manifest of what ran, standard SARIF for interoperability, and human-readable reports for review and handoff.
 
 **Key features.**
+
 - SARIF export for interoperability with other tools and platforms.
 - A scan manifest recording which tools ran, what was detected, and the resulting counts.
 - Normalized findings with rule, severity, and location, plus fingerprints for stability.
@@ -270,6 +281,7 @@ Each pillar below is written to stand alone. Every one includes what it is, the 
 **What it is.** The Wolf governs who can do what, and keeps a record of what was done. Access is controlled, sessions are hardened, and activity is logged.
 
 **Key features.**
+
 - Scoped access tokens with fine-grained verb and resource permissions.
 - Hardened browser sessions and an administrator bootstrap for first setup.
 - A complete audit log of activity across the platform.
@@ -284,6 +296,7 @@ Each pillar below is written to stand alone. Every one includes what it is, the 
 **What it is.** The credentials the Wolf needs, such as repository tokens and model keys, are stored as encrypted secrets rather than scattered across config files or command lines.
 
 **Key features.**
+
 - Encrypted storage for repository tokens, model keys, and other sensitive values.
 - Per-user scoping, so credentials belong to an owner.
 - Secrets referenced by the platform rather than copied around.
@@ -298,6 +311,7 @@ Each pillar below is written to stand alone. Every one includes what it is, the 
 **What it is.** The Wolf can use AI to help triage, enrich, and explain findings, and to power the remediation engine. Every one of these features is optional and off by default, and turns on only when you decide and supply your own provider.
 
 **Key features.**
+
 - AI-assisted enrichment and triage of findings, when enabled.
 - Fix prompts and remediation powered by your choice of agent tooling or model provider.
 - A master switch per capability, defaulting to off.
@@ -312,6 +326,7 @@ Each pillar below is written to stand alone. Every one includes what it is, the 
 **What it is.** The Wolf runs on your infrastructure, in your cloud, or fully disconnected. It is built to operate as a service with separable workers, so it scales the way modern platforms do.
 
 **Key features.**
+
 - Fully self-hosted, with no dependency on a vendor cloud to scan.
 - Air-gap capable, with scanner images you can build and host yourself.
 - A durable, queue-driven worker model suited to scaling remediation work, and ready for Kubernetes.
@@ -457,4 +472,4 @@ The Wolf is developed by AlphaBravo. AlphaBravo builds secure, cloud-native plat
 
 The Wolf. Find it. Prove it. Fix it.
 
-To learn more or to see the Wolf in action, reach out to AlphaBravo. https://alphabravo.io
+To learn more or to see the Wolf in action, reach out to AlphaBravo. <https://alphabravo.io>

@@ -17,6 +17,7 @@
 Files this plan creates or changes, with one-line responsibility each.
 
 **New files:**
+
 - `ui-next/src/components/add-repo-form.tsx` — Self-contained source-type-tabbed form: Local / GitHub / Remote git URL / SSH node. Used from both `/repos` and `/collections/$id`.
 - `ui-next/src/lib/parse-frameworks.ts` — Tiny JSON-array → `string[]` parser with a graceful fallback for legacy non-JSON payloads.
 - `ui-next/src/components/frameworks-chips.tsx` — Renders an array of framework names as inline chip badges.
@@ -25,6 +26,7 @@ Files this plan creates or changes, with one-line responsibility each.
 - `ui-next/src/components/add-repo-form.test.tsx` — Component-level test for source-type tab switching + body payload.
 
 **Modified files:**
+
 - `ui-next/src/components/sidebar.tsx` — Extend the `primary` nav array with Loops, Fixes, Scanners, Audit; keep Settings in `secondary`.
 - `ui-next/src/routes/_authed.repos.index.tsx` — Add an "+ Add repo" button that toggles `AddRepoForm`; replace the misleading description copy.
 - `ui-next/src/routes/_authed.collections.$collectionId.tsx` — Delete the inline copy of the form and import the shared component, threading `collectionId` so it auto-links after create.
@@ -34,6 +36,7 @@ Files this plan creates or changes, with one-line responsibility each.
 - `ui-next/src/lib/api.ts` — Add typed wrappers for `/api/v1/audit-log` if not already present.
 
 **Read-only references (don't modify):**
+
 - `cmd/wolf/main.go` — bootstrap admin (unchanged; UI just consumes the API).
 - `internal/scantarget/github.go` — `ParseGitHubSource` validation (UI must keep input acceptable to this).
 - `internal/api/routes/repos.go:107-132` — server-side validation order (the UI's `source_type: "github"` must match).
@@ -67,6 +70,7 @@ The plan is complete only when **all** of the following are true. A run-through 
 **Why first:** smallest unit, independently committable, sets the testing scaffolding pattern the rest of the plan reuses.
 
 **Files:**
+
 - Create: `ui-next/src/lib/parse-frameworks.ts`
 - Test: `ui-next/src/lib/parse-frameworks.test.ts`
 
@@ -156,6 +160,7 @@ git commit -m "feat(ui): parse repo.detected_frameworks JSON into string[]"
 ## Task 2: Render Frameworks as chips on the repo detail page
 
 **Files:**
+
 - Create: `ui-next/src/components/frameworks-chips.tsx`
 - Modify: `ui-next/src/routes/_authed.repos.$repoId.tsx` (the line currently rendering raw `detected_frameworks`)
 
@@ -230,6 +235,7 @@ git commit -m "fix(ui): render repo frameworks as chips, not raw JSON"
 This is the load-bearing refactor — every subsequent UI improvement depends on it. Make this one work cleanly before moving on.
 
 **Files:**
+
 - Create: `ui-next/src/components/add-repo-form.tsx`
 - Create: `ui-next/src/components/add-repo-form.test.tsx`
 - Modify: `ui-next/src/routes/_authed.collections.$collectionId.tsx` (delete the inline form, import the new one)
@@ -607,6 +613,7 @@ Expected: PASS, 3 tests green.
 - [ ] **Step 5: Swap the collection page to use the shared component**
 
 In `ui-next/src/routes/_authed.collections.$collectionId.tsx`:
+
 1. Delete the inline `AddRepoForm` (the JSX block previously at ~lines 455-620 and its supporting hooks).
 2. Add `import { AddRepoForm } from "@/components/add-repo-form";` at the top.
 3. Replace the rendered form with:
@@ -644,6 +651,7 @@ git commit -m "refactor(ui): extract AddRepoForm into a shared component, add Gi
 ## Task 4: Mount AddRepoForm directly on the Repos page
 
 **Files:**
+
 - Modify: `ui-next/src/routes/_authed.repos.index.tsx`
 
 - [ ] **Step 1: Read the current Repos page**
@@ -734,6 +742,7 @@ git commit -m "feat(ui): create repos directly from the Repos page"
 ## Task 5: Extend the sidebar nav to cover all working routes
 
 **Files:**
+
 - Modify: `ui-next/src/components/sidebar.tsx`
 
 - [ ] **Step 1: Inspect the current nav array**
@@ -798,6 +807,7 @@ git commit -m "feat(ui): surface Fixes, Loops, Scanners, Audit in the sidebar"
 ## Task 6: Add the Audit log page
 
 **Files:**
+
 - Create: `ui-next/src/routes/_authed.audit.tsx` (route group wrapper)
 - Create: `ui-next/src/routes/_authed.audit.index.tsx` (the actual page)
 
@@ -969,6 +979,7 @@ git commit -m "feat(ui): add /audit page surfacing the audit log table"
 ## Task 7: "No scanners ran" banner on scan detail
 
 **Files:**
+
 - Modify: whichever of `_authed.scans.$scanId.tsx`, `_authed.scans.$scanId.index.tsx`, or `_authed.scans.$scanId.live.tsx` renders the header block. Grep first.
 
 - [ ] **Step 1: Locate the header**
@@ -1010,10 +1021,13 @@ function toolsSelectedCount(scan: { tools_selected?: string }): number {
 - [ ] **Step 3: Guard the misleading no-issues message**
 
 Find:
+
 ```tsx
 <div>This scan completed without any issues. Nice.</div>
 ```
+
 and change to:
+
 ```tsx
 {toolsSelectedCount(scan) > 0 && (
   <div>This scan completed without any issues. Nice.</div>
@@ -1024,6 +1038,7 @@ and change to:
 
 Run: `pnpm --filter ui-next build`
 Open a scan whose `tools_selected` is `[]` (the one created during the walkthrough) and confirm:
+
 - The amber banner appears.
 - The "without any issues. Nice." line is gone.
 
@@ -1041,6 +1056,7 @@ git commit -m "fix(ui): banner when a completed scan ran zero scanners"
 ## Task 8: Duration consistency on the Scans list
 
 **Files:**
+
 - Modify: `ui-next/src/routes/_authed.scans.index.tsx`
 
 - [ ] **Step 1: Find the duration render site**
@@ -1066,6 +1082,7 @@ function formatDuration(started?: string | null, completed?: string | null): str
 ```
 
 Then in the table row:
+
 ```tsx
 <td className="px-3 py-2 text-xs">
   {formatDuration(scan.started_at, scan.completed_at)}
@@ -1076,6 +1093,7 @@ Then in the table row:
 
 Run: `pnpm --filter ui-next build`
 Visit `/scans`:
+
 - A completed-instant scan should show `0s`, not `—`.
 - A running scan should still show `—`.
 
@@ -1091,6 +1109,7 @@ git commit -m "fix(ui): show 0s for instant scans in the Scans list Duration col
 ## Task 9: README + smoke verification
 
 **Files:**
+
 - Modify: `README.md` (the "API & CLI" section — note the new UI capabilities)
 
 - [ ] **Step 1: Document the new UI affordances**
@@ -1135,6 +1154,7 @@ curl -sf http://127.0.0.1:8779/api/v1/health >/dev/null && echo "OK"
 - [ ] **Step 3: Walk the flow in a browser**
 
 Sign in with `admin@wolf.local` / the password from `.env`. Then:
+
 1. `/repos` → "+ Add repo" → GitHub tab → enter `alphabravo-oss/thewolf` → submit → land on detail page with `source_type: "github"`.
 2. Click Scan now → confirm the "No scanners ran" banner appears on the completed scan.
 3. Back to `/scans` → confirm Duration shows `0s`.

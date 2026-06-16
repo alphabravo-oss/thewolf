@@ -32,8 +32,9 @@ recorded, reversible, and human-gated.
 findings. The AI never creates, discovers, or adds findings to wolf's
 record. wolf is the driving force behind every finding and every
 validation. The AI has exactly two jobs:
-  - **Fix** — attempt to remediate a finding wolf reported.
-  - **Prove validity** — determine whether a finding is genuine or a
+
+- **Fix** — attempt to remediate a finding wolf reported.
+- **Prove validity** — determine whether a finding is genuine or a
     false positive (e.g. sample data, a test fixture, a deliberate
     anti-pattern) and justify that call.
 
@@ -195,11 +196,13 @@ are an enhancement layer that degrades cleanly to "unavailable".
 ## User Stories
 
 ### US-1: Deterministic enrichment template engine
+
 **Description:** As a security engineer, I want each finding turned into a
 structured fix prompt assembled from data wolf already has, so I get a
 usable AI-ready prompt with no AI call and no cost.
 
 **Acceptance Criteria:**
+
 - [ ] A function builds an `ai_fix_prompt` string with fixed sections:
   Problem, Location + snippet, Repo context, Task, Acceptance criteria.
 - [ ] Repo context includes function/module name, file purpose,
@@ -210,10 +213,12 @@ usable AI-ready prompt with no AI call and no cost.
 - [ ] `go build ./...` and `go test ./...` pass.
 
 ### US-2: `enrich` command with filter expression
+
 **Description:** As a user, I want `wolf enrich` to write fix prompts into
 a scan's findings JSON for the findings I select.
 
 **Acceptance Criteria:**
+
 - [ ] `wolf enrich --scan <id>` populates `ai_fix_prompt` on findings in
   the scan's findings JSON artifact.
 - [ ] Filters `--severity`, `--category`, `--tool`, `--exclude-path`
@@ -224,10 +229,12 @@ a scan's findings JSON for the findings I select.
 - [ ] `go build ./...` and `go test ./...` pass.
 
 ### US-3: Optional AI-generated guidance layer
+
 **Description:** As a user with an AI provider configured, I want
 `enrich --ai` to produce richer, model-authored remediation guidance.
 
 **Acceptance Criteria:**
+
 - [ ] `enrich --ai` calls the configured provider per selected finding
   and stores model-authored guidance in `ai_fix_prompt`.
 - [ ] With no provider configured, `--ai` fails with a clear message and
@@ -237,10 +244,12 @@ a scan's findings JSON for the findings I select.
 - [ ] `go build ./...` and `go test ./...` pass.
 
 ### US-4: Hybrid AI tool registry
+
 **Description:** As an operator, I want to add a CLI AI agent by config
 without recompiling, while raw-API engines stay in Go code.
 
 **Acceptance Criteria:**
+
 - [ ] CLI tool definitions (name, command, arg template, cwd, success
   rule) are read from the settings store.
 - [ ] An unknown/misconfigured tool yields a clear error, not a panic.
@@ -250,10 +259,12 @@ without recompiling, while raw-API engines stay in Go code.
 - [ ] `go build ./...` and `go test ./...` pass.
 
 ### US-5: AI runner container
+
 **Description:** As the loop, I need a writable, networked container with
 git and the AI CLIs so an agent can edit the repo.
 
 **Acceptance Criteria:**
+
 - [ ] A runner image (Dockerfile) ships git + supported AI CLIs.
 - [ ] The loop launches it with the repo bind-mounted read-write, network
   enabled, and API keys injected as env from the secrets store.
@@ -263,10 +274,12 @@ git and the AI CLIs so an agent can edit the repo.
 - [ ] `go build ./...` passes.
 
 ### US-6: Raw-API patch mode
+
 **Description:** As a user pointing the loop at a plain LLM endpoint, I
 want wolf to obtain and apply a patch itself.
 
 **Acceptance Criteria:**
+
 - [ ] wolf prompts the model for a unified diff and applies it via
   `git apply`.
 - [ ] On `git apply` rejection, wolf re-prompts with the apply error and
@@ -277,10 +290,12 @@ want wolf to obtain and apply a patch itself.
 - [ ] `go build ./...` and `go test ./...` pass.
 
 ### US-7: Loop iteration — triage, plan, fix, rescan
+
 **Description:** As a user, I want one loop iteration to triage findings,
 make the AI plan and fix, then rescan with wolf to validate.
 
 **Acceptance Criteria:**
+
 - [ ] An iteration: AI triage → plan artifact written → agentic fix or
   raw-API patch → wolf rescan.
 - [ ] The agentic tool receives the whole targeted findings set + the
@@ -295,10 +310,12 @@ make the AI plan and fix, then rescan with wolf to validate.
 - [ ] `go build ./...` and `go test ./...` pass.
 
 ### US-8: Loop stop conditions
+
 **Description:** As a user, I want the loop to end correctly — success,
 exhaustion, or guardrail.
 
 **Acceptance Criteria:**
+
 - [ ] Loop stops when targeted findings reach 0 (success).
 - [ ] Loop stops when a configured severity threshold is met.
 - [ ] Loop stops when an iteration reduces targeted findings by 0
@@ -312,10 +329,12 @@ exhaustion, or guardrail.
 - [ ] `go build ./...` and `go test ./...` pass.
 
 ### US-9: AI triage of false positives
+
 **Description:** As a user, I want the AI's false-positive calls applied
 but reviewable — the AI proving a finding invalid, never deleting it.
 
 **Acceptance Criteria:**
+
 - [ ] An AI-triaged false positive gets status `false_positive`, the AI's
   reason, and a `triaged_by=ai` tag; the finding row is retained.
 - [ ] Such findings are excluded from loop success counting.
@@ -324,10 +343,12 @@ but reviewable — the AI proving a finding invalid, never deleting it.
 - [ ] `go build ./...` and `go test ./...` pass.
 
 ### US-10: Determinism manifest & AI I/O capture
+
 **Description:** As an auditor, I want every loop run fully reconstructable
 from records.
 
 **Acceptance Criteria:**
+
 - [ ] Each iteration writes a manifest: git SHA before/after, scanner
   image digests, tool set, fingerprints in/out, AI tool, plan reference.
 - [ ] Scanner image digests are pinned across the loop.
@@ -338,9 +359,11 @@ from records.
 - [ ] `go build ./...` and `go test ./...` pass.
 
 ### US-11: Cost & time ceilings
+
 **Description:** As an operator, I want optional spend/time caps.
 
 **Acceptance Criteria:**
+
 - [ ] `--max-iterations` is mandatory and enforced.
 - [ ] Optional per-invocation timeout kills a hung batch and marks it
   failed.
@@ -352,10 +375,12 @@ from records.
 - [ ] `go build ./...` and `go test ./...` pass.
 
 ### US-12: `wolf loop` CLI + loop REST API
+
 **Description:** As a user, I want to start and watch a loop from the CLI
 and API.
 
 **Acceptance Criteria:**
+
 - [ ] `wolf loop --scan <id> [--max-iterations N] [--ai-tool X]
   [--min-severity S] [budget/timeout flags]` runs a loop and streams
   progress.
@@ -366,10 +391,12 @@ and API.
 - [ ] `go build ./...` and `go test ./...` pass.
 
 ### US-13: Revive & update the Loops UI
+
 **Description:** As a user, I want to configure, run, and watch a loop in
 the browser.
 
 **Acceptance Criteria:**
+
 - [ ] The Loops nav entry, route, and command-palette item are un-hidden.
 - [ ] A start-loop form: pick scan, AI tool, max iterations, severity
   target, optional ceilings.
@@ -379,10 +406,12 @@ the browser.
 - [ ] Verify in browser: start a loop, watch iterations advance.
 
 ### US-14 (deferred): Container-plugin system for paid scanners
+
 **Description:** As an operator, I want to add a paid SAST/DAST scanner by
 config — extending wolf's own scanning, still wolf-owned findings.
 
 **Acceptance Criteria:**
+
 - [ ] A plugin is a config entry: name, image, invocation, secret refs,
   output format (SARIF or wolf JSON).
 - [ ] The existing container runner executes it; output is normalized
@@ -467,18 +496,21 @@ decides. wolf drives every scan; the AI only fixes and proves validity.
 ## Implementation Phases
 
 ### Phase 1: Enrichment foundation
+
 - [ ] US-1 deterministic enrichment template engine
 - [ ] US-2 `enrich` command + filter expression + JSON write-back
 - [ ] US-3 optional AI-generated guidance layer
 - **Verification:** `go build ./... && go test ./internal/...`
 
 ### Phase 2: AI tool abstraction & execution environment
+
 - [ ] US-4 hybrid AI tool registry
 - [ ] US-5 AI runner container
 - [ ] US-6 raw-API patch mode
 - **Verification:** `go build ./... && go test ./internal/...`
 
 ### Phase 3: The auto-remediation loop
+
 - [ ] US-7 loop iteration (triage, plan, fix, rescan)
 - [ ] US-8 loop stop conditions
 - [ ] US-9 AI false-positive triage
@@ -487,18 +519,21 @@ decides. wolf drives every scan; the AI only fixes and proves validity.
 - **Verification:** `go build ./... && go test ./internal/...`
 
 ### Phase 4: Surfaces
+
 - [ ] US-12 `wolf loop` CLI + loop REST API
 - [ ] US-13 revive & update the Loops UI
 - **Verification:** `go build ./...`, `go test ./internal/...`,
   `cd ui-next && npx tsc --noEmit && npm run build`
 
 ### Phase 5 (deferred): Plugin system
+
 - [ ] US-14 container-plugin system for paid scanners
 - **Verification:** `go build ./... && go test ./internal/...`
 
 ## Definition of Done
 
 This feature is complete (MVP = Phases 1–4) when:
+
 - [ ] All acceptance criteria in US-1 … US-13 pass.
 - [ ] Phases 1–4 verified by their verification commands.
 - [ ] Tests pass: `go test ./...`

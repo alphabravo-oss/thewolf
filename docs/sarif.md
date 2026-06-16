@@ -41,4 +41,3 @@ Run:
 ```sh
 go test ./internal/finding/sarifio ./internal/api/routes ./internal/scan/report
 ```
-

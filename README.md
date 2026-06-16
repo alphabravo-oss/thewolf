@@ -47,18 +47,21 @@ The Wolf collapses that sprawl into one platform:
 <td width="33%" valign="top">
 
 ### 🐺 Unified Scanning
+
 **49 scanners, one engine.** SAST, SCA, secrets, containers, IaC, DAST, SBOM, license, privacy/PII, K8s, and more — running in parallel, version-pinned, and fully reproducible.
 
 </td>
 <td width="33%" valign="top">
 
 ### 🛰️ Fleet Management
+
 **See and steer everything.** Manage 100+ repos across local, GitHub, and remote SSH hosts from a single fleet dashboard — posture, trends, top risks, and what needs attention today.
 
 </td>
 <td width="33%" valign="top">
 
 ### 🤖 AI Remediation
+
 **Find *and* fix.** AI enriches findings with ready-to-ship guidance, opens fix PRs, and runs autonomous scan→fix→rescan loops with budget and regression guardrails.
 
 </td>
@@ -67,18 +70,21 @@ The Wolf collapses that sprawl into one platform:
 <td width="33%" valign="top">
 
 ### 🛡️ Governance & Policy
+
 **Ship with confidence.** Quality gates that block CI, baselines that surface only what's *new*, audit-logged suppressions, and SARIF in and out of every system you already run.
 
 </td>
 <td width="33%" valign="top">
 
 ### 🔌 Built for Platforms
+
 **Automate all of it.** A complete REST API with live OpenAPI docs, a CLI that mirrors it 1:1, scoped tokens, SSE streaming, SQLite or PostgreSQL — self-hosted and air-gap friendly.
 
 </td>
 <td width="33%" valign="top">
 
 ### 🔗 Source Anywhere
+
 **Scan it wherever it lives.** Local checkouts, public and private GitHub, generic git, or code sitting on remote SSH hosts — no agents to deploy, bulk-imported in seconds.
 
 </td>

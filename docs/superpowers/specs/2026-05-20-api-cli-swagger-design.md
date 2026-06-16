@@ -213,6 +213,7 @@ New table `api_tokens`:
 Admins may pass `?user_id=` to manage other users' tokens.
 
 **Example — create a token:**
+
 ```
 POST /api/v1/auth/tokens
 Authorization: Bearer <jwt-or-token>
@@ -220,6 +221,7 @@ Content-Type: application/json
 
 { "name": "ci-pipeline", "scopes": ["read:scans","write:scans","read:findings"], "expires_in_days": 90 }
 ```
+
 ```
 201 Created
 { "data": {
@@ -437,6 +439,7 @@ Precedence: `--server/--token` flags → `--context` → `WOLF_SERVER`/`WOLF_TOK
 Every protected endpoint and its CLI command. All commands go through the API client.
 
 #### `wolf repo`
+
 | Command | API |
 |---------|-----|
 | `wolf repo list` | `GET /repos` |
@@ -447,6 +450,7 @@ Every protected endpoint and its CLI command. All commands go through the API cl
 | `wolf repo branches <id>` | `GET /repos/{id}/branches` |
 
 #### `wolf collection`
+
 | Command | API |
 |---------|-----|
 | `wolf collection list` | `GET /collections` |
@@ -460,6 +464,7 @@ Every protected endpoint and its CLI command. All commands go through the API cl
 | `wolf collection metrics <id>` | `GET /collections/{id}/metrics` |
 
 #### `wolf scan`
+
 | Command | API |
 |---------|-----|
 | `wolf scan list [--repo] [--status] [--page] [--per-page]` | `GET /scans` |
@@ -484,6 +489,7 @@ Every protected endpoint and its CLI command. All commands go through the API cl
 | `wolf scan run --repo <path> …` | **local mode** — current `wolf scan`, no server (see §7.5) |
 
 #### `wolf finding`
+
 | Command | API |
 |---------|-----|
 | `wolf finding list [--severity] [--status] [--repo] [--page]` | `GET /findings` |
@@ -494,6 +500,7 @@ Every protected endpoint and its CLI command. All commands go through the API cl
 | `wolf finding trends-export [--out file]` | `GET /findings/trends/export` |
 
 #### `wolf fix`
+
 | Command | API |
 |---------|-----|
 | `wolf fix list` | `GET /fixes` |
@@ -503,6 +510,7 @@ Every protected endpoint and its CLI command. All commands go through the API cl
 | `wolf fix cancel <id>` | `DELETE /fixes/{id}` |
 
 #### `wolf loop`
+
 | Command | API |
 |---------|-----|
 | `wolf loop list` | `GET /loops` |
@@ -514,6 +522,7 @@ Every protected endpoint and its CLI command. All commands go through the API cl
 | `wolf loop stop <id>` | `DELETE /loops/{id}` |
 
 #### `wolf user` (admin scope)
+
 | Command | API |
 |---------|-----|
 | `wolf user list` | `GET /users` |
@@ -521,12 +530,14 @@ Every protected endpoint and its CLI command. All commands go through the API cl
 | `wolf user delete <id>` | `DELETE /users/{id}` |
 
 #### `wolf settings`
+
 | Command | API |
 |---------|-----|
 | `wolf settings get` | `GET /settings` |
 | `wolf settings set --key K --value V` (repeatable) | `PUT /settings` |
 
 #### `wolf prompt` (AI prompt templates)
+
 | Command | API |
 |---------|-----|
 | `wolf prompt list` | `GET /ai-prompts` |
@@ -536,11 +547,13 @@ Every protected endpoint and its CLI command. All commands go through the API cl
 | `wolf prompt delete <id>` | `DELETE /ai-prompts/{id}` |
 
 #### `wolf provider`
+
 | Command | API |
 |---------|-----|
 | `wolf provider list` | `GET /ai-providers` |
 
 #### `wolf secret`
+
 | Command | API |
 |---------|-----|
 | `wolf secret list` | `GET /config/secrets` |
@@ -548,12 +561,14 @@ Every protected endpoint and its CLI command. All commands go through the API cl
 | `wolf secret delete <id>` | `DELETE /config/secrets/{id}` |
 
 #### `wolf plugin`
+
 | Command | API |
 |---------|-----|
 | `wolf plugin list` | `GET /config/plugins` |
 | `wolf plugin install <name>` | `POST /config/plugins/{name}/install` |
 
 #### `wolf scanner`
+
 | Command | API |
 |---------|-----|
 | `wolf scanner images` | `GET /scanners/images` |
@@ -564,6 +579,7 @@ Every protected endpoint and its CLI command. All commands go through the API cl
 | `wolf scanner doctor` | `POST /scanners/doctor` |
 
 #### `wolf system` / misc
+
 | Command | API |
 |---------|-----|
 | `wolf system health` | `GET /health` |
@@ -574,6 +590,7 @@ Every protected endpoint and its CLI command. All commands go through the API cl
 | `wolf git-info <path>` | `GET /git-info` |
 
 #### Existing operational commands (kept)
+
 `wolf serve`, `wolf doctor`, `wolf pull scanners`, `wolf version` (local build info).
 
 ### 7.5 Local vs. API mode (the Hybrid decision)
@@ -601,6 +618,7 @@ Every protected endpoint and its CLI command. All commands go through the API cl
 - `--output table` — a human-readable table; each resource type registers its columns.
 
 Example:
+
 ```
 $ wolf scan list --output table
 ID        REPO            STATUS     FINDINGS  STARTED

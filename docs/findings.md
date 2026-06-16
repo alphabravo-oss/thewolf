@@ -50,4 +50,3 @@ Run:
 ```sh
 go test ./internal/finding/... ./internal/scan/runner ./internal/db
 ```
-

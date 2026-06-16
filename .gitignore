@@ -60,3 +60,6 @@ tmp/
 # Misc
 -.json
 *.log
+
+# Local scan-export output
+FINDINGS/

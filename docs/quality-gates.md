@@ -44,4 +44,3 @@ Run:
 ```sh
 go test ./internal/finding/gates ./internal/api/routes ./internal/cli
 ```
-

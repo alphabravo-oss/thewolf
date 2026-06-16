@@ -25,6 +25,7 @@ The 141 remaining findings break into **3 wolf-side bugs to actually fix** + **2
 
 **File**: `plugins/infra/kics.go:44-46`
 **Current**:
+
 ```go
 script := "kics scan -p /scan -o /tmp/kics --no-progress " +
     "--report-formats json --silent >/dev/null 2>&1; " +
@@ -49,6 +50,7 @@ Test: write a `.kics.yaml` with one exclusion + assert that rule doesn't appear 
 After the staticcheck-cleanup commit (`32e5943`) removed dead code from `internal/api/routes/scans.go` and `fixes.go`, the line numbers downstream shifted by 1–4. The batch suppression script that landed in commit `6c0d200` used line numbers from the *original* scan, so the inline `// nosemgrep` comments are now on the wrong lines.
 
 **Files affected** (current scan, ground truth):
+
 - `internal/api/routes/findings.go:337` — `xss/no-direct-write-to-responsewriter`
 - `internal/api/routes/findings.go:440` — same
 - `internal/api/routes/scans.go:1014, 1054, 1783, 1961, 1974` — same
@@ -94,10 +96,12 @@ Plus add `# trufflehog:ignore` comments next to the UUIDs.
 
 ## Dep bumps (renovate, 27)
 
-### Patch (1, safe to merge):
+### Patch (1, safe to merge)
+
 - `gomod: github.com/mattn/go-sqlite3 v1.14.34 → v1.14.44`
 
-### Minor (7, safe-ish — single-PR batch):
+### Minor (7, safe-ish — single-PR batch)
+
 - `gomod: x/crypto v0.50.0 → v0.51.0`
 - `gomod: zerolog v1.34.0 → v1.35.1`
 - `gomod: lib/pq v1.11.2 → v1.12.3`
@@ -106,7 +110,7 @@ Plus add `# trufflehog:ignore` comments next to the UUIDs.
 - `npm: lucide-react ^0.469.0 → ^0.577.0`
 - `npm: @tanstack/react-form ^0.40.0 → ^0.48.0`
 
-### Major (19, individual PRs — review each):
+### Major (19, individual PRs — review each)
 
 | Package | From → To | Risk | Notes |
 |---|---|---|---|
@@ -142,6 +146,7 @@ If they persist after a clean rebuild, the local Go toolchain is missing the pat
 ## Action plan
 
 **Single PR (~half day, clears ~70%)**:
+
 1. Patch KICS plugin to honor `.kics.yaml` exclusions → 27 findings cleared
 2. Re-run inline `// nosemgrep` script at current line numbers → 9 findings cleared
 3. Fix yamllint `colons` in `configs/wolf.yaml` → 8 findings cleared
@@ -151,6 +156,7 @@ If they persist after a clean rebuild, the local Go toolchain is missing the pat
 7. Clean rebuild + re-scan to flush stale stdlib CVEs from grype/osv → up to 44 findings cleared
 
 **Follow-on**:
+
 - Renovate patch + minor bundle → 8 deps in one PR
 - Major bumps: 1 PR per logical group (tailwind, vite, charmbracelet, debian-base, postgres)
 

@@ -3,9 +3,11 @@
 *Interview in progress - Started: 2026-05-19*
 
 ## Overview
+
 [To be filled during interview]
 
 ## Problem Statement
+
 [To be filled during interview]
 
 ## Scope
@@ -44,20 +46,25 @@ GOOD criteria: "Response time < 200ms", "Returns 404 for missing resource", "For
 ## Technical Design
 
 ### Data Model
+
 [To be filled during interview]
 
 ### API Endpoints
+
 [To be filled during interview]
 
 ### Integration Points
+
 [To be filled during interview]
 
 ## User Experience
 
 ### User Flows
+
 [To be filled during interview]
 
 ### Edge Cases
+
 [To be filled during interview]
 
 ## Requirements
@@ -83,16 +90,19 @@ Performance, security, scalability requirements:
 <!-- Break work into 2-4 incremental milestones Ralph can complete one at a time -->
 
 ### Phase 1: [Foundation/Setup]
+
 - [ ] [Task 1]
 - [ ] [Task 2]
 - **Verification:** `[command to verify phase 1]`
 
 ### Phase 2: [Core Implementation]
+
 - [ ] [Task 1]
 - [ ] [Task 2]
 - **Verification:** `[command to verify phase 2]`
 
 ### Phase 3: [Integration/Polish]
+
 - [ ] [Task 1]
 - [ ] [Task 2]
 - **Verification:** `[command to verify phase 3]`
@@ -102,6 +112,7 @@ Performance, security, scalability requirements:
 ## Definition of Done
 
 This feature is complete when:
+
 - [ ] All acceptance criteria in user stories pass
 - [ ] All implementation phases verified
 - [ ] Tests pass: `[verification command]`
@@ -134,17 +145,21 @@ Output <promise>COMPLETE</promise> when all phases pass verification." --max-ite
 ```
 
 ## Open Questions
+
 - (round 2) Phase-2 AI tool registration model; CLI-agent vs API-endpoint
   execution; loop stop conditions; determinism guarantees.
 - (later) Plugin system shape for paid SAST/DAST.
 
 ## Implementation Notes
+
 [To be filled during interview]
 
 ---
+
 ## INTERVIEW NOTES (accumulating)
 
 ### Existing infrastructure — DO NOT rebuild
+
 - `internal/ai/`: Provider interface; Anthropic, OpenAI, CLI, noop providers.
 - `internal/fix/engine/`: SubprocessEngine interface; ClaudeCode, Codex,
   Custom, Auto engines; NewEngine().
@@ -154,10 +169,12 @@ Output <promise>COMPLETE</promise> when all phases pass verification." --max-ite
 - Fixes/Loops UI hidden earlier this session; backend engine intact.
 
 ### Core principle
+
 AI is OPTIONAL. wolf must remain fully functional with NO AI configured.
 The deterministic path is the guaranteed baseline; AI is an enhancement.
 
 ### Round 1 answers
+
 - **Enrichment generation:** deterministic template is the baseline (free,
   reproducible, works with no AI). AI-generated guidance is an optional
   layer when a provider is configured and the user opts in.
@@ -167,6 +184,7 @@ The deterministic path is the guaranteed baseline; AI is an enhancement.
   `--tool`, `--exclude-path` glob, `--ids`.
 
 ### Round 2 answers
+
 - **AI tool registration:** HYBRID. Config-driven definitions for CLI
   agents (cursor-agent, opencode, antigravity, codex, claude code) —
   command, arg template, cwd, result interpretation. Go code for tools
@@ -184,6 +202,7 @@ The deterministic path is the guaranteed baseline; AI is an enhancement.
   - (implicit success exit: zero targeted findings remain.)
 
 ### Round 3 answers
+
 - **Git strategy:** one commit per iteration on a `wolf/fix-<scanid>`
   branch; branch is PR-ready when the loop ends. Revert = drop commit.
 - **Build/test verification:** auto-detect a verify command from the
@@ -200,6 +219,7 @@ The deterministic path is the guaranteed baseline; AI is an enhancement.
     and drive the per-finding fix budget.
 
 ### Round 4 answers
+
 - **Plugin contract:** BOTH, phased. MVP = config-declared scanner
   containers emitting SARIF/JSON (reuse existing container runner +
   normalizer). Later = HTTP adapter shape for API-only DAST services.
@@ -211,6 +231,7 @@ The deterministic path is the guaranteed baseline; AI is an enhancement.
   defaults. No new storage. Managed via existing config endpoints.
 
 ### Round 5 answers
+
 - **MVP line:** first release = Phase 1 enrichment + the FULL Phase-2
   auto-fix loop. Paid-tool plugin system is the only deferred piece.
 - **Out of scope (explicitly not built):**
@@ -224,6 +245,7 @@ The deterministic path is the guaranteed baseline; AI is an enhancement.
   docs (reuses wolf's existing finding enrichment data).
 
 ### Round 6 answers
+
 - **Non-git repos:** the auto-fix loop REQUIRES git and fails fast with an
   actionable precondition error ("not a git repo — run git init / add as
   a git source"). Scan + enrich still work on non-git local paths.
@@ -234,6 +256,7 @@ The deterministic path is the guaranteed baseline; AI is an enhancement.
   per-batch-commit; per-iteration manifest still bounds the set.
 
 ### Round 7 answers
+
 - **Loop execution model:** FOREGROUND, attached to the initiating caller
   (CLI process or API stream). No background-job queue / no resumability.
   If the caller disconnects, the loop stops. Mitigation: because commits
@@ -251,6 +274,7 @@ The deterministic path is the guaranteed baseline; AI is an enhancement.
   ceiling triggers first. Costs are always recorded regardless.
 
 ### Round 8 answers
+
 - **AI-tool success signal:** the RESCAN is the authoritative validator.
   The AI tool does its own work (and may run its own tests); wolf does
   NOT trust the tool's own success claim. Flow: a fix invocation produces
@@ -267,6 +291,7 @@ The deterministic path is the guaranteed baseline; AI is an enhancement.
   their per-finding budget is spent, then marked `ai_unfixable`.
 
 ### Round 9 — canonical loop flow (user clarification)
+
 The authoritative end-to-end flow:
 
 1. `wolf scan` → findings JSON.
@@ -287,6 +312,7 @@ The authoritative end-to-end flow:
    PR-ready branch, merge, discard). wolf never auto-merges.
 
 Implications folded into the design:
+
 - Triage is a first-class loop step; AI may set finding status to
   `false_positive`. Success counting ignores AI-triaged false positives.
 - Plan step is explicit and persisted per iteration (auditable).
@@ -294,6 +320,7 @@ Implications folded into the design:
   critical+high and reaching 0 of those is success even if lows remain.
 
 ### Round 10 — the AI step models the user's current manual workflow
+
 User's exact current workflow (what the built-in AI should replicate):
 "Take the findings JSON, give it to Claude Code, tell it to analyze the
 codebase, look at the findings, write a detailed task-driven granular
@@ -301,6 +328,7 @@ plan with acceptance criteria, then execute that plan until done. Then
 rescan with wolf."
 
 This REFRAMES the per-iteration AI step and reconciles earlier rounds:
+
 - **Agentic CLI tools (primary mode):** wolf hands the tool the WHOLE
   targeted findings set plus a meta-prompt instructing it to analyze,
   write a granular plan with acceptance criteria, and execute until done.
@@ -315,6 +343,7 @@ This REFRAMES the per-iteration AI step and reconciles earlier rounds:
   artifact (auditable; part of the determinism manifest).
 
 ### Round 11 answers
+
 - **Agentic commit handling:** if the agentic tool makes its own commits,
   wolf keeps them (agent commit history preserved); wolf commits any
   remaining uncommitted edits as a remainder commit. All on the
@@ -329,6 +358,7 @@ This REFRAMES the per-iteration AI step and reconciles earlier rounds:
   review/override at the end.
 
 ### Round 12 answers
+
 - **Meta-prompt:** wolf ships a strong built-in default; overridable
   globally or per-collection via the existing `ai_prompt_templates`
   resolution (collection → global), same model as scan prompts.
@@ -341,6 +371,7 @@ This REFRAMES the per-iteration AI step and reconciles earlier rounds:
   and the per-iteration plan artifacts.)
 
 ### Round 13 answers
+
 - **AI execution environment:** a dedicated WRITABLE container per loop.
   Repo bind-mounted read-write, network enabled, git + the AI CLI tools
   installed, API keys injected as env. wolf builds/maintains this runner
@@ -356,6 +387,7 @@ This REFRAMES the per-iteration AI step and reconciles earlier rounds:
   hardening item, NOT this effort.
 
 ---
-*Interview notes will be accumulated below as the interview progresses*
----
 
+*Interview notes will be accumulated below as the interview progresses*
+
+---

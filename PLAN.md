@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Status** | Draft — pending approval |
-| **Author** | mjclaude1@alphabravo.io |
+| **Author** | <mjclaude1@alphabravo.io> |
 | **Created** | 2026-05-14 |
 | **Scope** | v1: scanner tools (~40 plugins). Fix engine (claude/codex/git/gh/glab) deferred to v2. |
 | **Target release** | wolf 2.0 (breaking change — fingerprints invalidate) |
@@ -31,6 +31,7 @@ End state for an operator: `docker compose up -d`, point wolf at a repo, identic
 
 - **Wolf orchestrator** (`cmd/wolf/` → `internal/scan/runner/runner.go`) selects N plugins for a scan based on detected languages (`internal/scan/detector/`), runs them concurrently via `errgroup.SetLimit(concurrency)`, deduplicates findings, and emits fingerprints.
 - **Plugins** (`plugins/<bucket>/*.go`, ~40 files) each implement `models.Plugin`:
+
   ```go
   type Plugin interface {
       Name() string
@@ -40,6 +41,7 @@ End state for an operator: `docker compose up -d`, point wolf at a repo, identic
       Execute(ctx context.Context, opts ExecuteOpts) ([]Finding, error) // → exec.CommandContext
   }
   ```
+
 - **Process control** (`internal/plugin/command.go`) wraps `exec.CommandContext` to put each child in its own process group, so context cancel kills the whole subprocess tree (essential for tools like semgrep that fork pysemgrep → semgrep-core).
 - **Output parsing** lives in each plugin. Tools generally emit JSON on stdout; `cmd.Output()` captures it; the plugin unmarshals and maps to `models.Finding`.
 - **Streaming** is per-tool via `opts.OnOutput(line)`, which the runner pipes to the SSE broker for live UI updates.
@@ -100,7 +102,7 @@ End state for an operator: `docker compose up -d`, point wolf at a repo, identic
 |---|---|---|
 | D1 | **Topology: wolf-slim container + wolf-scanners fat container; docker socket mounted into wolf-slim.** | Clean separation of orchestrator and scan environment. Mirrors how CI runners work. Wolf-slim stays small; scanners get their own attack surface. |
 | D2 | **Invocation: one `docker run --rm` per tool invocation; concurrency stays wolf-side via existing `errgroup.SetLimit(concurrency)`.** | Preserves existing parallelism, streaming, dedup, cancel logic. ~40 plugins barely change. Per-container startup (~0.3–1s) is amortized by concurrency. |
-| D3 | **Hybrid image strategy** (revised twice). Default state: wolf-built **slim** `wolf-scanners` image (~600–900 MB) carrying only the tools without a maintained upstream image (`bandit`, `ruff`, `mypy`, `pip-audit`, `radon`, `vulture`, `gosec`, `staticcheck`, `govulncheck`, `eslint`/`npm-audit`, `brakeman`, `rubocop`, `phpstan`, `cppcheck`, `shellcheck`, `swiftlint`, `detect-secrets`, `sqlfluff`); plus **wolf-built bucket images** `wolf-scanners-jvm` (infer + pmd), `wolf-scanners-rust` (clippy), `wolf-scanners-codeql` (codeql); plus **upstream-official images** routed per-tool via `Config.UpstreamTools` for `trivy`, `grype`, `syft`, `osv-scanner`, `gitleaks`, `trufflehog`, `hadolint`, `dockle`, `checkov`, `tflint`, `kubescape`, `kube-linter`, `semgrep`, `nuclei`, `vale`, `spectral`, `scancode`, `scorecard`. The shim resolves tool→image via `Config.ImageFor()` walking `UpstreamTools → ImageOverrides → default Image`. Operators can disable the upstream tier with `WOLF_SCANNERS_DISABLE_UPSTREAM=1` to force everything through wolf-built images. **Why this evolved:** an all-bundled v1 image was 6–8 GB; a 4-image split shrank the typical user's pull but still had every arm64 release pin to maintain; routing the well-supported tools to their upstream-published images shrinks our default image to under 1 GB and eliminates the upstream-version-pin maintenance burden for those tools. |
+| D3 | **Hybrid image strategy** (revised twice). Default state: wolf-built **slim** `wolf-scanners` image (~600–900 MB) carrying only the tools without a maintained upstream image (`bandit`, `ruff`, `mypy`, `pip-audit`, `radon`, `vulture`, `gosec`, `staticcheck`, `govulncheck`, `eslint`/`npm-audit`, `brakeman`, `rubocop`, `phpstan`, `cppcheck`, `shellcheck`, `swiftlint`, `detect-secrets`, `sqlfluff`); plus **wolf-built bucket images** `wolf-scanners-jvm` (infer + pmd), `wolf-scanners-rust` (clippy), `wolf-scanners-codeql` (codeql); plus **upstream-official images** routed per-tool via `Config.UpstreamTools` for `trivy`, `grype`, `syft`, `osv-scanner`, `gitleaks`, `trufflehog`, `hadolint`, `dockle`, `checkov`, `tflint`, `kubescape`, `kube-linter`, `semgrep`, `nuclei`, `vale`, `spectral`, `scancode`, `scorecard`. The shim resolves tool→image via `Config.ImageFor()` walking `UpstreamTools → ImageOverrides → default Image`. Operators can disable the upstream tier with `WOLF_SCANNERS_DISABLE_UPSTREAM=1` to force everything through wolf-built images. | **Why this evolved:** an all-bundled v1 image was 6–8 GB; a 4-image split shrank the typical user's pull but still had every arm64 release pin to maintain; routing the well-supported tools to their upstream-published images shrinks our default image to under 1 GB and eliminates the upstream-version-pin maintenance burden for those tools. |
 | D4 | **Container-only; no host fallback.** | Reproducibility is the whole point. A silent host fallback would let two users get different findings — defeats the goal. Devs iterate on tool invocations via `make dev-scanners` (interactive shell into the image). |
 | D5 | **Scope: scanners only.** Fix engine stays on host for v1. | Smaller blast radius, cleaner spec, no secrets-in-image questions in v1. v2 will containerize the fix engine in `wolf-fixer`. |
 
@@ -142,6 +144,7 @@ Lifecycle for one scan:
 2. Wolf-slim: detector picks N tools.
 3. Wolf-slim: availability check — confirms `wolf-scanners:<wolf-version>` is present locally (pull if missing per policy).
 4. Wolf-slim: opens an errgroup with `Concurrency` slots. For each selected tool, calls the container shim:
+
    ```
    docker run --rm --user 1000:1000 \
      -v /home/me/myrepo:/scan:ro \
@@ -151,6 +154,7 @@ Lifecycle for one scan:
      wolf-scanners:1.0 \
      bandit -r /scan -f json --exit-zero
    ```
+
 5. Scanner container: tool runs, writes JSON to stdout, exits.
 6. Wolf-slim: captures stdout (existing `cmd.Output()` path), pipes stderr line-by-line to `OnToolOutput` (existing path).
 7. Plugin: parses JSON, emits `[]models.Finding` with paths normalized (`/scan/foo.py` → `foo.py`).
@@ -550,6 +554,7 @@ Exit codes 64 (no tool) and 127 (tool missing) are recognized by `internal/plugi
 Per plugin, the diff is small. Worked example — `plugins/python/bandit.go`:
 
 **Before:**
+
 ```go
 func (p *BanditPlugin) CheckAvailable() bool {
     _, err := exec.LookPath("bandit")
@@ -567,6 +572,7 @@ func (p *BanditPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]
 ```
 
 **After:**
+
 ```go
 func (p *BanditPlugin) CheckAvailable() bool {
     return container.ImageReady(plugin.ContainerConfig())
@@ -589,6 +595,7 @@ func (p *BanditPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]
 ```
 
 Key invariants:
+
 - The tool's CLI args change from referencing `opts.RepoPath` (host) to referencing `/scan` (container).
 - After parsing, paths in findings are normalized via `container.NormalizePath`.
 - `CheckAvailable` is now uniform across all plugins. We may extract this to a default method on a base struct in a later pass; v1 just inlines it.
@@ -647,12 +654,14 @@ Net effect: from the caller's perspective in each plugin, the `*exec.Cmd` return
 **Registry.** Initial home: `ghcr.io/alphabravocompany/wolf-scanners`. Public on first release; we can flip to private if licensing concerns about bundled tools arise (see §10).
 
 **Tagging policy:**
+
 - **Per release:** `wolf-scanners:1.0.0`, `wolf-scanners:1.0`, `wolf-scanners:1` — semver fanout.
 - **Per commit on main:** `wolf-scanners:main`, `wolf-scanners:main-<short-sha>`.
 - **Per PR (CI only):** `wolf-scanners:pr-<num>` (cleaned up on close).
 - **`latest`** intentionally **not used** — wolf's pull policy is version-pinned by default.
 
 **Pull behavior:**
+
 - At wolf-slim startup, if `WOLF_SCANNERS_PULL_POLICY=IfNotPresent` (default), wolf checks `docker image inspect $WOLF_SCANNERS_IMAGE` and pulls if missing.
 - The pull blocks startup. On a slow link this is ~5–10 minutes for a 6 GB image; we log progress and surface it in the UI as "Pulling scanners image…".
 - `WOLF_SCANNERS_PULL_POLICY=Always` is intended for dev tags only.
@@ -714,6 +723,7 @@ jobs:
 ### 6.1 Backward compatibility posture
 
 This is a **breaking change** by design:
+
 - Operators with host-installed tools must adopt Docker.
 - Finding fingerprints invalidate (paths change form). One-time event.
 - The `scan.execution` config knob does not exist; container is the only mode.
@@ -751,6 +761,7 @@ This is the most common DooD bug. We must have a regression test for it (§7 P1 
 ### 6.4 Fingerprint invalidation
 
 `internal/scan/runner/runner.go:82` defines:
+
 ```go
 func Fingerprint(toolName, ruleID, title, filePath string) string {
     identifier := ruleID
@@ -802,6 +813,7 @@ Each task is a unit of work. Each phase ends at a pass gate that must be **demon
 | P0.8 | Add `.dockerignore` in `scanners/` to avoid sending the full repo as build context | | |
 
 **Pass gate P0 — must demonstrate:**
+
 - `make scanners-build` produces `wolf-scanners:dev` locally, size 5–8 GB.
 - `make scanners-smoke` exits 0; output lists `<tool>: <version>` for every tool in `scanners/versions.env`.
 - `docker run --rm wolf-scanners:dev bandit --version` works.
@@ -824,6 +836,7 @@ Each task is a unit of work. Each phase ends at a pass gate that must be **demon
 | P1.11 | DooD bind-mount test: `TestShim_HostPathTranslation` confirms `cfg.HostReposRoot` substitution works | | Regression test for §6.3 |
 
 **Pass gate P1 — must demonstrate:**
+
 - `go test ./internal/plugin/container/...` passes.
 - `go test -tags=integration ./internal/plugin/container/...` passes against `wolf-scanners:dev`.
 - A cancelled scan leaves no orphan `wolf-scan-*` containers (`docker ps -a` clean).
@@ -839,6 +852,7 @@ Each task is a unit of work. Each phase ends at a pass gate that must be **demon
 | P2.4 | Add regression test: `TestBandit_BackendParity` runs Bandit against `plugins/python/testdata/` via both backends and asserts identical finding sets (modulo path form) | | This is the canonical pattern for the bulk migration |
 
 **Pass gate P2 — must demonstrate:**
+
 - Bandit, run via the shim, produces a finding set equivalent to host-exec Bandit (same tool version) on the fixture repo.
 - The integration test runs green in CI.
 - Documentation example in §5.5 reflects the actual code.
@@ -866,6 +880,7 @@ Plugins migrate in batches. Each batch is one PR. Order:
 | P3.<batch> | One PR per batch. For each plugin: (a) swap exec→container, (b) normalize paths, (c) backend-parity test | Use the bandit migration as the template |
 
 **Pass gate P3 — must demonstrate (per batch):**
+
 - All existing unit tests in `plugins/<bucket>/*_test.go` pass against the shim.
 - Backend-parity test (host vs container) produces equivalent finding sets for each tool.
 - For network-dependent tools, an offline-mode test confirms graceful failure with an actionable error.
@@ -888,6 +903,7 @@ Plugins migrate in batches. Each batch is one PR. Order:
 | P4.11 | Add a `wolf doctor` CLI command — checks docker reachability, image presence, sample tool invocation, mount round-trip | Diagnostics |
 
 **Pass gate P4 — must demonstrate:**
+
 - Fresh checkout, no host tools installed, only Docker present: `docker compose up -d && docker compose exec wolf wolf scan --repo /repos/sample` produces findings.
 - `wolf doctor` reports OK on a clean install; reports actionable errors when (a) docker is down, (b) image is missing, (c) repos mount is mis-configured.
 - Removing host-installed Bandit between scans changes nothing about wolf's output. (Confirms no fallback path.)
@@ -900,10 +916,11 @@ Plugins migrate in batches. Each batch is one PR. Order:
 | P5.2 | CI workflow that builds wolf-slim now also pulls a matching `wolf-scanners` tag and runs the end-to-end test | |
 | P5.3 | Release notes: highlight breaking changes (fingerprint invalidation, docker requirement, removal of host-exec) | |
 | P5.4 | Migration guide for fingerprints (§6.4) | Includes the `wolf migrate fingerprints` command |
-| P5.5 | Air-gapped install docs | `docker save | docker load` walkthrough |
+| P5.5 | Air-gapped install docs | `docker save \| docker load` walkthrough |
 | P5.6 | Tag `wolf 2.0.0`, publish `wolf-scanners:2.0.0` + `wolf-scanners:2.0` + `wolf-scanners:2` | |
 
 **Pass gate P5 — must demonstrate:**
+
 - A user starting from `docker compose up` on a fresh VM with only Docker installed can run a scan against a sample repo in under 15 minutes (including image pull).
 - The release artifact bundle (wolf-slim image + wolf-scanners image + release notes + migration guide) is published and downloadable from a single page.
 - Downgrade test: stop wolf 2.0, start wolf 1.x against the same DB — the migration banner appears and findings are still readable.
@@ -946,7 +963,7 @@ For each failure mode, wolf must produce an actionable error. Existing `internal
 |---|---|---|
 | Docker daemon down | `docker run` exits with "Cannot connect to the Docker daemon" | `"wolf needs Docker. Start Docker Desktop, or check that the daemon socket is mounted into wolf-slim."` |
 | Image missing, pull policy `Never` | `EnsureImage` errors | `"scanners image 'X:Y' not present locally; either pre-pull it (docker pull X:Y) or set WOLF_SCANNERS_PULL_POLICY=IfNotPresent."` |
-| Image missing, pull policy `IfNotPresent`, registry unreachable | Pull times out | `"could not pull scanners image 'X:Y' (network: <error>). Check connectivity to ghcr.io, or download the image and `docker load` it (air-gapped install: <link>)."` |
+| Image missing, pull policy `IfNotPresent`, registry unreachable | Pull times out | `"could not pull scanners image 'X:Y' (network: <error>). Check connectivity to ghcr.io, or download the image and`docker load`it (air-gapped install: <link>)."` |
 | Bind mount path not on host | `docker run` fails with "no such file or directory" | `"the repo path '/repos/x' inside wolf-slim must correspond to a host path; check WOLF_HOST_REPOS_ROOT and the docker-compose volumes section."` |
 | Tool not in image | Entrypoint exits 127 | `"tool 'X' not present in wolf-scanners:Y. Rebuild the image or upgrade wolf — image and wolf versions must match."` |
 | OOM | Container killed (exit code 137) | `"tool 'X' was killed (OOM); increase scan.container.memory in wolf.yaml (currently <value>) and retry."` |
@@ -969,6 +986,7 @@ Mounting `/var/run/docker.sock` into wolf-slim grants wolf-slim **effective root
 - The alternative (running wolf-slim as root on the host directly) is strictly worse.
 
 **Hardening posture documented:**
+
 - Mount the socket **read-only** where possible (most docker operations need write — this works only for `inspect`/`ps`-only deployments). v1 mounts read-write.
 - Run wolf-slim as a non-root user *inside* the container (already done in current Dockerfile: `USER wolf`). The socket permission on the host typically requires being in the `docker` group; we document this.
 - Recommend operators not run wolf-slim with `--privileged` (it doesn't need it).

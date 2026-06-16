@@ -40,4 +40,3 @@ Run:
 ```sh
 go test ./internal/artifacts ./internal/api/routes ./internal/db
 ```
-

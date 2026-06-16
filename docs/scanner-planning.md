@@ -60,4 +60,3 @@ Run:
 make scanners-validate
 go test ./internal/scan/planner ./internal/scan/runner ./internal/scannertools/manifest
 ```
-

@@ -40,4 +40,3 @@ Run:
 ```sh
 go test ./internal/finding/diff ./internal/api/routes ./internal/db
 ```
-

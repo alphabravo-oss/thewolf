@@ -19,6 +19,7 @@
 - CI builds multi-arch (amd64+arm64) via buildx + GHA cache. **Server-local builds will be single-arch (the host's platform)** — multi-arch from one host without emulation is slow; CI stays the multi-arch path.
 
 ### Confirmed decisions (from the operator)
+
 | # | Decision | Choice |
 |---|----------|--------|
 | 1 | Where builds run when triggered from UI | **Wolf server builds locally** (buildx + push, streamed logs) |
@@ -55,6 +56,7 @@ So a fresh wolf install with zero creds can rebuild every image locally and scan
 ## File structure
 
 **New backend:**
+
 - `internal/scannerbuild/embed.go` — `//go:embed` of `scanners/Dockerfile*`, `scanners/install/**`, `scanners/*.env`, `scanners/*.yaml`; helper to materialize the context to a temp dir.
 - `internal/scannerbuild/build.go` — `Builder` running `docker buildx build`/`docker push` via `os/exec`, streaming combined output through a callback; variant table (default/jvm/rust/codeql → Dockerfile + image suffix).
 - `internal/scannerbuild/build_test.go` — context-materialization + arg-construction tests (no real docker).
@@ -62,6 +64,7 @@ So a fresh wolf install with zero creds can rebuild every image locally and scan
 - `internal/api/routes/scanner_build_test.go`.
 
 **Modified backend:**
+
 - `internal/models/types.go` — add `KeyTypeDockerHubToken KeyType = "dockerhub_token"`.
 - `internal/setup/scanners/scanners.go` — registry namespace + tag resolution helpers; expose the active image refs for the UI; keep DockerHub default.
 - `internal/api/server.go` — register `/scanners/images/{variant}/build` + `/scanners/images/build-all` under `write:config`.
@@ -70,6 +73,7 @@ So a fresh wolf install with zero creds can rebuild every image locally and scan
 - `Makefile` — keep build/push targets; ensure `:latest` + `:<version>` tagging parity with the server path.
 
 **New frontend:**
+
 - `ui/src/routes/_authed.settings.tsx` (Scanners tab section) or a dedicated `scanner-images` panel component — per-variant rows + Rebuild & push + log console.
 - `ui/src/components/scanners/build-console.tsx` — SSE log streamer.
 - `ui/src/components/scanners/dockerhub-credential.tsx` — save username + PAT.
@@ -80,10 +84,12 @@ So a fresh wolf install with zero creds can rebuild every image locally and scan
 ## Phase 1 — Slim the Go layer (no new infra; immediate size win)
 
 ### Task 1: Tighten go-tools.sh cleanup
+
 **Files:** `scanners/install/go-tools.sh`, `scanners/smoke-test.sh`
 
 - [ ] **Step 1:** Read `scanners/install/go-tools.sh` end-to-end; note that it keeps `/usr/local/go-toolchain` and `$GOBIN` but never removes `$GOPATH/pkg`.
 - [ ] **Step 2:** After the binary-move + `rm -rf $GOCACHE`, add:
+
   ```bash
   # Drop the module + build cache used only to compile the tools — not
   # needed at runtime. gosec/govulncheck use `go list`/`go env`, which
@@ -92,6 +98,7 @@ So a fresh wolf install with zero creds can rebuild every image locally and scan
   # Strip toolchain dirs unused at runtime (docs, tests, api, examples).
   rm -rf /usr/local/go-toolchain/{test,doc,api,misc}
   ```
+
 - [ ] **Step 3:** In `scanners/smoke-test.sh`, ensure there's a check that `gosec --version`, `govulncheck -version`, `staticcheck --version` all run, and that `go env GOROOT` + `go list std >/dev/null` succeed inside the default image (proves the stripped toolchain still resolves modules).
 - [ ] **Step 4:** Build the default locally: `make scanners-build`; record `docker image inspect ...:dev --format '{{.Size}}'` before/after; confirm ≥600 MB unpacked reduction.
 - [ ] **Step 5:** Run `scanners/smoke-test.sh` against the new image; all Go tools green.
@@ -102,6 +109,7 @@ So a fresh wolf install with zero creds can rebuild every image locally and scan
 ## Phase 2 — DockerHub credential + embedded build context
 
 ### Task 2: dockerhub_token secret type
+
 **Files:** `internal/models/types.go`, a small handler-validation touch in `internal/api/routes/config.go`
 
 - [ ] **Step 1:** Add `KeyTypeDockerHubToken KeyType = "dockerhub_token"` to the KeyType consts.
@@ -110,9 +118,11 @@ So a fresh wolf install with zero creds can rebuild every image locally and scan
 - [ ] **Step 4:** Commit: `feat(secrets): dockerhub_token key type`.
 
 ### Task 3: Embed the scanners build context
+
 **Files:** `internal/scannerbuild/embed.go`, `internal/scannerbuild/build_test.go`
 
 - [ ] **Step 1:** Create `embed.go`:
+
   ```go
   package scannerbuild
 
@@ -123,6 +133,7 @@ So a fresh wolf install with zero creds can rebuild every image locally and scan
   //go:embed all:context
   var contextFS embed.FS
   ```
+
   Then add a `make`/generate step (or a committed copy) placing the needed files under `internal/scannerbuild/context/` mirroring `scanners/` (Dockerfiles, `install/`, `versions.env`, `toolchains.yaml`, `tools.yaml`). Prefer a tiny `go:generate` that rsyncs `scanners/` → `internal/scannerbuild/context/` so it stays in sync; document it.
 - [ ] **Step 2:** `Materialize(dir string) error` walks `contextFS` and writes every file to `dir`, preserving paths + 0755 on `*.sh`.
 - [ ] **Step 3:** Test: `Materialize` to a temp dir; assert `Dockerfile` + `install/go-tools.sh` exist and the script is executable.
@@ -133,9 +144,11 @@ So a fresh wolf install with zero creds can rebuild every image locally and scan
 ## Phase 3 — Build/push subsystem
 
 ### Task 4: Builder (docker buildx via os/exec, streamed)
+
 **Files:** `internal/scannerbuild/build.go`, `internal/scannerbuild/build_test.go`
 
 - [ ] **Step 1:** Define the variant table:
+
   ```go
   type Variant struct{ Name, Dockerfile, ImageSuffix string }
   var Variants = []Variant{
@@ -145,6 +158,7 @@ So a fresh wolf install with zero creds can rebuild every image locally and scan
     {"codeql",  "Dockerfile.codeql", "-codeql"},
   }
   ```
+
 - [ ] **Step 2:** `type BuildRequest struct { Variant, Namespace, Version string; Push bool; DockerHubUser, DockerHubPAT string }`.
 - [ ] **Step 3:** `Build(ctx, req, onLine func(string)) (BuildResult, error)`:
   1. Materialize context to a temp dir (defer cleanup).
@@ -156,6 +170,7 @@ So a fresh wolf install with zero creds can rebuild every image locally and scan
 - [ ] **Step 5:** Commit: `feat(scannerbuild): buildx build/push runner with streamed output`.
 
 ### Task 5: API endpoints (SSE)
+
 **Files:** `internal/api/routes/scanner_build.go`, `_test.go`, `server.go`, `openapi/spec.go`
 
 - [ ] **Step 1:** `BuildScannerImage` (`POST /scanners/images/{variant}/build`): parse `{push: bool}` (default false); resolve namespace (setting `scanner_registry_namespace`, default `alphabravodevops`) + version (running wolf version); **only if `push`**, load the `dockerhub_token` secret (404-with-hint if absent) and pass the creds — a `push=false` build never reads the secret and never 404s on missing creds; set SSE headers; call `scannerbuild.Build` with `onLine` writing `data: <line>\n\n` + flush; emit a terminal `event: done` / `event: error`.
@@ -165,6 +180,7 @@ So a fresh wolf install with zero creds can rebuild every image locally and scan
 - [ ] **Step 5:** Commit: `feat(api): scanner image build/push endpoints (SSE)`.
 
 ### Task 6: Fix the tag-mismatch + expose active refs
+
 **Files:** `internal/setup/scanners/scanners.go`, `cmd/wolf/main.go` (startup log)
 
 - [ ] **Step 1:** Add `ActiveImageRefs()` returning, per variant, the `<ns>/<img>:<tag>` the runtime will pull, so the UI shows exactly what's configured.
@@ -177,18 +193,21 @@ So a fresh wolf install with zero creds can rebuild every image locally and scan
 ## Phase 4 — UI
 
 ### Task 7: Build client + SSE hook
+
 **Files:** `ui/src/lib/scanner-build.ts`
 
 - [ ] **Step 1:** `useScannerImages()` (status per variant, reuses `/scanners/images`), and `streamBuild(variant, push, onLine)` opening the SSE endpoint with the credential cookie.
 - [ ] **Step 2:** Commit: `feat(ui): scanner-build client + SSE hook`.
 
 ### Task 8: DockerHub credential card
+
 **Files:** `ui/src/components/scanners/dockerhub-credential.tsx`, settings wiring
 
 - [ ] **Step 1:** Form: username + PAT → `POST /config/secrets` with `key_type=dockerhub_token`, `key_name=<username>`. Show "configured / not configured" using `/config/secrets` filtered to the type. Use the Nocturne `.panel` / `.btn` classes.
 - [ ] **Step 2:** Commit: `feat(ui): DockerHub credential card`.
 
 ### Task 9: Scanner Images panel + build console
+
 **Files:** `ui/src/components/scanners/build-console.tsx`, Scanners-tab section
 
 - [ ] **Step 1:** Per-variant rows: name, local vs remote digest, up-to-date / update-available, last-built, and a **Rebuild (local)** button that is **always enabled regardless of credentials** + a header **Rebuild all**. When a `dockerhub_token` secret exists, render a small **"push to DockerHub"** checkbox/toggle beside the button; checking it makes the action **Rebuild & push** (`push:true`). With no secret, the toggle is replaced by a one-line hint ("Add a DockerHub token to publish") linking to the credential card — the build button stays active. `streamBuild(variant, push, …)` passes the toggle state.
@@ -196,6 +215,7 @@ So a fresh wolf install with zero creds can rebuild every image locally and scan
 - [ ] **Step 3:** Commit: `feat(ui): Scanner Images panel with live build console`.
 
 ### Task 10: README + smoke + push
+
 **Files:** `README.md`
 
 - [ ] **Step 1:** Document the server-side build/push flow, the `dockerhub_token` secret, the `WOLF_SCANNERS_TAG` knob, and the slimmer Go layer.
@@ -216,6 +236,7 @@ So a fresh wolf install with zero creds can rebuild every image locally and scan
 ---
 
 ## Out of scope
+
 - Re-architecting into per-language images (decision: keep 4).
 - ghcr.io as primary (decision: DockerHub primary; ghcr stays a CI mirror).
 - Multi-arch from the server (CI's job).

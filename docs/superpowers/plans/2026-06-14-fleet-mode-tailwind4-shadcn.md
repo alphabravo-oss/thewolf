@@ -48,19 +48,23 @@ Files this plan creates or significantly changes.
 ### Stage A — Foundation
 
 **Renames** (single git operation, scriptable):
+
 - `ui-next/` → `ui/` (everywhere: file paths, Makefile, docker-compose.yml, internal/api/static.go discovery list, README, .github/workflows).
 
 **New files:**
+
 - `ui/components.json` — shadcn CLI config.
 - `ui/src/components/ui/` — shadcn primitive components (button, card, badge, dialog, dropdown-menu, input, label, select, separator, table, tabs, sheet, toast, etc.). Added via `pnpm dlx shadcn@latest add <name>` one at a time.
 - `ui/postcss.config.mjs` — Tailwind 4 PostCSS plugin.
 - `ui/src/styles/globals.css` — Tailwind 4 `@import "tailwindcss"` + theme tokens.
 
 **Removed files:**
+
 - `ui-next/tailwind.config.ts` (replaced by inline `@theme` in CSS for Tailwind 4).
 - `ui-next/postcss.config.cjs` (replaced by ESM equivalent compatible with Tailwind 4).
 
 **Modified files:**
+
 - `ui/vite.config.ts` — add the Tailwind 4 Vite plugin (`@tailwindcss/vite`).
 - `ui/package.json` — bump tailwindcss to 4, add `@tailwindcss/vite` + `@tailwindcss/postcss`, remove `autoprefixer` (Tailwind 4 handles it).
 - `ui/src/styles/globals.css` — entire file rewritten for the new CSS-first config.
@@ -70,6 +74,7 @@ Files this plan creates or significantly changes.
 - `README.md` — update "Next.js dashboard" claim; update tech stack list.
 
 **Component migrations** (existing components rewritten to use shadcn primitives but keep their existing public API where possible):
+
 - `ui/src/components/severity-badge.tsx` → uses shadcn `<Badge>` + `cva` variant.
 - `ui/src/components/scan-status-pill.tsx` → uses shadcn `<Badge>` variant.
 - `ui/src/components/empty-state.tsx` → uses shadcn `<Card>` shell.
@@ -82,6 +87,7 @@ Files this plan creates or significantly changes.
 ### Stage B — Fleet management
 
 **New backend files:**
+
 - `internal/api/routes/fleet.go` — handlers for `GET /fleet/posture`, `GET /fleet/inventory`, `GET /fleet/needs-attention`, `GET /findings/aggregate`, `POST /sources/github/list-org-repos`, `POST /nodes/{id}/discover-repos`.
 - `internal/api/routes/fleet_test.go` — handler tests (httptest + in-memory store).
 - `internal/db/sqlite_fleet.go` + `internal/db/postgres_fleet.go` — aggregate queries (severity totals, top-rule-id by repo count, stale scans, gate-failing repos).
@@ -89,12 +95,14 @@ Files this plan creates or significantly changes.
 - `internal/github/api.go` — minimal GitHub REST client (org repos list); uses the secrets store for the token.
 
 **Modified backend files:**
+
 - `internal/api/server.go` — register `/fleet/*` and `/sources/github/*` routes with appropriate scopes.
 - `internal/api/openapi/spec.go` — add the new endpoints to the catalog.
 - `internal/api/routes/repos.go` — when `fleet_mode=true`, `ListRepos` returns all repos; otherwise existing per-user filter. Same for `scans.go`, `findings.go`, `collections.go`.
 - `internal/api/routes/nodes.go` — extend the browse handler with `?git_only=true` filter so the discover-repos wizard can list `.git/` parents in one call.
 
 **New frontend files:**
+
 - `ui/src/routes/_authed.index.tsx` — replaced wholesale: this is the new fleet dashboard.
 - `ui/src/components/fleet/posture-cards.tsx` — the four top-level stat cards.
 - `ui/src/components/fleet/severity-trend.tsx` — 90-day stacked area chart of open findings by severity.
@@ -110,6 +118,7 @@ Files this plan creates or significantly changes.
 - `ui/src/lib/fleet.ts` — typed wrappers for `/fleet/*` endpoints + react-query hooks (`useFleetPosture`, `useFleetInventory`, etc.).
 
 **Modified frontend files:**
+
 - `ui/src/routes/_authed.repos.index.tsx` — replace the flat table with the filter-bar / group-toggle / bulk-toolbar driven view.
 - `ui/src/routes/_authed.collections.$collectionId.tsx` — add per-collection posture summary (smaller version of the fleet dashboard).
 - `ui/src/routes/_authed.settings.tsx` — add the `fleet_mode` toggle in General settings.
@@ -138,21 +147,21 @@ The plan is done only when every item below is verifiable.
 
 ### Stage B (fleet management)
 
-14. `GET /api/v1/fleet/posture` returns total open findings by severity, week-over-week deltas, fleet repo count, gate-failure count. Tested with a seeded fixture.
-15. `GET /api/v1/fleet/inventory` returns counts by source_type, by collection, by language.
-16. `GET /api/v1/fleet/needs-attention` returns the top 10 repos sorted by a composite "needs attention" score (combination of new critical/high findings, gate-failure, stale-scan).
-17. `GET /api/v1/findings/aggregate?group_by=rule_id&limit=10` returns the top-N vulnerable rules with the count of repos they appear in.
-18. `POST /api/v1/sources/github/list-org-repos` accepts `{org, secret_id?}` and returns the GitHub org's repo list; uses the user's `github_token` secret when `secret_id` omitted. Returns `[]` and clear error message on bad token.
-19. `POST /api/v1/nodes/{id}/discover-repos` accepts `{base_path}` and returns the list of directories under that path containing a `.git/` entry, each with detected branch and last-commit-SHA.
-20. The `/` route is the fleet dashboard: posture cards, severity trend chart, top vulnerable components, needs-attention list, inventory breakdown, recent activity. Empty-state for a fresh install ("No repos yet — import some").
-21. The `/repos` page has a filter bar (source-type, collection, last-scan-status), a group-by selector (none, source-type, collection, language), and a bulk-action toolbar that appears when any rows are selected.
-22. Bulk "Scan selected" works against an arbitrary multi-selection (creates one scan per selected repo, surfaces a progress toast).
-23. `/repos` has a button "Import from GitHub" that opens the org-import modal; selecting N repos and clicking Import creates N repos with `source_type: "github"`, attached to the chosen collection if any.
-24. The node detail page (`/settings?tab=nodes` → click a node, or a dedicated route if one's added) has a "Discover repos" button that opens the SSH discover modal; selecting N repos and clicking Import creates N repos with `source_type: "ssh"` pointing at that node.
-25. The Settings page has a `fleet_mode` toggle under General. Default off (preserves single-user behavior). When on, ListRepos/ListScans/ListFindings/ListCollections no longer filter by `user_id`.
-26. With `fleet_mode=true` and two users in the system: User A's repos appear in User B's `/repos` list. User B can see and scan them. Admin-only operations (delete user, set policy) remain admin-only.
-27. `go test ./...` green (70+ packages). `pnpm test` green. `pnpm build` green. `go vet ./...` clean.
-28. Manual smoke (Chrome DevTools MCP, fresh DB): log in → see empty fleet dashboard → "Import from GitHub" → see the import modal request a token if none → import 3 repos → land back on `/repos` filtered to "GitHub" → bulk-select 3 → Scan selected → 3 scans appear in `/scans` → fleet dashboard updates posture cards.
+1. `GET /api/v1/fleet/posture` returns total open findings by severity, week-over-week deltas, fleet repo count, gate-failure count. Tested with a seeded fixture.
+2. `GET /api/v1/fleet/inventory` returns counts by source_type, by collection, by language.
+3. `GET /api/v1/fleet/needs-attention` returns the top 10 repos sorted by a composite "needs attention" score (combination of new critical/high findings, gate-failure, stale-scan).
+4. `GET /api/v1/findings/aggregate?group_by=rule_id&limit=10` returns the top-N vulnerable rules with the count of repos they appear in.
+5. `POST /api/v1/sources/github/list-org-repos` accepts `{org, secret_id?}` and returns the GitHub org's repo list; uses the user's `github_token` secret when `secret_id` omitted. Returns `[]` and clear error message on bad token.
+6. `POST /api/v1/nodes/{id}/discover-repos` accepts `{base_path}` and returns the list of directories under that path containing a `.git/` entry, each with detected branch and last-commit-SHA.
+7. The `/` route is the fleet dashboard: posture cards, severity trend chart, top vulnerable components, needs-attention list, inventory breakdown, recent activity. Empty-state for a fresh install ("No repos yet — import some").
+8. The `/repos` page has a filter bar (source-type, collection, last-scan-status), a group-by selector (none, source-type, collection, language), and a bulk-action toolbar that appears when any rows are selected.
+9. Bulk "Scan selected" works against an arbitrary multi-selection (creates one scan per selected repo, surfaces a progress toast).
+10. `/repos` has a button "Import from GitHub" that opens the org-import modal; selecting N repos and clicking Import creates N repos with `source_type: "github"`, attached to the chosen collection if any.
+11. The node detail page (`/settings?tab=nodes` → click a node, or a dedicated route if one's added) has a "Discover repos" button that opens the SSH discover modal; selecting N repos and clicking Import creates N repos with `source_type: "ssh"` pointing at that node.
+12. The Settings page has a `fleet_mode` toggle under General. Default off (preserves single-user behavior). When on, ListRepos/ListScans/ListFindings/ListCollections no longer filter by `user_id`.
+13. With `fleet_mode=true` and two users in the system: User A's repos appear in User B's `/repos` list. User B can see and scan them. Admin-only operations (delete user, set policy) remain admin-only.
+14. `go test ./...` green (70+ packages). `pnpm test` green. `pnpm build` green. `go vet ./...` clean.
+15. Manual smoke (Chrome DevTools MCP, fresh DB): log in → see empty fleet dashboard → "Import from GitHub" → see the import modal request a token if none → import 3 repos → land back on `/repos` filtered to "GitHub" → bulk-select 3 → Scan selected → 3 scans appear in `/scans` → fleet dashboard updates posture cards.
 
 ---
 
@@ -179,13 +188,14 @@ cd ui && pnpm test && pnpm build && pnpm typecheck
 
 ---
 
-# Stage A — Foundation modernization
+## Stage A — Foundation modernization
 
 ## Phase A1 — Rename and reference fixes
 
 ### Task A1: Rename `ui-next/` to `ui/`
 
 **Files:**
+
 - All files under `ui-next/` (renamed).
 - Modify: `Makefile`, `docker-compose.yml`, `internal/api/static.go`, `.github/workflows/*.yml`, `README.md`, every `import` that uses an absolute `@/` alias (none should, since Vite resolves `@` from the directory the config lives in).
 
@@ -202,6 +212,7 @@ Expected: `ui/` exists, `ui-next/` is gone, `git status` shows ~200 renamed file
 - [ ] **Step 3: Update every reference**
 
 For each file from Step 1, replace `ui-next` with `ui` exactly. Specifically:
+
 - `internal/api/static.go`: change `"./ui-next/dist"` to `"./ui/dist"` in the candidate list.
 - `Makefile`: every `cd ui-next` or `pushd ui-next` becomes `cd ui` / `pushd ui`.
 - `docker-compose.yml`: any volume mount or build context referencing `ui-next` becomes `ui`.
@@ -221,6 +232,7 @@ rm -rf ui/dist ui/node_modules
 cd ui && pnpm install && pnpm build && cd ..
 go build ./...
 ```
+
 Expected: clean build of both UI and Go.
 
 - [ ] **Step 6: Smoke the running app**
@@ -239,6 +251,7 @@ git commit -m "refactor(ui): rename ui-next/ to ui/ — there's no Next.js"
 ### Task A2: README + CHANGELOG accuracy fix
 
 **Files:**
+
 - Modify: `README.md`
 - Modify: `CHANGELOG.md` (if it mentions Next.js)
 
@@ -250,6 +263,7 @@ Expected: one or more matches.
 - [ ] **Step 2: Replace with accurate stack description**
 
 In `README.md`, replace any "Next.js dashboard" line with:
+
 ```markdown
 - **Web UI** — Vite + React 19 + TanStack Router + Tailwind 4 + shadcn/ui dashboard with collection management, scan monitoring, finding exploration, fleet posture, and scanner-backend admin
 ```
@@ -274,6 +288,7 @@ Tailwind 4 stable was released in late 2024. The breaking changes from 3.4: Post
 ### Task A3: Install Tailwind 4 + Vite plugin
 
 **Files:**
+
 - Modify: `ui/package.json`
 - Create: `ui/postcss.config.mjs` (replacing the 3.4 one)
 - Delete: `ui/tailwind.config.ts`, `ui/postcss.config.cjs`
@@ -285,11 +300,13 @@ cd ui
 pnpm remove tailwindcss autoprefixer
 pnpm add -D tailwindcss@^4 @tailwindcss/vite@^4 @tailwindcss/postcss@^4
 ```
+
 Expected: `package.json` now lists `tailwindcss: ^4.x`, `@tailwindcss/vite: ^4.x`. No `autoprefixer`.
 
 - [ ] **Step 2: Replace `postcss.config.cjs` with `postcss.config.mjs`**
 
 Delete `postcss.config.cjs`. Create:
+
 ```js
 // ui/postcss.config.mjs
 export default {
@@ -309,6 +326,7 @@ Run: `rm tailwind.config.ts`
 git add package.json pnpm-lock.yaml postcss.config.mjs tailwind.config.ts
 git commit -m "chore(ui): install Tailwind 4 packages, drop autoprefixer/old config"
 ```
+
 Note: the build will be broken until A4 ships. That's intentional — keep the migration commits atomic and reviewable.
 
 ---
@@ -316,6 +334,7 @@ Note: the build will be broken until A4 ships. That's intentional — keep the m
 ### Task A4: Rewrite globals.css for Tailwind 4 CSS-first config
 
 **Files:**
+
 - Modify: `ui/src/styles/globals.css` (entire file rewritten)
 
 - [ ] **Step 1: Read the existing globals.css to extract theme tokens**
@@ -405,6 +424,7 @@ When copying from the existing v3 file, preserve every custom HSL value verbatim
 - [ ] **Step 3: Add the Tailwind 4 Vite plugin**
 
 Edit `ui/vite.config.ts`:
+
 ```ts
 import tailwindcss from "@tailwindcss/vite";
 
@@ -421,11 +441,13 @@ plugins: [
 ```bash
 cd ui && pnpm build 2>&1 | tail -10
 ```
+
 Expected: build succeeds. CSS bundle size should be reported in the output; jot it down for comparison.
 
 - [ ] **Step 5: Run the app, eyeball every page**
 
 Start `wolf serve --bind :8779`, log in, walk every route:
+
 - `/` (Dashboard)
 - `/collections`, click a collection
 - `/repos`, click a repo
@@ -453,6 +475,7 @@ git commit -m "feat(ui): migrate Tailwind 3.4 → 4 (CSS-first @theme config)"
 ### Task A5: Initialize shadcn
 
 **Files:**
+
 - Create: `ui/components.json`
 
 - [ ] **Step 1: Run the shadcn init**
@@ -463,6 +486,7 @@ pnpm dlx shadcn@latest init
 ```
 
 Choose interactively:
+
 - Style: **Default**
 - Base color: **Neutral**
 - CSS variables: **Yes**
@@ -479,6 +503,7 @@ Expected: `components.json` written. The CLI also adds `src/lib/utils.ts` if it 
 ```bash
 cat components.json
 ```
+
 Expected: object with `style`, `tailwind` (pointing at `src/styles/globals.css`), `aliases: { components, utils, ui, hooks, lib }`.
 
 - [ ] **Step 3: Verify cn() helper**
@@ -486,7 +511,9 @@ Expected: object with `style`, `tailwind` (pointing at `src/styles/globals.css`)
 ```bash
 cat src/lib/utils.ts
 ```
+
 Expected:
+
 ```ts
 import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
@@ -501,6 +528,7 @@ If your project already has a `cn()` in `src/lib/cn.ts`, you have two: either de
 grep -rln '@/lib/cn' src | xargs sed -i '' 's|@/lib/cn|@/lib/utils|g'
 rm -f src/lib/cn.ts
 ```
+
 (On Linux, drop the `''` from sed.)
 
 - [ ] **Step 5: Build to verify**
@@ -520,14 +548,17 @@ git commit -m "feat(ui): adopt shadcn/ui (components.json + cn helper)"
 ### Task A6: Generate the primitive component set
 
 **Files:**
+
 - Create (via shadcn CLI): everything under `ui/src/components/ui/`.
 
 - [ ] **Step 1: Add the primitives we'll need**
 
 Run from `ui/`:
+
 ```bash
 pnpm dlx shadcn@latest add button card badge dialog dropdown-menu input label select separator table tabs sheet toast alert checkbox command popover scroll-area tooltip skeleton
 ```
+
 Expected: ~20 files appear under `src/components/ui/`. Each is hand-editable code in your repo (not a node_modules import).
 
 - [ ] **Step 2: Verify the new components compile**
@@ -535,6 +566,7 @@ Expected: ~20 files appear under `src/components/ui/`. Each is hand-editable cod
 ```bash
 pnpm typecheck
 ```
+
 Expected: clean. If a generated component references `@/lib/utils` but yours is at a different path, fix `components.json` and re-run `add` for any broken file.
 
 - [ ] **Step 3: Build to make sure CSS is correct**
@@ -542,6 +574,7 @@ Expected: clean. If a generated component references `@/lib/utils` but yours is 
 ```bash
 pnpm build
 ```
+
 Expected: clean build. CSS bundle size will grow slightly to include the new primitive classes; that's expected and Tailwind will tree-shake unused ones in a real build.
 
 - [ ] **Step 4: Commit**
@@ -564,6 +597,7 @@ This is the biggest task in Stage A by line count, but it's mechanical: each exi
 Current: custom span with severity-specific classes.
 
 Replace with:
+
 ```tsx
 // ui/src/components/severity-badge.tsx
 import { cva, type VariantProps } from "class-variance-authority";
@@ -653,19 +687,21 @@ Manual walk: log in, visit every route, confirm no visual regression. Take scree
 cd ui && pnpm test && pnpm build && pnpm typecheck
 cd .. && go build ./... && go test ./...
 ```
+
 Expected: all green.
 
 Commit: `test: Stage A foundation complete (Tailwind 4 + shadcn live)`
 
 ---
 
-# Stage B — Fleet management
+## Stage B — Fleet management
 
 ## Phase B1 — Aggregate API endpoints
 
 ### Task B1: Fleet posture endpoint
 
 **Files:**
+
 - Create: `internal/api/routes/fleet.go`
 - Create: `internal/api/routes/fleet_test.go`
 - Modify: `internal/api/server.go` (register routes)
@@ -775,6 +811,7 @@ func fleetModeEnabled(ctx context.Context, store db.Store) bool {
 - [ ] **Step 4: Add the store method (interface + sqlite + postgres)**
 
 In `internal/db/store.go`:
+
 ```go
 type FleetPostureResult struct {
   OpenFindingsBySeverity map[string]int `json:"open_findings_by_severity"`
@@ -788,6 +825,7 @@ FleetPosture(ctx context.Context, userID string, fleetMode bool) (*FleetPostureR
 ```
 
 Implement in `internal/db/sqlite_fleet.go`:
+
 ```go
 package db
 
@@ -841,6 +879,7 @@ Same shape for `internal/db/postgres_fleet.go` (substitute `?` placeholders with
 - [ ] **Step 5: Register the route in server.go**
 
 In the `/api/v1` protected group, add (inside the right scope group — `read:scans` is fine since posture aggregates scan data):
+
 ```go
 r.With(auth.RequireScope(apikey.ScopeReadScans)).Get("/fleet/posture", routes.FleetPosture)
 ```
@@ -848,6 +887,7 @@ r.With(auth.RequireScope(apikey.ScopeReadScans)).Get("/fleet/posture", routes.Fl
 - [ ] **Step 6: Add to the OpenAPI spec**
 
 In `internal/api/openapi/spec.go`, in `Endpoints()`:
+
 ```go
 {"GET", "/fleet/posture", "fleet", "Fleet-wide posture summary", "read:scans", "", false},
 ```
@@ -876,6 +916,7 @@ git commit -m "feat(api): GET /fleet/posture aggregate endpoint"
 ### Task B2: Fleet inventory endpoint
 
 **Files:**
+
 - Add handler to `internal/api/routes/fleet.go`
 - Add test to `internal/api/routes/fleet_test.go`
 - Extend `Store` interface + implementations.
@@ -925,6 +966,7 @@ git commit -m "feat(api): GET /fleet/inventory grouping breakdown"
 - [ ] **Step 1: Test + handler + store**
 
 `/fleet/needs-attention` returns the top 10 repos by composite score:
+
 ```
 score = 10 * new_critical + 5 * new_high + 8 * (gate_failing ? 1 : 0) + 1 * stale_days_over_30
 ```
@@ -934,6 +976,7 @@ Test seeds 5 repos with varied posture and asserts the order matches the formula
 - [ ] **Step 2: Implementation**
 
 The store method is a single Go function that:
+
 1. Lists all repos in scope (user_id or all).
 2. For each, fetches last scan + critical/high counts from that scan + gate status + scan recency.
 3. Computes the score, sorts, returns top 10.
@@ -992,6 +1035,7 @@ git commit -m "feat(api): GET /findings/aggregate?group_by=rule_id"
 ### Task B5: Fleet API hooks library
 
 **Files:**
+
 - Create: `ui/src/lib/fleet.ts`
 
 - [ ] **Step 1: Write the hooks**
@@ -1083,6 +1127,7 @@ git commit -m "feat(ui): fleet API hooks (posture/inventory/needs-attention/aggr
 ### Task B6: Posture cards component
 
 **Files:**
+
 - Create: `ui/src/components/fleet/posture-cards.tsx`
 
 - [ ] **Step 1: Implement the component**
@@ -1155,6 +1200,7 @@ git commit -m "feat(ui): fleet posture cards (4-stat row)"
 ### Task B7: Severity trend chart
 
 **Files:**
+
 - Create: `ui/src/components/fleet/severity-trend.tsx`
 
 - [ ] **Step 1: Implement**
@@ -1174,6 +1220,7 @@ git commit -m "feat(ui): fleet severity-trend chart"
 ### Task B8: Top vulnerable components + needs-attention tables
 
 **Files:**
+
 - Create: `ui/src/components/fleet/top-components.tsx`
 - Create: `ui/src/components/fleet/needs-attention.tsx`
 
@@ -1190,6 +1237,7 @@ git commit -m "feat(ui): top vulnerable components + needs-attention tables"
 ### Task B9: Inventory breakdown + recent activity panels
 
 **Files:**
+
 - Create: `ui/src/components/fleet/inventory-breakdown.tsx`
 - Create: `ui/src/components/fleet/recent-activity.tsx`
 
@@ -1206,6 +1254,7 @@ git commit -m "feat(ui): inventory breakdown + recent-activity panels"
 ### Task B10: Replace the dashboard route
 
 **Files:**
+
 - Modify: `ui/src/routes/_authed.index.tsx` (entire file rewritten)
 
 - [ ] **Step 1: New layout**
@@ -1263,6 +1312,7 @@ git commit -m "feat(ui): fleet dashboard replaces the empty-state Dashboard at /
 ### Task B11: Filter bar
 
 **Files:**
+
 - Create: `ui/src/components/repos/filter-bar.tsx`
 - Modify: `ui/src/routes/_authed.repos.index.tsx`
 
@@ -1287,6 +1337,7 @@ git commit -m "feat(ui): /repos filter bar (source-type, collection, last-scan)"
 ### Task B12: Group-by toggle
 
 **Files:**
+
 - Create: `ui/src/components/repos/group-toggle.tsx`
 - Modify: `ui/src/routes/_authed.repos.index.tsx`
 
@@ -1309,6 +1360,7 @@ git commit -m "feat(ui): /repos group-by toggle"
 ### Task B13: Bulk select + toolbar
 
 **Files:**
+
 - Create: `ui/src/components/repos/bulk-toolbar.tsx`
 - Modify: `ui/src/routes/_authed.repos.index.tsx`
 - Modify: `ui/src/components/repos/filter-bar.tsx` (add "Select all visible")
@@ -1320,6 +1372,7 @@ Use shadcn `<Checkbox>`. State: a `Set<string>` of selected repo IDs, stored in 
 - [ ] **Step 2: Floating toolbar**
 
 When `selected.size > 0`, render a fixed-bottom-center toolbar:
+
 ```
 N selected · [Scan ↗] [Add to collection] [Apply policy] [Delete] [Clear]
 ```
@@ -1339,6 +1392,7 @@ git commit -m "feat(ui): /repos bulk select + actions toolbar"
 ### Task B14: GitHub org list endpoint
 
 **Files:**
+
 - Create: `internal/github/api.go`
 - Create: `internal/github/api_test.go`
 - Add handler to `internal/api/routes/fleet.go` (or new `routes/github.go`)
@@ -1458,6 +1512,7 @@ git commit -m "feat(api): POST /sources/github/list-org-repos (org repo discover
 ### Task B15: GitHub import modal
 
 **Files:**
+
 - Create: `ui/src/components/repos/import-github-modal.tsx`
 - Modify: `ui/src/routes/_authed.repos.index.tsx` (add the "Import from GitHub" button)
 
@@ -1482,6 +1537,7 @@ git commit -m "feat(ui): GitHub org import wizard modal"
 ### Task B16: SSH discover-repos endpoint
 
 **Files:**
+
 - Modify: `internal/api/routes/nodes.go`
 - Add test
 - Update spec
@@ -1500,10 +1556,13 @@ func TestNodeDiscoverRepos(t *testing.T) {
 - [ ] **Step 2: Implementation**
 
 Run on the remote node:
+
 ```bash
 find <base_path> -maxdepth 3 -name .git -type d 2>/dev/null
 ```
+
 For each found `.git`, get the parent path. For each parent, also fetch `git rev-parse --abbrev-ref HEAD` and `git rev-parse HEAD`. Returns:
+
 ```json
 {
   "data": [
@@ -1524,6 +1583,7 @@ git commit -m "feat(api): POST /nodes/{id}/discover-repos (SSH walk for .git/)"
 ### Task B17: SSH discover modal
 
 **Files:**
+
 - Create: `ui/src/components/repos/discover-ssh-modal.tsx`
 - Modify: a node detail page or the Settings → Nodes tab
 
@@ -1547,6 +1607,7 @@ git commit -m "feat(ui): SSH discover-repos wizard modal"
 ### Task B18: Fleet-mode setting + handler scoping
 
 **Files:**
+
 - Create: `internal/db/migrations/020_fleet_mode.sql` (seeds `fleet_mode=false`)
 - Modify: `internal/api/routes/repos.go`, `scans.go`, `findings.go`, `collections.go` (consult `fleet_mode` setting; when true, skip the `user_id` filter on list endpoints)
 - Modify: `ui/src/routes/_authed.settings.tsx` (add the toggle under General)
@@ -1567,12 +1628,14 @@ Each list handler reads the setting (or accepts it through context) and chooses 
 - [ ] **Step 3: Tests**
 
 Two tests per resource:
+
 - Default (`fleet_mode=false`): user A's repos invisible to user B.
 - Fleet mode on: user A's repos visible to user B (since both authenticate with the right scope).
 
 - [ ] **Step 4: Settings UI**
 
 Add to `GENERAL_KNOBS` in `_authed.settings.tsx`:
+
 ```ts
 {
   key: "fleet_mode",
@@ -1595,6 +1658,7 @@ git commit -m "feat: fleet_mode setting — org-wide repo/scan/finding visibilit
 ### Task B19: Per-collection posture
 
 **Files:**
+
 - Modify: `ui/src/routes/_authed.collections.$collectionId.tsx`
 
 - [ ] **Step 1: Add a small posture summary at the top**
@@ -1616,11 +1680,13 @@ git commit -m "feat(ui): per-collection posture summary on collection detail"
 ### Task B20: README + final smoke + push
 
 **Files:**
+
 - Modify: `README.md` (add Fleet Mode subsection)
 
 - [ ] **Step 1: README**
 
 Add under "Web UI":
+
 ```markdown
 ### Fleet mode
 

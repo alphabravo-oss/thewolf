@@ -21,6 +21,7 @@ Eight phases (from design §12). Phases 1–6 are backend + worker; 7 is UI; 8 i
 ## Phase 1 — Feature flag + job model (foundation)
 
 ### Task 1.1: Migration + flag
+
 **Files:** `internal/db/migrations/021_autofix.sql`, `internal/db/sqlite.go`, `internal/db/postgres.go`
 
 - [ ] Create `021_autofix.sql`: `fix_jobs` + `fix_attempts` tables + `INSERT OR IGNORE INTO settings (key,value) VALUES ('autofix_enabled','false')`. Columns per design §5. Common SQL subset (TEXT/INTEGER/TIMESTAMP), `IF NOT EXISTS`.
@@ -28,17 +29,20 @@ Eight phases (from design §12). Phases 1–6 are backend + worker; 7 is UI; 8 i
 - [ ] Verify: `go test ./internal/db/...` migrates cleanly on a fresh `:memory:` store.
 
 ### Task 1.2: Models
+
 **Files:** `internal/models/fix_job.go`
 
 - [ ] `FixJob` + `FixAttempt` structs with json/db tags (design §5). Status consts (`FixJobQueued|Claimed|Running|Succeeded|Failed|Cancelled`; attempt outcome `Kept|RolledBack|Unfixable`).
 
 ### Task 1.3: Store methods (SQLite + Postgres)
+
 **Files:** `internal/db/store.go`, `internal/db/sqlite_fixjobs.go`, `internal/db/postgres_fixjobs.go`, `internal/db/sqlite_fixjobs_test.go`
 
 - [ ] Interface + impls: `EnqueueFixJob`, `GetFixJobByID`, `ListFixJobs(repoID?)`, `ClaimNextFixJob(workerID)` (atomic `UPDATE … SET status='claimed', claimed_by=? WHERE id=(SELECT id FROM fix_jobs WHERE status='queued' ORDER BY created_at LIMIT 1) RETURNING …` / SQLite equivalent), `UpdateFixJob`, `ReclaimStaleJobs(olderThan)`, `CreateFixAttempt`, `ListFixAttempts(jobID)`.
 - [ ] Test: enqueue → claim (returns it, marks claimed) → second claim returns nothing → update → list; attempt round-trip. Concurrency: two claims never return the same job.
 
 ### Task 1.4: Flag helper
+
 **Files:** `internal/api/routes/autofix.go`
 
 - [ ] `autofixEnabled(ctx, store) bool` (reads the setting, false on error/absent) — mirrors `fleetModeEnabled`.
@@ -135,4 +139,5 @@ Commit per task. `go build ./... && go vet ./... && go test ./internal/db/...` g
 ---
 
 ## Risks (from design §13)
+
 Agent rogue-fix → per-finding scope + verify gate + rollback. CLI auth in worker → versioned containers + persisted session + API fallback. Queue correctness → atomic claim + heartbeat + stale-reclaim. Build/verify cost → targeted single-rule rescans + budgets. **All of it dark until `autofix_enabled` is on.**

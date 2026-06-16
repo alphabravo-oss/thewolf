@@ -44,4 +44,3 @@ Run:
 ```sh
 go test ./internal/api/routes ./internal/scantarget ./internal/sshclient
 ```
-
