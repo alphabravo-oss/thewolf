@@ -287,5 +287,3 @@ Provide 3-5 structured recommendations with priority (1=highest to 5=lowest), ca
 
 	return b.String()
 }
-
-

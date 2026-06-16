@@ -313,16 +313,16 @@ func plural(n int) string {
 // land in the doc.
 func humanCategoryTitle(s string) string {
 	acronyms := map[string]string{
-		"sql":  "SQL",
-		"xss":  "XSS",
-		"xxe":  "XXE",
-		"csrf": "CSRF",
-		"ssrf": "SSRF",
-		"jwt":  "JWT",
-		"cors": "CORS",
-		"tls":  "TLS",
-		"ssh":  "SSH",
-		"iac":  "IaC",
+		"sql":   "SQL",
+		"xss":   "XSS",
+		"xxe":   "XXE",
+		"csrf":  "CSRF",
+		"ssrf":  "SSRF",
+		"jwt":   "JWT",
+		"cors":  "CORS",
+		"tls":   "TLS",
+		"ssh":   "SSH",
+		"iac":   "IaC",
 		"redos": "ReDoS",
 	}
 	parts := strings.Split(s, "-")

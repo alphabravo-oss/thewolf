@@ -16,7 +16,7 @@ func TestAnnotateFiles_NoopProvider(t *testing.T) {
 
 	rm := &RepoMap{
 		FileHashes: map[string]string{
-			"cmd/main.go":            "abc123",
+			"cmd/main.go":             "abc123",
 			"internal/service/svc.go": "def456",
 		},
 		Symbols: []Symbol{
@@ -24,7 +24,7 @@ func TestAnnotateFiles_NoopProvider(t *testing.T) {
 			{Name: "Run", Kind: "function", FilePath: "internal/service/svc.go", Line: 10, Language: "Go"},
 		},
 		FileStats: map[string]FileStats{
-			"cmd/main.go":            {Language: "Go", Code: 20},
+			"cmd/main.go":             {Language: "Go", Code: 20},
 			"internal/service/svc.go": {Language: "Go", Code: 150},
 		},
 	}

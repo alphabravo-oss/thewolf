@@ -25,17 +25,31 @@ import (
 type userSummary struct {
 	ID        string    `json:"id"`
 	Email     string    `json:"email"`
+	Role      string    `json:"role"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
 func toUserSummary(u models.User) userSummary {
+	role := u.Role
+	if role == "" {
+		role = models.RoleUser
+	}
 	return userSummary{
 		ID:        u.ID,
 		Email:     u.Email,
+		Role:      role,
 		CreatedAt: u.CreatedAt,
 		UpdatedAt: u.UpdatedAt,
 	}
+}
+
+// validRole normalizes a role string to admin|user, defaulting to user.
+func validRole(role string) string {
+	if strings.ToLower(strings.TrimSpace(role)) == models.RoleAdmin {
+		return models.RoleAdmin
+	}
+	return models.RoleUser
 }
 
 // ListUsers handles GET /api/users — list every user in the system.
@@ -69,6 +83,7 @@ func ListUsers(w http.ResponseWriter, r *http.Request) {
 type adminCreateUserRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
+	Role     string `json:"role"` // admin | user (default user)
 }
 
 // CreateUserAdmin handles POST /api/users — admin-flavor user creation
@@ -117,6 +132,7 @@ func CreateUserAdmin(w http.ResponseWriter, r *http.Request) {
 		ID:           uuid.New().String(),
 		Email:        req.Email,
 		PasswordHash: hash,
+		Role:         validRole(req.Role),
 		CreatedAt:    now,
 		UpdatedAt:    now,
 	}
@@ -126,6 +142,47 @@ func CreateUserAdmin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.WriteJSON(w, http.StatusCreated, response.SuccessResponse{Data: toUserSummary(*u)})
+}
+
+type updateUserRoleRequest struct {
+	Role string `json:"role"` // admin | user
+}
+
+// UpdateUserRole handles PUT /api/users/{id}/role — admin-only promote/demote.
+// A user can't demote themselves (so the system can't be left with no admin by
+// accident); the route group is already admin-gated.
+func UpdateUserRole(w http.ResponseWriter, r *http.Request) {
+	claims := auth.GetUserFromContext(r.Context())
+	if claims == nil {
+		response.WriteError(w, http.StatusUnauthorized, "unauthorized", "not authenticated")
+		return
+	}
+	h := DefaultHandler
+	if h == nil {
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "handler not initialized")
+		return
+	}
+	id := chi.URLParam(r, "id")
+	if id == claims.UserID {
+		response.WriteError(w, http.StatusBadRequest, "validation_error", "you cannot change your own role")
+		return
+	}
+	var req updateUserRoleRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.WriteError(w, http.StatusBadRequest, "bad_request", "invalid JSON body")
+		return
+	}
+	u, err := h.Store.GetUserByID(r.Context(), id)
+	if err != nil || u == nil {
+		response.WriteError(w, http.StatusNotFound, "not_found", "user not found")
+		return
+	}
+	u.Role = validRole(req.Role)
+	if err := h.Store.UpdateUser(r.Context(), u); err != nil {
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to update user role")
+		return
+	}
+	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: toUserSummary(*u)})
 }
 
 // DeleteUser handles DELETE /api/users/{id} — remove a user. The caller

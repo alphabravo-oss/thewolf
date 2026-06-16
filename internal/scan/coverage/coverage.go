@@ -4,12 +4,12 @@ package coverage
 
 // CoverageReport summarizes static test coverage analysis for a repo.
 type CoverageReport struct {
-	TotalSourceFiles  int                        `json:"total_source_files"`
-	FilesWithTests    int                        `json:"files_with_tests"`
-	FilesWithoutTests int                        `json:"files_without_tests"`
-	TestFiles         int                        `json:"test_files"`
-	CoveragePercent   float64                    `json:"coverage_percent"` // files_with_tests / total_source_files * 100
-	UncoveredFiles    []string                   `json:"uncovered_files"`  // source files with no matching test
+	TotalSourceFiles  int                         `json:"total_source_files"`
+	FilesWithTests    int                         `json:"files_with_tests"`
+	FilesWithoutTests int                         `json:"files_without_tests"`
+	TestFiles         int                         `json:"test_files"`
+	CoveragePercent   float64                     `json:"coverage_percent"` // files_with_tests / total_source_files * 100
+	UncoveredFiles    []string                    `json:"uncovered_files"`  // source files with no matching test
 	ByLanguage        map[string]LanguageCoverage `json:"by_language"`
 }
 

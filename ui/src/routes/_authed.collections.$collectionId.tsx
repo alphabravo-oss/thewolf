@@ -17,6 +17,7 @@ import {
 import { useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import { useMe, canModify } from "@/lib/me";
 import type { Collection, Repo, Scan } from "@/lib/types";
 import { CardSkeleton } from "@/components/skeleton";
 import { AddRepoForm } from "@/components/add-repo-form";
@@ -37,6 +38,7 @@ function CollectionDetailPage() {
   const { collectionId } = Route.useParams();
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const me = useMe();
   const [editing, setEditing] = useState(false);
   const [adding, setAdding] = useState(false);
 
@@ -130,7 +132,7 @@ function CollectionDetailPage() {
             </>
           )}
         </div>
-        {!editing && (
+        {!editing && canModify(me.data, c.user_id) && (
           <div className="flex items-center gap-1">
             <button
               type="button"

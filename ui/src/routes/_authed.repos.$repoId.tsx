@@ -30,6 +30,7 @@ import { BranchSelect } from "@/components/branch-select";
 import { FrameworksChips } from "@/components/frameworks-chips";
 import { FixableBadge } from "@/components/fixes/fixable-badge";
 import { useScanWithPreflight } from "@/components/scan-preflight";
+import { useMe, canModify } from "@/lib/me";
 
 // One row per past scan from GET /api/scans/trends?repo_id=&branch=
 interface TrendPoint {
@@ -83,6 +84,8 @@ function RepoDetailPage() {
   });
 
   const [scanBranch, setScanBranch] = useState("");
+
+  const me = useMe();
 
   // Scanning goes through the image preflight: it prompts to pull any selected
   // scanner whose container image isn't present before starting the scan.
@@ -161,22 +164,24 @@ function RepoDetailPage() {
             <PlayIcon className="size-4" />
             {scan.busy ? "Starting…" : "Scan now"}
           </button>
-          <button
-            type="button"
-            onClick={() => {
-              if (
-                window.confirm(
-                  `Delete repo "${r.name}"? This removes it from all collections and deletes its scans. Cannot be undone.`,
-                )
-              ) {
-                del.mutate();
-              }
-            }}
-            className="size-9 grid place-items-center rounded-md hover:bg-destructive/10 text-destructive"
-            aria-label="Delete"
-          >
-            <Trash2Icon className="size-4" />
-          </button>
+          {canModify(me.data, r.user_id) && (
+            <button
+              type="button"
+              onClick={() => {
+                if (
+                  window.confirm(
+                    `Delete repo "${r.name}"? This removes it from all collections and deletes its scans. Cannot be undone.`,
+                  )
+                ) {
+                  del.mutate();
+                }
+              }}
+              className="size-9 grid place-items-center rounded-md hover:bg-destructive/10 text-destructive"
+              aria-label="Delete"
+            >
+              <Trash2Icon className="size-4" />
+            </button>
+          )}
         </div>
       </div>
 

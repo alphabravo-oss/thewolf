@@ -16,8 +16,8 @@ type ToolDiagnostic struct {
 
 // errorPattern maps a compiled regex to a diagnostic generator.
 type errorPattern struct {
-	tool    string // empty = matches any tool
-	re      *regexp.Regexp
+	tool     string // empty = matches any tool
+	re       *regexp.Regexp
 	diagnose func(toolName string, matches []string) *ToolDiagnostic
 }
 

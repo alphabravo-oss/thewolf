@@ -163,7 +163,15 @@ func bootstrapAdmin(ctx context.Context, store db.Store) error {
 		return fmt.Errorf("WOLF_ADMIN_PASSWORD must be at least 8 characters")
 	}
 	if existing, _ := store.GetUserByEmail(ctx, email); existing != nil {
-		wolflog.L().Debug().Str("email", email).Msg("admin bootstrap: user already exists")
+		// Ensure the bootstrap admin always has the admin role (e.g. an install
+		// that pre-dates roles, or a demoted account).
+		if existing.Role != models.RoleAdmin {
+			existing.Role = models.RoleAdmin
+			if err := store.UpdateUser(ctx, existing); err != nil {
+				return fmt.Errorf("promote bootstrap admin: %w", err)
+			}
+			wolflog.L().Info().Str("email", email).Msg("admin bootstrap: promoted existing user to admin")
+		}
 		return nil
 	}
 	hash, err := auth.HashPassword(password)
@@ -175,6 +183,7 @@ func bootstrapAdmin(ctx context.Context, store db.Store) error {
 		ID:           uuid.New().String(),
 		Email:        email,
 		PasswordHash: hash,
+		Role:         models.RoleAdmin,
 		CreatedAt:    now,
 		UpdatedAt:    now,
 	}

@@ -73,11 +73,19 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The very first account bootstraps the system as an admin; everyone after
+	// is a regular user (an admin can promote them from Settings → Users).
+	role := models.RoleUser
+	if existing, lerr := h.Store.ListUsers(r.Context()); lerr == nil && len(existing) == 0 {
+		role = models.RoleAdmin
+	}
+
 	now := time.Now()
 	user := &models.User{
 		ID:           uuid.New().String(),
 		Email:        req.Email,
 		PasswordHash: hash,
+		Role:         role,
 		CreatedAt:    now,
 		UpdatedAt:    now,
 	}

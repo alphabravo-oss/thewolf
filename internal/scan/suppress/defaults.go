@@ -56,7 +56,7 @@ func DefaultRules() RuleSet {
 		// they're the test corpus. Suppressing all findings (not just
 		// hardcoded-secret) is the right default — if you really need to
 		// scan a fixtures directory, negate via .wolfignore.
-		{PathGlob: "**/testdata/**", Reason: "default:testdata"},          // go convention
+		{PathGlob: "**/testdata/**", Reason: "default:testdata"}, // go convention
 		{PathGlob: "**/test-fixtures/**", Reason: "default:test-fixtures"},
 		{PathGlob: "**/test_fixtures/**", Reason: "default:test-fixtures"},
 		{PathGlob: "**/testFixtures/**", Reason: "default:test-fixtures"}, // gradle

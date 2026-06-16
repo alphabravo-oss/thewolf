@@ -153,7 +153,6 @@ func DeleteSecret(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-
 	if err := h.Store.DeleteSecret(r.Context(), id); err != nil {
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to delete secret")
 		return
@@ -296,4 +295,3 @@ type Platform struct {
 	Arch   string `json:"arch"`
 	Distro string `json:"distro,omitempty"`
 }
-

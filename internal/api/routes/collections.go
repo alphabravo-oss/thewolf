@@ -198,6 +198,10 @@ func UpdateCollection(w http.ResponseWriter, r *http.Request) {
 		response.WriteError(w, http.StatusNotFound, "not_found", "collection not found")
 		return
 	}
+	if !canModifyOwned(claims, col.UserID) {
+		response.WriteError(w, http.StatusForbidden, "forbidden", "you can only modify collections you created")
+		return
+	}
 
 	var req updateCollectionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -254,6 +258,10 @@ func DeleteCollection(w http.ResponseWriter, r *http.Request) {
 		response.WriteError(w, http.StatusNotFound, "not_found", "collection not found")
 		return
 	}
+	if !canModifyOwned(claims, col.UserID) {
+		response.WriteError(w, http.StatusForbidden, "forbidden", "you can only delete collections you created")
+		return
+	}
 
 	// Folder model: move this collection's repos to the owner's Default
 	// collection first, so deleting a collection never strands a repo as an
@@ -298,9 +306,13 @@ func AddRepoToCollection(w http.ResponseWriter, r *http.Request) {
 	}
 
 	collectionID := chi.URLParam(r, "id")
-	_, err := h.Store.GetCollectionByID(r.Context(), collectionID)
+	col, err := h.Store.GetCollectionByID(r.Context(), collectionID)
 	if err != nil {
 		response.WriteError(w, http.StatusNotFound, "not_found", "collection not found")
+		return
+	}
+	if !canModifyOwned(claims, col.UserID) {
+		response.WriteError(w, http.StatusForbidden, "forbidden", "you can only modify collections you created")
 		return
 	}
 
@@ -343,9 +355,13 @@ func RemoveRepoFromCollection(w http.ResponseWriter, r *http.Request) {
 	}
 
 	collectionID := chi.URLParam(r, "id")
-	_, err := h.Store.GetCollectionByID(r.Context(), collectionID)
+	col, err := h.Store.GetCollectionByID(r.Context(), collectionID)
 	if err != nil {
 		response.WriteError(w, http.StatusNotFound, "not_found", "collection not found")
+		return
+	}
+	if !canModifyOwned(claims, col.UserID) {
+		response.WriteError(w, http.StatusForbidden, "forbidden", "you can only modify collections you created")
 		return
 	}
 

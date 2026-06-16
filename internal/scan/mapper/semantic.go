@@ -19,7 +19,7 @@ import (
 type FileAnnotation struct {
 	FilePath    string `json:"file_path"`
 	Purpose     string `json:"purpose"`     // controller, model, service, config, migration, test, utility, etc.
-	Importance  string `json:"importance"`   // critical, high, normal, low
+	Importance  string `json:"importance"`  // critical, high, normal, low
 	Description string `json:"description"` // brief description of what the file does
 }
 

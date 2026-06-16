@@ -15,7 +15,7 @@ type ReportConfig struct {
 	RepoName        string
 	Branch          string
 	Findings        []models.Finding
-	Languages       map[string]int  // language -> file count
+	Languages       map[string]int // language -> file count
 	Frameworks      []string
 	ToolsRun        []string
 	ToolsFailed     map[string]error
@@ -53,8 +53,8 @@ type jsonReport struct {
 	Findings        []jsonFinding        `json:"findings"`
 	Tools           []toolEntry          `json:"tools"`
 	AISummary       string               `json:"ai_summary,omitempty"`
-	ToolSummaries   []jsonToolSummary     `json:"tool_summaries,omitempty"`
-	Recommendations []jsonRecommendation  `json:"recommendations,omitempty"`
+	ToolSummaries   []jsonToolSummary    `json:"tool_summaries,omitempty"`
+	Recommendations []jsonRecommendation `json:"recommendations,omitempty"`
 }
 
 type reportSummary struct {

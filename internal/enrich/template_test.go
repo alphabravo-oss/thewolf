@@ -49,7 +49,7 @@ func TestBuildPrompt_AllSectionsPresent(t *testing.T) {
 		"Function: GetUser (function)",
 		"CWE: CWE-89",
 		"Rule: G201",
-		"Corroborated by: gosec, semgrep", // sorted
+		"Corroborated by: gosec, semgrep",              // sorted
 		"internal/api/admin.go, internal/api/users.go", // dependents sorted
 	} {
 		if !strings.Contains(got, want) {
@@ -70,11 +70,11 @@ func TestBuildPrompt_Deterministic(t *testing.T) {
 func TestBuildPrompt_MissingFieldsOmitted(t *testing.T) {
 	// A bare finding — only the always-present fields set.
 	bare := models.Finding{
-		ToolName: "eslint",
-		Category: models.CategoryQuality,
-		Severity: models.SeverityLow,
-		Title:    "unused variable",
-		FilePath: "src/app.ts",
+		ToolName:  "eslint",
+		Category:  models.CategoryQuality,
+		Severity:  models.SeverityLow,
+		Title:     "unused variable",
+		FilePath:  "src/app.ts",
 		LineStart: 10,
 	}
 	got := BuildPrompt(bare)

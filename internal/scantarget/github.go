@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	repocache "github.com/alphabravocompany/thewolf/internal/repo"
 	"github.com/alphabravocompany/thewolf/internal/models"
+	repocache "github.com/alphabravocompany/thewolf/internal/repo"
 	"github.com/alphabravocompany/thewolf/internal/secrets"
 )
 

@@ -54,6 +54,15 @@ func NewServer(store db.Store, addr string) *Server {
 	// Initialize route handler with store and plugin registry
 	routes.SetHandler(store, plugin.Global)
 
+	// Per-request role resolution for RBAC (admin | user). Looked up from the
+	// store so role changes apply immediately without re-issuing tokens.
+	auth.RoleResolver = func(ctx context.Context, userID string) string {
+		if u, err := store.GetUserByID(ctx, userID); err == nil && u != nil {
+			return u.Role
+		}
+		return ""
+	}
+
 	// Folder-model invariant: assign any pre-existing orphan repos to their
 	// owner's Default collection so none are unreachable now that the nav is
 	// browsed via collections. Idempotent; a warning on failure is non-fatal.
@@ -154,7 +163,13 @@ func NewServer(store db.Store, addr string) *Server {
 			wLoops := auth.RequireScope(apikey.ScopeWriteLoops)
 			rConfig := auth.RequireScope(apikey.ScopeReadConfig)
 			wConfig := auth.RequireScope(apikey.ScopeWriteConfig)
-			adminOnly := auth.RequireScope(apikey.ScopeAdmin)
+			adminScope := auth.RequireScope(apikey.ScopeAdmin)
+			// adminOnly gates the human admin surface by ROLE. It is chained
+			// WITH the relevant scope (defense in depth): an admin endpoint
+			// needs both the admin role AND the write/admin scope, so a
+			// limited-scope token can't perform admin ops even for an admin
+			// user, and a write-scoped token can't for a non-admin user.
+			adminOnly := auth.RequireAdmin
 
 			// Auth/session + API token self-management (no extra scope —
 			// any authenticated principal manages its own tokens).
@@ -167,12 +182,14 @@ func NewServer(store db.Store, addr string) *Server {
 				r.Delete("/tokens/{id}", routes.RevokeAPIToken)
 			})
 
-			r.With(adminOnly).Get("/audit-log", routes.ListAuditLog)
+			r.With(adminScope).With(adminOnly).Get("/audit-log", routes.ListAuditLog)
 
 			r.Route("/users", func(r chi.Router) {
+				r.Use(adminScope)
 				r.Use(adminOnly)
 				r.Get("/", routes.ListUsers)
 				r.Post("/", routes.CreateUserAdmin)
+				r.Put("/{id}/role", routes.UpdateUserRole)
 				r.Delete("/{id}", routes.DeleteUser)
 			})
 
@@ -193,15 +210,17 @@ func NewServer(store db.Store, addr string) *Server {
 			})
 
 			r.Route("/nodes", func(r chi.Router) {
+				// Remote SSH nodes are shared infrastructure managed from the
+				// admin Settings surface: writes are admin-only.
 				r.With(rConfig).Get("/", routes.ListRemoteNodes)
-				r.With(wConfig).Post("/", routes.CreateRemoteNode)
+				r.With(wConfig).With(adminOnly).Post("/", routes.CreateRemoteNode)
 				r.With(rConfig).Get("/{id}", routes.GetRemoteNode)
-				r.With(wConfig).Put("/{id}", routes.UpdateRemoteNode)
-				r.With(wConfig).Delete("/{id}", routes.DeleteRemoteNode)
-				r.With(wConfig).Post("/{id}/check", routes.CheckRemoteNode)
+				r.With(wConfig).With(adminOnly).Put("/{id}", routes.UpdateRemoteNode)
+				r.With(wConfig).With(adminOnly).Delete("/{id}", routes.DeleteRemoteNode)
+				r.With(wConfig).With(adminOnly).Post("/{id}/check", routes.CheckRemoteNode)
 				r.With(rConfig).Get("/{id}/browse", routes.BrowseRemoteNode)
 				r.With(rConfig).Get("/{id}/git-info", routes.RemoteGitInfo)
-				r.With(wConfig).Post("/{id}/discover-repos", routes.DiscoverNodeRepos)
+				r.With(wConfig).With(adminOnly).Post("/{id}/discover-repos", routes.DiscoverNodeRepos)
 			})
 
 			r.Route("/collections", func(r chi.Router) {
@@ -304,8 +323,8 @@ func NewServer(store db.Store, addr string) *Server {
 
 			r.Route("/config", func(r chi.Router) {
 				r.With(rConfig).Get("/secrets", routes.ListSecrets)
-				r.With(wConfig).Post("/secrets", routes.CreateSecret)
-				r.With(wConfig).Delete("/secrets/{id}", routes.DeleteSecret)
+				r.With(wConfig).With(adminOnly).Post("/secrets", routes.CreateSecret)
+				r.With(wConfig).With(adminOnly).Delete("/secrets/{id}", routes.DeleteSecret)
 				r.With(rConfig).Get("/plugins", routes.ListPlugins)
 				r.With(wConfig).Post("/plugins/{name}/install", routes.InstallPlugin)
 				r.With(rConfig).Get("/setup", routes.SetupStatus)
@@ -313,23 +332,27 @@ func NewServer(store db.Store, addr string) *Server {
 
 			// Scanner backend (PLAN.md §5).
 			r.Route("/scanners", func(r chi.Router) {
+				// Scanner-image builds/pulls/updates are admin-only (system
+				// maintenance); reads stay open for the scan flow.
 				r.With(rConfig).Get("/tools", routes.ScannersTools)
 				r.With(rConfig).Get("/tools/{name}", routes.ScannersTool)
-				r.With(wConfig).Post("/tools/check-updates", routes.ScannersCheckUpdates)
-				r.With(wConfig).Post("/tools/{name}/check-update", routes.ScannersCheckUpdate)
+				r.With(wConfig).With(adminOnly).Post("/tools/check-updates", routes.ScannersCheckUpdates)
+				r.With(wConfig).With(adminOnly).Post("/tools/{name}/check-update", routes.ScannersCheckUpdate)
 				r.With(rConfig).Get("/images", routes.ScannersImages)
-				r.With(wConfig).Post("/images/pull", routes.ScannersPullOne)
-				r.With(wConfig).Post("/images/{variant}/build", routes.BuildScannerImage)
-				r.With(wConfig).Post("/images/build-all", routes.BuildAllScannerImages)
+				r.With(wConfig).With(adminOnly).Post("/images/pull", routes.ScannersPullOne)
+				r.With(wConfig).With(adminOnly).Post("/images/{variant}/build", routes.BuildScannerImage)
+				r.With(wConfig).With(adminOnly).Post("/images/build-all", routes.BuildAllScannerImages)
 				r.With(rConfig).Get("/config", routes.ScannersConfig)
 				r.With(rConfig).Get("/list", routes.ScannersList)
 				r.With(rConfig).Post("/plan", routes.ScannersPlan)
-				r.With(wConfig).Post("/doctor", routes.ScannersDoctor)
-				r.With(wConfig).Post("/pull", routes.ScannersPull)
+				r.With(wConfig).With(adminOnly).Post("/doctor", routes.ScannersDoctor)
+				r.With(wConfig).With(adminOnly).Post("/pull", routes.ScannersPull)
 			})
 
+			// GET stays open (the UI reads feature flags to gate nav); writes
+			// are admin-only.
 			r.With(rConfig).Get("/settings", routes.ListSettings)
-			r.With(wConfig).Put("/settings", routes.UpdateSettings)
+			r.With(wConfig).With(adminOnly).Put("/settings", routes.UpdateSettings)
 
 			r.Route("/ai-prompts", func(r chi.Router) {
 				r.With(rConfig).Get("/", routes.ListPromptTemplates)

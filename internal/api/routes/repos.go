@@ -240,6 +240,10 @@ func UpdateRepo(w http.ResponseWriter, r *http.Request) {
 		response.WriteError(w, http.StatusNotFound, "not_found", "repo not found")
 		return
 	}
+	if !canModifyOwned(claims, repo.UserID) {
+		response.WriteError(w, http.StatusForbidden, "forbidden", "you can only modify repositories you created")
+		return
+	}
 
 	var req updateRepoRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -279,6 +283,10 @@ func DeleteRepo(w http.ResponseWriter, r *http.Request) {
 	repo, err := h.Store.GetRepoByID(r.Context(), id)
 	if err != nil {
 		response.WriteError(w, http.StatusNotFound, "not_found", "repo not found")
+		return
+	}
+	if !canModifyOwned(claims, repo.UserID) {
+		response.WriteError(w, http.StatusForbidden, "forbidden", "you can only delete repositories you created")
 		return
 	}
 

@@ -28,7 +28,7 @@ import (
 // Symbol represents a named code entity extracted from the repository.
 type Symbol struct {
 	Name     string `json:"name"`
-	Kind     string `json:"kind"`      // function, class, method, interface, import
+	Kind     string `json:"kind"` // function, class, method, interface, import
 	FilePath string `json:"file_path"`
 	Line     int    `json:"line"`
 	Language string `json:"language"`
@@ -287,7 +287,7 @@ func RunCtags(repoPath string) ([]Symbol, error) {
 	if err != nil {
 		// Retry without --output-format=json (older ctags).
 		return runCtagsTabular(binary, repoPath)
-	// #nosec G204 -- command is a configured tool name (docker / claude / codex / scanner binary); args sourced from internal config, not user input
+		// #nosec G204 -- command is a configured tool name (docker / claude / codex / scanner binary); args sourced from internal config, not user input
 	}
 
 	return parseCtagsJSON(out, repoPath)
@@ -360,8 +360,7 @@ func runCtagsTabular(binary, repoPath string) ([]Symbol, error) {
 		return nil, fmt.Errorf("ctags tabular exec: %w", err)
 	}
 
-// #nosec G204 -- command is a configured tool name (docker / claude / codex / scanner binary); args sourced from internal config, not user input
-
+	// #nosec G204 -- command is a configured tool name (docker / claude / codex / scanner binary); args sourced from internal config, not user input
 
 	var symbols []Symbol
 	scanner := bufio.NewScanner(strings.NewReader(string(out)))
@@ -440,7 +439,7 @@ func runTreeSitter(repoPath string, files []string) ([]Symbol, error) {
 			continue // skip unparseable files
 		}
 
-// #nosec G204 -- command is a configured tool name (docker / claude / codex / scanner binary); args sourced from internal config, not user input
+		// #nosec G204 -- command is a configured tool name (docker / claude / codex / scanner binary); args sourced from internal config, not user input
 
 		// Read source file lines so we can resolve identifier text from
 		// row/column positions reported in the S-expression.
@@ -450,7 +449,7 @@ func runTreeSitter(repoPath string, files []string) ([]Symbol, error) {
 		}
 		srcLines := strings.Split(string(srcBytes), "\n")
 
-// #nosec G304 -- reads tool-output JSON inside the artifact dir
+		// #nosec G304 -- reads tool-output JSON inside the artifact dir
 
 		lang := guessLanguage(rel)
 		syms := parseTreeSitterOutput(string(out), rel, lang, srcLines)
@@ -722,7 +721,7 @@ func countLines(path string) (code int, blank int, err error) {
 	}
 	defer f.Close()
 
-// #nosec G304 -- reads tool-output JSON inside the artifact dir
+	// #nosec G304 -- reads tool-output JSON inside the artifact dir
 
 	scanner := bufio.NewScanner(f)
 	// Increase buffer size for long lines.
@@ -749,7 +748,7 @@ func hashFile(path string) (string, error) {
 	}
 	defer f.Close()
 
-// #nosec G304 -- reads tool-output JSON inside the artifact dir
+	// #nosec G304 -- reads tool-output JSON inside the artifact dir
 
 	h := sha256.New()
 	if _, err := io.Copy(h, f); err != nil {

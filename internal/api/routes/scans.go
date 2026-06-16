@@ -1294,7 +1294,7 @@ func GetScanManifest(w http.ResponseWriter, r *http.Request) {
 		response.WriteError(w, http.StatusNotFound, "not_found", fmt.Sprintf("scan %s not found", scanID))
 		return
 	}
-	if scan.UserID != "" && scan.UserID != claims.UserID {
+	if !canModifyOwned(claims, scan.UserID) {
 		response.WriteError(w, http.StatusForbidden, "forbidden", "scan does not belong to current user")
 		return
 	}
@@ -2618,7 +2618,7 @@ func ensureScanOwner(w http.ResponseWriter, scan *models.Scan, claims *auth.Clai
 		response.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing user context")
 		return false
 	}
-	if scan.UserID != "" && scan.UserID != claims.UserID {
+	if !canModifyOwned(claims, scan.UserID) {
 		response.WriteError(w, http.StatusForbidden, "forbidden", "scan does not belong to current user")
 		return false
 	}

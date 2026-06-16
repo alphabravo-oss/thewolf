@@ -55,6 +55,7 @@ func Endpoints() []Endpoint {
 		// Users (admin).
 		{"GET", "/users", "users", "List users", "admin", "", true},
 		{"POST", "/users", "users", "Create a user", "admin", "CreateUserRequest", false},
+		{"PUT", "/users/{id}/role", "users", "Change a user's role (admin|user)", "admin", "", false},
 		{"DELETE", "/users/{id}", "users", "Delete a user", "admin", "", false},
 
 		// Repos.

@@ -241,7 +241,6 @@ func (p *AnthropicProvider) emitLog(prompt, response, errMsg string, start time.
 	})
 }
 
-
 // ---------- Shared prompt builders ----------
 
 func buildAnalyzePrompt(req AnalyzeRequest) string {

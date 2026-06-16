@@ -53,12 +53,12 @@ build/
 `)
 
 	findings := []models.Finding{
-		{FilePath: "app.log"},                  // *.log → ignored
-		{FilePath: "frontend/build/index.js"},  // build/ → ignored
-		{FilePath: "src/main.go"},              // not matched
-		{FilePath: "secret.env"},               // root-anchored → ignored
-		{FilePath: "nested/secret.env"},        // root-anchored, not matched
-		{FilePath: "keep.log"},                 // negated → NOT ignored
+		{FilePath: "app.log"},                 // *.log → ignored
+		{FilePath: "frontend/build/index.js"}, // build/ → ignored
+		{FilePath: "src/main.go"},             // not matched
+		{FilePath: "secret.env"},              // root-anchored → ignored
+		{FilePath: "nested/secret.env"},       // root-anchored, not matched
+		{FilePath: "keep.log"},                // negated → NOT ignored
 	}
 
 	n := ApplyGitignore(findings, repo)
@@ -124,10 +124,10 @@ func TestApplyGitignore_BadPathsDontPoisonGoodOnes(t *testing.T) {
 	repo := initRepo(t, "*.log\n")
 
 	findings := []models.Finding{
-		{FilePath: "app.log"},                  // should be suppressed
-		{FilePath: "/deploy/foo.yml"},          // absolute — git would barf
-		{FilePath: "../escape/secret.log"},     // traversal — git would barf
-		{FilePath: "subdir/other.log"},         // should be suppressed
+		{FilePath: "app.log"},              // should be suppressed
+		{FilePath: "/deploy/foo.yml"},      // absolute — git would barf
+		{FilePath: "../escape/secret.log"}, // traversal — git would barf
+		{FilePath: "subdir/other.log"},     // should be suppressed
 	}
 	n := ApplyGitignore(findings, repo)
 	if n != 2 {

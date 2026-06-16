@@ -4,18 +4,18 @@ import "time"
 
 // Fix represents a fix operation for scan findings.
 type Fix struct {
-	ID                string    `json:"id" db:"id"`
-	UserID            string    `json:"user_id" db:"user_id"`
-	ScanID            string    `json:"scan_id" db:"scan_id"`
-	LoopID            *string   `json:"loop_id,omitempty" db:"loop_id"`
-	Status            FixStatus `json:"status" db:"status"`
-	SeverityFilter    string    `json:"severity_filter" db:"severity_filter"`
-	BranchName        string    `json:"branch_name" db:"branch_name"`
-	WorktreePath      string    `json:"worktree_path" db:"worktree_path"`
-	FindingsAttempted int       `json:"findings_attempted" db:"findings_attempted"`
-	FindingsFixed     int       `json:"findings_fixed" db:"findings_fixed"`
-	FindingsFailed    int       `json:"findings_failed" db:"findings_failed"`
-	PRURLs            string    `json:"pr_urls" db:"pr_urls"`
+	ID                string     `json:"id" db:"id"`
+	UserID            string     `json:"user_id" db:"user_id"`
+	ScanID            string     `json:"scan_id" db:"scan_id"`
+	LoopID            *string    `json:"loop_id,omitempty" db:"loop_id"`
+	Status            FixStatus  `json:"status" db:"status"`
+	SeverityFilter    string     `json:"severity_filter" db:"severity_filter"`
+	BranchName        string     `json:"branch_name" db:"branch_name"`
+	WorktreePath      string     `json:"worktree_path" db:"worktree_path"`
+	FindingsAttempted int        `json:"findings_attempted" db:"findings_attempted"`
+	FindingsFixed     int        `json:"findings_fixed" db:"findings_fixed"`
+	FindingsFailed    int        `json:"findings_failed" db:"findings_failed"`
+	PRURLs            string     `json:"pr_urls" db:"pr_urls"`
 	StartedAt         *time.Time `json:"started_at,omitempty" db:"started_at"`
 	CompletedAt       *time.Time `json:"completed_at,omitempty" db:"completed_at"`
 	CreatedAt         time.Time  `json:"created_at" db:"created_at"`

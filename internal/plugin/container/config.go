@@ -14,12 +14,12 @@
 //     reliably stops the tool *inside* the container.
 //
 //   - Path translation has two flavors:
-//       1. HOST→DAEMON: when wolf-slim runs in a container, the host paths
-//          that docker daemon needs for -v aren't visible inside wolf-slim.
-//          We translate InContainerReposRoot → HostReposRoot before -v.
-//       2. CONTAINER→REPO-RELATIVE: paths returned in scanner findings are
-//          "/scan/foo.py". translate.go normalizes those to "foo.py" so
-//          fingerprints are portable across hosts.
+//     1. HOST→DAEMON: when wolf-slim runs in a container, the host paths
+//     that docker daemon needs for -v aren't visible inside wolf-slim.
+//     We translate InContainerReposRoot → HostReposRoot before -v.
+//     2. CONTAINER→REPO-RELATIVE: paths returned in scanner findings are
+//     "/scan/foo.py". translate.go normalizes those to "foo.py" so
+//     fingerprints are portable across hosts.
 package container
 
 import (

@@ -20,10 +20,13 @@ import {
   Trash2Icon,
   UploadCloudIcon,
   UsersIcon,
+  LockIcon,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import { useMe } from "@/lib/me";
+import { EmptyState } from "@/components/empty-state";
 import type { RemoteNode } from "@/lib/types";
 import { BuildConsole, type BuildTarget } from "@/components/scanners/build-console";
 import { DockerHubCredentialCard } from "@/components/scanners/dockerhub-credential";
@@ -55,6 +58,23 @@ const TABS: { key: TabKey; label: string; Icon: typeof SettingsIcon }[] = [
 function SettingsPage() {
   const { tab } = Route.useSearch();
   const navigate = useNavigate();
+  const me = useMe();
+
+  // Settings is the admin surface. A non-admin who reaches this route directly
+  // gets a clear message instead of a wall of 403s.
+  if (me.data && me.data.role !== "admin") {
+    return (
+      <div className="page stack page--narrow">
+        <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
+        <EmptyState
+          icon={LockIcon}
+          title="Administrators only"
+          description="System settings, users, nodes, secrets, and scanner images are managed by an administrator. Ask an admin if you need a change."
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="page stack page--narrow">
       <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
@@ -102,12 +122,14 @@ const GENERAL_KNOBS = [
   {
     key: "ai_enabled",
     label: "AI features",
+    alpha: true,
     help: "Master switch for AI-assisted finding enrichment and fix suggestions. When off, scans complete normally but no AI prompts are issued.",
     type: "bool" as const,
   },
   {
     key: "autofix_enabled",
     label: "Autonomous fixing",
+    alpha: true,
     help: "Master switch for the autonomous fix engine. v1 is dry-run, per-finding, verified, and branch-only — it produces a fix branch + diff for review and never pushes or opens a PR. When off, the Fixes surface, the worker, and the execute API are all dark. Default off.",
     type: "bool" as const,
   },
@@ -176,7 +198,14 @@ function GeneralTab() {
         return (
           <div key={knob.key} className="grid md:grid-cols-[1fr_240px] gap-4 items-start">
             <div>
-              <label className="text-sm font-medium">{knob.label}</label>
+              <label className="text-sm font-medium inline-flex items-center gap-1.5">
+                {knob.label}
+                {"alpha" in knob && knob.alpha && (
+                  <span className="rounded px-1.5 py-0.5 text-3xs font-semibold uppercase tracking-wide bg-amber-500/15 text-amber-500 border border-amber-500/30">
+                    Alpha
+                  </span>
+                )}
+              </label>
               <p className="text-xs text-muted-foreground mt-0.5">{knob.help}</p>
             </div>
             {knob.type === "bool" ? (
@@ -707,6 +736,7 @@ function NewNodeForm({
 interface UserSummary {
   id: string;
   email: string;
+  role: string;
   created_at: string;
   updated_at: string;
 }
@@ -722,12 +752,22 @@ function UsersTab() {
     queryFn: async () => (await api.get<UserSummary[]>("/users")).data ?? [],
   });
   const create = useMutation({
-    mutationFn: (body: { email: string; password: string }) => api.post("/users", body),
+    mutationFn: (body: { email: string; password: string; role: string }) =>
+      api.post("/users", body),
     onSuccess: () => {
       toast.success("User created");
       qc.invalidateQueries({ queryKey: ["users"] });
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Create failed"),
+  });
+  const setRole = useMutation({
+    mutationFn: ({ id, role }: { id: string; role: string }) =>
+      api.put(`/users/${id}/role`, { role }),
+    onSuccess: () => {
+      toast.success("Role updated");
+      qc.invalidateQueries({ queryKey: ["users"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Role change failed"),
   });
   const del = useMutation({
     mutationFn: (id: string) => api.delete(`/users/${id}`),
@@ -738,6 +778,7 @@ function UsersTab() {
     onError: (e) => toast.error(e instanceof Error ? e.message : "Delete failed"),
   });
   const meId = meQ.data?.id;
+  const adminCount = (q.data ?? []).filter((u) => u.role === "admin").length;
   return (
     <section className="space-y-4">
       <NewUserForm onSubmit={(b) => create.mutate(b)} disabled={create.isPending} />
@@ -749,6 +790,7 @@ function UsersTab() {
             <thead className="text-xs text-muted-foreground border-b border-border/30">
               <tr>
                 <th className="text-left px-4 py-2">Email</th>
+                <th className="text-left px-4 py-2">Role</th>
                 <th className="text-left px-4 py-2">Created</th>
                 <th className="text-right px-4 py-2 w-12"></th>
               </tr>
@@ -756,6 +798,10 @@ function UsersTab() {
             <tbody>
               {(q.data ?? []).map((u) => {
                 const isMe = u.id === meId;
+                const isAdmin = u.role === "admin";
+                // Don't let the last admin be demoted (would lock everyone out
+                // of settings). You also can't change your own role.
+                const lockDemote = isMe || (isAdmin && adminCount <= 1);
                 return (
                   <tr key={u.id} className="border-t border-border/20">
                     <td className="px-4 py-2">
@@ -764,6 +810,24 @@ function UsersTab() {
                         <span className="ml-2 text-[10px] uppercase tracking-wide text-muted-foreground">
                           you
                         </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2">
+                      {isMe ? (
+                        <RoleBadge role={u.role} />
+                      ) : (
+                        <select
+                          value={isAdmin ? "admin" : "user"}
+                          disabled={setRole.isPending || lockDemote}
+                          onChange={(e) => setRole.mutate({ id: u.id, role: e.target.value })}
+                          className="h-7 px-1.5 rounded-md bg-muted/40 border border-border/40 text-xs disabled:opacity-60"
+                          title={
+                            lockDemote ? "There must be at least one admin" : "Change role"
+                          }
+                        >
+                          <option value="user">User</option>
+                          <option value="admin">Admin</option>
+                        </select>
                       )}
                     </td>
                     <td className="px-4 py-2 text-xs text-muted-foreground">
@@ -797,24 +861,42 @@ function UsersTab() {
   );
 }
 
+function RoleBadge({ role }: { role: string }) {
+  const admin = role === "admin";
+  return (
+    <span
+      className={
+        "rounded px-1.5 py-0.5 text-3xs font-semibold uppercase tracking-wide border " +
+        (admin
+          ? "bg-primary/15 text-primary border-primary/30"
+          : "bg-muted/40 text-muted-foreground border-border/40")
+      }
+    >
+      {admin ? "Admin" : "User"}
+    </span>
+  );
+}
+
 function NewUserForm({
   onSubmit,
   disabled,
 }: {
-  onSubmit: (b: { email: string; password: string }) => void;
+  onSubmit: (b: { email: string; password: string; role: string }) => void;
   disabled?: boolean;
 }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [role, setRole] = useState("user");
   return (
     <form
-      className="glass-card p-4 grid md:grid-cols-[1fr_1fr_auto] gap-2 items-end"
+      className="glass-card p-4 grid md:grid-cols-[1fr_1fr_auto_auto] gap-2 items-end"
       onSubmit={(e) => {
         e.preventDefault();
         if (!email.trim() || password.length < 12) return;
-        onSubmit({ email: email.trim().toLowerCase(), password });
+        onSubmit({ email: email.trim().toLowerCase(), password, role });
         setEmail("");
         setPassword("");
+        setRole("user");
       }}
     >
       <Field label="Email">
@@ -837,6 +919,16 @@ function NewUserForm({
           className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm"
         />
         <span className="text-[10px] text-muted-foreground">At least 12 characters.</span>
+      </Field>
+      <Field label="Role">
+        <select
+          value={role}
+          onChange={(e) => setRole(e.target.value)}
+          className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm"
+        >
+          <option value="user">User</option>
+          <option value="admin">Admin</option>
+        </select>
       </Field>
       <button
         type="submit"

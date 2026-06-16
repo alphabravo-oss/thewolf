@@ -2,6 +2,7 @@
 // glow. Responsive: collapses to a hamburger-triggered drawer on screens
 // narrower than `md` (768 px).
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import {
   LayoutDashboardIcon,
   PackageIcon,
@@ -21,6 +22,7 @@ import { WolfLogo } from "./wolf-logo";
 import { ThemeToggle } from "./theme-toggle";
 import { api, clearToken } from "@/lib/api";
 import { useFlag } from "@/lib/flags";
+import { useIsAdmin } from "@/lib/me";
 import { cn } from "@/lib/utils";
 
 type NavItem = {
@@ -67,6 +69,19 @@ export function Sidebar() {
   });
   const navigate = useNavigate();
   const primary = usePrimaryNav();
+  // Settings (and the rest of the admin surface) are admin-only.
+  const isAdmin = useIsAdmin();
+  const footerNav = isAdmin ? secondary : [];
+
+  // App version for the footer (GET /version → { version }).
+  const versionQ = useQuery({
+    queryKey: ["version"],
+    queryFn: async () => {
+      const r = await api.get<{ version: string }>("/version");
+      return r.data?.version ?? "";
+    },
+    staleTime: 5 * 60 * 1000,
+  });
 
   // Mobile drawer. Auto-closes on route change.
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -154,7 +169,7 @@ export function Sidebar() {
         </nav>
 
         <div className="px-3 py-3 border-t border-sidebar-border space-y-0.5">
-          {secondary.map((item) => (
+          {footerNav.map((item) => (
             <NavLink key={item.to} item={item} active={isActive(item.to)} />
           ))}
           <ThemeToggle />
@@ -167,6 +182,23 @@ export function Sidebar() {
             <LogOutIcon />
             <span className="truncate">Sign out</span>
           </button>
+
+          <div className="pt-2 mt-1 border-t border-sidebar-border flex items-center justify-between px-2 text-3xs text-faint">
+            <span className="tabular-nums">
+              {versionQ.data ? `v${versionQ.data}` : ""}
+            </span>
+            <span>
+              built by{" "}
+              <a
+                href="https://alphabravo.io"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-muted-foreground hover:text-foreground transition-colors"
+              >
+                AlphaBravo
+              </a>
+            </span>
+          </div>
         </div>
       </aside>
     </>

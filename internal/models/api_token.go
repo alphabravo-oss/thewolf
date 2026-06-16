@@ -11,8 +11,8 @@ type APIToken struct {
 	Name        string     `json:"name" db:"name"`
 	TokenHash   string     `json:"-" db:"token_hash"`
 	TokenPrefix string     `json:"token_prefix" db:"token_prefix"`
-	Scopes      string     `json:"-" db:"scopes"`       // JSON-encoded []string as stored
-	ScopeList   []string   `json:"scopes" db:"-"`       // decoded form for API responses
+	Scopes      string     `json:"-" db:"scopes"` // JSON-encoded []string as stored
+	ScopeList   []string   `json:"scopes" db:"-"` // decoded form for API responses
 	CreatedAt   time.Time  `json:"created_at" db:"created_at"`
 	LastUsedAt  *time.Time `json:"last_used_at,omitempty" db:"last_used_at"`
 	ExpiresAt   *time.Time `json:"expires_at,omitempty" db:"expires_at"`

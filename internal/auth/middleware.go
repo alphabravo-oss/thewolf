@@ -113,9 +113,40 @@ func Middleware(next http.Handler) http.Handler {
 			info = &AuthInfo{Claims: claims, Scopes: apikey.AdminAll()}
 		}
 
+		// Resolve the principal's role per-request (admin | user) so role
+		// changes take effect immediately. Scopes gate API-token capability;
+		// Role gates the human admin surface (settings, user/node management,
+		// scanner image builds) and cross-owner modification.
+		if RoleResolver != nil && info.Claims != nil && info.Claims.UserID != "" {
+			info.Claims.Role = RoleResolver(r.Context(), info.Claims.UserID)
+		}
+
 		ctx := context.WithValue(r.Context(), UserContextKey, info.Claims)
 		ctx = context.WithValue(ctx, AuthInfoContextKey, info)
 		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+// RoleResolver, when set, returns a user's role ("admin" | "user") by id. The
+// server wires it to the store at startup. Kept as a package var so the auth
+// package doesn't depend on the db package.
+var RoleResolver func(ctx context.Context, userID string) string
+
+// RequireAdmin returns middleware that rejects the request with 403 unless the
+// authenticated principal has the admin role. Used for the settings/admin
+// surface (settings writes, user + node management, scanner image builds).
+func RequireAdmin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		claims := GetUserFromContext(r.Context())
+		if claims == nil {
+			writeAuthError(w, http.StatusUnauthorized, "unauthorized", "not authenticated")
+			return
+		}
+		if !claims.IsAdmin() {
+			writeAuthError(w, http.StatusForbidden, "forbidden", "this action requires an administrator")
+			return
+		}
+		next.ServeHTTP(w, r)
 	})
 }
 

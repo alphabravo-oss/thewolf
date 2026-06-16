@@ -36,19 +36,19 @@ const (
 	FrameworkFastify Framework = "fastify"
 
 	// --- JS / TS — UI / meta-frameworks ---
-	FrameworkNextJS    Framework = "nextjs"
-	FrameworkRemix     Framework = "remix"
-	FrameworkAstro     Framework = "astro"
-	FrameworkReact     Framework = "react"
+	FrameworkNextJS      Framework = "nextjs"
+	FrameworkRemix       Framework = "remix"
+	FrameworkAstro       Framework = "astro"
+	FrameworkReact       Framework = "react"
 	FrameworkReactNative Framework = "react-native"
-	FrameworkVue       Framework = "vue"
-	FrameworkNuxt      Framework = "nuxt"
-	FrameworkSvelte    Framework = "svelte"
-	FrameworkSvelteKit Framework = "sveltekit"
-	FrameworkAngular   Framework = "angular"
-	FrameworkSolid     Framework = "solidjs"
-	FrameworkQwik      Framework = "qwik"
-	FrameworkElectron  Framework = "electron"
+	FrameworkVue         Framework = "vue"
+	FrameworkNuxt        Framework = "nuxt"
+	FrameworkSvelte      Framework = "svelte"
+	FrameworkSvelteKit   Framework = "sveltekit"
+	FrameworkAngular     Framework = "angular"
+	FrameworkSolid       Framework = "solidjs"
+	FrameworkQwik        Framework = "qwik"
+	FrameworkElectron    Framework = "electron"
 
 	// --- JS / TS — build tools / routers / state ---
 	FrameworkVite           Framework = "vite"
@@ -71,11 +71,11 @@ const (
 	FrameworkSqlx    Framework = "sqlx"
 
 	// --- Java / Kotlin ---
-	FrameworkSpring    Framework = "spring"
-	FrameworkQuarkus   Framework = "quarkus"
-	FrameworkMicronaut Framework = "micronaut"
+	FrameworkSpring     Framework = "spring"
+	FrameworkQuarkus    Framework = "quarkus"
+	FrameworkMicronaut  Framework = "micronaut"
 	FrameworkDropwizard Framework = "dropwizard"
-	FrameworkKtor      Framework = "ktor"
+	FrameworkKtor       Framework = "ktor"
 
 	// --- Ruby ---
 	FrameworkRails   Framework = "rails"
@@ -102,11 +102,11 @@ const (
 	FrameworkSwiftUI Framework = "swiftui"
 
 	// --- Infra / IaC ---
-	FrameworkTerraform Framework = "terraform"
-	FrameworkPulumi    Framework = "pulumi"
-	FrameworkHelm      Framework = "helm"
-	FrameworkAnsible   Framework = "ansible"
-	FrameworkDocker    Framework = "docker"
+	FrameworkTerraform  Framework = "terraform"
+	FrameworkPulumi     Framework = "pulumi"
+	FrameworkHelm       Framework = "helm"
+	FrameworkAnsible    Framework = "ansible"
+	FrameworkDocker     Framework = "docker"
 	FrameworkKubernetes Framework = "kubernetes"
 )
 
@@ -125,28 +125,28 @@ type DetectionResult struct {
 // javascript/package.json carries an `"express"` entry that would otherwise
 // surface as Express in every wolf scan against this repo).
 var skipDirs = map[string]bool{
-	".git":           true,
-	"node_modules":   true,
-	"vendor":         true,
-	"__pycache__":    true,
-	".venv":          true,
-	"venv":           true,
-	"build":          true,
-	"dist":           true,
-	"target":         true,
-	"testdata":       true,
-	"test-fixtures":  true,
-	"test_fixtures":  true,
-	"testFixtures":   true,
-	"fixtures":       true,
-	"__fixtures__":   true,
-	"__snapshots__":  true,
-	"__mocks__":      true,
-	"mocks":          true,
-	"examples":       true,
-	"example":        true,
-	"demo":           true,
-	"samples":        true,
+	".git":          true,
+	"node_modules":  true,
+	"vendor":        true,
+	"__pycache__":   true,
+	".venv":         true,
+	"venv":          true,
+	"build":         true,
+	"dist":          true,
+	"target":        true,
+	"testdata":      true,
+	"test-fixtures": true,
+	"test_fixtures": true,
+	"testFixtures":  true,
+	"fixtures":      true,
+	"__fixtures__":  true,
+	"__snapshots__": true,
+	"__mocks__":     true,
+	"mocks":         true,
+	"examples":      true,
+	"example":       true,
+	"demo":          true,
+	"samples":       true,
 }
 
 // extToLang maps file extensions (without leading dot) to languages.
@@ -461,12 +461,12 @@ type manifestSet struct {
 }
 
 type infraSignals struct {
-	terraformFiles  bool
-	pulumiFiles     bool
-	helmChartYAML   bool
-	ansibleFiles    bool
-	dockerfiles     bool
-	k8sManifests    bool
+	terraformFiles bool
+	pulumiFiles    bool
+	helmChartYAML  bool
+	ansibleFiles   bool
+	dockerfiles    bool
+	k8sManifests   bool
 }
 
 // findManifests walks the repo once, collecting every interesting

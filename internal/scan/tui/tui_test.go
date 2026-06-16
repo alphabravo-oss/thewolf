@@ -102,9 +102,9 @@ func TestUpdateFindingMsg(t *testing.T) {
 	m := NewModel([]string{"gosec"})
 
 	tests := []struct {
-		severity   string
-		wantSev    string
-		wantTotal  int
+		severity  string
+		wantSev   string
+		wantTotal int
 	}{
 		{"HIGH", "high", 1},
 		{"critical", "critical", 2},

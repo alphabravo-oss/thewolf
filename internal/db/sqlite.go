@@ -76,6 +76,9 @@ var migration020SQL string
 //go:embed migrations/021_autofix.sql
 var migration021SQL string
 
+//go:embed migrations/022_user_roles.sql
+var migration022SQL string
+
 // SQLiteStore implements Store using SQLite.
 type SQLiteStore struct {
 	db *sqlx.DB
@@ -211,6 +214,11 @@ func (s *SQLiteStore) Migrate() error {
 			return err
 		}
 	}
+	if _, err := s.db.Exec(migration022SQL); err != nil {
+		if !strings.Contains(err.Error(), "duplicate column") && !strings.Contains(err.Error(), "already exists") {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -220,9 +228,12 @@ func (s *SQLiteStore) CreateUser(ctx context.Context, user *models.User) error {
 	now := time.Now().UTC()
 	user.CreatedAt = now
 	user.UpdatedAt = now
+	if user.Role == "" {
+		user.Role = models.RoleUser
+	}
 	_, err := s.db.NamedExecContext(ctx,
-		`INSERT INTO users (id, email, password_hash, created_at, updated_at)
-		 VALUES (:id, :email, :password_hash, :created_at, :updated_at)`, user)
+		`INSERT INTO users (id, email, password_hash, role, created_at, updated_at)
+		 VALUES (:id, :email, :password_hash, :role, :created_at, :updated_at)`, user)
 	return err
 }
 
@@ -246,8 +257,11 @@ func (s *SQLiteStore) GetUserByEmail(ctx context.Context, email string) (*models
 
 func (s *SQLiteStore) UpdateUser(ctx context.Context, user *models.User) error {
 	user.UpdatedAt = time.Now().UTC()
+	if user.Role == "" {
+		user.Role = models.RoleUser
+	}
 	_, err := s.db.NamedExecContext(ctx,
-		`UPDATE users SET email=:email, password_hash=:password_hash, updated_at=:updated_at WHERE id=:id`, user)
+		`UPDATE users SET email=:email, password_hash=:password_hash, role=:role, updated_at=:updated_at WHERE id=:id`, user)
 	return err
 }
 

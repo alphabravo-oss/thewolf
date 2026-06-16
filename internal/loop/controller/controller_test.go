@@ -24,8 +24,8 @@ type mockPlugin struct {
 	execErr   error
 }
 
-func (m *mockPlugin) Name() string                { return m.name }
-func (m *mockPlugin) Category() models.Category   { return m.category }
+func (m *mockPlugin) Name() string                 { return m.name }
+func (m *mockPlugin) Category() models.Category    { return m.category }
 func (m *mockPlugin) Languages() []models.Language { return m.languages }
 func (m *mockPlugin) CheckAvailable() bool         { return m.available }
 

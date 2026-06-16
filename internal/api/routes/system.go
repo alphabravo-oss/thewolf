@@ -12,7 +12,7 @@ var startTime = time.Now()
 
 // Version info set via ldflags
 var (
-	AppVersion  = "0.1.0"
+	AppVersion  = "0.2.0"
 	BuildCommit = "dev"
 	BuildDate   = "unknown"
 )

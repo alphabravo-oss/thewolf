@@ -20,12 +20,18 @@ type TokenPair struct {
 	RefreshToken string `json:"refresh_token"`
 }
 
-// Claims represents the JWT claims.
+// Claims represents the JWT claims. Role is not signed into the token — it is
+// populated per-request by the middleware via RoleResolver so role changes
+// take effect immediately, without re-issuing tokens.
 type Claims struct {
 	UserID string `json:"user_id"`
 	Email  string `json:"email"`
+	Role   string `json:"-"`
 	jwt.RegisteredClaims
 }
+
+// IsAdmin reports whether the resolved principal has the admin role.
+func (c *Claims) IsAdmin() bool { return c != nil && c.Role == "admin" }
 
 // GenerateToken creates a new access + refresh token pair.
 func GenerateToken(userID, email string) (*TokenPair, error) {

@@ -2,11 +2,11 @@ package prompt
 
 // Prompt types.
 const (
-	TypeToolAssess      = "tool_assess"
-	TypeExecSummary     = "executive_summary"
-	SectionSystemCtx    = "system_context"
-	SectionScoring      = "scoring_criteria"
-	SectionOutputInstr  = "output_instructions"
+	TypeToolAssess     = "tool_assess"
+	TypeExecSummary    = "executive_summary"
+	SectionSystemCtx   = "system_context"
+	SectionScoring     = "scoring_criteria"
+	SectionOutputInstr = "output_instructions"
 )
 
 // ---------------------------------------------------------------------------
