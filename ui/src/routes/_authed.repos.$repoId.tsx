@@ -29,6 +29,7 @@ import { CardSkeleton } from "@/components/skeleton";
 import { BranchSelect } from "@/components/branch-select";
 import { FrameworksChips } from "@/components/frameworks-chips";
 import { FixableBadge } from "@/components/fixes/fixable-badge";
+import { useScanWithPreflight } from "@/components/scan-preflight";
 
 // One row per past scan from GET /api/scans/trends?repo_id=&branch=
 interface TrendPoint {
@@ -83,23 +84,15 @@ function RepoDetailPage() {
 
   const [scanBranch, setScanBranch] = useState("");
 
-  const startScan = useMutation({
-    mutationFn: async () => {
-      const r = await api.post<Scan>("/scans", {
-        repo_id: repoId,
-        branch: scanBranch.trim() || repoQ.data?.default_branch || "main",
-      });
-      return r.data;
-    },
-    onSuccess: (scan) => {
-      toast.success("Scan started");
-      qc.invalidateQueries({ queryKey: ["scans"] });
-      navigate({ to: "/scans/$scanId", params: { scanId: scan.id } });
-    },
-    onError: (e) => {
-      toast.error(e instanceof Error ? e.message : "Failed to start scan");
-    },
-  });
+  // Scanning goes through the image preflight: it prompts to pull any selected
+  // scanner whose container image isn't present before starting the scan.
+  const scan = useScanWithPreflight();
+  function startScanNow() {
+    scan.launch({
+      repo_id: repoId,
+      branch: scanBranch.trim() || repoQ.data?.default_branch || "main",
+    });
+  }
 
   const del = useMutation({
     mutationFn: async () => {
@@ -127,6 +120,7 @@ function RepoDetailPage() {
 
   return (
     <div className="page stack page--mid">
+      {scan.dialog}
       <div className="flex items-start gap-3">
         <Link
           to="/repos"
@@ -160,12 +154,12 @@ function RepoDetailPage() {
           />
           <button
             type="button"
-            onClick={() => startScan.mutate()}
-            disabled={startScan.isPending}
+            onClick={startScanNow}
+            disabled={scan.busy}
             className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-50"
           >
             <PlayIcon className="size-4" />
-            {startScan.isPending ? "Starting…" : "Scan now"}
+            {scan.busy ? "Starting…" : "Scan now"}
           </button>
           <button
             type="button"

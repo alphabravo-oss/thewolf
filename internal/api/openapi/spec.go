@@ -94,6 +94,7 @@ func Endpoints() []Endpoint {
 		{"GET", "/scans", "scans", "List scans", "read:scans", "", true},
 		{"GET", "/scans/trends", "scans", "Scan trends over time", "read:scans", "", false},
 		{"POST", "/scans", "scans", "Start a scan", "write:scans", "CreateScanRequest", false},
+		{"POST", "/scans/preflight", "scans", "Check which selected scanners are missing their image before scanning", "read:scans", "", false},
 		{"GET", "/scans/{id}", "scans", "Get a scan", "read:scans", "", false},
 		{"GET", "/scans/{id}/findings", "scans", "List a scan's findings", "read:scans", "", true},
 		{"GET", "/scans/{id}/findings/stats", "scans", "Finding statistics for a scan", "read:scans", "", false},

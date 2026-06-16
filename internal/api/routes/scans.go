@@ -439,7 +439,6 @@ func executeScan(h *Handler, scanID, userID, repoID, branch string, req createSc
 			// Update tool status and cumulative finding count atomically.
 			toolStateMu.Lock()
 			if toolErr != nil {
-				toolsFailed = append(toolsFailed, toolName)
 				// Trim the error to a UI-friendly size; full traces
 				// remain in the per-tool .log artifact for deep dives.
 				e := errMsg
@@ -449,7 +448,15 @@ func executeScan(h *Handler, scanID, userID, repoID, branch string, req createSc
 				if len(e) > 500 {
 					e = e[:500] + "…"
 				}
-				toolsErrors[toolName] = e
+				if isMissingImageErr(e) {
+					// Not a real failure: the tool's image just isn't pulled.
+					// Record it as a skip (actionable: pull the image, rescan)
+					// instead of a scary red failure.
+					upsertScannerRunRecord(context.Background(), h, scannerRunRecordSkipped(scanID, toolName, scannerPlan, "image not pulled"))
+				} else {
+					toolsFailed = append(toolsFailed, toolName)
+					toolsErrors[toolName] = e
+				}
 			} else {
 				toolsCompleted = append(toolsCompleted, toolName)
 			}
@@ -593,7 +600,12 @@ func executeScan(h *Handler, scanID, userID, repoID, branch string, req createSc
 		scan.ToolsCompleted = string(completedJSON)
 
 		failedList := make([]string, 0, len(result.ToolsFailed))
-		for name := range result.ToolsFailed {
+		for name, terr := range result.ToolsFailed {
+			// A tool whose image isn't pulled is a skip, not a failure — keep
+			// it out of tools_failed (it's recorded as a skipped run record).
+			if terr != nil && isMissingImageErr(terr.Error()) {
+				continue
+			}
 			failedList = append(failedList, name)
 		}
 		failedJSON, _ := json.Marshal(failedList)

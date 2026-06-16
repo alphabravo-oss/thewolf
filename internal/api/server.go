@@ -220,6 +220,10 @@ func NewServer(store db.Store, addr string) *Server {
 				r.With(rScans).Get("/", routes.ListScans)
 				r.With(rScans).Get("/trends", routes.ScansTrends)
 				r.With(wScans).Post("/", routes.CreateScan)
+				// Preflight: which selected scanners are missing their image, so
+				// the UI can prompt to pull before starting (read-scope: no scan
+				// is created).
+				r.With(rScans).Post("/preflight", routes.ScanPreflight)
 				r.With(rScans).Get("/{id}", routes.GetScan)
 				r.With(rScans).Get("/{id}/findings", routes.GetScanFindings)
 				r.With(rScans).Get("/{id}/findings/stats", routes.GetScanFindingStats)
