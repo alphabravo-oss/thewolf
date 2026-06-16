@@ -177,6 +177,11 @@ func (s *PostgresStore) Migrate() error {
 			return err
 		}
 	}
+	if _, err := s.db.Exec(migration023SQL); err != nil {
+		if !strings.Contains(err.Error(), "already exists") && !strings.Contains(err.Error(), "duplicate column") {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -220,6 +225,15 @@ func (s *PostgresStore) UpdateUser(ctx context.Context, user *models.User) error
 	}
 	_, err := s.db.NamedExecContext(ctx,
 		`UPDATE users SET email=:email, password_hash=:password_hash, role=:role, updated_at=:updated_at WHERE id=:id`, user)
+	return err
+}
+
+// UpdateUserMFA persists only the TOTP fields, kept separate from UpdateUser so
+// the general profile update never has to carry the secret/recovery columns.
+func (s *PostgresStore) UpdateUserMFA(ctx context.Context, user *models.User) error {
+	user.UpdatedAt = time.Now().UTC()
+	_, err := s.db.NamedExecContext(ctx,
+		`UPDATE users SET totp_secret=:totp_secret, totp_enabled=:totp_enabled, totp_recovery_codes=:totp_recovery_codes, updated_at=:updated_at WHERE id=:id`, user)
 	return err
 }
 

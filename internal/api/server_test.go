@@ -16,6 +16,7 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/auth/apikey"
 	"github.com/alphabravocompany/thewolf/internal/db"
 	"github.com/alphabravocompany/thewolf/internal/models"
+	"github.com/alphabravocompany/thewolf/internal/secrets"
 )
 
 // newTestServer builds a real API server backed by an in-memory database
@@ -28,6 +29,9 @@ func newTestServer(t *testing.T) (*api.Server, db.Store, string) {
 	}
 	t.Cleanup(func() { _ = store.Close() })
 	auth.SetJWTSecret([]byte("test-secret-key-for-jwt-signing"))
+	// Production always has a master key (LoadMasterKey auto-generates one);
+	// mirror that so encryption-backed endpoints (secrets, MFA) work in tests.
+	secrets.SetMasterKey([]byte("0123456789abcdef0123456789abcdef"))
 	srv := api.NewServer(store, ":0")
 
 	body, _ := json.Marshal(map[string]string{"email": "dev@example.com", "password": "password1234"})

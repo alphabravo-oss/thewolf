@@ -12,13 +12,24 @@ const (
 
 // User represents an authenticated user.
 type User struct {
-	ID           string    `json:"id" db:"id"`
-	Email        string    `json:"email" db:"email"`
-	PasswordHash string    `json:"-" db:"password_hash"`
-	Role         string    `json:"role" db:"role"`
-	CreatedAt    time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at" db:"updated_at"`
+	ID           string `json:"id" db:"id"`
+	Email        string `json:"email" db:"email"`
+	PasswordHash string `json:"-" db:"password_hash"`
+	Role         string `json:"role" db:"role"`
+	// TOTPSecret is the user's base32 TOTP secret, encrypted at rest with the
+	// master key. Empty until enrollment. Never serialized to clients.
+	TOTPSecret string `json:"-" db:"totp_secret"`
+	// TOTPEnabled is true once the user has confirmed a code and activated MFA.
+	TOTPEnabled bool `json:"totp_enabled" db:"totp_enabled"`
+	// TOTPRecoveryCodes is a JSON array of SHA-256 hashes of unused one-time
+	// recovery codes. Consumed (removed) as they are used. Never serialized.
+	TOTPRecoveryCodes string    `json:"-" db:"totp_recovery_codes"`
+	CreatedAt         time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at" db:"updated_at"`
 }
 
 // IsAdmin reports whether the user has the admin role.
 func (u *User) IsAdmin() bool { return u != nil && u.Role == RoleAdmin }
+
+// MFAEnabled reports whether the user has an active TOTP second factor.
+func (u *User) MFAEnabled() bool { return u != nil && u.TOTPEnabled }

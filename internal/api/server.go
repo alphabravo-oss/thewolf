@@ -142,6 +142,9 @@ func NewServer(store db.Store, addr string) *Server {
 			r.Get("/auth/settings", routes.AuthSettings)
 			r.Post("/auth/register", routes.Register)
 			r.Post("/auth/login", routes.Login)
+			// Step two of a 2FA login: exchange the challenge token + code for
+			// a session. Public — the user has no session yet.
+			r.Post("/auth/mfa/login", routes.MFALogin)
 		})
 
 		// Protected endpoints. Scope vocabulary is defined in
@@ -150,6 +153,9 @@ func NewServer(store db.Store, addr string) *Server {
 			r.Use(auth.Middleware)
 			r.Use(tokenLimiter.HandlerForToken)
 			r.Use(middleware.Audit(auditRecorder))
+			// When the org mandates MFA, confine not-yet-enrolled sessions to
+			// the enrollment endpoints. No-op when MFA isn't required.
+			r.Use(routes.MFAEnrollmentGuard)
 
 			rRepos := auth.RequireScope(apikey.ScopeReadRepos)
 			wRepos := auth.RequireScope(apikey.ScopeWriteRepos)
@@ -180,6 +186,11 @@ func NewServer(store db.Store, addr string) *Server {
 				r.Get("/tokens", routes.ListAPITokens)
 				r.Post("/tokens", routes.CreateAPIToken)
 				r.Delete("/tokens/{id}", routes.RevokeAPIToken)
+				// Self-service second factor (any authenticated principal).
+				r.Get("/mfa/status", routes.MFAStatus)
+				r.Post("/mfa/setup", routes.MFASetup)
+				r.Post("/mfa/activate", routes.MFAActivate)
+				r.Post("/mfa/disable", routes.MFADisable)
 			})
 
 			r.With(adminScope).With(adminOnly).Get("/audit-log", routes.ListAuditLog)
@@ -190,6 +201,7 @@ func NewServer(store db.Store, addr string) *Server {
 				r.Get("/", routes.ListUsers)
 				r.Post("/", routes.CreateUserAdmin)
 				r.Put("/{id}/role", routes.UpdateUserRole)
+				r.Post("/{id}/mfa/reset", routes.AdminResetUserMFA)
 				r.Delete("/{id}", routes.DeleteUser)
 			})
 

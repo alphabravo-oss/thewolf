@@ -29,8 +29,25 @@ type changePasswordRequest struct {
 }
 
 const minPasswordLength = 12
+
+// maxPasswordLength caps password length. Argon2id hashes the full input, so an
+// unbounded password lets an attacker burn server memory/CPU per login attempt
+// (a cheap DoS). 128 is comfortably above any human passphrase.
+const maxPasswordLength = 128
 const sessionDuration = 7 * 24 * time.Hour
 const registrationEnabledSetting = "registration_enabled"
+
+// validatePassword enforces the length policy shared by register, change-
+// password, and admin user-creation. Returns a user-facing message on failure.
+func validatePassword(pw string) (string, bool) {
+	if len(pw) < minPasswordLength {
+		return "password must be at least 12 characters", false
+	}
+	if len(pw) > maxPasswordLength {
+		return "password must be at most 128 characters", false
+	}
+	return "", true
+}
 
 func Register(w http.ResponseWriter, r *http.Request) {
 	h := DefaultHandler
@@ -55,8 +72,8 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		response.WriteError(w, http.StatusBadRequest, "validation_error", "valid email is required")
 		return
 	}
-	if len(req.Password) < minPasswordLength {
-		response.WriteError(w, http.StatusBadRequest, "validation_error", "password must be at least 12 characters")
+	if msg, ok := validatePassword(req.Password); !ok {
+		response.WriteError(w, http.StatusBadRequest, "validation_error", msg)
 		return
 	}
 
@@ -162,6 +179,24 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Second factor: if the user has TOTP active, the password alone earns no
+	// session. Hand back a short-lived challenge to be exchanged for a session
+	// via POST /auth/mfa/login with a valid code.
+	if user.MFAEnabled() {
+		challenge, err := auth.GenerateMFAChallenge(user.ID, user.Email)
+		if err != nil {
+			response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to start mfa challenge")
+			return
+		}
+		response.WriteJSON(w, http.StatusOK, response.SuccessResponse{
+			Data: map[string]interface{}{
+				"mfa_required": true,
+				"mfa_token":    challenge,
+			},
+		})
+		return
+	}
+
 	tokens, err := auth.GenerateToken(user.ID, user.Email)
 	if err != nil {
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to generate token")
@@ -177,6 +212,10 @@ func Login(w http.ResponseWriter, r *http.Request) {
 			"user":          user,
 			"access_token":  tokens.AccessToken,
 			"refresh_token": tokens.RefreshToken,
+			// When the org mandates MFA and this user hasn't enrolled, the
+			// session is issued (password was valid) but the enrollment guard
+			// confines it to the MFA-setup endpoints until they enroll.
+			"enrollment_required": mfaRequiredEnabled(r.Context()) && !user.MFAEnabled(),
 		},
 	})
 }
@@ -306,8 +345,8 @@ func ChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(req.NewPassword) < minPasswordLength {
-		response.WriteError(w, http.StatusBadRequest, "validation_error", "new password must be at least 12 characters")
+	if msg, ok := validatePassword(req.NewPassword); !ok {
+		response.WriteError(w, http.StatusBadRequest, "validation_error", "new "+msg)
 		return
 	}
 

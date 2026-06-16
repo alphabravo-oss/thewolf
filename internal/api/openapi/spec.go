@@ -38,11 +38,18 @@ func Endpoints() []Endpoint {
 		{"GET", "/auth/settings", "auth", "Get public authentication settings", "", "", false},
 		{"POST", "/auth/register", "auth", "Register a new user", "", "RegisterRequest", false},
 		{"POST", "/auth/login", "auth", "Log in and receive a JWT", "", "LoginRequest", false},
+		{"POST", "/auth/mfa/login", "auth", "Complete two-factor login (exchange challenge + code for a session)", "", "", false},
 
 		// Auth / session (authenticated).
 		{"POST", "/auth/logout", "auth", "Log out the current session", "self", "", false},
 		{"GET", "/auth/me", "auth", "Get the current identity", "self", "", false},
 		{"PUT", "/auth/password", "auth", "Change the current user's password", "self", "ChangePasswordRequest", false},
+
+		// Two-factor auth (authenticated, self-managed).
+		{"GET", "/auth/mfa/status", "auth", "Get the caller's MFA status", "self", "", false},
+		{"POST", "/auth/mfa/setup", "auth", "Begin MFA enrollment (returns a QR code + secret)", "self", "", false},
+		{"POST", "/auth/mfa/activate", "auth", "Activate MFA by confirming a code (returns one-time recovery codes)", "self", "", false},
+		{"POST", "/auth/mfa/disable", "auth", "Disable MFA after verifying a current code", "self", "", false},
 
 		// API tokens (authenticated, self-managed).
 		{"GET", "/auth/tokens", "tokens", "List the caller's API tokens", "self", "", true},
@@ -56,6 +63,7 @@ func Endpoints() []Endpoint {
 		{"GET", "/users", "users", "List users", "admin", "", true},
 		{"POST", "/users", "users", "Create a user", "admin", "CreateUserRequest", false},
 		{"PUT", "/users/{id}/role", "users", "Change a user's role (admin|user)", "admin", "", false},
+		{"POST", "/users/{id}/mfa/reset", "users", "Reset a user's MFA (e.g. lost device)", "admin", "", false},
 		{"DELETE", "/users/{id}", "users", "Delete a user", "admin", "", false},
 
 		// Repos.
