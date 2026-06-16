@@ -147,8 +147,13 @@ func DeleteSecret(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := chi.URLParam(r, "id")
-	_, err := h.Store.GetSecretByID(r.Context(), id)
+	secret, err := h.Store.GetSecretByID(r.Context(), id)
 	if err != nil {
+		response.WriteError(w, http.StatusNotFound, "not_found", "secret not found")
+		return
+	}
+	if !canModifyOwned(claims, secret.UserID) {
+		// 404 (not 403) so a user can't probe which secret IDs exist.
 		response.WriteError(w, http.StatusNotFound, "not_found", "secret not found")
 		return
 	}

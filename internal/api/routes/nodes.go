@@ -307,6 +307,12 @@ func loadRemoteNode(w http.ResponseWriter, r *http.Request) (*models.RemoteNode,
 		response.WriteError(w, http.StatusNotFound, "not_found", "remote node not found")
 		return nil, false
 	}
+	// Ownership: a user can only operate on the nodes they created; admins on
+	// any. 404 (not 403) so node IDs can't be enumerated.
+	if !canModifyOwned(claims, node.UserID) {
+		response.WriteError(w, http.StatusNotFound, "not_found", "remote node not found")
+		return nil, false
+	}
 	return node, true
 }
 

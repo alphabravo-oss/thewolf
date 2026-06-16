@@ -20,13 +20,11 @@ import {
   Trash2Icon,
   UploadCloudIcon,
   UsersIcon,
-  LockIcon,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useMe } from "@/lib/me";
-import { EmptyState } from "@/components/empty-state";
 import type { RemoteNode } from "@/lib/types";
 import { BuildConsole, type BuildTarget } from "@/components/scanners/build-console";
 import { DockerHubCredentialCard } from "@/components/scanners/dockerhub-credential";
@@ -47,40 +45,36 @@ export const Route = createFileRoute("/_authed/settings")({
 
 type TabKey = "general" | "secrets" | "nodes" | "users" | "scanners";
 
-const TABS: { key: TabKey; label: string; Icon: typeof SettingsIcon }[] = [
-  { key: "general", label: "General", Icon: SettingsIcon },
+// adminOnly tabs are hidden for regular users. Secrets + Nodes are per-user, so
+// everyone can manage their own.
+const TABS: { key: TabKey; label: string; Icon: typeof SettingsIcon; adminOnly?: boolean }[] = [
+  { key: "general", label: "General", Icon: SettingsIcon, adminOnly: true },
   { key: "secrets", label: "Secrets", Icon: KeyIcon },
   { key: "nodes", label: "Nodes", Icon: ServerIcon },
-  { key: "users", label: "Users", Icon: UsersIcon },
-  { key: "scanners", label: "Scanners", Icon: ShieldIcon },
+  { key: "users", label: "Users", Icon: UsersIcon, adminOnly: true },
+  { key: "scanners", label: "Scanners", Icon: ShieldIcon, adminOnly: true },
 ];
 
 function SettingsPage() {
   const { tab } = Route.useSearch();
   const navigate = useNavigate();
   const me = useMe();
+  const isAdmin = me.data?.role === "admin";
 
-  // Settings is the admin surface. A non-admin who reaches this route directly
-  // gets a clear message instead of a wall of 403s.
-  if (me.data && me.data.role !== "admin") {
-    return (
-      <div className="page stack page--narrow">
-        <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
-        <EmptyState
-          icon={LockIcon}
-          title="Administrators only"
-          description="System settings, users, nodes, secrets, and scanner images are managed by an administrator. Ask an admin if you need a change."
-        />
-      </div>
-    );
-  }
+  // Regular users see only the per-user tabs (Secrets, Nodes). Admins see all.
+  const visibleTabs = TABS.filter((t) => isAdmin || !t.adminOnly);
+  // If a non-admin lands on an admin tab (e.g. a saved ?tab=users link),
+  // fall back to the first tab they can see.
+  const activeTab = visibleTabs.some((t) => t.key === tab)
+    ? tab
+    : visibleTabs[0]?.key ?? "secrets";
 
   return (
     <div className="page stack page--narrow">
       <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
       <nav className="flex gap-1 border-b border-border/40">
-        {TABS.map(({ key, label, Icon }) => {
-          const active = tab === key;
+        {visibleTabs.map(({ key, label, Icon }) => {
+          const active = activeTab === key;
           return (
             <button
               key={key}
@@ -99,11 +93,11 @@ function SettingsPage() {
         })}
       </nav>
 
-      {tab === "general" && <GeneralTab />}
-      {tab === "secrets" && <SecretsTab />}
-      {tab === "nodes" && <NodesTab />}
-      {tab === "users" && <UsersTab />}
-      {tab === "scanners" && <ScannersTab />}
+      {activeTab === "general" && isAdmin && <GeneralTab />}
+      {activeTab === "secrets" && <SecretsTab />}
+      {activeTab === "nodes" && <NodesTab />}
+      {activeTab === "users" && isAdmin && <UsersTab />}
+      {activeTab === "scanners" && isAdmin && <ScannersTab />}
     </div>
   );
 }
@@ -884,59 +878,93 @@ function NewUserForm({
   onSubmit: (b: { email: string; password: string; role: string }) => void;
   disabled?: boolean;
 }) {
+  const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("user");
+
+  function reset() {
+    setEmail("");
+    setPassword("");
+    setRole("user");
+    setOpen(false);
+  }
+
+  // Collapsed: just a button, so the table reads cleanly.
+  if (!open) {
+    return (
+      <div>
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border/60 text-sm hover:bg-muted/30"
+        >
+          <PlusIcon className="size-4" /> Add user
+        </button>
+      </div>
+    );
+  }
+
   return (
     <form
-      className="glass-card p-4 grid md:grid-cols-[1fr_1fr_auto_auto] gap-2 items-end"
+      className="glass-card p-4 space-y-3"
       onSubmit={(e) => {
         e.preventDefault();
         if (!email.trim() || password.length < 12) return;
         onSubmit({ email: email.trim().toLowerCase(), password, role });
-        setEmail("");
-        setPassword("");
-        setRole("user");
+        reset();
       }}
     >
-      <Field label="Email">
-        <input
-          required
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="user@example.com"
-          className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm"
-        />
-      </Field>
-      <Field label="Password">
-        <input
-          required
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          minLength={12}
-          className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm"
-        />
-        <span className="text-[10px] text-muted-foreground">At least 12 characters.</span>
-      </Field>
-      <Field label="Role">
-        <select
-          value={role}
-          onChange={(e) => setRole(e.target.value)}
-          className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm"
+      <div className="grid sm:grid-cols-3 gap-3">
+        <Field label="Email">
+          <input
+            required
+            autoFocus
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="user@example.com"
+            className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm"
+          />
+        </Field>
+        <Field label="Password">
+          <input
+            required
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            minLength={12}
+            placeholder="At least 12 characters"
+            className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm"
+          />
+        </Field>
+        <Field label="Role">
+          <select
+            value={role}
+            onChange={(e) => setRole(e.target.value)}
+            className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm"
+          >
+            <option value="user">User</option>
+            <option value="admin">Admin</option>
+          </select>
+        </Field>
+      </div>
+      <div className="flex items-center gap-2">
+        <button
+          type="submit"
+          disabled={disabled || !email.trim() || password.length < 12}
+          className="inline-flex items-center gap-1 h-9 px-3 rounded-md bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
         >
-          <option value="user">User</option>
-          <option value="admin">Admin</option>
-        </select>
-      </Field>
-      <button
-        type="submit"
-        disabled={disabled || !email.trim() || password.length < 12}
-        className="inline-flex items-center gap-1 h-9 px-3 rounded-md bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
-      >
-        <PlusIcon className="size-4" /> Add user
-      </button>
+          <PlusIcon className="size-4" /> Create user
+        </button>
+        <button
+          type="button"
+          onClick={reset}
+          className="h-9 px-3 rounded-md border border-border/60 text-sm hover:bg-muted/30"
+        >
+          Cancel
+        </button>
+      </div>
     </form>
   );
 }

@@ -22,7 +22,6 @@ import { WolfLogo } from "./wolf-logo";
 import { ThemeToggle } from "./theme-toggle";
 import { api, clearToken } from "@/lib/api";
 import { useFlag } from "@/lib/flags";
-import { useIsAdmin } from "@/lib/me";
 import { cn } from "@/lib/utils";
 
 type NavItem = {
@@ -69,9 +68,10 @@ export function Sidebar() {
   });
   const navigate = useNavigate();
   const primary = usePrimaryNav();
-  // Settings (and the rest of the admin surface) are admin-only.
-  const isAdmin = useIsAdmin();
-  const footerNav = isAdmin ? secondary : [];
+  // Settings is visible to everyone: regular users manage their own secrets +
+  // SSH nodes there, while the admin-only tabs (general, users, scanners) are
+  // hidden inside the page for non-admins.
+  const footerNav = secondary;
 
   // App version for the footer (GET /version → { version }).
   const versionQ = useQuery({

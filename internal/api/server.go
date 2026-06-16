@@ -210,17 +210,18 @@ func NewServer(store db.Store, addr string) *Server {
 			})
 
 			r.Route("/nodes", func(r chi.Router) {
-				// Remote SSH nodes are shared infrastructure managed from the
-				// admin Settings surface: writes are admin-only.
+				// Remote SSH nodes are per-user: a user manages their own (the
+				// handlers scope to the caller + enforce ownership via
+				// loadRemoteNode).
 				r.With(rConfig).Get("/", routes.ListRemoteNodes)
-				r.With(wConfig).With(adminOnly).Post("/", routes.CreateRemoteNode)
+				r.With(wConfig).Post("/", routes.CreateRemoteNode)
 				r.With(rConfig).Get("/{id}", routes.GetRemoteNode)
-				r.With(wConfig).With(adminOnly).Put("/{id}", routes.UpdateRemoteNode)
-				r.With(wConfig).With(adminOnly).Delete("/{id}", routes.DeleteRemoteNode)
-				r.With(wConfig).With(adminOnly).Post("/{id}/check", routes.CheckRemoteNode)
+				r.With(wConfig).Put("/{id}", routes.UpdateRemoteNode)
+				r.With(wConfig).Delete("/{id}", routes.DeleteRemoteNode)
+				r.With(wConfig).Post("/{id}/check", routes.CheckRemoteNode)
 				r.With(rConfig).Get("/{id}/browse", routes.BrowseRemoteNode)
 				r.With(rConfig).Get("/{id}/git-info", routes.RemoteGitInfo)
-				r.With(wConfig).With(adminOnly).Post("/{id}/discover-repos", routes.DiscoverNodeRepos)
+				r.With(wConfig).Post("/{id}/discover-repos", routes.DiscoverNodeRepos)
 			})
 
 			r.Route("/collections", func(r chi.Router) {
@@ -323,8 +324,10 @@ func NewServer(store db.Store, addr string) *Server {
 
 			r.Route("/config", func(r chi.Router) {
 				r.With(rConfig).Get("/secrets", routes.ListSecrets)
-				r.With(wConfig).With(adminOnly).Post("/secrets", routes.CreateSecret)
-				r.With(wConfig).With(adminOnly).Delete("/secrets/{id}", routes.DeleteSecret)
+				// Secrets are per-user: any authenticated user manages their own
+				// (the handlers scope to the caller + enforce ownership).
+				r.With(wConfig).Post("/secrets", routes.CreateSecret)
+				r.With(wConfig).Delete("/secrets/{id}", routes.DeleteSecret)
 				r.With(rConfig).Get("/plugins", routes.ListPlugins)
 				r.With(wConfig).Post("/plugins/{name}/install", routes.InstallPlugin)
 				r.With(rConfig).Get("/setup", routes.SetupStatus)
