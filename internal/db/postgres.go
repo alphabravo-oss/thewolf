@@ -89,7 +89,7 @@ func (s *PostgresStore) Migrate() error {
 			return err
 		}
 	}
-	if _, err := s.db.Exec(`INSERT INTO settings (key, value) VALUES ('registration_enabled', 'true') ON CONFLICT(key) DO NOTHING`); err != nil {
+	if _, err := s.db.Exec(`INSERT INTO settings (key, value) VALUES ('registration_enabled', 'false') ON CONFLICT(key) DO NOTHING`); err != nil {
 		if !strings.Contains(err.Error(), "already exists") && !strings.Contains(err.Error(), "does not exist") {
 			return err
 		}

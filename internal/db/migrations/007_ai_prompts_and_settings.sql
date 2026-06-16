@@ -30,4 +30,4 @@ ON ai_prompt_templates (scope, scope_id, prompt_type, section);
 -- prompts are issued and any `ai_enabled: true` on a scan request is
 -- silently demoted to false (see internal/api/routes/scans.go).
 INSERT OR IGNORE INTO settings (key, value) VALUES ('ai_enabled', 'false');
-INSERT OR IGNORE INTO settings (key, value) VALUES ('registration_enabled', 'true');
+INSERT OR IGNORE INTO settings (key, value) VALUES ('registration_enabled', 'false');

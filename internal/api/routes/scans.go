@@ -314,8 +314,9 @@ func executeScan(h *Handler, scanID, userID, repoID, branch string, req createSc
 	}
 	scanBranches := map[string]string{scanID: branch}
 
-	// Read scan concurrency from settings (default: 8).
-	scanConcurrency := 8
+	// Read scan concurrency from settings (default: 2 — conservative for a
+	// typical host; raise it in Settings → General for beefier machines).
+	scanConcurrency := 2
 	if val, err := h.Store.GetSetting(context.Background(), "scan_concurrency"); err == nil && val != "" {
 		if n, parseErr := strconv.Atoi(val); parseErr == nil && n > 0 {
 			scanConcurrency = n
