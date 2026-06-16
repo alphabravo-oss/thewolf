@@ -6,6 +6,21 @@
 # (No ACME_EMAIL needed — Caddy uses your provided cert instead of Let's Encrypt.)
 {$WOLF_DOMAIN} {
 	encode zstd gzip
+
+	# Security headers. Caddy already adds HSTS on HTTPS, but set it explicitly
+	# (longer max-age) and add the headers Caddy does NOT set by default. If you
+	# embed wolf in an iframe or call external APIs from the SPA, relax
+	# frame-ancestors / connect-src accordingly — the defaults assume wolf serves
+	# its own SPA + API on this single origin.
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Content-Security-Policy "default-src 'self'; img-src 'self' data:; font-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
+		-Server
+	}
+
 	reverse_proxy wolf:8778
 	tls /certs/cert.pem /certs/key.pem
 }
