@@ -1,0 +1,65 @@
+# Hardened override: route wolf's Docker access through a docker-socket-proxy
+# instead of mounting the host /var/run/docker.sock directly.
+#
+# Why: wolf spawns scanner containers, which normally needs the host Docker
+# socket — and the socket is effectively root on the host. The socket-proxy
+# (tecnativa/docker-socket-proxy) sits in front of the real socket and only
+# allows the specific API calls wolf needs (containers, images, build), denying
+# swarm, secrets, services, volume management, etc. It is a meaningful
+# reduction of the attack surface, not a complete sandbox — a compromised wolf
+# could still create a container with host bind-mounts. For full isolation, run
+# on a dedicated host (and consider rootless Docker or sysbox).
+#
+# Usage (compose v2.24+ for the !override tag):
+#   docker compose -f docker-compose.yml -f docker-compose.hardened.yml \
+#     --profile proxy up -d --build
+#
+# Combine with --profile postgres as needed.
+
+services:
+  docker-socket-proxy:
+    image: tecnativa/docker-socket-proxy:latest
+    restart: unless-stopped
+    # The ONLY container with the real socket, mounted read-only. It exposes a
+    # filtered TCP API on :2375, reachable only on the internal wolf-net.
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      # Least-privilege allow-list for the scan + in-app-build paths. Anything
+      # not listed (SWARM, SECRETS, SERVICES, CONFIGS, PLUGINS, VOLUMES, NODES,
+      # NETWORKS, …) stays denied.
+      - CONTAINERS=1 # create/start/inspect/logs/remove scanner containers
+      - IMAGES=1 # inspect/list/pull scanner images
+      - POST=1 # required for any create/start/pull (write ops)
+      - VERSION=1 # `docker version` (wolf scanner doctor)
+      - INFO=1
+      - PING=1
+      - EXEC=1 # some tool flows exec into a container
+      - BUILD=1 # in-app scanner image builds (buildx --load); omit if unused
+      - SESSION=1 # buildkit session for builds
+      - DISTRIBUTION=1
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETGID
+      - SETUID
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /run
+    networks:
+      - wolf-net
+
+  wolf:
+    # Talk to Docker over the proxy instead of the raw socket.
+    environment:
+      - DOCKER_HOST=tcp://docker-socket-proxy:2375
+    # !override REPLACES the base volumes list, dropping the docker.sock mount
+    # (compose merges lists by default, so a plain override would keep it).
+    volumes: !override
+      - wolf-data:/home/wolf/.wolf
+      - ${WOLF_REPOS_ROOT:-./repos}:/repos:ro
+    depends_on:
+      docker-socket-proxy:
+        condition: service_started

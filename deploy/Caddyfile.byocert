@@ -1,0 +1,11 @@
+# Bring your own TLS certificate. In .env set:
+#   CADDYFILE=./deploy/Caddyfile.byocert
+#   WOLF_DOMAIN=wolf.example.com
+#   WOLF_TLS_DIR=/absolute/path/to/your/certs   # must contain cert.pem + key.pem
+# Then: docker compose --profile proxy up -d
+# (No ACME_EMAIL needed — Caddy uses your provided cert instead of Let's Encrypt.)
+{$WOLF_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy wolf:8778
+	tls /certs/cert.pem /certs/key.pem
+}

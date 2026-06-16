@@ -1,0 +1,3 @@
+# Bring-your-own-cert mount point. Put cert.pem + key.pem here (or point
+# WOLF_TLS_DIR at a directory that contains them) and set
+# CADDYFILE=./deploy/Caddyfile.byocert in your .env.

@@ -1,0 +1,11 @@
+# Automatic HTTPS via Let's Encrypt. Set WOLF_DOMAIN + ACME_EMAIL in .env, then:
+#   docker compose --profile proxy up -d
+# Caddy obtains + auto-renews the cert and terminates TLS, forwarding to wolf.
+{
+	email {$ACME_EMAIL}
+}
+
+{$WOLF_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy wolf:8778
+}

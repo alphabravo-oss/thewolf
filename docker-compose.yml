@@ -151,6 +151,43 @@ services:
     profiles:
       - postgres
 
+  # Reverse proxy + TLS termination. Opt-in: `docker compose --profile proxy up`.
+  # Two TLS modes, both driven by .env:
+  #   1. Automatic (Let's Encrypt): set WOLF_DOMAIN + ACME_EMAIL. Default.
+  #   2. Bring your own cert: set CADDYFILE=./deploy/Caddyfile.byocert and put
+  #      cert.pem + key.pem in WOLF_TLS_DIR (default ./deploy/certs).
+  # Caddy sets X-Forwarded-Proto, which wolf uses to mark session cookies
+  # Secure. With the proxy up, only Caddy faces the internet (80/443); wolf is
+  # reached over the internal network and need not publish a host port.
+  caddy:
+    image: caddy:2-alpine
+    profiles:
+      - proxy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ${CADDYFILE:-./deploy/Caddyfile}:/etc/caddy/Caddyfile:ro
+      # Your TLS cert dir (cert.pem + key.pem), used only in bring-your-own mode.
+      - ${WOLF_TLS_DIR:-./deploy/certs}:/certs:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    environment:
+      - WOLF_DOMAIN=${WOLF_DOMAIN:-localhost}
+      - ACME_EMAIL=${ACME_EMAIL:-}
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      - wolf
+    networks:
+      - wolf-net
+
 networks:
   wolf-net:
     driver: bridge
@@ -158,6 +195,8 @@ networks:
 volumes:
   wolf-data:
   pg-data:
+  caddy-data:
+  caddy-config:
 
 # Compose secrets — the postgres password lands here on dev machines
 # via the POSTGRES_PASSWORD env (compose substitutes into the file at
