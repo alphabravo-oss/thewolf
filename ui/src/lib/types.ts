@@ -387,9 +387,16 @@ export interface RegisterRequest {
 }
 
 export interface AuthResponse {
-  user: User;
-  access_token: string;
-  refresh_token: string;
+  user?: User;
+  access_token?: string;
+  refresh_token?: string;
+  // Present instead of a session when the account has TOTP enabled: the caller
+  // must complete POST /auth/mfa/login with mfa_token + a code.
+  mfa_required?: boolean;
+  mfa_token?: string;
+  // Present on a normal login when the org mandates MFA but the user hasn't
+  // enrolled yet — the session is confined to the Security tab until they do.
+  enrollment_required?: boolean;
 }
 
 // Coverage types

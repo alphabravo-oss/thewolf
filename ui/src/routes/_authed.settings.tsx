@@ -12,6 +12,7 @@ import {
   HammerIcon,
   KeyIcon,
   Loader2Icon,
+  LockIcon,
   PlusIcon,
   RefreshCwIcon,
   ServerIcon,
@@ -36,19 +37,20 @@ import {
 export const Route = createFileRoute("/_authed/settings")({
   validateSearch: (s: Record<string, unknown>) => ({
     tab:
-      typeof s.tab === "string" && /^(general|secrets|nodes|users|scanners)$/.test(s.tab)
+      typeof s.tab === "string" && /^(general|security|secrets|nodes|users|scanners)$/.test(s.tab)
         ? (s.tab as TabKey)
         : ("general" as TabKey),
   }),
   component: SettingsPage,
 });
 
-type TabKey = "general" | "secrets" | "nodes" | "users" | "scanners";
+type TabKey = "general" | "security" | "secrets" | "nodes" | "users" | "scanners";
 
-// adminOnly tabs are hidden for regular users. Secrets + Nodes are per-user, so
-// everyone can manage their own.
+// adminOnly tabs are hidden for regular users. Security, Secrets + Nodes are
+// per-user, so everyone can manage their own.
 const TABS: { key: TabKey; label: string; Icon: typeof SettingsIcon; adminOnly?: boolean }[] = [
   { key: "general", label: "General", Icon: SettingsIcon, adminOnly: true },
+  { key: "security", label: "Security", Icon: LockIcon },
   { key: "secrets", label: "Secrets", Icon: KeyIcon },
   { key: "nodes", label: "Nodes", Icon: ServerIcon },
   { key: "users", label: "Users", Icon: UsersIcon, adminOnly: true },
@@ -94,6 +96,7 @@ function SettingsPage() {
       </nav>
 
       {activeTab === "general" && isAdmin && <GeneralTab />}
+      {activeTab === "security" && <SecurityTab />}
       {activeTab === "secrets" && <SecretsTab />}
       {activeTab === "nodes" && <NodesTab />}
       {activeTab === "users" && isAdmin && <UsersTab />}
@@ -131,6 +134,12 @@ const GENERAL_KNOBS = [
     key: "registration_enabled",
     label: "Self-service registration",
     help: "When off, new accounts can only be created from the Users tab. The first account can always bootstrap the system.",
+    type: "bool" as const,
+  },
+  {
+    key: "mfa_required",
+    label: "Require two-factor auth",
+    help: "When on, every user must enroll an authenticator app before they can use Wolf. Existing sessions are confined to the Security tab until they enroll, and MFA cannot be self-disabled.",
     type: "bool" as const,
   },
   {
@@ -302,6 +311,217 @@ function IntInput({
         Save
       </button>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Security — per-user two-factor authentication (TOTP).
+// ---------------------------------------------------------------------------
+
+interface MfaStatus {
+  enabled: boolean;
+  required: boolean;
+}
+interface MfaSetup {
+  otpauth_uri: string;
+  secret: string;
+  qr: string; // PNG data URI
+}
+
+function SecurityTab() {
+  const qc = useQueryClient();
+  const status = useQuery({
+    queryKey: ["mfa-status"],
+    queryFn: async () => (await api.get<MfaStatus>("/auth/mfa/status")).data,
+  });
+
+  // Local enrollment state machine: idle -> enroll (scan QR) -> codes (show
+  // recovery codes once).
+  const [setup, setSetup] = useState<MfaSetup | null>(null);
+  const [code, setCode] = useState("");
+  const [recovery, setRecovery] = useState<string[] | null>(null);
+
+  const begin = useMutation({
+    mutationFn: async () => (await api.post<MfaSetup>("/auth/mfa/setup")).data,
+    onSuccess: (d) => {
+      setSetup(d);
+      setRecovery(null);
+      setCode("");
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Could not start setup"),
+  });
+  const activate = useMutation({
+    mutationFn: async () =>
+      (await api.post<{ recovery_codes: string[] }>("/auth/mfa/activate", { code })).data,
+    onSuccess: (d) => {
+      setRecovery(d?.recovery_codes ?? []);
+      setSetup(null);
+      setCode("");
+      qc.invalidateQueries({ queryKey: ["mfa-status"] });
+      toast.success("Two-factor authentication enabled");
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "That code is not valid"),
+  });
+  const disable = useMutation({
+    mutationFn: async () => api.post("/auth/mfa/disable", { code }),
+    onSuccess: () => {
+      setCode("");
+      qc.invalidateQueries({ queryKey: ["mfa-status"] });
+      toast.success("Two-factor authentication disabled");
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "That code is not valid"),
+  });
+
+  if (status.isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  const enabled = status.data?.enabled ?? false;
+  const required = status.data?.required ?? false;
+
+  return (
+    <section className="glass-card p-5 space-y-5 max-w-xl">
+      <div className="flex items-start gap-3">
+        <LockIcon className="size-5 mt-0.5 text-muted-foreground" />
+        <div>
+          <h2 className="text-sm font-medium">Two-factor authentication</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Protect your account with a time-based code from an authenticator app
+            (Google Authenticator, 1Password, Authy, …) in addition to your password.
+          </p>
+        </div>
+        <span
+          className={
+            "ml-auto shrink-0 rounded px-2 py-0.5 text-xs font-medium border " +
+            (enabled
+              ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-300"
+              : "bg-muted/40 border-border/40 text-muted-foreground")
+          }
+        >
+          {enabled ? "On" : "Off"}
+        </span>
+      </div>
+
+      {/* One-time recovery codes, shown right after activation. */}
+      {recovery && (
+        <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-4 space-y-2">
+          <p className="text-sm font-medium text-amber-300">Save your recovery codes</p>
+          <p className="text-xs text-muted-foreground">
+            Each code works once if you lose your device. Store them somewhere safe —
+            they won't be shown again.
+          </p>
+          <div className="grid grid-cols-2 gap-1.5 font-mono text-sm">
+            {recovery.map((c) => (
+              <span key={c} className="rounded bg-muted/40 px-2 py-1 tracking-wider">
+                {c}
+              </span>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              void navigator.clipboard?.writeText(recovery.join("\n"));
+              toast.success("Recovery codes copied");
+            }}
+            className="text-xs text-foreground hover:underline"
+          >
+            Copy all
+          </button>
+        </div>
+      )}
+
+      {/* Enrollment in progress: QR + verify. */}
+      {setup && (
+        <div className="space-y-3">
+          <p className="text-sm">
+            1. Scan this with your authenticator app, then enter the 6-digit code to confirm.
+          </p>
+          <div className="flex items-start gap-4">
+            <img
+              src={setup.qr}
+              alt="TOTP QR code"
+              className="size-40 rounded-md bg-white p-2"
+              width={160}
+              height={160}
+            />
+            <div className="space-y-1 text-xs text-muted-foreground">
+              <p>Can't scan? Enter this secret manually:</p>
+              <code className="block rounded bg-muted/40 px-2 py-1 font-mono break-all">
+                {setup.secret}
+              </code>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={6}
+              placeholder="123456"
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+              className="w-32 h-9 px-3 rounded-md bg-muted/40 border border-border/40 text-sm font-mono tracking-widest"
+            />
+            <button
+              type="button"
+              onClick={() => activate.mutate()}
+              disabled={activate.isPending || code.length < 6}
+              className="h-9 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
+            >
+              {activate.isPending ? "Verifying…" : "Activate"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setSetup(null);
+                setCode("");
+              }}
+              className="h-9 px-3 rounded-md text-sm text-muted-foreground hover:text-foreground"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Idle states: offer enable, or disable when already on. */}
+      {!setup && !enabled && (
+        <button
+          type="button"
+          onClick={() => begin.mutate()}
+          disabled={begin.isPending}
+          className="h-9 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
+        >
+          {begin.isPending ? "Starting…" : "Set up two-factor authentication"}
+        </button>
+      )}
+
+      {!setup && enabled && (
+        <div className="space-y-2">
+          {required ? (
+            <p className="text-xs text-muted-foreground">
+              Your administrator requires two-factor authentication, so it can't be turned off.
+            </p>
+          ) : (
+            <div className="flex items-center gap-2">
+              <input
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={9}
+                placeholder="code to disable"
+                value={code}
+                onChange={(e) => setCode(e.target.value.trim())}
+                className="w-44 h-9 px-3 rounded-md bg-muted/40 border border-border/40 text-sm font-mono"
+              />
+              <button
+                type="button"
+                onClick={() => disable.mutate()}
+                disabled={disable.isPending || code.length < 6}
+                className="h-9 px-4 rounded-md border border-red-500/40 text-red-300 hover:bg-red-500/10 text-sm disabled:opacity-50"
+              >
+                {disable.isPending ? "Disabling…" : "Disable"}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </section>
   );
 }
 
