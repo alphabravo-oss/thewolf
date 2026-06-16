@@ -1,8 +1,11 @@
-// Loops list — Phase 1 stub.
+// Loops list. Part of the agentic remediation surface, gated on
+// autofix_enabled: with autonomous fixing off we show a disabled-state hint
+// pointing at Settings → General instead of the loop list.
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { RepeatIcon } from "lucide-react";
 import { api } from "@/lib/api";
+import { useFlag } from "@/lib/flags";
 import type { Loop } from "@/lib/types";
 import { TableSkeleton } from "@/components/skeleton";
 import { EmptyState } from "@/components/empty-state";
@@ -12,6 +15,7 @@ export const Route = createFileRoute("/_authed/loops/")({
 });
 
 function LoopsPage() {
+  const { enabled, isLoading: flagLoading } = useFlag("autofix_enabled");
   const q = useQuery({
     queryKey: ["loops", "all"],
     queryFn: async () => {
@@ -19,7 +23,22 @@ function LoopsPage() {
       return r.data ?? [];
     },
     refetchInterval: 10_000,
+    enabled,
   });
+
+  if (!flagLoading && !enabled) {
+    return (
+      <div className="page stack">
+        <h1 className="text-2xl font-semibold tracking-tight">Loops</h1>
+        <EmptyState
+          icon={RepeatIcon}
+          title="Autonomous remediation is off"
+          description="Loops chain scan → fix → rescan with guardrails. Enable Autonomous fixing in Settings → General to use them."
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="page stack">
       <h1 className="text-2xl font-semibold tracking-tight">Loops</h1>

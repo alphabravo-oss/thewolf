@@ -255,6 +255,17 @@ func DeleteCollection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Folder model: move this collection's repos to the owner's Default
+	// collection first, so deleting a collection never strands a repo as an
+	// unreachable orphan. (Skipped when deleting the Default collection itself.)
+	if defID, derr := ensureDefaultCollection(r.Context(), h.Store, col.UserID); derr == nil && defID != id {
+		if repos, lerr := h.Store.ListReposInCollection(r.Context(), id); lerr == nil {
+			for i := range repos {
+				_ = h.Store.SetRepoCollection(r.Context(), repos[i].ID, defID)
+			}
+		}
+	}
+
 	scanIDs, err := h.Store.DeleteCollectionCascade(r.Context(), id)
 	if err != nil {
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to delete collection")
@@ -303,7 +314,9 @@ func AddRepoToCollection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.Store.AddRepoToCollection(r.Context(), collectionID, req.RepoID); err != nil {
+	// Folder model: a repo belongs to exactly one collection, so adding it here
+	// moves it out of whatever collection it was in (including Default).
+	if err := h.Store.SetRepoCollection(r.Context(), req.RepoID, collectionID); err != nil {
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to add repo to collection")
 		return
 	}

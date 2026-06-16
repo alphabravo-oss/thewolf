@@ -83,6 +83,14 @@ func CreateLoop(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Loops are part of the agentic remediation surface, gated by the same
+	// master switch as Fixes. With autofix off, the loop path is dark.
+	if !autofixEnabled(r.Context(), h.Store) {
+		response.WriteError(w, http.StatusForbidden, "autofix_disabled",
+			"autonomous remediation is disabled; enable autofix_enabled in settings to use loops")
+		return
+	}
+
 	var req createLoopRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		response.WriteError(w, http.StatusBadRequest, "bad_request", "invalid request body")

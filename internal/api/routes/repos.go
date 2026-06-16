@@ -182,6 +182,13 @@ func CreateRepo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Folder model: every repo belongs to exactly one collection, so a new repo
+	// lands in the owner's Default collection. The collection-detail "add repo"
+	// flow then moves it into the chosen collection via SetRepoCollection.
+	if defID, derr := ensureDefaultCollection(r.Context(), h.Store, claims.UserID); derr == nil {
+		_ = h.Store.SetRepoCollection(r.Context(), repo.ID, defID)
+	}
+
 	// Run local detection asynchronously so the response isn't blocked.
 	// SSH repos are detected when a scan prepares a local archive workspace.
 	if repo.SourceType == models.SourceTypeLocal {
@@ -405,4 +412,68 @@ func runDetection(store db.Store, repoID, sourcePath string) {
 	if err := store.UpdateRepoDetection(context.Background(), repoID, string(langsJSON), string(fwJSON)); err != nil {
 		log.Printf("failed to save detection for repo %s: %v", repoID, err)
 	}
+}
+
+// defaultCollectionName is the per-user "folder" that holds repositories not
+// explicitly placed elsewhere. The folder model guarantees every repo belongs
+// to exactly one collection, so none are orphaned and unreachable in the UI.
+const defaultCollectionName = "Default"
+
+// ensureDefaultCollection finds (or lazily creates) the user's Default
+// collection and returns its ID. Used on repo create and during backfill.
+func ensureDefaultCollection(ctx context.Context, store db.Store, userID string) (string, error) {
+	cols, err := store.ListCollectionsByUser(ctx, userID)
+	if err == nil {
+		for i := range cols {
+			if cols[i].Name == defaultCollectionName {
+				return cols[i].ID, nil
+			}
+		}
+	}
+	col := &models.Collection{
+		ID:          uuid.New().String(),
+		UserID:      userID,
+		Name:        defaultCollectionName,
+		Description: "Repositories not assigned to another collection.",
+		ScanConfig:  "{}",
+	}
+	if err := store.CreateCollection(ctx, col); err != nil {
+		return "", err
+	}
+	return col.ID, nil
+}
+
+// BackfillRepoCollections assigns every repo that is in no collection to its
+// owner's Default collection, enforcing the folder-model invariant for data
+// created before the model existed. Idempotent: run safely at every startup.
+func BackfillRepoCollections(ctx context.Context, store db.Store) error {
+	cols, err := store.ListAllCollections(ctx)
+	if err != nil {
+		return err
+	}
+	member := make(map[string]bool)
+	for i := range cols {
+		repos, err := store.ListReposInCollection(ctx, cols[i].ID)
+		if err != nil {
+			continue
+		}
+		for j := range repos {
+			member[repos[j].ID] = true
+		}
+	}
+	repos, err := store.ListAllRepos(ctx)
+	if err != nil {
+		return err
+	}
+	for i := range repos {
+		if member[repos[i].ID] {
+			continue
+		}
+		defID, err := ensureDefaultCollection(ctx, store, repos[i].UserID)
+		if err != nil {
+			continue
+		}
+		_ = store.SetRepoCollection(ctx, repos[i].ID, defID)
+	}
+	return nil
 }

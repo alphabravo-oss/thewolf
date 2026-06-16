@@ -54,6 +54,13 @@ func NewServer(store db.Store, addr string) *Server {
 	// Initialize route handler with store and plugin registry
 	routes.SetHandler(store, plugin.Global)
 
+	// Folder-model invariant: assign any pre-existing orphan repos to their
+	// owner's Default collection so none are unreachable now that the nav is
+	// browsed via collections. Idempotent; a warning on failure is non-fatal.
+	if err := routes.BackfillRepoCollections(context.Background(), store); err != nil {
+		wolflog.L().Warn().Err(err).Msg("repo-collection backfill failed")
+	}
+
 	// Initialize SSE broker so scan events are broadcast to connected clients.
 	routes.SSEBroker = sse.NewBroker()
 

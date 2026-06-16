@@ -5,7 +5,6 @@ import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboardIcon,
   PackageIcon,
-  GitForkIcon,
   BugIcon,
   SettingsIcon,
   GaugeIcon,
@@ -21,6 +20,7 @@ import { useEffect, useState } from "react";
 import { WolfLogo } from "./wolf-logo";
 import { ThemeToggle } from "./theme-toggle";
 import { api, clearToken } from "@/lib/api";
+import { useFlag } from "@/lib/flags";
 import { cn } from "@/lib/utils";
 
 type NavItem = {
@@ -29,17 +29,33 @@ type NavItem = {
   icon: typeof PackageIcon;
 };
 
-const primary: NavItem[] = [
-  { label: "Dashboard", to: "/", icon: LayoutDashboardIcon },
-  { label: "Collections", to: "/collections", icon: PackageIcon },
-  { label: "Repos", to: "/repos", icon: GitForkIcon },
-  { label: "Scans", to: "/scans", icon: GaugeIcon },
-  { label: "Findings", to: "/findings", icon: BugIcon },
-  { label: "Fixes", to: "/fixes", icon: WrenchIcon },
-  { label: "Loops", to: "/loops", icon: RepeatIcon },
-  { label: "Scanners", to: "/scanners", icon: ContainerIcon },
-  { label: "Audit", to: "/audit", icon: ScrollTextIcon },
-];
+// Navigation follows the folder model: you browse Collections -> a collection
+// -> a repo -> a scan -> its findings, so there is no top-level Repos item.
+// The cross-repo global lists (Scans, Findings) only make sense in a fleet
+// view, and the agentic surface (Fixes, Loops) only when autonomous fixing is
+// on, so both groups are gated by their feature flag.
+function usePrimaryNav(): NavItem[] {
+  const fleet = useFlag("fleet_mode");
+  const autofix = useFlag("autofix_enabled");
+  return [
+    { label: "Dashboard", to: "/", icon: LayoutDashboardIcon },
+    { label: "Collections", to: "/collections", icon: PackageIcon },
+    ...(fleet.enabled
+      ? [
+          { label: "Scans", to: "/scans", icon: GaugeIcon },
+          { label: "Findings", to: "/findings", icon: BugIcon },
+        ]
+      : []),
+    ...(autofix.enabled
+      ? [
+          { label: "Fixes", to: "/fixes", icon: WrenchIcon },
+          { label: "Loops", to: "/loops", icon: RepeatIcon },
+        ]
+      : []),
+    { label: "Scanners", to: "/scanners", icon: ContainerIcon },
+    { label: "Audit", to: "/audit", icon: ScrollTextIcon },
+  ];
+}
 
 const secondary: NavItem[] = [
   { label: "Settings", to: "/settings", icon: SettingsIcon },
@@ -50,6 +66,7 @@ export function Sidebar() {
     select: (s) => s.location.pathname,
   });
   const navigate = useNavigate();
+  const primary = usePrimaryNav();
 
   // Mobile drawer. Auto-closes on route change.
   const [mobileOpen, setMobileOpen] = useState(false);

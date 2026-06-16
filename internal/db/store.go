@@ -84,6 +84,10 @@ type Store interface {
 	DeleteCollection(ctx context.Context, id string) error
 	AddRepoToCollection(ctx context.Context, collectionID, repoID string) error
 	RemoveRepoFromCollection(ctx context.Context, collectionID, repoID string) error
+	// SetRepoCollection moves a repo into exactly one collection: it clears any
+	// existing membership for the repo, then adds it to collectionID. This is
+	// the "folder" model where every repo belongs to a single collection.
+	SetRepoCollection(ctx context.Context, repoID, collectionID string) error
 	ListReposInCollection(ctx context.Context, collectionID string) ([]models.Repo, error)
 
 	// Secrets

@@ -119,6 +119,44 @@ func TestCollectionWithRepos(t *testing.T) {
 	}
 }
 
+// TestSetRepoCollectionIsSingleMembership guards the folder-model invariant: a
+// repo belongs to exactly one collection, and SetRepoCollection moves it (it
+// does not accumulate memberships).
+func TestSetRepoCollectionIsSingleMembership(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+
+	userID := uuid.New().String()
+	store.CreateUser(ctx, &models.User{ID: userID, Email: "folder@test.com", PasswordHash: "hash"})
+
+	repo := &models.Repo{ID: uuid.New().String(), UserID: userID, Name: "r", SourceType: models.SourceTypeLocal, SourcePath: "/tmp/r", DefaultBranch: "main"}
+	store.CreateRepo(ctx, repo)
+
+	colA := &models.Collection{ID: uuid.New().String(), UserID: userID, Name: "A"}
+	colB := &models.Collection{ID: uuid.New().String(), UserID: userID, Name: "B"}
+	store.CreateCollection(ctx, colA)
+	store.CreateCollection(ctx, colB)
+
+	// Place in A.
+	if err := store.SetRepoCollection(ctx, repo.ID, colA.ID); err != nil {
+		t.Fatalf("SetRepoCollection(A): %v", err)
+	}
+	if rs, _ := store.ListReposInCollection(ctx, colA.ID); len(rs) != 1 {
+		t.Fatalf("expected repo in A, got %d", len(rs))
+	}
+
+	// Move to B — must leave A entirely (not be in both).
+	if err := store.SetRepoCollection(ctx, repo.ID, colB.ID); err != nil {
+		t.Fatalf("SetRepoCollection(B): %v", err)
+	}
+	if rs, _ := store.ListReposInCollection(ctx, colA.ID); len(rs) != 0 {
+		t.Errorf("repo should have moved out of A, still in A: %d", len(rs))
+	}
+	if rs, _ := store.ListReposInCollection(ctx, colB.ID); len(rs) != 1 {
+		t.Errorf("repo should be in B, got %d", len(rs))
+	}
+}
+
 func TestCreateAndGetScan(t *testing.T) {
 	store := newTestStore(t)
 	ctx := context.Background()

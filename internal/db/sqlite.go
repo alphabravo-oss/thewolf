@@ -413,6 +413,26 @@ func (s *SQLiteStore) RemoveRepoFromCollection(ctx context.Context, collectionID
 	return err
 }
 
+// SetRepoCollection enforces the single-collection (folder) model: it clears
+// any existing membership for the repo, then adds it to collectionID, in one
+// transaction so a repo is never momentarily in zero or two collections.
+func (s *SQLiteStore) SetRepoCollection(ctx context.Context, repoID, collectionID string) error {
+	tx, err := s.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(ctx, "DELETE FROM collection_repos WHERE repo_id = ?", repoID); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx,
+		"INSERT OR IGNORE INTO collection_repos (collection_id, repo_id) VALUES (?, ?)",
+		collectionID, repoID); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 func (s *SQLiteStore) ListReposInCollection(ctx context.Context, collectionID string) ([]models.Repo, error) {
 	var repos []models.Repo
 	err := s.db.SelectContext(ctx, &repos,

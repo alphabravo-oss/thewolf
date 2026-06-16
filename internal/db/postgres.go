@@ -367,6 +367,26 @@ func (s *PostgresStore) RemoveRepoFromCollection(ctx context.Context, collection
 	return err
 }
 
+// SetRepoCollection enforces the single-collection (folder) model: it clears
+// any existing membership for the repo, then adds it to collectionID, in one
+// transaction so a repo is never momentarily in zero or two collections.
+func (s *PostgresStore) SetRepoCollection(ctx context.Context, repoID, collectionID string) error {
+	tx, err := s.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(ctx, "DELETE FROM collection_repos WHERE repo_id = $1", repoID); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx,
+		"INSERT INTO collection_repos (collection_id, repo_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+		collectionID, repoID); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 func (s *PostgresStore) ListReposInCollection(ctx context.Context, collectionID string) ([]models.Repo, error) {
 	var repos []models.Repo
 	err := s.db.SelectContext(ctx, &repos,
