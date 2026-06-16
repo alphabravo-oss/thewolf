@@ -17,6 +17,8 @@ LDFLAGS     := -s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main
 # Docker — wolf-slim (the orchestrator + UI)
 DOCKER_IMAGE := thewolf
 DOCKER_TAG   ?= $(VERSION)
+# Registry for multi-arch publishing of the app image (docker-buildx).
+DOCKER_REGISTRY ?= alphabravodevops
 
 # Docker — wolf-scanners (the bundled scanner image).
 # SCANNERS_REGISTRY must match the registry the runtime pulls from
@@ -32,7 +34,7 @@ SCANNERS_REF   := $(SCANNERS_IMAGE):$(SCANNERS_TAG)
 GOLANGCI_LINT := $(shell command -v golangci-lint 2>/dev/null)
 AIR           := $(shell command -v air 2>/dev/null || echo $(shell go env GOPATH)/bin/air)
 
-.PHONY: all build test lint vet fmt ui-build dev dev-api dev-ui docker docker-up docker-down clean help \
+.PHONY: all build test lint vet fmt ui-build dev dev-api dev-ui docker docker-buildx docker-up docker-down clean help \
         scanners-build scanners-buildx scanners-buildx-all scanners-buildx-setup scanners-smoke scanners-push scanners-validate scanners-docs scanners-docs-check scanners-upstream-check scanners-bump dev-scanners test-integration
 
 ## all: Build everything (Go binary + UI)
@@ -270,6 +272,22 @@ docker:
 		-t $(DOCKER_IMAGE):latest \
 		.
 	@echo "==> Built: $(DOCKER_IMAGE):$(DOCKER_TAG)"
+
+## docker-buildx: Multi-arch build+push of the app image (amd64+arm64).
+## Requires `make scanners-buildx-setup` (QEMU+builder) once and a logged-in
+## registry. PUSHES (a manifest list can't be --load'ed). The app image has no
+## arch-fragile smoke step, so it cross-builds cleanly. Override PLATFORMS,
+## DOCKER_REGISTRY, or DOCKER_TAG as needed.
+docker-buildx:
+	@echo "==> Multi-arch build+push $(DOCKER_REGISTRY)/$(DOCKER_IMAGE):$(DOCKER_TAG) [$(PLATFORMS)]..."
+	docker buildx build --platform $(PLATFORMS) \
+		--build-arg VERSION=$(VERSION) \
+		--build-arg COMMIT=$(COMMIT) \
+		--build-arg BUILD_DATE=$(BUILD_DATE) \
+		-t $(DOCKER_REGISTRY)/$(DOCKER_IMAGE):$(DOCKER_TAG) \
+		-t $(DOCKER_REGISTRY)/$(DOCKER_IMAGE):latest \
+		--push \
+		.
 
 ## docker-up: Start services with docker-compose
 docker-up:
