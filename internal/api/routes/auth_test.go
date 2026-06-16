@@ -137,6 +137,12 @@ func TestRegisterDuplicate(t *testing.T) {
 		t.Fatalf("first register: expected 201, got %d", w.Code)
 	}
 
+	// Registration defaults off after the first account; enable it so the
+	// second attempt reaches the duplicate-email check (rather than 403).
+	if err := store.SetSetting(context.Background(), "registration_enabled", "true"); err != nil {
+		t.Fatalf("enable registration: %v", err)
+	}
+
 	// Second register fails
 	body, _ = json.Marshal(map[string]string{
 		"email":    "dupe@example.com",

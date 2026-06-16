@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"testing"
@@ -10,7 +11,13 @@ import (
 // the second registered user is a regular user and is blocked from the admin
 // surface and from modifying resources it did not create.
 func TestRBACNonAdminIsRestricted(t *testing.T) {
-	srv, _, adminJWT := newTestServer(t)
+	srv, store, adminJWT := newTestServer(t)
+
+	// Registration defaults off after the first (bootstrap) account; enable it
+	// so we can register a second, regular user.
+	if err := store.SetSetting(context.Background(), "registration_enabled", "true"); err != nil {
+		t.Fatalf("enable registration: %v", err)
+	}
 
 	// The first user (adminJWT) is the admin. Register a second user → regular.
 	body, _ := json.Marshal(map[string]string{"email": "user2@example.com", "password": "password1234"})
