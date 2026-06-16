@@ -1411,10 +1411,20 @@ function ScannerImagesPanel() {
   const togglePush = (name: string) =>
     setPushVariants((prev) => ({ ...prev, [name]: !prev[name] }));
 
+  // Multi-arch (linux/amd64+arm64) toggle. Implies push (a manifest list can't
+  // be loaded locally), so it's only useful with a DockerHub token + a buildx
+  // builder on the host running Wolf.
+  const [multiArch, setMultiArch] = useState(false);
+
   // The build the console should stream. Bumping `nonce` re-runs the same one.
   const [target, setTarget] = useState<BuildTarget | null>(null);
   const startBuild = (variant: string, push: boolean) =>
-    setTarget((prev) => ({ variant, push, nonce: (prev?.nonce ?? 0) + 1 }));
+    setTarget((prev) => ({
+      variant,
+      push: push || multiArch,
+      multiArch,
+      nonce: (prev?.nonce ?? 0) + 1,
+    }));
 
   return (
     <div className="space-y-4">
@@ -1425,14 +1435,35 @@ function ScannerImagesPanel() {
             <h3 className="text-sm font-medium">Scanner images</h3>
             <span className="chip">wolf-built</span>
           </div>
-          <button
-            type="button"
-            onClick={() => startBuild("all", false)}
-            className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md border border-border/60 text-xs hover:bg-muted/30"
-            title="Rebuild all four variants in sequence (local --load; never needs credentials)"
-          >
-            <HammerIcon className="size-3.5" /> Rebuild all
-          </button>
+          <div className="flex items-center gap-2">
+            {hasDockerHubToken && (
+              <label
+                className="inline-flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none"
+                title="Build linux/amd64 + linux/arm64 with buildx and push a multi-arch manifest. Requires a QEMU buildx builder on the host running Wolf."
+              >
+                <input
+                  type="checkbox"
+                  checked={multiArch}
+                  onChange={() => setMultiArch((v) => !v)}
+                  className="size-3.5 accent-primary"
+                />
+                multi-arch
+              </label>
+            )}
+            <button
+              type="button"
+              onClick={() => startBuild("all", false)}
+              className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md border border-border/60 text-xs hover:bg-muted/30"
+              title={
+                multiArch
+                  ? "Rebuild all four variants multi-arch and push to DockerHub"
+                  : "Rebuild all four variants in sequence (local --load; never needs credentials)"
+              }
+            >
+              <HammerIcon className="size-3.5" />{" "}
+              {multiArch ? "Rebuild all & push" : "Rebuild all"}
+            </button>
+          </div>
         </div>
 
         <p className="text-xs text-muted-foreground max-w-prose">

@@ -71,12 +71,17 @@ export async function streamBuild(
   variant: string,
   push: boolean,
   handlers: StreamBuildHandlers,
+  opts?: { multiArch?: boolean },
 ): Promise<void> {
   const path =
     variant === "all"
       ? "/scanners/images/build-all"
       : `/scanners/images/${encodeURIComponent(variant)}/build`;
 
+  // A multi-arch build implies push (a manifest list can't be loaded locally);
+  // the server forces it too, but we send push=true so the UI's cred check is
+  // consistent.
+  const multiArch = opts?.multiArch ?? false;
   const res = await fetch(`${BASE_URL}${path}`, {
     method: "POST",
     credentials: "include",
@@ -84,7 +89,7 @@ export async function streamBuild(
       "Content-Type": "application/json",
       Accept: "text/event-stream",
     },
-    body: JSON.stringify({ push }),
+    body: JSON.stringify({ push: push || multiArch, multi_arch: multiArch }),
     signal: handlers.signal,
   });
 

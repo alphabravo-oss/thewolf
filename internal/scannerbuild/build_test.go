@@ -304,3 +304,48 @@ func equalStrings(a, b []string) bool {
 	}
 	return true
 }
+
+func TestBumpPatch(t *testing.T) {
+	cases := map[string]string{
+		"2.0.0":  "2.0.1",
+		"2.0.9":  "2.0.10",
+		"1.4.0":  "1.4.1",
+		"v2.0.0": "v2.0.1",
+		"":       "0.0.1",
+		"weird":  "weird.1", // non-semver still yields a distinct tag
+	}
+	for in, want := range cases {
+		if got := BumpPatch(in); got != want {
+			t.Errorf("BumpPatch(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestIsMultiPlatform(t *testing.T) {
+	if !IsMultiPlatform("linux/amd64,linux/arm64") {
+		t.Error("comma-separated platforms should be multi")
+	}
+	if IsMultiPlatform("linux/arm64") {
+		t.Error("single platform should not be multi")
+	}
+	if IsMultiPlatform("") {
+		t.Error("empty should not be multi")
+	}
+}
+
+func TestBuildArgsAddsPlatform(t *testing.T) {
+	req := BuildRequest{Version: "2.0.1", Push: true, Platforms: "linux/amd64,linux/arm64"}
+	argv := buildArgs(req, "/ctx", "Dockerfile", []string{"2.0.1"}, "acme/wolf-scanners")
+	joined := strings.Join(argv, " ")
+	if !strings.Contains(joined, "--platform linux/amd64,linux/arm64") {
+		t.Errorf("expected --platform in argv, got: %v", argv)
+	}
+	if !strings.Contains(joined, "--push") {
+		t.Errorf("multi-arch build must push, got: %v", argv)
+	}
+	// A single-arch (no platforms) build must NOT add --platform.
+	argv2 := buildArgs(BuildRequest{Version: "2.0.1"}, "/ctx", "Dockerfile", []string{"2.0.1"}, "acme/wolf-scanners")
+	if strings.Contains(strings.Join(argv2, " "), "--platform") {
+		t.Errorf("single-arch build should not add --platform, got: %v", argv2)
+	}
+}

@@ -30,6 +30,8 @@ export interface BuildTarget {
   // "default" | "jvm" | "rust" | "codeql" | "all"
   variant: string;
   push: boolean;
+  // Multi-arch (linux/amd64+arm64) build via buildx. Implies push.
+  multiArch?: boolean;
   // Bumped on every click so re-running the same variant restarts the stream.
   nonce: number;
 }
@@ -48,6 +50,7 @@ export function BuildConsole({ target }: { target: BuildTarget | null }) {
   // a re-click (nonce bump) re-runs even with the same variant/push.
   const variant = target?.variant;
   const push = target?.push;
+  const multiArch = target?.multiArch;
   const nonce = target?.nonce;
 
   useEffect(() => {
@@ -58,18 +61,23 @@ export function BuildConsole({ target }: { target: BuildTarget | null }) {
     setError(null);
     setPhase("running");
 
-    streamBuild(variant, push ?? false, {
-      signal: ctrl.signal,
-      onLine: (line) => setLines((prev) => [...prev, line]),
-      onDone: (done) => {
-        setResult(done);
-        setPhase("done");
+    streamBuild(
+      variant,
+      push ?? false,
+      {
+        signal: ctrl.signal,
+        onLine: (line) => setLines((prev) => [...prev, line]),
+        onDone: (done) => {
+          setResult(done);
+          setPhase("done");
+        },
+        onError: (err) => {
+          setError(err);
+          setPhase("error");
+        },
       },
-      onError: (err) => {
-        setError(err);
-        setPhase("error");
-      },
-    }).catch((e) => {
+      { multiArch: multiArch ?? false },
+    ).catch((e) => {
       if (ctrl.signal.aborted) return;
       setError(e instanceof Error ? e.message : "Build request failed");
       setPhase("error");
@@ -77,7 +85,7 @@ export function BuildConsole({ target }: { target: BuildTarget | null }) {
 
     return () => ctrl.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [variant, push, nonce]);
+  }, [variant, push, multiArch, nonce]);
 
   // Auto-scroll to the newest line as output streams in.
   useEffect(() => {

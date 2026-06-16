@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -101,6 +102,11 @@ type BuildRequest struct {
 	Push          bool
 	DockerHubUser string
 	DockerHubPAT  string
+	// Platforms, when non-empty (e.g. "linux/amd64,linux/arm64"), builds a
+	// multi-arch image via buildx --platform. A multi-platform build can only
+	// be --push'ed (a manifest list can't be --load'ed into the local daemon),
+	// so Push must be true when Platforms names more than one platform.
+	Platforms string
 }
 
 // BuildResult reports what a Build produced.
@@ -174,6 +180,9 @@ func buildArgs(req BuildRequest, contextDir, dockerfile string, tags []string, r
 		"--file", dockerfile,
 		"--build-arg", "WOLF_VERSION=" + req.Version,
 	}
+	if p := strings.TrimSpace(req.Platforms); p != "" {
+		args = append(args, "--platform", p)
+	}
 	for _, t := range tags {
 		args = append(args, "-t", repo+":"+t)
 	}
@@ -184,6 +193,38 @@ func buildArgs(req BuildRequest, contextDir, dockerfile string, tags []string, r
 	}
 	args = append(args, contextDir)
 	return args
+}
+
+// IsMultiPlatform reports whether a platforms spec names more than one platform
+// (so the build must be --push'ed, not --load'ed).
+func IsMultiPlatform(platforms string) bool {
+	return strings.Contains(strings.TrimSpace(platforms), ",")
+}
+
+// BumpPatch increments the patch component of a MAJOR.MINOR.PATCH version
+// string ("2.0.0" -> "2.0.1"). A leading "v" is preserved. If the input isn't
+// dotted-numeric semver, it falls back to appending ".1" so a build still
+// produces a distinct, monotonic-ish tag rather than failing.
+func BumpPatch(version string) string {
+	v := strings.TrimSpace(version)
+	prefix := ""
+	if strings.HasPrefix(v, "v") {
+		prefix, v = "v", v[1:]
+	}
+	parts := strings.Split(v, ".")
+	if len(parts) != 3 {
+		if v == "" {
+			return prefix + "0.0.1"
+		}
+		return prefix + v + ".1"
+	}
+	major, e1 := strconv.Atoi(parts[0])
+	minor, e2 := strconv.Atoi(parts[1])
+	patch, e3 := strconv.Atoi(parts[2])
+	if e1 != nil || e2 != nil || e3 != nil {
+		return prefix + v + ".1"
+	}
+	return fmt.Sprintf("%s%d.%d.%d", prefix, major, minor, patch+1)
 }
 
 // echoCommand renders a docker invocation for logging. It is the single place

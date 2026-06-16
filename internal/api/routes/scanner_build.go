@@ -14,6 +14,7 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/scannerbuild"
 	"github.com/alphabravocompany/thewolf/internal/secrets"
+	"github.com/alphabravocompany/thewolf/internal/setup/scanners"
 )
 
 // defaultScannerNamespace is the DockerHub namespace used when the
@@ -25,11 +26,26 @@ const defaultScannerNamespace = "alphabravodevops"
 // daemon. Defaults to scannerbuild.Build.
 var ScannerBuildFn = scannerbuild.Build
 
-// buildScannerBody is the request payload for both build endpoints. push is
-// the only credential-gated knob; it defaults to false (local --load build).
+// buildScannerBody is the request payload for both build endpoints.
+//   - push: publish to the registry (needs a dockerhub_token secret). Default
+//     false → local --load build.
+//   - multi_arch: build linux/amd64+arm64 via buildx. Implies push (a manifest
+//     list can't be --load'ed locally) and needs a QEMU buildx builder.
+//   - platforms: optional explicit override (e.g. "linux/amd64").
 type buildScannerBody struct {
-	Push bool `json:"push"`
+	Push      bool   `json:"push"`
+	MultiArch bool   `json:"multi_arch"`
+	Platforms string `json:"platforms,omitempty"`
 }
+
+// scannerImageVersionSetting persists the current published scanner-image
+// semver. Each push (publish) build bumps its patch so every published rebuild
+// is a distinct immutable tag.
+const scannerImageVersionSetting = "scanners_image_version"
+
+// defaultMultiArchPlatforms is what a multi_arch build targets when no explicit
+// platforms override is given.
+const defaultMultiArchPlatforms = "linux/amd64,linux/arm64"
 
 // BuildScannerImage builds one wolf-built scanner variant from the embedded
 // context and streams docker buildx output over SSE.
@@ -58,9 +74,10 @@ func BuildScannerImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	push := decodeBuildPush(r)
+	push, platforms := decodeBuildOpts(r)
+	version := resolveBuildVersion(r.Context(), h, push)
 
-	req, ok := buildRequestFor(w, r, h, claims.UserID, variant, push)
+	req, ok := buildRequestFor(w, r, h, claims.UserID, variant, push, version, platforms)
 	if !ok {
 		return
 	}
@@ -88,7 +105,7 @@ func BuildAllScannerImages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	push := decodeBuildPush(r)
+	push, platforms := decodeBuildOpts(r)
 
 	// Resolve creds once up front so a missing dockerhub_token on a push
 	// build 404s before we open the SSE stream.
@@ -101,7 +118,9 @@ func BuildAllScannerImages(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	namespace := resolveScannerNamespace(r.Context(), h)
-	version := AppVersion
+	// One version bump for the whole build-all run, so all four variants share
+	// the same new immutable tag.
+	version := resolveBuildVersion(r.Context(), h, push)
 
 	flusher, ok := beginSSE(w)
 	if !ok {
@@ -115,6 +134,7 @@ func BuildAllScannerImages(w http.ResponseWriter, r *http.Request) {
 			Push:          push,
 			DockerHubUser: user,
 			DockerHubPAT:  pat,
+			Platforms:     platforms,
 		}
 		if !streamOneBuild(r.Context(), w, flusher, req, v.Name) {
 			return
@@ -122,29 +142,64 @@ func BuildAllScannerImages(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// decodeBuildPush reads the {push:bool} body, defaulting to false. A malformed
-// or empty body is treated as push=false rather than an error.
-func decodeBuildPush(r *http.Request) bool {
+// decodeBuildOpts reads {push, multi_arch, platforms}, defaulting to a local
+// single-arch build. A multi-arch build implies push (a manifest list can't be
+// --load'ed locally). Returns the effective push flag and the platforms spec
+// ("" = single-arch native).
+func decodeBuildOpts(r *http.Request) (push bool, platforms string) {
 	if r.Body == nil {
-		return false
+		return false, ""
 	}
 	var body buildScannerBody
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		return false
+		return false, ""
 	}
-	return body.Push
+	platforms = strings.TrimSpace(body.Platforms)
+	if body.MultiArch && platforms == "" {
+		platforms = defaultMultiArchPlatforms
+	}
+	push = body.Push
+	if scannerbuild.IsMultiPlatform(platforms) {
+		push = true // multi-arch must be pushed
+	}
+	return push, platforms
 }
 
-// buildRequestFor assembles a BuildRequest, resolving namespace + version and
-// — only when push is set — the dockerhub_token credentials. On a missing
-// push credential it writes the 404 and returns ok=false. A push=false build
-// never touches the secret store.
-func buildRequestFor(w http.ResponseWriter, r *http.Request, h *Handler, userID, variant string, push bool) (scannerbuild.BuildRequest, bool) {
+// resolveBuildVersion returns the image version to tag a build with. A push
+// (publish) build auto-increments the persisted scanner-image semver patch and
+// saves it, so every published rebuild is a distinct immutable tag. A local
+// (--load) build reuses the current version without bumping.
+func resolveBuildVersion(ctx context.Context, h *Handler, push bool) string {
+	cur := strings.TrimSpace(getSettingOr(ctx, h, scannerImageVersionSetting, scanners.DefaultScannersTag))
+	if cur == "" {
+		cur = scanners.DefaultScannersTag
+	}
+	if !push {
+		return cur
+	}
+	next := scannerbuild.BumpPatch(cur)
+	_ = h.Store.SetSetting(ctx, scannerImageVersionSetting, next)
+	return next
+}
+
+// getSettingOr returns the setting value or a fallback when unset/errored.
+func getSettingOr(ctx context.Context, h *Handler, key, fallback string) string {
+	if v, err := h.Store.GetSetting(ctx, key); err == nil && strings.TrimSpace(v) != "" {
+		return v
+	}
+	return fallback
+}
+
+// buildRequestFor assembles a BuildRequest, resolving namespace + creds (only
+// when push is set). version + platforms are resolved by the caller. On a
+// missing push credential it writes the 404 and returns ok=false.
+func buildRequestFor(w http.ResponseWriter, r *http.Request, h *Handler, userID, variant string, push bool, version, platforms string) (scannerbuild.BuildRequest, bool) {
 	req := scannerbuild.BuildRequest{
 		Variant:   variant,
 		Namespace: resolveScannerNamespace(r.Context(), h),
-		Version:   AppVersion,
+		Version:   version,
 		Push:      push,
+		Platforms: platforms,
 	}
 	if push {
 		user, pat, ok := resolveDockerHubCreds(w, r, h, userID)
