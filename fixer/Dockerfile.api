@@ -16,7 +16,12 @@
 # Build via internal/scannerbuild FixerVariants ("api").
 # ============================================================
 
-FROM alphabravodevops/wolf-fixer:latest AS base
+# Pin the base by version tag (not :latest) — the scanner-image build
+# subsystem always passes --build-arg WOLF_VERSION and tags the base as
+# wolf-fixer:<version> alongside :latest, so this resolves to the matching
+# immutable version at build time (default `dev` for manual local builds).
+ARG WOLF_VERSION=dev
+FROM alphabravodevops/wolf-fixer:${WOLF_VERSION} AS base
 
 ENV WOLF_FIXER_VARIANT=api \
     WOLF_FIXER_ENGINE=api
@@ -25,6 +30,9 @@ ENV WOLF_FIXER_VARIANT=api \
 # and the wolf binary. The API engine returns a unified diff that wolf
 # applies with `git apply` — no in-place agent edits.
 
+# The base already creates and selects the non-root `wolf` user; restate it
+# explicitly so the running user is unambiguous in this final image.
+USER wolf
 WORKDIR /workspace
 ENV HOME=/home/wolf
 
