@@ -4,7 +4,7 @@
 // preserves which section the user was on. Scan presets were deliberately
 // omitted — wolf auto-detects per-repo language/framework, no manual
 // preset list is needed.
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, redirect } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CheckIcon,
@@ -16,19 +16,19 @@ import {
   LockIcon,
   PlusIcon,
   RefreshCwIcon,
+  ScrollTextIcon,
   ServerIcon,
   SettingsIcon,
   ShieldIcon,
   Trash2Icon,
   UploadCloudIcon,
-  UserIcon,
   UsersIcon,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useMe } from "@/lib/me";
-import type { ApiToken, ApiTokenCreated, RemoteNode } from "@/lib/types";
+import type { AdminSecret, ApiToken, ApiTokenCreated, RemoteNode } from "@/lib/types";
 import { BuildConsole, type BuildTarget } from "@/components/scanners/build-console";
 import { DockerHubCredentialCard } from "@/components/scanners/dockerhub-credential";
 import {
@@ -36,59 +36,73 @@ import {
   type ScannerImageStatus,
 } from "@/lib/scanner-build";
 
+// Legacy personal ?tab= values that have NO admin tab of the same name now
+// redirect to /account. (apikeys/secrets/nodes are kept here as ADMIN tabs —
+// the global oversight view — so they are intentionally NOT redirected.)
+const LEGACY_PERSONAL: Record<string, "profile" | "security"> = {
+  account: "profile",
+  security: "security",
+};
+
 export const Route = createFileRoute("/_authed/settings")({
+  // Accept any string here; beforeLoad does the routing/redirects.
   validateSearch: (s: Record<string, unknown>) => ({
-    tab:
-      typeof s.tab === "string" &&
-      /^(account|general|security|apikeys|secrets|nodes|users|scanners)$/.test(s.tab)
-        ? (s.tab as TabKey)
-        : ("account" as TabKey),
+    tab: typeof s.tab === "string" ? s.tab : "general",
   }),
+  beforeLoad: async ({ search }) => {
+    // Personal surfaces moved to /account.
+    const legacy = LEGACY_PERSONAL[(search as { tab?: string }).tab ?? ""];
+    if (legacy) {
+      throw redirect({ to: "/account", search: { section: legacy } });
+    }
+    // Settings is admin-only; bounce everyone else to their account.
+    const me = await api
+      .get<{ role: string }>("/auth/me")
+      .then((r) => r.data)
+      .catch(() => null);
+    if (me?.role !== "admin") {
+      throw redirect({ to: "/account", search: { section: "profile" } });
+    }
+  },
   component: SettingsPage,
 });
 
-type TabKey =
-  | "account"
-  | "general"
-  | "security"
-  | "apikeys"
-  | "secrets"
-  | "nodes"
-  | "users"
-  | "scanners";
+type TabKey = "general" | "users" | "apikeys" | "secrets" | "nodes" | "scanners" | "audit";
 
-// adminOnly tabs are hidden for regular users. Account, Security, API Keys,
-// Secrets + Nodes are per-user, so everyone can manage their own.
-const TABS: { key: TabKey; label: string; Icon: typeof SettingsIcon; adminOnly?: boolean }[] = [
-  { key: "account", label: "Account", Icon: UserIcon },
-  { key: "general", label: "General", Icon: SettingsIcon, adminOnly: true },
-  { key: "security", label: "Security", Icon: LockIcon },
+// Settings is the admin surface: system config + a global, cross-user
+// oversight view of API keys / secrets / nodes, plus the audit log. Personal
+// (per-user) management lives under /account.
+const TABS: { key: TabKey; label: string; Icon: typeof SettingsIcon }[] = [
+  { key: "general", label: "General", Icon: SettingsIcon },
+  { key: "users", label: "Users", Icon: UsersIcon },
   { key: "apikeys", label: "API Keys", Icon: KeyRoundIcon },
   { key: "secrets", label: "Secrets", Icon: KeyIcon },
   { key: "nodes", label: "Nodes", Icon: ServerIcon },
-  { key: "users", label: "Users", Icon: UsersIcon, adminOnly: true },
-  { key: "scanners", label: "Scanners", Icon: ShieldIcon, adminOnly: true },
+  { key: "scanners", label: "Scanners", Icon: ShieldIcon },
+  { key: "audit", label: "Audit", Icon: ScrollTextIcon },
 ];
 
 function SettingsPage() {
   const { tab } = Route.useSearch();
   const navigate = useNavigate();
-  const me = useMe();
-  const isAdmin = me.data?.role === "admin";
-
-  // Regular users see only the per-user tabs (Secrets, Nodes). Admins see all.
-  const visibleTabs = TABS.filter((t) => isAdmin || !t.adminOnly);
-  // If a non-admin lands on an admin tab (e.g. a saved ?tab=users link),
-  // fall back to the first tab they can see.
-  const activeTab = visibleTabs.some((t) => t.key === tab)
-    ? tab
-    : visibleTabs[0]?.key ?? "secrets";
+  const activeTab: TabKey = TABS.some((t) => t.key === tab) ? (tab as TabKey) : "general";
 
   return (
     <div className="page stack page--narrow">
       <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
+      <p className="text-sm text-muted-foreground -mt-2">
+        Administration &amp; global oversight. Manage your own profile, keys, and secrets under{" "}
+        <button
+          type="button"
+          onClick={() => navigate({ to: "/account", search: { section: "profile" } })}
+          className="text-foreground hover:underline"
+        >
+          Account
+        </button>
+        .
+      </p>
       <nav className="flex gap-1 border-b border-border/40">
-        {visibleTabs.map(({ key, label, Icon }) => {
+        {TABS.map(({ key, label, Icon }) => {
           const active = activeTab === key;
           return (
             <button
@@ -108,14 +122,312 @@ function SettingsPage() {
         })}
       </nav>
 
-      {activeTab === "account" && <AccountTab />}
-      {activeTab === "general" && isAdmin && <GeneralTab />}
-      {activeTab === "security" && <SecurityTab />}
-      {activeTab === "apikeys" && <ApiKeysTab />}
-      {activeTab === "secrets" && <SecretsTab />}
-      {activeTab === "nodes" && <NodesTab />}
-      {activeTab === "users" && isAdmin && <UsersTab />}
-      {activeTab === "scanners" && isAdmin && <ScannersTab />}
+      {activeTab === "general" && <GeneralTab />}
+      {activeTab === "users" && <UsersTab />}
+      {activeTab === "apikeys" && <AdminApiKeysTab />}
+      {activeTab === "secrets" && <AdminSecretsTab />}
+      {activeTab === "nodes" && <AdminNodesTab />}
+      {activeTab === "scanners" && <ScannersTab />}
+      {activeTab === "audit" && <AuditTab />}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Admin oversight — global, cross-user views (read + revoke/delete). Secret
+// values are never exposed; tokens are hash-only. Owner is resolved from the
+// users list (no backend join).
+// ---------------------------------------------------------------------------
+
+// useOwnerLookup returns a fn mapping a user_id to that user's email.
+function useOwnerLookup() {
+  const q = useQuery({
+    queryKey: ["users"],
+    queryFn: async () => (await api.get<{ id: string; email: string }[]>("/users")).data ?? [],
+  });
+  const map = new Map((q.data ?? []).map((u) => [u.id, u.email]));
+  return (id?: string) => (id ? (map.get(id) ?? `${id.slice(0, 8)}…`) : "—");
+}
+
+function AdminCard({ children }: { children: React.ReactNode }) {
+  return <section className="glass-card overflow-x-auto">{children}</section>;
+}
+
+function AdminApiKeysTab() {
+  const qc = useQueryClient();
+  const ownerOf = useOwnerLookup();
+  const q = useQuery({
+    queryKey: ["admin", "tokens"],
+    queryFn: async () => (await api.get<ApiToken[]>("/admin/tokens")).data ?? [],
+  });
+  const revoke = useMutation({
+    mutationFn: (id: string) => api.delete(`/auth/tokens/${id}`),
+    onSuccess: () => {
+      toast.success("Key revoked");
+      qc.invalidateQueries({ queryKey: ["admin", "tokens"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Revoke failed"),
+  });
+  return (
+    <div className="space-y-2">
+      <p className="text-xs text-muted-foreground">
+        Every user's API keys. Keys are hash-only — names, scopes, and usage are visible; the
+        secret itself is never recoverable.
+      </p>
+      <AdminCard>
+        {q.isLoading ? (
+          <div className="p-5 text-sm text-muted-foreground">Loading…</div>
+        ) : !q.data || q.data.length === 0 ? (
+          <div className="p-5 text-sm text-muted-foreground">No API keys.</div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="text-xs text-muted-foreground border-b border-border/30">
+              <tr>
+                <th className="text-left px-4 py-2">Owner</th>
+                <th className="text-left px-4 py-2">Name</th>
+                <th className="text-left px-4 py-2">Prefix</th>
+                <th className="text-left px-4 py-2">Scopes</th>
+                <th className="text-left px-4 py-2">Expires</th>
+                <th className="text-right px-4 py-2 w-20"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {q.data.map((t) => (
+                <tr key={t.id} className="border-t border-border/20 align-top">
+                  <td className="px-4 py-2">{ownerOf(t.user_id)}</td>
+                  <td className="px-4 py-2">
+                    {t.name}
+                    {t.revoked_at && (
+                      <span className="ml-1 text-[10px] uppercase text-muted-foreground">revoked</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-2 font-mono text-xs text-muted-foreground">{t.token_prefix}…</td>
+                  <td className="px-4 py-2">
+                    <div className="flex flex-wrap gap-1">
+                      {t.scopes.map((s) => (
+                        <span key={s} className="text-[10px] font-mono rounded bg-muted/40 border border-border/40 px-1.5 py-0.5">
+                          {s}
+                        </span>
+                      ))}
+                    </div>
+                  </td>
+                  <td className="px-4 py-2 text-xs text-muted-foreground">
+                    {t.expires_at ? new Date(t.expires_at).toLocaleDateString() : "never"}
+                  </td>
+                  <td className="px-4 py-2 text-right">
+                    {!t.revoked_at && (
+                      <button
+                        type="button"
+                        onClick={() => revoke.mutate(t.id)}
+                        className="inline-flex items-center gap-1 h-7 px-2 rounded-md border border-red-500/40 text-red-300 hover:bg-red-500/10 text-xs"
+                      >
+                        <Trash2Icon className="size-3.5" /> Revoke
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </AdminCard>
+    </div>
+  );
+}
+
+function AdminSecretsTab() {
+  const qc = useQueryClient();
+  const ownerOf = useOwnerLookup();
+  const q = useQuery({
+    queryKey: ["admin", "secrets"],
+    queryFn: async () => (await api.get<AdminSecret[]>("/admin/secrets")).data ?? [],
+  });
+  const del = useMutation({
+    mutationFn: (id: string) => api.delete(`/config/secrets/${id}`),
+    onSuccess: () => {
+      toast.success("Secret deleted");
+      qc.invalidateQueries({ queryKey: ["admin", "secrets"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Delete failed"),
+  });
+  return (
+    <div className="space-y-2">
+      <p className="text-xs text-muted-foreground">
+        Every user's secrets. Values are <strong>masked</strong> — you can see a secret exists and
+        delete it, but never read another user's value.
+      </p>
+      <AdminCard>
+        {q.isLoading ? (
+          <div className="p-5 text-sm text-muted-foreground">Loading…</div>
+        ) : !q.data || q.data.length === 0 ? (
+          <div className="p-5 text-sm text-muted-foreground">No secrets.</div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="text-xs text-muted-foreground border-b border-border/30">
+              <tr>
+                <th className="text-left px-4 py-2">Owner</th>
+                <th className="text-left px-4 py-2">Type</th>
+                <th className="text-left px-4 py-2">Name</th>
+                <th className="text-left px-4 py-2">Value</th>
+                <th className="text-right px-4 py-2 w-20"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {q.data.map((s) => (
+                <tr key={s.id} className="border-t border-border/20">
+                  <td className="px-4 py-2">{ownerOf(s.user_id)}</td>
+                  <td className="px-4 py-2 font-mono text-xs">{s.key_type}</td>
+                  <td className="px-4 py-2">{s.key_name}</td>
+                  <td className="px-4 py-2 font-mono text-xs text-muted-foreground">{s.value}</td>
+                  <td className="px-4 py-2 text-right">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (window.confirm(`Delete ${ownerOf(s.user_id)}'s secret "${s.key_name}"?`))
+                          del.mutate(s.id);
+                      }}
+                      className="inline-flex items-center gap-1 h-7 px-2 rounded-md border border-red-500/40 text-red-300 hover:bg-red-500/10 text-xs"
+                    >
+                      <Trash2Icon className="size-3.5" /> Delete
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </AdminCard>
+    </div>
+  );
+}
+
+function AdminNodesTab() {
+  const qc = useQueryClient();
+  const ownerOf = useOwnerLookup();
+  const q = useQuery({
+    queryKey: ["admin", "nodes"],
+    queryFn: async () => (await api.get<RemoteNode[]>("/nodes")).data ?? [],
+  });
+  const del = useMutation({
+    mutationFn: (id: string) => api.delete(`/nodes/${id}`),
+    onSuccess: () => {
+      toast.success("Node deleted");
+      qc.invalidateQueries({ queryKey: ["admin", "nodes"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Delete failed"),
+  });
+  return (
+    <div className="space-y-2">
+      <p className="text-xs text-muted-foreground">Every user's SSH nodes.</p>
+      <AdminCard>
+        {q.isLoading ? (
+          <div className="p-5 text-sm text-muted-foreground">Loading…</div>
+        ) : !q.data || q.data.length === 0 ? (
+          <div className="p-5 text-sm text-muted-foreground">No nodes.</div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="text-xs text-muted-foreground border-b border-border/30">
+              <tr>
+                <th className="text-left px-4 py-2">Owner</th>
+                <th className="text-left px-4 py-2">Name</th>
+                <th className="text-left px-4 py-2">Host</th>
+                <th className="text-left px-4 py-2">Enabled</th>
+                <th className="text-right px-4 py-2 w-20"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {q.data.map((n) => (
+                <tr key={n.id} className="border-t border-border/20">
+                  <td className="px-4 py-2">{ownerOf(n.user_id)}</td>
+                  <td className="px-4 py-2">{n.name}</td>
+                  <td className="px-4 py-2 font-mono text-xs text-muted-foreground">
+                    {n.username}@{n.host}:{n.port}
+                  </td>
+                  <td className="px-4 py-2 text-xs">{n.enabled ? "yes" : "no"}</td>
+                  <td className="px-4 py-2 text-right">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (window.confirm(`Delete ${ownerOf(n.user_id)}'s node "${n.name}"?`))
+                          del.mutate(n.id);
+                      }}
+                      className="inline-flex items-center gap-1 h-7 px-2 rounded-md border border-red-500/40 text-red-300 hover:bg-red-500/10 text-xs"
+                    >
+                      <Trash2Icon className="size-3.5" /> Delete
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </AdminCard>
+    </div>
+  );
+}
+
+interface AuditEntry {
+  id: string;
+  user_id: string;
+  method: string;
+  path: string;
+  action: string;
+  status_code: number;
+  created_at: string;
+}
+
+function AuditTab() {
+  const ownerOf = useOwnerLookup();
+  const q = useQuery({
+    queryKey: ["audit-log"],
+    queryFn: async () => (await api.get<AuditEntry[]>("/audit-log?limit=100")).data ?? [],
+  });
+  return (
+    <div className="space-y-2">
+      <p className="text-xs text-muted-foreground">
+        The 100 most recent mutating requests — who did what, where, and the response status.
+      </p>
+      <AdminCard>
+        {q.isLoading ? (
+          <div className="p-5 text-sm text-muted-foreground">Loading…</div>
+        ) : !q.data || q.data.length === 0 ? (
+          <div className="p-5 text-sm text-muted-foreground">No audit entries.</div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="text-xs text-muted-foreground border-b border-border/30">
+              <tr>
+                <th className="text-left px-4 py-2">When</th>
+                <th className="text-left px-4 py-2">User</th>
+                <th className="text-left px-4 py-2">Action</th>
+                <th className="text-left px-4 py-2">Request</th>
+                <th className="text-right px-4 py-2">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {q.data.map((e) => (
+                <tr key={e.id} className="border-t border-border/20">
+                  <td className="px-4 py-2 text-xs text-muted-foreground whitespace-nowrap">
+                    {new Date(e.created_at).toLocaleString()}
+                  </td>
+                  <td className="px-4 py-2 text-xs">{ownerOf(e.user_id)}</td>
+                  <td className="px-4 py-2 text-xs">{e.action}</td>
+                  <td className="px-4 py-2 font-mono text-xs text-muted-foreground">
+                    {e.method} {e.path}
+                  </td>
+                  <td
+                    className={
+                      "px-4 py-2 text-right text-xs tabular-nums " +
+                      (e.status_code >= 400 ? "text-red-300" : "text-muted-foreground")
+                    }
+                  >
+                    {e.status_code}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </AdminCard>
     </div>
   );
 }
@@ -125,7 +437,7 @@ function SettingsPage() {
 // other personal surfaces (API keys, two-factor).
 // ---------------------------------------------------------------------------
 
-function AccountTab() {
+export function AccountTab() {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const me = useMe();
@@ -531,7 +843,7 @@ interface MfaSetup {
   qr: string; // PNG data URI
 }
 
-function SecurityTab() {
+export function SecurityTab() {
   const qc = useQueryClient();
   const status = useQuery({
     queryKey: ["mfa-status"],
@@ -771,7 +1083,7 @@ const EXPIRY_OPTIONS = [
   { days: 0, label: "Never" },
 ];
 
-function ApiKeysTab() {
+export function ApiKeysTab() {
   const qc = useQueryClient();
   const q = useQuery({
     queryKey: ["api-tokens"],
@@ -1042,7 +1354,7 @@ const KEY_TYPES = [
   { value: "custom", label: "Custom" },
 ];
 
-function SecretsTab() {
+export function SecretsTab() {
   const qc = useQueryClient();
   const q = useQuery({
     queryKey: ["secrets"],
@@ -1196,7 +1508,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 // secrets; node records only reference the selected secret.
 // ---------------------------------------------------------------------------
 
-function NodesTab() {
+export function NodesTab() {
   const qc = useQueryClient();
   const nodes = useQuery({
     queryKey: ["remote-nodes"],

@@ -14,7 +14,6 @@ import {
   WrenchIcon,
   RepeatIcon,
   ContainerIcon,
-  ScrollTextIcon,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { WolfLogo } from "./wolf-logo";
@@ -54,12 +53,9 @@ function usePrimaryNav(): NavItem[] {
           { label: "Loops", to: "/loops", icon: RepeatIcon },
         ]
       : []),
-    // Scanner-image management and the audit log are admin-only.
+    // Scanner-image management is admin-only. (Audit moved into Settings.)
     ...(isAdmin
-      ? [
-          { label: "Scanners", to: "/scanners", icon: ContainerIcon },
-          { label: "Audit", to: "/audit", icon: ScrollTextIcon },
-        ]
+      ? [{ label: "Scanners", to: "/scanners", icon: ContainerIcon }]
       : []),
   ];
 }

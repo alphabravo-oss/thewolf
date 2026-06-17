@@ -397,6 +397,17 @@ export interface ApiToken {
   last_used_at?: string;
   expires_at?: string;
   revoked_at?: string;
+  user_id?: string; // present in the admin oversight view
+}
+
+// A secret in the admin oversight view: masked value + owner's user_id.
+export interface AdminSecret {
+  id: string;
+  user_id: string;
+  key_type: string;
+  key_name: string;
+  value: string; // masked
+  created_at: string;
 }
 
 export interface ApiTokenCreated extends ApiToken {

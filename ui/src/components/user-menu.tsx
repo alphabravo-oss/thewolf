@@ -37,8 +37,8 @@ export function UserMenu() {
   const label = displayLabel(me.data);
   const initial = label.charAt(0).toUpperCase();
 
-  const go = (tab: "account" | "security" | "apikeys") =>
-    navigate({ to: "/settings", search: { tab } });
+  const go = (section: "profile" | "security" | "apikeys") =>
+    navigate({ to: "/account", search: { section } });
 
   return (
     <DropdownMenu>
@@ -63,7 +63,7 @@ export function UserMenu() {
           </span>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={() => go("account")}>
+        <DropdownMenuItem onSelect={() => go("profile")}>
           <UserIcon className="mr-2 size-4" /> Account
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => go("security")}>
