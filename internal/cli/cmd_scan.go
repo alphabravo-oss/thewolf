@@ -18,9 +18,10 @@ func AddScanSubcommands(scan *cobra.Command) {
 	var tools []string
 	var aiEnabled bool
 	create := &cobra.Command{
-		Use:   "create",
-		Short: "Start a server-managed scan",
-		Args:  cobra.NoArgs,
+		Use:         "create",
+		Short:       "Start a server-managed scan",
+		Annotations: apiAnno("POST", "/scans"),
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if repoID == "" {
 				return fmt.Errorf("--repo is required")
@@ -48,27 +49,30 @@ func AddScanSubcommands(scan *cobra.Command) {
 	create.Flags().BoolVar(&aiEnabled, "ai", false, "enable AI enrichment")
 
 	compare := &cobra.Command{
-		Use:   "compare <id> <other-id>",
-		Short: "Compare two scans",
-		Args:  cobra.ExactArgs(2),
+		Use:         "compare <id> <other-id>",
+		Annotations: apiAnno("GET", "/scans/{}/compare/{}"),
+		Short:       "Compare two scans",
+		Args:        cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runRender(cmd, "GET", "/scans/"+args[0]+"/compare/"+args[1], nil)
 		},
 	}
 
 	toolOutput := &cobra.Command{
-		Use:   "tool-output <id> <tool>",
-		Short: "Get a tool's raw output for a scan",
-		Args:  cobra.ExactArgs(2),
+		Use:         "tool-output <id> <tool>",
+		Annotations: apiAnno("GET", "/scans/{}/tools/{}/output"),
+		Short:       "Get a tool's raw output for a scan",
+		Args:        cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runRender(cmd, "GET", "/scans/"+args[0]+"/tools/"+args[1]+"/output", nil)
 		},
 	}
 
 	cancelTool := &cobra.Command{
-		Use:   "cancel-tool <id> <tool>",
-		Short: "Cancel one tool of a running scan",
-		Args:  cobra.ExactArgs(2),
+		Use:         "cancel-tool <id> <tool>",
+		Annotations: apiAnno("DELETE", "/scans/{}/tools/{}"),
+		Short:       "Cancel one tool of a running scan",
+		Args:        cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runRender(cmd, "DELETE", "/scans/"+args[0]+"/tools/"+args[1], nil)
 		},
@@ -77,9 +81,10 @@ func AddScanSubcommands(scan *cobra.Command) {
 	var trendRepo, trendBranch string
 	var trendLimit int
 	trends := &cobra.Command{
-		Use:   "trends",
-		Short: "Scan trends over time for a repository",
-		Args:  cobra.NoArgs,
+		Use:         "trends",
+		Short:       "Scan trends over time for a repository",
+		Annotations: apiAnno("GET", "/scans/trends"),
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if trendRepo == "" {
 				return fmt.Errorf("--repo is required")
@@ -101,9 +106,10 @@ func AddScanSubcommands(scan *cobra.Command) {
 
 	var gateFailExitCode bool
 	gate := &cobra.Command{
-		Use:   "gate <id>",
-		Short: "Evaluate a scan's quality gate",
-		Args:  cobra.ExactArgs(1),
+		Use:         "gate <id>",
+		Annotations: apiAnno("GET", "/scans/{}/gate"),
+		Short:       "Evaluate a scan's quality gate",
+		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			c, err := resolveClient(cmd)
 			if err != nil {
@@ -140,12 +146,54 @@ func AddScanSubcommands(scan *cobra.Command) {
 	}
 	gate.Flags().BoolVar(&gateFailExitCode, "fail-exit-code", false, "return exit code 2 when the quality gate fails")
 
+	var preflightRepo, preflightBranch string
+	preflight := &cobra.Command{
+		Use:         "preflight",
+		Short:       "Preview which tools a scan would run",
+		Annotations: apiAnno("POST", "/scans/preflight"),
+		Args:        cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if preflightRepo == "" {
+				return fmt.Errorf("--repo is required")
+			}
+			body := map[string]any{"repo_id": preflightRepo}
+			if preflightBranch != "" {
+				body["branch"] = preflightBranch
+			}
+			return runRender(cmd, "POST", "/scans/preflight", body)
+		},
+	}
+	preflight.Flags().StringVar(&preflightRepo, "repo", "", "repository ID")
+	preflight.Flags().StringVar(&preflightBranch, "branch", "", "branch to preflight")
+
+	downloadArtifact := &cobra.Command{
+		Use:         "download-artifact <id> <artifact-id>",
+		Short:       "Download a scan artifact to stdout",
+		Annotations: apiAnno("GET", "/scans/{}/artifacts/{}/download"),
+		Args:        cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			c, err := resolveClient(cmd)
+			if err != nil {
+				return err
+			}
+			raw, err := c.Raw(cmd.Context(), "/scans/"+args[0]+"/artifacts/"+args[1]+"/download")
+			if err != nil {
+				return err
+			}
+			_, err = cmd.OutOrStdout().Write(raw)
+			return err
+		},
+	}
+
 	scan.AddCommand(
 		listCmd("/scans", "List scans"),
 		getCmd("/scans", "Get a scan"),
 		create,
+		preflight,
 		deleteCmd("cancel <id>", "Cancel a scan", "/scans/%s"),
 		cancelTool,
+		subGetCmd("diff <id>", "Diff a scan against its baseline", "/scans/%s/diff"),
+		downloadArtifact,
 		watchCmd("Stream a scan's progress", "/scans/%s/stream"),
 		subGetCmd("findings <id>", "List a scan's findings", "/scans/%s/findings"),
 		subGetCmd("stats <id>", "Finding statistics for a scan", "/scans/%s/findings/stats"),

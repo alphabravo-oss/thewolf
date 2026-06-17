@@ -15,9 +15,10 @@ func newRepoCmd() *cobra.Command {
 
 	var name, sourceType, sourcePath, branch, remoteNodeID, remotePath string
 	create := &cobra.Command{
-		Use:   "create",
-		Short: "Add a repository",
-		Args:  cobra.NoArgs,
+		Use:         "create",
+		Short:       "Add a repository",
+		Annotations: apiAnno("POST", "/repos"),
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if name == "" || sourcePath == "" {
 				return fmt.Errorf("--name and --path are required")
@@ -47,9 +48,10 @@ func newRepoCmd() *cobra.Command {
 
 	var upName, upBranch string
 	update := &cobra.Command{
-		Use:   "update <id>",
-		Short: "Update a repository",
-		Args:  cobra.ExactArgs(1),
+		Use:         "update <id>",
+		Short:       "Update a repository",
+		Annotations: apiAnno("PUT", "/repos/{}"),
+		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			body := map[string]any{}
 			if cmd.Flags().Changed("name") {
@@ -64,6 +66,26 @@ func newRepoCmd() *cobra.Command {
 	update.Flags().StringVar(&upName, "name", "", "new name")
 	update.Flags().StringVar(&upBranch, "branch", "", "new default branch")
 
+	var orgName, orgSecret string
+	listOrg := &cobra.Command{
+		Use:         "list-org",
+		Short:       "List a GitHub org's repositories",
+		Annotations: apiAnno("POST", "/sources/github/list-org-repos"),
+		Args:        cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if orgName == "" {
+				return fmt.Errorf("--org is required")
+			}
+			body := map[string]any{"org": orgName}
+			if orgSecret != "" {
+				body["secret_id"] = orgSecret
+			}
+			return runRender(cmd, "POST", "/sources/github/list-org-repos", body)
+		},
+	}
+	listOrg.Flags().StringVar(&orgName, "org", "", "GitHub organization (or user) login")
+	listOrg.Flags().StringVar(&orgSecret, "secret", "", "github_token secret ID for private orgs")
+
 	cmd.AddCommand(
 		listCmd("/repos", "List repositories"),
 		getCmd("/repos", "Get a repository"),
@@ -71,6 +93,8 @@ func newRepoCmd() *cobra.Command {
 		update,
 		deleteCmd("delete <id>", "Delete a repository", "/repos/%s"),
 		subGetCmd("branches <id>", "List a repository's branches", "/repos/%s/branches"),
+		subGetCmd("fixable <id>", "List a repository's fixable findings", "/repos/%s/fixable"),
+		listOrg,
 	)
 	return cmd
 }
@@ -84,9 +108,10 @@ func newNodeCmd() *cobra.Command {
 	var port int
 	var enabled bool
 	create := &cobra.Command{
-		Use:   "create",
-		Short: "Add a remote SSH node",
-		Args:  cobra.NoArgs,
+		Use:         "create",
+		Short:       "Add a remote SSH node",
+		Annotations: apiAnno("POST", "/nodes"),
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if name == "" || host == "" || username == "" {
 				return fmt.Errorf("--name, --host, and --username are required")
@@ -126,9 +151,10 @@ func newNodeCmd() *cobra.Command {
 	var upPort int
 	var upEnabled bool
 	update := &cobra.Command{
-		Use:   "update <id>",
-		Short: "Update a remote SSH node",
-		Args:  cobra.ExactArgs(1),
+		Use:         "update <id>",
+		Short:       "Update a remote SSH node",
+		Annotations: apiAnno("PUT", "/nodes/{}"),
+		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			body := map[string]any{}
 			if cmd.Flags().Changed("name") {
@@ -172,9 +198,10 @@ func newNodeCmd() *cobra.Command {
 	update.Flags().BoolVar(&upEnabled, "enabled", true, "node enabled")
 
 	browse := &cobra.Command{
-		Use:   "browse <id> [path]",
-		Short: "Browse a remote SSH node",
-		Args:  cobra.RangeArgs(1, 2),
+		Use:         "browse <id> [path]",
+		Short:       "Browse a remote SSH node",
+		Annotations: apiAnno("GET", "/nodes/{}/browse"),
+		Args:        cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			q := url.Values{}
 			if len(args) == 2 {
@@ -188,9 +215,10 @@ func newNodeCmd() *cobra.Command {
 		},
 	}
 	gitInfo := &cobra.Command{
-		Use:   "git-info <id> <path>",
-		Short: "Inspect a remote git working tree",
-		Args:  cobra.ExactArgs(2),
+		Use:         "git-info <id> <path>",
+		Short:       "Inspect a remote git working tree",
+		Annotations: apiAnno("GET", "/nodes/{}/git-info"),
+		Args:        cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			q := url.Values{}
 			q.Set("path", args[1])
@@ -204,12 +232,14 @@ func newNodeCmd() *cobra.Command {
 		create,
 		update,
 		deleteCmd("delete <id>", "Delete a remote SSH node", "/nodes/%s"),
-		&cobra.Command{Use: "check <id>", Short: "Check SSH connectivity", Args: cobra.ExactArgs(1),
+		&cobra.Command{Use: "check <id>", Short: "Check SSH connectivity",
+			Annotations: apiAnno("POST", "/nodes/{}/check"), Args: cobra.ExactArgs(1),
 			RunE: func(cmd *cobra.Command, args []string) error {
 				return runRender(cmd, "POST", "/nodes/"+args[0]+"/check", nil)
 			}},
 		browse,
 		gitInfo,
+		actionCmd("discover-repos <id>", "Discover repositories on a node", "POST", "/nodes/%s/discover-repos"),
 	)
 	return cmd
 }
@@ -221,9 +251,10 @@ func newCollectionCmd() *cobra.Command {
 
 	var name, desc string
 	create := &cobra.Command{
-		Use:   "create",
-		Short: "Create a collection",
-		Args:  cobra.NoArgs,
+		Use:         "create",
+		Short:       "Create a collection",
+		Annotations: apiAnno("POST", "/collections"),
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if name == "" {
 				return fmt.Errorf("--name is required")
@@ -238,9 +269,10 @@ func newCollectionCmd() *cobra.Command {
 
 	var upName, upDesc string
 	update := &cobra.Command{
-		Use:   "update <id>",
-		Short: "Update a collection",
-		Args:  cobra.ExactArgs(1),
+		Use:         "update <id>",
+		Short:       "Update a collection",
+		Annotations: apiAnno("PUT", "/collections/{}"),
+		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			body := map[string]any{}
 			if cmd.Flags().Changed("name") {
@@ -257,9 +289,10 @@ func newCollectionCmd() *cobra.Command {
 
 	var addRepoID, rmRepoID string
 	addRepo := &cobra.Command{
-		Use:   "add-repo <id>",
-		Short: "Add a repository to a collection",
-		Args:  cobra.ExactArgs(1),
+		Use:         "add-repo <id>",
+		Short:       "Add a repository to a collection",
+		Annotations: apiAnno("POST", "/collections/{}/repos"),
+		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if addRepoID == "" {
 				return fmt.Errorf("--repo is required")
@@ -270,9 +303,10 @@ func newCollectionCmd() *cobra.Command {
 	addRepo.Flags().StringVar(&addRepoID, "repo", "", "repository ID to add")
 
 	removeRepo := &cobra.Command{
-		Use:   "remove-repo <id>",
-		Short: "Remove a repository from a collection",
-		Args:  cobra.ExactArgs(1),
+		Use:         "remove-repo <id>",
+		Short:       "Remove a repository from a collection",
+		Annotations: apiAnno("DELETE", "/collections/{}/repos/{}"),
+		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if rmRepoID == "" {
 				return fmt.Errorf("--repo is required")
@@ -303,9 +337,10 @@ func newBaselineCmd() *cobra.Command {
 
 	var listRepo, listBranch string
 	list := &cobra.Command{
-		Use:   "list",
-		Short: "List repository baselines",
-		Args:  cobra.NoArgs,
+		Use:         "list",
+		Short:       "List repository baselines",
+		Annotations: apiAnno("GET", "/repos/{}/baselines"),
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if listRepo == "" {
 				return fmt.Errorf("--repo is required")
@@ -326,9 +361,10 @@ func newBaselineCmd() *cobra.Command {
 
 	var createRepo, createName, createScan, createBranch, createStrategy string
 	create := &cobra.Command{
-		Use:   "create",
-		Short: "Create a repository baseline from a scan",
-		Args:  cobra.NoArgs,
+		Use:         "create",
+		Short:       "Create a repository baseline from a scan",
+		Annotations: apiAnno("POST", "/repos/{}/baselines"),
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if createRepo == "" || createName == "" || createScan == "" {
 				return fmt.Errorf("--repo, --name, and --scan are required")
@@ -358,9 +394,10 @@ func newBaselineCmd() *cobra.Command {
 func newCompareCmd() *cobra.Command {
 	var scanID, baselineID string
 	cmd := &cobra.Command{
-		Use:   "compare",
-		Short: "Compare a scan to a baseline scan",
-		Args:  cobra.NoArgs,
+		Use:         "compare",
+		Short:       "Compare a scan to a baseline scan",
+		Annotations: apiAnno("POST", "/scans/{}/compare"),
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if scanID == "" || baselineID == "" {
 				return fmt.Errorf("--scan and --baseline are required")
@@ -382,9 +419,10 @@ func newSarifCmd() *cobra.Command {
 
 	var importRepo, importFile, importBranch, importSource string
 	importCmd := &cobra.Command{
-		Use:   "import",
-		Short: "Import SARIF findings as a completed scan",
-		Args:  cobra.NoArgs,
+		Use:         "import",
+		Short:       "Import SARIF findings as a completed scan",
+		Annotations: apiAnno("POST", "/sarif/import"),
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if importRepo == "" || importFile == "" {
 				return fmt.Errorf("--repo and --file are required")
@@ -412,9 +450,10 @@ func newSarifCmd() *cobra.Command {
 	importCmd.Flags().StringVar(&importSource, "source", "", "import source label")
 
 	exportCmd := &cobra.Command{
-		Use:   "export <scan-id>",
-		Short: "Export a scan as SARIF",
-		Args:  cobra.ExactArgs(1),
+		Use:         "export <scan-id>",
+		Short:       "Export a scan as SARIF",
+		Annotations: apiAnno("GET", "/scans/{}/sarif"),
+		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runRender(cmd, "GET", "/scans/"+args[0]+"/sarif", nil)
 		},
@@ -431,9 +470,10 @@ func newFindingCmd() *cobra.Command {
 
 	var status string
 	setStatus := &cobra.Command{
-		Use:   "set-status <id>",
-		Short: "Change a finding's status",
-		Args:  cobra.ExactArgs(1),
+		Use:         "set-status <id>",
+		Short:       "Change a finding's status",
+		Annotations: apiAnno("PUT", "/findings/{}/status"),
+		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if status == "" {
 				return fmt.Errorf("--status is required")
@@ -446,17 +486,27 @@ func newFindingCmd() *cobra.Command {
 	cmd.AddCommand(
 		listCmd("/findings", "List findings"),
 		getCmd("/findings", "Get a finding"),
+		&cobra.Command{
+			Use: "aggregate", Short: "Aggregate findings by group", Args: cobra.NoArgs,
+			Annotations: apiAnno("GET", "/findings/aggregate"),
+			RunE: func(cmd *cobra.Command, _ []string) error {
+				return runRender(cmd, "GET", "/findings/aggregate", nil)
+			},
+		},
 		setStatus,
 		&cobra.Command{
-			Use: "export", Short: "Export findings", Args: cobra.NoArgs,
+			Use: "export", Short: "Export findings",
+			Annotations: apiAnno("GET", "/findings/export"), Args: cobra.NoArgs,
 			RunE: func(cmd *cobra.Command, _ []string) error { return runRender(cmd, "GET", "/findings/export", nil) },
 		},
 		&cobra.Command{
-			Use: "trends", Short: "Finding trends over time", Args: cobra.NoArgs,
+			Use: "trends", Short: "Finding trends over time",
+			Annotations: apiAnno("GET", "/findings/trends"), Args: cobra.NoArgs,
 			RunE: func(cmd *cobra.Command, _ []string) error { return runRender(cmd, "GET", "/findings/trends", nil) },
 		},
 		&cobra.Command{
-			Use: "trends-export", Short: "Export finding trends", Args: cobra.NoArgs,
+			Use: "trends-export", Short: "Export finding trends",
+			Annotations: apiAnno("GET", "/findings/trends/export"), Args: cobra.NoArgs,
 			RunE: func(cmd *cobra.Command, _ []string) error {
 				return runRender(cmd, "GET", "/findings/trends/export", nil)
 			},
@@ -473,9 +523,10 @@ func newSuppressCmd() *cobra.Command {
 	var listRepo string
 	var includeInactive bool
 	list := &cobra.Command{
-		Use:   "list",
-		Short: "List repository suppressions",
-		Args:  cobra.NoArgs,
+		Use:         "list",
+		Short:       "List repository suppressions",
+		Annotations: apiAnno("GET", "/suppressions"),
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if listRepo == "" {
 				return fmt.Errorf("--repo is required")
@@ -522,9 +573,10 @@ func newSuppressCmd() *cobra.Command {
 
 	var addFinding, addRepo, addScopeType, addScopeValue, addBranch, addReason, addExpires string
 	add := &cobra.Command{
-		Use:   "add",
-		Short: "Create a durable suppression",
-		Args:  cobra.NoArgs,
+		Use:         "add",
+		Short:       "Create a durable suppression",
+		Annotations: apiAnno("POST", "/suppressions"),
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			body, err := buildSuppressionBody(addFinding, addRepo, addScopeType, addScopeValue, addBranch, addReason, addExpires)
 			if err != nil {
@@ -543,9 +595,10 @@ func newSuppressCmd() *cobra.Command {
 
 	var prevFinding, prevRepo, prevScopeType, prevScopeValue, prevBranch, prevReason, prevExpires string
 	preview := &cobra.Command{
-		Use:   "preview",
-		Short: "Preview suppression impact",
-		Args:  cobra.NoArgs,
+		Use:         "preview",
+		Short:       "Preview suppression impact",
+		Annotations: apiAnno("POST", "/suppressions/preview"),
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			body, err := buildSuppressionBody(prevFinding, prevRepo, prevScopeType, prevScopeValue, prevBranch, prevReason, prevExpires)
 			if err != nil {
@@ -578,9 +631,10 @@ func newPolicyCmd() *cobra.Command {
 
 	var listScope, listScopeID string
 	list := &cobra.Command{
-		Use:   "list",
-		Short: "List quality policies",
-		Args:  cobra.NoArgs,
+		Use:         "list",
+		Short:       "List quality policies",
+		Annotations: apiAnno("GET", "/policies"),
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			q := url.Values{}
 			if listScope != "" {
@@ -641,9 +695,10 @@ func newPolicyCmd() *cobra.Command {
 	var createName, createScope, createScopeID, createMode, createRulesJSON, createRulesFile string
 	var createEnabled bool
 	create := &cobra.Command{
-		Use:   "create",
-		Short: "Create or replace a quality policy",
-		Args:  cobra.NoArgs,
+		Use:         "create",
+		Short:       "Create or replace a quality policy",
+		Annotations: apiAnno("POST", "/policies"),
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			body, err := buildPolicyBody(cmd, createName, createScope, createScopeID, createMode, createRulesJSON, createRulesFile, createEnabled)
 			if err != nil {
@@ -657,9 +712,10 @@ func newPolicyCmd() *cobra.Command {
 	var updateName, updateScope, updateScopeID, updateMode, updateRulesJSON, updateRulesFile string
 	var updateEnabled bool
 	update := &cobra.Command{
-		Use:   "update <id>",
-		Short: "Update a quality policy",
-		Args:  cobra.ExactArgs(1),
+		Use:         "update <id>",
+		Short:       "Update a quality policy",
+		Annotations: apiAnno("PUT", "/policies/{}"),
+		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			body, err := buildPolicyBody(cmd, updateName, updateScope, updateScopeID, updateMode, updateRulesJSON, updateRulesFile, updateEnabled)
 			if err != nil {
@@ -683,9 +739,10 @@ func newFixCmd() *cobra.Command {
 	var findingIDs []string
 	var maxAttempts int
 	create := &cobra.Command{
-		Use:   "create",
-		Short: "Enqueue an autonomous fix job (dry-run, branch-only)",
-		Args:  cobra.NoArgs,
+		Use:         "create",
+		Short:       "Enqueue an autonomous fix job (dry-run, branch-only)",
+		Annotations: apiAnno("POST", "/fixes"),
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if repoID == "" {
 				return fmt.Errorf("--repo is required")
@@ -728,9 +785,10 @@ func newFixCmd() *cobra.Command {
 	create.Flags().IntVar(&maxAttempts, "max-attempts", 0, "max engine attempts per finding")
 
 	diff := &cobra.Command{
-		Use:   "diff <id>",
-		Short: "Print the proposed diff for a fix job",
-		Args:  cobra.ExactArgs(1),
+		Use:         "diff <id>",
+		Short:       "Print the proposed diff for a fix job",
+		Annotations: apiAnno("GET", "/fixes/{}/diff"),
+		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			c, err := resolveClient(cmd)
 			if err != nil {
@@ -766,9 +824,10 @@ func AddLoopSubcommands(loop *cobra.Command) {
 	var repoID, severity, strategy, engine string
 	var maxIter int
 	create := &cobra.Command{
-		Use:   "create",
-		Short: "Start a server-managed loop",
-		Args:  cobra.NoArgs,
+		Use:         "create",
+		Short:       "Start a server-managed loop",
+		Annotations: apiAnno("POST", "/loops"),
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if repoID == "" {
 				return fmt.Errorf("--repo is required")
@@ -813,9 +872,10 @@ func newUserCmd() *cobra.Command {
 
 	var email, password string
 	create := &cobra.Command{
-		Use:   "create",
-		Short: "Create a user",
-		Args:  cobra.NoArgs,
+		Use:         "create",
+		Short:       "Create a user",
+		Annotations: apiAnno("POST", "/users"),
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if email == "" || password == "" {
 				return fmt.Errorf("--email and --password are required")
@@ -826,9 +886,26 @@ func newUserCmd() *cobra.Command {
 	create.Flags().StringVar(&email, "email", "", "user email")
 	create.Flags().StringVar(&password, "password", "", "initial password")
 
+	var newRole string
+	setRole := &cobra.Command{
+		Use:         "set-role <id>",
+		Short:       "Change a user's role (admin|user)",
+		Annotations: apiAnno("PUT", "/users/{}/role"),
+		Args:        cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if newRole == "" {
+				return fmt.Errorf("--role is required (admin|user)")
+			}
+			return runRender(cmd, "PUT", "/users/"+args[0]+"/role", map[string]any{"role": newRole})
+		},
+	}
+	setRole.Flags().StringVar(&newRole, "role", "", "new role: admin or user")
+
 	cmd.AddCommand(
 		listCmd("/users", "List users"),
 		create,
+		setRole,
+		actionCmd("reset-mfa <id>", "Reset a user's two-factor auth", "POST", "/users/%s/mfa/reset"),
 		deleteCmd("delete <id>", "Delete a user", "/users/%s"),
 	)
 	return cmd
@@ -841,9 +918,10 @@ func newSettingsCmd() *cobra.Command {
 
 	var kv map[string]string
 	set := &cobra.Command{
-		Use:   "set",
-		Short: "Update settings (--set key=value, repeatable)",
-		Args:  cobra.NoArgs,
+		Use:         "set",
+		Short:       "Update settings (--set key=value, repeatable)",
+		Annotations: apiAnno("PUT", "/settings"),
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if len(kv) == 0 {
 				return fmt.Errorf("at least one --set key=value is required")
@@ -855,7 +933,8 @@ func newSettingsCmd() *cobra.Command {
 
 	cmd.AddCommand(
 		&cobra.Command{
-			Use: "get", Short: "Get all settings", Args: cobra.NoArgs,
+			Use: "get", Short: "Get all settings",
+			Annotations: apiAnno("GET", "/settings"), Args: cobra.NoArgs,
 			RunE: func(cmd *cobra.Command, _ []string) error { return runRender(cmd, "GET", "/settings", nil) },
 		},
 		set,
@@ -870,9 +949,10 @@ func newPromptCmd() *cobra.Command {
 
 	var scope, scopeID, promptType, section, content string
 	set := &cobra.Command{
-		Use:   "set",
-		Short: "Create or update a prompt template",
-		Args:  cobra.NoArgs,
+		Use:         "set",
+		Short:       "Create or update a prompt template",
+		Annotations: apiAnno("PUT", "/ai-prompts"),
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if promptType == "" || section == "" {
 				return fmt.Errorf("--type and --section are required")
@@ -892,9 +972,10 @@ func newPromptCmd() *cobra.Command {
 
 	var prevType, prevCollection string
 	preview := &cobra.Command{
-		Use:   "preview",
-		Short: "Preview a rendered prompt",
-		Args:  cobra.NoArgs,
+		Use:         "preview",
+		Short:       "Preview a rendered prompt",
+		Annotations: apiAnno("POST", "/ai-prompts/preview"),
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if prevType == "" {
 				return fmt.Errorf("--type is required")
@@ -910,7 +991,8 @@ func newPromptCmd() *cobra.Command {
 	cmd.AddCommand(
 		listCmd("/ai-prompts", "List prompt templates"),
 		&cobra.Command{
-			Use: "defaults", Short: "Show default prompts", Args: cobra.NoArgs,
+			Use: "defaults", Short: "Show default prompts",
+			Annotations: apiAnno("GET", "/ai-prompts/defaults"), Args: cobra.NoArgs,
 			RunE: func(cmd *cobra.Command, _ []string) error { return runRender(cmd, "GET", "/ai-prompts/defaults", nil) },
 		},
 		set,
@@ -935,9 +1017,10 @@ func newSecretCmd() *cobra.Command {
 
 	var keyType, keyName, value string
 	create := &cobra.Command{
-		Use:   "create",
-		Short: "Store a secret",
-		Args:  cobra.NoArgs,
+		Use:         "create",
+		Short:       "Store a secret",
+		Annotations: apiAnno("POST", "/config/secrets"),
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if keyName == "" || value == "" {
 				return fmt.Errorf("--name and --value are required")
@@ -968,7 +1051,8 @@ func newPluginCmd() *cobra.Command {
 	cmd.AddCommand(
 		listCmd("/config/plugins", "List plugins"),
 		&cobra.Command{
-			Use: "install <name>", Short: "Install a plugin", Args: cobra.ExactArgs(1),
+			Use: "install <name>", Short: "Install a plugin",
+			Annotations: apiAnno("POST", "/config/plugins/{}/install"), Args: cobra.ExactArgs(1),
 			RunE: func(cmd *cobra.Command, args []string) error {
 				return runRender(cmd, "POST", "/config/plugins/"+args[0]+"/install", nil)
 			},
@@ -987,9 +1071,10 @@ func newScannerCmd() *cobra.Command {
 	var planDisabledTools []string
 	var planCheckAvailability bool
 	planCmd := &cobra.Command{
-		Use:   "plan",
-		Short: "Explain which scanners would run or skip",
-		Args:  cobra.NoArgs,
+		Use:         "plan",
+		Short:       "Explain which scanners would run or skip",
+		Annotations: apiAnno("POST", "/scanners/plan"),
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			body := map[string]any{}
 			if planRepo != "" {
@@ -1021,19 +1106,22 @@ func newScannerCmd() *cobra.Command {
 		listCmd("/scanners/list", "List scanners"),
 		planCmd,
 		&cobra.Command{
-			Use: "tool <name>", Short: "Show scanner tool metadata", Args: cobra.ExactArgs(1),
+			Use: "tool <name>", Short: "Show scanner tool metadata",
+			Annotations: apiAnno("GET", "/scanners/tools/{}"), Args: cobra.ExactArgs(1),
 			RunE: func(cmd *cobra.Command, args []string) error {
 				return runRender(cmd, "GET", "/scanners/tools/"+args[0], nil)
 			},
 		},
 		&cobra.Command{
-			Use: "check-updates", Short: "Refresh scanner tool version checks", Args: cobra.NoArgs,
+			Use: "check-updates", Short: "Refresh scanner tool version checks",
+			Annotations: apiAnno("POST", "/scanners/tools/check-updates"), Args: cobra.NoArgs,
 			RunE: func(cmd *cobra.Command, _ []string) error {
 				return runRender(cmd, "POST", "/scanners/tools/check-updates", nil)
 			},
 		},
 		&cobra.Command{
-			Use: "check-update <name>", Short: "Refresh one scanner tool version check", Args: cobra.ExactArgs(1),
+			Use: "check-update <name>", Short: "Refresh one scanner tool version check",
+			Annotations: apiAnno("POST", "/scanners/tools/{}/check-update"), Args: cobra.ExactArgs(1),
 			RunE: func(cmd *cobra.Command, args []string) error {
 				return runRender(cmd, "POST", "/scanners/tools/"+args[0]+"/check-update", nil)
 			},
@@ -1056,23 +1144,62 @@ func newScannerCmd() *cobra.Command {
 			},
 		},
 		&cobra.Command{
-			Use: "config", Short: "Show scanner config", Args: cobra.NoArgs,
+			Use: "config", Short: "Show scanner config",
+			Annotations: apiAnno("GET", "/scanners/config"), Args: cobra.NoArgs,
 			RunE: func(cmd *cobra.Command, _ []string) error { return runRender(cmd, "GET", "/scanners/config", nil) },
 		},
 		&cobra.Command{
-			Use: "doctor", Short: "Run scanner diagnostics", Args: cobra.NoArgs,
+			Use: "doctor", Short: "Run scanner diagnostics",
+			Annotations: apiAnno("POST", "/scanners/doctor"), Args: cobra.NoArgs,
 			RunE: func(cmd *cobra.Command, _ []string) error { return runRender(cmd, "POST", "/scanners/doctor", nil) },
 		},
 		&cobra.Command{
-			Use: "pull-all", Short: "Pull every scanner image", Args: cobra.NoArgs,
+			Use: "pull-all", Short: "Pull every scanner image",
+			Annotations: apiAnno("POST", "/scanners/pull"), Args: cobra.NoArgs,
 			RunE: func(cmd *cobra.Command, _ []string) error { return runRender(cmd, "POST", "/scanners/pull", nil) },
 		},
 		&cobra.Command{
-			Use: "pull-image <name>", Short: "Pull one scanner image", Args: cobra.ExactArgs(1),
+			Use: "pull-image <name>", Short: "Pull one scanner image",
+			Annotations: apiAnno("POST", "/scanners/images/pull"), Args: cobra.ExactArgs(1),
 			RunE: func(cmd *cobra.Command, args []string) error {
 				return runRender(cmd, "POST", "/scanners/images/pull", map[string]any{"image": args[0]})
 			},
 		},
+		&cobra.Command{
+			Use: "build-all", Short: "Build every scanner image locally", Args: cobra.NoArgs,
+			Annotations: apiAnno("POST", "/scanners/images/build-all"),
+			RunE: func(cmd *cobra.Command, _ []string) error {
+				return runRender(cmd, "POST", "/scanners/images/build-all", nil)
+			},
+		},
+		&cobra.Command{
+			Use: "build <variant>", Short: "Build one scanner image locally", Args: cobra.ExactArgs(1),
+			Annotations: apiAnno("POST", "/scanners/images/{}/build"),
+			RunE: func(cmd *cobra.Command, args []string) error {
+				return runRender(cmd, "POST", "/scanners/images/"+args[0]+"/build", nil)
+			},
+		},
+	)
+	return cmd
+}
+
+// --- fleet ------------------------------------------------------------------
+
+func newFleetCmd() *cobra.Command {
+	cmd := group("fleet", "Fleet-wide inventory and posture")
+	get := func(use, short, path string) *cobra.Command {
+		return &cobra.Command{
+			Use: use, Short: short, Args: cobra.NoArgs,
+			Annotations: apiAnno("GET", path),
+			RunE: func(cmd *cobra.Command, _ []string) error {
+				return runRender(cmd, "GET", path, nil)
+			},
+		}
+	}
+	cmd.AddCommand(
+		get("inventory", "Repository inventory across the fleet", "/fleet/inventory"),
+		get("needs-attention", "Repositories needing attention", "/fleet/needs-attention"),
+		get("posture", "Fleet-wide security posture", "/fleet/posture"),
 	)
 	return cmd
 }
@@ -1099,17 +1226,23 @@ func newSystemCmd() *cobra.Command {
 	}
 
 	cmd.AddCommand(
-		&cobra.Command{Use: "health", Short: "Liveness probe", Args: cobra.NoArgs,
+		&cobra.Command{Use: "health", Short: "Liveness probe",
+			Annotations: apiAnno("GET", "/health"), Args: cobra.NoArgs,
 			RunE: func(cmd *cobra.Command, _ []string) error { return runRender(cmd, "GET", "/health", nil) }},
-		&cobra.Command{Use: "ready", Short: "Readiness probe", Args: cobra.NoArgs,
+		&cobra.Command{Use: "ready", Short: "Readiness probe",
+			Annotations: apiAnno("GET", "/ready"), Args: cobra.NoArgs,
 			RunE: func(cmd *cobra.Command, _ []string) error { return runRender(cmd, "GET", "/ready", nil) }},
-		&cobra.Command{Use: "version", Short: "Server build version", Args: cobra.NoArgs,
+		&cobra.Command{Use: "version", Short: "Server build version",
+			Annotations: apiAnno("GET", "/version"), Args: cobra.NoArgs,
 			RunE: func(cmd *cobra.Command, _ []string) error { return runRender(cmd, "GET", "/version", nil) }},
-		&cobra.Command{Use: "setup-status", Short: "First-run setup status", Args: cobra.NoArgs,
+		&cobra.Command{Use: "setup-status", Short: "First-run setup status",
+			Annotations: apiAnno("GET", "/config/setup"), Args: cobra.NoArgs,
 			RunE: func(cmd *cobra.Command, _ []string) error { return runRender(cmd, "GET", "/config/setup", nil) }},
-		&cobra.Command{Use: "browse <path>", Short: "Browse a local filesystem path", Args: cobra.ExactArgs(1),
+		&cobra.Command{Use: "browse <path>", Short: "Browse a local filesystem path",
+			Annotations: apiAnno("GET", "/browse"), Args: cobra.ExactArgs(1),
 			RunE: pathQuery("/browse")},
-		&cobra.Command{Use: "git-info <path>", Short: "Inspect a local git repository", Args: cobra.ExactArgs(1),
+		&cobra.Command{Use: "git-info <path>", Short: "Inspect a local git repository",
+			Annotations: apiAnno("GET", "/git-info"), Args: cobra.ExactArgs(1),
 			RunE: pathQuery("/git-info")},
 	)
 	return cmd

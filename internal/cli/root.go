@@ -137,6 +137,19 @@ func runRender(cmd *cobra.Command, method, path string, body any) error {
 // loop, whose API subcommands are attached to the existing local commands
 // via AddScanSubcommands and AddLoopSubcommands. The caller (cmd/wolf) adds
 // these to the root.
+// APICommandTree returns every command that drives the HTTP API. The local
+// `scan`/`loop` parents (whose one-shot behavior lives in package main) are
+// synthesized here with their API subcommands attached, so the full
+// API-command surface is assembled in one place — used by
+// TestCLICoversEveryEndpoint to check coverage against the real CLI.
+func APICommandTree() []*cobra.Command {
+	scan := &cobra.Command{Use: "scan", Short: "Scans"}
+	AddScanSubcommands(scan)
+	loop := &cobra.Command{Use: "loop", Short: "Loops"}
+	AddLoopSubcommands(loop)
+	return append([]*cobra.Command{scan, loop}, NewCommandGroups()...)
+}
+
 func NewCommandGroups() []*cobra.Command {
 	return []*cobra.Command{
 		newConfigCmd(),
@@ -146,6 +159,7 @@ func NewCommandGroups() []*cobra.Command {
 		newCollectionCmd(),
 		newBaselineCmd(),
 		newCompareCmd(),
+		newFleetCmd(),
 		newFindingCmd(),
 		newSarifCmd(),
 		newSuppressCmd(),
