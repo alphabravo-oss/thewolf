@@ -120,6 +120,17 @@ func NewServer(store db.Store, addr string) *Server {
 	auth.SetSessionResolver(makeSessionResolver(store))
 	tokenLimiter := middleware.TokenRateLimiter()
 	auditRecorder := makeAuditRecorder(store)
+	// Let handlers emit explicit audit events (e.g. login success/failure on the
+	// public auth group, which the mutation middleware never sees). Non-blocking.
+	routes.AuditSink = func(e models.AuditLogEntry) {
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := store.AppendAuditLog(ctx, &e); err != nil {
+				wolflog.Warn().Err(err).Msg("audit log append failed")
+			}
+		}()
+	}
 
 	// Mount the versioned API. All routes live under /api/v1; /api/* is a
 	// deprecating redirect alias kept for one release.
@@ -564,6 +575,11 @@ func makeAuditRecorder(store db.Store) func(middleware.AuditEntry) {
 			Path:       e.Path,
 			ResourceID: e.ResourceID,
 			StatusCode: e.StatusCode,
+			EventType:  e.EventType,
+			Category:   e.Category,
+			Severity:   e.Severity,
+			IP:         e.IP,
+			UserAgent:  e.UserAgent,
 			CreatedAt:  time.Now().UTC(),
 		})
 		if err != nil {

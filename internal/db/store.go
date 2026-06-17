@@ -44,12 +44,14 @@ type FindingsAggregateRow struct {
 
 // AuditQuery filters, sorts, and paginates the audit log.
 type AuditQuery struct {
-	Search string // case-insensitive substring on path / action / method
-	Method string // exact HTTP method filter (empty = all)
-	SortBy string // "time" (default) | "status"
-	Desc   bool   // sort descending (newest / highest first)
-	Limit  int    // page size (1..1000; defaults applied in the store)
-	Offset int    // rows to skip
+	Search   string // case-insensitive substring on path / action / method / event
+	Method   string // exact HTTP method filter (empty = all)
+	Category string // exact category filter (empty = all)
+	Severity string // exact severity filter (empty = all)
+	SortBy   string // "time" (default) | "status"
+	Desc     bool   // sort descending (newest / highest first)
+	Limit    int    // page size (1..1000; defaults applied in the store)
+	Offset   int    // rows to skip
 }
 
 // Store defines the interface for all database operations.

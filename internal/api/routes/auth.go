@@ -169,12 +169,14 @@ func Login(w http.ResponseWriter, r *http.Request) {
 
 	user, err := h.Store.GetUserByEmail(r.Context(), req.Email)
 	if err != nil {
+		RecordAuthEvent(r, "", "auth.login.failed", "warning", http.StatusUnauthorized)
 		response.WriteError(w, http.StatusUnauthorized, "unauthorized", "invalid email or password")
 		return
 	}
 
 	ok, err := auth.VerifyPassword(req.Password, user.PasswordHash)
 	if err != nil || !ok {
+		RecordAuthEvent(r, user.ID, "auth.login.failed", "warning", http.StatusUnauthorized)
 		response.WriteError(w, http.StatusUnauthorized, "unauthorized", "invalid email or password")
 		return
 	}
@@ -206,6 +208,7 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to create session")
 		return
 	}
+	RecordAuthEvent(r, user.ID, "auth.login", "info", http.StatusOK)
 
 	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{
 		Data: map[string]interface{}{

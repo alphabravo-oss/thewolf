@@ -39,12 +39,20 @@ func (s *SQLiteStore) QueryAuditLog(ctx context.Context, q AuditQuery) ([]models
 	var args []any
 	if term := strings.TrimSpace(q.Search); term != "" {
 		like := "%" + strings.ToLower(term) + "%"
-		conds = append(conds, "(LOWER(path) LIKE ? OR LOWER(action) LIKE ? OR LOWER(method) LIKE ?)")
-		args = append(args, like, like, like)
+		conds = append(conds, "(LOWER(path) LIKE ? OR LOWER(action) LIKE ? OR LOWER(method) LIKE ? OR LOWER(event_type) LIKE ?)")
+		args = append(args, like, like, like, like)
 	}
 	if q.Method != "" {
 		conds = append(conds, "method = ?")
 		args = append(args, strings.ToUpper(q.Method))
+	}
+	if q.Category != "" {
+		conds = append(conds, "category = ?")
+		args = append(args, q.Category)
+	}
+	if q.Severity != "" {
+		conds = append(conds, "severity = ?")
+		args = append(args, q.Severity)
 	}
 	where := ""
 	if len(conds) > 0 {
@@ -72,11 +80,17 @@ func (s *PostgresStore) QueryAuditLog(ctx context.Context, q AuditQuery) ([]mode
 	}
 	if term := strings.TrimSpace(q.Search); term != "" {
 		like := "%" + strings.ToLower(term) + "%"
-		conds = append(conds, fmt.Sprintf("(LOWER(path) LIKE %s OR LOWER(action) LIKE %s OR LOWER(method) LIKE %s)",
-			ph(like), ph(like), ph(like)))
+		conds = append(conds, fmt.Sprintf("(LOWER(path) LIKE %s OR LOWER(action) LIKE %s OR LOWER(method) LIKE %s OR LOWER(event_type) LIKE %s)",
+			ph(like), ph(like), ph(like), ph(like)))
 	}
 	if q.Method != "" {
 		conds = append(conds, "method = "+ph(strings.ToUpper(q.Method)))
+	}
+	if q.Category != "" {
+		conds = append(conds, "category = "+ph(q.Category))
+	}
+	if q.Severity != "" {
+		conds = append(conds, "severity = "+ph(q.Severity))
 	}
 	where := ""
 	if len(conds) > 0 {

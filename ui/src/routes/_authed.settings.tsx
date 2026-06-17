@@ -379,21 +379,52 @@ interface AuditEntry {
   action: string;
   status_code: number;
   created_at: string;
+  event_type?: string;
+  category?: string;
+  severity?: string;
+  ip?: string;
 }
 
-const AUDIT_METHODS = ["", "GET", "POST", "PUT", "DELETE"];
+const AUDIT_METHODS = ["", "POST", "PUT", "DELETE"];
+const AUDIT_CATEGORIES = [
+  "",
+  "authentication",
+  "authorization",
+  "configuration",
+  "secrets",
+  "data",
+  "system",
+];
+const AUDIT_SEVERITIES = ["", "info", "warning", "critical"];
 const AUDIT_PER_PAGE = 25;
+
+function SeverityBadge({ severity }: { severity?: string }) {
+  if (!severity) return <span className="text-muted-foreground/50">—</span>;
+  const cls =
+    severity === "critical"
+      ? "bg-red-500/15 text-red-300 border-red-500/30"
+      : severity === "warning"
+        ? "bg-amber-500/15 text-amber-400 border-amber-500/30"
+        : "bg-muted/40 text-muted-foreground border-border/40";
+  return (
+    <span className={"rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide border " + cls}>
+      {severity}
+    </span>
+  );
+}
 
 function AuditTab() {
   const ownerOf = useOwnerLookup();
   const [search, setSearch] = useState("");
   const [method, setMethod] = useState("");
+  const [category, setCategory] = useState("");
+  const [severity, setSeverity] = useState("");
   const [sort, setSort] = useState<"time" | "status">("time");
   const [order, setOrder] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(1);
 
   const q = useQuery({
-    queryKey: ["audit-log", search, method, sort, order, page],
+    queryKey: ["audit-log", search, method, category, severity, sort, order, page],
     queryFn: async () => {
       const params = new URLSearchParams({
         page: String(page),
@@ -403,6 +434,8 @@ function AuditTab() {
       });
       if (search.trim()) params.set("q", search.trim());
       if (method) params.set("method", method);
+      if (category) params.set("category", category);
+      if (severity) params.set("severity", severity);
       const res = await api.get<AuditEntry[]>(`/audit-log?${params.toString()}`);
       return { entries: res.data ?? [], total: res.meta?.total ?? 0 };
     },
@@ -452,6 +485,28 @@ function AuditTab() {
           />
         </div>
         <select
+          value={category}
+          onChange={(e) => onFilter(() => setCategory(e.target.value))}
+          className="h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm capitalize"
+        >
+          {AUDIT_CATEGORIES.map((c) => (
+            <option key={c} value={c}>
+              {c || "All categories"}
+            </option>
+          ))}
+        </select>
+        <select
+          value={severity}
+          onChange={(e) => onFilter(() => setSeverity(e.target.value))}
+          className="h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm capitalize"
+        >
+          {AUDIT_SEVERITIES.map((sv) => (
+            <option key={sv} value={sv}>
+              {sv || "All severities"}
+            </option>
+          ))}
+        </select>
+        <select
           value={method}
           onChange={(e) => onFilter(() => setMethod(e.target.value))}
           className="h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm"
@@ -478,8 +533,11 @@ function AuditTab() {
                     When {sortMark("time")}
                   </button>
                 </th>
+                <th className="text-left px-4 py-2">Severity</th>
+                <th className="text-left px-4 py-2">Event</th>
+                <th className="text-left px-4 py-2">Category</th>
                 <th className="text-left px-4 py-2">User</th>
-                <th className="text-left px-4 py-2">Action</th>
+                <th className="text-left px-4 py-2">Source</th>
                 <th className="text-left px-4 py-2">Request</th>
                 <th className="text-right px-4 py-2">
                   <button type="button" onClick={() => toggleSort("status")} className="hover:text-foreground">
@@ -490,12 +548,17 @@ function AuditTab() {
             </thead>
             <tbody>
               {entries.map((e) => (
-                <tr key={e.id} className="border-t border-border/20">
+                <tr key={e.id} className="border-t border-border/20 align-top">
                   <td className="px-4 py-2 text-xs text-muted-foreground whitespace-nowrap">
                     {new Date(e.created_at).toLocaleString()}
                   </td>
+                  <td className="px-4 py-2">
+                    <SeverityBadge severity={e.severity} />
+                  </td>
+                  <td className="px-4 py-2 font-mono text-xs">{e.event_type || e.action}</td>
+                  <td className="px-4 py-2 text-xs text-muted-foreground capitalize">{e.category || "—"}</td>
                   <td className="px-4 py-2 text-xs">{ownerOf(e.user_id)}</td>
-                  <td className="px-4 py-2 text-xs">{e.action}</td>
+                  <td className="px-4 py-2 font-mono text-xs text-muted-foreground">{e.ip || "—"}</td>
                   <td className="px-4 py-2 font-mono text-xs text-muted-foreground">
                     {e.method} {e.path}
                   </td>

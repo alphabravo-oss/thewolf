@@ -22,13 +22,20 @@ type APIToken struct {
 // AuditLogEntry records a single mutating API request. TokenID is nil when
 // the request was authenticated with a JWT (the UI) rather than an API token.
 type AuditLogEntry struct {
-	ID         string    `json:"id" db:"id"`
-	TokenID    *string   `json:"token_id,omitempty" db:"token_id"`
-	UserID     string    `json:"user_id" db:"user_id"`
-	Action     string    `json:"action" db:"action"`
-	Method     string    `json:"method" db:"method"`
-	Path       string    `json:"path" db:"path"`
-	ResourceID string    `json:"resource_id,omitempty" db:"resource_id"`
-	StatusCode int       `json:"status_code" db:"status_code"`
-	CreatedAt  time.Time `json:"created_at" db:"created_at"`
+	ID         string  `json:"id" db:"id"`
+	TokenID    *string `json:"token_id,omitempty" db:"token_id"`
+	UserID     string  `json:"user_id" db:"user_id"`
+	Action     string  `json:"action" db:"action"`
+	Method     string  `json:"method" db:"method"`
+	Path       string  `json:"path" db:"path"`
+	ResourceID string  `json:"resource_id,omitempty" db:"resource_id"`
+	StatusCode int     `json:"status_code" db:"status_code"`
+	// Classification (enterprise audit): a semantic event type, its category
+	// and severity, plus request context. Default '' for rows predating this.
+	EventType string    `json:"event_type,omitempty" db:"event_type"`
+	Category  string    `json:"category,omitempty" db:"category"`
+	Severity  string    `json:"severity,omitempty" db:"severity"`
+	IP        string    `json:"ip,omitempty" db:"ip"`
+	UserAgent string    `json:"user_agent,omitempty" db:"user_agent"`
+	CreatedAt time.Time `json:"created_at" db:"created_at"`
 }

@@ -78,8 +78,8 @@ func (s *SQLiteStore) AppendAuditLog(ctx context.Context, e *models.AuditLogEntr
 		e.CreatedAt = time.Now().UTC()
 	}
 	_, err := s.db.NamedExecContext(ctx,
-		`INSERT INTO audit_log (id, token_id, user_id, action, method, path, resource_id, status_code, created_at)
-		 VALUES (:id, :token_id, :user_id, :action, :method, :path, :resource_id, :status_code, :created_at)`, e)
+		`INSERT INTO audit_log (id, token_id, user_id, action, method, path, resource_id, status_code, event_type, category, severity, ip, user_agent, created_at)
+		 VALUES (:id, :token_id, :user_id, :action, :method, :path, :resource_id, :status_code, :event_type, :category, :severity, :ip, :user_agent, :created_at)`, e)
 	return err
 }
 

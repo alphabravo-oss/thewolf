@@ -188,12 +188,14 @@ func ListAuditLog(w http.ResponseWriter, r *http.Request) {
 	desc := q.Get("order") != "asc"
 
 	entries, total, err := h.Store.QueryAuditLog(r.Context(), db.AuditQuery{
-		Search: q.Get("q"),
-		Method: q.Get("method"),
-		SortBy: sortBy,
-		Desc:   desc,
-		Limit:  perPage,
-		Offset: (page - 1) * perPage,
+		Search:   q.Get("q"),
+		Method:   q.Get("method"),
+		Category: q.Get("category"),
+		Severity: q.Get("severity"),
+		SortBy:   sortBy,
+		Desc:     desc,
+		Limit:    perPage,
+		Offset:   (page - 1) * perPage,
 	})
 	if err != nil {
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to list audit log")

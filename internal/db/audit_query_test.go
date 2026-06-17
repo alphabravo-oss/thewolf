@@ -31,13 +31,27 @@ func TestQueryAuditLog(t *testing.T) {
 	}
 	base := time.Now().UTC().Add(-time.Hour)
 	for i, e := range seed {
+		// Classify the POSTs as security/critical so the filter test has data.
+		cat, sev := "data", "info"
+		if e.method == "POST" {
+			cat, sev = "security", "critical"
+		}
 		if err := store.AppendAuditLog(ctx, &models.AuditLogEntry{
 			ID: uuid.New().String(), UserID: "u", Action: "x",
 			Method: e.method, Path: e.path, StatusCode: e.status,
+			Category: cat, Severity: sev,
 			CreatedAt: base.Add(time.Duration(i) * time.Minute),
 		}); err != nil {
 			t.Fatalf("append %d: %v", i, err)
 		}
+	}
+
+	// Category + severity filters.
+	if _, total, _ := store.QueryAuditLog(ctx, AuditQuery{Category: "security", Limit: 50}); total != 2 {
+		t.Errorf("category=security: total=%d, want 2", total)
+	}
+	if _, total, _ := store.QueryAuditLog(ctx, AuditQuery{Severity: "critical", Method: "POST", Limit: 50}); total != 2 {
+		t.Errorf("severity=critical+POST: total=%d, want 2", total)
 	}
 
 	// Search by path substring.

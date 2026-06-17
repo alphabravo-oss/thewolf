@@ -10,7 +10,7 @@ func TestIsLocalOnlyImage(t *testing.T) {
 		"alphabravodevops/wolf-scanners:2.0.0":        false,
 		"alphabravodevops/wolf-scanners-jvm:2.0.0":    false,
 		"alphabravodevops/wolf-scanners-rust:2.0.0":   false,
-		"":                                            false,
+		"": false,
 	}
 	for ref, want := range cases {
 		if got := IsLocalOnlyImage(ref); got != want {

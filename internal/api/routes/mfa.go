@@ -233,6 +233,7 @@ func MFALogin(w http.ResponseWriter, r *http.Request) {
 
 	ok, consumedRecovery, newRecoveryJSON := verifyMFACode(user, req.Code)
 	if !ok {
+		RecordAuthEvent(r, user.ID, "auth.login.failed", "warning", http.StatusUnauthorized)
 		response.WriteError(w, http.StatusUnauthorized, "invalid_code", "that code is not valid")
 		return
 	}
@@ -254,6 +255,7 @@ func MFALogin(w http.ResponseWriter, r *http.Request) {
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to create session")
 		return
 	}
+	RecordAuthEvent(r, user.ID, "auth.login", "info", http.StatusOK)
 	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{
 		Data: map[string]interface{}{
 			"user":          user,

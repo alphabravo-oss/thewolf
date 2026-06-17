@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -17,6 +18,27 @@ type AuditEntry struct {
 	Action     string
 	ResourceID string
 	StatusCode int
+	EventType  string
+	Category   string
+	Severity   string
+	IP         string
+	UserAgent  string
+}
+
+// ClientIP extracts the best-guess source address: the first X-Forwarded-For
+// hop (when behind the bundled proxy) else the request's remote host.
+func ClientIP(r *http.Request) string {
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		if i := strings.IndexByte(xff, ','); i >= 0 {
+			return strings.TrimSpace(xff[:i])
+		}
+		return strings.TrimSpace(xff)
+	}
+	host := r.RemoteAddr
+	if i := strings.LastIndexByte(host, ':'); i >= 0 {
+		host = host[:i]
+	}
+	return host
 }
 
 // Audit returns middleware that records mutating (POST/PUT/PATCH/DELETE)
@@ -41,6 +63,7 @@ func Audit(record func(AuditEntry)) func(http.Handler) http.Handler {
 			if info == nil || info.Claims == nil {
 				return
 			}
+			event, category, severity := Classify(r.Method, r.URL.Path)
 			entry := AuditEntry{
 				TokenID:    info.TokenID,
 				UserID:     info.Claims.UserID,
@@ -49,6 +72,11 @@ func Audit(record func(AuditEntry)) func(http.Handler) http.Handler {
 				Action:     actionForMethod(r.Method),
 				ResourceID: chi.URLParam(r, "id"),
 				StatusCode: sr.status,
+				EventType:  event,
+				Category:   category,
+				Severity:   severity,
+				IP:         ClientIP(r),
+				UserAgent:  r.UserAgent(),
 			}
 			go record(entry)
 		})
