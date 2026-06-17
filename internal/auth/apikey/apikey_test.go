@@ -72,6 +72,20 @@ func TestParseScopesValidatesAndExpandsAliases(t *testing.T) {
 		t.Error("full alias must expand to every scope")
 	}
 
+	// read-write expands to every read+write scope but NOT admin.
+	rw, err := ParseScopes([]string{"read-write"})
+	if err != nil {
+		t.Fatalf("read-write alias: %v", err)
+	}
+	if !rw.Has(ScopeWriteRepos) || !rw.Has(ScopeReadScans) {
+		t.Error("read-write must grant read and write scopes")
+	}
+	for _, s := range rw {
+		if s == ScopeAdmin {
+			t.Error("read-write must not grant admin")
+		}
+	}
+
 	// Concrete scopes, deduplicated.
 	cs, err := ParseScopes([]string{"read:scans", "read:scans", "write:scans"})
 	if err != nil {

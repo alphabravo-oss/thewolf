@@ -107,6 +107,13 @@ func ParseScopes(raw []string) (ScopeSet, error) {
 					add(sc)
 				}
 			}
+		case "read-write", "readwrite":
+			// Every read + write scope, but NOT the admin super-scope.
+			for _, sc := range AllScopes {
+				if sc != ScopeAdmin {
+					add(sc)
+				}
+			}
 		case "full", "all":
 			for _, sc := range AllScopes {
 				add(sc)

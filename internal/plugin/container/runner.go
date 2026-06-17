@@ -98,6 +98,12 @@ func CommandContext(ctx context.Context, cfg *Config, opts Options, tool string,
 		return scannerFailureCommand(ctx, fmt.Sprintf("scanner image for tool %q is empty", tool))
 	}
 	if !scannerImageReady(ctx, cfg, image) {
+		if IsLocalOnlyImage(image) {
+			return scannerFailureCommand(ctx, fmt.Sprintf(
+				"scanner image for tool %q is local-build-only by license and not present: %s (build it locally with `make scanners-build-codeql`; it is never pulled from a registry)",
+				tool, image,
+			))
+		}
 		return scannerFailureCommand(ctx, fmt.Sprintf(
 			"scanner image for tool %q is not present locally: %s (pull it with `docker pull %s` or `wolf scanner pull-image %s`)",
 			tool, image, image, image,

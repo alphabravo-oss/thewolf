@@ -12,7 +12,12 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/alphabravocompany/thewolf/scanners"
 )
+
+// ManifestEnvOverride lets operators point wolf at a custom tools manifest.
+const ManifestEnvOverride = "WOLF_SCANNER_MANIFEST"
 
 const (
 	TierDefault  = "default"
@@ -88,11 +93,17 @@ func LoadFile(path string) (*Manifest, error) {
 	if err != nil {
 		return nil, err
 	}
+	return LoadBytes(data, path)
+}
+
+// LoadBytes decodes and validates a manifest from raw YAML. source is used only
+// in error messages (a file path or a label like "embedded").
+func LoadBytes(data []byte, source string) (*Manifest, error) {
 	var m Manifest
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true)
 	if err := dec.Decode(&m); err != nil {
-		return nil, fmt.Errorf("decode scanner manifest %s: %w", path, err)
+		return nil, fmt.Errorf("decode scanner manifest %s: %w", source, err)
 	}
 	if err := m.Validate(); err != nil {
 		return nil, err
@@ -100,12 +111,22 @@ func LoadFile(path string) (*Manifest, error) {
 	return &m, nil
 }
 
+// LoadDefault resolves the scanner manifest from, in order:
+//  1. WOLF_SCANNER_MANIFEST, if set (operator override);
+//  2. scanners/tools.yaml in the repo checkout, if we're running inside one
+//     (dev convenience — edits apply without recompiling the embedded copy);
+//  3. the copy embedded in the binary (always present — this is what makes the
+//     container image and `go install`-ed binaries work, where no repo exists).
 func LoadDefault() (*Manifest, error) {
-	root, err := FindRepoRoot("")
-	if err != nil {
-		return nil, err
+	if p := strings.TrimSpace(os.Getenv(ManifestEnvOverride)); p != "" {
+		return LoadFile(p)
 	}
-	return LoadFile(filepath.Join(root, "scanners", "tools.yaml"))
+	if root, err := FindRepoRoot(""); err == nil {
+		if m, err := LoadFile(filepath.Join(root, "scanners", "tools.yaml")); err == nil {
+			return m, nil
+		}
+	}
+	return LoadBytes(scanners.ToolsYAML, "embedded scanners/tools.yaml")
 }
 
 func FindRepoRoot(start string) (string, error) {

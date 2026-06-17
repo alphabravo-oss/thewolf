@@ -303,6 +303,14 @@ func MFAEnrollmentGuard(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
+		// API tokens are a separate credential class: they never go through the
+		// interactive login that MFA protects, and they're already scoped +
+		// revocable. Forcing TOTP enrollment before a machine token works would
+		// break automation, so tokens are exempt — MFA is a UI-session concern.
+		if auth.TokenIDFromContext(r.Context()) != "" {
+			next.ServeHTTP(w, r)
+			return
+		}
 		for _, suffix := range mfaEnrollmentAllowlist {
 			if strings.HasSuffix(r.URL.Path, suffix) {
 				next.ServeHTTP(w, r)

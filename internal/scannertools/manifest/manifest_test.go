@@ -8,7 +8,25 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/scannertools/manifest"
 	"github.com/alphabravocompany/thewolf/internal/scannertools/validate"
 	_ "github.com/alphabravocompany/thewolf/plugins"
+	"github.com/alphabravocompany/thewolf/scanners"
 )
+
+// TestEmbeddedManifestIsValid guards the packaging fix: scanners/tools.yaml is
+// embedded in the binary so /scanners/tools works in the container (where no
+// repo checkout exists). If the embed breaks or the YAML goes invalid, this
+// fails at test time instead of 500-ing at runtime.
+func TestEmbeddedManifestIsValid(t *testing.T) {
+	if len(scanners.ToolsYAML) == 0 {
+		t.Fatal("embedded tools.yaml is empty")
+	}
+	m, err := manifest.LoadBytes(scanners.ToolsYAML, "embedded")
+	if err != nil {
+		t.Fatalf("embedded manifest failed to load: %v", err)
+	}
+	if len(m.Tools) == 0 {
+		t.Fatal("embedded manifest has no tools")
+	}
+}
 
 func TestDefaultManifestLoads(t *testing.T) {
 	m := loadManifest(t)
