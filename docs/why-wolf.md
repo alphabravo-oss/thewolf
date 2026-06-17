@@ -92,8 +92,9 @@ The deeper issue is that most tooling treats a single scan of a single repositor
 - **Quality gates.** Pass or fail policy enforced on every scan, so risky code stops at the gate instead of shipping.
 - **Fleet posture.** Risk, attention lists, and trends across every repository you own.
 - **Automation-first.** Full API and command line parity, scoped access tokens, versioned endpoints, and offline API documentation.
+- **Governed access.** Role-based access control, two-factor authentication, and scoped, revocable API keys.
 - **Flexible sources.** Scan local paths, GitHub repositories public and private, and remote hosts over SSH.
-- **Evidence built in.** Durable scan records, SARIF export, manifests, and a complete audit log.
+- **Evidence built in.** Durable scan records, SARIF export, manifests, and a classified, searchable audit log.
 - **Private by design.** Self-hosted, air-gap capable, with optional AI features off by default.
 
 ---
@@ -278,18 +279,20 @@ Each pillar below is written to stand alone. Every one includes what it is, the 
 
 ### Identity, access control, and audit
 
-**What it is.** The Wolf governs who can do what, and keeps a record of what was done. Access is controlled, sessions are hardened, and activity is logged.
+**What it is.** The Wolf governs who can do what, proves who they are, and keeps a classified record of what was done. Access is role-based, sign-in can require a second factor, sessions are hardened, and every change is logged and classified.
 
 **Key features.**
 
-- Scoped access tokens with fine-grained verb and resource permissions.
-- Hardened browser sessions and an administrator bootstrap for first setup.
-- A complete audit log of activity across the platform.
+- Role-based access control with administrator and standard-user roles, and per-user data isolation, so people manage only the repositories, scans, secrets, and credentials they own.
+- Two-factor authentication (TOTP authenticator apps), self-service for each user or required organization-wide, with one-time recovery codes and an administrator reset for lost devices.
+- Scoped, revocable API keys with fine-grained verb-and-resource permissions and optional expirations, for the CLI, CI, and agents — minted once, stored only as a hash.
+- Hardened browser sessions, an administrator bootstrap for first setup, and a clean split between a personal account area and an administrators-only settings area with a global oversight view of every user's keys, secrets, and nodes.
+- A classified, security-aware audit log: every mutating action and every login recorded with a semantic event type, a category, a severity, the actor, the source address, and the result — searchable, filterable, and paginated.
 - Versioned, consistent access controls across the API, CLI, and UI.
 
-**Why it matters.** A platform that touches source code and can change it must be governed and accountable. Scoped access and a full audit trail turn "who ran that, and when?" from an investigation into a query.
+**Why it matters.** A platform that touches source code and can change it must be governed and accountable. Roles and per-user isolation enforce least privilege, two-factor auth hardens the front door, and a classified audit trail turns "who disabled MFA, changed a role, or touched that secret, and from where?" from an investigation into a single filtered query.
 
-**How it helps teams.** Security teams enforce least privilege. Compliance teams get an attributable record. Administrators hand out exactly the access each user or automation should have, and nothing more.
+**How it helps teams.** Security teams enforce least privilege and require strong authentication. Compliance teams get an attributable, classified record they can filter by category and severity. Administrators hand out exactly the access each user or automation should have, and nothing more, and keep oversight of the whole estate without ever reading another user's secret material.
 
 ### Secrets and credential management
 
@@ -348,7 +351,7 @@ Each pillar below is written to stand alone. Every one includes what it is, the 
 
 **For engineering leadership.** Get one honest answer about risk across the whole portfolio, and a trend that shows whether it is improving. Close the remediation gap that keeps findings open for months. Reduce the cost and incident risk that come from unscanned layers and unfixed issues.
 
-**For compliance and risk teams.** Produce evidence on demand with durable scan records, SARIF export, and a complete audit log. Rely on scoped access and accountability. Enforce policy baselines across the fleet rather than per repository.
+**For compliance and risk teams.** Produce evidence on demand with durable scan records, SARIF export, and a classified, filterable audit log. Rely on role-based access, two-factor authentication, and attributable accountability. Enforce policy baselines across the fleet rather than per repository.
 
 **For regulated and air-gapped environments.** Run a complete scanning and remediation engine entirely inside your boundary, with self-built scanner images and AI off by default. Meet the requirement that code never leaves, without giving up coverage or remediation.
 
@@ -412,7 +415,7 @@ These are the outcomes to lead with when the audience cares about results rather
 - **Real coverage, no gaps.** One engine across every language and layer removes the quiet blind spots that single-vendor tools leave.
 - **Lower tooling cost and overhead.** One engine replaces a stack of overlapping scanners and dashboards.
 - **Portfolio-level assurance.** Fleet posture and trends give leadership one honest, improving picture of risk.
-- **Audit readiness.** Durable records, SARIF, and a full audit log make evidence a query rather than a project.
+- **Audit readiness.** Durable records, SARIF, and a classified audit log — filterable by category and severity — make evidence a query rather than a project.
 - **Uncompromised privacy.** Self-hosted and air-gap capable, with AI off by default, so code never has to leave the boundary.
 
 ---
@@ -441,7 +444,7 @@ No. Every AI feature is optional and off by default. The core scanning, gating, 
 Yes. Build the scanner images yourself, run the Wolf disconnected with AI off, and scan and remediate entirely inside the network.
 
 **How does it handle access control?**
-Through scoped access tokens with verb and resource permissions, hardened sessions, an administrator bootstrap, and a complete audit log, applied consistently across the API, CLI, and UI.
+Through role-based access control with administrator and standard-user roles and per-user data isolation, optional two-factor authentication that can be required organization-wide, scoped and revocable API keys with verb-and-resource permissions, hardened sessions, and a classified, searchable audit log — applied consistently across the API, CLI, and UI.
 
 ---
 
