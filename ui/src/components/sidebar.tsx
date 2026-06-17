@@ -1,7 +1,7 @@
 // Sidebar nav. Astronomer-style: dense, grouped, with subtle active-state
 // glow. Responsive: collapses to a hamburger-triggered drawer on screens
 // narrower than `md` (768 px).
-import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
+import { Link, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
   LayoutDashboardIcon,
@@ -9,7 +9,6 @@ import {
   BugIcon,
   SettingsIcon,
   GaugeIcon,
-  LogOutIcon,
   MenuIcon,
   XIcon,
   WrenchIcon,
@@ -19,10 +18,9 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { WolfLogo } from "./wolf-logo";
-import { ThemeToggle } from "./theme-toggle";
-import { api, clearToken } from "@/lib/api";
+import { api } from "@/lib/api";
 import { useFlag } from "@/lib/flags";
-import { useIsAdmin, useMe, displayLabel } from "@/lib/me";
+import { useIsAdmin } from "@/lib/me";
 import { cn } from "@/lib/utils";
 
 type NavItem = {
@@ -74,7 +72,6 @@ export function Sidebar() {
   const pathname = useRouterState({
     select: (s) => s.location.pathname,
   });
-  const navigate = useNavigate();
   const primary = usePrimaryNav();
   // Settings is visible to everyone: regular users manage their own secrets +
   // SSH nodes there, while the admin-only tabs (general, users, scanners) are
@@ -93,22 +90,9 @@ export function Sidebar() {
 
   // Mobile drawer. Auto-closes on route change.
   const [mobileOpen, setMobileOpen] = useState(false);
-  const me = useMe();
   useEffect(() => {
     setMobileOpen(false);
   }, [pathname]);
-
-  async function handleLogout() {
-    // Best-effort server-side logout (clears server session if any);
-    // either way we drop the local cookie and redirect to /login.
-    try {
-      await api.post("/auth/logout");
-    } catch {
-      // server returned 401 or 500 — we still want to clear locally.
-    }
-    clearToken();
-    navigate({ to: "/login" });
-  }
 
   function isActive(to: string) {
     if (to === "/") return pathname === "/";
@@ -178,32 +162,9 @@ export function Sidebar() {
         </nav>
 
         <div className="px-3 py-3 border-t border-sidebar-border space-y-0.5">
-          {me.data && (
-            <Link
-              to="/settings"
-              search={{ tab: "account" }}
-              className="nav-item w-full flex items-center gap-2.5"
-              title="Account settings"
-            >
-              <span className="grid size-6 shrink-0 place-items-center rounded-full bg-sidebar-accent text-[0.65rem] font-semibold uppercase text-foreground">
-                {displayLabel(me.data).charAt(0)}
-              </span>
-              <span className="truncate text-sm">{displayLabel(me.data)}</span>
-            </Link>
-          )}
           {footerNav.map((item) => (
             <NavLink key={item.to} item={item} active={isActive(item.to)} />
           ))}
-          <ThemeToggle />
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="nav-item w-full text-left"
-            aria-label="Sign out"
-          >
-            <LogOutIcon />
-            <span className="truncate">Sign out</span>
-          </button>
 
           <div className="pt-2 mt-1 border-t border-sidebar-border flex items-center justify-between px-2 text-3xs text-faint">
             <span className="tabular-nums">

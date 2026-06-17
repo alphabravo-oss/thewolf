@@ -9,6 +9,8 @@ import { api } from "@/lib/api";
 import type { Scan } from "@/lib/types";
 import { Link } from "@tanstack/react-router";
 import { Input } from "@/components/ui/input";
+import { UserMenu } from "@/components/user-menu";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export function Topbar() {
   const crumbs = useBreadcrumbs();
@@ -82,6 +84,9 @@ export function Topbar() {
           </span>
         </Link>
       )}
+
+      <ThemeToggle compact />
+      <UserMenu />
     </header>
   );
 }
