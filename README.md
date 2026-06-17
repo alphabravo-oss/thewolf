@@ -7,6 +7,7 @@
 <p align="center">by <a href="https://alphabravo.io">AlphaBravo</a></p>
 
 <p align="center">
+  <img alt="Version" src="https://img.shields.io/badge/version-0.2.0-1f6feb?style=flat-square" />
   <img alt="Scanners" src="https://img.shields.io/badge/scanners-49-1f6feb?style=flat-square" />
   <img alt="Self-hosted" src="https://img.shields.io/badge/deployment-self--hosted-2ea043?style=flat-square" />
   <img alt="AI" src="https://img.shields.io/badge/AI-assisted%20remediation-8957e5?style=flat-square" />
@@ -158,7 +159,8 @@ The controls that turn scanning into a program.
 - **Faster mean-time-to-remediate** — prioritized findings plus AI that opens the fix PR.
 - **One pane of glass** — fleet-wide posture instead of a dozen disconnected dashboards.
 - **Lower tooling cost** — replace a stack of point products and per-seat SaaS with one self-hosted platform.
-- **Audit-ready evidence** — reproducible scans, full audit logs, and SARIF exports out of the box.
+- **Audit-ready evidence** — reproducible scans, a classified audit log, and SARIF exports out of the box.
+- **Secure by default** — role-based access, two-factor auth, scoped API keys, and HTTPS via the bundled proxy.
 - **No vendor lock-in** — your data, your infrastructure, standard formats, open scanners.
 
 ---
@@ -187,8 +189,11 @@ docker compose exec wolf wolf scan --repo /repos/myproject
 Prefer the API or CI? Everything the console does is one call away:
 
 ```bash
-# Authenticate once, then drive the whole platform from the CLI
+# Authenticate once, then drive the whole platform from the CLI.
+# Mint a scoped key in the console (Account → API Keys) or:  wolf auth token create --name ci --scope read-write
 wolf config set-context prod --server https://wolf.internal --token wolf_…
+# (interactive alternative — prompts for a 2FA code when enabled)
+#   wolf auth login --server https://wolf.internal --email you@example.com
 
 wolf repo create --name acme --type github --path acme/payments
 SCAN=$(wolf scan create --repo <repo-id> -o json | jq -r .data.id)
@@ -322,8 +327,9 @@ The Wolf is designed to live inside your perimeter and your governance model.
 |---|---|
 | **Deployment** | Single Go binary or Docker Compose. Runs on your servers, your cloud, or fully air-gapped. |
 | **Data store** | SQLite for a team; **PostgreSQL** for scale and high availability. |
-| **Access control** | Session-based console auth + scoped, revocable API tokens (`verb:resource` + `admin`). |
-| **Audit** | Every mutating action recorded with actor, token, resource, and result. |
+| **Access control** | **Role-based** (admin / user) with per-user data isolation, **two-factor auth** (TOTP, optionally mandatory org-wide), console sessions, and scoped, revocable **API keys** (`verb:resource` + `admin`). See [`docs/authentication.md`](docs/authentication.md). |
+| **Audit** | A **classified, security-aware audit log** — semantic event type, category, severity, actor, source IP, and result — searchable and filterable. See [`docs/audit.md`](docs/audit.md). |
+| **HTTPS** | Run behind the bundled **Caddy** reverse proxy — automatic Let's Encrypt *or* bring-your-own cert — with an optional hardened Docker-socket proxy. See [`docs/deployment.md`](docs/deployment.md). |
 | **Secrets** | Encrypted at rest with a master key; GitHub, SSH, AI-provider, and registry credentials managed in-product. |
 | **Air-gapped** | Pre-load images and run with `pull_policy=Never`, or disable upstream images entirely and run everything from images you build and host yourself. |
 | **Supply chain** | Version-pinned, reproducible scanner images you can build, sign, and publish from the console to your own registry. |
