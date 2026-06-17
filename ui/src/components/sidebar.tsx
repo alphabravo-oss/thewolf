@@ -22,7 +22,7 @@ import { WolfLogo } from "./wolf-logo";
 import { ThemeToggle } from "./theme-toggle";
 import { api, clearToken } from "@/lib/api";
 import { useFlag } from "@/lib/flags";
-import { useIsAdmin } from "@/lib/me";
+import { useIsAdmin, useMe, displayLabel } from "@/lib/me";
 import { cn } from "@/lib/utils";
 
 type NavItem = {
@@ -93,6 +93,7 @@ export function Sidebar() {
 
   // Mobile drawer. Auto-closes on route change.
   const [mobileOpen, setMobileOpen] = useState(false);
+  const me = useMe();
   useEffect(() => {
     setMobileOpen(false);
   }, [pathname]);
@@ -177,6 +178,19 @@ export function Sidebar() {
         </nav>
 
         <div className="px-3 py-3 border-t border-sidebar-border space-y-0.5">
+          {me.data && (
+            <Link
+              to="/settings"
+              search={{ tab: "account" }}
+              className="nav-item w-full flex items-center gap-2.5"
+              title="Account settings"
+            >
+              <span className="grid size-6 shrink-0 place-items-center rounded-full bg-sidebar-accent text-[0.65rem] font-semibold uppercase text-foreground">
+                {displayLabel(me.data).charAt(0)}
+              </span>
+              <span className="truncate text-sm">{displayLabel(me.data)}</span>
+            </Link>
+          )}
           {footerNav.map((item) => (
             <NavLink key={item.to} item={item} active={isActive(item.to)} />
           ))}

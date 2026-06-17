@@ -8,6 +8,14 @@ export interface Me {
   id: string;
   email: string;
   role: string;
+  display_name?: string;
+}
+
+// displayLabel is the name to show for a user in the UI: their display name if
+// set, otherwise their email.
+export function displayLabel(me: { display_name?: string; email: string } | undefined): string {
+  if (!me) return "";
+  return me.display_name?.trim() || me.email;
 }
 
 export function useMe() {

@@ -182,6 +182,7 @@ func NewServer(store db.Store, addr string) *Server {
 			r.Route("/auth", func(r chi.Router) {
 				r.Post("/logout", routes.Logout)
 				r.Get("/me", routes.Me)
+				r.Put("/profile", routes.UpdateProfile)
 				r.Put("/password", routes.ChangePassword)
 				r.Get("/tokens", routes.ListAPITokens)
 				r.Post("/tokens", routes.CreateAPIToken)

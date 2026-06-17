@@ -21,9 +21,10 @@ import {
   ShieldIcon,
   Trash2Icon,
   UploadCloudIcon,
+  UserIcon,
   UsersIcon,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useMe } from "@/lib/me";
@@ -39,14 +40,15 @@ export const Route = createFileRoute("/_authed/settings")({
   validateSearch: (s: Record<string, unknown>) => ({
     tab:
       typeof s.tab === "string" &&
-      /^(general|security|apikeys|secrets|nodes|users|scanners)$/.test(s.tab)
+      /^(account|general|security|apikeys|secrets|nodes|users|scanners)$/.test(s.tab)
         ? (s.tab as TabKey)
-        : ("general" as TabKey),
+        : ("account" as TabKey),
   }),
   component: SettingsPage,
 });
 
 type TabKey =
+  | "account"
   | "general"
   | "security"
   | "apikeys"
@@ -55,9 +57,10 @@ type TabKey =
   | "users"
   | "scanners";
 
-// adminOnly tabs are hidden for regular users. Security, API Keys, Secrets +
-// Nodes are per-user, so everyone can manage their own.
+// adminOnly tabs are hidden for regular users. Account, Security, API Keys,
+// Secrets + Nodes are per-user, so everyone can manage their own.
 const TABS: { key: TabKey; label: string; Icon: typeof SettingsIcon; adminOnly?: boolean }[] = [
+  { key: "account", label: "Account", Icon: UserIcon },
   { key: "general", label: "General", Icon: SettingsIcon, adminOnly: true },
   { key: "security", label: "Security", Icon: LockIcon },
   { key: "apikeys", label: "API Keys", Icon: KeyRoundIcon },
@@ -105,6 +108,7 @@ function SettingsPage() {
         })}
       </nav>
 
+      {activeTab === "account" && <AccountTab />}
       {activeTab === "general" && isAdmin && <GeneralTab />}
       {activeTab === "security" && <SecurityTab />}
       {activeTab === "apikeys" && <ApiKeysTab />}
@@ -113,6 +117,194 @@ function SettingsPage() {
       {activeTab === "users" && isAdmin && <UsersTab />}
       {activeTab === "scanners" && isAdmin && <ScannersTab />}
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Account — per-user profile (display name, email, password) + links to the
+// other personal surfaces (API keys, two-factor).
+// ---------------------------------------------------------------------------
+
+function AccountTab() {
+  const qc = useQueryClient();
+  const navigate = useNavigate();
+  const me = useMe();
+
+  const [displayName, setDisplayName] = useState("");
+  const [email, setEmail] = useState("");
+  const [currentPw, setCurrentPw] = useState("");
+  // Seed the form from the loaded user (and re-sync after a saved change).
+  useEffect(() => {
+    if (me.data) {
+      setDisplayName(me.data.display_name ?? "");
+      setEmail(me.data.email);
+    }
+  }, [me.data]);
+  const emailChanged = !!me.data && email.trim().toLowerCase() !== me.data.email;
+
+  const [curPw, setCurPw] = useState("");
+  const [newPw, setNewPw] = useState("");
+  const [confirmPw, setConfirmPw] = useState("");
+
+  const profile = useMutation({
+    mutationFn: () =>
+      api.put("/auth/profile", {
+        display_name: displayName,
+        email,
+        current_password: currentPw,
+      }),
+    onSuccess: () => {
+      toast.success("Profile saved");
+      setCurrentPw("");
+      qc.invalidateQueries({ queryKey: ["me"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Save failed"),
+  });
+  const password = useMutation({
+    mutationFn: () =>
+      api.put("/auth/password", { current_password: curPw, new_password: newPw }),
+    onSuccess: () => {
+      toast.success("Password updated");
+      setCurPw("");
+      setNewPw("");
+      setConfirmPw("");
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Update failed"),
+  });
+
+  if (me.isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  const pwMismatch = confirmPw.length > 0 && confirmPw !== newPw;
+
+  return (
+    <section className="space-y-4 max-w-xl">
+      {/* Profile */}
+      <div className="glass-card p-5 space-y-4">
+        <h3 className="text-sm font-medium">Profile</h3>
+        <label className="block space-y-1">
+          <span className="text-xs text-muted-foreground">Display name</span>
+          <input
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            placeholder="Shown in the UI instead of your email"
+            className="w-full h-9 px-3 rounded-md bg-muted/40 border border-border/40 text-sm"
+          />
+        </label>
+        <label className="block space-y-1">
+          <span className="text-xs text-muted-foreground">Email</span>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full h-9 px-3 rounded-md bg-muted/40 border border-border/40 text-sm"
+          />
+        </label>
+        {emailChanged && (
+          <label className="block space-y-1">
+            <span className="text-xs text-muted-foreground">
+              Current password <span className="text-amber-400">(required to change email)</span>
+            </span>
+            <input
+              type="password"
+              value={currentPw}
+              onChange={(e) => setCurrentPw(e.target.value)}
+              autoComplete="current-password"
+              className="w-full h-9 px-3 rounded-md bg-muted/40 border border-border/40 text-sm"
+            />
+          </label>
+        )}
+        <button
+          type="button"
+          onClick={() => profile.mutate()}
+          disabled={
+            profile.isPending ||
+            email.trim() === "" ||
+            (emailChanged && currentPw.length === 0)
+          }
+          className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
+        >
+          <CheckIcon className="size-4" />
+          {profile.isPending ? "Saving…" : "Save profile"}
+        </button>
+      </div>
+
+      {/* Password */}
+      <div className="glass-card p-5 space-y-4">
+        <h3 className="text-sm font-medium">Password</h3>
+        <div className="grid sm:grid-cols-3 gap-3">
+          <label className="block space-y-1">
+            <span className="text-xs text-muted-foreground">Current</span>
+            <input
+              type="password"
+              value={curPw}
+              onChange={(e) => setCurPw(e.target.value)}
+              autoComplete="current-password"
+              className="w-full h-9 px-3 rounded-md bg-muted/40 border border-border/40 text-sm"
+            />
+          </label>
+          <label className="block space-y-1">
+            <span className="text-xs text-muted-foreground">New</span>
+            <input
+              type="password"
+              value={newPw}
+              onChange={(e) => setNewPw(e.target.value)}
+              autoComplete="new-password"
+              minLength={12}
+              className="w-full h-9 px-3 rounded-md bg-muted/40 border border-border/40 text-sm"
+            />
+          </label>
+          <label className="block space-y-1">
+            <span className="text-xs text-muted-foreground">Confirm</span>
+            <input
+              type="password"
+              value={confirmPw}
+              onChange={(e) => setConfirmPw(e.target.value)}
+              autoComplete="new-password"
+              aria-invalid={pwMismatch}
+              className={
+                "w-full h-9 px-3 rounded-md bg-muted/40 border text-sm " +
+                (pwMismatch ? "border-red-500" : "border-border/40")
+              }
+            />
+          </label>
+        </div>
+        <p className="text-xs text-muted-foreground">At least 12 characters.</p>
+        <button
+          type="button"
+          onClick={() => password.mutate()}
+          disabled={
+            password.isPending ||
+            curPw.length === 0 ||
+            newPw.length < 12 ||
+            newPw !== confirmPw
+          }
+          className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
+        >
+          <CheckIcon className="size-4" />
+          {password.isPending ? "Updating…" : "Update password"}
+        </button>
+      </div>
+
+      {/* Links to the other personal surfaces. */}
+      <div className="glass-card p-5 space-y-2">
+        <h3 className="text-sm font-medium">More</h3>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => navigate({ to: "/settings", search: { tab: "apikeys" } })}
+            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border/40 text-sm hover:bg-muted/40"
+          >
+            <KeyRoundIcon className="size-4" /> API Keys
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate({ to: "/settings", search: { tab: "security" } })}
+            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border/40 text-sm hover:bg-muted/40"
+          >
+            <LockIcon className="size-4" /> Two-factor auth
+          </button>
+        </div>
+      </div>
+    </section>
   );
 }
 

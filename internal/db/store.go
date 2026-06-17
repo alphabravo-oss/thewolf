@@ -55,6 +55,7 @@ type Store interface {
 	GetUserByEmail(ctx context.Context, email string) (*models.User, error)
 	UpdateUser(ctx context.Context, user *models.User) error
 	UpdateUserMFA(ctx context.Context, user *models.User) error
+	UpdateUserProfile(ctx context.Context, user *models.User) error
 	ListUsers(ctx context.Context) ([]models.User, error)
 	DeleteUser(ctx context.Context, id string) error
 

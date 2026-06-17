@@ -182,6 +182,11 @@ func (s *PostgresStore) Migrate() error {
 			return err
 		}
 	}
+	if _, err := s.db.Exec(migration024SQL); err != nil {
+		if !strings.Contains(err.Error(), "already exists") && !strings.Contains(err.Error(), "duplicate column") {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -234,6 +239,15 @@ func (s *PostgresStore) UpdateUserMFA(ctx context.Context, user *models.User) er
 	user.UpdatedAt = time.Now().UTC()
 	_, err := s.db.NamedExecContext(ctx,
 		`UPDATE users SET totp_secret=:totp_secret, totp_enabled=:totp_enabled, totp_recovery_codes=:totp_recovery_codes, updated_at=:updated_at WHERE id=:id`, user)
+	return err
+}
+
+// UpdateUserProfile persists self-service profile fields (email + display name),
+// without touching role, password, or MFA.
+func (s *PostgresStore) UpdateUserProfile(ctx context.Context, user *models.User) error {
+	user.UpdatedAt = time.Now().UTC()
+	_, err := s.db.NamedExecContext(ctx,
+		`UPDATE users SET email=:email, display_name=:display_name, updated_at=:updated_at WHERE id=:id`, user)
 	return err
 }
 

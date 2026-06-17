@@ -16,6 +16,9 @@ type User struct {
 	Email        string `json:"email" db:"email"`
 	PasswordHash string `json:"-" db:"password_hash"`
 	Role         string `json:"role" db:"role"`
+	// DisplayName is an optional human-friendly name shown in the UI in place
+	// of the email. Empty falls back to the email.
+	DisplayName string `json:"display_name" db:"display_name"`
 	// TOTPSecret is the user's base32 TOTP secret, encrypted at rest with the
 	// master key. Empty until enrollment. Never serialized to clients.
 	TOTPSecret string `json:"-" db:"totp_secret"`

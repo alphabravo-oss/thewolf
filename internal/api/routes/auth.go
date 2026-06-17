@@ -377,3 +377,68 @@ func ChangePassword(w http.ResponseWriter, r *http.Request) {
 
 	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: map[string]string{"message": "password updated"}})
 }
+
+// updateProfileRequest carries self-service profile edits. Fields are pointers
+// so "not provided" is distinguishable from "set to empty". Changing the email
+// (the login identifier) requires re-entering the current password.
+type updateProfileRequest struct {
+	DisplayName     *string `json:"display_name"`
+	Email           *string `json:"email"`
+	CurrentPassword string  `json:"current_password"`
+}
+
+// UpdateProfile lets the caller change their own display name and email.
+// PUT /api/auth/profile
+func UpdateProfile(w http.ResponseWriter, r *http.Request) {
+	h := DefaultHandler
+	if h == nil {
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "handler not initialized")
+		return
+	}
+	claims := auth.GetUserFromContext(r.Context())
+	if claims == nil {
+		response.WriteError(w, http.StatusUnauthorized, "unauthorized", "not authenticated")
+		return
+	}
+	var req updateProfileRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.WriteError(w, http.StatusBadRequest, "bad_request", "invalid JSON body")
+		return
+	}
+	user, err := h.Store.GetUserByID(r.Context(), claims.UserID)
+	if err != nil {
+		response.WriteError(w, http.StatusNotFound, "not_found", "user not found")
+		return
+	}
+
+	if req.DisplayName != nil {
+		user.DisplayName = strings.TrimSpace(*req.DisplayName)
+	}
+
+	if req.Email != nil {
+		newEmail := strings.TrimSpace(strings.ToLower(*req.Email))
+		if newEmail != user.Email {
+			if newEmail == "" || !strings.Contains(newEmail, "@") {
+				response.WriteError(w, http.StatusBadRequest, "validation_error", "valid email is required")
+				return
+			}
+			// Email is the login identifier — require the current password.
+			ok, err := auth.VerifyPassword(req.CurrentPassword, user.PasswordHash)
+			if err != nil || !ok {
+				response.WriteError(w, http.StatusUnauthorized, "unauthorized", "current password is required to change email")
+				return
+			}
+			if existing, _ := h.Store.GetUserByEmail(r.Context(), newEmail); existing != nil && existing.ID != user.ID {
+				response.WriteError(w, http.StatusConflict, "conflict", "that email is already in use")
+				return
+			}
+			user.Email = newEmail
+		}
+	}
+
+	if err := h.Store.UpdateUserProfile(r.Context(), user); err != nil {
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to update profile")
+		return
+	}
+	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: user})
+}

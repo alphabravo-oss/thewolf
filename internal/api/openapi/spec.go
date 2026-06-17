@@ -43,6 +43,7 @@ func Endpoints() []Endpoint {
 		// Auth / session (authenticated).
 		{"POST", "/auth/logout", "auth", "Log out the current session", "self", "", false},
 		{"GET", "/auth/me", "auth", "Get the current identity", "self", "", false},
+		{"PUT", "/auth/profile", "auth", "Update the current user's display name / email", "self", "", false},
 		{"PUT", "/auth/password", "auth", "Change the current user's password", "self", "ChangePasswordRequest", false},
 
 		// Two-factor auth (authenticated, self-managed).
