@@ -458,7 +458,15 @@ func (s *PostgresStore) GetSecretByID(ctx context.Context, id string) (*models.S
 
 func (s *PostgresStore) ListSecretsByUser(ctx context.Context, userID string) ([]models.Secret, error) {
 	var secs []models.Secret
-	// No RBAC yet — all authenticated users see all secrets.
+	err := s.db.SelectContext(ctx, &secs,
+		"SELECT * FROM secrets WHERE user_id = $1 ORDER BY created_at DESC", userID)
+	return secs, err
+}
+
+// ListAllSecrets returns every user's secrets (admin oversight). Values stay
+// encrypted; the handler masks them and never exposes another user's plaintext.
+func (s *PostgresStore) ListAllSecrets(ctx context.Context) ([]models.Secret, error) {
+	var secs []models.Secret
 	err := s.db.SelectContext(ctx, &secs, "SELECT * FROM secrets ORDER BY created_at DESC")
 	return secs, err
 }

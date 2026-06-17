@@ -96,6 +96,7 @@ type Store interface {
 	CreateSecret(ctx context.Context, secret *models.Secret) error
 	GetSecretByID(ctx context.Context, id string) (*models.Secret, error)
 	ListSecretsByUser(ctx context.Context, userID string) ([]models.Secret, error)
+	ListAllSecrets(ctx context.Context) ([]models.Secret, error)
 	DeleteSecret(ctx context.Context, id string) error
 
 	// RepoMaps
@@ -224,6 +225,7 @@ type Store interface {
 	GetAPITokenByHash(ctx context.Context, hash string) (*models.APIToken, error)
 	GetAPITokenByID(ctx context.Context, id string) (*models.APIToken, error)
 	ListAPITokensByUser(ctx context.Context, userID string) ([]models.APIToken, error)
+	ListAllAPITokens(ctx context.Context) ([]models.APIToken, error)
 	RevokeAPIToken(ctx context.Context, id string) error
 	TouchAPIToken(ctx context.Context, id string) error
 

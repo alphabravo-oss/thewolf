@@ -60,6 +60,10 @@ func Endpoints() []Endpoint {
 		// Audit log (admin).
 		{"GET", "/audit-log", "audit", "List mutating-request audit entries", "admin", "", true},
 
+		// Admin oversight (admin).
+		{"GET", "/admin/tokens", "admin", "List all users' API tokens (metadata only)", "admin", "", true},
+		{"GET", "/admin/secrets", "admin", "List all users' secrets, masked (existence only)", "admin", "", true},
+
 		// Users (admin).
 		{"GET", "/users", "users", "List users", "admin", "", true},
 		{"POST", "/users", "users", "Create a user", "admin", "CreateUserRequest", false},

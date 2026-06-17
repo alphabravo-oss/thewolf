@@ -172,6 +172,7 @@ func NewCommandGroups() []*cobra.Command {
 		newSecretCmd(),
 		newPluginCmd(),
 		newScannerCmd(),
+		newAdminCmd(),
 		newAuditCmd(),
 		newSystemCmd(),
 	}

@@ -48,6 +48,17 @@ func (s *SQLiteStore) ListAPITokensByUser(ctx context.Context, userID string) ([
 	return ts, err
 }
 
+// ListAllAPITokens returns every user's tokens (admin oversight). Tokens are
+// hash-only — no plaintext is ever stored or returned, just metadata.
+func (s *SQLiteStore) ListAllAPITokens(ctx context.Context) ([]models.APIToken, error) {
+	var ts []models.APIToken
+	err := s.db.SelectContext(ctx, &ts, "SELECT * FROM api_tokens ORDER BY created_at DESC")
+	for i := range ts {
+		ts[i].ScopeList = apikey.DecodeScopes(ts[i].Scopes)
+	}
+	return ts, err
+}
+
 func (s *SQLiteStore) RevokeAPIToken(ctx context.Context, id string) error {
 	now := time.Now().UTC()
 	_, err := s.db.ExecContext(ctx, "UPDATE api_tokens SET revoked_at = ? WHERE id = ?", now, id)

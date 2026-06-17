@@ -196,6 +196,14 @@ func NewServer(store db.Store, addr string) *Server {
 
 			r.With(adminScope).With(adminOnly).Get("/audit-log", routes.ListAuditLog)
 
+			// Admin oversight: read-only global views across all users.
+			r.Route("/admin", func(r chi.Router) {
+				r.Use(adminScope)
+				r.Use(adminOnly)
+				r.Get("/tokens", routes.AdminListTokens)
+				r.Get("/secrets", routes.AdminListSecrets)
+			})
+
 			r.Route("/users", func(r chi.Router) {
 				r.Use(adminScope)
 				r.Use(adminOnly)

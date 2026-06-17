@@ -1204,6 +1204,17 @@ func newFleetCmd() *cobra.Command {
 	return cmd
 }
 
+// --- admin oversight --------------------------------------------------------
+
+func newAdminCmd() *cobra.Command {
+	cmd := group("admin", "Cross-user oversight (admin)")
+	cmd.AddCommand(
+		listCmd("/admin/tokens", "List all users' API tokens"),
+		listCmd("/admin/secrets", "List all users' secrets (masked)"),
+	)
+	return cmd
+}
+
 // --- audit log --------------------------------------------------------------
 
 func newAuditCmd() *cobra.Command {
