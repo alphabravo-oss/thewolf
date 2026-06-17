@@ -8,6 +8,10 @@ import { createFileRoute, useNavigate, redirect } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CheckIcon,
+  ChevronDownIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  ChevronUpIcon,
   DownloadIcon,
   HammerIcon,
   KeyIcon,
@@ -15,6 +19,7 @@ import {
   Loader2Icon,
   LockIcon,
   PlusIcon,
+  SearchIcon,
   RefreshCwIcon,
   ScrollTextIcon,
   ServerIcon,
@@ -376,35 +381,115 @@ interface AuditEntry {
   created_at: string;
 }
 
+const AUDIT_METHODS = ["", "GET", "POST", "PUT", "DELETE"];
+const AUDIT_PER_PAGE = 25;
+
 function AuditTab() {
   const ownerOf = useOwnerLookup();
+  const [search, setSearch] = useState("");
+  const [method, setMethod] = useState("");
+  const [sort, setSort] = useState<"time" | "status">("time");
+  const [order, setOrder] = useState<"asc" | "desc">("desc");
+  const [page, setPage] = useState(1);
+
   const q = useQuery({
-    queryKey: ["audit-log"],
-    queryFn: async () => (await api.get<AuditEntry[]>("/audit-log?limit=100")).data ?? [],
+    queryKey: ["audit-log", search, method, sort, order, page],
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        page: String(page),
+        per_page: String(AUDIT_PER_PAGE),
+        sort,
+        order,
+      });
+      if (search.trim()) params.set("q", search.trim());
+      if (method) params.set("method", method);
+      const res = await api.get<AuditEntry[]>(`/audit-log?${params.toString()}`);
+      return { entries: res.data ?? [], total: res.meta?.total ?? 0 };
+    },
+    placeholderData: (prev) => prev, // keep the current page visible while the next loads
   });
+
+  const total = q.data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / AUDIT_PER_PAGE));
+  const entries = q.data?.entries ?? [];
+
+  // Changing a filter resets to page 1.
+  const onFilter = (fn: () => void) => {
+    fn();
+    setPage(1);
+  };
+  const toggleSort = (col: "time" | "status") =>
+    onFilter(() => {
+      if (sort === col) setOrder((o) => (o === "desc" ? "asc" : "desc"));
+      else {
+        setSort(col);
+        setOrder("desc");
+      }
+    });
+  const sortMark = (col: "time" | "status") =>
+    sort === col ? (
+      order === "desc" ? (
+        <ChevronDownIcon className="inline size-3" />
+      ) : (
+        <ChevronUpIcon className="inline size-3" />
+      )
+    ) : null;
+
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       <p className="text-xs text-muted-foreground">
-        The 100 most recent mutating requests — who did what, where, and the response status.
+        Every mutating request — who did what, where, and the response status.
       </p>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative flex-1 min-w-[12rem]">
+          <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+          <input
+            value={search}
+            onChange={(e) => onFilter(() => setSearch(e.target.value))}
+            placeholder="Search path, action, or method…"
+            className="w-full h-9 pl-8 pr-3 rounded-md bg-muted/40 border border-border/40 text-sm"
+          />
+        </div>
+        <select
+          value={method}
+          onChange={(e) => onFilter(() => setMethod(e.target.value))}
+          className="h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm"
+        >
+          {AUDIT_METHODS.map((m) => (
+            <option key={m} value={m}>
+              {m || "All methods"}
+            </option>
+          ))}
+        </select>
+      </div>
+
       <AdminCard>
-        {q.isLoading ? (
+        {q.isLoading && !q.data ? (
           <div className="p-5 text-sm text-muted-foreground">Loading…</div>
-        ) : !q.data || q.data.length === 0 ? (
-          <div className="p-5 text-sm text-muted-foreground">No audit entries.</div>
+        ) : entries.length === 0 ? (
+          <div className="p-5 text-sm text-muted-foreground">No matching audit entries.</div>
         ) : (
           <table className="w-full text-sm">
             <thead className="text-xs text-muted-foreground border-b border-border/30">
               <tr>
-                <th className="text-left px-4 py-2">When</th>
+                <th className="text-left px-4 py-2">
+                  <button type="button" onClick={() => toggleSort("time")} className="hover:text-foreground">
+                    When {sortMark("time")}
+                  </button>
+                </th>
                 <th className="text-left px-4 py-2">User</th>
                 <th className="text-left px-4 py-2">Action</th>
                 <th className="text-left px-4 py-2">Request</th>
-                <th className="text-right px-4 py-2">Status</th>
+                <th className="text-right px-4 py-2">
+                  <button type="button" onClick={() => toggleSort("status")} className="hover:text-foreground">
+                    Status {sortMark("status")}
+                  </button>
+                </th>
               </tr>
             </thead>
             <tbody>
-              {q.data.map((e) => (
+              {entries.map((e) => (
                 <tr key={e.id} className="border-t border-border/20">
                   <td className="px-4 py-2 text-xs text-muted-foreground whitespace-nowrap">
                     {new Date(e.created_at).toLocaleString()}
@@ -428,6 +513,33 @@ function AuditTab() {
           </table>
         )}
       </AdminCard>
+
+      <div className="flex items-center justify-between text-xs text-muted-foreground">
+        <span>
+          {total.toLocaleString()} {total === 1 ? "entry" : "entries"}
+        </span>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page <= 1}
+            className="inline-flex items-center gap-1 h-7 px-2 rounded-md border border-border/40 hover:bg-muted/40 disabled:opacity-40"
+          >
+            <ChevronLeftIcon className="size-3.5" /> Prev
+          </button>
+          <span className="tabular-nums">
+            Page {page} / {totalPages}
+          </span>
+          <button
+            type="button"
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={page >= totalPages}
+            className="inline-flex items-center gap-1 h-7 px-2 rounded-md border border-border/40 hover:bg-muted/40 disabled:opacity-40"
+          >
+            Next <ChevronRightIcon className="size-3.5" />
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

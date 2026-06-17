@@ -42,6 +42,16 @@ type FindingsAggregateRow struct {
 	Findings int    `json:"findings"`
 }
 
+// AuditQuery filters, sorts, and paginates the audit log.
+type AuditQuery struct {
+	Search string // case-insensitive substring on path / action / method
+	Method string // exact HTTP method filter (empty = all)
+	SortBy string // "time" (default) | "status"
+	Desc   bool   // sort descending (newest / highest first)
+	Limit  int    // page size (1..1000; defaults applied in the store)
+	Offset int    // rows to skip
+}
+
 // Store defines the interface for all database operations.
 type Store interface {
 	// Lifecycle
@@ -238,6 +248,9 @@ type Store interface {
 	// Audit Log
 	AppendAuditLog(ctx context.Context, entry *models.AuditLogEntry) error
 	ListAuditLog(ctx context.Context, limit int) ([]models.AuditLogEntry, error)
+	// QueryAuditLog returns a filtered/sorted/paginated page of audit entries
+	// plus the total count matching the filter (for pagination).
+	QueryAuditLog(ctx context.Context, q AuditQuery) ([]models.AuditLogEntry, int, error)
 
 	// Fleet aggregates
 	FleetPosture(ctx context.Context, userID string, fleetMode bool, collectionID string) (*FleetPostureResult, error)

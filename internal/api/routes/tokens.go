@@ -13,6 +13,7 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/api/response"
 	"github.com/alphabravocompany/thewolf/internal/auth"
 	"github.com/alphabravocompany/thewolf/internal/auth/apikey"
+	"github.com/alphabravocompany/thewolf/internal/db"
 	"github.com/alphabravocompany/thewolf/internal/models"
 )
 
@@ -162,19 +163,44 @@ func ListAuditLog(w http.ResponseWriter, r *http.Request) {
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "handler not initialized")
 		return
 	}
-	limit := 100
-	if v := r.URL.Query().Get("limit"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			limit = n
+	q := r.URL.Query()
+	perPage := 25
+	if v := q.Get("per_page"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 1000 {
+			perPage = n
+		}
+	} else if v := q.Get("limit"); v != "" { // back-compat with the old ?limit=
+		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 1000 {
+			perPage = n
 		}
 	}
-	entries, err := h.Store.ListAuditLog(r.Context(), limit)
+	page := 1
+	if v := q.Get("page"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			page = n
+		}
+	}
+	sortBy := "time"
+	if q.Get("sort") == "status" {
+		sortBy = "status"
+	}
+	// Default newest / highest-first unless explicitly ascending.
+	desc := q.Get("order") != "asc"
+
+	entries, total, err := h.Store.QueryAuditLog(r.Context(), db.AuditQuery{
+		Search: q.Get("q"),
+		Method: q.Get("method"),
+		SortBy: sortBy,
+		Desc:   desc,
+		Limit:  perPage,
+		Offset: (page - 1) * perPage,
+	})
 	if err != nil {
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to list audit log")
 		return
 	}
 	response.WriteJSON(w, http.StatusOK, response.ListResponse{
 		Data: entries,
-		Meta: response.ListMeta{Total: len(entries), Page: 1, PerPage: limit},
+		Meta: response.ListMeta{Total: total, Page: page, PerPage: perPage},
 	})
 }
