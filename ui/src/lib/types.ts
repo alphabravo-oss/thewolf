@@ -386,6 +386,23 @@ export interface RegisterRequest {
   password: string;
 }
 
+// An API token (CLI / CI / agent credential). The plaintext `token` is only
+// present on the create response — never on list.
+export interface ApiToken {
+  id: string;
+  name: string;
+  token_prefix: string;
+  scopes: string[];
+  created_at: string;
+  last_used_at?: string;
+  expires_at?: string;
+  revoked_at?: string;
+}
+
+export interface ApiTokenCreated extends ApiToken {
+  token: string; // shown exactly once
+}
+
 export interface AuthResponse {
   user?: User;
   access_token?: string;

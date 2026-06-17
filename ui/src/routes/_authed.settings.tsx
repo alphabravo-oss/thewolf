@@ -11,6 +11,7 @@ import {
   DownloadIcon,
   HammerIcon,
   KeyIcon,
+  KeyRoundIcon,
   Loader2Icon,
   LockIcon,
   PlusIcon,
@@ -26,7 +27,7 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useMe } from "@/lib/me";
-import type { RemoteNode } from "@/lib/types";
+import type { ApiToken, ApiTokenCreated, RemoteNode } from "@/lib/types";
 import { BuildConsole, type BuildTarget } from "@/components/scanners/build-console";
 import { DockerHubCredentialCard } from "@/components/scanners/dockerhub-credential";
 import {
@@ -37,20 +38,29 @@ import {
 export const Route = createFileRoute("/_authed/settings")({
   validateSearch: (s: Record<string, unknown>) => ({
     tab:
-      typeof s.tab === "string" && /^(general|security|secrets|nodes|users|scanners)$/.test(s.tab)
+      typeof s.tab === "string" &&
+      /^(general|security|apikeys|secrets|nodes|users|scanners)$/.test(s.tab)
         ? (s.tab as TabKey)
         : ("general" as TabKey),
   }),
   component: SettingsPage,
 });
 
-type TabKey = "general" | "security" | "secrets" | "nodes" | "users" | "scanners";
+type TabKey =
+  | "general"
+  | "security"
+  | "apikeys"
+  | "secrets"
+  | "nodes"
+  | "users"
+  | "scanners";
 
-// adminOnly tabs are hidden for regular users. Security, Secrets + Nodes are
-// per-user, so everyone can manage their own.
+// adminOnly tabs are hidden for regular users. Security, API Keys, Secrets +
+// Nodes are per-user, so everyone can manage their own.
 const TABS: { key: TabKey; label: string; Icon: typeof SettingsIcon; adminOnly?: boolean }[] = [
   { key: "general", label: "General", Icon: SettingsIcon, adminOnly: true },
   { key: "security", label: "Security", Icon: LockIcon },
+  { key: "apikeys", label: "API Keys", Icon: KeyRoundIcon },
   { key: "secrets", label: "Secrets", Icon: KeyIcon },
   { key: "nodes", label: "Nodes", Icon: ServerIcon },
   { key: "users", label: "Users", Icon: UsersIcon, adminOnly: true },
@@ -97,6 +107,7 @@ function SettingsPage() {
 
       {activeTab === "general" && isAdmin && <GeneralTab />}
       {activeTab === "security" && <SecurityTab />}
+      {activeTab === "apikeys" && <ApiKeysTab />}
       {activeTab === "secrets" && <SecretsTab />}
       {activeTab === "nodes" && <NodesTab />}
       {activeTab === "users" && isAdmin && <UsersTab />}
@@ -434,13 +445,19 @@ function SecurityTab() {
             1. Scan this with your authenticator app, then enter the 6-digit code to confirm.
           </p>
           <div className="flex items-start gap-4">
-            <img
-              src={setup.qr}
-              alt="TOTP QR code"
-              className="size-40 rounded-md bg-white p-2"
-              width={160}
-              height={160}
-            />
+            {/* Solid white box with a generous quiet zone — a QR needs a white
+                border on all sides to scan, and the dark theme otherwise
+                crowds the code's edges. The white background lives on the
+                wrapper (not the img) so it's opaque even if the PNG isn't. */}
+            <div className="shrink-0 rounded-md bg-white p-4">
+              <img
+                src={setup.qr}
+                alt="TOTP QR code"
+                className="block size-48"
+                width={192}
+                height={192}
+              />
+            </div>
             <div className="space-y-1 text-xs text-muted-foreground">
               <p>Can't scan? Enter this secret manually:</p>
               <code className="block rounded bg-muted/40 px-2 py-1 font-mono break-all">
@@ -521,6 +538,291 @@ function SecurityTab() {
           )}
         </div>
       )}
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// API Keys — per-user, scoped tokens for the CLI / CI / agents. The secret is
+// shown exactly once at creation. These bypass MFA by design (they are minted
+// from an already-authenticated session and are individually revocable).
+// ---------------------------------------------------------------------------
+
+const API_SCOPES = [
+  "read:repos",
+  "write:repos",
+  "read:scans",
+  "write:scans",
+  "read:findings",
+  "write:findings",
+  "read:fixes",
+  "write:fixes",
+  "read:loops",
+  "write:loops",
+  "read:config",
+  "write:config",
+  "admin",
+] as const;
+
+// Role presets map to the scope aliases the backend (apikey.ParseScopes) knows.
+const ROLE_PRESETS = [
+  { key: "read-only", label: "Read-only", help: "Read every resource; no writes." },
+  { key: "read-write", label: "Read & write", help: "Read and write everything except admin." },
+  { key: "admin", label: "Admin (full)", help: "Full access, including settings and users." },
+  { key: "custom", label: "Custom", help: "Pick exact scopes." },
+] as const;
+
+const EXPIRY_OPTIONS = [
+  { days: 30, label: "30 days" },
+  { days: 90, label: "90 days" },
+  { days: 365, label: "1 year" },
+  { days: 0, label: "Never" },
+];
+
+function ApiKeysTab() {
+  const qc = useQueryClient();
+  const q = useQuery({
+    queryKey: ["api-tokens"],
+    queryFn: async () => (await api.get<ApiToken[]>("/auth/tokens")).data ?? [],
+  });
+
+  const [name, setName] = useState("");
+  const [role, setRole] = useState<(typeof ROLE_PRESETS)[number]["key"]>("read-only");
+  const [customScopes, setCustomScopes] = useState<string[]>(["read:scans"]);
+  const [expiryDays, setExpiryDays] = useState(90);
+  const [created, setCreated] = useState<ApiTokenCreated | null>(null);
+
+  const create = useMutation({
+    mutationFn: async () => {
+      const scopes = role === "custom" ? customScopes : [role];
+      return (
+        await api.post<ApiTokenCreated>("/auth/tokens", {
+          name,
+          scopes,
+          expires_in_days: expiryDays,
+        })
+      ).data;
+    },
+    onSuccess: (d) => {
+      setCreated(d ?? null);
+      setName("");
+      qc.invalidateQueries({ queryKey: ["api-tokens"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Could not create key"),
+  });
+  const revoke = useMutation({
+    mutationFn: (id: string) => api.delete(`/auth/tokens/${id}`),
+    onSuccess: () => {
+      toast.success("Key revoked");
+      qc.invalidateQueries({ queryKey: ["api-tokens"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Revoke failed"),
+  });
+
+  const toggleScope = (s: string) =>
+    setCustomScopes((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]));
+
+  const canCreate =
+    name.trim().length > 0 && (role !== "custom" || customScopes.length > 0) && !create.isPending;
+
+  const origin = typeof window !== "undefined" ? window.location.origin : "https://wolf.example.com";
+
+  return (
+    <section className="space-y-4 max-w-2xl">
+      <p className="text-sm text-muted-foreground">
+        API keys are scoped, revocable credentials for the{" "}
+        <code className="text-foreground">wolf</code> CLI, CI pipelines, and agents. They{" "}
+        <strong>bypass two-factor auth</strong> by design, so treat them like passwords. Browse the
+        full API at{" "}
+        <a href="/api/v1/docs" target="_blank" rel="noreferrer" className="text-foreground hover:underline">
+          /api/v1/docs
+        </a>
+        .
+      </p>
+
+      {/* One-time secret reveal. */}
+      {created && (
+        <div className="rounded-md border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-3">
+          <p className="text-sm font-medium text-emerald-300">
+            Key created — copy it now, it won't be shown again
+          </p>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 path break-all rounded bg-muted/50 px-2 py-1.5 text-sm">
+              {created.token}
+            </code>
+            <button
+              type="button"
+              onClick={() => {
+                void navigator.clipboard?.writeText(created.token);
+                toast.success("Key copied");
+              }}
+              className="h-8 px-3 rounded-md bg-primary text-primary-foreground text-xs font-medium"
+            >
+              Copy
+            </button>
+          </div>
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground">Use it with the CLI:</p>
+            <pre className="path text-xs rounded bg-muted/50 p-2 overflow-x-auto">
+              {`export WOLF_SERVER=${origin}\nexport WOLF_TOKEN=${created.token}\nwolf scans list`}
+            </pre>
+          </div>
+          <button
+            type="button"
+            onClick={() => setCreated(null)}
+            className="text-xs text-muted-foreground hover:text-foreground"
+          >
+            Done
+          </button>
+        </div>
+      )}
+
+      {/* Create form. */}
+      <div className="glass-card p-5 space-y-4">
+        <h3 className="text-sm font-medium">Create a key</h3>
+        <div className="grid sm:grid-cols-2 gap-3">
+          <label className="block space-y-1">
+            <span className="text-xs text-muted-foreground">Name</span>
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="ci-pipeline"
+              className="w-full h-9 px-3 rounded-md bg-muted/40 border border-border/40 text-sm"
+            />
+          </label>
+          <label className="block space-y-1">
+            <span className="text-xs text-muted-foreground">Expires</span>
+            <select
+              value={expiryDays}
+              onChange={(e) => setExpiryDays(Number(e.target.value))}
+              className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm"
+            >
+              {EXPIRY_OPTIONS.map((o) => (
+                <option key={o.days} value={o.days}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <div className="space-y-1.5">
+          <span className="text-xs text-muted-foreground">Access</span>
+          <div className="grid sm:grid-cols-2 gap-1.5">
+            {ROLE_PRESETS.map((p) => (
+              <button
+                key={p.key}
+                type="button"
+                onClick={() => setRole(p.key)}
+                className={
+                  "text-left rounded-md border px-3 py-2 text-sm " +
+                  (role === p.key
+                    ? "border-primary bg-primary/10"
+                    : "border-border/40 hover:border-border")
+                }
+              >
+                <div className="font-medium">{p.label}</div>
+                <div className="text-xs text-muted-foreground">{p.help}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {role === "custom" && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+            {API_SCOPES.map((s) => (
+              <label
+                key={s}
+                className="inline-flex items-center gap-1.5 text-xs cursor-pointer select-none"
+              >
+                <input
+                  type="checkbox"
+                  checked={customScopes.includes(s)}
+                  onChange={() => toggleScope(s)}
+                  className="size-3.5 accent-primary"
+                />
+                <span className={s === "admin" ? "text-amber-300 font-mono" : "font-mono"}>{s}</span>
+              </label>
+            ))}
+          </div>
+        )}
+
+        <button
+          type="button"
+          onClick={() => create.mutate()}
+          disabled={!canCreate}
+          className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
+        >
+          <PlusIcon className="size-4" />
+          {create.isPending ? "Creating…" : "Create key"}
+        </button>
+      </div>
+
+      {/* Existing keys. */}
+      <div className="glass-card overflow-hidden">
+        {q.isLoading ? (
+          <div className="p-5 text-sm text-muted-foreground">Loading…</div>
+        ) : !q.data || q.data.length === 0 ? (
+          <div className="p-5 text-sm text-muted-foreground">No API keys yet.</div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="text-xs text-muted-foreground border-b border-border/30">
+              <tr>
+                <th className="text-left px-4 py-2">Name</th>
+                <th className="text-left px-4 py-2">Prefix</th>
+                <th className="text-left px-4 py-2">Scopes</th>
+                <th className="text-left px-4 py-2">Expires</th>
+                <th className="text-right px-4 py-2 w-20"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {q.data.map((t) => {
+                const revoked = !!t.revoked_at;
+                const expired = !!t.expires_at && new Date(t.expires_at) < new Date();
+                return (
+                  <tr key={t.id} className="border-t border-border/20 align-top">
+                    <td className="px-4 py-2">
+                      <div className="font-medium">{t.name}</div>
+                      {(revoked || expired) && (
+                        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                          {revoked ? "revoked" : "expired"}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2 font-mono text-xs text-muted-foreground">{t.token_prefix}…</td>
+                    <td className="px-4 py-2">
+                      <div className="flex flex-wrap gap-1">
+                        {t.scopes.map((s) => (
+                          <span
+                            key={s}
+                            className="text-[10px] font-mono rounded bg-muted/40 border border-border/40 px-1.5 py-0.5"
+                          >
+                            {s}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+                    <td className="px-4 py-2 text-xs text-muted-foreground">
+                      {t.expires_at ? new Date(t.expires_at).toLocaleDateString() : "never"}
+                    </td>
+                    <td className="px-4 py-2 text-right">
+                      {!revoked && (
+                        <button
+                          type="button"
+                          onClick={() => revoke.mutate(t.id)}
+                          className="inline-flex items-center gap-1 h-7 px-2 rounded-md border border-red-500/40 text-red-300 hover:bg-red-500/10 text-xs"
+                        >
+                          <Trash2Icon className="size-3.5" /> Revoke
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
     </section>
   );
 }
@@ -1687,11 +1989,24 @@ const SCANNER_VARIANTS: {
   name: string;
   label: string;
   suffix: string;
+  // licenseNote surfaces a usage restriction the operator must clear before
+  // enabling the tool (only CodeQL today — it is not open source).
+  licenseNote?: string;
+  // localOnly buckets are never pulled from / pushed to a registry (CodeQL —
+  // its license forbids redistribution). The UI offers only a local rebuild.
+  localOnly?: boolean;
 }[] = [
   { name: "default", label: "Default", suffix: "" },
   { name: "jvm", label: "JVM", suffix: "-jvm" },
   { name: "rust", label: "Rust", suffix: "-rust" },
-  { name: "codeql", label: "CodeQL", suffix: "-codeql" },
+  {
+    name: "codeql",
+    label: "CodeQL",
+    suffix: "-codeql",
+    localOnly: true,
+    licenseNote:
+      "CodeQL is not open source. It is free only for analyzing open-source code; scanning private or commercial code requires a GitHub Advanced Security license. Confirm your entitlement before enabling it. It is built locally only — never pulled or pushed.",
+  },
 ];
 
 // Match a variant to its image-status row. The status list is keyed by full
@@ -1810,7 +2125,7 @@ function ScannerImagesPanel() {
         <ul className="space-y-2 text-sm">
           {SCANNER_VARIANTS.map((v) => {
             const status = statusForVariant(images, v.suffix);
-            const push = hasDockerHubToken && !!pushVariants[v.name];
+            const push = hasDockerHubToken && !v.localOnly && !!pushVariants[v.name];
             return (
               <li
                 key={v.name}
@@ -1825,12 +2140,18 @@ function ScannerImagesPanel() {
                   value={status?.local_digest}
                   err={status?.local_error}
                 />
-                <DigestPill
-                  label="remote"
-                  value={status?.remote_digest}
-                  err={status?.remote_error}
-                />
-                {status?.updates_available ? (
+                {v.localOnly ? (
+                  <span className="text-[10px] uppercase tracking-wide font-medium text-muted-foreground bg-muted/40 border border-border/40 rounded px-1.5 py-0.5">
+                    local only
+                  </span>
+                ) : (
+                  <DigestPill
+                    label="remote"
+                    value={status?.remote_digest}
+                    err={status?.remote_error}
+                  />
+                )}
+                {v.localOnly ? null : status?.updates_available ? (
                   <span className="text-[10px] uppercase tracking-wide font-medium text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded px-1.5 py-0.5">
                     update available
                   </span>
@@ -1840,7 +2161,7 @@ function ScannerImagesPanel() {
                   </span>
                 ) : null}
 
-                {hasDockerHubToken && (
+                {hasDockerHubToken && !v.localOnly && (
                   <label className="inline-flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
                     <input
                       type="checkbox"
@@ -1869,6 +2190,12 @@ function ScannerImagesPanel() {
                   )}
                   {push ? "Rebuild & push" : "Rebuild (local)"}
                 </button>
+
+                {v.licenseNote && (
+                  <p className="basis-full text-xs text-amber-300/90 bg-amber-500/5 border border-amber-500/20 rounded px-2 py-1.5">
+                    ⚠ <span className="font-medium">License:</span> {v.licenseNote}
+                  </p>
+                )}
               </li>
             );
           })}
