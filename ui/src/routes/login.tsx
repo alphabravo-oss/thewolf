@@ -1,10 +1,16 @@
 // Login. Uses TanStack Form for type-safe form state + validation; redirects
-// to the original target (or /) on success.
+// to the original target (or /) on success. Two-step when the account has 2FA.
 import { createFileRoute, useNavigate, redirect } from "@tanstack/react-router";
 import { useForm } from "@tanstack/react-form";
 import { useState } from "react";
 import { toast } from "sonner";
-import { WolfLogo } from "@/components/wolf-logo";
+import {
+  AuthShell,
+  AuthField,
+  AuthSubmit,
+  PasswordInput,
+  authInputCls,
+} from "@/components/auth-shell";
 import { api, hasSession } from "@/lib/api";
 import type { AuthResponse } from "@/lib/types";
 
@@ -76,22 +82,17 @@ function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen grid place-items-center bg-background p-6">
-      <div className="w-full max-w-sm glass-card p-7 space-y-5">
-        <div className="flex flex-col items-center gap-2">
-          <WolfLogo className="size-10" />
-          <div className="text-lg font-semibold">Sign in to The Wolf</div>
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground -mt-1">
-            by AlphaBravo
-          </div>
-        </div>
-
-        {mfaToken ? (
-          <form onSubmit={submitCode} className="space-y-3">
-            <p className="text-sm text-muted-foreground text-center">
+    <AuthShell>
+      {mfaToken ? (
+        <>
+          <div className="space-y-1.5">
+            <h2 className="text-2xl font-semibold tracking-tight">Two-factor authentication</h2>
+            <p className="text-sm text-muted-foreground">
               Enter the 6-digit code from your authenticator app, or a recovery code.
             </p>
-            <Field label="Authentication code">
+          </div>
+          <form onSubmit={submitCode} className="space-y-4">
+            <AuthField label="Authentication code">
               <input
                 inputMode="numeric"
                 autoComplete="one-time-code"
@@ -100,16 +101,12 @@ function LoginPage() {
                 placeholder="123456"
                 value={code}
                 onChange={(e) => setCode(e.target.value.trim())}
-                className="w-full h-9 px-3 rounded-md bg-muted/30 border border-border focus:border-ring focus:bg-muted/50 outline-none text-sm font-mono tracking-widest"
+                className={authInputCls + " font-mono tracking-[0.3em]"}
               />
-            </Field>
-            <button
-              type="submit"
-              disabled={submitting || code.length < 6}
-              className="w-full h-9 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-60"
-            >
+            </AuthField>
+            <AuthSubmit type="submit" disabled={submitting || code.length < 6} loading={submitting}>
               {submitting ? "Verifying…" : "Verify"}
-            </button>
+            </AuthSubmit>
             <button
               type="button"
               onClick={() => {
@@ -121,77 +118,63 @@ function LoginPage() {
               Back to sign in
             </button>
           </form>
-        ) : (
-          <>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                form.handleSubmit();
-              }}
-              className="space-y-3"
-            >
-              <form.Field name="email">
-                {(field) => (
-                  <Field label="Email">
-                    <input
-                      type="email"
-                      name="email"
-                      required
-                      autoComplete="email"
-                      value={field.state.value}
-                      onChange={(e) => field.handleChange(e.target.value)}
-                      className="w-full h-9 px-3 rounded-md bg-muted/30 border border-border focus:border-ring focus:bg-muted/50 outline-none text-sm"
-                    />
-                  </Field>
-                )}
-              </form.Field>
-              <form.Field name="password">
-                {(field) => (
-                  <Field label="Password">
-                    <input
-                      type="password"
-                      name="password"
-                      required
-                      autoComplete="current-password"
-                      value={field.state.value}
-                      onChange={(e) => field.handleChange(e.target.value)}
-                      className="w-full h-9 px-3 rounded-md bg-muted/30 border border-border focus:border-ring focus:bg-muted/50 outline-none text-sm"
-                    />
-                  </Field>
-                )}
-              </form.Field>
-              <button
-                type="submit"
-                disabled={submitting}
-                className="w-full h-9 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-60"
-              >
-                {submitting ? "Signing in…" : "Sign in"}
-              </button>
-            </form>
-            <div className="text-center text-xs text-muted-foreground">
-              Don't have an account?{" "}
-              <a href="/register" className="text-foreground hover:underline">
-                Register
-              </a>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <label className="block space-y-1">
-      <span className="text-xs text-muted-foreground">{label}</span>
-      {children}
-    </label>
+        </>
+      ) : (
+        <>
+          <div className="space-y-1.5">
+            <h2 className="text-2xl font-semibold tracking-tight">Sign in to The Wolf</h2>
+            <p className="text-sm text-muted-foreground">
+              Enter your credentials to continue.
+            </p>
+          </div>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              form.handleSubmit();
+            }}
+            className="space-y-4"
+          >
+            <form.Field name="email">
+              {(field) => (
+                <AuthField label="Email">
+                  <input
+                    type="email"
+                    name="email"
+                    required
+                    autoComplete="email"
+                    placeholder="you@example.com"
+                    value={field.state.value}
+                    onChange={(e) => field.handleChange(e.target.value)}
+                    className={authInputCls}
+                  />
+                </AuthField>
+              )}
+            </form.Field>
+            <form.Field name="password">
+              {(field) => (
+                <AuthField label="Password">
+                  <PasswordInput
+                    name="password"
+                    required
+                    autoComplete="current-password"
+                    value={field.state.value}
+                    onChange={(e) => field.handleChange(e.target.value)}
+                  />
+                </AuthField>
+              )}
+            </form.Field>
+            <AuthSubmit type="submit" disabled={submitting} loading={submitting}>
+              {submitting ? "Signing in…" : "Sign in"}
+            </AuthSubmit>
+          </form>
+          <div className="text-center text-xs text-muted-foreground">
+            Don't have an account?{" "}
+            <a href="/register" className="text-foreground hover:underline">
+              Register
+            </a>
+          </div>
+        </>
+      )}
+    </AuthShell>
   );
 }
