@@ -166,7 +166,7 @@ export function Sidebar() {
             <NavLink key={item.to} item={item} active={isActive(item.to)} />
           ))}
 
-          <div className="pt-2 mt-1 border-t border-sidebar-border flex items-center justify-between px-2 text-3xs text-faint">
+          <div className="pt-2 mt-1 border-t border-sidebar-border flex items-center justify-between px-2 text-2xs text-faint">
             <span className="tabular-nums">
               {versionQ.data ? `v${versionQ.data}` : ""}
             </span>
