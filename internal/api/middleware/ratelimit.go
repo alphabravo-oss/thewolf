@@ -2,6 +2,7 @@
 package middleware
 
 import (
+	"net"
 	"net/http"
 	"sync"
 	"time"
@@ -87,10 +88,7 @@ func (rl *RateLimiter) allow(ip string) bool {
 // Handler returns middleware that rate-limits requests by client IP.
 func (rl *RateLimiter) Handler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ip := r.RemoteAddr
-		if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
-			ip = fwd
-		}
+		ip := rateLimitRemoteKey(r.RemoteAddr)
 
 		if !rl.allow(ip) {
 			wolflog.Warn().Str("ip", ip).Str("path", r.URL.Path).Msg("rate limit exceeded")
@@ -101,6 +99,13 @@ func (rl *RateLimiter) Handler(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+func rateLimitRemoteKey(remoteAddr string) string {
+	if host, _, err := net.SplitHostPort(remoteAddr); err == nil && host != "" {
+		return host
+	}
+	return remoteAddr
 }
 
 // StrictHandler returns middleware with tighter limits, suitable for

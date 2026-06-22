@@ -130,15 +130,7 @@ func (p *CLIProvider) send(ctx context.Context, prompt string) (string, error) {
 		cmd = exec.CommandContext(callCtx, p.command, "-p")
 	}
 
-	// Clear environment variables that prevent nested CLI sessions
-	env := os.Environ()
-	filtered := make([]string, 0, len(env))
-	for _, e := range env {
-		if !strings.HasPrefix(e, "CLAUDECODE=") && !strings.HasPrefix(e, "CLAUDE_CODE_SESSION=") {
-			filtered = append(filtered, e)
-		}
-	}
-	cmd.Env = filtered
+	cmd.Env = safeCLIEnv(os.Environ())
 
 	// Pass prompt via stdin to avoid OS argument length limits
 	cmd.Stdin = bytes.NewReader([]byte(prompt))
@@ -219,6 +211,28 @@ func (p *CLIProvider) emitLog(prompt, response, errMsg string, start time.Time) 
 // escaping any embedded single quotes.
 func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
+}
+
+func safeCLIEnv(env []string) []string {
+	allowed := map[string]bool{
+		"HOME":          true,
+		"LANG":          true,
+		"LC_ALL":        true,
+		"PATH":          true,
+		"SSL_CERT_DIR":  true,
+		"SSL_CERT_FILE": true,
+		"TEMP":          true,
+		"TMP":           true,
+		"TMPDIR":        true,
+	}
+	filtered := make([]string, 0, len(allowed))
+	for _, e := range env {
+		key, _, ok := strings.Cut(e, "=")
+		if ok && allowed[key] {
+			filtered = append(filtered, e)
+		}
+	}
+	return filtered
 }
 
 // IsCLIEngine returns true if the engine name refers to a local CLI tool.

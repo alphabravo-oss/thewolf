@@ -923,6 +923,15 @@ func TestCompareScanRejectsIncompatibleSources(t *testing.T) {
 
 func TestPoliciesAPI(t *testing.T) {
 	env := setupTestEnv(t)
+	auth.RoleResolver = func(ctx context.Context, userID string) string {
+		user, err := env.Store.GetUserByID(ctx, userID)
+		if err != nil {
+			return ""
+		}
+		return user.Role
+	}
+	t.Cleanup(func() { auth.RoleResolver = nil })
+
 	w := env.doRequest(http.MethodPost, "/api/policies", map[string]any{
 		"name":  "warn-medium",
 		"scope": "global",

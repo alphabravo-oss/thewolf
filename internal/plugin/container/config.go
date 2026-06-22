@@ -25,6 +25,7 @@ package container
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 )
@@ -344,22 +345,36 @@ func IsScannersReady() bool {
 // path that the docker daemon resolves bind mounts against. See the doc on
 // Config.HostReposRoot.
 //
-// If HostReposRoot/InContainerReposRoot are empty (dev mode), returns p
-// unchanged.
+// If HostReposRoot/InContainerReposRoot are empty (dev mode), returns a clean
+// version of p unchanged.
 //
-// If p does not live under InContainerReposRoot, returns p unchanged with no
-// error — the caller may be passing an absolute host path already, which is
-// valid in dev mode.
-func (c *Config) TranslateRepoPath(p string) string {
+// In production translation mode, p must live under InContainerReposRoot.
+// Unrelated absolute paths and traversal attempts are rejected rather than
+// silently bind-mounted into scanner containers.
+func (c *Config) TranslateRepoPath(p string) (string, error) {
+	if strings.TrimSpace(p) == "" {
+		return "", fmt.Errorf("repo path is empty")
+	}
 	if c == nil || c.HostReposRoot == "" || c.InContainerReposRoot == "" {
-		return p
+		return filepath.Clean(p), nil
 	}
-	root := strings.TrimRight(c.InContainerReposRoot, "/")
-	if p == root {
-		return c.HostReposRoot
+	root := filepath.Clean(c.InContainerReposRoot)
+	hostRoot := filepath.Clean(c.HostReposRoot)
+	candidate := filepath.Clean(p)
+	rel, err := filepath.Rel(root, candidate)
+	if err != nil {
+		return "", fmt.Errorf("repo path %q is outside configured repos root %q", p, root)
 	}
-	if strings.HasPrefix(p, root+"/") {
-		return c.HostReposRoot + strings.TrimPrefix(p, root)
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
+		return "", fmt.Errorf("repo path %q is outside configured repos root %q", p, root)
 	}
-	return p
+	if rel == "." {
+		return hostRoot, nil
+	}
+	hostPath := filepath.Join(hostRoot, rel)
+	hostRel, err := filepath.Rel(hostRoot, hostPath)
+	if err != nil || hostRel == ".." || strings.HasPrefix(hostRel, ".."+string(filepath.Separator)) || filepath.IsAbs(hostRel) {
+		return "", fmt.Errorf("translated repo path %q is outside host repos root %q", hostPath, hostRoot)
+	}
+	return hostPath, nil
 }

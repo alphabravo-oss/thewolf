@@ -31,6 +31,20 @@ func (s *PostgresStore) RevokeAuthSessionByHash(ctx context.Context, hash string
 	return err
 }
 
+func (s *PostgresStore) RevokeAuthSessionsByUser(ctx context.Context, userID string, exceptSessionID string) error {
+	now := time.Now().UTC()
+	if exceptSessionID != "" {
+		_, err := s.db.ExecContext(ctx,
+			"UPDATE auth_sessions SET revoked_at = $1 WHERE user_id = $2 AND id <> $3 AND revoked_at IS NULL",
+			now, userID, exceptSessionID)
+		return err
+	}
+	_, err := s.db.ExecContext(ctx,
+		"UPDATE auth_sessions SET revoked_at = $1 WHERE user_id = $2 AND revoked_at IS NULL",
+		now, userID)
+	return err
+}
+
 func (s *PostgresStore) TouchAuthSession(ctx context.Context, id string) error {
 	now := time.Now().UTC()
 	_, err := s.db.ExecContext(ctx, "UPDATE auth_sessions SET last_used_at = $1 WHERE id = $2", now, id)

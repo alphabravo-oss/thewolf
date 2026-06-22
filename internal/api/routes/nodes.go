@@ -89,6 +89,11 @@ func CreateRemoteNode(w http.ResponseWriter, r *http.Request) {
 		response.WriteError(w, http.StatusBadRequest, "validation_error", "auth_type must be private_key or password")
 		return
 	}
+	if req.CredentialSecretID != nil {
+		if !credentialSecretAllowed(w, r, h, claims.UserID, req.AuthType, *req.CredentialSecretID) {
+			return
+		}
+	}
 	enabled := true
 	if req.Enabled != nil {
 		enabled = *req.Enabled
@@ -159,6 +164,14 @@ func UpdateRemoteNode(w http.ResponseWriter, r *http.Request) {
 		node.AuthType = req.AuthType
 	}
 	if req.CredentialSecretID != nil {
+		claims := auth.GetUserFromContext(r.Context())
+		if claims == nil {
+			response.WriteError(w, http.StatusUnauthorized, "unauthorized", "not authenticated")
+			return
+		}
+		if !credentialSecretAllowed(w, r, h, claims.UserID, node.AuthType, *req.CredentialSecretID) {
+			return
+		}
 		node.CredentialSecretID = req.CredentialSecretID
 	}
 	if req.KnownHosts != "" {
@@ -274,6 +287,10 @@ func DiscoverNodeRepos(w http.ResponseWriter, r *http.Request) {
 	if base == "" {
 		base = node.BasePath
 	}
+	if !remotePathWithinBase(base, node.BasePath) {
+		response.WriteError(w, http.StatusForbidden, "forbidden", "base_path must stay under the remote node base_path")
+		return
+	}
 	h := DefaultHandler
 	repos, err := (remote.Service{Store: h.Store, Runner: SSHRunnerOverride}).DiscoverRepos(r.Context(), node, base)
 	if err != nil {
@@ -318,4 +335,57 @@ func loadRemoteNode(w http.ResponseWriter, r *http.Request) (*models.RemoteNode,
 
 func validSSHAuthType(v string) bool {
 	return v == "private_key" || v == "password"
+}
+
+func credentialSecretAllowed(w http.ResponseWriter, r *http.Request, h *Handler, userID, authType, secretID string) bool {
+	secretID = strings.TrimSpace(secretID)
+	if secretID == "" {
+		response.WriteError(w, http.StatusBadRequest, "validation_error", "credential_secret_id cannot be empty")
+		return false
+	}
+	secret, err := h.Store.GetSecretByID(r.Context(), secretID)
+	if err != nil {
+		response.WriteError(w, http.StatusBadRequest, "validation_error", "credential_secret_id does not reference a configured secret")
+		return false
+	}
+	if secret.UserID != userID {
+		response.WriteError(w, http.StatusForbidden, "forbidden", "credential secret does not belong to current user")
+		return false
+	}
+	switch authType {
+	case "", "private_key":
+		if secret.KeyType != models.KeyTypeSSHPrivate {
+			response.WriteError(w, http.StatusBadRequest, "validation_error", "private_key nodes require an ssh_private_key secret")
+			return false
+		}
+	case "password":
+		if secret.KeyType != models.KeyTypeSSHPassword {
+			response.WriteError(w, http.StatusBadRequest, "validation_error", "password nodes require an ssh_password secret")
+			return false
+		}
+	}
+	return true
+}
+
+func remotePathWithinBase(pathValue, baseValue string) bool {
+	baseValue = normalizeRemotePath(baseValue)
+	if baseValue == "" {
+		return true
+	}
+	pathValue = normalizeRemotePath(pathValue)
+	if pathValue == "" {
+		pathValue = baseValue
+	}
+	return pathValue == baseValue || strings.HasPrefix(pathValue+"/", baseValue+"/")
+}
+
+func normalizeRemotePath(p string) string {
+	p = strings.TrimSpace(p)
+	if p == "" || p == "/" {
+		return p
+	}
+	for strings.Contains(p, "//") {
+		p = strings.ReplaceAll(p, "//", "/")
+	}
+	return strings.TrimRight(p, "/")
 }

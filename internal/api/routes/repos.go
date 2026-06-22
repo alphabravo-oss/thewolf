@@ -126,8 +126,13 @@ func CreateRepo(w http.ResponseWriter, r *http.Request) {
 			response.WriteError(w, http.StatusBadRequest, "validation_error", "remote_path is required for ssh repos")
 			return
 		}
-		if _, err := h.Store.GetRemoteNodeByID(r.Context(), *req.RemoteNodeID); err != nil {
+		node, err := h.Store.GetRemoteNodeByID(r.Context(), *req.RemoteNodeID)
+		if err != nil {
 			response.WriteError(w, http.StatusBadRequest, "validation_error", "remote_node_id does not reference a configured node")
+			return
+		}
+		if !canModifyOwned(claims, node.UserID) {
+			response.WriteError(w, http.StatusForbidden, "forbidden", "remote_node_id does not belong to current user")
 			return
 		}
 		req.SourcePath = req.RemotePath
@@ -213,9 +218,8 @@ func GetRepo(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := chi.URLParam(r, "id")
-	repo, err := h.Store.GetRepoByID(r.Context(), id)
-	if err != nil {
-		response.WriteError(w, http.StatusNotFound, "not_found", "repo not found")
+	repo, ok := loadRepoForCaller(w, r, h.Store, id, claims)
+	if !ok {
 		return
 	}
 
@@ -235,9 +239,8 @@ func UpdateRepo(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := chi.URLParam(r, "id")
-	repo, err := h.Store.GetRepoByID(r.Context(), id)
-	if err != nil {
-		response.WriteError(w, http.StatusNotFound, "not_found", "repo not found")
+	repo, ok := loadRepoForCaller(w, r, h.Store, id, claims)
+	if !ok {
 		return
 	}
 	if !canModifyOwned(claims, repo.UserID) {
@@ -342,6 +345,10 @@ func ListRepoBranches(w http.ResponseWriter, r *http.Request) {
 			response.WriteError(w, http.StatusNotFound, "not_found", "remote node not found")
 			return
 		}
+		if !canModifyOwned(claims, node.UserID) {
+			response.WriteError(w, http.StatusForbidden, "forbidden", "remote node does not belong to current user")
+			return
+		}
 		info, err := (remote.Service{Store: h.Store}).GitInfo(r.Context(), node, repo.SourcePath)
 		if err != nil {
 			response.WriteError(w, http.StatusBadGateway, "ssh_git_info_failed", "failed to list remote branches: "+err.Error())
@@ -388,9 +395,8 @@ func GetRepoFixable(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := chi.URLParam(r, "id")
-	repo, err := h.Store.GetRepoByID(r.Context(), id)
-	if err != nil {
-		response.WriteError(w, http.StatusNotFound, "not_found", "repo not found")
+	repo, ok := loadRepoForCaller(w, r, h.Store, id, claims)
+	if !ok {
 		return
 	}
 

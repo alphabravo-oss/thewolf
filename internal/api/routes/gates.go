@@ -81,6 +81,18 @@ func ListPolicies(w http.ResponseWriter, r *http.Request) {
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to list policies")
 		return
 	}
+	if !claims.IsAdmin() {
+		filtered := policies[:0]
+		for _, policy := range policies {
+			if policy.Scope != "repo" {
+				continue
+			}
+			if repo, err := h.Store.GetRepoByID(r.Context(), policy.ScopeID); err == nil && repo.UserID == claims.UserID {
+				filtered = append(filtered, policy)
+			}
+		}
+		policies = filtered
+	}
 	response.WriteJSON(w, http.StatusOK, response.ListResponse{
 		Data: policies,
 		Meta: response.ListMeta{Total: len(policies), Page: 1, PerPage: len(policies)},
@@ -115,6 +127,24 @@ func upsertPolicy(w http.ResponseWriter, r *http.Request, id string) {
 		response.WriteError(w, http.StatusBadRequest, "bad_request", "name is required")
 		return
 	}
+	scope := defaultString(req.Scope, "global")
+	if scope != "global" && scope != "repo" {
+		response.WriteError(w, http.StatusBadRequest, "bad_request", "scope must be global or repo")
+		return
+	}
+	if scope == "global" && !claims.IsAdmin() {
+		response.WriteError(w, http.StatusForbidden, "forbidden", "global policies require an administrator")
+		return
+	}
+	if scope == "repo" {
+		if req.ScopeID == "" {
+			response.WriteError(w, http.StatusBadRequest, "bad_request", "scope_id is required for repo policies")
+			return
+		}
+		if _, ok := loadRepoForCaller(w, r, h.Store, req.ScopeID, claims); !ok {
+			return
+		}
+	}
 	rulesJSON := req.RulesJSON
 	if len(req.Rules) > 0 {
 		data, err := json.Marshal(req.Rules)
@@ -138,7 +168,7 @@ func upsertPolicy(w http.ResponseWriter, r *http.Request, id string) {
 	policy := &models.QualityPolicy{
 		ID:        id,
 		Name:      req.Name,
-		Scope:     defaultString(req.Scope, "global"),
+		Scope:     scope,
 		ScopeID:   req.ScopeID,
 		Mode:      defaultString(req.Mode, "warn"),
 		RulesJSON: defaultString(rulesJSON, "[]"),

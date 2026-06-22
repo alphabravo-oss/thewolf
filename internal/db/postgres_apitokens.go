@@ -65,6 +65,20 @@ func (s *PostgresStore) RevokeAPIToken(ctx context.Context, id string) error {
 	return err
 }
 
+func (s *PostgresStore) RevokeAPITokensByUser(ctx context.Context, userID string, exceptTokenID string) error {
+	now := time.Now().UTC()
+	if exceptTokenID != "" {
+		_, err := s.db.ExecContext(ctx,
+			"UPDATE api_tokens SET revoked_at = $1 WHERE user_id = $2 AND id <> $3 AND revoked_at IS NULL",
+			now, userID, exceptTokenID)
+		return err
+	}
+	_, err := s.db.ExecContext(ctx,
+		"UPDATE api_tokens SET revoked_at = $1 WHERE user_id = $2 AND revoked_at IS NULL",
+		now, userID)
+	return err
+}
+
 func (s *PostgresStore) TouchAPIToken(ctx context.Context, id string) error {
 	now := time.Now().UTC()
 	_, err := s.db.ExecContext(ctx, "UPDATE api_tokens SET last_used_at = $1 WHERE id = $2", now, id)

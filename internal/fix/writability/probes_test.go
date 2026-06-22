@@ -102,7 +102,7 @@ func newSSHNode(t *testing.T) (*models.RemoteNode, sshTestStore) {
 		CredentialSecretID: &secID,
 		Enabled:            true,
 	}
-	store := sshTestStore{secret: &models.Secret{ID: secID, EncryptedValue: enc}}
+	store := sshTestStore{secret: &models.Secret{ID: secID, KeyType: models.KeyTypeSSHPassword, EncryptedValue: enc}}
 	return node, store
 }
 

@@ -361,7 +361,7 @@ func NewServer(store db.Store, addr string) *Server {
 				r.With(wConfig).Post("/secrets", routes.CreateSecret)
 				r.With(wConfig).Delete("/secrets/{id}", routes.DeleteSecret)
 				r.With(rConfig).Get("/plugins", routes.ListPlugins)
-				r.With(wConfig).Post("/plugins/{name}/install", routes.InstallPlugin)
+				r.With(wConfig).With(adminOnly).Post("/plugins/{name}/install", routes.InstallPlugin)
 				r.With(rConfig).Get("/setup", routes.SetupStatus)
 			})
 

@@ -65,6 +65,20 @@ func (s *SQLiteStore) RevokeAPIToken(ctx context.Context, id string) error {
 	return err
 }
 
+func (s *SQLiteStore) RevokeAPITokensByUser(ctx context.Context, userID string, exceptTokenID string) error {
+	now := time.Now().UTC()
+	if exceptTokenID != "" {
+		_, err := s.db.ExecContext(ctx,
+			"UPDATE api_tokens SET revoked_at = ? WHERE user_id = ? AND id <> ? AND revoked_at IS NULL",
+			now, userID, exceptTokenID)
+		return err
+	}
+	_, err := s.db.ExecContext(ctx,
+		"UPDATE api_tokens SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL",
+		now, userID)
+	return err
+}
+
 func (s *SQLiteStore) TouchAPIToken(ctx context.Context, id string) error {
 	now := time.Now().UTC()
 	_, err := s.db.ExecContext(ctx, "UPDATE api_tokens SET last_used_at = ? WHERE id = ?", now, id)

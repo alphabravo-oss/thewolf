@@ -22,9 +22,10 @@ const (
 // (Claims) plus the effective authorization scopes and, when the request
 // was authenticated by an API token rather than a JWT, the token's ID.
 type AuthInfo struct {
-	Claims  *Claims
-	Scopes  apikey.ScopeSet
-	TokenID string // empty for JWT (UI) sessions
+	Claims    *Claims
+	Scopes    apikey.ScopeSet
+	TokenID   string // empty for JWT/UI sessions
+	SessionID string // empty unless authenticated by the wolf_token cookie
 }
 
 // ResolvedToken is the principal an APITokenResolver returns for a valid,
@@ -85,8 +86,9 @@ func Middleware(next http.Handler) http.Handler {
 				return
 			}
 			info = &AuthInfo{
-				Claims: &Claims{UserID: session.UserID, Email: session.Email},
-				Scopes: apikey.AdminAll(),
+				Claims:    &Claims{UserID: session.UserID, Email: session.Email},
+				Scopes:    apikey.AdminAll(),
+				SessionID: session.SessionID,
 			}
 		} else if apikey.LooksLikeToken(cred) {
 			if resolveAPIToken == nil {

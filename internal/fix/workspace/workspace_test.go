@@ -228,13 +228,13 @@ func TestPrepare_Validation(t *testing.T) {
 
 func TestGitHubCloneURL(t *testing.T) {
 	cases := map[string]string{
-		"owner/repo":                        "https://tok@github.com/owner/repo.git",
-		"github.com/owner/repo":             "https://tok@github.com/owner/repo.git",
-		"https://github.com/owner/repo":     "https://tok@github.com/owner/repo.git",
-		"https://github.com/owner/repo.git": "https://tok@github.com/owner/repo.git",
+		"owner/repo":                        "https://github.com/owner/repo.git",
+		"github.com/owner/repo":             "https://github.com/owner/repo.git",
+		"https://github.com/owner/repo":     "https://github.com/owner/repo.git",
+		"https://github.com/owner/repo.git": "https://github.com/owner/repo.git",
 	}
 	for in, want := range cases {
-		got, err := githubCloneURL(in, "tok")
+		got, err := githubCloneURL(in)
 		if err != nil {
 			t.Errorf("githubCloneURL(%q): %v", in, err)
 			continue
@@ -243,8 +243,23 @@ func TestGitHubCloneURL(t *testing.T) {
 			t.Errorf("githubCloneURL(%q) = %q, want %q", in, got, want)
 		}
 	}
-	if _, err := githubCloneURL("nope", "tok"); err == nil {
+	if _, err := githubCloneURL("nope"); err == nil {
 		t.Error("expected error for malformed source")
+	}
+}
+
+func TestGitHubAuthEnv_StoresTokenOutsideCloneArgs(t *testing.T) {
+	env, cleanup, err := githubAuthEnv(t.TempDir(), "tok'quoted")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	joined := strings.Join(env, "\n")
+	if strings.Contains(joined, "tok'quoted") {
+		t.Fatalf("token must not be placed directly in environment values: %s", joined)
+	}
+	if !strings.Contains(joined, "GIT_ASKPASS=") || !strings.Contains(joined, "GIT_TERMINAL_PROMPT=0") {
+		t.Fatalf("missing git askpass env: %s", joined)
 	}
 }
 

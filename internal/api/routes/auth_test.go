@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -184,6 +185,53 @@ func TestRegisterRespectsRegistrationDisabledAfterBootstrap(t *testing.T) {
 	r.ServeHTTP(w, req)
 	if w.Code != http.StatusForbidden {
 		t.Fatalf("second register with disabled registration: expected 403, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestRegisterBootstrapCreatesOnlyOneAdminConcurrently(t *testing.T) {
+	r, store := setupTestRouter(t)
+	defer store.Close()
+
+	if err := store.SetSetting(context.Background(), "registration_enabled", "false"); err != nil {
+		t.Fatal(err)
+	}
+
+	const requests = 8
+	var wg sync.WaitGroup
+	statuses := make(chan int, requests)
+	for i := 0; i < requests; i++ {
+		i := i
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			body, _ := json.Marshal(map[string]string{
+				"email":    "bootstrap" + string(rune('a'+i)) + "@example.com",
+				"password": "password1234",
+			})
+			req := httptest.NewRequest(http.MethodPost, "/api/auth/register", bytes.NewReader(body))
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+			statuses <- w.Code
+		}()
+	}
+	wg.Wait()
+	close(statuses)
+
+	created := 0
+	for status := range statuses {
+		if status == http.StatusCreated {
+			created++
+		}
+	}
+	if created != 1 {
+		t.Fatalf("expected exactly one bootstrap registration, got %d", created)
+	}
+	users, err := store.ListUsers(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(users) != 1 {
+		t.Fatalf("expected exactly one user, got %d", len(users))
 	}
 }
 

@@ -38,7 +38,7 @@ func (s *PostgresStore) GetRemoteNodeByID(ctx context.Context, id string) (*mode
 
 func (s *PostgresStore) ListRemoteNodesByUser(ctx context.Context, userID string) ([]models.RemoteNode, error) {
 	var nodes []models.RemoteNode
-	err := s.db.SelectContext(ctx, &nodes, "SELECT * FROM remote_nodes ORDER BY created_at DESC")
+	err := s.db.SelectContext(ctx, &nodes, "SELECT * FROM remote_nodes WHERE user_id = $1 ORDER BY created_at DESC", userID)
 	return nodes, err
 }
 

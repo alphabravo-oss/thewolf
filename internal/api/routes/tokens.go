@@ -84,6 +84,15 @@ func CreateAPIToken(w http.ResponseWriter, r *http.Request) {
 		response.WriteError(w, http.StatusBadRequest, "validation_failed", err.Error())
 		return
 	}
+	info := auth.GetAuthInfo(r.Context())
+	if info == nil || !info.Scopes.AllowsDelegation(scopes) {
+		response.WriteError(w, http.StatusForbidden, "insufficient_scope", "requested scopes exceed current credential")
+		return
+	}
+	if apikey.ScopeSet(scopes).Has(apikey.ScopeAdmin) && !claims.IsAdmin() {
+		response.WriteError(w, http.StatusForbidden, "forbidden", "admin scope requires an administrator")
+		return
+	}
 
 	days := apikey.DefaultExpiryDays
 	if req.ExpiresInDays != nil {
@@ -144,7 +153,7 @@ func RevokeAPIToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	info := auth.GetAuthInfo(r.Context())
-	isAdmin := info != nil && info.Scopes.Has(apikey.ScopeAdmin)
+	isAdmin := claims.IsAdmin() && info != nil && info.Scopes.Has(apikey.ScopeAdmin)
 	if token.UserID != claims.UserID && !isAdmin {
 		response.WriteError(w, http.StatusForbidden, "forbidden", "cannot revoke another user's token")
 		return

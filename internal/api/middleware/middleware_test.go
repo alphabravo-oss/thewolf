@@ -206,14 +206,14 @@ func TestRateLimiter_Handler_Returns429(t *testing.T) {
 	}
 }
 
-func TestRateLimiter_Handler_UsesXForwardedFor(t *testing.T) {
+func TestRateLimiter_Handler_IgnoresXForwardedFor(t *testing.T) {
 	rl := NewRateLimiter(1, 1, time.Second)
 
 	handler := rl.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	// First request with X-Forwarded-For
+	// First request with X-Forwarded-For consumes only the real remote bucket.
 	req := httptest.NewRequest("GET", "/", nil)
 	req.RemoteAddr = "10.0.0.1:1234"
 	req.Header.Set("X-Forwarded-For", "203.0.113.50")
@@ -223,14 +223,16 @@ func TestRateLimiter_Handler_UsesXForwardedFor(t *testing.T) {
 		t.Errorf("expected 200, got %d", w.Code)
 	}
 
-	// Second request from same forwarded IP, different RemoteAddr
+	// A spoofed same forwarded IP from a different RemoteAddr must not share
+	// the bucket. Wolf should only trust RemoteAddr unless a trusted-proxy
+	// layer has already rewritten it.
 	req2 := httptest.NewRequest("GET", "/", nil)
 	req2.RemoteAddr = "10.0.0.2:5678"
 	req2.Header.Set("X-Forwarded-For", "203.0.113.50")
 	w2 := httptest.NewRecorder()
 	handler.ServeHTTP(w2, req2)
-	if w2.Code != http.StatusTooManyRequests {
-		t.Errorf("expected 429 for same X-Forwarded-For, got %d", w2.Code)
+	if w2.Code != http.StatusOK {
+		t.Errorf("expected 200 for different RemoteAddr despite same X-Forwarded-For, got %d", w2.Code)
 	}
 }
 

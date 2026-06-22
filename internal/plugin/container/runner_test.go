@@ -24,9 +24,18 @@ func newTestCfg() *Config {
 	}
 }
 
+func mustBuildDockerArgs(t *testing.T, cfg *Config, opts Options, tool string, args ...string) (string, []string) {
+	t.Helper()
+	name, dockerArgs, err := BuildDockerArgs(cfg, opts, tool, args...)
+	if err != nil {
+		t.Fatalf("BuildDockerArgs: %v", err)
+	}
+	return name, dockerArgs
+}
+
 func TestBuildDockerArgs_Bandit(t *testing.T) {
 	cfg := newTestCfg()
-	_, args := BuildDockerArgs(cfg, Options{RepoDir: "/repos/myrepo"},
+	_, args := mustBuildDockerArgs(t, cfg, Options{RepoDir: "/repos/myrepo"},
 		"bandit", "-r", "/scan", "-f", "json", "--exit-zero")
 
 	joined := argList(args).String()
@@ -63,7 +72,7 @@ func TestScannerFailureCommandIncludesMessage(t *testing.T) {
 
 func TestBuildDockerArgs_WorkDirOverride(t *testing.T) {
 	cfg := newTestCfg()
-	_, args := BuildDockerArgs(cfg,
+	_, args := mustBuildDockerArgs(t, cfg,
 		Options{RepoDir: "/repos/myrepo", WorkDir: "/scan/cmd/foo"},
 		"gosec", "-fmt", "json", "./...")
 	joined := argList(args).String()
@@ -74,7 +83,7 @@ func TestBuildDockerArgs_WorkDirOverride(t *testing.T) {
 
 func TestBuildDockerArgs_NoRepoMount(t *testing.T) {
 	cfg := newTestCfg()
-	_, args := BuildDockerArgs(cfg,
+	_, args := mustBuildDockerArgs(t, cfg,
 		Options{NoRepoMount: true},
 		"nuclei", "-target", "https://example.com")
 	joined := argList(args).String()
@@ -88,7 +97,7 @@ func TestBuildDockerArgs_NoRepoMount(t *testing.T) {
 
 func TestBuildDockerArgs_ReadWrite(t *testing.T) {
 	cfg := newTestCfg()
-	_, args := BuildDockerArgs(cfg,
+	_, args := mustBuildDockerArgs(t, cfg,
 		Options{RepoDir: "/repos/x", ReadWrite: true},
 		"codeql", "database", "create")
 	joined := argList(args).String()
@@ -108,7 +117,7 @@ func TestBuildDockerArgs_ExtraEnvSortedAndIncluded(t *testing.T) {
 		RepoDir:  "/repos/x",
 		ExtraEnv: map[string]string{"LOCAL_KEY": "l", "AAA": "1"},
 	}
-	_, args := BuildDockerArgs(cfg, opts, "bandit", "/scan")
+	_, args := mustBuildDockerArgs(t, cfg, opts, "bandit", "/scan")
 	joined := argList(args).String()
 	// All three vars present.
 	for _, key := range []string{"GLOBAL_KEY=g", "LOCAL_KEY=l", "AAA=1"} {
@@ -127,7 +136,7 @@ func TestBuildDockerArgs_ExtraEnvSortedAndIncluded(t *testing.T) {
 
 func TestBuildDockerArgs_ExtraMounts(t *testing.T) {
 	cfg := newTestCfg()
-	_, args := BuildDockerArgs(cfg,
+	_, args := mustBuildDockerArgs(t, cfg,
 		Options{RepoDir: "/repos/x", ExtraMounts: []string{"wolf-semgrep-cache:/cache"}},
 		"semgrep", "/scan")
 	joined := argList(args).String()
@@ -136,10 +145,19 @@ func TestBuildDockerArgs_ExtraMounts(t *testing.T) {
 	}
 }
 
+func TestBuildDockerArgs_RejectsDockerSocketExtraMount(t *testing.T) {
+	cfg := newTestCfg()
+	if _, _, err := BuildDockerArgs(cfg,
+		Options{RepoDir: "/repos/x", ExtraMounts: []string{"/var/run/docker.sock:/var/run/docker.sock"}},
+		"semgrep", "/scan"); err == nil {
+		t.Fatal("expected docker socket extra mount to be rejected")
+	}
+}
+
 func TestBuildDockerArgs_DBVolume(t *testing.T) {
 	cfg := newTestCfg()
 	cfg.DBVolume = "wolf-scanners-db"
-	_, args := BuildDockerArgs(cfg, Options{RepoDir: "/repos/x"},
+	_, args := mustBuildDockerArgs(t, cfg, Options{RepoDir: "/repos/x"},
 		"trivy", "fs", "/scan")
 	joined := argList(args).String()
 	if !strings.Contains(joined, "-v wolf-scanners-db:/var/lib/wolf-db") {
@@ -151,7 +169,7 @@ func TestBuildDockerArgs_NoMemoryNoCPU(t *testing.T) {
 	cfg := newTestCfg()
 	cfg.Memory = ""
 	cfg.CPUs = ""
-	_, args := BuildDockerArgs(cfg, Options{RepoDir: "/repos/x"},
+	_, args := mustBuildDockerArgs(t, cfg, Options{RepoDir: "/repos/x"},
 		"bandit", "/scan")
 	joined := argList(args).String()
 	if strings.Contains(joined, "--memory") {
@@ -164,8 +182,8 @@ func TestBuildDockerArgs_NoMemoryNoCPU(t *testing.T) {
 
 func TestBuildDockerArgs_UniqueNames(t *testing.T) {
 	cfg := newTestCfg()
-	name1, _ := BuildDockerArgs(cfg, Options{RepoDir: "/repos/x"}, "bandit", "/scan")
-	name2, _ := BuildDockerArgs(cfg, Options{RepoDir: "/repos/x"}, "bandit", "/scan")
+	name1, _ := mustBuildDockerArgs(t, cfg, Options{RepoDir: "/repos/x"}, "bandit", "/scan")
+	name2, _ := mustBuildDockerArgs(t, cfg, Options{RepoDir: "/repos/x"}, "bandit", "/scan")
 	if name1 == name2 {
 		t.Errorf("expected unique names from sequential calls, both were %q", name1)
 	}
@@ -182,7 +200,7 @@ func TestBuildDockerArgs_UniqueNames(t *testing.T) {
 // non-upstream image, so the args go straight to the entrypoint.
 func TestBuildDockerArgs_EntrypointOverrideSkipsToolName(t *testing.T) {
 	cfg := newTestCfg()
-	_, args := BuildDockerArgs(cfg,
+	_, args := mustBuildDockerArgs(t, cfg,
 		Options{RepoDir: "/repos/myrepo", EntrypointOverride: "sh"},
 		"markdownlint", "-c", "markdownlint /scan/**/*.md")
 

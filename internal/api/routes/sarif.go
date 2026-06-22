@@ -33,6 +33,8 @@ type sarifImportResponse struct {
 	FindingCount int                `json:"finding_count"`
 }
 
+const maxSARIFImportRequestBytes = sarifio.MaxImportBytes + (1 << 20)
+
 func ImportSARIF(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetUserFromContext(r.Context())
 	if claims == nil {
@@ -45,6 +47,7 @@ func ImportSARIF(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, maxSARIFImportRequestBytes)
 	var req sarifImportRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		response.WriteError(w, http.StatusBadRequest, "bad_request", "invalid JSON body")

@@ -70,6 +70,9 @@ func (s Service) ConfigForNode(ctx context.Context, node *models.RemoteNode) (ss
 	if err != nil {
 		return sshclient.Config{}, fmt.Errorf("load SSH credential secret: %w", err)
 	}
+	if secret.UserID != node.UserID {
+		return sshclient.Config{}, fmt.Errorf("SSH credential secret does not belong to remote node owner")
+	}
 	credential, err := secrets.Decrypt(secret.EncryptedValue)
 	if err != nil {
 		return sshclient.Config{}, fmt.Errorf("decrypt SSH credential secret: %w", err)
@@ -83,8 +86,14 @@ func (s Service) ConfigForNode(ctx context.Context, node *models.RemoteNode) (ss
 	}
 	switch node.AuthType {
 	case "", "private_key":
+		if secret.KeyType != models.KeyTypeSSHPrivate {
+			return sshclient.Config{}, fmt.Errorf("SSH private-key auth requires an ssh_private_key secret")
+		}
 		cfg.PrivateKey = credential
 	case "password":
+		if secret.KeyType != models.KeyTypeSSHPassword {
+			return sshclient.Config{}, fmt.Errorf("SSH password auth requires an ssh_password secret")
+		}
 		cfg.Password = credential
 	default:
 		return sshclient.Config{}, fmt.Errorf("unsupported SSH auth_type %q", node.AuthType)
@@ -187,8 +196,17 @@ func (s Service) DiscoverRepos(ctx context.Context, node *models.RemoteNode, bas
 		basePath = defaultPath(node.BasePath)
 	}
 	cmd := `base=` + sshclient.ShellQuote(basePath) + `;
+root=` + sshclient.ShellQuote(node.BasePath) + `;
 if [ ! -d "$base" ]; then exit 44; fi
-find "$base" -maxdepth 3 -name .git -type d 2>/dev/null | while read -r gitdir; do
+cd "$base" || exit 44
+base_real=$(pwd -P)
+if [ -n "$root" ]; then
+  root_real=$(cd "$root" 2>/dev/null && pwd -P) || exit 45
+  if [ "$base_real" != "$root_real" ]; then
+    case "$base_real/" in "$root_real"/*) ;; *) exit 45;; esac
+  fi
+fi
+find "$base_real" -maxdepth 3 -name .git -type d 2>/dev/null | while read -r gitdir; do
   parent=$(dirname "$gitdir")
   name=$(basename "$parent")
   branch=$(git -C "$parent" rev-parse --abbrev-ref HEAD 2>/dev/null || true)

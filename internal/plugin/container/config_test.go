@@ -88,51 +88,74 @@ func TestConfig_Validate(t *testing.T) {
 
 func TestConfig_TranslateRepoPath(t *testing.T) {
 	tests := []struct {
-		name string
-		cfg  *Config
-		in   string
-		want string
+		name    string
+		cfg     *Config
+		in      string
+		want    string
+		wantErr bool
 	}{
 		{
 			"dev_mode_no_translation",
 			&Config{},
 			"/abs/path",
 			"/abs/path",
+			false,
 		},
 		{
 			"prod_mode_translates_subpath",
 			&Config{HostReposRoot: "/host/projects", InContainerReposRoot: "/repos"},
 			"/repos/myrepo",
 			"/host/projects/myrepo",
+			false,
 		},
 		{
 			"prod_mode_translates_root",
 			&Config{HostReposRoot: "/host/projects", InContainerReposRoot: "/repos"},
 			"/repos",
 			"/host/projects",
+			false,
 		},
 		{
-			"prod_mode_unrelated_path_unchanged",
+			"prod_mode_unrelated_path_rejected",
 			&Config{HostReposRoot: "/host/projects", InContainerReposRoot: "/repos"},
 			"/elsewhere/x",
-			"/elsewhere/x",
+			"",
+			true,
+		},
+		{
+			"prod_mode_traversal_rejected",
+			&Config{HostReposRoot: "/host/projects", InContainerReposRoot: "/repos"},
+			"/repos/../etc",
+			"",
+			true,
 		},
 		{
 			"prod_mode_trailing_slash_in_root",
 			&Config{HostReposRoot: "/host/projects", InContainerReposRoot: "/repos/"},
 			"/repos/myrepo",
 			"/host/projects/myrepo",
+			false,
 		},
 		{
 			"nil_config_safe",
 			nil,
 			"/x",
 			"/x",
+			false,
 		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := tc.cfg.TranslateRepoPath(tc.in)
+			got, err := tc.cfg.TranslateRepoPath(tc.in)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("TranslateRepoPath(%q) expected error, got nil", tc.in)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("TranslateRepoPath(%q): %v", tc.in, err)
+			}
 			if got != tc.want {
 				t.Errorf("TranslateRepoPath(%q) = %q, want %q", tc.in, got, tc.want)
 			}

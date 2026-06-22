@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -37,6 +38,8 @@ const maxPasswordLength = 128
 const sessionDuration = 7 * 24 * time.Hour
 const registrationEnabledSetting = "registration_enabled"
 
+var registrationMu sync.Mutex
+
 // validatePassword enforces the length policy shared by register, change-
 // password, and admin user-creation. Returns a user-facing message on failure.
 func validatePassword(pw string) (string, bool) {
@@ -53,11 +56,6 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	h := DefaultHandler
 	if h == nil {
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "handler not initialized")
-		return
-	}
-
-	if !registrationAllowed(r) {
-		response.WriteError(w, http.StatusForbidden, "registration_disabled", "self-service registration is disabled")
 		return
 	}
 
@@ -87,6 +85,22 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	hash, err := auth.HashPassword(req.Password)
 	if err != nil {
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to hash password")
+		return
+	}
+
+	registrationMu.Lock()
+	defer registrationMu.Unlock()
+
+	if !registrationAllowed(r) {
+		response.WriteError(w, http.StatusForbidden, "registration_disabled", "self-service registration is disabled")
+		return
+	}
+
+	// Check if user already exists after acquiring the bootstrap lock so two
+	// concurrent first-user requests cannot both observe an empty user table.
+	existing, _ = h.Store.GetUserByEmail(r.Context(), req.Email)
+	if existing != nil {
+		response.WriteError(w, http.StatusConflict, "conflict", "email already registered")
 		return
 	}
 
@@ -375,6 +389,19 @@ func ChangePassword(w http.ResponseWriter, r *http.Request) {
 	user.UpdatedAt = time.Now()
 	if err := h.Store.UpdateUser(r.Context(), user); err != nil {
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to update password")
+		return
+	}
+	info := auth.GetAuthInfo(r.Context())
+	exceptSessionID := ""
+	if info != nil {
+		exceptSessionID = info.SessionID
+	}
+	if err := h.Store.RevokeAuthSessionsByUser(r.Context(), user.ID, exceptSessionID); err != nil {
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to revoke existing sessions")
+		return
+	}
+	if err := h.Store.RevokeAPITokensByUser(r.Context(), user.ID, ""); err != nil {
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to revoke existing API tokens")
 		return
 	}
 

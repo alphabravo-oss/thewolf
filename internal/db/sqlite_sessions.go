@@ -31,6 +31,20 @@ func (s *SQLiteStore) RevokeAuthSessionByHash(ctx context.Context, hash string) 
 	return err
 }
 
+func (s *SQLiteStore) RevokeAuthSessionsByUser(ctx context.Context, userID string, exceptSessionID string) error {
+	now := time.Now().UTC()
+	if exceptSessionID != "" {
+		_, err := s.db.ExecContext(ctx,
+			"UPDATE auth_sessions SET revoked_at = ? WHERE user_id = ? AND id <> ? AND revoked_at IS NULL",
+			now, userID, exceptSessionID)
+		return err
+	}
+	_, err := s.db.ExecContext(ctx,
+		"UPDATE auth_sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL",
+		now, userID)
+	return err
+}
+
 func (s *SQLiteStore) TouchAuthSession(ctx context.Context, id string) error {
 	now := time.Now().UTC()
 	_, err := s.db.ExecContext(ctx, "UPDATE auth_sessions SET last_used_at = ? WHERE id = ?", now, id)

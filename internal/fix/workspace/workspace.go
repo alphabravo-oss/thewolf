@@ -6,10 +6,10 @@
 // gate, then either keeps the resulting branch (v1: branch-only, no push) or
 // rolls it back. The user's original work tree is never touched: local repos
 // get a dedicated `git worktree` on a fresh branch; GitHub repos get a
-// clone-for-write with the token.
+// clone-for-write with a temporary git askpass helper for the token.
 //
 //   - local  → `git worktree add <tmp> -b <branch>` off the repo's checkout.
-//   - github → `git clone <https-with-token>` into a tmp dir, then a new branch.
+//   - github → `git clone <https-url>` into a tmp dir, then a new branch.
 //   - ssh    → DEFERRED to v1.1; the writability preflight already gates it, and
 //     Prepare returns ErrSSHUnsupported so a misconfigured job fails fast with a
 //     clear reason rather than half-running.
@@ -62,7 +62,7 @@ type Options struct {
 	Token string
 	// CloneURL overrides the derived GitHub clone URL (host/owner/repo). When
 	// empty, it is derived from Repo.SourcePath as
-	// https://<token>@github.com/<owner>/<repo>.git. Mainly a test seam.
+	// https://github.com/<owner>/<repo>.git. Mainly a test seam.
 	CloneURL string
 	// BaseDir is the parent directory for the worktree / clone. When empty,
 	// os.MkdirTemp's default (the OS temp dir) is used.
@@ -95,6 +95,21 @@ var runGit = func(ctx context.Context, dir string, args ...string) (string, erro
 	if dir != "" {
 		cmd.Dir = dir
 	}
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return string(out), fmt.Errorf("git %s: %s: %w", strings.Join(args, " "), strings.TrimSpace(string(out)), err)
+	}
+	return string(out), nil
+}
+
+func runGitWithEnv(ctx context.Context, dir string, env []string, args ...string) (string, error) {
+	// #nosec G204 -- "git" is a fixed binary; args are internal (branch names,
+	// repo paths), never raw user input.
+	cmd := exec.CommandContext(ctx, "git", args...)
+	if dir != "" {
+		cmd.Dir = dir
+	}
+	cmd.Env = append(os.Environ(), env...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return string(out), fmt.Errorf("git %s: %s: %w", strings.Join(args, " "), strings.TrimSpace(string(out)), err)
@@ -157,7 +172,7 @@ func prepareGitHub(ctx context.Context, opts Options) (*Workspace, error) {
 	}
 	cloneURL := opts.CloneURL
 	if cloneURL == "" {
-		derived, err := githubCloneURL(opts.Repo.SourcePath, opts.Token)
+		derived, err := githubCloneURL(opts.Repo.SourcePath)
 		if err != nil {
 			return nil, err
 		}
@@ -169,7 +184,14 @@ func prepareGitHub(ctx context.Context, opts Options) (*Workspace, error) {
 	}
 	clonePath := filepath.Join(tmpRoot, "clone")
 
-	if out, err := runGit(ctx, "", "clone", cloneURL, clonePath); err != nil {
+	env, cleanup, err := githubAuthEnv(tmpRoot, opts.Token)
+	if err != nil {
+		_ = os.RemoveAll(tmpRoot)
+		return nil, err
+	}
+	defer cleanup()
+
+	if out, err := runGitWithEnv(ctx, "", env, "clone", cloneURL, clonePath); err != nil {
 		_ = os.RemoveAll(tmpRoot)
 		return nil, fmt.Errorf("workspace: clone-for-write: %s: %w", redact(strings.TrimSpace(out), opts.Token), err)
 	}
@@ -308,10 +330,9 @@ func mkTempRoot(baseDir string) (string, error) {
 	return dir, nil
 }
 
-// githubCloneURL derives an https clone URL with the token embedded from a
-// GitHub source path. It accepts "owner/repo", "github.com/owner/repo", or a
-// full https URL.
-func githubCloneURL(source, token string) (string, error) {
+// githubCloneURL derives an https clone URL from a GitHub source path. It
+// accepts "owner/repo", "github.com/owner/repo", or a full https URL.
+func githubCloneURL(source string) (string, error) {
 	s := strings.TrimSpace(source)
 	s = strings.TrimSuffix(s, ".git")
 	switch {
@@ -327,7 +348,29 @@ func githubCloneURL(source, token string) (string, error) {
 		return "", fmt.Errorf("workspace: invalid github source %q (want owner/repo)", source)
 	}
 	owner, repo := parts[0], parts[1]
-	return fmt.Sprintf("https://%s@github.com/%s/%s.git", token, owner, repo), nil
+	return fmt.Sprintf("https://github.com/%s/%s.git", owner, repo), nil
+}
+
+func githubAuthEnv(tmpRoot, token string) ([]string, func(), error) {
+	askpass := filepath.Join(tmpRoot, "git-askpass.sh")
+	body := "#!/bin/sh\n" +
+		"case \"$1\" in\n" +
+		"*Username*) printf '%s\\n' 'x-access-token' ;;\n" +
+		"*Password*) printf '%s\\n' " + shellSingleQuote(token) + " ;;\n" +
+		"*) printf '\\n' ;;\n" +
+		"esac\n"
+	if err := os.WriteFile(askpass, []byte(body), 0o700); err != nil {
+		return nil, func() {}, fmt.Errorf("workspace: create git askpass helper: %w", err)
+	}
+	cleanup := func() { _ = os.Remove(askpass) }
+	return []string{
+		"GIT_ASKPASS=" + askpass,
+		"GIT_TERMINAL_PROMPT=0",
+	}, cleanup, nil
+}
+
+func shellSingleQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
 }
 
 // redact removes the token from text so it never leaks into error messages or

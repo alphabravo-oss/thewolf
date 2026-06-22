@@ -77,6 +77,19 @@ func (s ScopeSet) HasAll(required ...string) bool {
 	return true
 }
 
+// AllowsDelegation reports whether a credential holding s may mint a new
+// credential with requested scopes. Unlike Has, the admin super-scope does not
+// imply that non-admin callers may delegate arbitrary privileges; role checks
+// remain responsible for admin authority.
+func (s ScopeSet) AllowsDelegation(requested ScopeSet) bool {
+	for _, scope := range requested {
+		if !s.Has(scope) {
+			return false
+		}
+	}
+	return true
+}
+
 // AdminAll is the implicit scope set granted to JWT (UI) sessions — the UI
 // is fully trusted, so it carries every privilege.
 func AdminAll() ScopeSet { return ScopeSet{ScopeAdmin} }

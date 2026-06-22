@@ -239,12 +239,14 @@ type Store interface {
 	ListAPITokensByUser(ctx context.Context, userID string) ([]models.APIToken, error)
 	ListAllAPITokens(ctx context.Context) ([]models.APIToken, error)
 	RevokeAPIToken(ctx context.Context, id string) error
+	RevokeAPITokensByUser(ctx context.Context, userID string, exceptTokenID string) error
 	TouchAPIToken(ctx context.Context, id string) error
 
 	// Browser Sessions
 	CreateAuthSession(ctx context.Context, session *models.AuthSession) error
 	GetAuthSessionByHash(ctx context.Context, hash string) (*models.AuthSession, error)
 	RevokeAuthSessionByHash(ctx context.Context, hash string) error
+	RevokeAuthSessionsByUser(ctx context.Context, userID string, exceptSessionID string) error
 	TouchAuthSession(ctx context.Context, id string) error
 
 	// Audit Log

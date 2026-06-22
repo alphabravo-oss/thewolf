@@ -45,10 +45,9 @@ func (v *Validator) Validate(ctx context.Context, toolName string, repoPath stri
 
 	cmdParts, ok := ToolCommand[toolName]
 	if !ok {
-		// Unknown tool — skip validation, assume pass
 		return &Result{
-			Pass:   true,
-			Output: fmt.Sprintf("no validation command for tool %q, skipping", toolName),
+			Pass:   false,
+			Output: fmt.Sprintf("no validation command for tool %q", toolName),
 		}, nil
 	}
 

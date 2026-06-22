@@ -1,6 +1,7 @@
 package sarifio
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
@@ -50,11 +51,33 @@ func TestImportSARIFMapsWolfMetadata(t *testing.T) {
 	if !f.Suppressed || f.SuppressionID != "sup-1" || f.SuppressedReason != "accepted risk" {
 		t.Fatalf("suppression not imported: %+v", f)
 	}
+	if strings.Contains(f.SARIFData, `"runs"`) {
+		t.Fatalf("finding SARIFData should contain only the result payload, got full document: %.80s", f.SARIFData)
+	}
 }
 
 func TestImportRejectsUnsupportedVersion(t *testing.T) {
 	_, err := Import([]byte(`{"version":"2.0.0","runs":[{}]}`))
 	if err == nil {
 		t.Fatal("expected unsupported version error")
+	}
+}
+
+func TestImportRejectsOversizedSARIF(t *testing.T) {
+	_, err := Import([]byte(`{"version":"2.1.0","runs":[],"padding":"` + strings.Repeat("x", MaxImportBytes) + `"}`))
+	if err == nil {
+		t.Fatal("expected oversized SARIF error")
+	}
+}
+
+func TestImportRejectsTooManyResults(t *testing.T) {
+	results := make([]string, MaxImportResults+1)
+	for i := range results {
+		results[i] = `{"ruleId":"r","message":{"text":"issue"}}`
+	}
+	data := []byte(`{"version":"2.1.0","runs":[{"tool":{"driver":{"name":"tool"}},"results":[` + strings.Join(results, ",") + `]}]}`)
+	_, err := Import(data)
+	if err == nil {
+		t.Fatal("expected too many results error")
 	}
 }

@@ -22,11 +22,11 @@ func TestValidate_UnknownTool(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !result.Pass {
-		t.Error("expected pass for unknown tool (skip validation)")
+	if result.Pass {
+		t.Error("expected fail-closed result for unknown tool")
 	}
 	if result.Output == "" {
-		t.Error("expected non-empty output explaining skip")
+		t.Error("expected non-empty output explaining missing command")
 	}
 }
 

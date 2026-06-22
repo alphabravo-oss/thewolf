@@ -133,9 +133,12 @@ func TestShim_HostPathTranslation_DooD(t *testing.T) {
 		HostReposRoot:        "/Users/me/projects",
 		InContainerReposRoot: "/repos",
 	}
-	_, args := BuildDockerArgs(cfg,
+	_, args, err := BuildDockerArgs(cfg,
 		Options{RepoDir: "/repos/myrepo"},
 		"bandit", "-r", "/scan")
+	if err != nil {
+		t.Fatalf("BuildDockerArgs: %v", err)
+	}
 	joined := strings.Join(args, " ")
 	if !strings.Contains(joined, "-v /Users/me/projects/myrepo:/scan:ro") {
 		t.Errorf("expected DooD translation host path in bind, got: %s", joined)

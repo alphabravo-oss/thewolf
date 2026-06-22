@@ -134,7 +134,10 @@ func CommandContext(ctx context.Context, cfg *Config, opts Options, tool string,
 			// lets the runner's normal error pathway surface this to the user.
 			return scannerFailureCommand(ctx, "scanner repo mount path is empty")
 		}
-		hostPath := cfg.TranslateRepoPath(opts.RepoDir)
+		hostPath, err := cfg.TranslateRepoPath(opts.RepoDir)
+		if err != nil {
+			return scannerFailureCommand(ctx, err.Error())
+		}
 		mountFlag := fmt.Sprintf("%s:%s:ro", hostPath, ScanMountPoint)
 		if opts.ReadWrite {
 			mountFlag = fmt.Sprintf("%s:%s", hostPath, ScanMountPoint)
@@ -174,6 +177,9 @@ func CommandContext(ctx context.Context, cfg *Config, opts Options, tool string,
 
 	// Extra mounts.
 	for _, m := range opts.ExtraMounts {
+		if err := validateExtraMount(m); err != nil {
+			return scannerFailureCommand(ctx, err.Error())
+		}
 		dockerArgs = append(dockerArgs, "-v", m)
 	}
 
@@ -296,7 +302,7 @@ func sanitizeName(s string) string {
 // would pass to exec.CommandContext, minus the leading "docker".
 //
 // The returned name is the unique --name value used; tests can ignore it.
-func BuildDockerArgs(cfg *Config, opts Options, tool string, args ...string) (containerName string, dockerArgs []string) {
+func BuildDockerArgs(cfg *Config, opts Options, tool string, args ...string) (containerName string, dockerArgs []string, err error) {
 	id := atomic.AddUint64(&containerCounter, 1)
 	containerName = fmt.Sprintf("wolf-scan-%s-%d-%d", sanitizeName(tool), time.Now().UnixNano(), id)
 
@@ -313,7 +319,10 @@ func BuildDockerArgs(cfg *Config, opts Options, tool string, args ...string) (co
 	}
 
 	if !opts.NoRepoMount {
-		hostPath := cfg.TranslateRepoPath(opts.RepoDir)
+		hostPath, err := cfg.TranslateRepoPath(opts.RepoDir)
+		if err != nil {
+			return containerName, nil, err
+		}
 		mountFlag := fmt.Sprintf("%s:%s:ro", hostPath, ScanMountPoint)
 		if opts.ReadWrite {
 			mountFlag = fmt.Sprintf("%s:%s", hostPath, ScanMountPoint)
@@ -345,6 +354,9 @@ func BuildDockerArgs(cfg *Config, opts Options, tool string, args ...string) (co
 		dockerArgs = append(dockerArgs, "-v", fmt.Sprintf("%s:/var/lib/wolf-db", cfg.DBVolume))
 	}
 	for _, m := range opts.ExtraMounts {
+		if err := validateExtraMount(m); err != nil {
+			return containerName, nil, err
+		}
 		dockerArgs = append(dockerArgs, "-v", m)
 	}
 
@@ -382,5 +394,23 @@ func BuildDockerArgs(cfg *Config, opts Options, tool string, args ...string) (co
 		dockerArgs = append(dockerArgs, cfg.ImageFor(tool), tool)
 		dockerArgs = append(dockerArgs, args...)
 	}
-	return containerName, dockerArgs
+	return containerName, dockerArgs, nil
+}
+
+func validateExtraMount(m string) error {
+	parts := strings.Split(m, ":")
+	if len(parts) < 2 {
+		return fmt.Errorf("invalid extra mount %q", m)
+	}
+	hostPath := parts[0]
+	containerPath := parts[1]
+	if isDockerSocketPath(hostPath) || isDockerSocketPath(containerPath) {
+		return fmt.Errorf("refusing to mount Docker socket into scanner container")
+	}
+	return nil
+}
+
+func isDockerSocketPath(p string) bool {
+	clean := strings.TrimSpace(p)
+	return clean == "/var/run/docker.sock" || strings.HasSuffix(clean, "/docker.sock")
 }

@@ -10,6 +10,11 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/models"
 )
 
+const (
+	MaxImportBytes   = 10 << 20
+	MaxImportResults = 10000
+)
+
 type ImportResult struct {
 	Findings    []models.Finding `json:"findings"`
 	ResultCount int              `json:"result_count"`
@@ -69,6 +74,9 @@ type suppressionFile struct {
 }
 
 func Import(data []byte) (ImportResult, error) {
+	if len(data) > MaxImportBytes {
+		return ImportResult{}, fmt.Errorf("SARIF exceeds maximum size of %d bytes", MaxImportBytes)
+	}
 	var log logFile
 	if err := json.Unmarshal(data, &log); err != nil {
 		return ImportResult{}, fmt.Errorf("parse SARIF: %w", err)
@@ -91,8 +99,11 @@ func Import(data []byte) (ImportResult, error) {
 			rules[rule.ID] = rule
 		}
 		for _, result := range run.Results {
+			if out.ResultCount >= MaxImportResults {
+				return ImportResult{}, fmt.Errorf("SARIF exceeds maximum result count of %d", MaxImportResults)
+			}
 			out.ResultCount++
-			finding := findingFromResult(tool, rules[result.RuleID], result, data)
+			finding := findingFromResult(tool, rules[result.RuleID], result)
 			identity.Apply(&finding)
 			out.Findings = append(out.Findings, finding)
 		}
@@ -100,7 +111,7 @@ func Import(data []byte) (ImportResult, error) {
 	return out, nil
 }
 
-func findingFromResult(tool string, rule ruleFile, result resultFile, source []byte) models.Finding {
+func findingFromResult(tool string, rule ruleFile, result resultFile) models.Finding {
 	title := rule.ShortDescription.Text
 	if title == "" {
 		title = result.RuleID
@@ -124,7 +135,7 @@ func findingFromResult(tool string, rule ruleFile, result resultFile, source []b
 		RuleID:           result.RuleID,
 		CWEID:            stringProp(rule.Properties, "cweId"),
 		Status:           models.StatusOpen,
-		SARIFData:        string(source),
+		SARIFData:        findingSARIFData(result),
 		FineCategory:     firstString(stringProp(result.Properties, "fineCategory"), stringProp(rule.Properties, "fineCategory")),
 		FixStrategyID:    firstString(stringProp(result.Properties, "fixStrategyId"), stringProp(rule.Properties, "fixStrategyId")),
 		Confidence:       stringProp(result.Properties, "confidence"),
@@ -144,6 +155,14 @@ func findingFromResult(tool string, rule ruleFile, result resultFile, source []b
 	applyFingerprints(&finding, result)
 	applySuppression(&finding, result)
 	return finding
+}
+
+func findingSARIFData(result resultFile) string {
+	data, err := json.Marshal(result)
+	if err != nil {
+		return ""
+	}
+	return string(data)
 }
 
 func (r resultFile) Description() string {

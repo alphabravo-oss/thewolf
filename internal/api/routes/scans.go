@@ -100,10 +100,8 @@ func CreateScan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify the repo exists. No RBAC yet — all authenticated users can scan any repo.
-	repo, err := h.Store.GetRepoByID(r.Context(), req.RepoID)
-	if err != nil {
-		response.WriteError(w, http.StatusNotFound, "not_found", "repo not found")
+	repo, ok := loadRepoForCaller(w, r, h.Store, req.RepoID, claims)
+	if !ok {
 		return
 	}
 
@@ -925,9 +923,8 @@ func GetScan(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := chi.URLParam(r, "id")
-	scan, err := h.Store.GetScanByID(r.Context(), id)
-	if err != nil {
-		response.WriteError(w, http.StatusNotFound, "not_found", fmt.Sprintf("scan %s not found", id))
+	scan, ok := loadScanForCaller(w, r, h.Store, id, claims)
+	if !ok {
 		return
 	}
 
@@ -1164,9 +1161,7 @@ func StreamScan(w http.ResponseWriter, r *http.Request) {
 	scanID := chi.URLParam(r, "id")
 
 	// Verify scan exists.
-	_, err := h.Store.GetScanByID(r.Context(), scanID)
-	if err != nil {
-		response.WriteError(w, http.StatusNotFound, "not_found", fmt.Sprintf("scan %s not found", scanID))
+	if _, ok := loadScanForCaller(w, r, h.Store, scanID, claims); !ok {
 		return
 	}
 
@@ -1202,6 +1197,9 @@ func streamScanPoll(w http.ResponseWriter, r *http.Request, h *Handler, scanID s
 	if err != nil {
 		return
 	}
+	if !ensureScanOwner(w, scan, auth.GetUserFromContext(r.Context())) {
+		return
+	}
 	sendSSE(w, flusher, "scan_status", fmt.Sprintf(
 		`{"type":"scan_status","scan_id":"%s","status":"%s","finding_count":%d}`,
 		scan.ID, scan.Status, scan.FindingCount,
@@ -1217,6 +1215,9 @@ func streamScanPoll(w http.ResponseWriter, r *http.Request, h *Handler, scanID s
 		case <-ticker.C:
 			scan, err = h.Store.GetScanByID(r.Context(), scanID)
 			if err != nil {
+				return
+			}
+			if !canModifyOwned(auth.GetUserFromContext(r.Context()), scan.UserID) {
 				return
 			}
 			sendSSE(w, flusher, "scan_status", fmt.Sprintf(
@@ -1383,9 +1384,8 @@ func CancelScan(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := chi.URLParam(r, "id")
-	scan, err := h.Store.GetScanByID(r.Context(), id)
-	if err != nil {
-		response.WriteError(w, http.StatusNotFound, "not_found", fmt.Sprintf("scan %s not found", id))
+	scan, ok := loadScanForCaller(w, r, h.Store, id, claims)
+	if !ok {
 		return
 	}
 
@@ -1452,6 +1452,14 @@ func CancelScanTool(w http.ResponseWriter, r *http.Request) {
 	toolName := chi.URLParam(r, "toolName")
 	if scanID == "" || toolName == "" {
 		response.WriteError(w, http.StatusBadRequest, "validation_error", "scanId and toolName required")
+		return
+	}
+	h := DefaultHandler
+	if h == nil {
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "handler not initialized")
+		return
+	}
+	if _, ok := loadScanForCaller(w, r, h.Store, scanID, claims); !ok {
 		return
 	}
 
@@ -1739,6 +1747,9 @@ func GetScanCoverage(w http.ResponseWriter, r *http.Request) {
 		response.WriteError(w, http.StatusNotFound, "not_found", fmt.Sprintf("scan %s not found", scanID))
 		return
 	}
+	if !ensureScanOwner(w, scan, claims) {
+		return
+	}
 
 	if scan.CoverageSummary == "" {
 		response.WriteError(w, http.StatusNotFound, "not_found", "coverage data not available for this scan")
@@ -1831,7 +1842,14 @@ func getAPIKey(h *Handler, engine, userID string) string {
 // ListAILogs returns AI call logs for a scan.
 func ListAILogs(w http.ResponseWriter, r *http.Request) {
 	h := DefaultHandler
+	if h == nil {
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "handler not initialized")
+		return
+	}
 	scanID := chi.URLParam(r, "id")
+	if _, ok := loadScanForCaller(w, r, h.Store, scanID, auth.GetUserFromContext(r.Context())); !ok {
+		return
+	}
 	logs, err := h.Store.ListAILogsByScan(r.Context(), scanID)
 	if err != nil {
 		response.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to list AI logs")
@@ -2861,6 +2879,9 @@ func ScansTrends(w http.ResponseWriter, r *http.Request) {
 		response.WriteError(w, http.StatusBadRequest, "validation_error", "repo_id is required")
 		return
 	}
+	if _, ok := loadRepoForCaller(w, r, h.Store, repoID, claims); !ok {
+		return
+	}
 	branch := r.URL.Query().Get("branch")
 	limit := 30
 	if v := r.URL.Query().Get("limit"); v != "" {
@@ -3173,6 +3194,9 @@ func GetToolSummaries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	scanID := chi.URLParam(r, "id")
+	if _, ok := loadScanForCaller(w, r, h.Store, scanID, auth.GetUserFromContext(r.Context())); !ok {
+		return
+	}
 	summaries, err := h.Store.ListToolSummariesByScan(r.Context(), scanID)
 	if err != nil {
 		response.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to list tool summaries")
@@ -3192,6 +3216,9 @@ func GetScanRecommendations(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	scanID := chi.URLParam(r, "id")
+	if _, ok := loadScanForCaller(w, r, h.Store, scanID, auth.GetUserFromContext(r.Context())); !ok {
+		return
+	}
 	recs, err := h.Store.ListScanRecommendations(r.Context(), scanID)
 	if err != nil {
 		response.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to list recommendations")

@@ -38,7 +38,7 @@ func (s *SQLiteStore) GetRemoteNodeByID(ctx context.Context, id string) (*models
 
 func (s *SQLiteStore) ListRemoteNodesByUser(ctx context.Context, userID string) ([]models.RemoteNode, error) {
 	var nodes []models.RemoteNode
-	err := s.db.SelectContext(ctx, &nodes, "SELECT * FROM remote_nodes ORDER BY created_at DESC")
+	err := s.db.SelectContext(ctx, &nodes, "SELECT * FROM remote_nodes WHERE user_id = ? ORDER BY created_at DESC", userID)
 	return nodes, err
 }
 
