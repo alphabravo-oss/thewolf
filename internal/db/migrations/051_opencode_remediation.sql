@@ -69,4 +69,11 @@ CREATE TABLE IF NOT EXISTS remediation_events (
     created_at TIMESTAMP NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_remediation_events_session_seq ON remediation_events(session_id, seq);
+-- UNIQUE, not a plain index. seq is the sole ordering key for SSE replay and
+-- for the audit trail, so two events sharing a session's seq make the stream
+-- unorderable and let a replay silently drop or reorder turns. The constraint
+-- turns an emitter that restarts its sequence per phase into a loud write
+-- failure instead of quiet corruption. Free to add now because this migration
+-- has never run in production, where it would need a data migration instead.
+-- Keep this comment free of semicolons: the migration runner splits on them.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_remediation_events_session_seq ON remediation_events(session_id, seq);

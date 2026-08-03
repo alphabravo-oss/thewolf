@@ -100,6 +100,51 @@ func TestRemediationEventsOrderedBySeq(t *testing.T) {
 	}
 }
 
+// seq is the only ordering key SSE replay has, so a session must never hold
+// two events sharing one. The unique index is what turns an emitter that
+// restarts its sequence per phase — plan and execute both starting at 1 —
+// into a visible write failure instead of a replay that silently reorders or
+// drops a phase.
+func TestRemediationEventSeqIsUniquePerSession(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+	seed := &models.RemediationSession{
+		ID: "rs-3", UserID: "u-1", RepoID: "r-1", ScanID: "sc-1",
+		Status: models.RemediationPending, CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	}
+	if err := store.CreateRemediationSession(ctx, seed); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	first := &models.RemediationEvent{
+		ID: "rs-3-1", SessionID: "rs-3", Seq: 1, Type: "assistant", CreatedAt: time.Now(),
+	}
+	if err := store.AppendRemediationEvent(ctx, first); err != nil {
+		t.Fatalf("AppendRemediationEvent: %v", err)
+	}
+	// Distinct ID, same (session, seq): the primary key alone would accept
+	// this. Only the unique index refuses it.
+	clash := &models.RemediationEvent{
+		ID: "rs-3-execute-1", SessionID: "rs-3", Seq: 1, Type: "assistant", CreatedAt: time.Now(),
+	}
+	if err := store.AppendRemediationEvent(ctx, clash); err == nil {
+		t.Fatal("duplicate (session_id, seq) was accepted — SSE replay ordering is unguarded")
+	}
+	// A different session reusing seq 1 is legitimate; the constraint is
+	// scoped per session, not global.
+	other := &models.RemediationSession{
+		ID: "rs-4", UserID: "u-1", RepoID: "r-1", ScanID: "sc-1",
+		Status: models.RemediationPending, CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	}
+	if err := store.CreateRemediationSession(ctx, other); err != nil {
+		t.Fatalf("seed other: %v", err)
+	}
+	if err := store.AppendRemediationEvent(ctx, &models.RemediationEvent{
+		ID: "rs-4-1", SessionID: "rs-4", Seq: 1, Type: "assistant", CreatedAt: time.Now(),
+	}); err != nil {
+		t.Fatalf("seq 1 in a second session was rejected: %v", err)
+	}
+}
+
 // TestRemediationSessionBooleansRoundTripPostgres is the direct regression
 // guard for the plan_gate_enabled/patch_gate_enabled INTEGER-vs-BOOLEAN
 // defect: lib/pq encodes a Go bool as the literal "true"/"false" regardless
