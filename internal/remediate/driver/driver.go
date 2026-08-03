@@ -47,6 +47,15 @@ type Patch struct {
 	FilesChanged []string
 	FindingIDs   []string
 	Message      string
+	// Unattributed is true when the commit's Finding-IDs trailer was
+	// missing, malformed, or named no ID in the run's actual finding set —
+	// so FindingIDs is empty. This is a visibility signal, not a failure:
+	// collectPatches keeps the patch (a single missed trailer must not
+	// discard an otherwise-successful run) and only errors the whole
+	// series when every commit in it is unattributed, which is the only
+	// case that plausibly means the agent ignored the trailer contract
+	// entirely rather than missing it once.
+	Unattributed bool
 }
 
 // PatchSeries is the ordered output of an execute run.

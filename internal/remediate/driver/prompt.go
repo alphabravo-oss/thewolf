@@ -156,7 +156,17 @@ var runGit = func(ctx context.Context, dir string, args ...string) (string, erro
 //
 // findings is the set Wolf handed the agent this run; it validates the
 // Finding-IDs trailer each commit carries (see commitFindingIDs) so a
-// malformed or hallucinated ID cannot silently corrupt attribution.
+// malformed or hallucinated ID cannot silently corrupt attribution. A
+// commit that ends up with none is kept, not dropped — see Patch.
+// Unattributed — because one missed trailer must not discard every other,
+// correctly attributed commit in the same run. Only a run where NO commit
+// carries any attribution at all is rejected outright, since that is the
+// one shape that plausibly means the agent ignored the trailer contract
+// entirely rather than missing it once.
+//
+// Cleanliness (did the agent leave uncommitted work behind) is deliberately
+// NOT checked here — see checkClean's doc comment for why that is the
+// caller's call, not this function's.
 func collectPatches(ctx context.Context, worktreePath, base string, findings []models.Finding) (*PatchSeries, error) {
 	validIDs := make(map[string]struct{}, len(findings))
 	for _, f := range findings {
@@ -169,37 +179,94 @@ func collectPatches(ctx context.Context, worktreePath, base string, findings []m
 	}
 	shas := strings.Fields(out)
 	patches := make([]Patch, 0, len(shas))
+	attributed := 0
 	for _, sha := range shas {
 		p, err := commitPatch(ctx, worktreePath, sha, validIDs)
 		if err != nil {
 			return nil, fmt.Errorf("collect patches: %s: %w", sha, err)
 		}
-		if len(p.FindingIDs) == 0 {
-			return nil, fmt.Errorf("collect patches: commit %s has no attributable finding IDs (missing or malformed %s trailer)", sha, findingIDsTrailer)
+		p.Unattributed = len(p.FindingIDs) == 0
+		if !p.Unattributed {
+			attributed++
 		}
 		patches = append(patches, p)
 	}
-
-	if err := checkClean(ctx, worktreePath); err != nil {
-		return nil, err
+	if len(patches) > 0 && attributed == 0 {
+		return nil, fmt.Errorf("collect patches: no commit in this run carries an attributable %s trailer (%d commit(s))", findingIDsTrailer, len(patches))
 	}
+
 	return &PatchSeries{Patches: patches}, nil
 }
 
-// checkClean fails if the agent left uncommitted work behind. `git log`
-// only sees commits — an agent that edits a file and forgets to commit it
-// (or gets interrupted mid-fix) would otherwise report success with the
-// edit silently dropped, since nothing downstream inspects the working
-// tree.
+// strippedAgentConfigPaths are the repository-level OpenCode config paths a
+// separate, not-yet-landed task (StripAgentConfig) removes from the
+// worktree before any driver call, on every run against a repo that ships
+// one — that is the entire point of stripping them, so their removal
+// shows up in every such run's `git status`, not as an edge case. The list
+// is duplicated here defensively rather than imported: this package cannot
+// depend on a sibling package that does not exist yet, and must not assume
+// it lands with this exact shape.
+var strippedAgentConfigPaths = []string{"opencode.json", "opencode.jsonc", ".opencode"}
+
+func isStrippedAgentConfigPath(path string) bool {
+	for _, p := range strippedAgentConfigPaths {
+		if path == p || strings.HasPrefix(path, p+"/") {
+			return true
+		}
+	}
+	return false
+}
+
+// checkClean fails if the agent left uncommitted work behind — a tracked
+// file edited and never committed, which `git log` alone would silently
+// drop since nothing else inspects the working tree. It is NOT part of
+// collectPatches: budget exhaustion kills the container mid-tool-call, so a
+// half-written file is the EXPECTED state on that path, not evidence a fix
+// was lost, and execDriver.Execute skips this check entirely when the run
+// was exhausted rather than let it discard commits the agent already
+// landed.
+//
+// Two categories of "dirty" are deliberately not failures:
+//   - Untracked files (--untracked-files=no): a stray build artifact, or a
+//     directory OpenCode itself creates in the project dir, is not agent
+//     work left uncommitted.
+//   - strippedAgentConfigPaths: removed from the worktree before this run
+//     even started, by a step outside this package's control. Their
+//     deletion is expected on every run against a repo that ships one, not
+//     a signal of anything the agent did.
 func checkClean(ctx context.Context, worktreePath string) error {
-	out, err := runGit(ctx, worktreePath, "status", "--porcelain")
+	out, err := runGit(ctx, worktreePath, "status", "--porcelain", "--untracked-files=no")
 	if err != nil {
 		return fmt.Errorf("collect patches: check worktree status: %w", err)
 	}
-	if strings.TrimSpace(out) != "" {
-		return fmt.Errorf("collect patches: worktree has uncommitted changes:\n%s", strings.TrimSpace(out))
+	var dirty []string
+	for _, line := range strings.Split(out, "\n") {
+		if line == "" {
+			continue
+		}
+		if isStrippedAgentConfigPath(statusPath(line)) {
+			continue
+		}
+		dirty = append(dirty, line)
+	}
+	if len(dirty) > 0 {
+		return fmt.Errorf("collect patches: worktree has uncommitted changes:\n%s", strings.Join(dirty, "\n"))
 	}
 	return nil
+}
+
+// statusPath extracts the path from one `git status --porcelain` line:
+// 2 status characters, a space, then either a plain path or, for a rename,
+// "old -> new" — the latter names what's actually present in the tree now.
+func statusPath(line string) string {
+	if len(line) < 4 {
+		return ""
+	}
+	path := line[3:]
+	if idx := strings.Index(path, " -> "); idx >= 0 {
+		path = path[idx+4:]
+	}
+	return path
 }
 
 // commitPatch turns one commit into a Patch: `git show --name-only` carries
@@ -241,9 +308,9 @@ func commitPatch(ctx context.Context, worktreePath, sha string, validIDs map[str
 // dropped rather than trusted. This also catches malformed trailers as a
 // side effect: "f-1 f-2" (space, not comma) parses as one bogus id
 // "f-1 f-2", which matches nothing in validIDs and is dropped; "[f-1, f-2]"
-// splits into "[f-1" and "f-2]", neither of which matches either.
-// collectPatches then rejects a commit outright once it ends up with zero
-// attributed IDs, rather than accepting the corrupted value.
+// splits into "[f-1" and "f-2]", neither of which matches either. A commit
+// that ends up with zero IDs this way is kept by collectPatches with
+// Patch.Unattributed set, not rejected — see collectPatches's doc comment.
 func commitFindingIDs(body string, validIDs map[string]struct{}) []string {
 	var ids []string
 	for _, line := range strings.Split(body, "\n") {

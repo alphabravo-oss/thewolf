@@ -195,31 +195,91 @@ func TestCollectPatchesNoNewCommitsReturnsEmptySeries(t *testing.T) {
 	}
 }
 
-func TestCollectPatchesRejectsUncommittedWork(t *testing.T) {
-	wt, base := newFixtureWorktree(t, "wolf/remediation-dirty")
+// TestCollectPatchesToleratesOneUnattributedCommitAmongOthers is the
+// inverted form of what was TestCollectPatchesRejectsCommitWithNoAttributable
+// FindingIDs in fix round 1: a single missed/malformed trailer must not
+// discard an otherwise-successful run's other, correctly attributed
+// commits. The gap is visible via Patch.Unattributed instead of fatal.
+func TestCollectPatchesToleratesOneUnattributedCommitAmongOthers(t *testing.T) {
+	wt, base := newFixtureWorktree(t, "wolf/remediation-mixed-trailer")
 	writeTestFile(t, filepath.Join(wt, "fix1.txt"), "fix1\n")
 	runGitT(t, wt, "add", "fix1.txt")
 	runGitT(t, wt, "commit", "-q", "-m", "Fix one\n\nFinding-IDs: f-1")
-	// Leave an uncommitted edit behind, simulating an agent interrupted
-	// mid-fix.
-	writeTestFile(t, filepath.Join(wt, "fix2.txt"), "half-done\n")
 
-	_, err := collectPatches(context.Background(), wt, base, []models.Finding{{ID: "f-1"}})
-	if err == nil {
-		t.Fatal("collectPatches succeeded with an uncommitted file present, want an error")
+	writeTestFile(t, filepath.Join(wt, "fix2.txt"), "fix2\n")
+	runGitT(t, wt, "add", "fix2.txt")
+	// Malformed trailer (space, not comma) — must not discard the whole run.
+	runGitT(t, wt, "commit", "-q", "-m", "Fix two\n\nFinding-IDs: f-2 f-3")
+
+	series, err := collectPatches(context.Background(), wt, base, []models.Finding{{ID: "f-1"}, {ID: "f-2"}, {ID: "f-3"}})
+	if err != nil {
+		t.Fatalf("collectPatches: %v (one bad trailer must not discard an otherwise-attributed run)", err)
+	}
+	if len(series.Patches) != 2 {
+		t.Fatalf("got %d patches, want 2", len(series.Patches))
+	}
+	if series.Patches[0].Unattributed {
+		t.Errorf("patch 0 marked Unattributed, want attributed (carries f-1)")
+	}
+	if !series.Patches[1].Unattributed {
+		t.Error("patch 1 (malformed trailer) not marked Unattributed")
+	}
+	if len(series.Patches[1].FindingIDs) != 0 {
+		t.Errorf("patch 1 FindingIDs = %v, want empty", series.Patches[1].FindingIDs)
 	}
 }
 
-func TestCollectPatchesRejectsCommitWithNoAttributableFindingIDs(t *testing.T) {
-	wt, base := newFixtureWorktree(t, "wolf/remediation-bad-trailer")
+// TestCollectPatchesRejectsSeriesWithNoAttributionAtAll covers the one case
+// that IS still fatal: every commit in a non-empty series unattributed,
+// which plausibly means the agent ignored the trailer contract entirely.
+func TestCollectPatchesRejectsSeriesWithNoAttributionAtAll(t *testing.T) {
+	wt, base := newFixtureWorktree(t, "wolf/remediation-no-attribution")
 	writeTestFile(t, filepath.Join(wt, "fix1.txt"), "fix1\n")
 	runGitT(t, wt, "add", "fix1.txt")
-	// Malformed trailer (space, not comma) — must not be trusted.
-	runGitT(t, wt, "commit", "-q", "-m", "Fix one\n\nFinding-IDs: f-1 f-2")
+	runGitT(t, wt, "commit", "-q", "-m", "Fix one (no trailer at all)")
 
-	_, err := collectPatches(context.Background(), wt, base, []models.Finding{{ID: "f-1"}, {ID: "f-2"}})
+	_, err := collectPatches(context.Background(), wt, base, []models.Finding{{ID: "f-1"}})
 	if err == nil {
-		t.Fatal("collectPatches succeeded for a commit with an unparsable trailer, want an error")
+		t.Fatal("collectPatches succeeded for a run where no commit carries any attribution, want an error")
+	}
+}
+
+func TestCheckCleanRejectsUnstagedEditToTrackedFile(t *testing.T) {
+	wt, _ := newFixtureWorktree(t, "wolf/checkclean-dirty")
+	// base.txt is tracked (committed as part of the fixture's pre-existing
+	// history) and edited here without being committed.
+	writeTestFile(t, filepath.Join(wt, "base.txt"), "edited but never committed\n")
+
+	if err := checkClean(context.Background(), wt); err == nil {
+		t.Fatal("checkClean succeeded with an edited tracked file present, want an error")
+	}
+}
+
+func TestCheckCleanIgnoresUntrackedFiles(t *testing.T) {
+	wt, _ := newFixtureWorktree(t, "wolf/checkclean-untracked")
+	writeTestFile(t, filepath.Join(wt, "build-artifact.tmp"), "stray output\n")
+
+	if err := checkClean(context.Background(), wt); err != nil {
+		t.Errorf("checkClean failed on an untracked file, want it ignored: %v", err)
+	}
+}
+
+// TestCheckCleanIgnoresStrippedAgentConfigPaths is a regression test for
+// fix round 2: Task 4a's StripAgentConfig (not yet landed, wired in
+// separately) os.RemoveAll's repo-level OpenCode config from the worktree
+// before any driver call, with no commit. Without this exclusion, every run
+// against a repo that ships one of these would look dirty and fail.
+func TestCheckCleanIgnoresStrippedAgentConfigPaths(t *testing.T) {
+	wt, _ := newFixtureWorktree(t, "wolf/checkclean-stripped")
+	writeTestFile(t, filepath.Join(wt, "opencode.json"), `{"permission":{"*":"allow"}}`)
+	runGitT(t, wt, "add", "opencode.json")
+	runGitT(t, wt, "commit", "-q", "-m", "repo ships its own opencode.json")
+	if err := os.Remove(filepath.Join(wt, "opencode.json")); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := checkClean(context.Background(), wt); err != nil {
+		t.Errorf("checkClean failed on a stripped agent-config removal, want it ignored: %v", err)
 	}
 }
 

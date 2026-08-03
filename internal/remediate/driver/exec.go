@@ -127,9 +127,14 @@ func (d *execDriver) buildInvocation(req ExecuteRequest, configPath, prompt stri
 		// refuses to operate on a directory it doesn't own.
 		"--user", fmt.Sprintf("%d:%d", d.cfg.UID, d.cfg.GID),
 		// The image's baked-in $HOME (/home/wolf) is owned by uid 1000 and
-		// unwritable by the arbitrary --user above; /tmp is world-writable
-		// in the base image regardless of uid.
-		"-e", "HOME=/tmp",
+		// unwritable by the arbitrary --user above. A dedicated tmpfs HOME,
+		// owned by that same uid and mode 0700, is tighter than pointing
+		// HOME at the world-writable /tmp this image already tmpfs-mounts
+		// for scanners (internal/plugin/container/runner.go's
+		// --tmpfs /tmp:...,mode=1777 convention) — nothing else in the
+		// container can read whatever OpenCode or git write there.
+		"-e", "HOME=/home/agent",
+		"--tmpfs", fmt.Sprintf("/home/agent:rw,mode=0700,uid=%d,gid=%d", d.cfg.UID, d.cfg.GID),
 		"-v", req.WorktreePath + ":/workspace",
 		"-v", filepath.Dir(configPath) + ":/config:ro",
 	}
@@ -190,10 +195,10 @@ type textEvent struct {
 
 // killContainer force-stops a run's container by name after budget
 // exhaustion. Canceling the driver's own context only SIGKILLs the local
-// `docker run` CLI client process — SIGKILL cannot be signal-proxied into
-// the container it's attached to, and `--rm` never fires on a killed
-// client — so without this the agent keeps running, still spending tokens
-// and still writing to the worktree, after Wolf has stopped watching it.
+// `docker run` CLI client process; SIGKILL cannot be signal-proxied into
+// the container it's attached to, so without an explicit kill the agent
+// keeps running — still spending tokens and still writing to the
+// worktree — after Wolf has stopped watching it.
 func killContainer(ctx context.Context, binary, name string) {
 	if name == "" {
 		return
@@ -373,6 +378,17 @@ func (d *execDriver) Execute(ctx context.Context, req ExecuteRequest) (*PatchSer
 			return nil, m.Usage(), fmt.Errorf("%w (collect patches after exhaustion: %v)", streamErr, collectErr)
 		}
 		return nil, m.Usage(), collectErr
+	}
+	// checkClean only runs when the agent finished on its own. Exhaustion
+	// kills the container mid-tool-call, so a half-written file is the
+	// EXPECTED state on that path — evidence Wolf pulled the plug, not
+	// evidence a fix was lost — and must not discard the commits already
+	// landed, which is exactly what the exhaustion branch above exists to
+	// keep.
+	if streamErr == nil {
+		if err := checkClean(ctx, req.WorktreePath); err != nil {
+			return nil, m.Usage(), err
+		}
 	}
 	return series, m.Usage(), streamErr
 }
