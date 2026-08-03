@@ -24,6 +24,7 @@ Every task's requirements implicitly include this section.
 - **Scopes are reused, not minted.** Remediation endpoints use `read:fixes` / `write:fixes`. Writing the service-identity credential additionally requires `admin`.
 - **Redaction:** injected credentials must never appear in `remediation_events`, SSE output, or a PR body. Follow the existing `*_never_render` fixture convention.
 - **Commit style:** conventional commits (`feat(remediate):`, `test(remediate):`). Every task ends with a commit and a green `go build ./...`.
+- **Regenerate the scanner lock whenever you add or change Go source.** `scanners/scanner-lock.yaml` digests every file under `internal/` — they are fixer build inputs, because the fixer image compiles Wolf's own source. Adding a package therefore makes the lock stale and fails `TestRepositoryLockIsDeterministicGolden` and `TestDefaultManifestValidation`. Run `go run ./cmd/scannertools lock` and include the result in your commit. `go test ./internal/remediate/...` alone will not catch this — only the full `go test ./...` will.
 
 ## Spike: COMPLETE — findings that change this plan
 
