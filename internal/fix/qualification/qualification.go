@@ -44,6 +44,9 @@ var boundaries = map[string]boundary{
 	"api":    {authMode: "api-key"},
 	"claude": {authMode: "interactive-session", cli: "claude"},
 	"codex":  {authMode: "interactive-session", cli: "codex"},
+	// opencode takes credentials per run through OPENCODE_AUTH_CONTENT rather
+	// than a logged-in session on disk, so its boundary is "injected".
+	"opencode": {authMode: "injected", cli: "opencode"},
 }
 
 // Run validates the packaged variant and executes success, fallback, and
@@ -68,7 +71,7 @@ func Run(ctx context.Context, expectedVariant, expectedAuthMode, scratch string)
 	}
 
 	installed := make([]string, 0, 1)
-	for _, command := range []string{"claude", "codex"} {
+	for _, command := range []string{"claude", "codex", "opencode"} {
 		_, err := exec.LookPath(command)
 		present := err == nil
 		if command == expected.cli && !present {

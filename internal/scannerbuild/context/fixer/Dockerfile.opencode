@@ -68,4 +68,10 @@ USER wolf
 WORKDIR /workspace
 ENV HOME=/home/wolf
 
-ENTRYPOINT ["/usr/local/bin/opencode"]
+# Same entrypoint as every other fixer variant. The release path (strict
+# version smoke, qualification) appends its own arguments to the image with no
+# --entrypoint override and so assumes this exact contract; diverging here
+# turned those invocations into `opencode opencode --version`. The remediation
+# driver reaches the CLI by passing `--entrypoint /usr/local/bin/opencode` at
+# run time, which is the caller's business, not the image's.
+ENTRYPOINT ["/usr/local/bin/wolf", "fixer"]

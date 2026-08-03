@@ -60,15 +60,22 @@ type RemediationPlan struct {
 
 // RemediationPatch is one commit produced by an execute run.
 type RemediationPatch struct {
-	ID           string     `json:"id" db:"id"`
-	SessionID    string     `json:"session_id" db:"session_id"`
-	CommitSHA    string     `json:"commit_sha" db:"commit_sha"`
-	FilesChanged string     `json:"files_changed" db:"files_changed"`
-	FindingIDs   string     `json:"finding_ids" db:"finding_ids"`
-	Message      string     `json:"message" db:"message"`
-	CreatedAt    time.Time  `json:"created_at" db:"created_at"`
-	ApprovedBy   string     `json:"approved_by,omitempty" db:"approved_by"`
-	ApprovedAt   *time.Time `json:"approved_at,omitempty" db:"approved_at"`
+	ID        string `json:"id" db:"id"`
+	SessionID string `json:"session_id" db:"session_id"`
+	CommitSHA string `json:"commit_sha" db:"commit_sha"`
+	// FilesChanged is a JSON array of repo-relative paths, e.g.
+	// `["db/user.go","api/handler.go"]`. It is stored as text because the
+	// column must work on SQLite and Postgres alike; JSON is the encoding
+	// rather than a delimiter because paths may contain a comma or a space,
+	// and because it round-trips with plan.Item.Files. Empty is "" or "[]".
+	FilesChanged string `json:"files_changed" db:"files_changed"`
+	// FindingIDs is a JSON array of finding IDs this commit addresses, e.g.
+	// `["f-1","f-2"]`, encoded exactly as FilesChanged is.
+	FindingIDs string     `json:"finding_ids" db:"finding_ids"`
+	Message    string     `json:"message" db:"message"`
+	CreatedAt  time.Time  `json:"created_at" db:"created_at"`
+	ApprovedBy string     `json:"approved_by,omitempty" db:"approved_by"`
+	ApprovedAt *time.Time `json:"approved_at,omitempty" db:"approved_at"`
 }
 
 // RemediationEvent is one redacted record from the agent's event stream.
