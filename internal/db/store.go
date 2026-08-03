@@ -289,6 +289,22 @@ type Store interface {
 	UpdatePromptTemplate(ctx context.Context, tmpl *models.AIPromptTemplate) error
 	DeletePromptTemplate(ctx context.Context, id string) error
 	ResolvePromptSection(ctx context.Context, promptType, section, collectionID string) (string, error)
+
+	// Remediation (agentic triage/fix sessions driven by the OpenCode CLI)
+	CreateRemediationSession(ctx context.Context, session *models.RemediationSession) error
+	GetRemediationSession(ctx context.Context, id string) (*models.RemediationSession, error)
+	ListRemediationSessions(ctx context.Context, userID string) ([]models.RemediationSession, error)
+	UpdateRemediationSession(ctx context.Context, session *models.RemediationSession) error
+	SaveRemediationPlan(ctx context.Context, plan *models.RemediationPlan) error
+	// GetRemediationPlan returns the most recently saved plan for a session.
+	GetRemediationPlan(ctx context.Context, sessionID string) (*models.RemediationPlan, error)
+	ApproveRemediationPlan(ctx context.Context, sessionID, approverID string) error
+	SaveRemediationPatches(ctx context.Context, sessionID string, patches []models.RemediationPatch) error
+	ListRemediationPatches(ctx context.Context, sessionID string) ([]models.RemediationPatch, error)
+	// AppendRemediationEvent and ListRemediationEvents back the SSE replay
+	// stream: events are ordered by seq, never mutated once written.
+	AppendRemediationEvent(ctx context.Context, event *models.RemediationEvent) error
+	ListRemediationEvents(ctx context.Context, sessionID string, afterSeq int) ([]models.RemediationEvent, error)
 }
 
 // prepareScanForWrite applies the durable queue defaults to explicit INSERTs.
