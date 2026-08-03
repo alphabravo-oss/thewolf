@@ -524,6 +524,46 @@ func TestNoAskRulesForDangerousActions(t *testing.T) {
 			}
 		}
 	}
+
+	// No rule anywhere may be "ask": under --auto it silently becomes allow.
+	for pattern, effect := range parsed.Permission.Bash {
+		if effect == "ask" {
+			t.Errorf("bash[%q] = \"ask\" — degrades to allow under --auto", pattern)
+		}
+	}
+}
+
+// bash defaults to deny so a command nobody enumerated is refused rather
+// than permitted. This is the difference between an allowlist and a
+// blocklist, and it is the whole reason yolo mode is survivable.
+func TestExecuteBashDefaultsToDeny(t *testing.T) {
+	doc, err := Execute()
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	var parsed struct {
+		Permission struct {
+			Bash map[string]string `json:"bash"`
+		} `json:"permission"`
+	}
+	if err := json.Unmarshal(doc, &parsed); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if got := parsed.Permission.Bash["*"]; got != "deny" {
+		t.Fatalf("bash[\"*\"] = %q, want \"deny\"", got)
+	}
+	// Commands nobody thought to denylist must still be refused.
+	for _, unlisted := range []string{"nc *", "ssh *", "chmod *", "dd *", "base64 *"} {
+		if effect, present := parsed.Permission.Bash[unlisted]; present && effect == "allow" {
+			t.Errorf("bash[%q] = allow, want refusal via the deny default", unlisted)
+		}
+	}
+	// The build tooling the agent legitimately needs stays allowed.
+	for _, allowed := range []string{"git *", "npm *", "go *"} {
+		if parsed.Permission.Bash[allowed] != "allow" {
+			t.Errorf("bash[%q] = %q, want \"allow\"", allowed, parsed.Permission.Bash[allowed])
+		}
+	}
 }
 ```
 
@@ -564,10 +604,12 @@ func TestNoAskRulesForDangerousActions(t *testing.T) {
       "**/*.key": "deny"
     },
     "bash": {
-      "*": "ask",
+      "*": "deny",
       "git *": "allow",
       "npm *": "allow",
       "go *": "allow",
+      "make *": "allow",
+      "pytest *": "allow",
       "rm -rf *": "deny",
       "curl *": "deny",
       "wget *": "deny",
@@ -577,6 +619,13 @@ func TestNoAskRulesForDangerousActions(t *testing.T) {
   }
 }
 ```
+
+The bash default is `deny`, not `ask`. Under `--auto` an `ask` degrades to
+allow, which would permit any dangerous command nobody thought to denylist
+(`nc`, `ssh`, `chmod`, `dd`, `base64`). Default-deny plus an allowlist refuses
+the unlisted command instead. The explicit denies after the allowlist are
+belt-and-braces: `rm -rf *` would otherwise be caught by `*: deny` anyway, but
+naming it documents intent and survives someone widening the allowlist later.
 
 - [ ] **Step 3: Run test to verify it fails**
 
@@ -647,10 +696,17 @@ func Execute() ([]byte, error) {
 				"**/*.key":    "deny",
 			},
 			Bash: map[string]string{
-				"*":        "ask",
+				// Default-deny: an unlisted command is refused, not allowed.
+				// Under --auto an "ask" would degrade to allow, so the
+				// fallback must be deny.
+				"*":        "deny",
 				"git *":    "allow",
 				"npm *":    "allow",
 				"go *":     "allow",
+				"make *":   "allow",
+				"pytest *": "allow",
+				// Redundant under *: deny, but kept to document intent if the
+				// allowlist is ever widened.
 				"rm -rf *": "deny",
 				"curl *":   "deny",
 				"wget *":   "deny",

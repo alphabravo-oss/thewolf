@@ -165,15 +165,26 @@ anything not explicitly denied.
 { "permission": {
     "edit": { "*": "allow", ".github/**": "deny", "**/*.pem": "deny",
               "**/*.key": "deny" },
-    "bash": { "*": "ask", "git *": "allow", "npm *": "allow", "go *": "allow",
+    "bash": { "*": "deny", "git *": "allow", "npm *": "allow", "go *": "allow",
+              "make *": "allow", "pytest *": "allow",
               "rm -rf *": "deny", "curl *": "deny", "sudo *": "deny" },
     "external_directory": { "*": "deny" } } }
 ```
 
 The deny entries are the **hard deny list** and are injected in both gated and
 yolo mode. Yolo mode disables Wolf's approval gates; it does not disable
-OpenCode's permission rules. Under `--auto`, `ask` degrades to allow, so
-anything that must not happen is expressed as `deny`, never as `ask`.
+OpenCode's permission rules.
+
+**Bash is default-deny, not default-ask.** Under `--auto` an `ask` degrades to
+allow, so a bash fallback of `ask` would permit every command nobody thought to
+denylist — `nc`, `ssh`, `chmod`, `dd`, `base64`. An allowlist refuses the
+unlisted command instead; a blocklist only stops what we remembered to name.
+No rule in either document is `ask`.
+
+`edit` keeps `*: allow` because the agent must be able to modify arbitrary
+source files to fix findings — that is the job. The risk there is bounded by
+path denies plus `external_directory: deny`, which confines every write to the
+worktree.
 
 `external_directory: deny` confines the agent to the worktree.
 
