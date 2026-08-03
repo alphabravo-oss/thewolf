@@ -196,11 +196,49 @@ closes. The agent edits, builds, tests, and commits — it never pushes,
 installs, or fetches. Wolf pushes the branch from the host via
 `pr.PushBranch`, outside the container.
 
-Egress is controlled at two layers — this allowlist and the container's
-`--network none` — and neither is sufficient alone. The allowlist cannot stop
-a permitted binary from opening a socket; the network policy cannot stop local
-arbitrary code execution. Do not remove one because the other appears to cover
-it.
+**The document is root-deny at the key level.** OpenCode has roughly fifteen
+permission keys (`read`, `edit`, `glob`, `grep`, `list`, `bash`, `task`,
+`external_directory`, `todowrite`, `webfetch`, `websearch`, `lsp`, `skill`,
+`question`, `doom_loop`), and an unset key defaults to **allow**. Setting only
+`edit`/`bash`/`external_directory` would therefore permit `webfetch` and
+`websearch` — direct egress that bypasses the bash allowlist entirely. So both
+documents open with `"*": "deny"` and re-allow only what the phase needs:
+`read`/`glob`/`grep`/`list` in both, plus `todowrite` in the execute phase.
+`task`, `skill`, `webfetch`, `websearch`, and `lsp` are denied.
+
+### Egress control — what is and is not enforced
+
+Three corrections to earlier drafts of this section, all found in whole-branch
+review. They are recorded here because the next four phases are built against
+this document.
+
+**`--network none` cannot be one of the layers.** An `opencode run` must reach
+its provider API, so a network-isolated container cannot start a session at
+all. Earlier text named `--network none` as one of two egress layers; that is
+not achievable. The realistic control is an **egress allowlist restricted to
+the provider endpoint**, which Task 4 must implement instead. Resolve this
+before Task 4 is written — it changes the threat model the bash allowlist was
+sized against.
+
+**The hard deny list may be overridable by the scanned repository.** OpenCode's
+config precedence places project-level config (`opencode.json`, `.opencode/`)
+*above* the env-var custom config. The scanned repository is untrusted input by
+definition, so a repo carrying its own `opencode.json` may outrank Wolf's
+document. The execute phase denies editing those paths so the agent cannot
+author one mid-run, but a pre-existing file in the repo is not yet handled.
+OpenCode documents a highest-priority "managed config" tier that is not
+overridable — that is the correct home for a hard deny list, and confirming it
+is a spike question. Do not claim the deny list is non-overridable until that
+is verified.
+
+**The bash allowlist is not a containment boundary.** `make *`, `npm run *`,
+`go build *`, and `go test *` all execute code from files the agent can edit
+(`Makefile`, `package.json`, `*_test.go`), because `edit` is `{"*": "allow"}`
+with only path-specific denies. An agent that writes a `Makefile` and runs
+`make x` has stepped outside the allowlist. These entries are kept because the
+agent genuinely needs to build and test — but the allowlist should be
+understood as reducing accidental blast radius, not as preventing deliberate
+escape. Egress control has to carry that weight.
 
 `edit` keeps `*: allow` because the agent must be able to modify arbitrary
 source files to fix findings — that is the job. The risk there is bounded by
@@ -444,6 +482,12 @@ fold back into this spec before phase 4 is planned.
 2. Can `auth.json` be harvested cleanly on container exit, and what is the exit behavior if the user abandons the login?
 3. Do Grok and OpenAI rotate refresh tokens on use? This determines whether the write-back path is mandatory or belt-and-braces.
 4. What does the `--format json` event stream actually emit per turn, and what is the correct signal to count as "a turn"?
+5. **What is the complete permission key set for the pinned version (1.18.11), and does a root `"*": "deny"` actually deny unlisted keys?** The root-wildcard design above depends on it. Confirm too that denying `task`, `skill`, `webfetch`, `websearch`, and `lsp` does not break ordinary triage or fixing.
+6. **Which environment variable loads a config *file* — `OPENCODE_CONFIG` or `OPENCODE_CONFIG_DIR`?** The docs describe `OPENCODE_CONFIG_DIR` as the directory for agents/commands/plugins, not for `opencode.json`. If the driver sets the wrong one, the golden-tested permission document is never loaded at all and the agent runs unconstrained. Verify by running with a deliberately restrictive document and confirming it takes effect.
+7. **Does a repository-supplied `opencode.json` override the injected config, and does the "managed config" tier resolve it?** Test with a fixture repo carrying a permissive `opencode.json` and confirm whether Wolf's denies still hold.
+
+Questions 4, 5, and 6 all gate Phase 1: question 4 blocks the meter, and 5 and 6
+together determine whether the permission documents constrain anything at all.
 
 Question 4 gates phase 1 (the meter cannot be written without it), so the spike
 should answer it first even though the rest concerns phase 4.
