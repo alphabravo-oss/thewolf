@@ -1074,6 +1074,12 @@ func (d *execDriver) buildInvocation(req ExecuteRequest, configPath, prompt stri
 		"-e", "OPENCODE_AUTH_CONTENT",
 		"-e", "OPENCODE_CONFIG_DIR=/config",
 		"--network", "none",
+		// The image keeps the repo-wide fixer entrypoint
+		// (`wolf fixer`) so the release path's smoke and
+		// qualification steps, which append their own arguments with
+		// no override, still work. Reaching the CLI is this driver's
+		// job, not the image's.
+		"--entrypoint", "/usr/local/bin/opencode",
 		d.cfg.Image,
 		"run", "--format", "json", "--auto",
 	}
@@ -1712,6 +1718,14 @@ func envDuration(name string, def time.Duration) time.Duration {
 
 - [ ] **Step 4: Write the orchestrator**
 
+Note on the event sequence: `remediation_events.seq` is the only ordering key
+SSE replay has, and migration 051 makes `(session_id, seq)` UNIQUE. The sink
+below therefore keeps one sequence per *session*, seeded from what is already
+persisted, rather than one per driver call — plan and execute are two calls,
+and two sequences both starting at 1 would collide on the primary key and lose
+the entire execute-phase stream. For the same reason the append error is
+logged, never discarded: a silent drop is indistinguishable from an idle agent.
+
 ```go
 // Package remediate orchestrates agentic remediation sessions: a read-only
 // triage run that emits a plan, then a scoped-write run that executes it.
@@ -1729,6 +1743,7 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/remediate/driver"
 	"github.com/alphabravocompany/thewolf/internal/remediate/meter"
+	"github.com/alphabravocompany/thewolf/internal/wolflog"
 )
 
 // Runner drives one session through its phases.
@@ -1800,18 +1815,45 @@ func (r *Runner) runPlanPhase(ctx context.Context, sess *models.RemediationSessi
 }
 
 // eventSink persists each observed event, redacted, for SSE replay and audit.
+//
+// The sequence is session-scoped and monotonic across phases, not per-call.
+// A sink is built once per phase, so a counter starting at zero each time
+// would have execute-phase event 1 collide with plan-phase event 1: the ID is
+// derived from (session, seq) and is the primary key, and (session_id, seq)
+// is UNIQUE, so the second phase's every write fails. Seeding from what is
+// already persisted keeps one continuous sequence per session.
 func (r *Runner) eventSink(ctx context.Context, sessionID string) func(meter.Event) {
-	seq := 0
+	seq := r.lastEventSeq(ctx, sessionID)
 	return func(e meter.Event) {
 		seq++
-		_ = r.store.AppendRemediationEvent(ctx, &models.RemediationEvent{
+		// Never discard this error. A dropped append is a hole in the audit
+		// trail and a gap SSE replay cannot tell apart from "no activity",
+		// which is exactly how the per-call sequence bug stayed invisible.
+		if err := r.store.AppendRemediationEvent(ctx, &models.RemediationEvent{
 			ID:        fmt.Sprintf("%s-%d", sessionID, seq),
 			SessionID: sessionID,
 			Seq:       seq,
 			Type:      e.Type,
 			CreatedAt: time.Now(),
-		})
+		}); err != nil {
+			wolflog.L().Error().Err(err).
+				Str("session", sessionID).Int("seq", seq).
+				Msg("persist remediation event")
+		}
 	}
+}
+
+// lastEventSeq returns the highest seq already stored for a session so a sink
+// built for a later phase continues that session's single sequence. Events
+// come back ordered by seq, so the tail holds the maximum. A read failure
+// falls back to 0: the unique index then rejects the duplicate loudly rather
+// than letting the sink overwrite an earlier phase.
+func (r *Runner) lastEventSeq(ctx context.Context, sessionID string) int {
+	events, err := r.store.ListRemediationEvents(ctx, sessionID, 0)
+	if err != nil || len(events) == 0 {
+		return 0
+	}
+	return events[len(events)-1].Seq
 }
 
 func (r *Runner) transition(ctx context.Context, sess *models.RemediationSession, status models.RemediationStatus, reason string) error {
@@ -1930,7 +1972,11 @@ USER wolf
 WORKDIR /workspace
 ENV HOME=/home/wolf
 
-ENTRYPOINT ["/usr/local/bin/opencode"]
+# Every fixer variant carries the same entrypoint. The release path appends
+# its smoke and qualification arguments to the image with no --entrypoint
+# override, so a variant-specific entrypoint here would corrupt those calls.
+# The driver (Task 4) passes --entrypoint /usr/local/bin/opencode at run time.
+ENTRYPOINT ["/usr/local/bin/wolf", "fixer"]
 ```
 
 - [ ] **Step 3: Register the variant**
