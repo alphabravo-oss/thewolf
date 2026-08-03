@@ -1,0 +1,5 @@
+# Code generated from scanners/os-packages.lock.yaml; DO NOT EDIT.
+ca-certificates=20250419
+curl:amd64=8.14.1-2+deb13u4
+git:amd64=1:2.47.3-0+deb13u1
+unzip:amd64=6.0-29

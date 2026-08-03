@@ -1,0 +1,123 @@
+package general
+
+import (
+	"bufio"
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+
+	"github.com/alphabravocompany/thewolf/internal/models"
+	"github.com/alphabravocompany/thewolf/internal/plugin"
+	"github.com/alphabravocompany/thewolf/internal/plugin/container"
+)
+
+// TrufflehogPlugin runs TruffleHog secret detection.
+type TrufflehogPlugin struct{}
+
+func init() {
+	plugin.Register(&TrufflehogPlugin{})
+}
+
+func (p *TrufflehogPlugin) Name() string                 { return "trufflehog" }
+func (p *TrufflehogPlugin) Category() models.Category    { return models.CategorySecrets }
+func (p *TrufflehogPlugin) Languages() []models.Language { return nil }
+
+func (p *TrufflehogPlugin) CheckAvailable() bool { return container.IsScannersReady() }
+
+func (p *TrufflehogPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
+	timeout := opts.Timeout
+	if timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+		defer cancel()
+	}
+
+	// The wolf-scanners image bakes a standard excludes file at
+	// /etc/wolf-scanners/trufflehog-excludes.txt; passing that lets us share
+	// wolf's DefaultExcludeDirs without needing a writable scratch volume.
+	// trufflehog uses git2go which insists on reading ~/.gitconfig. With
+	// the wolf default uid:gid (1000:1000) HOME defaults to / which is
+	// read-only under our --read-only flag, so trufflehog errors out on
+	// startup. Pointing HOME at the writable tmpfs avoids the issue.
+	// We previously passed --exclude-paths pointing at a wolf-baked file
+	// inside the scanners image. Dropped because the file isn't reliably
+	// present (image-build version skew). trufflehog's own defaults are
+	// reasonable; wolf's path-suppression layer filters further at the
+	// renderer.
+	//
+	// --no-update keeps the auto-updater from trying to move the binary
+	// to a read-only path on every invocation (exits 1 before scanning).
+	cmd := container.CommandContext(ctx,
+		container.ConfigFromOpts(opts.ContainerCfg),
+		container.Options{
+			RepoDir:  opts.RepoPath,
+			ExtraEnv: map[string]string{"GOMAXPROCS": "2", "HOME": "/tmp"},
+		},
+		"trufflehog", "filesystem", "--json", "--no-update", "/scan")
+	out, err := cmd.Output()
+	if err != nil && len(out) == 0 {
+		return nil, plugin.WrapExecError("trufflehog", err)
+	}
+
+	findings, perr := parseTrufflehogOutputWithMetrics(out, opts.OnParseError)
+	if perr != nil {
+		return nil, perr
+	}
+	for i := range findings {
+		findings[i].FilePath = container.NormalizePath(findings[i].FilePath)
+	}
+	return findings, nil
+}
+
+type trufflehogResult struct {
+	DetectorName   string `json:"DetectorName"`
+	Verified       bool   `json:"Verified"`
+	Raw            string `json:"Raw"`
+	SourceMetadata struct {
+		Data struct {
+			Filesystem struct {
+				File string `json:"file"`
+				Line int    `json:"line"`
+			} `json:"Filesystem"`
+		} `json:"Data"`
+	} `json:"SourceMetadata"`
+}
+
+func parseTrufflehogOutput(data []byte) ([]models.Finding, error) {
+	return parseTrufflehogOutputWithMetrics(data, nil)
+}
+
+func parseTrufflehogOutputWithMetrics(data []byte, onParseError func(error)) ([]models.Finding, error) {
+	var findings []models.Finding
+	scanner := bufio.NewScanner(bytes.NewReader(data))
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if len(line) == 0 {
+			continue
+		}
+		var r trufflehogResult
+		if err := json.Unmarshal(line, &r); err != nil {
+			notifyParseError(onParseError, err)
+			continue
+		}
+
+		sev := models.SeverityMedium
+		if r.Verified {
+			sev = models.SeverityCritical
+		}
+
+		findings = append(findings, models.Finding{
+			ToolName:    "trufflehog",
+			Category:    models.CategorySecrets,
+			Severity:    sev,
+			Title:       fmt.Sprintf("Secret detected: %s", r.DetectorName),
+			Description: fmt.Sprintf("Detected %s secret (verified: %t)", r.DetectorName, r.Verified),
+			FilePath:    r.SourceMetadata.Data.Filesystem.File,
+			LineStart:   r.SourceMetadata.Data.Filesystem.Line,
+			RuleID:      r.DetectorName,
+			Status:      models.StatusOpen,
+		})
+	}
+	return findings, nil
+}

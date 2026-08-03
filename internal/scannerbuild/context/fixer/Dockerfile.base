@@ -1,120 +1,142 @@
+# syntax=docker/dockerfile:1.7
 # ============================================================
 # checkov:skip=CKV_DOCKER_2 — fixer images are worker containers driven by
-#   `wolf fixer`, not network services with their own healthcheck.
-# checkov:skip=CKV_DOCKER_3 — a non-root `wolf` user is created and selected
-#   below; the agent CLI variants add their own per-user session dir.
+# `wolf fixer`, not network services.
 #
-# wolf-fixer — SHARED BASE for the autonomous remediation worker
-# ============================================================
-# This base carries everything the `wolf fixer` worker needs to run a fix
-# job regardless of which engine drives it:
-#
-#   - git + gh (GitHub) + glab (GitLab)   : branch/clone/inspect a repo
-#   - go toolchain                         : `go build ./...` verify gate
-#   - node + npm + typescript (tsc)        : `tsc --noEmit` verify gate
-#   - python3                              : misc tooling / venvs
-#   - the `wolf` binary itself             : the worker entrypoint
-#
-# The three concrete images extend this base:
-#   - Dockerfile.claude : + the Claude Code CLI   (interactive `claude login`)
-#   - Dockerfile.codex  : + the Codex CLI         (interactive `codex login`)
-#   - Dockerfile.api    : CLI-free; uses an API key from the secret store
-#
-# The CLI variants persist their auth session under /home/wolf/.config
-# (mount a volume / k8s PVC there) so a one-time `docker exec -it … claude
-# login` keeps every restart "ready". See the README "Autonomous
-# remediation" section for the auth-then-ready flow and the k8s shape.
-#
-# Build (via the scanner-image build subsystem):
-#   wolf-built; see internal/scannerbuild FixerVariants. Manual:
-#   docker build -t wolf-fixer:dev -f fixer/Dockerfile.base fixer/
+# Wolf fixer shared base. All network-fetched tools are exact-version and
+# checksum/integrity pinned. OS packages come from the same immutable snapshot
+# contract as scanner images. The release lock includes this Dockerfile,
+# fixer/versions.env, go.mod/go.sum, and the complete Wolf source inputs.
 # ============================================================
 
-FROM debian:trixie-slim@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a0c3ccd26f436a0e AS base
+FROM debian:trixie-slim@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a0c3ccd26f436a0e AS build
 
 ARG WOLF_VERSION=dev
+ARG GO_VERSION=1.26.5
+ARG GO_LINUX_AMD64_SHA256=5c2c3b16caefa1d968a94c1daca04a7ca301a496d9b086e17ad77bb81393f053
+ARG GO_LINUX_ARM64_SHA256=fe4789e92b1f33358680864bbe8704289e7bb5fc207d80623c308935bd696d49
+ARG TYPESCRIPT_VERSION=6.0.3
+ARG TYPESCRIPT_INTEGRITY=sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw==
+ARG GH_VERSION=2.96.0
+ARG GLAB_VERSION=1.111.0
+
 LABEL org.opencontainers.image.title="wolf-fixer" \
       org.opencontainers.image.description="Autonomous remediation worker base for The Wolf" \
       org.opencontainers.image.source="https://github.com/alphabravocompany/thewolf" \
       org.opencontainers.image.vendor="AlphaBravo" \
-      org.opencontainers.image.version="${WOLF_VERSION}"
+      org.opencontainers.image.version="${WOLF_VERSION}" \
+      dev.wolf.fixer.variant="base" \
+      dev.wolf.fixer.auth-mode="none"
 
 ENV DEBIAN_FRONTEND=noninteractive \
     WOLF_FIXER_VARIANT=base \
     GOTOOLCHAIN=local \
     PATH=/usr/local/go/bin:/home/wolf/go/bin:/usr/local/bin:/usr/bin:/bin
 
-# Base packages + Node (from NodeSource, same rationale as the scanner image:
-# Debian trixie dropped the standalone npm package).
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        ca-certificates curl wget gnupg \
-    && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
-    && apt-get update && apt-get install -y --no-install-recommends \
-        unzip tar gzip xz-utils \
-        git jq openssh-client \
-        python3 python3-venv \
-        nodejs \
-        build-essential pkg-config \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+COPY scanners/os-packages /etc/wolf-scanners/os-packages
+COPY scanners/install/os-packages.sh /usr/local/bin/install-os-packages
+RUN chmod 0755 /usr/local/bin/install-os-packages \
+    && /usr/local/bin/install-os-packages fixer-base \
+    && rm -f /usr/local/bin/install-os-packages
 
-# Go toolchain — needed for the `go build ./...` verification gate.
-ARG GO_VERSION=1.26.0
 RUN set -eux; \
     arch="$(dpkg --print-architecture)"; \
     case "$arch" in \
-      amd64) goarch=amd64 ;; \
-      arm64) goarch=arm64 ;; \
-      *) echo "unsupported arch $arch" >&2; exit 1 ;; \
+      amd64) goarch=amd64; go_sha="$GO_LINUX_AMD64_SHA256" ;; \
+      arm64) goarch=arm64; go_sha="$GO_LINUX_ARM64_SHA256" ;; \
+      *) echo "unsupported architecture: $arch" >&2; exit 65 ;; \
     esac; \
-    curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-${goarch}.tar.gz" -o /tmp/go.tgz; \
+    curl --proto '=https' --tlsv1.2 --fail --location --silent --show-error \
+      --proto-redir '=https' --retry 3 --retry-all-errors \
+      "https://go.dev/dl/go${GO_VERSION}.linux-${goarch}.tar.gz" -o /tmp/go.tgz; \
+    printf '%s  %s\n' "$go_sha" /tmp/go.tgz | sha256sum --check --strict -; \
     tar -C /usr/local -xzf /tmp/go.tgz; \
     rm /tmp/go.tgz; \
-    /usr/local/go/bin/go version
+    test "$(/usr/local/go/bin/go version | awk '{print $3}')" = "go${GO_VERSION}"
 
-# TypeScript (tsc) for the `tsc --noEmit` verification gate, installed
-# globally so it resolves for any uid.
-RUN npm install -g typescript@5 && tsc --version
+COPY fixer/versions.env /tmp/fixer-versions.env
+COPY fixer/install-node-tools.sh /tmp/install-node-tools.sh
+RUN chmod 0755 /tmp/install-node-tools.sh \
+    && /tmp/install-node-tools.sh /tmp/fixer-versions.env
 
-# GitHub CLI (gh).
-RUN set -eux; \
-    mkdir -p -m 0755 /etc/apt/keyrings; \
-    curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
-      -o /etc/apt/keyrings/githubcli-archive-keyring.gpg; \
-    chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg; \
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
-      > /etc/apt/sources.list.d/github-cli.list; \
-    apt-get update && apt-get install -y --no-install-recommends gh; \
-    apt-get clean && rm -rf /var/lib/apt/lists/*; \
-    gh --version
+COPY fixer/go-tools /tmp/fixer-go-tools
+RUN cd /tmp/fixer-go-tools \
+    && go mod download all \
+    && test "$(go list -m -f '{{.Version}}' github.com/cli/cli/v2)" = "v${GH_VERSION}" \
+    && test "$(go list -m -f '{{.Version}}' gitlab.com/gitlab-org/cli)" = "v${GLAB_VERSION}" \
+    && go mod verify \
+    && go build -mod=readonly -trimpath -o /usr/local/bin/gh github.com/cli/cli/v2/cmd/gh \
+    && go build -mod=readonly -trimpath -ldflags "-X main.version=${GLAB_VERSION}" -o /usr/local/bin/glab gitlab.com/gitlab-org/cli/cmd/glab \
+    && gh --version \
+    && glab --version \
+    && rm -rf /tmp/fixer-go-tools
 
-# GitLab CLI (glab) — released as a static binary.
-ARG GLAB_VERSION=1.45.0
-RUN set -eux; \
-    arch="$(dpkg --print-architecture)"; \
-    case "$arch" in \
-      amd64) glabarch=amd64 ;; \
-      arm64) glabarch=arm64 ;; \
-      *) echo "unsupported arch $arch" >&2; exit 1 ;; \
-    esac; \
-    curl -fsSL "https://gitlab.com/gitlab-org/cli/-/releases/v${GLAB_VERSION}/downloads/glab_${GLAB_VERSION}_linux_${glabarch}.tar.gz" \
-      -o /tmp/glab.tgz; \
-    tar -C /tmp -xzf /tmp/glab.tgz bin/glab; \
-    install -m 0755 /tmp/bin/glab /usr/local/bin/glab; \
-    rm -rf /tmp/glab.tgz /tmp/bin; \
-    glab --version
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download && go mod verify
+COPY cmd ./cmd
+COPY internal ./internal
+COPY plugins ./plugins
+COPY scanners ./scanners
+RUN CGO_ENABLED=1 go build \
+      -trimpath \
+      -ldflags "-s -w -X main.version=${WOLF_VERSION}" \
+      -tags "fixer_runtime sqlite_omit_load_extension netgo osusergo" \
+      -o /usr/local/bin/wolf ./cmd/wolf \
+    && /usr/local/bin/wolf version \
+    && rm -rf /src /root/.cache/go-build /root/go \
+    && rm -f /usr/local/go/src/crypto/x509/platform_root_key.pem
 
-# The wolf binary — the worker entrypoint. Build context provides it as
-# ./wolf (the scannerbuild materializer / CI stages it next to the
-# Dockerfile). A missing binary fails the build loudly rather than
-# producing a silently broken image.
-COPY wolf /usr/local/bin/wolf
-RUN chmod +x /usr/local/bin/wolf && /usr/local/bin/wolf --version || true
+# Start the distributable runtime from a clean layer history. Removing build
+# caches in a later layer does not remove them from an OCI image, so the final
+# stage deliberately copies only runtime artifacts from the build stage.
+FROM debian:trixie-slim@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a0c3ccd26f436a0e AS runtime
 
-# Non-root worker user. The agent CLI variants persist their auth session
-# under /home/wolf/.config — mount a volume / PVC there to keep it.
-RUN groupadd -g 1000 wolf \
-    && useradd -u 1000 -g 1000 -m -d /home/wolf -s /bin/bash wolf \
+ARG WOLF_VERSION=dev
+LABEL org.opencontainers.image.title="wolf-fixer" \
+      org.opencontainers.image.description="Autonomous remediation worker base for The Wolf" \
+      org.opencontainers.image.source="https://github.com/alphabravocompany/thewolf" \
+      org.opencontainers.image.vendor="AlphaBravo" \
+      org.opencontainers.image.version="${WOLF_VERSION}" \
+      dev.wolf.fixer.variant="base" \
+      dev.wolf.fixer.auth-mode="none"
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    WOLF_FIXER_VARIANT=base \
+    GOTOOLCHAIN=local \
+    PATH=/usr/local/go/bin:/home/wolf/go/bin:/usr/local/bin:/usr/bin:/bin
+
+COPY scanners/os-packages /etc/wolf-scanners/os-packages
+COPY scanners/install/os-packages.sh /usr/local/bin/install-os-packages
+RUN chmod 0755 /usr/local/bin/install-os-packages \
+    && /usr/local/bin/install-os-packages fixer-base \
+    && rm -f /usr/local/bin/install-os-packages \
+    && rm -rf /usr/lib/node_modules/npm /usr/lib/node_modules/typescript \
+    && rm -f /usr/bin/npm /usr/bin/npx /usr/bin/tsc /usr/bin/tsserver
+
+COPY --from=build /usr/local/go /usr/local/go
+COPY --from=build /usr/local/bin/wolf /usr/local/bin/wolf
+COPY --from=build /usr/local/bin/gh /usr/local/bin/gh
+COPY --from=build /usr/local/bin/glab /usr/local/bin/glab
+COPY --from=build /usr/lib/node_modules /usr/lib/node_modules
+RUN ln -sfn ../lib/node_modules/npm/bin/npm-cli.js /usr/bin/npm \
+    && ln -sfn ../lib/node_modules/npm/bin/npx-cli.js /usr/bin/npx \
+    && ln -sfn ../lib/node_modules/typescript/bin/tsc /usr/bin/tsc \
+    && ln -sfn ../lib/node_modules/typescript/bin/tsserver /usr/bin/tsserver
+
+RUN wolf version \
+    && gh --version \
+    && glab --version \
+    && test "$(tsc --version | awk '{print $2}')" = "6.0.3" \
+    && node -e "if (require('/usr/lib/node_modules/npm/package.json').version !== '12.0.2') process.exit(1)" \
+    && node -e "if (require('/usr/lib/node_modules/npm/node_modules/brace-expansion/package.json').version !== '5.0.9') process.exit(1)" \
+    && node -e "if (require('/usr/lib/node_modules/npm/node_modules/picomatch/package.json').version !== '4.0.5') process.exit(1)"
+
+COPY fixer/versions.env /usr/share/wolf/fixer/versions.env
+
+RUN /usr/sbin/addgroup --gid 1000 wolf \
+    && /usr/sbin/adduser --uid 1000 --gid 1000 --home /home/wolf --shell /bin/bash \
+         --disabled-password --gecos '' wolf \
     && mkdir -p /home/wolf/.config /workspace \
     && chown -R wolf:wolf /home/wolf /workspace
 
@@ -122,5 +144,4 @@ USER wolf
 WORKDIR /workspace
 ENV HOME=/home/wolf
 
-# Default: run the worker loop. k8s Job-per-task overrides with `--once`.
 ENTRYPOINT ["/usr/local/bin/wolf", "fixer"]

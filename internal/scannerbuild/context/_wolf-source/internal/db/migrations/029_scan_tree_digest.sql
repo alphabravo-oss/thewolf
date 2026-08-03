@@ -1,0 +1,1 @@
+ALTER TABLE scans ADD COLUMN tree_digest TEXT NOT NULL DEFAULT '';

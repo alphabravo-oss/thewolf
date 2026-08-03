@@ -1,10 +1,13 @@
 package scannerbuild
 
 import (
+	"bufio"
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -38,6 +41,59 @@ func TestMaterialize(t *testing.T) {
 	}
 	if info.Mode().Perm()&0o111 == 0 {
 		t.Fatalf("install/go-tools.sh is not executable, mode=%v", info.Mode().Perm())
+	}
+	for _, relative := range []string{"go.mod", "go.sum", "cmd/wolf", "internal", "plugins"} {
+		if _, err := os.Stat(filepath.Join(dir, relative)); err != nil {
+			t.Fatalf("expected fixer build source %s materialized: %v", relative, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(dir, "_wolf-source")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("encoded source prefix leaked into Docker context: %v", err)
+	}
+}
+
+func TestEmbeddedFixerContextContainsEveryLocalCopySource(t *testing.T) {
+	root := t.TempDir()
+	if err := Materialize(root); err != nil {
+		t.Fatalf("Materialize: %v", err)
+	}
+	for _, variant := range FixerVariants {
+		contextDir, dockerfile := buildContextPaths(root, variant)
+		if contextDir != root {
+			t.Errorf("%s context=%q, want repository root %q", variant.Name, contextDir, root)
+			continue
+		}
+		validateLocalCopySources(t, contextDir, dockerfile)
+	}
+}
+
+func validateLocalCopySources(t *testing.T, contextDir, dockerfile string) {
+	t.Helper()
+	input, err := os.Open(dockerfile)
+	if err != nil {
+		t.Errorf("open Dockerfile %s: %v", dockerfile, err)
+		return
+	}
+	defer input.Close()
+	scanner := bufio.NewScanner(input)
+	line := 0
+	for scanner.Scan() {
+		line++
+		fields := strings.Fields(scanner.Text())
+		if len(fields) < 3 || fields[0] != "COPY" || strings.HasPrefix(fields[1], "--from=") {
+			continue
+		}
+		for _, source := range fields[1 : len(fields)-1] {
+			if strings.ContainsAny(source, "$*?[{") {
+				t.Fatalf("unsupported dynamic COPY source at %s:%d: %s", dockerfile, line, source)
+			}
+			if _, err := os.Stat(filepath.Join(contextDir, filepath.FromSlash(source))); err != nil {
+				t.Errorf("local COPY source %q at %s:%d is unavailable: %v", source, dockerfile, line, err)
+			}
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		t.Errorf("read Dockerfile %s: %v", dockerfile, err)
 	}
 }
 
@@ -199,6 +255,203 @@ func TestLocalBuildConstructsNoLogin(t *testing.T) {
 	}
 }
 
+func TestBuildUsesEphemeralDockerConfigAndRemovesIt(t *testing.T) {
+	const token = "dckr_pat_EPHEMERAL_ONLY"
+	cases := []struct {
+		name   string
+		build  func(context.Context) error
+		cancel bool
+	}{
+		{
+			name: "success",
+			build: func(context.Context) error {
+				return nil
+			},
+		},
+		{
+			name: "failure",
+			build: func(context.Context) error {
+				return errors.New("build failed")
+			},
+		},
+		{
+			name:   "cancellation",
+			cancel: true,
+			build: func(ctx context.Context) error {
+				<-ctx.Done()
+				return ctx.Err()
+			},
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			previousLogin := runDockerLoginFn
+			previousBuild := runStreamingFn
+			defer func() {
+				runDockerLoginFn = previousLogin
+				runStreamingFn = previousBuild
+			}()
+			var loginConfig, buildConfig string
+			var loginArgs, buildArgsSeen []string
+			var loginStdin string
+			runDockerLoginFn = func(
+				_ context.Context,
+				name string,
+				argv []string,
+				stdin string,
+				_ func(string),
+			) error {
+				if name != "docker" {
+					t.Fatalf("login command = %q", name)
+				}
+				loginArgs = append([]string(nil), argv...)
+				loginConfig = argumentAfter(argv, "--config")
+				loginStdin = stdin
+				assertPrivateDirectory(t, loginConfig)
+				return nil
+			}
+			runStreamingFn = func(
+				ctx context.Context,
+				name string,
+				argv []string,
+				_ func(string),
+			) error {
+				if name != "docker" {
+					t.Fatalf("build command = %q", name)
+				}
+				buildArgsSeen = append([]string(nil), argv...)
+				buildConfig = argumentAfter(argv, "--config")
+				assertPrivateDirectory(t, buildConfig)
+				return testCase.build(ctx)
+			}
+			ctx := context.Background()
+			var cancel context.CancelFunc
+			if testCase.cancel {
+				ctx, cancel = context.WithCancel(ctx)
+				go cancel()
+			}
+			var lines []string
+			_, _ = Build(ctx, BuildRequest{
+				Variant: "default", Namespace: "acme", Version: "2.0.0",
+				Push: true, DockerHubUser: "registry-user",
+				DockerHubPAT: token,
+			}, func(line string) { lines = append(lines, line) })
+			if loginConfig == "" || loginConfig != buildConfig {
+				t.Fatalf("login config=%q build config=%q", loginConfig, buildConfig)
+			}
+			if loginStdin != token {
+				t.Fatal("registry token was not delivered exactly through stdin")
+			}
+			for _, value := range append(loginArgs, buildArgsSeen...) {
+				if strings.Contains(value, token) {
+					t.Fatalf("token leaked into argv: %#v", value)
+				}
+			}
+			joined := strings.Join(lines, "\n")
+			if strings.Contains(joined, token) ||
+				strings.Contains(joined, "registry-user") {
+				t.Fatalf("credential material leaked into logs: %s", joined)
+			}
+			if _, err := os.Stat(loginConfig); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("ephemeral config survived %s: %v", testCase.name, err)
+			}
+		})
+	}
+}
+
+func TestConcurrentBuildsUseDistinctEphemeralDockerConfigs(t *testing.T) {
+	previousLogin := runDockerLoginFn
+	previousBuild := runStreamingFn
+	defer func() {
+		runDockerLoginFn = previousLogin
+		runStreamingFn = previousBuild
+	}()
+	var mutex sync.Mutex
+	var loginConfigs, buildConfigs []string
+	runDockerLoginFn = func(
+		_ context.Context,
+		_ string,
+		argv []string,
+		_ string,
+		_ func(string),
+	) error {
+		config := argumentAfter(argv, "--config")
+		assertPrivateDirectory(t, config)
+		mutex.Lock()
+		loginConfigs = append(loginConfigs, config)
+		mutex.Unlock()
+		return nil
+	}
+	runStreamingFn = func(
+		_ context.Context,
+		_ string,
+		argv []string,
+		_ func(string),
+	) error {
+		config := argumentAfter(argv, "--config")
+		assertPrivateDirectory(t, config)
+		mutex.Lock()
+		buildConfigs = append(buildConfigs, config)
+		mutex.Unlock()
+		return nil
+	}
+	var wait sync.WaitGroup
+	errorsChannel := make(chan error, 2)
+	for _, variant := range []string{"default", "jvm"} {
+		wait.Add(1)
+		go func(variant string) {
+			defer wait.Done()
+			_, err := Build(context.Background(), BuildRequest{
+				Variant: variant, Namespace: "acme", Version: "2.0.0",
+				Push: true, DockerHubUser: "user", DockerHubPAT: "token",
+			}, nil)
+			errorsChannel <- err
+		}(variant)
+	}
+	wait.Wait()
+	close(errorsChannel)
+	for err := range errorsChannel {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(loginConfigs) != 2 || len(buildConfigs) != 2 {
+		t.Fatalf("login configs=%#v build configs=%#v", loginConfigs, buildConfigs)
+	}
+	if loginConfigs[0] == loginConfigs[1] {
+		t.Fatalf("concurrent builds shared config %q", loginConfigs[0])
+	}
+	buildSet := map[string]bool{buildConfigs[0]: true, buildConfigs[1]: true}
+	for _, config := range loginConfigs {
+		if !buildSet[config] {
+			t.Fatalf("login/build config mismatch: login=%#v build=%#v", loginConfigs, buildConfigs)
+		}
+		if _, err := os.Stat(config); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("concurrent ephemeral config survived: %v", err)
+		}
+	}
+}
+
+func argumentAfter(arguments []string, name string) string {
+	for index := range arguments {
+		if arguments[index] == name && index+1 < len(arguments) {
+			return arguments[index+1]
+		}
+	}
+	return ""
+}
+
+func assertPrivateDirectory(t *testing.T, path string) {
+	t.Helper()
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat ephemeral config: %v", err)
+	}
+	if !info.IsDir() || info.Mode().Perm() != 0o700 {
+		t.Fatalf("ephemeral config mode = %v", info.Mode())
+	}
+}
+
 // TestFixerVariantsResolve verifies the parallel fixer build table: each
 // engine variant resolves, carries the wolf-fixer repo base, and points at a
 // Dockerfile in the fixer/ context subtree.
@@ -240,7 +493,7 @@ func TestFixerVariantsResolve(t *testing.T) {
 
 // TestFixerBuildUsesFixerContextAndDockerfile drives Build for a fixer variant
 // with a stubbed runner and asserts the argv targets the materialized
-// fixer/Dockerfile.api under the fixer/ context subtree, tagged wolf-fixer-api.
+// fixer/Dockerfile.api under the repository-shaped context, tagged wolf-fixer-api.
 func TestFixerBuildUsesFixerContextAndDockerfile(t *testing.T) {
 	t.Setenv("WOLF_SCANNERS_TAG", "dev")
 
@@ -270,10 +523,11 @@ func TestFixerBuildUsesFixerContextAndDockerfile(t *testing.T) {
 	if !strings.Contains(dockerfileArg, filepath.Join("fixer", "Dockerfile.api")) {
 		t.Fatalf("--file = %q, want a fixer/Dockerfile.api path", dockerfileArg)
 	}
-	// Context dir (last positional) must be the fixer/ subtree.
+	// Context dir (last positional) must be the repository-shaped root so the
+	// fixer Dockerfile can COPY cmd/, internal/, plugins/, scanners/, and fixer/.
 	ctxDir := argvSeen[len(argvSeen)-1]
-	if filepath.Base(ctxDir) != "fixer" {
-		t.Fatalf("context dir = %q, want a .../fixer dir", ctxDir)
+	if filepath.Base(ctxDir) != "context" {
+		t.Fatalf("context dir = %q, want a .../context root", ctxDir)
 	}
 	if !equalStrings(res.Refs, []string{
 		"acme/wolf-fixer-api:2.0.0",

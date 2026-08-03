@@ -1,0 +1,11 @@
+ALTER TABLE scanner_release_images ADD COLUMN signature_digest TEXT NOT NULL DEFAULT '';
+ALTER TABLE scanner_release_images ADD COLUMN signature_artifact_uri TEXT NOT NULL DEFAULT '';
+ALTER TABLE scanner_release_images ADD COLUMN signature_artifact_digest TEXT NOT NULL DEFAULT '';
+ALTER TABLE scanner_release_images ADD COLUMN signature_media_type TEXT NOT NULL DEFAULT '';
+ALTER TABLE scanner_release_images ADD COLUMN signature_artifact_size_bytes BIGINT NOT NULL DEFAULT 0 CHECK (signature_artifact_size_bytes >= 0);
+ALTER TABLE scanner_release_images ADD COLUMN signature_certificate_digest TEXT NOT NULL DEFAULT '';
+ALTER TABLE scanner_release_images ADD COLUMN signature_identity TEXT NOT NULL DEFAULT '';
+ALTER TABLE scanner_release_images ADD COLUMN signature_issuer TEXT NOT NULL DEFAULT '';
+ALTER TABLE scanner_release_images ADD COLUMN signature_subject TEXT NOT NULL DEFAULT '';
+ALTER TABLE scanner_release_images ADD COLUMN signature_trust_root TEXT NOT NULL DEFAULT '';
+ALTER TABLE scanner_release_images ADD COLUMN signature_operation_id TEXT NOT NULL DEFAULT '';

@@ -1,0 +1,15 @@
+# Code generated from scanners/os-packages.lock.yaml; DO NOT EDIT.
+
+Types: deb
+URIs: https://snapshot.debian.org/archive/debian/20260730T220000Z/
+Suites: trixie
+Components: main
+Signed-By: /usr/share/keyrings/debian-archive-keyring.pgp
+Check-Valid-Until: no
+
+Types: deb
+URIs: https://snapshot.debian.org/archive/debian-security/20260730T220000Z/
+Suites: trixie-security
+Components: main
+Signed-By: /usr/share/keyrings/debian-archive-keyring.pgp
+Check-Valid-Until: no

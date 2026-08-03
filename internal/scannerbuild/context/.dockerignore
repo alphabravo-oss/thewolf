@@ -1,0 +1,32 @@
+# Keep the Docker build context small and correct. The image installs deps
+# fresh (go mod download / pnpm install) and builds from source, so host
+# dependency trees and build output must NOT be copied in — notably pnpm's
+# symlinked ui/node_modules, which breaks `COPY ui/ ./` with a
+# "cannot copy to non-directory" error.
+
+# Dependency trees + build output
+**/node_modules
+.pnpm-store/
+ui/dist
+/dist
+
+# Version control + CI
+.git
+.github
+.gitignore
+
+# Local runtime data, caches, and scan output (never belongs in the image)
+.wolf/
+.wolf-*
+.codex-security/
+/artifacts
+FINDINGS/
+*.log
+
+# Editor / OS junk
+**/.DS_Store
+.vscode
+.idea
+
+# Session/agent scratch
+.claude

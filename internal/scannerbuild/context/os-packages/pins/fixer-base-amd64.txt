@@ -1,0 +1,14 @@
+# Code generated from scanners/os-packages.lock.yaml; DO NOT EDIT.
+build-essential:amd64=12.12
+ca-certificates=20250419
+curl:amd64=8.14.1-2+deb13u4
+git:amd64=1:2.47.3-0+deb13u1
+gzip:amd64=1.13-1
+jq:amd64=1.7.1-6+deb13u2
+openssh-client:amd64=1:10.0p1-7+deb13u4
+pkg-config:amd64=1.8.1-4
+python3:amd64=3.13.5-1
+python3-venv:amd64=3.13.5-1
+tar:amd64=1.35+dfsg-3.1
+unzip:amd64=6.0-29
+xz-utils:amd64=5.8.1-1+deb13u1
