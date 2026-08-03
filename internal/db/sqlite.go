@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	_ "embed"
 	"fmt"
 	"strings"
@@ -88,6 +89,81 @@ var migration024SQL string
 //go:embed migrations/025_audit_classification.sql
 var migration025SQL string
 
+//go:embed migrations/026_remote_scan_workers.sql
+var migration026SQL string
+
+//go:embed migrations/027_credential_metadata.sql
+var migration027SQL string
+
+//go:embed migrations/028_artifact_storage_keys.sql
+var migration028SQL string
+
+//go:embed migrations/029_scan_tree_digest.sql
+var migration029SQL string
+
+//go:embed migrations/030_scanner_release_management_sqlite.sql
+var migration030SQLiteSQL string
+
+//go:embed migrations/031_scanner_run_release_provenance.sql
+var migration031SQL string
+
+//go:embed migrations/032_scan_release_assignment.sql
+var migration032SQL string
+
+//go:embed migrations/033_scanner_registry_observations.sql
+var migration033SQL string
+
+//go:embed migrations/034_scanner_discovery_execution.sql
+var migration034SQL string
+
+//go:embed migrations/035_scanner_rollout_controller.sql
+var migration035SQL string
+
+//go:embed migrations/036_scanner_proposal_execution.sql
+var migration036SQL string
+
+//go:embed migrations/037_scanner_release_sequence.sql
+var migration037SQL string
+
+//go:embed migrations/038_scanner_worker_assignment_evidence.sql
+var migration038SQL string
+
+//go:embed migrations/039_scanner_release_notifications.sql
+var migration039SQL string
+
+//go:embed migrations/040_scanner_release_alerts.sql
+var migration040SQL string
+
+//go:embed migrations/041_scan_release_reproducibility.sql
+var migration041SQL string
+
+//go:embed migrations/042_scanner_signer_profiles.sql
+var migration042SQL string
+
+//go:embed migrations/043_scanner_registry_reconciliation.sql
+var migration043SQL string
+
+//go:embed migrations/044_scanner_release_backup_restore.sql
+var migration044SQL string
+
+//go:embed migrations/045_scanner_operation_correlation.sql
+var migration045SQL string
+
+//go:embed migrations/046_scanner_custom_builds.sql
+var migration046SQL string
+
+//go:embed migrations/047_scanner_release_image_kind.sql
+var migration047SQL string
+
+//go:embed migrations/048_scanner_release_exceptions.sql
+var migration048SQL string
+
+//go:embed migrations/049_user_scanner_supply_chain_access.sql
+var migration049SQL string
+
+//go:embed migrations/050_scanner_release_signature_identity.sql
+var migration050SQL string
+
 // SQLiteStore implements Store using SQLite.
 type SQLiteStore struct {
 	db *sqlx.DB
@@ -95,7 +171,7 @@ type SQLiteStore struct {
 
 // NewSQLite creates a new SQLite store. Use ":memory:" for in-memory databases.
 func NewSQLite(dsn string) (*SQLiteStore, error) {
-	db, err := sqlx.Open("sqlite3", dsn+"?_journal_mode=WAL&_foreign_keys=on")
+	db, err := sqlx.Open("sqlite3", sqliteConnectionDSN(dsn))
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite: %w", err)
 	}
@@ -112,6 +188,20 @@ func NewSQLite(dsn string) (*SQLiteStore, error) {
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
 	return store, nil
+}
+
+func sqliteConnectionDSN(dsn string) string {
+	separator := "?"
+	if strings.Contains(dsn, "?") {
+		separator = "&"
+	}
+	// SQLite permits one writer at a time. A bounded busy timeout turns normal
+	// writer overlap into backpressure, while immediate transactions reserve the
+	// writer slot before reading and avoid an un-retryable deferred-transaction
+	// upgrade race. Keep these invariants last so caller-supplied DSN options
+	// cannot silently weaken foreign-key or concurrency safety.
+	return dsn + separator +
+		"_journal_mode=WAL&_foreign_keys=on&_busy_timeout=5000&_txlock=immediate"
 }
 
 func (s *SQLiteStore) Close() error { return s.db.Close() }
@@ -243,6 +333,103 @@ func (s *SQLiteStore) Migrate() error {
 			return err
 		}
 	}
+	if err := execAdditiveMigration(s.db, migration026SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration027SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration028SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration029SQL); err != nil {
+		return err
+	}
+	if _, err := s.db.Exec(migration030SQLiteSQL); err != nil {
+		return fmt.Errorf("scanner release migration: %w", err)
+	}
+	if err := execAdditiveMigration(s.db, migration031SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration032SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration033SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration034SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration035SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration036SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration037SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration038SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration039SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration040SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration041SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration042SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration043SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration044SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration045SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration046SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration047SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration048SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration049SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration050SQL); err != nil {
+		return err
+	}
+	return sanitizePersistedSecretMasks(s.db)
+}
+
+// execAdditiveMigration executes additive DDL one statement at a time. This
+// makes migrations containing several ALTER TABLE statements safely
+// restartable after an interrupted upgrade.
+func execAdditiveMigration(db *sqlx.DB, migration string) error {
+	for _, statement := range strings.Split(migration, ";") {
+		statement = strings.TrimSpace(statement)
+		if statement == "" {
+			continue
+		}
+		if _, err := db.Exec(statement); err != nil {
+			msg := strings.ToLower(err.Error())
+			if strings.Contains(msg, "duplicate column") ||
+				strings.Contains(msg, "already exists") ||
+				strings.Contains(msg, "duplicate key") {
+				continue
+			}
+			return fmt.Errorf("additive migration statement failed: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -256,8 +443,8 @@ func (s *SQLiteStore) CreateUser(ctx context.Context, user *models.User) error {
 		user.Role = models.RoleUser
 	}
 	_, err := s.db.NamedExecContext(ctx,
-		`INSERT INTO users (id, email, password_hash, role, created_at, updated_at)
-		 VALUES (:id, :email, :password_hash, :role, :created_at, :updated_at)`, user)
+		`INSERT INTO users (id, email, password_hash, role, scanner_supply_chain_personas, created_at, updated_at)
+		 VALUES (:id, :email, :password_hash, :role, :scanner_supply_chain_personas, :created_at, :updated_at)`, user)
 	return err
 }
 
@@ -285,8 +472,21 @@ func (s *SQLiteStore) UpdateUser(ctx context.Context, user *models.User) error {
 		user.Role = models.RoleUser
 	}
 	_, err := s.db.NamedExecContext(ctx,
-		`UPDATE users SET email=:email, password_hash=:password_hash, role=:role, updated_at=:updated_at WHERE id=:id`, user)
+		`UPDATE users SET email=:email, password_hash=:password_hash, role=:role, scanner_supply_chain_personas=:scanner_supply_chain_personas, updated_at=:updated_at WHERE id=:id`, user)
 	return err
+}
+
+func (s *SQLiteStore) UpdateUserScannerSupplyChainPersonas(ctx context.Context, userID, encodedPersonas string) error {
+	result, err := s.db.ExecContext(ctx,
+		`UPDATE users SET scanner_supply_chain_personas = ?, updated_at = ? WHERE id = ?`,
+		encodedPersonas, time.Now().UTC(), userID)
+	if err != nil {
+		return err
+	}
+	if affected, err := result.RowsAffected(); err == nil && affected == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
 }
 
 // UpdateUserMFA persists only the TOTP fields, kept separate from UpdateUser so
@@ -310,7 +510,7 @@ func (s *SQLiteStore) UpdateUserProfile(ctx context.Context, user *models.User) 
 func (s *SQLiteStore) ListUsers(ctx context.Context) ([]models.User, error) {
 	var users []models.User
 	err := s.db.SelectContext(ctx, &users,
-		`SELECT id, email, password_hash, created_at, updated_at FROM users ORDER BY created_at ASC`)
+		`SELECT id, email, password_hash, role, display_name, totp_enabled, scanner_supply_chain_personas, created_at, updated_at FROM users ORDER BY created_at ASC`)
 	return users, err
 }
 
@@ -332,9 +532,11 @@ func (s *SQLiteStore) CreateRepo(ctx context.Context, repo *models.Repo) error {
 	repo.UpdatedAt = now
 	_, err := s.db.NamedExecContext(ctx,
 		`INSERT INTO repos (id, user_id, name, source_type, source_path, remote_node_id, remote_path,
-		 last_commit_sha, last_dirty_state, default_branch, created_at, updated_at)
+		 last_commit_sha, last_dirty_state, source_fingerprint, credential_secret_id,
+		 default_branch, created_at, updated_at)
 		 VALUES (:id, :user_id, :name, :source_type, :source_path, :remote_node_id, :remote_path,
-		 :last_commit_sha, :last_dirty_state, :default_branch, :created_at, :updated_at)`, repo)
+		 :last_commit_sha, :last_dirty_state, :source_fingerprint, :credential_secret_id,
+		 :default_branch, :created_at, :updated_at)`, repo)
 	return err
 }
 
@@ -369,7 +571,9 @@ func (s *SQLiteStore) UpdateRepo(ctx context.Context, repo *models.Repo) error {
 	_, err := s.db.NamedExecContext(ctx,
 		`UPDATE repos SET name=:name, source_type=:source_type, source_path=:source_path,
 		 remote_node_id=:remote_node_id, remote_path=:remote_path, last_commit_sha=:last_commit_sha,
-		 last_dirty_state=:last_dirty_state, default_branch=:default_branch, updated_at=:updated_at WHERE id=:id`, repo)
+		 last_dirty_state=:last_dirty_state, source_fingerprint=:source_fingerprint,
+		 credential_secret_id=:credential_secret_id, default_branch=:default_branch,
+		 updated_at=:updated_at WHERE id=:id`, repo)
 	return err
 }
 
@@ -504,9 +708,15 @@ func (s *SQLiteStore) CreateSecret(ctx context.Context, secret *models.Secret) e
 	now := time.Now().UTC()
 	secret.CreatedAt = now
 	secret.UpdatedAt = now
+	if secret.AllowedHosts == "" {
+		secret.AllowedHosts = "[]"
+	}
+	if secret.MetadataJSON == "" {
+		secret.MetadataJSON = "{}"
+	}
 	_, err := s.db.NamedExecContext(ctx,
-		`INSERT INTO secrets (id, user_id, key_type, key_name, encrypted_value, created_at, updated_at)
-		 VALUES (:id, :user_id, :key_type, :key_name, :encrypted_value, :created_at, :updated_at)`, secret)
+		`INSERT INTO secrets (id, user_id, key_type, key_name, encrypted_value, allowed_hosts, metadata_json, created_at, updated_at)
+		 VALUES (:id, :user_id, :key_type, :key_name, :encrypted_value, :allowed_hosts, :metadata_json, :created_at, :updated_at)`, secret)
 	return err
 }
 
@@ -519,11 +729,38 @@ func (s *SQLiteStore) GetSecretByID(ctx context.Context, id string) (*models.Sec
 	return &sec, nil
 }
 
+func (s *SQLiteStore) GetSecretMetadataByID(
+	ctx context.Context,
+	id string,
+) (*models.Secret, error) {
+	var secret models.Secret
+	err := s.db.GetContext(ctx, &secret,
+		`SELECT id, user_id, key_type, key_name, '' AS encrypted_value,
+		        allowed_hosts, metadata_json, created_at, updated_at
+		   FROM secrets WHERE id = ?`, id)
+	if err != nil {
+		return nil, err
+	}
+	return &secret, nil
+}
+
 func (s *SQLiteStore) ListSecretsByUser(ctx context.Context, userID string) ([]models.Secret, error) {
 	var secs []models.Secret
 	err := s.db.SelectContext(ctx, &secs,
 		"SELECT * FROM secrets WHERE user_id = ? ORDER BY created_at DESC", userID)
 	return secs, err
+}
+
+func (s *SQLiteStore) ListSecretMetadataByUser(
+	ctx context.Context,
+	userID string,
+) ([]models.Secret, error) {
+	var secrets []models.Secret
+	err := s.db.SelectContext(ctx, &secrets,
+		`SELECT id, user_id, key_type, key_name, '' AS encrypted_value,
+		        allowed_hosts, metadata_json, created_at, updated_at
+		   FROM secrets WHERE user_id = ? ORDER BY created_at DESC`, userID)
+	return secrets, err
 }
 
 // ListAllSecrets returns every user's secrets (admin oversight). Values stay
@@ -575,16 +812,26 @@ func (s *SQLiteStore) CreateScan(ctx context.Context, scan *models.Scan) error {
 	now := time.Now().UTC()
 	scan.CreatedAt = now
 	scan.UpdatedAt = now
-	if scan.ToolsErrors == "" {
-		scan.ToolsErrors = "{}"
-	}
+	prepareScanForWrite(scan)
 	_, err := s.db.NamedExecContext(ctx,
 		`INSERT INTO scans (id, user_id, repo_id, collection_id, loop_id, iteration, branch, status,
-		 source_type, remote_node_id, source_path, commit_sha, dirty_state, prepared_workspace,
+		 source_type, remote_node_id, source_path, commit_sha, tree_digest, dirty_state, prepared_workspace,
+		 request_json, request_digest, client_reference, idempotency_key, phase, claimed_by,
+		 lease_token, lease_expires_at, heartbeat_at, attempt, max_attempts, cancel_requested_at,
+		 failure_code, failure_message, execution_backend, source_fingerprint, profile,
+		 scanner_release_id, release_manifest_digest,
+		 rescan_of_scan_id, release_selection_reason,
+		 categories, include_paths, exclude_paths,
 		 tools_selected, tools_completed, tools_failed, tools_errors, finding_count, coverage_summary, ai_enabled, ai_summary,
 		 started_at, completed_at, created_at, updated_at)
 		 VALUES (:id, :user_id, :repo_id, :collection_id, :loop_id, :iteration, :branch, :status,
-		 :source_type, :remote_node_id, :source_path, :commit_sha, :dirty_state, :prepared_workspace,
+		 :source_type, :remote_node_id, :source_path, :commit_sha, :tree_digest, :dirty_state, :prepared_workspace,
+		 :request_json, :request_digest, :client_reference, :idempotency_key, :phase, :claimed_by,
+		 :lease_token, :lease_expires_at, :heartbeat_at, :attempt, :max_attempts, :cancel_requested_at,
+		 :failure_code, :failure_message, :execution_backend, :source_fingerprint, :profile,
+		 :scanner_release_id, :release_manifest_digest,
+		 :rescan_of_scan_id, :release_selection_reason,
+		 :categories, :include_paths, :exclude_paths,
 		 :tools_selected, :tools_completed, :tools_failed, :tools_errors, :finding_count, :coverage_summary, :ai_enabled, :ai_summary,
 		 :started_at, :completed_at, :created_at, :updated_at)`, scan)
 	return err
@@ -631,9 +878,23 @@ func (s *SQLiteStore) UpdateScan(ctx context.Context, scan *models.Scan) error {
 		`UPDATE scans SET status=:status, tools_selected=:tools_selected, tools_completed=:tools_completed,
 		 tools_failed=:tools_failed, tools_errors=:tools_errors, finding_count=:finding_count, coverage_summary=:coverage_summary,
 		 ai_enabled=:ai_enabled, ai_summary=:ai_summary, source_type=:source_type, remote_node_id=:remote_node_id,
-		 source_path=:source_path, commit_sha=:commit_sha, dirty_state=:dirty_state, prepared_workspace=:prepared_workspace,
+		 source_path=:source_path, commit_sha=:commit_sha, tree_digest=:tree_digest, dirty_state=:dirty_state, prepared_workspace=:prepared_workspace,
+		 request_json=:request_json, request_digest=:request_digest, client_reference=:client_reference,
+		 idempotency_key=:idempotency_key, phase=:phase, claimed_by=:claimed_by, lease_token=:lease_token,
+		 lease_expires_at=:lease_expires_at, heartbeat_at=:heartbeat_at, attempt=:attempt,
+		 max_attempts=:max_attempts, cancel_requested_at=:cancel_requested_at, failure_code=:failure_code,
+		 failure_message=:failure_message, execution_backend=:execution_backend,
+		 scanner_release_id=CASE WHEN scanner_release_id='' THEN :scanner_release_id ELSE scanner_release_id END,
+		 release_manifest_digest=CASE WHEN release_manifest_digest='' THEN :release_manifest_digest ELSE release_manifest_digest END,
+		 rescan_of_scan_id=CASE WHEN rescan_of_scan_id='' THEN :rescan_of_scan_id ELSE rescan_of_scan_id END,
+		 release_selection_reason=CASE WHEN release_selection_reason='' THEN :release_selection_reason ELSE release_selection_reason END,
+		 source_fingerprint=:source_fingerprint, profile=:profile, categories=:categories,
+		 include_paths=:include_paths, exclude_paths=:exclude_paths,
 		 started_at=:started_at, completed_at=:completed_at, updated_at=:updated_at
-		 WHERE id=:id`, scan)
+		 WHERE id=:id AND (
+		   :lease_token = '' OR
+		   (lease_token=:lease_token AND status='running' AND cancel_requested_at IS NULL)
+		 )`, scan)
 	return err
 }
 
@@ -675,31 +936,8 @@ func (s *SQLiteStore) CreateFindings(ctx context.Context, findings []models.Find
 		return err
 	}
 	defer tx.Rollback()
-	for i := range findings {
-		now := time.Now().UTC()
-		findings[i].CreatedAt = now
-		findings[i].UpdatedAt = now
-		prepareFindingForWrite(&findings[i])
-		_, err := tx.NamedExecContext(ctx,
-			`INSERT INTO findings (id, scan_id, repo_id, fingerprint, stable_fingerprint, location_fingerprint,
-			 semantic_fingerprint, evidence_fingerprint, identity_version, tool_name, category, severity,
-			 title, description, file_path, line_start, line_end, code_snippet, cwe_id, rule_id,
-			 tool_severity_score, location_weight, ai_context_score, composite_score,
-			 ai_fix_suggestion, status, sarif_data, module_name, function_name, symbol_kind, file_purpose, dependents_json,
-			 fine_category, fix_strategy_id, confidence, corroborated_by_json, suppressed, suppression_id,
-			 suppressed_reason, baseline_state, introduced_in_scan_id, resolved_in_scan_id, source_kind, source_ref,
-			 created_at, updated_at)
-			 VALUES (:id, :scan_id, :repo_id, :fingerprint, :stable_fingerprint, :location_fingerprint,
-			 :semantic_fingerprint, :evidence_fingerprint, :identity_version, :tool_name, :category, :severity,
-			 :title, :description, :file_path, :line_start, :line_end, :code_snippet, :cwe_id, :rule_id,
-			 :tool_severity_score, :location_weight, :ai_context_score, :composite_score,
-			 :ai_fix_suggestion, :status, :sarif_data, :module_name, :function_name, :symbol_kind, :file_purpose, :dependents_json,
-			 :fine_category, :fix_strategy_id, :confidence, :corroborated_by_json, :suppressed, :suppression_id,
-			 :suppressed_reason, :baseline_state, :introduced_in_scan_id, :resolved_in_scan_id, :source_kind, :source_ref,
-			 :created_at, :updated_at)`, &findings[i])
-		if err != nil {
-			return err
-		}
+	if err := insertFindingsTx(ctx, tx, findings); err != nil {
+		return err
 	}
 	return tx.Commit()
 }
@@ -883,8 +1121,8 @@ func (s *SQLiteStore) CreateScanArtifact(ctx context.Context, artifact *models.S
 		artifact.RedactionLevel = "internal_report"
 	}
 	_, err := s.db.NamedExecContext(ctx,
-		`INSERT INTO scan_artifacts (id, scan_id, artifact_type, file_path, file_size, checksum_sha256, redaction_level, created_at, updated_at)
-		 VALUES (:id, :scan_id, :artifact_type, :file_path, :file_size, :checksum_sha256, :redaction_level, :created_at, :updated_at)`, artifact)
+		`INSERT INTO scan_artifacts (id, scan_id, artifact_type, file_path, storage_key, file_size, checksum_sha256, redaction_level, created_at, updated_at)
+		 VALUES (:id, :scan_id, :artifact_type, :file_path, :storage_key, :file_size, :checksum_sha256, :redaction_level, :created_at, :updated_at)`, artifact)
 	return err
 }
 
@@ -928,32 +1166,30 @@ func (s *SQLiteStore) UpsertScannerRunRecord(ctx context.Context, record *models
 	if record.CreatedAt.IsZero() {
 		record.CreatedAt = now
 	}
-	_, err := s.db.NamedExecContext(ctx,
-		`INSERT INTO scanner_run_records (
-		 id, scan_id, tool_name, status, category, image, image_digest, version, command_json,
-		 exit_code, duration_ms, finding_count, error_message, parser_status, parser_message,
-		 started_at, finished_at, created_at, updated_at)
-		 VALUES (
-		 :id, :scan_id, :tool_name, :status, :category, :image, :image_digest, :version, :command_json,
-		 :exit_code, :duration_ms, :finding_count, :error_message, :parser_status, :parser_message,
-		 :started_at, :finished_at, :created_at, :updated_at)
-		 ON CONFLICT (scan_id, tool_name) DO UPDATE SET
-		   status=excluded.status,
-		   category=excluded.category,
-		   image=excluded.image,
-		   image_digest=excluded.image_digest,
-		   version=excluded.version,
-		   command_json=excluded.command_json,
-		   exit_code=excluded.exit_code,
-		   duration_ms=excluded.duration_ms,
-		   finding_count=excluded.finding_count,
-		   error_message=excluded.error_message,
-		   parser_status=excluded.parser_status,
-		   parser_message=excluded.parser_message,
-		   started_at=COALESCE(excluded.started_at, scanner_run_records.started_at),
-		   finished_at=excluded.finished_at,
-		   updated_at=excluded.updated_at`, record)
-	return err
+	if record.LeaseToken == "" {
+		_, err := s.db.NamedExecContext(ctx, scannerRunRecordUpsertQuery, record)
+		return err
+	}
+	tx, err := s.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	result, err := tx.ExecContext(ctx,
+		`UPDATE scans SET updated_at = updated_at
+		 WHERE id = ? AND status = ? AND lease_token = ? AND cancel_requested_at IS NULL`,
+		record.ScanID, models.ScanStatusRunning, record.LeaseToken)
+	if err != nil {
+		return err
+	}
+	affected, _ := result.RowsAffected()
+	if affected != 1 {
+		return ErrStaleScanLease
+	}
+	if _, err := tx.NamedExecContext(ctx, scannerRunRecordUpsertQuery, record); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (s *SQLiteStore) ListScannerRunRecords(ctx context.Context, scanID string) ([]models.ScannerRunRecord, error) {

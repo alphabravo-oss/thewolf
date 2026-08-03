@@ -35,6 +35,11 @@ type ExecuteOpts struct {
 	// requiring the runner to re-invoke the tool.
 	OnRawOutput func(data []byte, ext string)
 
+	// OnParseError reports a malformed record that a streaming parser can
+	// safely skip while continuing to process later records. Callers use this
+	// to distinguish a fully parsed successful run from partial data loss.
+	OnParseError func(error)
+
 	// ContainerCfg is the runtime container backend configuration. It is
 	// typed as `any` here to avoid a circular import (models → container →
 	// models). Plugins assert it back to `*container.Config` at the call

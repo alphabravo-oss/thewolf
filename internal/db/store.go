@@ -60,12 +60,14 @@ type Store interface {
 	Close() error
 	Migrate() error
 	Ping(ctx context.Context) error
+	ScannerReleases() ScannerReleasePersistence
 
 	// Users
 	CreateUser(ctx context.Context, user *models.User) error
 	GetUserByID(ctx context.Context, id string) (*models.User, error)
 	GetUserByEmail(ctx context.Context, email string) (*models.User, error)
 	UpdateUser(ctx context.Context, user *models.User) error
+	UpdateUserScannerSupplyChainPersonas(ctx context.Context, userID, encodedPersonas string) error
 	UpdateUserMFA(ctx context.Context, user *models.User) error
 	UpdateUserProfile(ctx context.Context, user *models.User) error
 	ListUsers(ctx context.Context) ([]models.User, error)
@@ -107,7 +109,9 @@ type Store interface {
 	// Secrets
 	CreateSecret(ctx context.Context, secret *models.Secret) error
 	GetSecretByID(ctx context.Context, id string) (*models.Secret, error)
+	GetSecretMetadataByID(ctx context.Context, id string) (*models.Secret, error)
 	ListSecretsByUser(ctx context.Context, userID string) ([]models.Secret, error)
+	ListSecretMetadataByUser(ctx context.Context, userID string) ([]models.Secret, error)
 	ListAllSecrets(ctx context.Context) ([]models.Secret, error)
 	DeleteSecret(ctx context.Context, id string) error
 
@@ -125,6 +129,22 @@ type Store interface {
 	ListScansByCollection(ctx context.Context, collectionID string) ([]models.Scan, error)
 	UpdateScan(ctx context.Context, scan *models.Scan) error
 	DeleteScan(ctx context.Context, id string) error
+	FindScanByIdempotencyKey(ctx context.Context, userID, key string) (*models.Scan, error)
+	ClaimNextScan(ctx context.Context, workerID, backend string, leaseUntil time.Time) (*models.Scan, error)
+	StartScanExecution(ctx context.Context, scanID, leaseToken string, startedAt time.Time) (bool, error)
+	HeartbeatScanLease(ctx context.Context, scanID, leaseToken string, leaseUntil time.Time) (bool, error)
+	FinalizeScan(ctx context.Context, scan *models.Scan, leaseToken string) (bool, error)
+	ReclaimStaleScans(ctx context.Context, now time.Time) (int, error)
+	RequestScanCancellation(ctx context.Context, scanID string, at time.Time) error
+	RequestScannerRunCancellation(ctx context.Context, scanID, toolName string, at time.Time) error
+	DeleteFindingsByScanTool(ctx context.Context, scanID, toolName string) error
+	CreateFindingsForScanLease(ctx context.Context, findings []models.Finding, scanID, leaseToken string) (bool, error)
+
+	// Durable scan progress and worker capacity.
+	AppendScanEvent(ctx context.Context, event *models.ScanEvent) error
+	ListScanEvents(ctx context.Context, scanID string, afterSequence int64, limit int) ([]models.ScanEvent, error)
+	UpsertScanWorker(ctx context.Context, worker *models.ScanWorker) error
+	ListScanWorkers(ctx context.Context, activeAfter time.Time) ([]models.ScanWorker, error)
 
 	// Findings
 	CreateFinding(ctx context.Context, f *models.Finding) error
@@ -269,4 +289,40 @@ type Store interface {
 	UpdatePromptTemplate(ctx context.Context, tmpl *models.AIPromptTemplate) error
 	DeletePromptTemplate(ctx context.Context, id string) error
 	ResolvePromptSection(ctx context.Context, promptType, section, collectionID string) (string, error)
+}
+
+// prepareScanForWrite applies the durable queue defaults to explicit INSERTs.
+// Database column defaults do not apply when a named INSERT supplies the zero
+// value, and legacy callers intentionally construct only the original fields.
+func prepareScanForWrite(scan *models.Scan) {
+	if scan.RequestJSON == "" {
+		scan.RequestJSON = "{}"
+	}
+	if scan.Phase == "" {
+		scan.Phase = "queued"
+	}
+	if scan.MaxAttempts <= 0 {
+		scan.MaxAttempts = 2
+	}
+	if scan.Categories == "" {
+		scan.Categories = "[]"
+	}
+	if scan.IncludePaths == "" {
+		scan.IncludePaths = "[]"
+	}
+	if scan.ExcludePaths == "" {
+		scan.ExcludePaths = "[]"
+	}
+	if scan.ToolsSelected == "" {
+		scan.ToolsSelected = "[]"
+	}
+	if scan.ToolsCompleted == "" {
+		scan.ToolsCompleted = "[]"
+	}
+	if scan.ToolsFailed == "" {
+		scan.ToolsFailed = "[]"
+	}
+	if scan.ToolsErrors == "" {
+		scan.ToolsErrors = "{}"
+	}
 }

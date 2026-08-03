@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -47,6 +48,48 @@ func TestCreateAndGetUser(t *testing.T) {
 	}
 	if got2.ID != user.ID {
 		t.Fatalf("expected ID %s, got %s", user.ID, got2.ID)
+	}
+}
+
+func TestUserScannerSupplyChainPersonasPersistAndUpdate(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+	user := &models.User{
+		ID:                         uuid.New().String(),
+		Email:                      "scanner-access@example.com",
+		PasswordHash:               "hash",
+		Role:                       models.RoleUser,
+		ScannerSupplyChainPersonas: `["release_approver","scanner_operator"]`,
+	}
+	if err := store.CreateUser(ctx, user); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := store.GetUserByID(ctx, user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ScannerSupplyChainPersonas != user.ScannerSupplyChainPersonas {
+		t.Fatalf("persisted personas = %q, want %q", got.ScannerSupplyChainPersonas, user.ScannerSupplyChainPersonas)
+	}
+
+	const updated = `["viewer"]`
+	if err := store.UpdateUserScannerSupplyChainPersonas(ctx, user.ID, updated); err != nil {
+		t.Fatal(err)
+	}
+	listed, err := store.ListUsers(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(listed) != 1 || listed[0].ScannerSupplyChainPersonas != updated {
+		t.Fatalf("listed personas = %v, want %q", listed, updated)
+	}
+	if listed[0].Role != models.RoleUser {
+		t.Fatalf("listed role = %q, want %q", listed[0].Role, models.RoleUser)
+	}
+
+	if err := store.UpdateUserScannerSupplyChainPersonas(ctx, uuid.New().String(), updated); err == nil {
+		t.Fatal("updating a missing user must fail")
 	}
 }
 
@@ -511,6 +554,41 @@ func TestSecretsCRUD(t *testing.T) {
 	}
 }
 
+func TestMigrateRemovesLegacySecretDerivedMasks(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+	userID := uuid.NewString()
+	if err := store.CreateUser(ctx, &models.User{
+		ID: userID, Email: "legacy-mask@test.com", PasswordHash: "hash",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	secret := &models.Secret{
+		ID: uuid.NewString(), UserID: userID, KeyType: models.KeyTypeGitHTTPS,
+		KeyName: "legacy", EncryptedValue: "encrypted",
+		MetadataJSON: `{"username":"bot","has_known_hosts":false,"masked":"********1234"}`,
+	}
+	if err := store.CreateSecret(ctx, secret); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := store.Migrate(); err != nil {
+		t.Fatalf("rerun migration: %v", err)
+	}
+	stored, err := store.GetSecretByID(ctx, secret.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(stored.MetadataJSON, `"masked"`) ||
+		strings.Contains(stored.MetadataJSON, "1234") {
+		t.Fatalf("legacy mask survived migration: %s", stored.MetadataJSON)
+	}
+	if !strings.Contains(stored.MetadataJSON, `"username":"bot"`) ||
+		!strings.Contains(stored.MetadataJSON, `"has_known_hosts":false`) {
+		t.Fatalf("migration discarded legitimate credential metadata: %s", stored.MetadataJSON)
+	}
+}
+
 func TestScanArtifactMetadataRoundTrip(t *testing.T) {
 	store := newTestStore(t)
 	ctx := context.Background()
@@ -703,6 +781,79 @@ func TestScannerRunRecordUpsertRoundTrip(t *testing.T) {
 	}
 	if got.StartedAt == nil || got.FinishedAt == nil {
 		t.Fatalf("expected start and finish timestamps: %+v", got)
+	}
+}
+
+func TestScannerRunCancellationRemainsStickyAcrossExecutorUpsert(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+
+	userID := uuid.New().String()
+	if err := store.CreateUser(ctx, &models.User{ID: userID, Email: "scanner-cancel@test.com", PasswordHash: "hash"}); err != nil {
+		t.Fatalf("CreateUser failed: %v", err)
+	}
+	repoID := uuid.New().String()
+	if err := store.CreateRepo(ctx, &models.Repo{
+		ID:            repoID,
+		UserID:        userID,
+		Name:          "scanner-cancel-repo",
+		SourceType:    models.SourceTypeLocal,
+		SourcePath:    "/tmp/scanner-cancel-repo",
+		DefaultBranch: "main",
+	}); err != nil {
+		t.Fatalf("CreateRepo failed: %v", err)
+	}
+	scanID := uuid.New().String()
+	if err := store.CreateScan(ctx, &models.Scan{
+		ID:              scanID,
+		UserID:          userID,
+		RepoID:          repoID,
+		Branch:          "main",
+		Status:          models.ScanStatusRunning,
+		ToolsSelected:   `["gosec"]`,
+		ToolsCompleted:  "[]",
+		ToolsFailed:     "[]",
+		CoverageSummary: "{}",
+	}); err != nil {
+		t.Fatalf("CreateScan failed: %v", err)
+	}
+
+	started := time.Now().UTC()
+	if err := store.UpsertScannerRunRecord(ctx, &models.ScannerRunRecord{
+		ScanID:      scanID,
+		ToolName:    "gosec",
+		Status:      "running",
+		CommandJSON: "{}",
+		StartedAt:   &started,
+	}); err != nil {
+		t.Fatalf("UpsertScannerRunRecord running failed: %v", err)
+	}
+	cancelledAt := started.Add(time.Second)
+	if err := store.RequestScannerRunCancellation(ctx, scanID, "gosec", cancelledAt); err != nil {
+		t.Fatalf("RequestScannerRunCancellation failed: %v", err)
+	}
+
+	finished := cancelledAt.Add(time.Second)
+	if err := store.UpsertScannerRunRecord(ctx, &models.ScannerRunRecord{
+		ScanID:      scanID,
+		ToolName:    "gosec",
+		Status:      "completed",
+		CommandJSON: "{}",
+		StartedAt:   &started,
+		FinishedAt:  &finished,
+	}); err != nil {
+		t.Fatalf("late UpsertScannerRunRecord failed: %v", err)
+	}
+
+	records, err := store.ListScannerRunRecords(ctx, scanID)
+	if err != nil {
+		t.Fatalf("ListScannerRunRecords failed: %v", err)
+	}
+	if len(records) != 1 {
+		t.Fatalf("expected one scanner run record, got %d", len(records))
+	}
+	if records[0].Status != "cancelled" || records[0].CancelRequestedAt == nil {
+		t.Fatalf("late executor upsert overwrote cancellation: %+v", records[0])
 	}
 }
 

@@ -19,6 +19,10 @@ type User struct {
 	// DisplayName is an optional human-friendly name shown in the UI in place
 	// of the email. Empty falls back to the email.
 	DisplayName string `json:"display_name" db:"display_name"`
+	// ScannerSupplyChainPersonas is a JSON array of server-defined human
+	// persona IDs. It is intentionally not serialized directly; API handlers
+	// expose validated persona and effective-scope arrays instead.
+	ScannerSupplyChainPersonas string `json:"-" db:"scanner_supply_chain_personas"`
 	// TOTPSecret is the user's base32 TOTP secret, encrypted at rest with the
 	// master key. Empty until enrollment. Never serialized to clients.
 	TOTPSecret string `json:"-" db:"totp_secret"`

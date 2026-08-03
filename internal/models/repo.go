@@ -13,6 +13,8 @@ type Repo struct {
 	RemotePath         string     `json:"remote_path,omitempty" db:"remote_path"`
 	LastCommitSHA      string     `json:"last_commit_sha,omitempty" db:"last_commit_sha"`
 	LastDirtyState     string     `json:"last_dirty_state,omitempty" db:"last_dirty_state"`
+	SourceFingerprint  string     `json:"source_fingerprint,omitempty" db:"source_fingerprint"`
+	CredentialSecretID string     `json:"credential_secret_id,omitempty" db:"credential_secret_id"`
 	DefaultBranch      string     `json:"default_branch" db:"default_branch"`
 	DetectedLanguages  string     `json:"detected_languages" db:"detected_languages"`
 	DetectedFrameworks string     `json:"detected_frameworks" db:"detected_frameworks"`

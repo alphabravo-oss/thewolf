@@ -2,6 +2,8 @@ package db
 
 import (
 	"context"
+	"database/sql"
+	_ "embed"
 	"fmt"
 	"strings"
 	"time"
@@ -11,6 +13,9 @@ import (
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 )
+
+//go:embed migrations/007_ai_prompts_and_settings_postgres.sql
+var migration007PostgresSQL string
 
 // PostgresStore implements Store using PostgreSQL.
 type PostgresStore struct {
@@ -66,10 +71,8 @@ func (s *PostgresStore) Migrate() error {
 			return err
 		}
 	}
-	if _, err := s.db.Exec(migration007SQL); err != nil {
-		if !strings.Contains(err.Error(), "already exists") && !strings.Contains(err.Error(), "syntax error") {
-			return err
-		}
+	if _, err := s.db.Exec(migration007PostgresSQL); err != nil {
+		return fmt.Errorf("postgres settings migration: %w", err)
 	}
 	if _, err := s.db.Exec(migration008SQL); err != nil {
 		if !strings.Contains(err.Error(), "duplicate column") && !strings.Contains(err.Error(), "already exists") {
@@ -78,19 +81,6 @@ func (s *PostgresStore) Migrate() error {
 	}
 	if _, err := s.db.Exec(migration009SQL); err != nil {
 		if !strings.Contains(err.Error(), "duplicate column") && !strings.Contains(err.Error(), "already exists") {
-			return err
-		}
-	}
-	// Seed default settings using Postgres-compatible syntax. AI features
-	// default to OFF (see migration 007 for the SQLite seed and the
-	// matching scan handler at internal/api/routes/scans.go:132).
-	if _, err := s.db.Exec(`INSERT INTO settings (key, value) VALUES ('ai_enabled', 'false') ON CONFLICT(key) DO NOTHING`); err != nil {
-		if !strings.Contains(err.Error(), "already exists") && !strings.Contains(err.Error(), "does not exist") {
-			return err
-		}
-	}
-	if _, err := s.db.Exec(`INSERT INTO settings (key, value) VALUES ('registration_enabled', 'false') ON CONFLICT(key) DO NOTHING`); err != nil {
-		if !strings.Contains(err.Error(), "already exists") && !strings.Contains(err.Error(), "does not exist") {
 			return err
 		}
 	}
@@ -192,7 +182,82 @@ func (s *PostgresStore) Migrate() error {
 			return err
 		}
 	}
-	return nil
+	if err := execAdditiveMigration(s.db, migration026SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration027SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration028SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration029SQL); err != nil {
+		return err
+	}
+	if _, err := s.db.Exec(migration030PostgresSQL); err != nil {
+		return fmt.Errorf("scanner release migration: %w", err)
+	}
+	if err := execAdditiveMigration(s.db, migration031SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration032SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration033SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration034SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration035SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration036SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration037SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration038SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration039SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration040SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration041SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration042SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration043SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration044SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration045SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration046SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration047SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration048SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration049SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration050SQL); err != nil {
+		return err
+	}
+	return sanitizePersistedSecretMasks(s.db)
 }
 
 // --- Users ---
@@ -205,8 +270,8 @@ func (s *PostgresStore) CreateUser(ctx context.Context, user *models.User) error
 		user.Role = models.RoleUser
 	}
 	_, err := s.db.NamedExecContext(ctx,
-		`INSERT INTO users (id, email, password_hash, role, created_at, updated_at)
-		 VALUES (:id, :email, :password_hash, :role, :created_at, :updated_at)`, user)
+		`INSERT INTO users (id, email, password_hash, role, scanner_supply_chain_personas, created_at, updated_at)
+		 VALUES (:id, :email, :password_hash, :role, :scanner_supply_chain_personas, :created_at, :updated_at)`, user)
 	return err
 }
 
@@ -234,8 +299,21 @@ func (s *PostgresStore) UpdateUser(ctx context.Context, user *models.User) error
 		user.Role = models.RoleUser
 	}
 	_, err := s.db.NamedExecContext(ctx,
-		`UPDATE users SET email=:email, password_hash=:password_hash, role=:role, updated_at=:updated_at WHERE id=:id`, user)
+		`UPDATE users SET email=:email, password_hash=:password_hash, role=:role, scanner_supply_chain_personas=:scanner_supply_chain_personas, updated_at=:updated_at WHERE id=:id`, user)
 	return err
+}
+
+func (s *PostgresStore) UpdateUserScannerSupplyChainPersonas(ctx context.Context, userID, encodedPersonas string) error {
+	result, err := s.db.ExecContext(ctx,
+		`UPDATE users SET scanner_supply_chain_personas = $1, updated_at = $2 WHERE id = $3`,
+		encodedPersonas, time.Now().UTC(), userID)
+	if err != nil {
+		return err
+	}
+	if affected, err := result.RowsAffected(); err == nil && affected == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
 }
 
 // UpdateUserMFA persists only the TOTP fields, kept separate from UpdateUser so
@@ -259,7 +337,7 @@ func (s *PostgresStore) UpdateUserProfile(ctx context.Context, user *models.User
 func (s *PostgresStore) ListUsers(ctx context.Context) ([]models.User, error) {
 	var users []models.User
 	err := s.db.SelectContext(ctx, &users,
-		`SELECT id, email, password_hash, created_at, updated_at FROM users ORDER BY created_at ASC`)
+		`SELECT id, email, password_hash, role, display_name, totp_enabled, scanner_supply_chain_personas, created_at, updated_at FROM users ORDER BY created_at ASC`)
 	return users, err
 }
 
@@ -276,9 +354,11 @@ func (s *PostgresStore) CreateRepo(ctx context.Context, repo *models.Repo) error
 	repo.UpdatedAt = now
 	_, err := s.db.NamedExecContext(ctx,
 		`INSERT INTO repos (id, user_id, name, source_type, source_path, remote_node_id, remote_path,
-		 last_commit_sha, last_dirty_state, default_branch, created_at, updated_at)
+		 last_commit_sha, last_dirty_state, source_fingerprint, credential_secret_id,
+		 default_branch, created_at, updated_at)
 		 VALUES (:id, :user_id, :name, :source_type, :source_path, :remote_node_id, :remote_path,
-		 :last_commit_sha, :last_dirty_state, :default_branch, :created_at, :updated_at)`, repo)
+		 :last_commit_sha, :last_dirty_state, :source_fingerprint, :credential_secret_id,
+		 :default_branch, :created_at, :updated_at)`, repo)
 	return err
 }
 
@@ -312,7 +392,9 @@ func (s *PostgresStore) UpdateRepo(ctx context.Context, repo *models.Repo) error
 	_, err := s.db.NamedExecContext(ctx,
 		`UPDATE repos SET name=:name, source_type=:source_type, source_path=:source_path,
 		 remote_node_id=:remote_node_id, remote_path=:remote_path, last_commit_sha=:last_commit_sha,
-		 last_dirty_state=:last_dirty_state, default_branch=:default_branch, updated_at=:updated_at WHERE id=:id`, repo)
+		 last_dirty_state=:last_dirty_state, source_fingerprint=:source_fingerprint,
+		 credential_secret_id=:credential_secret_id, default_branch=:default_branch,
+		 updated_at=:updated_at WHERE id=:id`, repo)
 	return err
 }
 
@@ -446,9 +528,15 @@ func (s *PostgresStore) CreateSecret(ctx context.Context, secret *models.Secret)
 	now := time.Now().UTC()
 	secret.CreatedAt = now
 	secret.UpdatedAt = now
+	if secret.AllowedHosts == "" {
+		secret.AllowedHosts = "[]"
+	}
+	if secret.MetadataJSON == "" {
+		secret.MetadataJSON = "{}"
+	}
 	_, err := s.db.NamedExecContext(ctx,
-		`INSERT INTO secrets (id, user_id, key_type, key_name, encrypted_value, created_at, updated_at)
-		 VALUES (:id, :user_id, :key_type, :key_name, :encrypted_value, :created_at, :updated_at)`, secret)
+		`INSERT INTO secrets (id, user_id, key_type, key_name, encrypted_value, allowed_hosts, metadata_json, created_at, updated_at)
+		 VALUES (:id, :user_id, :key_type, :key_name, :encrypted_value, :allowed_hosts, :metadata_json, :created_at, :updated_at)`, secret)
 	return err
 }
 
@@ -461,11 +549,38 @@ func (s *PostgresStore) GetSecretByID(ctx context.Context, id string) (*models.S
 	return &sec, nil
 }
 
+func (s *PostgresStore) GetSecretMetadataByID(
+	ctx context.Context,
+	id string,
+) (*models.Secret, error) {
+	var secret models.Secret
+	err := s.db.GetContext(ctx, &secret,
+		`SELECT id, user_id, key_type, key_name, '' AS encrypted_value,
+		        allowed_hosts, metadata_json, created_at, updated_at
+		   FROM secrets WHERE id = $1`, id)
+	if err != nil {
+		return nil, err
+	}
+	return &secret, nil
+}
+
 func (s *PostgresStore) ListSecretsByUser(ctx context.Context, userID string) ([]models.Secret, error) {
 	var secs []models.Secret
 	err := s.db.SelectContext(ctx, &secs,
 		"SELECT * FROM secrets WHERE user_id = $1 ORDER BY created_at DESC", userID)
 	return secs, err
+}
+
+func (s *PostgresStore) ListSecretMetadataByUser(
+	ctx context.Context,
+	userID string,
+) ([]models.Secret, error) {
+	var secrets []models.Secret
+	err := s.db.SelectContext(ctx, &secrets,
+		`SELECT id, user_id, key_type, key_name, '' AS encrypted_value,
+		        allowed_hosts, metadata_json, created_at, updated_at
+		   FROM secrets WHERE user_id = $1 ORDER BY created_at DESC`, userID)
+	return secrets, err
 }
 
 // ListAllSecrets returns every user's secrets (admin oversight). Values stay
@@ -517,16 +632,26 @@ func (s *PostgresStore) CreateScan(ctx context.Context, scan *models.Scan) error
 	now := time.Now().UTC()
 	scan.CreatedAt = now
 	scan.UpdatedAt = now
-	if scan.ToolsErrors == "" {
-		scan.ToolsErrors = "{}"
-	}
+	prepareScanForWrite(scan)
 	_, err := s.db.NamedExecContext(ctx,
 		`INSERT INTO scans (id, user_id, repo_id, collection_id, loop_id, iteration, branch, status,
-		 source_type, remote_node_id, source_path, commit_sha, dirty_state, prepared_workspace,
+		 source_type, remote_node_id, source_path, commit_sha, tree_digest, dirty_state, prepared_workspace,
+		 request_json, request_digest, client_reference, idempotency_key, phase, claimed_by,
+		 lease_token, lease_expires_at, heartbeat_at, attempt, max_attempts, cancel_requested_at,
+		 failure_code, failure_message, execution_backend, source_fingerprint, profile,
+		 scanner_release_id, release_manifest_digest,
+		 rescan_of_scan_id, release_selection_reason,
+		 categories, include_paths, exclude_paths,
 		 tools_selected, tools_completed, tools_failed, tools_errors, finding_count, coverage_summary, ai_enabled, ai_summary,
 		 started_at, completed_at, created_at, updated_at)
 		 VALUES (:id, :user_id, :repo_id, :collection_id, :loop_id, :iteration, :branch, :status,
-		 :source_type, :remote_node_id, :source_path, :commit_sha, :dirty_state, :prepared_workspace,
+		 :source_type, :remote_node_id, :source_path, :commit_sha, :tree_digest, :dirty_state, :prepared_workspace,
+		 :request_json, :request_digest, :client_reference, :idempotency_key, :phase, :claimed_by,
+		 :lease_token, :lease_expires_at, :heartbeat_at, :attempt, :max_attempts, :cancel_requested_at,
+		 :failure_code, :failure_message, :execution_backend, :source_fingerprint, :profile,
+		 :scanner_release_id, :release_manifest_digest,
+		 :rescan_of_scan_id, :release_selection_reason,
+		 :categories, :include_paths, :exclude_paths,
 		 :tools_selected, :tools_completed, :tools_failed, :tools_errors, :finding_count, :coverage_summary, :ai_enabled, :ai_summary,
 		 :started_at, :completed_at, :created_at, :updated_at)`, scan)
 	return err
@@ -573,9 +698,23 @@ func (s *PostgresStore) UpdateScan(ctx context.Context, scan *models.Scan) error
 		`UPDATE scans SET status=:status, tools_selected=:tools_selected, tools_completed=:tools_completed,
 		 tools_failed=:tools_failed, tools_errors=:tools_errors, finding_count=:finding_count, coverage_summary=:coverage_summary,
 		 ai_enabled=:ai_enabled, ai_summary=:ai_summary, source_type=:source_type, remote_node_id=:remote_node_id,
-		 source_path=:source_path, commit_sha=:commit_sha, dirty_state=:dirty_state, prepared_workspace=:prepared_workspace,
+		 source_path=:source_path, commit_sha=:commit_sha, tree_digest=:tree_digest, dirty_state=:dirty_state, prepared_workspace=:prepared_workspace,
+		 request_json=:request_json, request_digest=:request_digest, client_reference=:client_reference,
+		 idempotency_key=:idempotency_key, phase=:phase, claimed_by=:claimed_by, lease_token=:lease_token,
+		 lease_expires_at=:lease_expires_at, heartbeat_at=:heartbeat_at, attempt=:attempt,
+		 max_attempts=:max_attempts, cancel_requested_at=:cancel_requested_at, failure_code=:failure_code,
+		 failure_message=:failure_message, execution_backend=:execution_backend,
+		 scanner_release_id=CASE WHEN scanner_release_id='' THEN :scanner_release_id ELSE scanner_release_id END,
+		 release_manifest_digest=CASE WHEN release_manifest_digest='' THEN :release_manifest_digest ELSE release_manifest_digest END,
+		 rescan_of_scan_id=CASE WHEN rescan_of_scan_id='' THEN :rescan_of_scan_id ELSE rescan_of_scan_id END,
+		 release_selection_reason=CASE WHEN release_selection_reason='' THEN :release_selection_reason ELSE release_selection_reason END,
+		 source_fingerprint=:source_fingerprint, profile=:profile, categories=:categories,
+		 include_paths=:include_paths, exclude_paths=:exclude_paths,
 		 started_at=:started_at, completed_at=:completed_at, updated_at=:updated_at
-		 WHERE id=:id`, scan)
+		 WHERE id=:id AND (
+		   :lease_token = '' OR
+		   (lease_token=:lease_token AND status='running' AND cancel_requested_at IS NULL)
+		 )`, scan)
 	return err
 }
 
@@ -617,31 +756,8 @@ func (s *PostgresStore) CreateFindings(ctx context.Context, findings []models.Fi
 		return err
 	}
 	defer tx.Rollback()
-	for i := range findings {
-		now := time.Now().UTC()
-		findings[i].CreatedAt = now
-		findings[i].UpdatedAt = now
-		prepareFindingForWrite(&findings[i])
-		_, err := tx.NamedExecContext(ctx,
-			`INSERT INTO findings (id, scan_id, repo_id, fingerprint, stable_fingerprint, location_fingerprint,
-			 semantic_fingerprint, evidence_fingerprint, identity_version, tool_name, category, severity,
-			 title, description, file_path, line_start, line_end, code_snippet, cwe_id, rule_id,
-			 tool_severity_score, location_weight, ai_context_score, composite_score,
-			 ai_fix_suggestion, status, sarif_data, module_name, function_name, symbol_kind, file_purpose, dependents_json,
-			 fine_category, fix_strategy_id, confidence, corroborated_by_json, suppressed, suppression_id,
-			 suppressed_reason, baseline_state, introduced_in_scan_id, resolved_in_scan_id, source_kind, source_ref,
-			 created_at, updated_at)
-			 VALUES (:id, :scan_id, :repo_id, :fingerprint, :stable_fingerprint, :location_fingerprint,
-			 :semantic_fingerprint, :evidence_fingerprint, :identity_version, :tool_name, :category, :severity,
-			 :title, :description, :file_path, :line_start, :line_end, :code_snippet, :cwe_id, :rule_id,
-			 :tool_severity_score, :location_weight, :ai_context_score, :composite_score,
-			 :ai_fix_suggestion, :status, :sarif_data, :module_name, :function_name, :symbol_kind, :file_purpose, :dependents_json,
-			 :fine_category, :fix_strategy_id, :confidence, :corroborated_by_json, :suppressed, :suppression_id,
-			 :suppressed_reason, :baseline_state, :introduced_in_scan_id, :resolved_in_scan_id, :source_kind, :source_ref,
-			 :created_at, :updated_at)`, &findings[i])
-		if err != nil {
-			return err
-		}
+	if err := insertFindingsTx(ctx, tx, findings); err != nil {
+		return err
 	}
 	return tx.Commit()
 }
@@ -825,8 +941,8 @@ func (s *PostgresStore) CreateScanArtifact(ctx context.Context, artifact *models
 		artifact.RedactionLevel = "internal_report"
 	}
 	_, err := s.db.NamedExecContext(ctx,
-		`INSERT INTO scan_artifacts (id, scan_id, artifact_type, file_path, file_size, checksum_sha256, redaction_level, created_at, updated_at)
-		 VALUES (:id, :scan_id, :artifact_type, :file_path, :file_size, :checksum_sha256, :redaction_level, :created_at, :updated_at)`, artifact)
+		`INSERT INTO scan_artifacts (id, scan_id, artifact_type, file_path, storage_key, file_size, checksum_sha256, redaction_level, created_at, updated_at)
+		 VALUES (:id, :scan_id, :artifact_type, :file_path, :storage_key, :file_size, :checksum_sha256, :redaction_level, :created_at, :updated_at)`, artifact)
 	return err
 }
 
@@ -870,32 +986,30 @@ func (s *PostgresStore) UpsertScannerRunRecord(ctx context.Context, record *mode
 	if record.CreatedAt.IsZero() {
 		record.CreatedAt = now
 	}
-	_, err := s.db.NamedExecContext(ctx,
-		`INSERT INTO scanner_run_records (
-		 id, scan_id, tool_name, status, category, image, image_digest, version, command_json,
-		 exit_code, duration_ms, finding_count, error_message, parser_status, parser_message,
-		 started_at, finished_at, created_at, updated_at)
-		 VALUES (
-		 :id, :scan_id, :tool_name, :status, :category, :image, :image_digest, :version, :command_json,
-		 :exit_code, :duration_ms, :finding_count, :error_message, :parser_status, :parser_message,
-		 :started_at, :finished_at, :created_at, :updated_at)
-		 ON CONFLICT (scan_id, tool_name) DO UPDATE SET
-		   status=excluded.status,
-		   category=excluded.category,
-		   image=excluded.image,
-		   image_digest=excluded.image_digest,
-		   version=excluded.version,
-		   command_json=excluded.command_json,
-		   exit_code=excluded.exit_code,
-		   duration_ms=excluded.duration_ms,
-		   finding_count=excluded.finding_count,
-		   error_message=excluded.error_message,
-		   parser_status=excluded.parser_status,
-		   parser_message=excluded.parser_message,
-		   started_at=COALESCE(excluded.started_at, scanner_run_records.started_at),
-		   finished_at=excluded.finished_at,
-		   updated_at=excluded.updated_at`, record)
-	return err
+	if record.LeaseToken == "" {
+		_, err := s.db.NamedExecContext(ctx, scannerRunRecordUpsertQuery, record)
+		return err
+	}
+	tx, err := s.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	result, err := tx.ExecContext(ctx,
+		`UPDATE scans SET updated_at = updated_at
+		 WHERE id = $1 AND status = $2 AND lease_token = $3 AND cancel_requested_at IS NULL`,
+		record.ScanID, models.ScanStatusRunning, record.LeaseToken)
+	if err != nil {
+		return err
+	}
+	affected, _ := result.RowsAffected()
+	if affected != 1 {
+		return ErrStaleScanLease
+	}
+	if _, err := tx.NamedExecContext(ctx, scannerRunRecordUpsertQuery, record); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (s *PostgresStore) ListScannerRunRecords(ctx context.Context, scanID string) ([]models.ScannerRunRecord, error) {

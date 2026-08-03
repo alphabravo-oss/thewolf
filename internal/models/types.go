@@ -158,6 +158,7 @@ type KeyType string
 const (
 	KeyTypeGitHubToken  KeyType = "github_token"
 	KeyTypeGitLabToken  KeyType = "gitlab_token"
+	KeyTypeGitHTTPS     KeyType = "git_https"
 	KeyTypeSSHPrivate   KeyType = "ssh_private_key"
 	KeyTypeSSHPassword  KeyType = "ssh_password"
 	KeyTypeAnthropicKey KeyType = "anthropic_key"
