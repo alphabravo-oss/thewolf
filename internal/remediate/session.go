@@ -6,6 +6,7 @@ package remediate
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -19,6 +20,14 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/wolflog"
 )
 
+// ErrWrongSessionState means a caller tried to advance a remediation session
+// from a status it is not currently in — either the session never reached
+// the expected state, or a concurrent caller already moved it past that
+// state first (a double-clicked approve, or an approval racing Run's own
+// claim after a restart). Both cases are indistinguishable to the caller and
+// handled identically; Task 10 maps this to HTTP 409.
+var ErrWrongSessionState = errors.New("remediation session is not in the expected state for this action")
+
 // Runner drives one session through its phases.
 type Runner struct {
 	store  db.Store
@@ -31,24 +40,44 @@ func NewRunner(store db.Store, d driver.Driver, cfg Config) *Runner {
 	return &Runner{store: store, driver: d, cfg: cfg}
 }
 
+// driverPreflight enforces the operator kill switch and the wall-clock
+// session bound before any call that reaches the driver — a container-backed
+// agent run with scoped writes. It is shared by every entry point that can
+// invoke the driver (Run, and the approval methods that resume a session
+// straight into a driver-calling phase), not just Run's own first phase:
+// without this, a held session resuming via ApprovePlan/ApprovePatches would
+// ignore WOLF_REMEDIATE_ENABLED entirely and run unbounded by
+// WOLF_REMEDIATE_SESSION_TIMEOUT, even though Run's own first phase enforces
+// both. ClampTurns still bounds turns regardless, so a missed call here is a
+// missing kill-switch/wall-clock guard, not a fully unbounded run — but both
+// must apply uniformly.
+//
+// A zero SessionTimeout must not become an immediately-expiring context:
+// context.WithTimeout(ctx, 0) sets a deadline of "now" and its internal
+// timer fires almost instantly, so the session is bounded only when a
+// positive timeout was actually configured. LoadConfig always sets one; only
+// a hand-built Config (e.g. in tests) can leave this zero.
+func (r *Runner) driverPreflight(ctx context.Context) (context.Context, context.CancelFunc, error) {
+	if !r.cfg.Enabled {
+		return nil, nil, errors.New("remediation is disabled (WOLF_REMEDIATE_ENABLED=false)")
+	}
+	if r.cfg.SessionTimeout > 0 {
+		ctx, cancel := context.WithTimeout(ctx, r.cfg.SessionTimeout)
+		return ctx, cancel, nil
+	}
+	return ctx, func() {}, nil
+}
+
 // Run advances a pending session as far as its gates allow. With both gates
 // off it runs to completion; with a gate on it stops at the corresponding
 // review state and returns nil, to be resumed by an approval. Only a
 // pending session may be started this way — see the status check below.
 func (r *Runner) Run(ctx context.Context, sessionID string) error {
-	if !r.cfg.Enabled {
-		return errors.New("remediation is disabled (WOLF_REMEDIATE_ENABLED=false)")
+	ctx, cancel, err := r.driverPreflight(ctx)
+	if err != nil {
+		return err
 	}
-	// A zero SessionTimeout must not become an immediately-expiring context:
-	// context.WithTimeout(ctx, 0) sets a deadline of "now" and its internal
-	// timer fires almost instantly, so bound the session only when a positive
-	// timeout was actually configured. LoadConfig always sets one; only a
-	// hand-built Config (e.g. in tests) can leave this zero.
-	if r.cfg.SessionTimeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, r.cfg.SessionTimeout)
-		defer cancel()
-	}
+	defer cancel()
 
 	sess, err := r.store.GetRemediationSession(ctx, sessionID)
 	if err != nil {
@@ -61,7 +90,7 @@ func (r *Runner) Run(ctx context.Context, sessionID string) error {
 	// it. Task 9 widens this to the resumable approval states explicitly;
 	// until then only a pending session may start.
 	if sess.Status != models.RemediationPending {
-		return fmt.Errorf("session %s is not pending (status=%q)", sessionID, sess.Status)
+		return fmt.Errorf("%w: session %s is %s, not pending", ErrWrongSessionState, sessionID, sess.Status)
 	}
 	if (!sess.PlanGateEnabled || !sess.PatchGateEnabled) && !r.cfg.AllowYolo {
 		return errors.New("gates disabled but WOLF_REMEDIATE_ALLOW_YOLO=false")
@@ -233,13 +262,23 @@ func (r *Runner) runExecutePhase(ctx context.Context, sess *models.RemediationSe
 // everything from sess (freshly read above) and the store inside
 // runExecutePhase; no in-memory state survives from the original Run call,
 // so this works identically after a server restart.
+//
+// Gated by driverPreflight since this resumes straight into a driver call:
+// the operator kill switch and wall-clock bound must apply here exactly as
+// they do to Run's own first phase.
 func (r *Runner) ApprovePlan(ctx context.Context, sessionID, approverID string) error {
+	ctx, cancel, err := r.driverPreflight(ctx)
+	if err != nil {
+		return err
+	}
+	defer cancel()
+
 	sess, err := r.store.GetRemediationSession(ctx, sessionID)
 	if err != nil {
 		return err
 	}
 	if sess.Status != models.RemediationPlanReview {
-		return fmt.Errorf("session %s is %s, not awaiting plan approval", sessionID, sess.Status)
+		return fmt.Errorf("%w: session %s is %s, not awaiting plan approval", ErrWrongSessionState, sessionID, sess.Status)
 	}
 	if err := r.store.ApproveRemediationPlan(ctx, sessionID, approverID); err != nil {
 		return err
@@ -248,53 +287,90 @@ func (r *Runner) ApprovePlan(ctx context.Context, sessionID, approverID string) 
 }
 
 // RejectPlan terminates the session without ever reaching the execute phase,
-// so no code is written for a plan a human declined.
+// so no code is written for a plan a human declined. The session is
+// terminated FIRST, before the best-effort write of the reason onto the plan
+// row: a human's decision to reject must not be defeated by a bookkeeping
+// write. If RejectRemediationPlan then fails, that is logged rather than
+// returned — escalating it would leave the session stuck in plan_review,
+// where every retry of this same call re-hits the very failure that stranded
+// it, since the session's own status has already moved to rejected.
+//
+// Deliberately not gated by driverPreflight: this never calls the driver, so
+// there is nothing for the kill switch or wall-clock bound to protect
+// against, and an admin who set WOLF_REMEDIATE_ENABLED=false to stop
+// remediation activity must still be able to terminate a session sitting in
+// review — refusing that would be the kill switch working against itself.
 func (r *Runner) RejectPlan(ctx context.Context, sessionID, approverID, reason string) error {
 	sess, err := r.store.GetRemediationSession(ctx, sessionID)
 	if err != nil {
 		return err
 	}
 	if sess.Status != models.RemediationPlanReview {
-		return fmt.Errorf("session %s is %s, not awaiting plan approval", sessionID, sess.Status)
+		return fmt.Errorf("%w: session %s is %s, not awaiting plan approval", ErrWrongSessionState, sessionID, sess.Status)
 	}
-	// Persist the reason on the plan row as well as the session. The plan is
-	// what a human reviewed and declined, so the rejection belongs beside it —
-	// otherwise remediation_plans.rejected_reason is never written by anything.
+	if terr := r.transition(ctx, sess, models.RemediationRejected, reason); terr != nil {
+		return terr
+	}
+	// The plan is what a human reviewed and declined, so the rejection
+	// belongs beside it too — otherwise remediation_plans.rejected_reason is
+	// never written by anything. But this write is best-effort now that the
+	// session itself is already terminated; see the doc comment above.
 	if err := r.store.RejectRemediationPlan(ctx, sessionID, approverID, reason); err != nil {
-		return err
+		wolflog.L().Error().Err(err).Str("session", sessionID).
+			Msg("record plan rejection reason after session was terminated")
 	}
-	return r.transition(ctx, sess, models.RemediationRejected, reason)
+	return nil
 }
 
-// ApprovePatches records approval and resumes the session into the landing
-// phase, the patch-review counterpart to ApprovePlan.
+// ApprovePatches records who approved and resumes the session into the
+// landing phase, the patch-review counterpart to ApprovePlan. Gated by
+// driverPreflight for the same reason as ApprovePlan: the landing phase will
+// itself call the driver once Task 13 replaces its stub body.
 func (r *Runner) ApprovePatches(ctx context.Context, sessionID, approverID string) error {
+	ctx, cancel, err := r.driverPreflight(ctx)
+	if err != nil {
+		return err
+	}
+	defer cancel()
+
 	sess, err := r.store.GetRemediationSession(ctx, sessionID)
 	if err != nil {
 		return err
 	}
 	if sess.Status != models.RemediationPatchReview {
-		return fmt.Errorf("session %s is %s, not awaiting patch approval", sessionID, sess.Status)
+		return fmt.Errorf("%w: session %s is %s, not awaiting patch approval", ErrWrongSessionState, sessionID, sess.Status)
 	}
-	// Unlike ApproveRemediationPlan, there is no store write here recording
-	// approverID against the patch rows themselves — Task 13's landing phase
-	// owns that, alongside the apply/rescan/PR work it actually gates.
+	if err := r.store.ApproveRemediationPatches(ctx, sessionID, approverID); err != nil {
+		return err
+	}
 	return r.runLandingPhase(ctx, sess)
 }
 
 // RejectPatches terminates the session without landing any patch. The patch
 // rows already saved to remediation_patches are left in place — they are the
 // audit trail of what the agent produced and a human declined, not scratch
-// state to discard.
+// state to discard. Ordered the same way as RejectPlan: the session is
+// terminated first, and the best-effort write of who rejected it onto those
+// rows is logged rather than escalated on failure, for the same reason. Also
+// not gated by driverPreflight, for the same reason as RejectPlan: no driver
+// call happens here, and termination must stay available even when
+// remediation is administratively disabled.
 func (r *Runner) RejectPatches(ctx context.Context, sessionID, approverID, reason string) error {
 	sess, err := r.store.GetRemediationSession(ctx, sessionID)
 	if err != nil {
 		return err
 	}
 	if sess.Status != models.RemediationPatchReview {
-		return fmt.Errorf("session %s is %s, not awaiting patch approval", sessionID, sess.Status)
+		return fmt.Errorf("%w: session %s is %s, not awaiting patch approval", ErrWrongSessionState, sessionID, sess.Status)
 	}
-	return r.transition(ctx, sess, models.RemediationRejected, reason)
+	if terr := r.transition(ctx, sess, models.RemediationRejected, reason); terr != nil {
+		return terr
+	}
+	if err := r.store.ApproveRemediationPatches(ctx, sessionID, approverID); err != nil {
+		wolflog.L().Error().Err(err).Str("session", sessionID).
+			Msg("record patch reviewer after session was terminated")
+	}
+	return nil
 }
 
 // runLandingPhase applies approved patches, rescans, and opens a PR. Until
@@ -405,16 +481,38 @@ func (r *Runner) lastEventSeq(ctx context.Context, sessionID string) int {
 	return events[len(events)-1].Seq
 }
 
+// transition moves sess to a new status, guarded by a compare-and-swap on
+// the status sess still carries in memory. That value is always the last
+// status actually committed for this sess, because sess is only mutated
+// below once the database write has actually landed — a failed write leaves
+// sess (and so the "from" a subsequent transition call computes, e.g.
+// failSession's, chained right after this one returns) pointing at the true
+// committed state rather than a phantom one.
+//
+// The CAS is what keeps two racing callers — a double-clicked approve, or an
+// approval landing the instant Run's own claim commits — from both observing
+// the same review state and both proceeding: only the first write wins, and
+// the loser's ErrWrongSessionState looks identical to a stale precondition,
+// which is exactly how it should be handled.
 func (r *Runner) transition(ctx context.Context, sess *models.RemediationSession, status models.RemediationStatus, reason string) error {
-	sess.Status = status
-	sess.FailureReason = reason
-	sess.UpdatedAt = time.Now()
+	from := sess.Status
+	next := *sess
+	next.Status = status
+	next.FailureReason = reason
+	next.UpdatedAt = time.Now()
 	switch status {
 	case models.RemediationCompleted, models.RemediationFailed,
 		models.RemediationExhausted, models.RemediationCancelled,
 		models.RemediationRejected:
 		now := time.Now()
-		sess.CompletedAt = &now
+		next.CompletedAt = &now
 	}
-	return r.store.UpdateRemediationSession(ctx, sess)
+	if err := r.store.TransitionRemediationSession(ctx, &next, from); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("%w: session %s is no longer %s", ErrWrongSessionState, sess.ID, from)
+		}
+		return err
+	}
+	*sess = next
+	return nil
 }

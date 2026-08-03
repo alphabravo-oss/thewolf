@@ -30,7 +30,7 @@ retains control of budget, approval gates, and verification by rescan.
 
 - Hand a full scan result to an agentic session that triages and fixes across turns.
 - Bound every run by a turn budget, metered by Wolf.
-- Gate the run at two points — after triage, and before patches land — with each gate independently switchable. Both off is "yolo mode".
+- Gate the run at two points — after triage, and before patches land — with each gate independently switchable. Both off is "yolo mode" — and the `WOLF_REMEDIATE_ALLOW_YOLO` opt-in is required whenever *either* gate is off, not only when both are (patch-gate-off-alone still lands code with no human review).
 - Support per-user LLM credentials via OAuth (subscription plans) and API keys, plus a service identity for scheduled runs.
 - Land results as a branch and PR whose body carries the scan delta.
 - Leave the existing per-finding engine chain untouched and fully functional.
@@ -93,10 +93,9 @@ machinery.
 
 | Package | Responsibility | Depends on |
 |---|---|---|
-| `internal/remediate` | Session orchestration: run the two-phase flow, evaluate gates, persist state | driver, plan, gate, meter, credential |
+| `internal/remediate` | Session orchestration: run the two-phase flow, evaluate gates, persist state | driver, plan, meter, credential |
 | `internal/remediate/driver` | `Driver` interface + `exec` implementation that shells out to `opencode run` | credential |
 | `internal/remediate/plan` | Plan schema, JSON parsing, validation | — |
-| `internal/remediate/gate` | Gate policy evaluation (plan gate, patch gate, yolo) | — |
 | `internal/remediate/meter` | `Meter` interface + `turns` implementation; consumes the JSON event stream | — |
 | `internal/remediate/credential` | Resolve per-user → service credentials, render `OPENCODE_AUTH_CONTENT`, drive the ephemeral login container | `internal/db` |
 | `internal/remediate/permission` | Build the per-run `opencode.json` permission document | — |
@@ -263,7 +262,7 @@ DDL, split into `051_opencode_remediation_postgres.sql` and
 | `repo_id`, `scan_id` | source scan the findings come from |
 | `loop_id` | nullable; set when a `Loop` drives this session |
 | `status` | see state machine below |
-| `plan_gate_enabled`, `patch_gate_enabled` | booleans; both false = yolo |
+| `plan_gate_enabled`, `patch_gate_enabled` | booleans; both false = yolo mode. `WOLF_REMEDIATE_ALLOW_YOLO` is required when **either** is false, not only when both are — `Run` enforces this with an OR, deliberately stricter than "yolo" as a state |
 | `max_turns` | budget for each run phase |
 | `turns_used_plan`, `turns_used_execute` | metered actuals |
 | `tokens_used`, `cost_used` | reserved for future meters; zero in v1 |
@@ -428,7 +427,7 @@ The orphan recovery mirrors `recoverOrphanScans` in `internal/api/server.go`.
 
 ## Testing
 
-- **Unit** — `plan` parsing and validation, `gate` policy evaluation across the yolo/gated matrix, `meter` turn counting against recorded event-stream fixtures, `permission` document generation, `credential` resolution order including the service fallback.
+- **Unit** — `plan` parsing and validation, `Runner`'s own gate/yolo matrix (`Run` requires `AllowYolo` whenever either gate is off, holds at `plan_review`/`patch_review` when a gate is on, resumes via `ApprovePlan`/`ApprovePatches`), `meter` turn counting against recorded event-stream fixtures, `permission` document generation, `credential` resolution order including the service fallback.
 - **Golden files** — the generated `opencode.json` for both run phases, asserted byte-for-byte so a permission regression cannot land silently. This is the highest-value test in the suite: it is the only thing standing between a config typo and an agent with unrestricted `bash`.
 - **Fake driver** — a `Driver` implementation replaying recorded event streams, so session orchestration, gates, state transitions, and error paths are tested without containers or network.
 - **Redaction** — assert that credentials injected via `OPENCODE_AUTH_CONTENT` never appear in `remediation_events`, SSE output, or the PR body. Follows the existing `*_never_render` fixture convention in the UI tests.

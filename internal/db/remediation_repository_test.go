@@ -2,6 +2,8 @@ package db
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"os"
 	"testing"
 	"time"
@@ -201,6 +203,114 @@ func TestRejectRemediationPlanNoRows(t *testing.T) {
 
 	if err := store.RejectRemediationPlan(ctx, seed.ID, "u-approver", "no plan yet"); err == nil {
 		t.Fatal("RejectRemediationPlan succeeded with no plan row, want error")
+	}
+}
+
+// TestTransitionRemediationSessionCAS is the direct regression guard for the
+// TOCTOU gap a plain UPDATE left open: two callers who both read a session
+// as (say) plan_review must not both be able to advance it. A matching
+// fromStatus succeeds and writes every column UpdateRemediationSession does;
+// a stale fromStatus (the row already moved on) fails with sql.ErrNoRows
+// rather than silently overwriting whatever the first write committed.
+func TestTransitionRemediationSessionCAS(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+	s := &models.RemediationSession{
+		ID: "rs-cas-1", UserID: "u-1", RepoID: "r-1", ScanID: "sc-1",
+		Status: models.RemediationPlanReview, MaxTurns: 20,
+		CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	}
+	if err := store.CreateRemediationSession(ctx, s); err != nil {
+		t.Fatalf("CreateRemediationSession: %v", err)
+	}
+
+	s.Status = models.RemediationExecuting
+	s.TurnsUsedPlan = 3
+	if err := store.TransitionRemediationSession(ctx, s, models.RemediationPlanReview); err != nil {
+		t.Fatalf("TransitionRemediationSession (matching fromStatus): %v", err)
+	}
+	got, err := store.GetRemediationSession(ctx, s.ID)
+	if err != nil {
+		t.Fatalf("GetRemediationSession: %v", err)
+	}
+	if got.Status != models.RemediationExecuting || got.TurnsUsedPlan != 3 {
+		t.Fatalf("got = %+v, want status=executing, turns_used_plan=3", got)
+	}
+
+	// The row is now "executing", not "plan_review" — a second caller still
+	// holding the stale "plan_review" read must be refused, not silently
+	// allowed to clobber the write above.
+	stale := &models.RemediationSession{ID: s.ID, Status: models.RemediationFailed, MaxTurns: 20}
+	err = store.TransitionRemediationSession(ctx, stale, models.RemediationPlanReview)
+	if !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("TransitionRemediationSession (stale fromStatus) = %v, want sql.ErrNoRows", err)
+	}
+	// And the row must be exactly as the FIRST write left it — untouched by
+	// the second, refused attempt.
+	after, _ := store.GetRemediationSession(ctx, s.ID)
+	if after.Status != models.RemediationExecuting {
+		t.Fatalf("Status = %q after a refused CAS, want unchanged %q", after.Status, models.RemediationExecuting)
+	}
+}
+
+// TestApproveRemediationPatches proves the write ApprovePatches/RejectPatches
+// otherwise silently discard: approved_by/approved_at land on every patch
+// row for the session, not just the first or last.
+func TestApproveRemediationPatches(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+	seed := &models.RemediationSession{
+		ID: "rs-patches-1", UserID: "u-1", RepoID: "r-1", ScanID: "sc-1",
+		Status: models.RemediationPatchReview, CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	}
+	if err := store.CreateRemediationSession(ctx, seed); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	patches := []models.RemediationPatch{
+		{CommitSHA: "c1", Message: "fix 1", CreatedAt: time.Now()},
+		{CommitSHA: "c2", Message: "fix 2", CreatedAt: time.Now()},
+	}
+	if err := store.SaveRemediationPatches(ctx, seed.ID, patches); err != nil {
+		t.Fatalf("SaveRemediationPatches: %v", err)
+	}
+
+	if err := store.ApproveRemediationPatches(ctx, seed.ID, "u-approver"); err != nil {
+		t.Fatalf("ApproveRemediationPatches: %v", err)
+	}
+
+	got, err := store.ListRemediationPatches(ctx, seed.ID)
+	if err != nil {
+		t.Fatalf("ListRemediationPatches: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("len(got) = %d, want 2", len(got))
+	}
+	for i, p := range got {
+		if p.ApprovedBy != "u-approver" {
+			t.Errorf("got[%d].ApprovedBy = %q, want %q", i, p.ApprovedBy, "u-approver")
+		}
+		if p.ApprovedAt == nil {
+			t.Errorf("got[%d].ApprovedAt not recorded", i)
+		}
+	}
+}
+
+// A session that reached patch_review with an empty patch set (the agent
+// found nothing to commit) must still be approvable/rejectable — zero rows
+// affected is a valid outcome here, not an error.
+func TestApproveRemediationPatchesNoPatchesIsNotAnError(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+	seed := &models.RemediationSession{
+		ID: "rs-patches-2", UserID: "u-1", RepoID: "r-1", ScanID: "sc-1",
+		Status: models.RemediationPatchReview, CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	}
+	if err := store.CreateRemediationSession(ctx, seed); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	if err := store.ApproveRemediationPatches(ctx, seed.ID, "u-approver"); err != nil {
+		t.Fatalf("ApproveRemediationPatches on a patchless session: %v", err)
 	}
 }
 

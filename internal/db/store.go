@@ -295,6 +295,12 @@ type Store interface {
 	GetRemediationSession(ctx context.Context, id string) (*models.RemediationSession, error)
 	ListRemediationSessions(ctx context.Context, userID string) ([]models.RemediationSession, error)
 	UpdateRemediationSession(ctx context.Context, session *models.RemediationSession) error
+	// TransitionRemediationSession is UpdateRemediationSession's compare-
+	// and-swap counterpart: the write only lands if the session's current
+	// status still matches fromStatus, so two callers who both observed the
+	// same review state cannot both advance it. A mismatch surfaces as
+	// sql.ErrNoRows.
+	TransitionRemediationSession(ctx context.Context, session *models.RemediationSession, fromStatus models.RemediationStatus) error
 	SaveRemediationPlan(ctx context.Context, plan *models.RemediationPlan) error
 	// GetRemediationPlan returns the most recently saved plan for a session.
 	GetRemediationPlan(ctx context.Context, sessionID string) (*models.RemediationPlan, error)
@@ -305,6 +311,10 @@ type Store interface {
 	// somewhere to land beside the plan a human actually reviewed.
 	RejectRemediationPlan(ctx context.Context, sessionID, approverID, reason string) error
 	SaveRemediationPatches(ctx context.Context, sessionID string, patches []models.RemediationPatch) error
+	// ApproveRemediationPatches records who acted (approved or rejected) on
+	// a session's whole patch set, across every patch row belonging to it —
+	// the write ApprovePatches/RejectPatches otherwise silently discard.
+	ApproveRemediationPatches(ctx context.Context, sessionID, approverID string) error
 	ListRemediationPatches(ctx context.Context, sessionID string) ([]models.RemediationPatch, error)
 	// AppendRemediationEvent and ListRemediationEvents back the SSE replay
 	// stream: events are ordered by seq, never mutated once written.

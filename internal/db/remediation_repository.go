@@ -81,6 +81,42 @@ func (r *remediationRepository) UpdateRemediationSession(ctx context.Context, s 
 	return err
 }
 
+// TransitionRemediationSession is UpdateRemediationSession's compare-and-swap
+// counterpart: the identical column list, but the WHERE clause also requires
+// the row's current status to still be fromStatus. A plain UPDATE keyed only
+// on id lets two callers who both read the same review state both write —
+// this is what stops that: only the first write lands, and the second gets
+// RowsAffected()==0 (surfaced as sql.ErrNoRows) rather than silently
+// clobbering whatever the first write just committed.
+func (r *remediationRepository) TransitionRemediationSession(ctx context.Context, s *models.RemediationSession, fromStatus models.RemediationStatus) error {
+	s.UpdatedAt = time.Now().UTC()
+	result, err := r.db.ExecContext(ctx, r.db.Rebind(
+		`UPDATE remediation_sessions SET
+		  status = ?, plan_gate_enabled = ?, patch_gate_enabled = ?,
+		  max_turns = ?, turns_used_plan = ?, turns_used_execute = ?,
+		  tokens_used = ?, cost_used = ?, provider = ?, model = ?,
+		  branch_name = ?, worktree_path = ?, pr_url = ?,
+		  failure_reason = ?, updated_at = ?, started_at = ?, completed_at = ?
+		 WHERE id = ? AND status = ?`),
+		s.Status, s.PlanGateEnabled, s.PatchGateEnabled,
+		s.MaxTurns, s.TurnsUsedPlan, s.TurnsUsedExecute,
+		s.TokensUsed, s.CostUsed, s.Provider, s.Model,
+		s.BranchName, s.WorktreePath, s.PRURL,
+		s.FailureReason, s.UpdatedAt, s.StartedAt, s.CompletedAt,
+		s.ID, fromStatus)
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected != 1 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
 func (r *remediationRepository) SaveRemediationPlan(ctx context.Context, p *models.RemediationPlan) error {
 	if p.ID == "" {
 		p.ID = uuid.NewString()
@@ -192,6 +228,23 @@ func (r *remediationRepository) SaveRemediationPatches(ctx context.Context, sess
 	return tx.Commit()
 }
 
+// ApproveRemediationPatches records who acted on a session's whole patch
+// set, across every patch row belonging to it — unlike ApproveRemediationPlan
+// (one latest plan row), ApprovePatches/RejectPatches decide the whole batch
+// at once, not a single row. The column is approved_by/approved_at
+// regardless of outcome, the same "records the actor, not the verdict" shape
+// RejectRemediationPlan already uses, since RemediationPatch has no separate
+// rejected_by column. Zero rows affected is not an error: a session can
+// reach patch_review with an empty patch set (the agent found nothing to
+// commit) and still be approved or rejected.
+func (r *remediationRepository) ApproveRemediationPatches(ctx context.Context, sessionID, approverID string) error {
+	now := time.Now().UTC()
+	_, err := r.db.ExecContext(ctx, r.db.Rebind(
+		`UPDATE remediation_patches SET approved_by = ?, approved_at = ? WHERE session_id = ?`),
+		approverID, now, sessionID)
+	return err
+}
+
 func (r *remediationRepository) ListRemediationPatches(ctx context.Context, sessionID string) ([]models.RemediationPatch, error) {
 	var patches []models.RemediationPatch
 	err := r.db.SelectContext(ctx, &patches, r.db.Rebind(
@@ -241,6 +294,10 @@ func (s *SQLiteStore) UpdateRemediationSession(ctx context.Context, session *mod
 	return newRemediationRepository(s.db).UpdateRemediationSession(ctx, session)
 }
 
+func (s *SQLiteStore) TransitionRemediationSession(ctx context.Context, session *models.RemediationSession, fromStatus models.RemediationStatus) error {
+	return newRemediationRepository(s.db).TransitionRemediationSession(ctx, session, fromStatus)
+}
+
 func (s *SQLiteStore) SaveRemediationPlan(ctx context.Context, plan *models.RemediationPlan) error {
 	return newRemediationRepository(s.db).SaveRemediationPlan(ctx, plan)
 }
@@ -259,6 +316,10 @@ func (s *SQLiteStore) RejectRemediationPlan(ctx context.Context, sessionID, appr
 
 func (s *SQLiteStore) SaveRemediationPatches(ctx context.Context, sessionID string, patches []models.RemediationPatch) error {
 	return newRemediationRepository(s.db).SaveRemediationPatches(ctx, sessionID, patches)
+}
+
+func (s *SQLiteStore) ApproveRemediationPatches(ctx context.Context, sessionID, approverID string) error {
+	return newRemediationRepository(s.db).ApproveRemediationPatches(ctx, sessionID, approverID)
 }
 
 func (s *SQLiteStore) ListRemediationPatches(ctx context.Context, sessionID string) ([]models.RemediationPatch, error) {
@@ -289,6 +350,10 @@ func (s *PostgresStore) UpdateRemediationSession(ctx context.Context, session *m
 	return newRemediationRepository(s.db).UpdateRemediationSession(ctx, session)
 }
 
+func (s *PostgresStore) TransitionRemediationSession(ctx context.Context, session *models.RemediationSession, fromStatus models.RemediationStatus) error {
+	return newRemediationRepository(s.db).TransitionRemediationSession(ctx, session, fromStatus)
+}
+
 func (s *PostgresStore) SaveRemediationPlan(ctx context.Context, plan *models.RemediationPlan) error {
 	return newRemediationRepository(s.db).SaveRemediationPlan(ctx, plan)
 }
@@ -307,6 +372,10 @@ func (s *PostgresStore) RejectRemediationPlan(ctx context.Context, sessionID, ap
 
 func (s *PostgresStore) SaveRemediationPatches(ctx context.Context, sessionID string, patches []models.RemediationPatch) error {
 	return newRemediationRepository(s.db).SaveRemediationPatches(ctx, sessionID, patches)
+}
+
+func (s *PostgresStore) ApproveRemediationPatches(ctx context.Context, sessionID, approverID string) error {
+	return newRemediationRepository(s.db).ApproveRemediationPatches(ctx, sessionID, approverID)
 }
 
 func (s *PostgresStore) ListRemediationPatches(ctx context.Context, sessionID string) ([]models.RemediationPatch, error) {
