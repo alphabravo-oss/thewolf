@@ -36,6 +36,11 @@ func TestParseRejectsInvalid(t *testing.T) {
 		{"missing finding_id", `{"summary":"s","items":[{"action":"fix","rationale":"r"}]}`},
 		{"missing rationale", `{"summary":"s","items":[{"finding_id":"f-1","action":"fix"}]}`},
 		{"not json", `this is not json`},
+		// Strict decoding is the package's whole point: a plan that carries a
+		// field this schema does not know is schema drift, and drift must
+		// fail loudly rather than drive a write run off a partial plan.
+		{"unknown top-level field", `{"summary":"s","items":[{"finding_id":"f-1","action":"fix","rationale":"r"}],"extra":"x"}`},
+		{"unknown item field", `{"summary":"s","items":[{"finding_id":"f-1","action":"fix","rationale":"r","severity":"high"}]}`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

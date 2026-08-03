@@ -54,6 +54,69 @@ func TestExecuteDeniesDangerousPaths(t *testing.T) {
 	assertGolden(t, doc, "execute.json")
 }
 
+// Both documents must root-deny. OpenCode's permission map has roughly
+// fifteen keys and an unset key defaults to allow, so an enumerated blocklist
+// grants every key nobody thought to name — including webfetch and websearch,
+// which are network egress the bash allowlist never sees. Only the read-side
+// keys below (plus todowrite in execute) may be re-allowed above the root.
+func TestBothDocumentsRootDeny(t *testing.T) {
+	triageDoc, err := Triage()
+	if err != nil {
+		t.Fatalf("Triage: %v", err)
+	}
+	executeDoc, err := Execute()
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+
+	// Keys OpenCode must never grant: each is either egress (webfetch,
+	// websearch), a way to spawn an unconstrained sub-agent (task, skill), or
+	// an interactive escape (question, doom_loop, lsp).
+	forbidden := []string{"task", "skill", "webfetch", "websearch", "lsp", "question", "doom_loop"}
+	for _, tc := range []struct {
+		label   string
+		doc     []byte
+		allowed []string
+	}{
+		{"triage", triageDoc, []string{"read", "glob", "grep", "list"}},
+		{"execute", executeDoc, []string{"read", "glob", "grep", "list", "todowrite"}},
+	} {
+		t.Run(tc.label, func(t *testing.T) {
+			var parsed struct {
+				Permission map[string]any `json:"permission"`
+			}
+			if err := json.Unmarshal(tc.doc, &parsed); err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			if got := parsed.Permission["*"]; got != "deny" {
+				t.Fatalf("permission[\"*\"] = %v, want \"deny\" — unset keys default to allow", got)
+			}
+			for _, key := range tc.allowed {
+				if got := parsed.Permission[key]; got != "allow" {
+					t.Errorf("permission[%q] = %v, want \"allow\"", key, got)
+				}
+			}
+			for _, key := range forbidden {
+				if _, present := parsed.Permission[key]; present {
+					t.Errorf("permission[%q] is named — naming it overrides the root deny", key)
+				}
+			}
+		})
+	}
+
+	// todowrite is execute-only: triage reads and reports, it never tracks
+	// work, so it has no reason to escape the root deny.
+	var triage struct {
+		Permission map[string]any `json:"permission"`
+	}
+	if err := json.Unmarshal(triageDoc, &triage); err != nil {
+		t.Fatalf("unmarshal triage: %v", err)
+	}
+	if _, present := triage.Permission["todowrite"]; present {
+		t.Error("triage names todowrite — the read-only document must not grant it")
+	}
+}
+
 // The hard deny list must hold under --auto, where "ask" degrades to allow.
 // Anything that must not happen has to be "deny", never "ask". (The
 // exhaustive "no ask anywhere" scan across every field of both documents
@@ -73,7 +136,13 @@ func TestNoAskRulesForDangerousActions(t *testing.T) {
 		t.Fatalf("unmarshal: %v", err)
 	}
 	mustDeny := map[string][]string{
-		"edit": {".github/**", "**/*.pem", "**/*.key"},
+		// The opencode.* / .opencode entries matter because OpenCode ranks
+		// project config above the config Wolf passes by environment
+		// variable: an agent that writes one outranks its own permissions.
+		"edit": {
+			".github/**", "**/*.pem", "**/*.key",
+			"opencode.json", "opencode.jsonc", ".opencode/**",
+		},
 		"bash": {"rm -rf *", "curl *", "sudo *"},
 	}
 	for tool, patterns := range mustDeny {
