@@ -2,6 +2,8 @@ package manifest_test
 
 import (
 	"path/filepath"
+	"reflect"
+	"sort"
 	"strings"
 	"testing"
 
@@ -82,6 +84,86 @@ func TestManifestRequiresResourceMetadata(t *testing.T) {
 	if !strings.Contains(err.Error(), "resource_class") || !strings.Contains(err.Error(), "default_timeout") {
 		t.Fatalf("expected resource metadata errors, got %v", err)
 	}
+}
+
+func TestDefaultManifestUsesEverySupportedUpdateSource(t *testing.T) {
+	m := loadManifest(t)
+	declared := map[string]struct{}{}
+	for _, tool := range m.Tools {
+		declared[tool.UpdateSource.Type] = struct{}{}
+	}
+	var got []string
+	for sourceType := range declared {
+		got = append(got, sourceType)
+	}
+	sort.Strings(got)
+	want := manifest.SupportedUpdateSourceTypes()
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("declared update source types = %v, supported = %v", got, want)
+	}
+}
+
+func TestManifestRejectsIncompleteKnownUpdateSource(t *testing.T) {
+	m := validTestManifest()
+	tool := m.Tools["demo"]
+	tool.UpdateSource = manifest.UpdateSource{Type: "github_releases", Owner: "acme"}
+	m.Tools["demo"] = tool
+	err := m.Validate()
+	if err == nil || !strings.Contains(err.Error(), "update_source.repo is required") {
+		t.Fatalf("Validate() = %v", err)
+	}
+}
+
+func TestManifestAllowsUnsupportedSourceOnlyWithCompleteManualException(t *testing.T) {
+	m := validTestManifest()
+	tool := m.Tools["demo"]
+	tool.UpdateSource = manifest.UpdateSource{Type: "vendor_portal"}
+	m.Tools["demo"] = tool
+	if err := m.Validate(); err == nil || !strings.Contains(err.Error(), "unsupported") {
+		t.Fatalf("Validate unsupported source = %v", err)
+	}
+	tool.ManualUpdate = manifest.ManualUpdate{
+		Owner: "scanner-platform", Reason: "vendor portal requires an enterprise login",
+		ReviewAfter: "2027-07-30",
+	}
+	m.Tools["demo"] = tool
+	if err := m.Validate(); err != nil {
+		t.Fatalf("Validate manual exception = %v", err)
+	}
+}
+
+func TestManifestValidatesSupplyChainMetadata(t *testing.T) {
+	m := validTestManifest()
+	tool := m.Tools["demo"]
+	tool.SourceIntegrity = manifest.SourceIntegrity{
+		SHA256:         "not-a-digest",
+		SHA256Variable: "not-a-variable",
+		SignatureURL:   "https://example.invalid/demo.sig",
+	}
+	tool.ParserContract = manifest.ParserContract{Fixtures: []string{"../escape.json"}}
+	tool.Risk = manifest.RiskPolicy{AutoCandidate: true}
+	m.Tools["demo"] = tool
+	err := m.Validate()
+	if err == nil {
+		t.Fatal("expected supply-chain metadata validation errors")
+	}
+	for _, want := range []string{"source_integrity.sha256", "sha256_variable", "signature_identity", "parser_contract.fixtures", "risk.classification"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("validation error missing %q: %v", want, err)
+		}
+	}
+}
+
+func validTestManifest() *manifest.Manifest {
+	return &manifest.Manifest{Tools: map[string]manifest.Tool{
+		"demo": {
+			DisplayName: "Demo", Category: "sast", ResourceClass: "medium",
+			DefaultTimeout: "10m", PluginPackage: "plugins/demo",
+			IntegrationTier: manifest.TierDefault,
+			Install:         manifest.Install{Manager: "pip", Package: "demo"},
+			UpdateSource:    manifest.UpdateSource{Type: "pypi", Package: "demo"},
+		},
+	}}
 }
 
 func loadManifest(t *testing.T) *manifest.Manifest {

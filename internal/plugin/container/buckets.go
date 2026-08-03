@@ -1,6 +1,10 @@
 package container
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/alphabravocompany/thewolf/internal/scannertools/manifest"
+)
 
 // localOnlyImageSuffixes are repo-name suffixes for scanner buckets that must
 // NEVER be pulled from (or pushed to) a registry. CodeQL is the only one: its
@@ -57,16 +61,31 @@ func DefaultBucketImages(bucketBase, version string) map[string]string {
 	if bucketBase == "" || version == "" {
 		return nil
 	}
-	jvm := bucketBase + "-jvm:" + version
-	rust := bucketBase + "-rust:" + version
-	codeql := bucketBase + "-codeql:" + version
-	return map[string]string{
-		"detekt": jvm,
-		"infer":  jvm,
-		"pmd":    jvm,
-		"clippy": rust,
-		"codeql": codeql,
+	definition, err := manifest.LoadDefault()
+	if err != nil {
+		return nil
 	}
+	return BucketImagesFromManifest(definition, bucketBase, version)
+}
+
+// BucketImagesFromManifest is the deterministic runtime router. Keeping this
+// derived from the scanner definition removes a second mutable version map
+// that proposal automation could otherwise forget to update.
+func BucketImagesFromManifest(
+	definition *manifest.Manifest,
+	bucketBase, version string,
+) map[string]string {
+	if definition == nil || bucketBase == "" || version == "" {
+		return nil
+	}
+	out := make(map[string]string)
+	for name, tool := range definition.Tools {
+		if tool.IntegrationTier != manifest.TierBucket || tool.Bucket == "" {
+			continue
+		}
+		out[name] = bucketBase + "-" + tool.Bucket + ":" + version
+	}
+	return out
 }
 
 // DefaultUpstreamTools returns the curated per-tool map of upstream-official
@@ -94,66 +113,27 @@ func DefaultBucketImages(bucketBase, version string) map[string]string {
 // Operators can override or empty this map via wolf.yaml's
 // scan.container.upstream_tools.
 func DefaultUpstreamTools() map[string]ToolImageSpec {
-	// NOTE: The image tags below assume the upstream maintainer publishes
-	// using the same version we pin in versions.env. If a tag doesn't exist
-	// in the registry, EnsureImage will surface that at startup as a clear
-	// "image not found" error and the operator can override in wolf.yaml.
-	return map[string]ToolImageSpec{
-		// SCA / vuln scanners — all multi-arch, maintainer-built.
-		"trivy":       {Image: "aquasec/trivy:0.57.0"},
-		"grype":       {Image: "anchore/grype:v0.84.0"},
-		"syft":        {Image: "anchore/syft:v1.17.0"},
-		"osv-scanner": {Image: "ghcr.io/google/osv-scanner:v1.9.1"},
-
-		// Secrets — Gitleaks, TruffleHog official images are multi-arch.
-		"gitleaks":   {Image: "zricethezav/gitleaks:v8.21.2"},
-		"trufflehog": {Image: "trufflesecurity/trufflehog:3.83.5"},
-
-		// Container / IaC.
-		"hadolint":    {Image: "hadolint/hadolint:v2.12.0-alpine"},
-		"dockle":      {Image: "goodwithtech/dockle:v0.4.14"},
-		"checkov":     {Image: "bridgecrew/checkov:3.2.527"},
-		"tflint":      {Image: "ghcr.io/terraform-linters/tflint:v0.54.0"},
-		"kubescape":   {Image: "quay.io/kubescape/kubescape-cli:v3.0.22"},
-		"kube-linter": {Image: "stackrox/kube-linter:v0.7.1"},
-
-		// SAST — semgrep's official image is multi-arch. The image ships
-		// with an empty ENTRYPOINT and CMD=[semgrep --help], so we pin
-		// the entrypoint to "semgrep" so plugin args like ["scan",
-		// "--json", ...] dispatch correctly.
-		"semgrep": {Image: "semgrep/semgrep:1.92.0", Entrypoint: "semgrep"},
-
-		// DAST.
-		"nuclei": {Image: "projectdiscovery/nuclei:v3.3.5"},
-
-		// Docs / specs.
-		"vale":     {Image: "jdkato/vale:v3.9.1"},
-		"spectral": {Image: "stoplight/spectral:6.13.1"},
-
-		// Repo-hygiene (new in 2.0).
-		"scorecard": {Image: "gcr.io/openssf/scorecard:v5.0.0", Entrypoint: "scorecard"},
-
-		// Stale/insecure-dependency detection across many ecosystems
-		// (npm, pip, gem, composer, cargo, go.mod, helm, github-actions,
-		// Dockerfile base images, terraform modules, …). Used in
-		// dry-run / detect-only mode — wolf never opens PRs from it.
-		"renovate": {Image: "ghcr.io/renovatebot/renovate:39.55.0", Entrypoint: "renovate"},
-
-		// IaC SAST. KICS covers Terraform/K8s/Dockerfile/CloudFormation/
-		// Ansible/Helm/ARM/OpenAPI/Pulumi with ~3k rules — broader than
-		// Trivy/Checkov on those formats.
-		"kics": {Image: "checkmarx/kics:v2.1.3"},
-
-		// Policy-as-code. Operator writes Rego policies; conftest evaluates
-		// any YAML/JSON/HCL/Dockerfile against them. Apache-2.0.
-		"conftest": {Image: "openpolicyagent/conftest:v0.56.0"},
-
-		// Detects deprecated Kubernetes API versions — critical before a
-		// cluster upgrade. Apache-2.0.
-		"pluto": {Image: "us-docker.pkg.dev/fairwinds-ops/oss/pluto:v5.9.0"},
-
-		// Data-flow / PII / privacy scanner. Different category from
-		// CVE-focused scanners. ELv2.
-		"bearer": {Image: "bearer/bearer:1.49.0", Entrypoint: "bearer"},
+	definition, err := manifest.LoadDefault()
+	if err != nil {
+		return nil
 	}
+	return UpstreamToolsFromManifest(definition)
+}
+
+// UpstreamToolsFromManifest derives routing from the same definition used for
+// discovery, locking, documentation, and release builds.
+func UpstreamToolsFromManifest(definition *manifest.Manifest) map[string]ToolImageSpec {
+	if definition == nil {
+		return nil
+	}
+	out := make(map[string]ToolImageSpec)
+	for name, tool := range definition.Tools {
+		if tool.IntegrationTier != manifest.TierUpstream {
+			continue
+		}
+		out[name] = ToolImageSpec{
+			Image: tool.Image.PinnedReference, Entrypoint: tool.Image.Entrypoint,
+		}
+	}
+	return out
 }

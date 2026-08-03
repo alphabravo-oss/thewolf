@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -144,31 +145,29 @@ func ExtractJSON(data []byte) []byte {
 		return data
 	}
 
-	// Already valid JSON start
-	if trimmed[0] == '{' || trimmed[0] == '[' {
+	if json.Valid(trimmed) {
 		return trimmed
 	}
 
-	// Find the first { or [ which starts the JSON body
-	objIdx := bytes.IndexByte(trimmed, '{')
-	arrIdx := bytes.IndexByte(trimmed, '[')
-
-	idx := -1
-	switch {
-	case objIdx >= 0 && arrIdx >= 0:
-		if objIdx < arrIdx {
-			idx = objIdx
-		} else {
-			idx = arrIdx
+	// Validate candidate starts instead of assuming the first bracket begins
+	// JSON. Several scanners emit prefixes such as "[main] INFO" and
+	// Kubernetes combines stdout/stderr into one log stream. Bound the number
+	// of full-suffix validations so hostile output cannot force unbounded
+	// quadratic work.
+	const maxCandidates = 64
+	candidates := 0
+	for index, character := range trimmed {
+		if character != '{' && character != '[' {
+			continue
 		}
-	case objIdx >= 0:
-		idx = objIdx
-	case arrIdx >= 0:
-		idx = arrIdx
-	}
-
-	if idx >= 0 {
-		return trimmed[idx:]
+		candidate := bytes.TrimSpace(trimmed[index:])
+		candidates++
+		if json.Valid(candidate) {
+			return candidate
+		}
+		if candidates == maxCandidates {
+			break
+		}
 	}
 
 	// No JSON found — return original so callers get a clear parse error

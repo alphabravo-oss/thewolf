@@ -51,17 +51,19 @@ func defaultDBVolume() string {
 // the config loader in cmd/wolf/main.go is expected to populate this struct
 // from whichever yaml lib it uses.
 type Config struct {
-	Image                string            `yaml:"image"`
-	ImageOverrides       map[string]string `yaml:"image_overrides"`
-	PullPolicy           string            `yaml:"pull_policy"`
-	Network              string            `yaml:"network"`
-	Memory               string            `yaml:"memory"`
-	CPUs                 string            `yaml:"cpus"`
-	DBVolume             string            `yaml:"db_volume"`
-	DBRefresh            string            `yaml:"db_refresh"`
-	HostReposRoot        string            `yaml:"host_repos_root"`
-	InContainerReposRoot string            `yaml:"in_container_repos_root"`
-	ExtraEnv             map[string]string `yaml:"extra_env"`
+	Image                    string            `yaml:"image"`
+	ImageOverrides           map[string]string `yaml:"image_overrides"`
+	PullPolicy               string            `yaml:"pull_policy"`
+	Network                  string            `yaml:"network"`
+	Memory                   string            `yaml:"memory"`
+	CPUs                     string            `yaml:"cpus"`
+	DBVolume                 string            `yaml:"db_volume"`
+	DBRefresh                string            `yaml:"db_refresh"`
+	HostReposRoot            string            `yaml:"host_repos_root"`
+	InContainerReposRoot     string            `yaml:"in_container_repos_root"`
+	HostWorkspaceRoot        string            `yaml:"host_workspace_root"`
+	InContainerWorkspaceRoot string            `yaml:"in_container_workspace_root"`
+	ExtraEnv                 map[string]string `yaml:"extra_env"`
 }
 
 // EnvDefaults builds a Config from the WOLF_SCANNERS_* environment variables,
@@ -83,10 +85,12 @@ func EnvDefaults() Config {
 		// Docker named volume would land root-owned and block writes
 		// from the non-root scanner user. Operators who want strict
 		// ephemerality can set WOLF_SCANNERS_DB_VOLUME="" explicitly.
-		DBVolume:             envOr("WOLF_SCANNERS_DB_VOLUME", defaultDBVolume()),
-		DBRefresh:            envOr("WOLF_SCANNERS_DB_REFRESH", "never"),
-		HostReposRoot:        envOr("WOLF_HOST_REPOS_ROOT", ""),
-		InContainerReposRoot: envOr("WOLF_IN_CONTAINER_REPOS_ROOT", ""),
+		DBVolume:                 envOr("WOLF_SCANNERS_DB_VOLUME", defaultDBVolume()),
+		DBRefresh:                envOr("WOLF_SCANNERS_DB_REFRESH", "never"),
+		HostReposRoot:            envOr("WOLF_HOST_REPOS_ROOT", ""),
+		InContainerReposRoot:     envOr("WOLF_IN_CONTAINER_REPOS_ROOT", ""),
+		HostWorkspaceRoot:        envOr("WOLF_HOST_WORKSPACE_ROOT", ""),
+		InContainerWorkspaceRoot: envOr("WOLF_IN_CONTAINER_WORKSPACE_ROOT", ""),
 	}
 }
 
@@ -192,19 +196,21 @@ func (c Config) ToContainerConfig() (*container.Config, error) {
 		upstream = container.DefaultUpstreamTools()
 	}
 	cfg := &container.Config{
-		Image:                c.Image,
-		ImageOverrides:       c.ImageOverrides,
-		UpstreamTools:        upstream,
-		PullPolicy:           pp,
-		Network:              c.Network,
-		UID:                  os.Getuid(),
-		GID:                  os.Getgid(),
-		HostReposRoot:        c.HostReposRoot,
-		InContainerReposRoot: c.InContainerReposRoot,
-		Memory:               c.Memory,
-		CPUs:                 c.CPUs,
-		DBVolume:             c.DBVolume,
-		ExtraEnv:             c.ExtraEnv,
+		Image:                    c.Image,
+		ImageOverrides:           c.ImageOverrides,
+		UpstreamTools:            upstream,
+		PullPolicy:               pp,
+		Network:                  c.Network,
+		UID:                      os.Getuid(),
+		GID:                      os.Getgid(),
+		HostReposRoot:            c.HostReposRoot,
+		InContainerReposRoot:     c.InContainerReposRoot,
+		HostWorkspaceRoot:        c.HostWorkspaceRoot,
+		InContainerWorkspaceRoot: c.InContainerWorkspaceRoot,
+		Memory:                   c.Memory,
+		CPUs:                     c.CPUs,
+		DBVolume:                 c.DBVolume,
+		ExtraEnv:                 c.ExtraEnv,
 	}
 	if err := cfg.Validate(); err != nil {
 		return nil, err

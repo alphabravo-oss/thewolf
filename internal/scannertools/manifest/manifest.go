@@ -32,22 +32,29 @@ type Manifest struct {
 }
 
 type Tool struct {
-	DisplayName     string       `yaml:"display_name"`
-	Category        string       `yaml:"category"`
-	ResourceClass   string       `yaml:"resource_class"`
-	DefaultTimeout  string       `yaml:"default_timeout"`
-	NetworkRequired bool         `yaml:"network_required,omitempty"`
-	Exclusive       bool         `yaml:"exclusive,omitempty"`
-	PluginPackage   string       `yaml:"plugin_package"`
-	IntegrationTier string       `yaml:"integration_tier"`
-	Bucket          string       `yaml:"bucket,omitempty"`
-	PinnedVersion   string       `yaml:"pinned_version,omitempty"`
-	VersionVariable string       `yaml:"version_variable,omitempty"`
-	Image           Image        `yaml:"image,omitempty"`
-	Install         Install      `yaml:"install,omitempty"`
-	UpdateSource    UpdateSource `yaml:"update_source,omitempty"`
-	Smoke           Smoke        `yaml:"smoke,omitempty"`
-	Docs            Docs         `yaml:"docs,omitempty"`
+	DisplayName     string          `yaml:"display_name"`
+	Category        string          `yaml:"category"`
+	ResourceClass   string          `yaml:"resource_class"`
+	DefaultTimeout  string          `yaml:"default_timeout"`
+	NetworkRequired bool            `yaml:"network_required,omitempty"`
+	Exclusive       bool            `yaml:"exclusive,omitempty"`
+	PathScope       string          `yaml:"path_scope,omitempty"`
+	Platforms       []string        `yaml:"platforms,omitempty"`
+	PluginPackage   string          `yaml:"plugin_package"`
+	IntegrationTier string          `yaml:"integration_tier"`
+	Bucket          string          `yaml:"bucket,omitempty"`
+	PinnedVersion   string          `yaml:"pinned_version,omitempty"`
+	VersionVariable string          `yaml:"version_variable,omitempty"`
+	Image           Image           `yaml:"image,omitempty"`
+	Install         Install         `yaml:"install,omitempty"`
+	UpdateSource    UpdateSource    `yaml:"update_source,omitempty"`
+	SourceIntegrity SourceIntegrity `yaml:"source_integrity,omitempty"`
+	ParserContract  ParserContract  `yaml:"parser_contract,omitempty"`
+	License         LicensePolicy   `yaml:"license,omitempty"`
+	Risk            RiskPolicy      `yaml:"risk,omitempty"`
+	ManualUpdate    ManualUpdate    `yaml:"manual_update_exception,omitempty"`
+	Smoke           Smoke           `yaml:"smoke,omitempty"`
+	Docs            Docs            `yaml:"docs,omitempty"`
 }
 
 type Image struct {
@@ -75,6 +82,49 @@ type UpdateSource struct {
 	TagPattern string `yaml:"tag_pattern,omitempty"`
 }
 
+// SourceIntegrity declares how a downloaded scanner artifact is authenticated.
+// SHA256 is the digest of the exact archive/binary. SignatureURL and
+// SignatureIdentity describe detached-signature verification when the upstream
+// provides it. Lock generation carries missing values forward as explicitly
+// unverified inputs; it never invents integrity evidence.
+type SourceIntegrity struct {
+	URL               string `yaml:"url,omitempty"`
+	SHA256            string `yaml:"sha256,omitempty"`
+	SHA256Variable    string `yaml:"sha256_variable,omitempty"`
+	SignatureURL      string `yaml:"signature_url,omitempty"`
+	SignatureIdentity string `yaml:"signature_identity,omitempty"`
+}
+
+// ParserContract identifies fixtures whose normalized output is part of the
+// compatibility contract for an update.
+type ParserContract struct {
+	Format   string   `yaml:"format,omitempty"`
+	Fixtures []string `yaml:"fixtures,omitempty"`
+}
+
+// LicensePolicy records the SPDX expression and any repository license evidence
+// needed to admit a tool into a release.
+type LicensePolicy struct {
+	Expression string   `yaml:"expression,omitempty"`
+	Files      []string `yaml:"files,omitempty"`
+}
+
+// RiskPolicy is definition-time policy metadata. Classification is deliberately
+// conservative: omitted values are treated as high risk by release tooling.
+type RiskPolicy struct {
+	Classification   string `yaml:"classification,omitempty"`
+	AutoCandidate    bool   `yaml:"auto_candidate,omitempty"`
+	ApprovalRequired bool   `yaml:"approval_required,omitempty"`
+}
+
+// ManualUpdate is the explicit escape hatch for a source type that cannot be
+// resolved automatically. It must be owned, justified, and review-dated.
+type ManualUpdate struct {
+	Owner       string `yaml:"owner,omitempty"`
+	Reason      string `yaml:"reason,omitempty"`
+	ReviewAfter string `yaml:"review_after,omitempty"`
+}
+
 type Smoke struct {
 	Command         []string `yaml:"command,omitempty"`
 	ExpectedPattern string   `yaml:"expected_pattern,omitempty"`
@@ -87,6 +137,32 @@ type Docs struct {
 }
 
 var toolNameRE = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
+var sha256RE = regexp.MustCompile(`^(?:sha256:)?[a-f0-9]{64}$`)
+var environmentVariableRE = regexp.MustCompile(`^[A-Z][A-Z0-9_]*$`)
+
+var supportedUpdateSourceTypes = map[string]struct{}{
+	"debian_package":  {},
+	"docker_registry": {},
+	"github_releases": {},
+	"go_module":       {},
+	"npm":             {},
+	"packagist":       {},
+	"pypi":            {},
+	"rubygems":        {},
+	"rust_channel":    {},
+	"toolchain":       {},
+}
+
+// SupportedUpdateSourceTypes returns the stable, sorted set accepted by the
+// manifest schema and implemented by the update checker.
+func SupportedUpdateSourceTypes() []string {
+	out := make([]string, 0, len(supportedUpdateSourceTypes))
+	for sourceType := range supportedUpdateSourceTypes {
+		out = append(out, sourceType)
+	}
+	sort.Strings(out)
+	return out
+}
 
 func LoadFile(path string) (*Manifest, error) {
 	data, err := os.ReadFile(path)
@@ -191,6 +267,21 @@ func (m *Manifest) Validate() error {
 		if tool.NetworkRequired && tool.ResourceClass == "light" {
 			errs = append(errs, prefix+"network_required tools must not use resource_class light")
 		}
+		switch tool.PathScope {
+		case "", "repository", "file_globs":
+		default:
+			errs = append(errs, prefix+"path_scope must be repository or file_globs")
+		}
+		for _, platform := range tool.Platforms {
+			if !validPlatform(platform) {
+				errs = append(errs, prefix+"platforms contains unsupported platform "+platform)
+			}
+		}
+		for _, platform := range tool.Image.Platforms {
+			if !validPlatform(platform) {
+				errs = append(errs, prefix+"image.platforms contains unsupported platform "+platform)
+			}
+		}
 		if strings.TrimSpace(tool.PluginPackage) == "" {
 			errs = append(errs, prefix+"plugin_package is required")
 		}
@@ -228,20 +319,117 @@ func (m *Manifest) Validate() error {
 		if tool.PinnedVersion != "" && tool.VersionVariable == "" {
 			errs = append(errs, prefix+"pinned_version requires version_variable")
 		}
-		if tool.UpdateSource.Type == "" {
-			errs = append(errs, prefix+"update_source.type is required")
-		}
+		errs = append(errs, validateUpdateSource(prefix, tool.UpdateSource, tool.ManualUpdate)...)
 		if tool.UpdateSource.TagPattern != "" {
 			if _, err := regexp.Compile(tool.UpdateSource.TagPattern); err != nil {
 				errs = append(errs, prefix+"update_source.tag_pattern is invalid: "+err.Error())
 			}
 		}
+		if tool.SourceIntegrity.SHA256 != "" && !sha256RE.MatchString(tool.SourceIntegrity.SHA256) {
+			errs = append(errs, prefix+"source_integrity.sha256 must be a SHA-256 digest")
+		}
+		if tool.SourceIntegrity.SHA256Variable != "" {
+			if tool.SourceIntegrity.SHA256 == "" {
+				errs = append(errs, prefix+"source_integrity.sha256 is required with sha256_variable")
+			}
+			if !environmentVariableRE.MatchString(tool.SourceIntegrity.SHA256Variable) {
+				errs = append(errs, prefix+"source_integrity.sha256_variable must be an uppercase environment variable")
+			}
+		}
+		if tool.SourceIntegrity.SignatureURL != "" && tool.SourceIntegrity.SignatureIdentity == "" {
+			errs = append(errs, prefix+"source_integrity.signature_identity is required with signature_url")
+		}
+		for _, fixture := range tool.ParserContract.Fixtures {
+			if strings.TrimSpace(fixture) == "" || filepath.IsAbs(fixture) || strings.Contains(filepath.Clean(fixture), "..") {
+				errs = append(errs, prefix+"parser_contract.fixtures must contain repository-relative paths")
+			}
+		}
+		switch tool.Risk.Classification {
+		case "", "low", "medium", "high", "critical":
+		default:
+			errs = append(errs, prefix+"risk.classification must be low, medium, high, or critical")
+		}
+		if tool.Risk.AutoCandidate && tool.Risk.Classification == "" {
+			errs = append(errs, prefix+"risk.classification is required when auto_candidate is true")
+		}
+		errs = append(errs, validateManualUpdate(prefix, tool.ManualUpdate)...)
 	}
 	if len(errs) > 0 {
 		sort.Strings(errs)
 		return fmt.Errorf("invalid scanner manifest:\n- %s", strings.Join(errs, "\n- "))
 	}
 	return nil
+}
+
+func validateUpdateSource(prefix string, source UpdateSource, manual ManualUpdate) []string {
+	if source.Type == "" {
+		return []string{prefix + "update_source.type is required"}
+	}
+	if _, ok := supportedUpdateSourceTypes[source.Type]; !ok {
+		if manual.complete() {
+			return nil
+		}
+		return []string{fmt.Sprintf(
+			"%supdate_source.type %q is unsupported (supported: %s); a complete manual_update_exception is required",
+			prefix, source.Type, strings.Join(SupportedUpdateSourceTypes(), ", "),
+		)}
+	}
+	var missing []string
+	require := func(field, value string) {
+		if strings.TrimSpace(value) == "" {
+			missing = append(missing, prefix+"update_source."+field+" is required for "+source.Type)
+		}
+	}
+	switch source.Type {
+	case "debian_package", "npm", "packagist", "pypi", "rubygems", "toolchain":
+		require("package", source.Package)
+	case "docker_registry":
+		require("repository", source.Repository)
+	case "github_releases":
+		require("owner", source.Owner)
+		require("repo", source.Repo)
+	case "go_module":
+		require("module", source.Module)
+	case "rust_channel":
+		require("channel", source.Channel)
+	}
+	return missing
+}
+
+func validateManualUpdate(prefix string, manual ManualUpdate) []string {
+	if manual == (ManualUpdate{}) {
+		return nil
+	}
+	var errs []string
+	if strings.TrimSpace(manual.Owner) == "" {
+		errs = append(errs, prefix+"manual_update_exception.owner is required")
+	}
+	if strings.TrimSpace(manual.Reason) == "" {
+		errs = append(errs, prefix+"manual_update_exception.reason is required")
+	}
+	if strings.TrimSpace(manual.ReviewAfter) == "" {
+		errs = append(errs, prefix+"manual_update_exception.review_after is required")
+	} else if _, err := time.Parse("2006-01-02", manual.ReviewAfter); err != nil {
+		errs = append(errs, prefix+"manual_update_exception.review_after must be YYYY-MM-DD")
+	}
+	return errs
+}
+
+func (m ManualUpdate) complete() bool {
+	if strings.TrimSpace(m.Owner) == "" || strings.TrimSpace(m.Reason) == "" {
+		return false
+	}
+	_, err := time.Parse("2006-01-02", m.ReviewAfter)
+	return err == nil
+}
+
+func validPlatform(platform string) bool {
+	switch platform {
+	case "linux/amd64", "linux/arm64":
+		return true
+	default:
+		return false
+	}
 }
 
 func (m *Manifest) Names() []string {

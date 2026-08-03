@@ -62,3 +62,19 @@ func TestCleanupOlderThanRemovesOnlyExpiredDirs(t *testing.T) {
 		t.Fatalf("fresh dir was removed: %v", err)
 	}
 }
+
+func TestKeyReturnsPortableRelativePathAndRejectsEscape(t *testing.T) {
+	root := t.TempDir()
+	store := &Store{root: root}
+	artifact := filepath.Join(root, "scan-a", "findings.json")
+	if err := os.MkdirAll(filepath.Dir(artifact), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	key, err := store.Key(artifact)
+	if err != nil || key != "scan-a/findings.json" {
+		t.Fatalf("Key = %q, err=%v", key, err)
+	}
+	if _, err := store.Key(filepath.Join(t.TempDir(), "outside.json")); err == nil {
+		t.Fatal("expected path outside root to be rejected")
+	}
+}

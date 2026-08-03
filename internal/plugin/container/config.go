@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 )
@@ -93,6 +94,13 @@ func ParsePullPolicy(s string) (PullPolicy, error) {
 // is built at wolf-slim startup (from wolf.yaml + env), then passed through
 // the runner into every plugin via models.ExecuteOpts.ContainerCfg.
 type Config struct {
+	// DockerPath and DockerEnvironment select the daemon endpoint used by the
+	// trusted caller. DockerEnvironment is exact (not merged with the ambient
+	// process environment), which lets managed release workers use a remote
+	// mTLS engine without exposing those credentials inside scanner containers.
+	DockerPath        string
+	DockerEnvironment []string
+
 	// Image is the DEFAULT fully-qualified scanners image reference, used
 	// for any tool that does not have a per-tool override in ImageOverrides.
 	// Example: "ghcr.io/alphabravocompany/wolf-scanners:1.0.0".
@@ -141,6 +149,10 @@ type Config struct {
 	// host, paths line up).
 	HostReposRoot        string
 	InContainerReposRoot string
+	// HostWorkspaceRoot maps the worker-visible workspace used for one-shot
+	// Git/SSH snapshots to the same directory on the Docker daemon host.
+	HostWorkspaceRoot        string
+	InContainerWorkspaceRoot string
 
 	// Memory is the --memory value (e.g. "2g"). Empty disables the limit.
 	Memory string
@@ -151,6 +163,15 @@ type Config struct {
 	// in every scanner container. Used for shared vuln-DB caches (trivy,
 	// grype). Empty disables the volume mount.
 	DBVolume string
+
+	// RepoVolume mounts a Docker-managed volume at /scan instead of asking the
+	// daemon to resolve a worker-local bind path. It is used by remote release
+	// engines after the trusted adapter has materialized the canonical corpus.
+	RepoVolume string
+
+	// OnContainerScheduled observes the generated immutable container name.
+	// Managed quality evidence uses it to sample peak memory from the engine.
+	OnContainerScheduled func(string)
 
 	// ExtraEnv is forwarded to every scanner container as -e flags. Useful
 	// for tool-specific env (e.g. SEMGREP_APP_TOKEN). Keys must be uppercase.
@@ -167,17 +188,21 @@ type Config struct {
 // production use. Callers should override Image at minimum.
 func DefaultConfig() *Config {
 	return &Config{
-		Image:                "wolf-scanners:dev",
-		PullPolicy:           PullIfNotPresent,
-		Network:              "bridge",
-		UID:                  os.Getuid(),
-		GID:                  os.Getgid(),
-		HostReposRoot:        "",
-		InContainerReposRoot: "",
-		Memory:               "2g",
-		CPUs:                 "1.5",
-		DBVolume:             "",
-		ExtraEnv:             nil,
+		DockerPath:               "docker",
+		Image:                    "wolf-scanners:dev",
+		PullPolicy:               PullIfNotPresent,
+		Network:                  "bridge",
+		UID:                      os.Getuid(),
+		GID:                      os.Getgid(),
+		HostReposRoot:            "",
+		InContainerReposRoot:     "",
+		HostWorkspaceRoot:        "",
+		InContainerWorkspaceRoot: "",
+		Memory:                   "2g",
+		CPUs:                     "1.5",
+		DBVolume:                 "",
+		RepoVolume:               "",
+		ExtraEnv:                 nil,
 	}
 }
 
@@ -193,6 +218,18 @@ func (c *Config) Validate() error {
 	if c.Image == "" {
 		return fmt.Errorf("container image is empty (set scan.container.image or WOLF_SCANNERS_IMAGE)")
 	}
+	if c.DockerPath == "" {
+		c.DockerPath = "docker"
+	}
+	for _, item := range c.DockerEnvironment {
+		name, _, ok := strings.Cut(item, "=")
+		if !ok || name == "" || strings.ContainsAny(name, "\x00") || strings.ContainsRune(item, '\x00') {
+			return fmt.Errorf("container Docker environment contains an invalid assignment")
+		}
+	}
+	if c.RepoVolume != "" && !dockerVolumeNamePattern.MatchString(c.RepoVolume) {
+		return fmt.Errorf("container repository volume name is invalid")
+	}
 	if c.Network == "" {
 		// We allow this — docker defaults to bridge — but it's worth flagging.
 		c.Network = "bridge"
@@ -201,8 +238,21 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("HostReposRoot and InContainerReposRoot must both be set, or both empty (got host=%q, in-container=%q)",
 			c.HostReposRoot, c.InContainerReposRoot)
 	}
+	if (c.HostWorkspaceRoot == "") != (c.InContainerWorkspaceRoot == "") {
+		return fmt.Errorf("HostWorkspaceRoot and InContainerWorkspaceRoot must both be set, or both empty (got host=%q, in-container=%q)",
+			c.HostWorkspaceRoot, c.InContainerWorkspaceRoot)
+	}
 	return nil
 }
+
+func (c *Config) dockerPath() string {
+	if c == nil || strings.TrimSpace(c.DockerPath) == "" {
+		return "docker"
+	}
+	return c.DockerPath
+}
+
+var dockerVolumeNamePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`)
 
 // ImageFor returns the image reference for the named tool, walking the
 // lookup precedence: UpstreamTools → ImageOverrides → default Image.
@@ -285,8 +335,9 @@ func (c *Config) AllImages() []string {
 // --- process-wide default config (used by Plugin.CheckAvailable) -------------
 
 var (
-	defaultMu  sync.RWMutex
-	defaultCfg *Config
+	defaultMu        sync.RWMutex
+	defaultCfg       *Config
+	runtimeAvailable bool
 )
 
 // SetDefault installs a *Config as the process-wide default. Called once by
@@ -295,6 +346,14 @@ func SetDefault(c *Config) {
 	defaultMu.Lock()
 	defer defaultMu.Unlock()
 	defaultCfg = c
+}
+
+// SetRuntimeAvailable marks a non-Docker runtime as ready. Image presence is
+// then delegated to that runtime instead of Docker's local image cache.
+func SetRuntimeAvailable(available bool) {
+	defaultMu.Lock()
+	defer defaultMu.Unlock()
+	runtimeAvailable = available
 }
 
 // Default returns the process-wide default config (or nil before SetDefault).
@@ -335,6 +394,12 @@ func IsScannersReady() bool {
 	if cfg == nil || cfg.Disabled {
 		return false
 	}
+	defaultMu.RLock()
+	available := runtimeAvailable
+	defaultMu.RUnlock()
+	if available {
+		return true
+	}
 	// We only require the default image to be ready here. Per-tool override
 	// images, if present, are checked lazily by ImageReady when the plugin
 	// actually runs.
@@ -348,33 +413,49 @@ func IsScannersReady() bool {
 // If HostReposRoot/InContainerReposRoot are empty (dev mode), returns a clean
 // version of p unchanged.
 //
-// In production translation mode, p must live under InContainerReposRoot.
-// Unrelated absolute paths and traversal attempts are rejected rather than
-// silently bind-mounted into scanner containers.
+// In production translation mode, p must live under InContainerReposRoot or
+// InContainerWorkspaceRoot. Unrelated absolute paths and traversal attempts
+// are rejected rather than silently bind-mounted into scanner containers.
 func (c *Config) TranslateRepoPath(p string) (string, error) {
 	if strings.TrimSpace(p) == "" {
 		return "", fmt.Errorf("repo path is empty")
 	}
-	if c == nil || c.HostReposRoot == "" || c.InContainerReposRoot == "" {
+	if c == nil || (c.HostReposRoot == "" && c.HostWorkspaceRoot == "") {
 		return filepath.Clean(p), nil
 	}
-	root := filepath.Clean(c.InContainerReposRoot)
-	hostRoot := filepath.Clean(c.HostReposRoot)
 	candidate := filepath.Clean(p)
+	mappings := [][2]string{
+		{c.InContainerReposRoot, c.HostReposRoot},
+		{c.InContainerWorkspaceRoot, c.HostWorkspaceRoot},
+	}
+	for _, mapping := range mappings {
+		if mapping[0] == "" || mapping[1] == "" {
+			continue
+		}
+		if translated, ok := translateMappedPath(candidate, mapping[0], mapping[1]); ok {
+			return translated, nil
+		}
+	}
+	return "", fmt.Errorf("repo path %q is outside configured repo and workspace roots", p)
+}
+
+func translateMappedPath(candidate, inContainerRoot, hostRootValue string) (string, bool) {
+	root := filepath.Clean(inContainerRoot)
+	hostRoot := filepath.Clean(hostRootValue)
 	rel, err := filepath.Rel(root, candidate)
 	if err != nil {
-		return "", fmt.Errorf("repo path %q is outside configured repos root %q", p, root)
+		return "", false
 	}
 	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
-		return "", fmt.Errorf("repo path %q is outside configured repos root %q", p, root)
+		return "", false
 	}
 	if rel == "." {
-		return hostRoot, nil
+		return hostRoot, true
 	}
 	hostPath := filepath.Join(hostRoot, rel)
 	hostRel, err := filepath.Rel(hostRoot, hostPath)
 	if err != nil || hostRel == ".." || strings.HasPrefix(hostRel, ".."+string(filepath.Separator)) || filepath.IsAbs(hostRel) {
-		return "", fmt.Errorf("translated repo path %q is outside host repos root %q", hostPath, hostRoot)
+		return "", false
 	}
-	return hostPath, nil
+	return hostPath, true
 }

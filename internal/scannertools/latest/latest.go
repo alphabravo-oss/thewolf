@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -14,13 +13,20 @@ import (
 	"time"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
+	"github.com/alphabravocompany/thewolf/internal/scannertools/httpcache"
 	"github.com/alphabravocompany/thewolf/internal/scannertools/manifest"
+	"github.com/alphabravocompany/thewolf/internal/scannertools/registryauth"
 )
 
 type Checker struct {
-	Client *http.Client
-	Now    func() time.Time
+	Client      *http.Client
+	Now         func() time.Time
+	LookupIP    registryauth.LookupIPFunc
+	Cache       httpcache.Store
+	CacheMaxAge time.Duration
 }
+
+const maxMetadataResponseBytes int64 = 8 << 20
 
 func (c Checker) Check(ctx context.Context, name string, tool manifest.Tool) models.ScannerVersionCheck {
 	now := time.Now().UTC()
@@ -35,10 +41,6 @@ func (c Checker) Check(ctx context.Context, name string, tool manifest.Tool) mod
 		SourceType:    tool.UpdateSource.Type,
 		SourceURL:     sourceURL(tool.UpdateSource),
 	}
-	if tool.PinnedVersion == "" {
-		out.Error = "tool has no pinned version"
-		return out
-	}
 
 	latestVersion, latestRef, err := c.latest(ctx, tool.UpdateSource)
 	if err != nil {
@@ -52,6 +54,13 @@ func (c Checker) Check(ctx context.Context, name string, tool manifest.Tool) mod
 	}
 	out.LatestVersion = latestVersion
 	out.LatestReference = latestRef
+	if tool.PinnedVersion == "" {
+		// Some system-package and toolchain scanners intentionally inherit their
+		// version from a digest-pinned build input. Discovery is still useful,
+		// but there is no direct pin against which to classify freshness.
+		out.Status = models.ScannerVersionUnknown
+		return out
+	}
 	if CompareVersions(latestVersion, tool.PinnedVersion) > 0 {
 		out.Status = models.ScannerVersionUpdateAvailable
 	} else {
@@ -76,8 +85,14 @@ func (c Checker) latest(ctx context.Context, source manifest.UpdateSource) (vers
 		return c.latestGoModule(ctx, source.Module)
 	case "packagist":
 		return c.latestPackagist(ctx, source.Package)
+	case "rust_channel":
+		return c.latestRustChannel(ctx, source.Channel)
+	case "debian_package":
+		return c.latestDebianPackage(ctx, source.Package)
+	case "toolchain":
+		return c.latestToolchain(ctx, source.Package)
 	default:
-		return "", "", nil
+		return "", "", fmt.Errorf("unsupported update source type %q", source.Type)
 	}
 }
 
@@ -94,15 +109,17 @@ func (c Checker) getJSON(ctx context.Context, url string, dst any) error {
 		return err
 	}
 	req.Header.Set("Accept", "application/json")
-	resp, err := c.httpClient().Do(req)
+	resp, err := httpcache.Do(ctx, c.httpClient(), req, httpcache.Options{
+		Store: c.Cache, MaxBodyBytes: maxMetadataResponseBytes,
+		MaxAge: c.CacheMaxAge, Now: c.Now,
+	})
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("GET %s: %s", url, resp.Status)
 	}
-	return json.NewDecoder(resp.Body).Decode(dst)
+	return json.Unmarshal(resp.Body, dst)
 }
 
 func (c Checker) latestPyPI(ctx context.Context, pkg string) (string, string, error) {
@@ -113,12 +130,42 @@ func (c Checker) latestPyPI(ctx context.Context, pkg string) (string, string, er
 		Info struct {
 			Version string `json:"version"`
 		} `json:"info"`
+		Releases map[string][]struct {
+			Yanked bool `json:"yanked"`
+		} `json:"releases"`
 	}
 	u := "https://pypi.org/pypi/" + url.PathEscape(pkg) + "/json"
 	if err := c.getJSON(ctx, u, &resp); err != nil {
 		return "", "", err
 	}
-	return resp.Info.Version, "pypi:" + pkg + "@" + resp.Info.Version, nil
+	version := resp.Info.Version
+	if files, ok := resp.Releases[version]; ok && allYanked(files) {
+		var candidates []string
+		for candidate, candidateFiles := range resp.Releases {
+			if !allYanked(candidateFiles) {
+				candidates = append(candidates, candidate)
+			}
+		}
+		version = newestTag(candidates, `^\d+(?:\.\d+)+$`)
+	}
+	if version == "" {
+		return "", "", fmt.Errorf("pypi package %s has no non-yanked release", pkg)
+	}
+	return version, "pypi:" + pkg + "@" + version, nil
+}
+
+func allYanked(files []struct {
+	Yanked bool `json:"yanked"`
+}) bool {
+	if len(files) == 0 {
+		return false
+	}
+	for _, file := range files {
+		if !file.Yanked {
+			return false
+		}
+	}
+	return true
 }
 
 func (c Checker) latestNPM(ctx context.Context, pkg string) (string, string, error) {
@@ -198,20 +245,19 @@ func (c Checker) latestGoModule(ctx context.Context, module string) (string, str
 	if err != nil {
 		return "", "", err
 	}
-	resp, err := c.httpClient().Do(req)
+	req.Header.Set("Accept", "text/plain")
+	resp, err := httpcache.Do(ctx, c.httpClient(), req, httpcache.Options{
+		Store: c.Cache, MaxBodyBytes: maxMetadataResponseBytes,
+		MaxAge: c.CacheMaxAge, Now: c.Now,
+	})
 	if err != nil {
 		return "", "", err
 	}
-	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return "", "", fmt.Errorf("GET %s: %s", u, resp.Status)
 	}
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", "", err
-	}
 	var tags []string
-	for _, line := range strings.Split(string(data), "\n") {
+	for _, line := range strings.Split(string(resp.Body), "\n") {
 		line = strings.TrimSpace(line)
 		if line != "" {
 			tags = append(tags, line)
@@ -240,6 +286,90 @@ func (c Checker) latestPackagist(ctx context.Context, pkg string) (string, strin
 	}
 	best := newestTag(tags, `^v?\d+\.\d+\.\d+`)
 	return NormalizeVersion(best), "packagist:" + pkg + "@" + best, nil
+}
+
+func (c Checker) latestRustChannel(ctx context.Context, channel string) (string, string, error) {
+	if channel == "" {
+		return "", "", fmt.Errorf("rust channel is empty")
+	}
+	u := "https://static.rust-lang.org/dist/channel-rust-" + url.PathEscape(channel) + ".toml"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return "", "", err
+	}
+	req.Header.Set("Accept", "application/toml, text/plain")
+	resp, err := httpcache.Do(ctx, c.httpClient(), req, httpcache.Options{
+		Store: c.Cache, MaxBodyBytes: maxMetadataResponseBytes,
+		MaxAge: c.CacheMaxAge, Now: c.Now,
+	})
+	if err != nil {
+		return "", "", err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", "", fmt.Errorf("GET %s: %s", u, resp.Status)
+	}
+	// The channel manifest is TOML. Avoid adding a second TOML dependency for
+	// one stable field: locate [pkg.rust], then its version assignment.
+	section := regexp.MustCompile(`(?ms)^\[pkg\.rust\]\s*(.*?)(?:^\[|\z)`).FindSubmatch(resp.Body)
+	if len(section) != 2 {
+		return "", "", fmt.Errorf("rust channel manifest has no [pkg.rust] section")
+	}
+	match := regexp.MustCompile(`(?m)^version\s*=\s*"([^"]+)"`).FindSubmatch(section[1])
+	if len(match) != 2 {
+		return "", "", fmt.Errorf("rust channel manifest has no pkg.rust version")
+	}
+	version := NormalizeVersion(string(match[1]))
+	if version == "" {
+		return "", "", fmt.Errorf("rust channel returned invalid version %q", string(match[1]))
+	}
+	return version, "rust:" + channel + "@" + version, nil
+}
+
+func (c Checker) latestDebianPackage(ctx context.Context, pkg string) (string, string, error) {
+	if pkg == "" {
+		return "", "", fmt.Errorf("debian package is empty")
+	}
+	u := "https://sources.debian.org/api/src/" + url.PathEscape(pkg) + "/"
+	var resp struct {
+		Versions []struct {
+			Version string `json:"version"`
+		} `json:"versions"`
+	}
+	if err := c.getJSON(ctx, u, &resp); err != nil {
+		return "", "", err
+	}
+	versions := make([]string, 0, len(resp.Versions))
+	for _, item := range resp.Versions {
+		if normalized := normalizeDebianVersion(item.Version); normalized != "" {
+			versions = append(versions, normalized)
+		}
+	}
+	best := newestTag(versions, "")
+	if best == "" {
+		return "", "", fmt.Errorf("debian package %s has no usable versions", pkg)
+	}
+	return best, "debian:" + pkg + "@" + best, nil
+}
+
+func (c Checker) latestToolchain(ctx context.Context, pkg string) (string, string, error) {
+	switch pkg {
+	case "npm":
+		version, _, err := c.latestNPM(ctx, pkg)
+		return version, "toolchain:npm@" + version, err
+	default:
+		return "", "", fmt.Errorf("unsupported toolchain package %q", pkg)
+	}
+}
+
+func normalizeDebianVersion(version string) string {
+	version = strings.TrimSpace(version)
+	if _, rest, ok := strings.Cut(version, ":"); ok {
+		version = rest
+	}
+	if upstream, _, ok := strings.Cut(version, "-"); ok {
+		version = upstream
+	}
+	return NormalizeVersion(version)
 }
 
 func (c Checker) latestDockerTag(ctx context.Context, repo, pattern string) (string, string, error) {
@@ -284,14 +414,17 @@ func (c Checker) getDockerTagsPage(ctx context.Context, tagsURL, registry, path,
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
-	resp, err := c.httpClient().Do(req)
+	req.Header.Set("Accept", "application/json")
+	resp, err := httpcache.Do(ctx, c.httpClient(), req, httpcache.Options{
+		Store: c.Cache, MaxBodyBytes: maxMetadataResponseBytes,
+		MaxAge: c.CacheMaxAge, Now: c.Now,
+	})
 	if err != nil {
 		return nil, "", "", err
 	}
-	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusUnauthorized && token == "" {
 		challenge := resp.Header.Get("WWW-Authenticate")
-		token, terr := c.dockerBearerToken(ctx, challenge, path)
+		token, terr := c.dockerBearerToken(ctx, challenge, registry, path)
 		if terr != nil {
 			return nil, "", "", terr
 		}
@@ -304,7 +437,7 @@ func (c Checker) getDockerTagsPage(ctx context.Context, tagsURL, registry, path,
 	var payload struct {
 		Tags []string `json:"tags"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+	if err := json.Unmarshal(resp.Body, &payload); err != nil {
 		return nil, "", "", err
 	}
 	return payload.Tags, dockerNextURL(tagsURL, resp.Header.Get("Link")), token, nil
@@ -335,39 +468,13 @@ func dockerNextURL(currentURL, linkHeader string) string {
 	return ""
 }
 
-func (c Checker) dockerBearerToken(ctx context.Context, challenge, path string) (string, error) {
-	if !strings.HasPrefix(strings.ToLower(challenge), "bearer ") {
-		return "", fmt.Errorf("docker registry requires unsupported auth challenge")
-	}
-	params := parseAuthChallenge(challenge[len("Bearer "):])
-	realm := params["realm"]
-	if realm == "" {
-		return "", fmt.Errorf("docker registry auth challenge missing realm")
-	}
-	q := url.Values{}
-	if service := params["service"]; service != "" {
-		q.Set("service", service)
-	}
-	if scope := params["scope"]; scope != "" {
-		q.Set("scope", scope)
-	} else {
-		q.Set("scope", "repository:"+path+":pull")
-	}
-	u := realm + "?" + q.Encode()
-	var payload struct {
-		Token       string `json:"token"`
-		AccessToken string `json:"access_token"`
-	}
-	if err := c.getJSON(ctx, u, &payload); err != nil {
-		return "", err
-	}
-	if payload.Token != "" {
-		return payload.Token, nil
-	}
-	if payload.AccessToken != "" {
-		return payload.AccessToken, nil
-	}
-	return "", fmt.Errorf("docker auth response contained no token")
+func (c Checker) dockerBearerToken(ctx context.Context, challenge, registry, path string) (string, error) {
+	return registryauth.FetchBearerToken(ctx, challenge, registryauth.FetchOptions{
+		Client:     c.httpClient(),
+		Registry:   registry,
+		Repository: path,
+		LookupIP:   c.LookupIP,
+	})
 }
 
 func splitDockerRepository(repo string) (registry, path string) {
@@ -425,21 +532,18 @@ func sourceURL(source manifest.UpdateSource) string {
 		return "https://proxy.golang.org/" + source.Module + "/@v/list"
 	case "packagist":
 		return "https://repo.packagist.org/p2/" + source.Package + ".json"
+	case "rust_channel":
+		return "https://static.rust-lang.org/dist/channel-rust-" + source.Channel + ".toml"
+	case "debian_package":
+		return "https://sources.debian.org/api/src/" + source.Package + "/"
+	case "toolchain":
+		if source.Package == "npm" {
+			return "https://registry.npmjs.org/npm"
+		}
+		return "toolchain://" + source.Package
 	default:
 		return ""
 	}
-}
-
-func parseAuthChallenge(s string) map[string]string {
-	out := map[string]string{}
-	for _, part := range strings.Split(s, ",") {
-		key, val, ok := strings.Cut(strings.TrimSpace(part), "=")
-		if !ok {
-			continue
-		}
-		out[strings.ToLower(key)] = strings.Trim(val, `"`)
-	}
-	return out
 }
 
 func NormalizeVersion(v string) string {

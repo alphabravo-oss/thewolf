@@ -88,6 +88,7 @@ type SourceProvenance struct {
 	RepoPath         string `json:"repo_path,omitempty"`
 	Branch           string `json:"branch,omitempty"`
 	CommitSHA        string `json:"commit_sha,omitempty"`
+	TreeDigest       string `json:"tree_digest,omitempty"`
 	DirtyState       string `json:"dirty_state,omitempty"`
 	RemoteNodeID     string `json:"remote_node_id,omitempty"`
 	SnapshotStrategy string `json:"snapshot_strategy,omitempty"`
@@ -112,9 +113,11 @@ type ScannerSkip struct {
 // is intentionally report-local so manifest.json stays stable even if the
 // planner package evolves.
 type ScannerPlan struct {
-	Run     []ScannerPlanDecision `json:"run,omitempty"`
-	Skip    []ScannerPlanDecision `json:"skip,omitempty"`
-	Summary ScannerPlanSummary    `json:"summary"`
+	ScannerReleaseID      string                `json:"scanner_release_id,omitempty"`
+	ReleaseManifestDigest string                `json:"release_manifest_digest,omitempty"`
+	Run                   []ScannerPlanDecision `json:"run,omitempty"`
+	Skip                  []ScannerPlanDecision `json:"skip,omitempty"`
+	Summary               ScannerPlanSummary    `json:"summary"`
 }
 
 type ScannerPlanSummary struct {
@@ -142,6 +145,7 @@ type ScannerPlanDecision struct {
 	DefaultTimeout  string   `json:"default_timeout,omitempty"`
 	NetworkRequired bool     `json:"network_required,omitempty"`
 	Exclusive       bool     `json:"exclusive,omitempty"`
+	PathScope       string   `json:"path_scope"`
 }
 
 // Counts is the cheap-to-derive numeric summary of findings at each stage of

@@ -84,6 +84,13 @@ func TestConfig_Validate(t *testing.T) {
 			t.Errorf("want pairing error, got %v", err)
 		}
 	})
+	t.Run("workspace_root_pairing", func(t *testing.T) {
+		c := &Config{Image: "x:y", HostWorkspaceRoot: "/host", InContainerWorkspaceRoot: ""}
+		err := c.Validate()
+		if err == nil || !strings.Contains(err.Error(), "must both be set") {
+			t.Errorf("want pairing error, got %v", err)
+		}
+	})
 }
 
 func TestConfig_TranslateRepoPath(t *testing.T) {
@@ -113,6 +120,16 @@ func TestConfig_TranslateRepoPath(t *testing.T) {
 			&Config{HostReposRoot: "/host/projects", InContainerReposRoot: "/repos"},
 			"/repos",
 			"/host/projects",
+			false,
+		},
+		{
+			"prod_mode_translates_workspace",
+			&Config{
+				HostReposRoot: "/host/projects", InContainerReposRoot: "/repos",
+				HostWorkspaceRoot: "/host/workspaces", InContainerWorkspaceRoot: "/workspaces",
+			},
+			"/workspaces/wolf-git-scan-123",
+			"/host/workspaces/wolf-git-scan-123",
 			false,
 		},
 		{

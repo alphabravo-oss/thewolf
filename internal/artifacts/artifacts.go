@@ -31,8 +31,19 @@ type Store struct {
 	mu   sync.Mutex
 }
 
-// Global is the process-wide artifact store. Nil until Init is called.
-var Global *Store
+// Backend is the storage contract used by the API and workers. The first
+// implementation is a shared filesystem; object storage can implement the
+// same lifecycle without changing scan orchestration.
+type Backend interface {
+	Root() string
+	Key(path string) (string, error)
+	ScanDir(scanID string) string
+	DeleteScans(scanIDs []string)
+	CleanupOlderThan(maxAge time.Duration) ([]string, error)
+}
+
+// Global is the process-wide artifact backend. Nil until Init is called.
+var Global Backend
 
 // Init creates the directory at root if needed and installs a Store at Global.
 // Subsequent calls overwrite Global with a Store pointed at the new root.
@@ -41,10 +52,14 @@ func Init(root string) error {
 	if root == "" {
 		return errors.New("artifacts: root path is empty")
 	}
-	if err := os.MkdirAll(root, 0o750); err != nil {
+	absoluteRoot, err := filepath.Abs(root)
+	if err != nil {
 		return err
 	}
-	Global = &Store{root: root}
+	if err := os.MkdirAll(absoluteRoot, 0o750); err != nil {
+		return err
+	}
+	Global = &Store{root: absoluteRoot}
 	return nil
 }
 
@@ -54,6 +69,25 @@ func (s *Store) Root() string {
 		return ""
 	}
 	return s.root
+}
+
+// Key returns the portable, slash-separated path relative to the backend
+// root. Absolute host paths remain available for compatibility, while this
+// key can be used by future object-storage backends.
+func (s *Store) Key(path string) (string, error) {
+	if s == nil || path == "" {
+		return "", errors.New("artifacts: path is empty")
+	}
+	absolutePath, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	relative, err := filepath.Rel(s.root, absolutePath)
+	if err != nil || relative == "." || relative == ".." ||
+		strings.HasPrefix(relative, ".."+string(filepath.Separator)) || filepath.IsAbs(relative) {
+		return "", errors.New("artifacts: path is outside backend root")
+	}
+	return filepath.ToSlash(relative), nil
 }
 
 // ScanDir returns the path of the per-scan subdirectory for scanID. The

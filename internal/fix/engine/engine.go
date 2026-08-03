@@ -256,11 +256,13 @@ func parseClaudeOutput(output []byte) (*FixResult, error) {
 	// Claude Code JSON output contains a result field
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(output, &raw); err != nil {
-		// If not valid JSON, treat as plain text success
+		// Claude was invoked with --output-format=json. Accepting arbitrary or
+		// empty stdout as success would let a protocol/auth regression bypass
+		// the engine contract and defer discovery until after mutation.
 		return &FixResult{
-			Success:      true,
-			Output:       string(output),
-			EditsInPlace: true,
+			Success: false,
+			Output:  string(output),
+			Error:   "claude returned malformed JSON output",
 		}, nil
 	}
 

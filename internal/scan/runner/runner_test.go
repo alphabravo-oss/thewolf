@@ -15,12 +15,14 @@ import (
 // --- Mock Plugin ---
 
 type mockPlugin struct {
-	name      string
-	category  models.Category
-	languages []models.Language
-	available bool
-	findings  []models.Finding
-	execErr   error
+	name        string
+	category    models.Category
+	languages   []models.Language
+	available   bool
+	findings    []models.Finding
+	execErr     error
+	target      *string
+	parseErrors int
 }
 
 type blockingPlugin struct {
@@ -69,9 +71,17 @@ func (m *mockPlugin) Category() models.Category    { return m.category }
 func (m *mockPlugin) Languages() []models.Language { return m.languages }
 func (m *mockPlugin) CheckAvailable() bool         { return m.available }
 
-func (m *mockPlugin) Execute(_ context.Context, _ models.ExecuteOpts) ([]models.Finding, error) {
+func (m *mockPlugin) Execute(_ context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
+	if m.target != nil {
+		*m.target = opts.Target
+	}
 	if m.execErr != nil {
 		return nil, m.execErr
+	}
+	for index := 0; index < m.parseErrors; index++ {
+		if opts.OnParseError != nil {
+			opts.OnParseError(fmt.Errorf("malformed record %d", index+1))
+		}
 	}
 	return m.findings, nil
 }
@@ -84,6 +94,20 @@ func newRegistry(plugins ...models.Plugin) *plugin.Registry {
 		r.Register(p)
 	}
 	return r
+}
+
+func TestRunRecordsStreamingParserErrors(t *testing.T) {
+	p := &mockPlugin{name: "streaming-tool", available: true, parseErrors: 2}
+	result, err := Run(context.Background(), RunConfig{
+		Registry: newRegistry(p), Tools: []string{p.name}, ToolsExplicit: true,
+		Concurrency: 1, Timeout: time.Second,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.ToolParseErrors[p.name] != 2 {
+		t.Fatalf("parse errors = %d, want 2", result.ToolParseErrors[p.name])
+	}
 }
 
 // --- Tests: Fingerprint ---
@@ -299,6 +323,18 @@ func TestSelectTools(t *testing.T) {
 		}
 	})
 
+	t.Run("intentional empty selection does not fall back to auto", func(t *testing.T) {
+		reg := newRegistry(goPlugin, pyPlugin, jsPlugin, allLangPlugin)
+		selected := SelectTools(RunConfig{
+			Registry:      reg,
+			Languages:     []models.Language{models.LangGo},
+			ToolsExplicit: true,
+		})
+		if len(selected) != 0 {
+			t.Fatalf("expected no tools, got %v", pluginNames(selected))
+		}
+	})
+
 	t.Run("skip-tools excludes from selection", func(t *testing.T) {
 		reg := newRegistry(goPlugin, pyPlugin, jsPlugin, allLangPlugin)
 		cfg := RunConfig{
@@ -406,6 +442,21 @@ func TestRun(t *testing.T) {
 			if f.Fingerprint == "" {
 				t.Errorf("finding %s has empty fingerprint", f.RuleID)
 			}
+		}
+	})
+
+	t.Run("passes an explicit target to the selected plugin", func(t *testing.T) {
+		var target string
+		selected := &mockPlugin{name: "target-tool", available: true, target: &target}
+		_, err := Run(context.Background(), RunConfig{
+			Registry: newRegistry(selected), Tools: []string{"target-tool"},
+			ToolsExplicit: true, Target: "http://wolf-quality-nuclei:8080",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if target != "http://wolf-quality-nuclei:8080" {
+			t.Fatalf("plugin target = %q", target)
 		}
 	})
 

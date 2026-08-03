@@ -58,11 +58,71 @@ func TestResolverPrepareSSHExtractsArchive(t *testing.T) {
 	if prepared.CommitSHA != "abc123" || prepared.DirtyState != "clean" {
 		t.Fatalf("unexpected provenance: commit=%q dirty=%q", prepared.CommitSHA, prepared.DirtyState)
 	}
+	if !strings.HasPrefix(prepared.TreeDigest, "sha256:") {
+		t.Fatalf("TreeDigest = %q", prepared.TreeDigest)
+	}
 	if prepared.PreparedWorkspace == "" {
 		t.Fatalf("PreparedWorkspace was empty")
 	}
 	if _, err := os.Stat(filepath.Join(prepared.Path, "main.go")); err != nil {
 		t.Fatalf("expected extracted main.go: %v", err)
+	}
+}
+
+func TestWorkspaceTreeDigestIsStableAndIgnoresGitMetadata(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, ".git"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	first, err := workspaceTreeDigest(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".git", "HEAD"), []byte("moving metadata"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	second, err := workspaceTreeDigest(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first != second {
+		t.Fatalf("Git metadata changed digest: %q != %q", first, second)
+	}
+	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte("package changed\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	third, err := workspaceTreeDigest(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if third == second {
+		t.Fatal("working-tree content change did not change digest")
+	}
+}
+
+func TestCleanupWorkspaceEnforcesConfiguredBoundary(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("WOLF_WORKSPACE_ROOT", root)
+	workspace, err := os.MkdirTemp(root, "wolf-git-scan-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := CleanupWorkspace(workspace); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(workspace); !os.IsNotExist(err) {
+		t.Fatalf("workspace was not removed: %v", err)
+	}
+
+	outside := t.TempDir()
+	if err := CleanupWorkspace(outside); err == nil {
+		t.Fatal("cleanup accepted a path outside WOLF_WORKSPACE_ROOT")
+	}
+	if _, err := os.Stat(outside); err != nil {
+		t.Fatalf("rejected outside path was changed: %v", err)
 	}
 }
 

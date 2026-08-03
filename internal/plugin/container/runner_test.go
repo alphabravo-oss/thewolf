@@ -134,6 +134,37 @@ func TestBuildDockerArgs_ExtraEnvSortedAndIncluded(t *testing.T) {
 	}
 }
 
+func TestBuildDockerArgsNeverForwardsReleaseEngineOrRegistryCredentials(t *testing.T) {
+	for _, name := range []string{
+		"DOCKER_HOST", "DOCKER_CONFIG", "DOCKER_CERT_PATH", "DOCKER_TLS_VERIFY",
+		"WOLF_SCANNER_RELEASE_REGISTRY_CREDENTIAL_DIR", "WOLF_SCANNER_RELEASE_ENGINE_CREDENTIAL_DIR",
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := newTestCfg()
+			cfg.DockerEnvironment = []string{"DOCKER_HOST=tcp://engine.example:2376", "DOCKER_CERT_PATH=/run/engine"}
+			cfg.ExtraEnv = map[string]string{name: "credential-canary"}
+			if _, _, err := BuildDockerArgs(cfg, Options{RepoDir: "/repos/x"}, "bandit", "/scan"); err == nil {
+				t.Fatalf("credential environment %q was accepted for a scanner container", name)
+			}
+		})
+	}
+
+	cfg := newTestCfg()
+	cfg.DockerEnvironment = []string{
+		"DOCKER_HOST=tcp://engine.example:2376",
+		"DOCKER_CONFIG=/run/registry",
+		"DOCKER_CERT_PATH=/run/engine",
+		"DOCKER_TLS_VERIFY=1",
+	}
+	_, args := mustBuildDockerArgs(t, cfg, Options{RepoDir: "/repos/x"}, "bandit", "/scan")
+	joined := strings.Join(args, " ")
+	for _, secret := range cfg.DockerEnvironment {
+		if strings.Contains(joined, secret) {
+			t.Fatalf("Docker client credential environment leaked into scanner argv: %s", joined)
+		}
+	}
+}
+
 func TestBuildDockerArgs_ExtraMounts(t *testing.T) {
 	cfg := newTestCfg()
 	_, args := mustBuildDockerArgs(t, cfg,
@@ -162,6 +193,23 @@ func TestBuildDockerArgs_DBVolume(t *testing.T) {
 	joined := argList(args).String()
 	if !strings.Contains(joined, "-v wolf-scanners-db:/var/lib/wolf-db") {
 		t.Errorf("DBVolume not mounted; args: %s", joined)
+	}
+}
+
+func TestBuildDockerArgs_RepoVolumeAvoidsDaemonHostBindPath(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Image = "registry.example/wolf/scanners@sha256:" + strings.Repeat("a", 64)
+	cfg.RepoVolume = "wolf-quality-corpus-operation"
+	_, args, err := BuildDockerArgs(cfg, Options{RepoDir: "/worker-only/corpus"}, "bandit")
+	if err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(args, " ")
+	if !strings.Contains(joined, "wolf-quality-corpus-operation:/scan:ro") {
+		t.Fatalf("repository volume mount is absent: %s", joined)
+	}
+	if strings.Contains(joined, "/worker-only/corpus") {
+		t.Fatalf("worker-local bind path leaked to remote daemon: %s", joined)
 	}
 }
 

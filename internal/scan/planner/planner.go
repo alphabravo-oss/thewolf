@@ -63,6 +63,7 @@ type Decision struct {
 	DefaultTimeout  string   `json:"default_timeout,omitempty"`
 	NetworkRequired bool     `json:"network_required,omitempty"`
 	Exclusive       bool     `json:"exclusive,omitempty"`
+	PathScope       string   `json:"path_scope"`
 }
 
 func Build(cfg Config) Result {
@@ -175,6 +176,7 @@ func decisionFor(cfg Config, p models.Plugin, selected bool, reasonCode, reason 
 		ReasonCode:    reasonCode,
 		Reason:        reason,
 		ResourceClass: resourceClassFromCategory(p),
+		PathScope:     "repository",
 	}
 	if cfg.Manifest != nil {
 		if tool, ok := cfg.Manifest.Tools[p.Name()]; ok {
@@ -186,6 +188,9 @@ func decisionFor(cfg Config, p models.Plugin, selected bool, reasonCode, reason 
 			d.DefaultTimeout = tool.DefaultTimeout
 			d.NetworkRequired = tool.NetworkRequired
 			d.Exclusive = tool.Exclusive
+			if tool.PathScope != "" {
+				d.PathScope = tool.PathScope
+			}
 		}
 	}
 	if d.DisplayName == "" {

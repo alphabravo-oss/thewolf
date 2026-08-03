@@ -2,14 +2,39 @@ package container
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
 )
+
+// CommandFactory lets an alternate runtime preserve the plugins' existing
+// exec.Cmd contract. Kubernetes installs a factory that returns a local hidden
+// wolf command; that command creates/watches a native scanner Job and mirrors
+// its stdout, stderr, and exit code.
+type CommandFactory func(context.Context, *Config, Options, string, ...string) *exec.Cmd
+
+var (
+	commandFactoryMu sync.RWMutex
+	commandFactory   CommandFactory
+)
+
+func SetCommandFactory(factory CommandFactory) {
+	commandFactoryMu.Lock()
+	defer commandFactoryMu.Unlock()
+	commandFactory = factory
+}
+
+func alternateCommandFactory() CommandFactory {
+	commandFactoryMu.RLock()
+	defer commandFactoryMu.RUnlock()
+	return commandFactory
+}
 
 // Options controls per-invocation container behavior. Most plugins pass only
 // RepoDir; gosec/codeql/infer override WorkDir to run from a specific
@@ -97,6 +122,9 @@ func CommandContext(ctx context.Context, cfg *Config, opts Options, tool string,
 	if image == "" {
 		return scannerFailureCommand(ctx, fmt.Sprintf("scanner image for tool %q is empty", tool))
 	}
+	if factory := alternateCommandFactory(); factory != nil {
+		return factory(ctx, cfg, opts, tool, args...)
+	}
 	if !scannerImageReady(ctx, cfg, image) {
 		if IsLocalOnlyImage(image) {
 			return scannerFailureCommand(ctx, fmt.Sprintf(
@@ -129,20 +157,27 @@ func CommandContext(ctx context.Context, cfg *Config, opts Options, tool string,
 	}
 
 	if !opts.NoRepoMount {
-		if opts.RepoDir == "" {
+		if cfg.RepoVolume != "" {
+			mountFlag := fmt.Sprintf("%s:%s:ro", cfg.RepoVolume, ScanMountPoint)
+			if opts.ReadWrite {
+				mountFlag = fmt.Sprintf("%s:%s", cfg.RepoVolume, ScanMountPoint)
+			}
+			dockerArgs = append(dockerArgs, "-v", mountFlag)
+		} else if opts.RepoDir == "" {
 			// Returning a failing command keeps the type signature simple and
 			// lets the runner's normal error pathway surface this to the user.
 			return scannerFailureCommand(ctx, "scanner repo mount path is empty")
+		} else {
+			hostPath, err := cfg.TranslateRepoPath(opts.RepoDir)
+			if err != nil {
+				return scannerFailureCommand(ctx, err.Error())
+			}
+			mountFlag := fmt.Sprintf("%s:%s:ro", hostPath, ScanMountPoint)
+			if opts.ReadWrite {
+				mountFlag = fmt.Sprintf("%s:%s", hostPath, ScanMountPoint)
+			}
+			dockerArgs = append(dockerArgs, "-v", mountFlag)
 		}
-		hostPath, err := cfg.TranslateRepoPath(opts.RepoDir)
-		if err != nil {
-			return scannerFailureCommand(ctx, err.Error())
-		}
-		mountFlag := fmt.Sprintf("%s:%s:ro", hostPath, ScanMountPoint)
-		if opts.ReadWrite {
-			mountFlag = fmt.Sprintf("%s:%s", hostPath, ScanMountPoint)
-		}
-		dockerArgs = append(dockerArgs, "-v", mountFlag)
 	}
 
 	workdir := opts.WorkDir
@@ -191,6 +226,9 @@ func CommandContext(ctx context.Context, cfg *Config, opts Options, tool string,
 	for k, v := range opts.ExtraEnv {
 		envKeys[k] = v
 	}
+	if err := validateScannerEnvironment(envKeys); err != nil {
+		return scannerFailureCommand(ctx, err.Error())
+	}
 	// Sort for deterministic arg ordering — keeps tests stable.
 	keys := make([]string, 0, len(envKeys))
 	for k := range envKeys {
@@ -232,7 +270,10 @@ func CommandContext(ctx context.Context, cfg *Config, opts Options, tool string,
 	}
 
 	// #nosec G204 -- command is a configured tool name (docker / claude / codex / scanner binary); args sourced from internal config, not user input
-	cmd := exec.CommandContext(ctx, "docker", dockerArgs...)
+	cmd := dockerCommandContext(ctx, cfg, dockerArgs...)
+	if cfg.OnContainerScheduled != nil {
+		cfg.OnContainerScheduled(name)
+	}
 
 	if opts.Stdin != "" {
 		cmd.Stdin = strings.NewReader(opts.Stdin)
@@ -243,7 +284,11 @@ func CommandContext(ctx context.Context, cfg *Config, opts Options, tool string,
 	// CLI process only orphans the container otherwise — see PLAN.md §5.7).
 	cmd.Cancel = func() error {
 		// #nosec G204 -- command is a configured tool name (docker / claude / codex / scanner binary); args sourced from internal config, not user input
-		_ = exec.Command("docker", "kill", name).Run() // best-effort
+		kill := exec.Command(cfg.dockerPath(), "kill", name) // #nosec G204 -- deployment-owned immutable Docker CLI.
+		if len(cfg.DockerEnvironment) != 0 {
+			kill.Env = append([]string(nil), cfg.DockerEnvironment...)
+		}
+		_ = kill.Run() // best-effort
 		if cmd.Process != nil {
 			return syscall.Kill(cmd.Process.Pid, syscall.SIGTERM)
 		}
@@ -260,7 +305,7 @@ func scannerImageReady(ctx context.Context, cfg *Config, image string) bool {
 	if cfg != nil && image == cfg.Image && ImageReady(cfg) {
 		return true
 	}
-	return imageInspect(ctx, image) == nil
+	return imageInspectWithConfig(ctx, cfg, image) == nil
 }
 
 func scannerFailureCommand(ctx context.Context, msg string) *exec.Cmd {
@@ -319,13 +364,18 @@ func BuildDockerArgs(cfg *Config, opts Options, tool string, args ...string) (co
 	}
 
 	if !opts.NoRepoMount {
-		hostPath, err := cfg.TranslateRepoPath(opts.RepoDir)
-		if err != nil {
-			return containerName, nil, err
+		mountFlag := ""
+		if cfg.RepoVolume != "" {
+			mountFlag = fmt.Sprintf("%s:%s:ro", cfg.RepoVolume, ScanMountPoint)
+		} else {
+			hostPath, err := cfg.TranslateRepoPath(opts.RepoDir)
+			if err != nil {
+				return containerName, nil, err
+			}
+			mountFlag = fmt.Sprintf("%s:%s:ro", hostPath, ScanMountPoint)
 		}
-		mountFlag := fmt.Sprintf("%s:%s:ro", hostPath, ScanMountPoint)
 		if opts.ReadWrite {
-			mountFlag = fmt.Sprintf("%s:%s", hostPath, ScanMountPoint)
+			mountFlag = strings.TrimSuffix(mountFlag, ":ro")
 		}
 		dockerArgs = append(dockerArgs, "-v", mountFlag)
 	}
@@ -367,6 +417,9 @@ func BuildDockerArgs(cfg *Config, opts Options, tool string, args ...string) (co
 	for k, v := range opts.ExtraEnv {
 		envKeys[k] = v
 	}
+	if err := validateScannerEnvironment(envKeys); err != nil {
+		return containerName, nil, err
+	}
 	keys := make([]string, 0, len(envKeys))
 	for k := range envKeys {
 		keys = append(keys, k)
@@ -395,6 +448,20 @@ func BuildDockerArgs(cfg *Config, opts Options, tool string, args ...string) (co
 		dockerArgs = append(dockerArgs, args...)
 	}
 	return containerName, dockerArgs, nil
+}
+
+func validateScannerEnvironment(values map[string]string) error {
+	for name, value := range values {
+		if name == "" || strings.ContainsAny(name, "=\x00") || strings.ContainsRune(value, '\x00') {
+			return errors.New("scanner container environment contains an invalid name or value")
+		}
+		switch name {
+		case "DOCKER_HOST", "DOCKER_CONFIG", "DOCKER_CERT_PATH", "DOCKER_TLS_VERIFY",
+			"WOLF_SCANNER_RELEASE_REGISTRY_CREDENTIAL_DIR", "WOLF_SCANNER_RELEASE_ENGINE_CREDENTIAL_DIR":
+			return fmt.Errorf("scanner container environment must not receive release credential variable %q", name)
+		}
+	}
+	return nil
 }
 
 func validateExtraMount(m string) error {

@@ -22,17 +22,29 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/finding/knowledge"
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
+	"github.com/alphabravocompany/thewolf/internal/scannerruntime"
 	"github.com/alphabravocompany/thewolf/internal/scannertools/manifest"
 	"github.com/alphabravocompany/thewolf/internal/wolflog"
 )
 
 // RunConfig holds all configuration for a scan run.
 type RunConfig struct {
-	RepoPath      string
-	Branch        string
-	Registry      *plugin.Registry
-	Languages     []models.Language
-	Tools         []string // explicit tool list (overrides auto-detection)
+	RepoPath string
+	// Target is an explicit non-repository scan target, such as a controlled
+	// DAST URL or container-image archive. It is never inferred from RepoPath.
+	Target     string
+	ScanID     string
+	UserID     string
+	LeaseToken string
+	Attempt    int
+	Branch     string
+	Registry   *plugin.Registry
+	Languages  []models.Language
+	Tools      []string // explicit tool list (overrides auto-detection)
+	// ToolsExplicit distinguishes an intentionally empty profile/category
+	// selection from legacy auto-detection, where an empty Tools slice means
+	// "select by language."
+	ToolsExplicit bool
 	DisabledTools []string // tools to exclude from the auto-detected set
 	Concurrency   int
 	// HeavyConcurrency limits scanners that are expensive enough to contend
@@ -94,6 +106,7 @@ type RunResult struct {
 	Findings           []models.Finding
 	ToolsRun           []string
 	ToolsFailed        map[string]error
+	ToolParseErrors    map[string]int
 	ToolsSkipped       []string
 	MissingSuggestions []MissingPluginSuggestion
 	Duration           time.Duration
@@ -248,7 +261,7 @@ func SelectTools(cfg RunConfig) []models.Plugin {
 
 	var selected []models.Plugin
 
-	if len(cfg.Tools) > 0 {
+	if len(cfg.Tools) > 0 || cfg.ToolsExplicit {
 		// Explicit tool list overrides everything.
 		for _, name := range cfg.Tools {
 			if p, err := cfg.Registry.Get(name); err == nil {
@@ -449,7 +462,8 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	}
 
 	result := &RunResult{
-		ToolsFailed: make(map[string]error),
+		ToolsFailed:     make(map[string]error),
+		ToolParseErrors: make(map[string]int),
 	}
 
 	// Select tools.
@@ -516,6 +530,7 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 		g.Go(func() error {
 			defer toolCancel() // release in case the tool completes normally
 			toolName := p.Name()
+			parseErrors := 0
 			toolStart := time.Now()
 
 			// If this tool was cancelled BEFORE it acquired a slot
@@ -554,14 +569,25 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 				cfg.OnToolStart(toolName)
 			}
 
+			runtimeNetworkClass := "offline"
+			if spec.NetworkRequired || spec.Class == "network" {
+				runtimeNetworkClass = "network-required"
+			}
+			executionCtx := scannerruntime.WithExecutionIdentity(toolCtx, scannerruntime.Identity{
+				ScanID: cfg.ScanID, ToolName: toolName, UserID: cfg.UserID,
+				LeaseToken: cfg.LeaseToken, Attempt: cfg.Attempt,
+				NetworkClass: runtimeNetworkClass,
+			})
 			toolOpts := models.ExecuteOpts{
 				RepoPath:     cfg.RepoPath,
+				Target:       cfg.Target,
 				Branch:       cfg.Branch,
 				IncludePaths: cfg.IncludePaths,
 				ExcludePaths: cfg.ExcludePaths,
 				Timeout:      timeoutForTool(timeout, spec),
 				ContainerCfg: cfg.ContainerCfg,
 			}
+			toolOpts.OnParseError = func(error) { parseErrors++ }
 			if cfg.OnToolOutput != nil {
 				toolOpts.OnOutput = func(line string) {
 					cfg.OnToolOutput(toolName, line)
@@ -588,7 +614,7 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 				}
 			}
 
-			findings, err := p.Execute(toolCtx, toolOpts)
+			findings, err := p.Execute(executionCtx, toolOpts)
 
 			elapsed := time.Since(toolStart)
 
@@ -606,6 +632,7 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 			if err != nil {
 				result.ToolsFailed[toolName] = err
 			}
+			result.ToolParseErrors[toolName] = parseErrors
 			if len(findings) > 0 {
 				allFindings = append(allFindings, findings...)
 			}

@@ -41,6 +41,7 @@ func toReportDecisions(values []Decision) []report.ScannerPlanDecision {
 			DefaultTimeout:  value.DefaultTimeout,
 			NetworkRequired: value.NetworkRequired,
 			Exclusive:       value.Exclusive,
+			PathScope:       value.PathScope,
 		})
 	}
 	return out

@@ -88,15 +88,15 @@ func EnsureImage(ctx context.Context, cfg *Config) error {
 		return errors.New("container image is empty")
 	}
 
-	if err := DockerAvailable(ctx); err != nil {
+	if err := dockerAvailableWithConfig(ctx, cfg); err != nil {
 		return err
 	}
 
-	present := imageInspect(ctx, cfg.Image) == nil
+	present := imageInspectWithConfig(ctx, cfg, cfg.Image) == nil
 
 	switch cfg.PullPolicy {
 	case PullAlways:
-		if err := imagePull(ctx, cfg.Image); err != nil {
+		if err := imagePullWithConfig(ctx, cfg, cfg.Image); err != nil {
 			return fmt.Errorf("pull %q (policy=Always): %w", cfg.Image, err)
 		}
 	case PullNever:
@@ -108,7 +108,7 @@ func EnsureImage(ctx context.Context, cfg *Config) error {
 		fallthrough
 	default:
 		if !present {
-			if err := imagePull(ctx, cfg.Image); err != nil {
+			if err := imagePullWithConfig(ctx, cfg, cfg.Image); err != nil {
 				return fmt.Errorf("pull %q (policy=IfNotPresent): %w", cfg.Image, err)
 			}
 		}
@@ -118,15 +118,54 @@ func EnsureImage(ctx context.Context, cfg *Config) error {
 	return nil
 }
 
+// EnsureAllImages verifies every exact reference reachable from cfg. Managed
+// quality comparisons use this before scanner execution so a missing upstream
+// or bucket image is reported as preparation failure rather than a skipped
+// tool.
+func EnsureAllImages(ctx context.Context, cfg *Config) error {
+	if err := cfg.Validate(); err != nil {
+		return err
+	}
+	if err := dockerAvailableWithConfig(ctx, cfg); err != nil {
+		return err
+	}
+	for _, image := range cfg.AllImages() {
+		present := imageInspectWithConfig(ctx, cfg, image) == nil
+		switch cfg.PullPolicy {
+		case PullAlways:
+			if err := imagePullWithConfig(ctx, cfg, image); err != nil {
+				return fmt.Errorf("pull %q: %w", image, err)
+			}
+		case PullNever:
+			if !present {
+				return fmt.Errorf("%w: image %q", ErrImageMissing, image)
+			}
+		default:
+			if !present {
+				if err := imagePullWithConfig(ctx, cfg, image); err != nil {
+					return fmt.Errorf("pull %q: %w", image, err)
+				}
+			}
+		}
+		globalImageState.set(image, true)
+	}
+	return nil
+}
+
 // DockerAvailable returns nil if `docker version --format {{.Server.Version}}`
 // succeeds. Otherwise wraps ErrDockerUnavailable with diagnostic detail.
 func DockerAvailable(ctx context.Context) error {
-	if _, err := exec.LookPath("docker"); err != nil {
+	return dockerAvailableWithConfig(ctx, DefaultConfig())
+}
+
+func dockerAvailableWithConfig(ctx context.Context, cfg *Config) error {
+	path := cfg.dockerPath()
+	if _, err := exec.LookPath(path); err != nil {
 		return fmt.Errorf("%w: docker CLI not on PATH (install Docker, or mount /var/run/docker.sock into wolf-slim)", ErrDockerUnavailable)
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "docker", "version", "--format", "{{.Server.Version}}")
+	cmd := dockerCommandContext(ctx, cfg, "version", "--format", "{{.Server.Version}}")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("%w: %s (is the docker daemon running? is /var/run/docker.sock mounted into wolf-slim?)",
@@ -137,9 +176,13 @@ func DockerAvailable(ctx context.Context) error {
 
 // imageInspect returns nil if the image is present locally, otherwise an error.
 func imageInspect(ctx context.Context, image string) error {
+	return imageInspectWithConfig(ctx, DefaultConfig(), image)
+}
+
+func imageInspectWithConfig(ctx context.Context, cfg *Config, image string) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "docker", "image", "inspect", image)
+	cmd := dockerCommandContext(ctx, cfg, "image", "inspect", image)
 	// Suppress all output — exit code is the only signal we care about.
 	cmd.Stdout = nil
 	cmd.Stderr = nil
@@ -149,15 +192,27 @@ func imageInspect(ctx context.Context, image string) error {
 // imagePull pulls the named image. The function blocks until the pull
 // completes; on a 6+ GB image and a slow link this can be 10+ minutes.
 func imagePull(ctx context.Context, image string) error {
+	return imagePullWithConfig(ctx, DefaultConfig(), image)
+}
+
+func imagePullWithConfig(ctx context.Context, cfg *Config, image string) error {
 	// 30-minute pull cap — generous enough for a fresh 8 GB pull on a slow link.
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "docker", "pull", image)
+	cmd := dockerCommandContext(ctx, cfg, "pull", image)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("%s: %s", err, trimSpaces(string(out)))
 	}
 	return nil
+}
+
+func dockerCommandContext(ctx context.Context, cfg *Config, args ...string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, cfg.dockerPath(), args...) // #nosec G204 -- Docker path is deployment-owned configuration.
+	if cfg != nil && len(cfg.DockerEnvironment) != 0 {
+		cmd.Env = append([]string(nil), cfg.DockerEnvironment...)
+	}
+	return cmd
 }
 
 // trimSpaces is a tiny helper that avoids pulling in strings just for TrimSpace

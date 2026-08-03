@@ -19,7 +19,7 @@ func TestBuildMergesManifestAndContainerConfig(t *testing.T) {
 			PinnedVersion:   "1.0.0",
 			VersionVariable: "BANDIT_VERSION",
 			Install:         manifest.Install{Manager: "pip", Package: "bandit"},
-			UpdateSource:    manifest.UpdateSource{Type: "pypi"},
+			UpdateSource:    manifest.UpdateSource{Type: "pypi", Package: "bandit"},
 		},
 		"semgrep": {
 			DisplayName:     "Semgrep",
@@ -31,7 +31,7 @@ func TestBuildMergesManifestAndContainerConfig(t *testing.T) {
 			PinnedVersion:   "1.2.3",
 			VersionVariable: "SEMGREP_VERSION",
 			Image:           manifest.Image{PinnedReference: "semgrep/semgrep:1.2.3", Entrypoint: "semgrep"},
-			UpdateSource:    manifest.UpdateSource{Type: "docker_registry"},
+			UpdateSource:    manifest.UpdateSource{Type: "docker_registry", Repository: "semgrep/semgrep"},
 		},
 	}}
 	if err := m.Validate(); err != nil {
@@ -78,7 +78,7 @@ func TestBuildMergesImagePresence(t *testing.T) {
 			PinnedVersion:   "1.0.0",
 			VersionVariable: "BANDIT_VERSION",
 			Install:         manifest.Install{Manager: "pip", Package: "bandit"},
-			UpdateSource:    manifest.UpdateSource{Type: "pypi"},
+			UpdateSource:    manifest.UpdateSource{Type: "pypi", Package: "bandit"},
 		},
 	}}
 	if err := m.Validate(); err != nil {
@@ -108,7 +108,7 @@ func TestBuildDetectsOverridesAndLatest(t *testing.T) {
 			PinnedVersion:   "1.2.3",
 			VersionVariable: "SEMGREP_VERSION",
 			Image:           manifest.Image{PinnedReference: "semgrep/semgrep:1.2.3"},
-			UpdateSource:    manifest.UpdateSource{Type: "docker_registry"},
+			UpdateSource:    manifest.UpdateSource{Type: "docker_registry", Repository: "semgrep/semgrep"},
 		},
 	}}
 	if err := m.Validate(); err != nil {

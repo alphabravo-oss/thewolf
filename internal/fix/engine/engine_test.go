@@ -162,15 +162,15 @@ func TestParseClaudeOutput(t *testing.T) {
 			wantFiles:   0,
 		},
 		{
-			name:        "non-JSON output treated as success",
+			name:        "non-JSON output rejected",
 			input:       []byte("Fixed the issue in main.go"),
-			wantSuccess: true,
+			wantSuccess: false,
 			wantFiles:   0,
 		},
 		{
 			name:        "empty output",
 			input:       []byte(""),
-			wantSuccess: true,
+			wantSuccess: false,
 			wantFiles:   0,
 		},
 	}
