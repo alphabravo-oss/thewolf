@@ -27,7 +27,7 @@ func TestRepositoryCoverageIsComplete(t *testing.T) {
 		coverage.ParserAdapters != 49 || coverage.HostileTestedAdapters != 49 ||
 		coverage.ValidTestedAdapters != 49 ||
 		coverage.ScannerVariants != 4 || coverage.ScannerPlatformTuples != 7 ||
-		coverage.FixerVariants != 4 || coverage.FixerPlatformTuples != 8 ||
+		coverage.FixerVariants != 5 || coverage.FixerPlatformTuples != 10 ||
 		coverage.Families != 23 || coverage.Fixtures != 54 ||
 		coverage.GoldenExpectations != 23 {
 		t.Fatalf("unexpected coverage: %#v", coverage)

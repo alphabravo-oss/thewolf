@@ -78,3 +78,13 @@ fixerVariants:
     buildArgs:
       CODEX_VERSION: 0.146.0
     smokeCommand: ["codex", "--version"]
+  opencode:
+    dockerfile: fixer/Dockerfile.opencode
+    context: .
+    image: wolf-fixer-opencode
+    platforms: [linux/amd64, linux/arm64]
+    dependsOn: [base]
+    authMode: injected
+    buildArgs:
+      OPENCODE_VERSION: 1.18.11
+    smokeCommand: ["opencode", "--version"]

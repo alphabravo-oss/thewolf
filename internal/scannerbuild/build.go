@@ -46,13 +46,15 @@ var Variants = []Variant{
 
 // FixerVariants is the parallel build table for the autonomous-fix engine
 // containers. They live under fixer/ and share the wolf-fixer repo base.
-// "base" is the shared image the engine variants FROM; "claude"/"codex"
-// add the respective agent CLI; "api" is CLI-free (the zero-auth fallback).
+// "base" is the shared image the engine variants FROM; "claude"/"codex"/
+// "opencode" add the respective agent CLI; "api" is CLI-free (the zero-auth
+// fallback).
 var FixerVariants = []Variant{
 	{Name: "base", Dockerfile: "Dockerfile.base", ImageBase: fixerImageBase, ImageSuffix: "", ContextSubdir: fixerContextSubdir},
 	{Name: "claude", Dockerfile: "Dockerfile.claude", ImageBase: fixerImageBase, ImageSuffix: "-claude", ContextSubdir: fixerContextSubdir},
 	{Name: "codex", Dockerfile: "Dockerfile.codex", ImageBase: fixerImageBase, ImageSuffix: "-codex", ContextSubdir: fixerContextSubdir},
 	{Name: "api", Dockerfile: "Dockerfile.api", ImageBase: fixerImageBase, ImageSuffix: "-api", ContextSubdir: fixerContextSubdir},
+	{Name: "opencode", Dockerfile: "Dockerfile.opencode", ImageBase: fixerImageBase, ImageSuffix: "-opencode", ContextSubdir: fixerContextSubdir},
 }
 
 // VariantByName returns the scanner Variant with the given name, or false.

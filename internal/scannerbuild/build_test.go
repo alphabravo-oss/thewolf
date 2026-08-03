@@ -457,10 +457,11 @@ func assertPrivateDirectory(t *testing.T, path string) {
 // Dockerfile in the fixer/ context subtree.
 func TestFixerVariantsResolve(t *testing.T) {
 	wantSuffix := map[string]string{
-		"base":   "",
-		"claude": "-claude",
-		"codex":  "-codex",
-		"api":    "-api",
+		"base":     "",
+		"claude":   "-claude",
+		"codex":    "-codex",
+		"api":      "-api",
+		"opencode": "-opencode",
 	}
 	for name, suffix := range wantSuffix {
 		v, ok := FixerVariantByName(name)

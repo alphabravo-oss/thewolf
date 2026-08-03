@@ -126,6 +126,10 @@ fixerVariants:
     dockerfile: fixer/Dockerfile.codex
     platforms: [linux/amd64, linux/arm64]
     strategy: executable
+  opencode:
+    dockerfile: fixer/Dockerfile.opencode
+    platforms: [linux/amd64, linux/arm64]
+    strategy: executable
   api:
     dockerfile: fixer/Dockerfile.api
     platforms: [linux/amd64, linux/arm64]

@@ -105,6 +105,7 @@ func main() {
 		"fixer/Dockerfile.base",
 		"fixer/Dockerfile.claude",
 		"fixer/Dockerfile.codex",
+		"fixer/Dockerfile.opencode",
 		"fixer/go-tools",
 		"fixer/install-node-tools.sh",
 		"fixer/versions.env",

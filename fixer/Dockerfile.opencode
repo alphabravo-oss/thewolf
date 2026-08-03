@@ -1,0 +1,65 @@
+# check=skip=InvalidDefaultArgInFrom
+# WOLF_FIXER_BASE_REF intentionally has no mutable default; the release
+# pipeline must provide the verified base image by digest.
+# ============================================================
+# checkov:skip=CKV_DOCKER_2 — worker container, not a service.
+#
+# wolf-fixer-opencode — OPENCODE engine variant
+# ============================================================
+# Extends the wolf-fixer base with the OpenCode CLI. Unlike the claude and
+# codex variants this image needs no interactive login and no session
+# volume: Wolf runs `opencode run` directly in the container and injects
+# credentials per run via the OPENCODE_AUTH_CONTENT environment variable,
+# which bypasses auth.json file storage entirely. Two runs for two users
+# never share credential state, so there is nothing to mount and nothing
+# to persist across restarts.
+#
+# Build via internal/scannerbuild FixerVariants ("opencode").
+# ============================================================
+
+ARG WOLF_FIXER_BASE_REF
+FROM ${WOLF_FIXER_BASE_REF} AS base
+
+# opencode-ai is a thin wrapper whose postinstall resolves the actual CLI
+# binary from an os/cpu-gated optionalDependency (opencode-linux-x64 /
+# opencode-linux-arm64) rather than shipping the binary itself — the same
+# shape @anthropic-ai/claude-code uses. Verifying only the wrapper's
+# integrity would leave the native binary that actually runs unverified, so
+# both are pinned and checked, matching the claude/codex variants.
+ARG OPENCODE_VERSION=1.18.11
+ARG OPENCODE_INTEGRITY=sha512-2omDujweL9HNMCvz18PKUUkdOf5TbbzxhH43nLDHIQrWQIXM2poXjAjKpLyBCLP3LGj6vRNmB+1Q6CLKdV90cQ==
+ARG OPENCODE_LINUX_AMD64_INTEGRITY=sha512-0mBNdaLK9HWxB85N+qQK0I+2ZySfPFV+G6Q0utGSO1ZkI/YjjEofrIvb4OUVHIjCq3eWFYhFVRcoiOuD39sN6w==
+ARG OPENCODE_LINUX_ARM64_INTEGRITY=sha512-M4Ta+aRcROsWbp6X/uGrxfU5o/o1Qx1+WRlyW1H7vkH8M+G3cOHI6gGM4BgQgf5ZqdQaLVC2KjqFtONJi5rF8A==
+
+ENV WOLF_FIXER_VARIANT=opencode \
+    WOLF_FIXER_ENGINE=opencode
+
+LABEL dev.wolf.fixer.variant="opencode" \
+      dev.wolf.fixer.auth-mode="injected" \
+      dev.wolf.fixer.cli.version="${OPENCODE_VERSION}"
+
+USER root
+
+RUN set -eux; \
+    actual_integrity="$(npm --cache /tmp/npm-cache view "opencode-ai@${OPENCODE_VERSION}" dist.integrity)"; \
+    test "$actual_integrity" = "$OPENCODE_INTEGRITY"; \
+    arch="$(dpkg --print-architecture)"; \
+    case "$arch" in \
+      amd64) native_package="opencode-linux-x64"; native_integrity="$OPENCODE_LINUX_AMD64_INTEGRITY" ;; \
+      arm64) native_package="opencode-linux-arm64"; native_integrity="$OPENCODE_LINUX_ARM64_INTEGRITY" ;; \
+      *) echo "unsupported architecture: $arch" >&2; exit 65 ;; \
+    esac; \
+    actual_native_integrity="$(npm --cache /tmp/npm-cache view "${native_package}@${OPENCODE_VERSION}" dist.integrity)"; \
+    test "$actual_native_integrity" = "$native_integrity"; \
+    npm --cache /tmp/npm-cache install --prefix /opt/wolf/opencode --omit=dev \
+      "opencode-ai@${OPENCODE_VERSION}"; \
+    ln -s /opt/wolf/opencode/node_modules/.bin/opencode /usr/local/bin/opencode; \
+    command -v opencode; \
+    opencode --version; \
+    rm -rf /tmp/npm-cache
+
+USER wolf
+WORKDIR /workspace
+ENV HOME=/home/wolf
+
+ENTRYPOINT ["/usr/local/bin/opencode"]
