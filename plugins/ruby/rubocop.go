@@ -17,7 +17,7 @@ func init() {
 	plugin.Register(&RubocopPlugin{})
 }
 
-func (p *RubocopPlugin) Name() string             { return "rubocop" }
+func (p *RubocopPlugin) Name() string              { return "rubocop" }
 func (p *RubocopPlugin) Category() models.Category { return models.CategoryQuality }
 func (p *RubocopPlugin) Languages() []models.Language {
 	return []models.Language{models.LangRuby}

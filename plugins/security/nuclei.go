@@ -1,9 +1,11 @@
 package security
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
@@ -17,8 +19,8 @@ func init() {
 	plugin.Register(&NucleiPlugin{})
 }
 
-func (p *NucleiPlugin) Name() string             { return "nuclei" }
-func (p *NucleiPlugin) Category() models.Category { return models.CategoryDAST }
+func (p *NucleiPlugin) Name() string                 { return "nuclei" }
+func (p *NucleiPlugin) Category() models.Category    { return models.CategoryDAST }
 func (p *NucleiPlugin) Languages() []models.Language { return nil }
 
 func (p *NucleiPlugin) CheckAvailable() bool { return container.IsScannersReady() }
@@ -63,7 +65,7 @@ func (p *NucleiPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]
 		return nil, plugin.WrapExecError("nuclei", err)
 	}
 
-	findings, perr := parseNucleiOutput(out)
+	findings, perr := parseNucleiOutputWithMetrics(out, opts.OnParseError)
 	if perr != nil {
 		return nil, perr
 	}
@@ -89,13 +91,24 @@ type nucleiResult struct {
 }
 
 func parseNucleiOutput(data []byte) ([]models.Finding, error) {
+	return parseNucleiOutputWithMetrics(data, nil)
+}
+
+func parseNucleiOutputWithMetrics(data []byte, onParseError func(error)) ([]models.Finding, error) {
 	var findings []models.Finding
 
-	// NDJSON — one result per line
-	dec := json.NewDecoder(bytes.NewReader(data))
-	for dec.More() {
+	// NDJSON — one bounded result per line. Advancing by line also guarantees
+	// malformed records cannot trap the parser in a retry loop.
+	scanner := bufio.NewScanner(bytes.NewReader(data))
+	scanner.Buffer(make([]byte, 64*1024), 16*1024*1024)
+	for scanner.Scan() {
+		record := bytes.TrimSpace(scanner.Bytes())
+		if len(record) == 0 {
+			continue
+		}
 		var r nucleiResult
-		if err := dec.Decode(&r); err != nil {
+		if err := json.Unmarshal(record, &r); err != nil {
+			notifyParseError(onParseError, err)
 			continue
 		}
 		cwe := ""
@@ -114,6 +127,9 @@ func parseNucleiOutput(data []byte) ([]models.Finding, error) {
 			RuleID:      r.TemplateID,
 			Status:      models.StatusOpen,
 		})
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("scan nuclei NDJSON: %w", err)
 	}
 	return findings, nil
 }

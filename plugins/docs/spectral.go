@@ -17,8 +17,8 @@ func init() {
 	plugin.Register(&SpectralPlugin{})
 }
 
-func (p *SpectralPlugin) Name() string               { return "spectral" }
-func (p *SpectralPlugin) Category() models.Category   { return models.CategoryDocs }
+func (p *SpectralPlugin) Name() string                 { return "spectral" }
+func (p *SpectralPlugin) Category() models.Category    { return models.CategoryDocs }
 func (p *SpectralPlugin) Languages() []models.Language { return nil }
 
 func (p *SpectralPlugin) CheckAvailable() bool { return container.IsScannersReady() }

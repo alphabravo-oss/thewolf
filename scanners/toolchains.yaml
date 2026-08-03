@@ -10,7 +10,9 @@ base_images:
 
 toolchains:
   go:
-    version: "1.26.3"
+    version: "1.26.5"
+    linux_amd64_sha256: 5c2c3b16caefa1d968a94c1daca04a7ca301a496d9b086e17ad77bb81393f053
+    linux_arm64_sha256: fe4789e92b1f33358680864bbe8704289e7bb5fc207d80623c308935bd696d49
     source: https://go.dev/dl/
     install_script: scanners/install/go-tools.sh
   nodejs:
@@ -35,5 +37,11 @@ toolchains:
     dockerfile: scanners/Dockerfile.jvm
   rust:
     version_variable: RUST_TOOLCHAIN
-    source: https://sh.rustup.rs
+    bootstrap_version: "1.29.0"
+    bootstrap_version_variable: RUSTUP_VERSION
+    linux_amd64_sha256: 4acc9acc76d5079515b46346a485974457b5a79893cfb01112423c89aeb5aa10
+    linux_amd64_sha256_variable: RUSTUP_LINUX_AMD64_SHA256
+    linux_arm64_sha256: 9732d6c5e2a098d3521fca8145d826ae0aaa067ef2385ead08e6feac88fa5792
+    linux_arm64_sha256_variable: RUSTUP_LINUX_ARM64_SHA256
+    source: https://static.rust-lang.org/rustup/archive/
     install_script: scanners/install/rust.sh

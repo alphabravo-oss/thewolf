@@ -19,7 +19,7 @@ func init() {
 	plugin.Register(&StaticcheckPlugin{})
 }
 
-func (p *StaticcheckPlugin) Name() string             { return "staticcheck" }
+func (p *StaticcheckPlugin) Name() string              { return "staticcheck" }
 func (p *StaticcheckPlugin) Category() models.Category { return models.CategoryQuality }
 func (p *StaticcheckPlugin) Languages() []models.Language {
 	return []models.Language{models.LangGo}
@@ -82,7 +82,7 @@ func (p *StaticcheckPlugin) Execute(ctx context.Context, opts models.ExecuteOpts
 		return nil, plugin.WrapExecError("staticcheck", err)
 	}
 
-	findings, perr := parseStaticcheckOutput(out)
+	findings, perr := parseStaticcheckOutputWithMetrics(out, opts.OnParseError)
 	if perr != nil {
 		return nil, perr
 	}
@@ -109,6 +109,10 @@ type staticcheckDiag struct {
 }
 
 func parseStaticcheckOutput(data []byte) ([]models.Finding, error) {
+	return parseStaticcheckOutputWithMetrics(data, nil)
+}
+
+func parseStaticcheckOutputWithMetrics(data []byte, onParseError func(error)) ([]models.Finding, error) {
 	var findings []models.Finding
 	scanner := bufio.NewScanner(bytes.NewReader(data))
 	for scanner.Scan() {
@@ -119,6 +123,7 @@ func parseStaticcheckOutput(data []byte) ([]models.Finding, error) {
 
 		var diag staticcheckDiag
 		if err := json.Unmarshal(line, &diag); err != nil {
+			notifyParseError(onParseError, err)
 			continue
 		}
 

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
@@ -14,16 +15,11 @@ import (
 
 // DocklePlugin runs Dockle container best practice checks.
 //
-// Note: dockle is unusual among scanner plugins because it builds and inspects
-// a docker IMAGE rather than scanning a repo directory. v1 keeps the build
-// step at the wolf-slim level (which has access to the docker daemon socket
-// already mounted in for the scanner orchestration) and runs dockle inside
-// a scanner container that mounts the same docker socket so it can pull the
-// just-built image from the local daemon.
-//
-// This is the ONE place where a scanner container needs docker socket access.
-// We document the trade-off; if it becomes a concern, v2 can move dockle to
-// wolf-fixer (which already has socket access for git push, etc.).
+// Dockle is unusual because it inspects an image rather than a source tree.
+// Wolf deliberately never mounts a container-engine socket into a scanner.
+// A /scan/*.tar target is therefore passed to Dockle's supported --input
+// archive mode. Other targets are treated as immutable/remote image
+// references that Dockle resolves without access to the host daemon.
 type DocklePlugin struct{}
 
 func init() {
@@ -61,21 +57,31 @@ func (p *DocklePlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]
 		defer cancel()
 	}
 
-	// Run dockle against the user-provided image. The docker socket has
-	// to be mounted so dockle can read the image from the local daemon.
 	cfg := pkgcontainer.ConfigFromOpts(opts.ContainerCfg)
+	commandOptions, arguments, err := dockleInvocation(opts.Target)
+	if err != nil {
+		return nil, err
+	}
 	cmd := pkgcontainer.CommandContext(ctx, cfg,
-		pkgcontainer.Options{
-			NoRepoMount: true,
-			ExtraMounts: []string{"/var/run/docker.sock:/var/run/docker.sock"},
-		},
-		"dockle", "--format", "json", opts.Target)
+		commandOptions, "dockle", arguments...)
 	out, err := cmd.Output()
 	if err != nil && len(out) == 0 {
 		return nil, plugin.WrapExecError("dockle", err)
 	}
+	plugin.SaveRaw(opts, out, "json")
 
 	return parseDockleOutput(out)
+}
+
+func dockleInvocation(target string) (pkgcontainer.Options, []string, error) {
+	clean := filepath.Clean(target)
+	if strings.HasPrefix(clean, "/scan/") && strings.HasSuffix(clean, ".tar") {
+		return pkgcontainer.Options{}, []string{"--format", "json", "--input", clean}, nil
+	}
+	if strings.HasPrefix(clean, "/") || strings.ContainsAny(target, "\x00\r\n") {
+		return pkgcontainer.Options{}, nil, fmt.Errorf("dockle target must be a /scan/*.tar archive or an image reference")
+	}
+	return pkgcontainer.Options{NoRepoMount: true}, []string{"--format", "json", target}, nil
 }
 
 type dockleOutput struct {

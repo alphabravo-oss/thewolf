@@ -19,8 +19,8 @@ func init() {
 	plugin.Register(&TrufflehogPlugin{})
 }
 
-func (p *TrufflehogPlugin) Name() string               { return "trufflehog" }
-func (p *TrufflehogPlugin) Category() models.Category   { return models.CategorySecrets }
+func (p *TrufflehogPlugin) Name() string                 { return "trufflehog" }
+func (p *TrufflehogPlugin) Category() models.Category    { return models.CategorySecrets }
 func (p *TrufflehogPlugin) Languages() []models.Language { return nil }
 
 func (p *TrufflehogPlugin) CheckAvailable() bool { return container.IsScannersReady() }
@@ -60,7 +60,7 @@ func (p *TrufflehogPlugin) Execute(ctx context.Context, opts models.ExecuteOpts)
 		return nil, plugin.WrapExecError("trufflehog", err)
 	}
 
-	findings, perr := parseTrufflehogOutput(out)
+	findings, perr := parseTrufflehogOutputWithMetrics(out, opts.OnParseError)
 	if perr != nil {
 		return nil, perr
 	}
@@ -71,9 +71,9 @@ func (p *TrufflehogPlugin) Execute(ctx context.Context, opts models.ExecuteOpts)
 }
 
 type trufflehogResult struct {
-	DetectorName string `json:"DetectorName"`
-	Verified     bool   `json:"Verified"`
-	Raw          string `json:"Raw"`
+	DetectorName   string `json:"DetectorName"`
+	Verified       bool   `json:"Verified"`
+	Raw            string `json:"Raw"`
 	SourceMetadata struct {
 		Data struct {
 			Filesystem struct {
@@ -85,6 +85,10 @@ type trufflehogResult struct {
 }
 
 func parseTrufflehogOutput(data []byte) ([]models.Finding, error) {
+	return parseTrufflehogOutputWithMetrics(data, nil)
+}
+
+func parseTrufflehogOutputWithMetrics(data []byte, onParseError func(error)) ([]models.Finding, error) {
 	var findings []models.Finding
 	scanner := bufio.NewScanner(bytes.NewReader(data))
 	for scanner.Scan() {
@@ -94,6 +98,7 @@ func parseTrufflehogOutput(data []byte) ([]models.Finding, error) {
 		}
 		var r trufflehogResult
 		if err := json.Unmarshal(line, &r); err != nil {
+			notifyParseError(onParseError, err)
 			continue
 		}
 

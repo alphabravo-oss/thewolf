@@ -18,8 +18,8 @@ func init() {
 	plugin.Register(&RuffPlugin{})
 }
 
-func (p *RuffPlugin) Name() string               { return "ruff" }
-func (p *RuffPlugin) Category() models.Category   { return models.CategoryQuality }
+func (p *RuffPlugin) Name() string                 { return "ruff" }
+func (p *RuffPlugin) Category() models.Category    { return models.CategoryQuality }
 func (p *RuffPlugin) Languages() []models.Language { return []models.Language{models.LangPython} }
 
 func (p *RuffPlugin) CheckAvailable() bool { return container.IsScannersReady() }

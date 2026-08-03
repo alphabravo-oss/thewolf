@@ -8,5 +8,7 @@
 !trufflehog-excludes.txt
 !wolf-tool-entry
 !smoke-test.sh
+!go-tools/**
 !install/**
+!os-packages/**
 !testdata/**

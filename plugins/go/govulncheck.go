@@ -1,6 +1,7 @@
 package goplug
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -18,7 +19,7 @@ func init() {
 	plugin.Register(&GovulncheckPlugin{})
 }
 
-func (p *GovulncheckPlugin) Name() string             { return "govulncheck" }
+func (p *GovulncheckPlugin) Name() string              { return "govulncheck" }
 func (p *GovulncheckPlugin) Category() models.Category { return models.CategorySCA }
 func (p *GovulncheckPlugin) Languages() []models.Language {
 	return []models.Language{models.LangGo}
@@ -60,7 +61,7 @@ func (p *GovulncheckPlugin) Execute(ctx context.Context, opts models.ExecuteOpts
 		return nil, plugin.WrapExecError("govulncheck", err)
 	}
 
-	findings, perr := parseGovulncheckOutput(out)
+	findings, perr := parseGovulncheckOutputWithMetrics(out, opts.OnParseError)
 	if perr != nil {
 		return nil, perr
 	}
@@ -76,8 +77,8 @@ type govulnMessage struct {
 }
 
 type govulnFinding struct {
-	OSV   string          `json:"osv"`
-	Trace []govulnFrame   `json:"trace"`
+	OSV   string        `json:"osv"`
+	Trace []govulnFrame `json:"trace"`
 }
 
 type govulnFrame struct {
@@ -101,15 +102,27 @@ type govulnOSV struct {
 }
 
 func parseGovulncheckOutput(data []byte) ([]models.Finding, error) {
+	return parseGovulncheckOutputWithMetrics(data, nil)
+}
+
+func parseGovulncheckOutputWithMetrics(data []byte, onParseError func(error)) ([]models.Finding, error) {
 	// govulncheck outputs newline-delimited JSON messages
 	var findings []models.Finding
 	osvMap := make(map[string]*govulnOSV)
 
-	// Parse all messages
-	dec := json.NewDecoder(bytes.NewReader(data))
-	for dec.More() {
+	// Parse one bounded record at a time. A streaming Decoder retry loop can
+	// spin forever after malformed input because Decode does not guarantee
+	// forward progress on an error.
+	scanner := bufio.NewScanner(bytes.NewReader(data))
+	scanner.Buffer(make([]byte, 64*1024), 16*1024*1024)
+	for scanner.Scan() {
+		record := bytes.TrimSpace(scanner.Bytes())
+		if len(record) == 0 {
+			continue
+		}
 		var msg govulnMessage
-		if err := dec.Decode(&msg); err != nil {
+		if err := json.Unmarshal(record, &msg); err != nil {
+			notifyParseError(onParseError, err)
 			continue
 		}
 		if msg.Vuln != nil {
@@ -145,6 +158,8 @@ func parseGovulncheckOutput(data []byte) ([]models.Finding, error) {
 			})
 		}
 	}
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("scan govulncheck NDJSON: %w", err)
+	}
 	return findings, nil
 }
-

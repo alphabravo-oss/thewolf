@@ -18,8 +18,8 @@ func init() {
 	plugin.Register(&DetectSecretsPlugin{})
 }
 
-func (p *DetectSecretsPlugin) Name() string             { return "detect-secrets" }
-func (p *DetectSecretsPlugin) Category() models.Category { return models.CategorySecrets }
+func (p *DetectSecretsPlugin) Name() string                 { return "detect-secrets" }
+func (p *DetectSecretsPlugin) Category() models.Category    { return models.CategorySecrets }
 func (p *DetectSecretsPlugin) Languages() []models.Language { return nil }
 
 func (p *DetectSecretsPlugin) CheckAvailable() bool { return container.IsScannersReady() }

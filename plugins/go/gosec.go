@@ -18,7 +18,7 @@ func init() {
 	plugin.Register(&GosecPlugin{})
 }
 
-func (p *GosecPlugin) Name() string             { return "gosec" }
+func (p *GosecPlugin) Name() string              { return "gosec" }
 func (p *GosecPlugin) Category() models.Category { return models.CategorySAST }
 func (p *GosecPlugin) Languages() []models.Language {
 	return []models.Language{models.LangGo}

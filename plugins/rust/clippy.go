@@ -22,7 +22,7 @@ func init() {
 	plugin.Register(&ClippyPlugin{})
 }
 
-func (p *ClippyPlugin) Name() string             { return "clippy" }
+func (p *ClippyPlugin) Name() string              { return "clippy" }
 func (p *ClippyPlugin) Category() models.Category { return models.CategoryQuality }
 func (p *ClippyPlugin) Languages() []models.Language {
 	return []models.Language{models.LangRust}
@@ -63,7 +63,7 @@ func (p *ClippyPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]
 		return nil, plugin.WrapExecError("clippy", err)
 	}
 
-	findings, perr := parseClippyOutput(out)
+	findings, perr := parseClippyOutputWithMetrics(out, opts.OnParseError)
 	if perr != nil {
 		return nil, perr
 	}
@@ -74,14 +74,14 @@ func (p *ClippyPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]
 }
 
 type clippyLine struct {
-	Reason  string       `json:"reason"`
-	Message *clippyMsg   `json:"message"`
+	Reason  string     `json:"reason"`
+	Message *clippyMsg `json:"message"`
 }
 
 type clippyMsg struct {
-	Level   string      `json:"level"`
-	Message string      `json:"message"`
-	Code    *clippyCode `json:"code"`
+	Level   string       `json:"level"`
+	Message string       `json:"message"`
+	Code    *clippyCode  `json:"code"`
 	Spans   []clippySpan `json:"spans"`
 }
 
@@ -90,9 +90,9 @@ type clippyCode struct {
 }
 
 type clippySpan struct {
-	FileName  string      `json:"file_name"`
-	LineStart int         `json:"line_start"`
-	LineEnd   int         `json:"line_end"`
+	FileName  string       `json:"file_name"`
+	LineStart int          `json:"line_start"`
+	LineEnd   int          `json:"line_end"`
 	Text      []clippyText `json:"text"`
 }
 
@@ -101,6 +101,10 @@ type clippyText struct {
 }
 
 func parseClippyOutput(data []byte) ([]models.Finding, error) {
+	return parseClippyOutputWithMetrics(data, nil)
+}
+
+func parseClippyOutputWithMetrics(data []byte, onParseError func(error)) ([]models.Finding, error) {
 	var findings []models.Finding
 	scanner := bufio.NewScanner(bytes.NewReader(data))
 	for scanner.Scan() {
@@ -111,6 +115,7 @@ func parseClippyOutput(data []byte) ([]models.Finding, error) {
 
 		var entry clippyLine
 		if err := json.Unmarshal(line, &entry); err != nil {
+			notifyParseError(onParseError, err)
 			continue
 		}
 

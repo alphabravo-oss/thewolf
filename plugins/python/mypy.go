@@ -19,8 +19,8 @@ func init() {
 	plugin.Register(&MypyPlugin{})
 }
 
-func (p *MypyPlugin) Name() string               { return "mypy" }
-func (p *MypyPlugin) Category() models.Category   { return models.CategoryQuality }
+func (p *MypyPlugin) Name() string                 { return "mypy" }
+func (p *MypyPlugin) Category() models.Category    { return models.CategoryQuality }
 func (p *MypyPlugin) Languages() []models.Language { return []models.Language{models.LangPython} }
 
 func (p *MypyPlugin) CheckAvailable() bool { return container.IsScannersReady() }

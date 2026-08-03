@@ -20,8 +20,8 @@ func init() {
 	plugin.Register(&CodeQLPlugin{})
 }
 
-func (p *CodeQLPlugin) Name() string               { return "codeql" }
-func (p *CodeQLPlugin) Category() models.Category   { return models.CategorySAST }
+func (p *CodeQLPlugin) Name() string                 { return "codeql" }
+func (p *CodeQLPlugin) Category() models.Category    { return models.CategorySAST }
 func (p *CodeQLPlugin) Languages() []models.Language { return nil }
 
 func (p *CodeQLPlugin) CheckAvailable() bool { return container.IsScannersReady() }

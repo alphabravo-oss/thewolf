@@ -4,6 +4,16 @@
 license. Operators are responsible for confirming their use complies with
 each tool's terms.
 
+The release gate contains an explicit allowlist for the GPL-1.0, GPL-2.0,
+GPL-3.0, LGPL-2.0, LGPL-2.1, LGPL-3.0 (including the specific autoconf and
+bison exception identifiers present in the Debian packages), and Sleepycat
+license families used by the scanner and fixer images. These unmodified,
+standalone programs and libraries are intentionally redistributed with this
+public build source and their notices. This is an affirmative open-source
+distribution policy, not a vulnerability exception. Operators remain
+responsible for the corresponding notice and source-availability obligations;
+unknown, proprietary, and every unlisted license still fail the image gate.
+
 | Tool | License | Notes |
 |---|---|---|
 | semgrep | LGPL-2.1 | Free for SaaS/CLI use; semgrep registry rules may have separate terms. |

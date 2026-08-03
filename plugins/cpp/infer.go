@@ -17,7 +17,7 @@ func init() {
 	plugin.Register(&InferPlugin{})
 }
 
-func (p *InferPlugin) Name() string             { return "infer" }
+func (p *InferPlugin) Name() string              { return "infer" }
 func (p *InferPlugin) Category() models.Category { return models.CategorySAST }
 func (p *InferPlugin) Languages() []models.Language {
 	return []models.Language{models.LangC, models.LangCPP, models.LangJava, models.LangObjC}
@@ -83,13 +83,13 @@ func (p *InferPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]m
 }
 
 type inferIssue struct {
-	BugType     string `json:"bug_type"`
-	Severity    string `json:"severity"`
-	File        string `json:"file"`
-	Line        int    `json:"line"`
-	Procedure   string `json:"procedure"`
-	Qualifier   string `json:"qualifier"`
-	BugTypeHum  string `json:"bug_type_hum"`
+	BugType    string `json:"bug_type"`
+	Severity   string `json:"severity"`
+	File       string `json:"file"`
+	Line       int    `json:"line"`
+	Procedure  string `json:"procedure"`
+	Qualifier  string `json:"qualifier"`
+	BugTypeHum string `json:"bug_type_hum"`
 }
 
 func parseInferOutput(data []byte) ([]models.Finding, error) {

@@ -18,7 +18,7 @@ func init() {
 	plugin.Register(&CppcheckPlugin{})
 }
 
-func (p *CppcheckPlugin) Name() string             { return "cppcheck" }
+func (p *CppcheckPlugin) Name() string              { return "cppcheck" }
 func (p *CppcheckPlugin) Category() models.Category { return models.CategorySAST }
 func (p *CppcheckPlugin) Languages() []models.Language {
 	return []models.Language{models.LangC, models.LangCPP}
@@ -58,16 +58,16 @@ func (p *CppcheckPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) (
 }
 
 type cppcheckResults struct {
-	XMLName xml.Name       `xml:"results"`
+	XMLName xml.Name        `xml:"results"`
 	Errors  []cppcheckError `xml:"errors>error"`
 }
 
 type cppcheckError struct {
-	ID       string            `xml:"id,attr"`
-	Severity string            `xml:"severity,attr"`
-	Msg      string            `xml:"msg,attr"`
-	Verbose  string            `xml:"verbose,attr"`
-	CWE      string            `xml:"cwe,attr"`
+	ID       string             `xml:"id,attr"`
+	Severity string             `xml:"severity,attr"`
+	Msg      string             `xml:"msg,attr"`
+	Verbose  string             `xml:"verbose,attr"`
+	CWE      string             `xml:"cwe,attr"`
 	Location []cppcheckLocation `xml:"location"`
 }
 

@@ -86,22 +86,22 @@ type kicsOutput struct {
 }
 
 type kicsQuery struct {
-	QueryName    string    `json:"query_name"`
-	QueryID      string    `json:"query_id"`
-	Severity     string    `json:"severity"`
-	Category     string    `json:"category"`
-	Description  string    `json:"description"`
-	Platform     string    `json:"platform"`
-	CWE          string    `json:"cwe"`
-	Files        []kicsHit `json:"files"`
+	QueryName   string    `json:"query_name"`
+	QueryID     string    `json:"query_id"`
+	Severity    string    `json:"severity"`
+	Category    string    `json:"category"`
+	Description string    `json:"description"`
+	Platform    string    `json:"platform"`
+	CWE         string    `json:"cwe"`
+	Files       []kicsHit `json:"files"`
 }
 
 type kicsHit struct {
-	FileName     string `json:"file_name"`
-	Line         int    `json:"line"`
-	IssueType    string `json:"issue_type"`
-	SearchKey    string `json:"search_key"`
-	ResourceType string `json:"resource_type"`
+	FileName      string `json:"file_name"`
+	Line          int    `json:"line"`
+	IssueType     string `json:"issue_type"`
+	SearchKey     string `json:"search_key"`
+	ResourceType  string `json:"resource_type"`
 	ExpectedValue string `json:"expected_value"`
 	ActualValue   string `json:"actual_value"`
 }

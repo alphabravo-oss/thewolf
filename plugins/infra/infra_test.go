@@ -184,6 +184,36 @@ func TestParseTFLintOutput(t *testing.T) {
 	}
 }
 
+func TestParseConftestOutput(t *testing.T) {
+	findings, err := parseConftestOutput([]byte(`[{"filename":"deployment.yaml","namespace":"main","failures":[{"msg":"privileged containers are forbidden"}]}]`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(findings) != 1 || findings[0].ToolName != "conftest" || findings[0].FilePath != "deployment.yaml" || findings[0].Severity != models.SeverityHigh {
+		t.Fatalf("conftest finding = %#v", findings)
+	}
+}
+
+func TestParseKICSOutput(t *testing.T) {
+	findings, err := parseKICSOutput([]byte(`{"queries":[{"query_name":"Privileged container","query_id":"fixture-kics","severity":"HIGH","category":"Access Control","description":"Container is privileged","platform":"Kubernetes","cwe":"250","files":[{"file_name":"deployment.yaml","line":8,"expected_value":"false","actual_value":"true"}]}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(findings) != 1 || findings[0].ToolName != "kics" || findings[0].RuleID != "fixture-kics" || findings[0].CWEID != "CWE-250" || findings[0].Severity != models.SeverityHigh {
+		t.Fatalf("KICS finding = %#v", findings)
+	}
+}
+
+func TestParsePlutoOutput(t *testing.T) {
+	findings, err := parsePlutoOutput([]byte(`{"items":[{"name":"fixture","kind":"Deployment","api":"extensions/v1beta1","replacement":"apps/v1","deprecated":true,"deprecated-in":"1.9","removed":true,"removed-in":"1.16","filePath":"deployment.yaml"}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(findings) != 1 || findings[0].ToolName != "pluto" || findings[0].RuleID != "pluto-extensions/v1beta1" || findings[0].Severity != models.SeverityHigh {
+		t.Fatalf("pluto finding = %#v", findings)
+	}
+}
+
 func TestMapTFLintSeverity(t *testing.T) {
 	tests := []struct {
 		input    string

@@ -18,14 +18,12 @@ LABEL org.opencontainers.image.title="wolf-scanners-jvm" \
 ENV DEBIAN_FRONTEND=noninteractive \
     WOLF_SCANNERS_VARIANT=jvm
 
-# Debian 13 (trixie) ships OpenJDK 21 as its default — openjdk-17-*
-# is no longer in the indices. PMD 7.x + infer-static both work
-# fine on 21, so we follow the distro default rather than backport.
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        ca-certificates curl unzip tar xz-utils \
-        openjdk-21-jdk-headless \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+# Debian 13 (trixie) ships OpenJDK 21. The committed lock resolves it and
+# every other direct package for both supported architectures.
+COPY os-packages/ /etc/wolf-scanners/os-packages/
+COPY install/os-packages.sh /usr/local/bin/install-os-packages
+RUN chmod +x /usr/local/bin/install-os-packages \
+    && /usr/local/bin/install-os-packages jvm
 
 COPY versions.env       /etc/wolf-scanners/versions.env
 COPY wolf-tool-entry    /usr/local/bin/wolf-tool-entry

@@ -1,0 +1,264 @@
+# Safe, deterministic fixtures. No value below is a live credential, host, or
+# exploitable target. Large/binary inputs are declarative to keep Git portable.
+schemaVersion: wolf.scanners/quality-corpus/v1
+
+fixtures:
+  src-python:
+    kind: source
+    content: "import subprocess\n\ndef run_fixture():\n    subprocess.run(\"echo fixture\", shell=True, check=False)\n"
+    sha256: sha256:fadf5084b8e4942d83a30a625eccf89039850f1269cf8d4b65cfd5bf71123fae
+  src-ruby:
+    kind: source
+    content: "class User\n  def admin?\n    false\n  end\nend\n"
+    sha256: sha256:2b6c0e58240e625c694d8c66d6a2ba37ab24617aca1bcb802a255d5c94192a69
+  src-rust:
+    kind: source
+    content: "fn main() { let unused = 1; println!(\"fixture\"); }\n"
+    sha256: sha256:4c6df7994fa6bcdc7e447b74ea0d2caed2de92f8eea7cdb0617384a08ce1b6f1
+  src-go:
+    kind: source
+    content: "package main\n\nimport \"fmt\"\nfunc main() { fmt.Println(\"fixture\") }\n"
+    sha256: sha256:da4639e4cde2d22b08b483cdf54e3fd7157f2086f65177711b461a378b7bdd45
+  src-javascript:
+    kind: source
+    content: "const value = JSON.parse('{\"safe\":true}');\nconsole.log(value.safe);\n"
+    sha256: sha256:cd8df45af1cc859e20052e3ef109235ec93b5255e8a83cfeef3e213585bcf41d
+  src-jvm:
+    kind: source
+    content: "final class Fixture { public static void main(String[] args) { System.out.println(\"fixture\"); } }\n"
+    sha256: sha256:548ca16e6006793b3ce76ffae7cbb5ecc87959c5678594d69d2020d267b1b0b9
+  src-cpp:
+    kind: source
+    content: "#include <iostream>\nint main() { int value; std::cout << value; return 0; }\n"
+    sha256: sha256:a0a643f189f35bd46942a5f5dc85d167d8efb39695fbfc24248b59d1d3871438
+  src-php:
+    kind: source
+    content: "<?php\nfunction fixture(string $value): string { return trim($value); }\n"
+    sha256: sha256:0e77d821b5f87f0a5f9e627f54d66f028d47817daf71171582e75c566df32df2
+  src-swift:
+    kind: source
+    content: "import Foundation\nlet message = \"fixture\"\nprint(message)\n"
+    sha256: sha256:c24bf665d5f6bdd59a4d10380d008b93161437fab349f94eb6bfa5cd15393d56
+  src-shell:
+    kind: source
+    content: "#!/bin/sh\nname=\"fixture value\"\nprintf '%s\\n' $name\n"
+    sha256: sha256:5bdc47c3a6d8b2249ab4dd8ee14528d1e99848fd261e13c942bc8a3a8db72333
+  src-docs:
+    kind: config
+    content: "# Fixture\n\nA deterministic documentation sample.\n"
+    sha256: sha256:eec3fa94e58a3d61b22fd571b6f4f7ceb299f51f5995bde2134435c760d92884
+  src-sql:
+    kind: source
+    content: "SELECT id, name FROM fixture_users WHERE active = TRUE;\n"
+    sha256: sha256:fc24a08151b47df16f2b71f03efedc7e6991a48442b8e1b5cc2509dbc9cdd4e7
+  src-terraform:
+    kind: config
+    content: "resource \"null_resource\" \"fixture\" {}\n"
+    sha256: sha256:22312e0c1f66f6abf183c7c1e5ad4af76b2380220276cf0f7d5f3d462a138ae7
+  src-kubernetes:
+    kind: config
+    content: "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: wolf-fixture\ndata:\n  mode: test\n"
+    sha256: sha256:99bb2c62737101eb8f59b44ff05360132227cbf4d528c58ee7ebd17974b6a425
+  src-container:
+    kind: artifact
+    content: "FROM ubuntu:latest\nRUN apt-get update\n"
+    sha256: sha256:eca7c13304298b05c3419b55c0fab51b2750ab62eab162be477feeb4f12f5a01
+  src-dependency:
+    kind: artifact
+    content: "{\"name\":\"wolf-safe-fixture\",\"version\":\"1.0.0\",\"dependencies\":{}}\n"
+    sha256: sha256:b048458144fa20b7dedefe515767409a8c6e5735e80600f468530b3d6a6bc759
+  src-secret:
+    kind: source
+    content: "WOLF_TEST_CANARY=wolf_fake_not_a_credential_0000000000000000\n"
+    sha256: sha256:ea98cc433ce16901843c1a8e5872566e5667a8b693c2f286e1f741a5f66a0ae5
+  src-sbom:
+    kind: artifact
+    content: "{\"spdxVersion\":\"SPDX-2.3\",\"name\":\"wolf-safe-fixture\",\"packages\":[]}\n"
+    sha256: sha256:4b19d836099a6520e8ac15bc9bf94249172fdb20fa02eaa7186d2ab1598af495
+  src-openapi:
+    kind: config
+    content: "openapi: 3.0.3\ninfo:\n  title: Wolf Fixture\n  version: 1.0.0\npaths: {}\n"
+    sha256: sha256:930f2c48c15f72c758e7bf8a0a3f2dd54e4087efafaea8acccc7149207299f05
+  src-polyglot:
+    kind: source
+    content: "fixture: safe\npath: src/main.py\n"
+    sha256: sha256:61cb24cba56c7b9e6f8bdb1bf2962f637aefb4c26d877c09de1b3b6e71205816
+  src-codeql:
+    kind: source
+    content: "int main(void) { return 0; }\n"
+    sha256: sha256:2ad75d95660563887d8d3f1d0ae1dcf18c2379cbd83a5c72f5ab276351ee6949
+  src-supply-chain:
+    kind: artifact
+    content: "{\"repository\":\"local/wolf-fixture\",\"visibility\":\"private\",\"archived\":false}\n"
+    sha256: sha256:5d9f5268dcdd3910f379013e5fe9c8b79a36fc0ae8659e84689757ae8ba619b0
+
+  json-valid:
+    kind: parser-output
+    content: "[{\"ruleId\":\"WOLF-FIXTURE\",\"path\":\"src/main.py\",\"line\":1,\"severity\":\"high\"}]\n"
+    sha256: sha256:dbee95a80bc16c05d6cc13c04793e2918f529180a4a0a09c6b47886d4a8eb5c4
+  json-malformed:
+    kind: parser-output
+    content: "{not-json}\n"
+    sha256: sha256:8c69fc307fed3936d6a8ac679c0079c9bfd11f9de2a43e20ae25ff2a899d9776
+  json-partial:
+    kind: parser-output
+    content: "{\"findings\":[{\"ruleId\":\"WOLF-FIXTURE\"}\n"
+    sha256: sha256:54b6c439a77a45bd6d66714db895f7d6695a55a62b3dfcab20fde59ce889adde
+  json-empty:
+    kind: parser-output
+    content: ""
+    sha256: sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  json-large:
+    kind: parser-output
+    repeat: "{}\n"
+    repeatCount: 100000
+    sha256: sha256:3251b57eb45e4fcf6c9ebd39e6abffe429e4a6b8bee77a0725eaee51ec65309b
+  json-encoded:
+    kind: parser-output
+    content: "{\"message\":\"café 安全\",\"path\":\"src/space name.py\"}\n"
+    sha256: sha256:457aa4895d1648c57fb36acdb4ea6b114d073592cbafcefdc7dc194b6f6b5623
+  json-non-utf8:
+    kind: parser-output
+    base64: /wAB
+    sha256: sha256:942e1e2a66a427b6551732f758bc314f22b9cdec9365a3425c9184de299392b5
+  json-adversarial:
+    kind: parser-output
+    content: "{\"path\":\"../../etc/passwd\",\"line\":-1,\"message\":\"${WOLF_FAKE_SECRET}\\u001b[31m\",\"nested\":[[[[]]]]}\n"
+    sha256: sha256:7194268a2313dfb98264b5d3b56924d2bccc6a9c220275e742a0ea7688e27b06
+
+  json-lines-valid:
+    kind: parser-output
+    content: "{\"ruleId\":\"WOLF-FIXTURE\",\"path\":\"src/main.go\",\"line\":1}\n"
+    sha256: sha256:0f5e42426c5529d788c049d70a572580c91cb6dd2e4ea101ee333ced7c7deb93
+  json-lines-malformed:
+    kind: parser-output
+    content: "{not-json}\n{\"ruleId\":\"WOLF-AFTER-MALFORMED\"}\n"
+    sha256: sha256:7e7de1da40ca4c01e5ec8715d11581f6b9446b3e6627e070810833b25d5f4588
+  json-lines-partial:
+    kind: parser-output
+    content: "{\"ruleId\":\"WOLF-FIXTURE\"\n"
+    sha256: sha256:d2b722d7ea3848d524718bbbcd86cb794c1fd0be74d033e3ef48472dde7a8065
+  json-lines-empty:
+    kind: parser-output
+    content: ""
+    sha256: sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  json-lines-large:
+    kind: parser-output
+    repeat: "{\"ruleId\":\"WOLF-LARGE\"}\n"
+    repeatCount: 50000
+    sha256: sha256:0a6dec19cd2743b05abc8acda53708f89b2536bf698a1d537e0da3a528445a0b
+  json-lines-encoded:
+    kind: parser-output
+    content: "{\"message\":\"café 安全\"}\n"
+    sha256: sha256:a367376f4d07114d199fbbfef2108e8b12b14d8f823ba79ee948b1017173336b
+  json-lines-non-utf8:
+    kind: parser-output
+    base64: /wAB
+    sha256: sha256:942e1e2a66a427b6551732f758bc314f22b9cdec9365a3425c9184de299392b5
+  json-lines-adversarial:
+    kind: parser-output
+    content: "{\"path\":\"../../etc/passwd\",\"message\":\"${WOLF_FAKE_SECRET}\"}\n"
+    sha256: sha256:e8227abd673fc38d90af4643a139a88e1dd8c3ac187784c91cd1a1aa59913cee
+
+  xml-valid:
+    kind: parser-output
+    content: "<findings><finding rule=\"WOLF-FIXTURE\" file=\"src/main.cpp\" line=\"1\"/></findings>\n"
+    sha256: sha256:5665b7889234fc63f7693cd3a0d6fdfe43bafcf491a8449def894b4aa09134e4
+  xml-malformed:
+    kind: parser-output
+    content: "<findings><finding></findings>\n"
+    sha256: sha256:448881abe045940f1a1ca19ec6179675263470d15d876e26f6c6a045e5e9d48c
+  xml-partial:
+    kind: parser-output
+    content: "<findings><finding rule=\"WOLF-FIXTURE\"\n"
+    sha256: sha256:03e9d324ed47cf60193e9a9264b8b7357d5b123cc25bb44a597acf0fedd34fd8
+  xml-empty:
+    kind: parser-output
+    content: ""
+    sha256: sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  xml-large:
+    kind: parser-output
+    repeat: "<finding rule=\"WOLF-LARGE\"/>\n"
+    repeatCount: 50000
+    sha256: sha256:b9bbd6bb591f4f9e875ef3ada8b04856507b6d3688203e2229e5e0436041e1f9
+  xml-encoded:
+    kind: parser-output
+    content: "<finding message=\"café 安全\"/>\n"
+    sha256: sha256:68126458b0b381ff23476a2be91c379eb652cabdc1117b9c0979692d0af16df0
+  xml-non-utf8:
+    kind: parser-output
+    base64: /wAB
+    sha256: sha256:942e1e2a66a427b6551732f758bc314f22b9cdec9365a3425c9184de299392b5
+  xml-adversarial:
+    kind: parser-output
+    content: "<finding file=\"../../etc/passwd\" message=\"${WOLF_FAKE_SECRET}\" line=\"-1\"/>\n"
+    sha256: sha256:7a83b880685f8fb3949365d45a7b404daec557d1dbee95747189d4b4c232b47a
+
+  text-valid:
+    kind: parser-output
+    content: "src/main.py:1:1: WOLF-FIXTURE deterministic finding\n"
+    sha256: sha256:101481ce2518f8f196c41610b0f3c9ba9d4e93c60d9805855c509ec195706c7a
+  text-malformed:
+    kind: parser-output
+    content: "::not:a:location::\n"
+    sha256: sha256:7ae61b654bf497a6dbeaf34be51c7e4a026eaac0eab5b1fb7bc2aa69de9817e5
+  text-partial:
+    kind: parser-output
+    content: "src/main.py:\n"
+    sha256: sha256:c9ef2c301ccb34dfc22801d01a407f57740c16027b2cc84667a0f108a3463e3f
+  text-empty:
+    kind: parser-output
+    content: ""
+    sha256: sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  text-large:
+    kind: parser-output
+    repeat: "src/main.py:1:1: WOLF-LARGE fixture\n"
+    repeatCount: 50000
+    sha256: sha256:127134ab3297324499c97e6c8b62b80143f452f8ff4e3f0d984ec14891e7ae0e
+  text-encoded:
+    kind: parser-output
+    content: "src/café.py:1:1: 安全 fixture\n"
+    sha256: sha256:34c51db3e988487da35b62324fedbc976f9c1ceca8bcda75b381dd3b6a3810e3
+  text-non-utf8:
+    kind: parser-output
+    base64: /wAB
+    sha256: sha256:942e1e2a66a427b6551732f758bc314f22b9cdec9365a3425c9184de299392b5
+  text-adversarial:
+    kind: parser-output
+    content: "../../etc/passwd:-1:-1: ${WOLF_FAKE_SECRET}\\u001b[31m\n"
+    sha256: sha256:aad3ebebdb90f39d821e5454696e5ef09cd892ee6b5f5713be2cf0a7470ef404
+
+families:
+  python: {sourceFixtures: [src-python], categories: [language, source]}
+  ruby: {sourceFixtures: [src-ruby], categories: [language, source]}
+  rust: {sourceFixtures: [src-rust], categories: [language, source]}
+  go: {sourceFixtures: [src-go], categories: [language, source]}
+  javascript: {sourceFixtures: [src-javascript], categories: [language, source]}
+  jvm: {sourceFixtures: [src-jvm], categories: [language, source]}
+  cpp: {sourceFixtures: [src-cpp], categories: [language, source]}
+  php: {sourceFixtures: [src-php], categories: [language, source]}
+  swift: {sourceFixtures: [src-swift], categories: [language, source]}
+  shell: {sourceFixtures: [src-shell], categories: [language, source]}
+  documentation: {sourceFixtures: [src-docs, src-openapi], categories: [documentation, config]}
+  sql: {sourceFixtures: [src-sql], categories: [language, source]}
+  infrastructure: {sourceFixtures: [src-terraform], categories: [iac, config]}
+  kubernetes: {sourceFixtures: [src-kubernetes], categories: [kubernetes, config]}
+  container: {sourceFixtures: [src-container], categories: [container, artifact]}
+  dependency: {sourceFixtures: [src-dependency], categories: [dependency, artifact]}
+  secrets: {sourceFixtures: [src-secret], categories: [secret, source]}
+  security: {sourceFixtures: [src-polyglot], categories: [security, source]}
+  sbom: {sourceFixtures: [src-sbom], categories: [sbom, artifact]}
+  dast: {sourceFixtures: [src-openapi], categories: [dast, loopback-config]}
+  polyglot: {sourceFixtures: [src-polyglot], categories: [polyglot, source]}
+  codeql: {sourceFixtures: [src-codeql], categories: [licensed, source]}
+  supply-chain: {sourceFixtures: [src-supply-chain], categories: [supply-chain, artifact]}
+
+parserCases:
+  json:
+    {valid: json-valid, malformed: json-malformed, partial: json-partial, empty: json-empty, large: json-large, encoded: json-encoded, non-utf8: json-non-utf8, adversarial: json-adversarial}
+  json-lines:
+    {valid: json-lines-valid, malformed: json-lines-malformed, partial: json-lines-partial, empty: json-lines-empty, large: json-lines-large, encoded: json-lines-encoded, non-utf8: json-lines-non-utf8, adversarial: json-lines-adversarial}
+  xml:
+    {valid: xml-valid, malformed: xml-malformed, partial: xml-partial, empty: xml-empty, large: xml-large, encoded: xml-encoded, non-utf8: xml-non-utf8, adversarial: xml-adversarial}
+  text:
+    {valid: text-valid, malformed: text-malformed, partial: text-partial, empty: text-empty, large: text-large, encoded: text-encoded, non-utf8: text-non-utf8, adversarial: text-adversarial}

@@ -73,15 +73,15 @@ func (p *BearerPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]
 
 // bearerOutput is keyed by severity (e.g. "high", "medium").
 type bearerHit struct {
-	ID               string   `json:"id"`
-	Title            string   `json:"title"`
-	Description      string   `json:"description"`
-	CWE              []string `json:"cwe_ids"`
-	Filename         string   `json:"filename"`
-	FullFilename     string   `json:"full_filename"`
-	LineNumber       int      `json:"line_number"`
-	SnippetEnd       int      `json:"snippet_end_line"`
-	DataType         struct {
+	ID           string   `json:"id"`
+	Title        string   `json:"title"`
+	Description  string   `json:"description"`
+	CWE          []string `json:"cwe_ids"`
+	Filename     string   `json:"filename"`
+	FullFilename string   `json:"full_filename"`
+	LineNumber   int      `json:"line_number"`
+	SnippetEnd   int      `json:"snippet_end_line"`
+	DataType     struct {
 		Name string `json:"name"`
 	} `json:"data_type"`
 }

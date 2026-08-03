@@ -19,7 +19,7 @@ func init() {
 	plugin.Register(&ESLintPlugin{})
 }
 
-func (p *ESLintPlugin) Name() string             { return "eslint" }
+func (p *ESLintPlugin) Name() string              { return "eslint" }
 func (p *ESLintPlugin) Category() models.Category { return models.CategoryQuality }
 func (p *ESLintPlugin) Languages() []models.Language {
 	return []models.Language{models.LangJavaScript, models.LangTypeScript}

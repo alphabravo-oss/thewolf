@@ -2,6 +2,7 @@ package container
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
@@ -38,6 +39,26 @@ func TestParseDockleOutput(t *testing.T) {
 
 	if findings[1].Severity != models.SeverityLow {
 		t.Errorf("expected severity low for INFO, got %s", findings[1].Severity)
+	}
+}
+
+func TestDockleInvocationUsesArchiveWithoutDockerSocket(t *testing.T) {
+	options, arguments, err := dockleInvocation("/scan/dockle-image.tar")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if options.NoRepoMount || len(options.ExtraMounts) != 0 ||
+		strings.Join(arguments, " ") != "--format json --input /scan/dockle-image.tar" {
+		t.Fatalf("archive options=%#v arguments=%v", options, arguments)
+	}
+	options, arguments, err = dockleInvocation("registry.example/image@sha256:" + strings.Repeat("a", 64))
+	if err != nil || !options.NoRepoMount || len(options.ExtraMounts) != 0 || len(arguments) != 3 {
+		t.Fatalf("image options=%#v arguments=%v error=%v", options, arguments, err)
+	}
+	for _, target := range []string{"/etc/passwd", "/scan/not-an-archive.json", "image\nother"} {
+		if _, _, err := dockleInvocation(target); err == nil {
+			t.Fatalf("unsafe target %q was accepted", target)
+		}
 	}
 }
 
@@ -110,8 +131,8 @@ func TestParseHadolintOutput(t *testing.T) {
 
 func TestContainerPluginMetadata(t *testing.T) {
 	plugins := []struct {
-		plugin   models.Plugin
-		name     string
+		plugin models.Plugin
+		name   string
 	}{
 		{&DocklePlugin{}, "dockle"},
 		{&CheckovPlugin{}, "checkov"},

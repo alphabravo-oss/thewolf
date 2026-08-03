@@ -58,17 +58,17 @@ type plutoOutput struct {
 }
 
 type plutoItem struct {
-	Name             string `json:"name"`
-	Namespace        string `json:"namespace"`
-	Kind             string `json:"kind"`
-	APIVersion       string `json:"api"`
-	ReplacementAPI   string `json:"replacement"`
-	Deprecated       bool   `json:"deprecated"`
-	DeprecatedIn     string `json:"deprecated-in"`
-	Removed          bool   `json:"removed"`
-	RemovedIn        string `json:"removed-in"`
-	Filepath         string `json:"filePath"`
-	K8sCurrentVer    string `json:"k8sVersion"`
+	Name           string `json:"name"`
+	Namespace      string `json:"namespace"`
+	Kind           string `json:"kind"`
+	APIVersion     string `json:"api"`
+	ReplacementAPI string `json:"replacement"`
+	Deprecated     bool   `json:"deprecated"`
+	DeprecatedIn   string `json:"deprecated-in"`
+	Removed        bool   `json:"removed"`
+	RemovedIn      string `json:"removed-in"`
+	Filepath       string `json:"filePath"`
+	K8sCurrentVer  string `json:"k8sVersion"`
 }
 
 func parsePlutoOutput(data []byte) ([]models.Finding, error) {

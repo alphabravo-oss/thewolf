@@ -17,8 +17,8 @@ func init() {
 	plugin.Register(&CheckovPlugin{})
 }
 
-func (p *CheckovPlugin) Name() string               { return "checkov" }
-func (p *CheckovPlugin) Category() models.Category   { return models.CategoryContainer }
+func (p *CheckovPlugin) Name() string                 { return "checkov" }
+func (p *CheckovPlugin) Category() models.Category    { return models.CategoryContainer }
 func (p *CheckovPlugin) Languages() []models.Language { return nil }
 
 func (p *CheckovPlugin) CheckAvailable() bool { return container.IsScannersReady() }
@@ -59,16 +59,16 @@ type checkovResults struct {
 }
 
 type checkovCheck struct {
-	CheckID      string   `json:"check_id"`
-	CheckResult  struct {
+	CheckID     string `json:"check_id"`
+	CheckResult struct {
 		Result string `json:"result"`
 	} `json:"check_result"`
-	Name         string   `json:"name"`
-	FilePath     string   `json:"file_path"`
-	FileLineRange []int   `json:"file_line_range"`
-	Guideline    string   `json:"guideline"`
-	Severity     string   `json:"severity"`
-	CodeBlock    [][]interface{} `json:"code_block"`
+	Name          string          `json:"name"`
+	FilePath      string          `json:"file_path"`
+	FileLineRange []int           `json:"file_line_range"`
+	Guideline     string          `json:"guideline"`
+	Severity      string          `json:"severity"`
+	CodeBlock     [][]interface{} `json:"code_block"`
 }
 
 func parseCheckovOutput(data []byte) ([]models.Finding, error) {

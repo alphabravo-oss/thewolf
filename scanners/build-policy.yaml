@@ -1,0 +1,80 @@
+# Scanner release build policy.
+#
+# This file defines the complete set of scanner image variants and platforms
+# that a release lock must cover. It is an input to scanner-lock.yaml and is
+# intentionally separate from CI workflow syntax so customer-managed release
+# factories use the same contract.
+schemaVersion: wolf.scanners/build-policy/v1
+variants:
+  codeql:
+    dockerfile: scanners/Dockerfile.codeql
+    context: scanners
+    image: wolf-scanners-codeql
+    platforms:
+      - linux/amd64
+  default:
+    dockerfile: scanners/Dockerfile
+    context: scanners
+    image: wolf-scanners
+    platforms:
+      - linux/amd64
+      - linux/arm64
+  jvm:
+    dockerfile: scanners/Dockerfile.jvm
+    context: scanners
+    image: wolf-scanners-jvm
+    platforms:
+      - linux/amd64
+      - linux/arm64
+  rust:
+    dockerfile: scanners/Dockerfile.rust
+    context: scanners
+    image: wolf-scanners-rust
+    platforms:
+      - linux/amd64
+      - linux/arm64
+
+# Fixer images are release artifacts, not runtime scanner assignments. The
+# base is built and published first; every engine build must receive its exact
+# repository@sha256 reference through WOLF_FIXER_BASE_REF.
+fixerVariants:
+  base:
+    dockerfile: fixer/Dockerfile.base
+    context: .
+    image: wolf-fixer
+    platforms: [linux/amd64, linux/arm64]
+    authMode: none
+    buildArgs:
+      GO_VERSION: 1.26.5
+      TYPESCRIPT_VERSION: 6.0.3
+      GH_VERSION: 2.96.0
+      GLAB_VERSION: 1.111.0
+    smokeCommand: ["/usr/local/bin/wolf", "version"]
+  api:
+    dockerfile: fixer/Dockerfile.api
+    context: .
+    image: wolf-fixer-api
+    platforms: [linux/amd64, linux/arm64]
+    dependsOn: [base]
+    authMode: api-key
+    smokeCommand: ["/usr/local/bin/wolf", "version"]
+  claude:
+    dockerfile: fixer/Dockerfile.claude
+    context: .
+    image: wolf-fixer-claude
+    platforms: [linux/amd64, linux/arm64]
+    dependsOn: [base]
+    authMode: interactive-session
+    buildArgs:
+      CLAUDE_CODE_VERSION: 2.1.220
+    smokeCommand: ["claude", "--version"]
+  codex:
+    dockerfile: fixer/Dockerfile.codex
+    context: .
+    image: wolf-fixer-codex
+    platforms: [linux/amd64, linux/arm64]
+    dependsOn: [base]
+    authMode: interactive-session
+    buildArgs:
+      CODEX_VERSION: 0.146.0
+    smokeCommand: ["codex", "--version"]

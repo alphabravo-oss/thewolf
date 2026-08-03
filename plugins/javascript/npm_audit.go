@@ -19,7 +19,7 @@ func init() {
 	plugin.Register(&NPMAuditPlugin{})
 }
 
-func (p *NPMAuditPlugin) Name() string             { return "npm-audit" }
+func (p *NPMAuditPlugin) Name() string              { return "npm-audit" }
 func (p *NPMAuditPlugin) Category() models.Category { return models.CategorySCA }
 func (p *NPMAuditPlugin) Languages() []models.Language {
 	return []models.Language{models.LangJavaScript, models.LangTypeScript}

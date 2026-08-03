@@ -19,7 +19,7 @@ func init() {
 	plugin.Register(&ShellcheckPlugin{})
 }
 
-func (p *ShellcheckPlugin) Name() string             { return "shellcheck" }
+func (p *ShellcheckPlugin) Name() string              { return "shellcheck" }
 func (p *ShellcheckPlugin) Category() models.Category { return models.CategoryQuality }
 func (p *ShellcheckPlugin) Languages() []models.Language {
 	return []models.Language{models.LangShell}
@@ -85,8 +85,8 @@ type shellcheckResult struct {
 	Message string `json:"message"`
 	Fix     *struct {
 		Replacements []struct {
-			Line       int    `json:"line"`
-			Column     int    `json:"column"`
+			Line        int    `json:"line"`
+			Column      int    `json:"column"`
 			Replacement string `json:"replacement"`
 		} `json:"replacements"`
 	} `json:"fix"`

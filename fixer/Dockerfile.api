@@ -1,3 +1,6 @@
+# check=skip=InvalidDefaultArgInFrom
+# WOLF_FIXER_BASE_REF intentionally has no mutable default; the release
+# pipeline must provide the verified base image by digest.
 # ============================================================
 # checkov:skip=CKV_DOCKER_2 — worker container, not a service.
 #
@@ -16,15 +19,16 @@
 # Build via internal/scannerbuild FixerVariants ("api").
 # ============================================================
 
-# Pin the base by version tag (not :latest) — the scanner-image build
-# subsystem always passes --build-arg WOLF_VERSION and tags the base as
-# wolf-fixer:<version> alongside :latest, so this resolves to the matching
-# immutable version at build time (default `dev` for manual local builds).
-ARG WOLF_VERSION=dev
-FROM alphabravodevops/wolf-fixer:${WOLF_VERSION} AS base
+# The release factory must pass an exact repository@sha256 reference emitted by
+# the completed base publication job. There is deliberately no mutable default.
+ARG WOLF_FIXER_BASE_REF
+FROM ${WOLF_FIXER_BASE_REF} AS base
 
 ENV WOLF_FIXER_VARIANT=api \
     WOLF_FIXER_ENGINE=api
+
+LABEL dev.wolf.fixer.variant="api" \
+      dev.wolf.fixer.auth-mode="api-key"
 
 # Nothing to install: the base already carries git, gh/glab, go, node/tsc
 # and the wolf binary. The API engine returns a unified diff that wolf

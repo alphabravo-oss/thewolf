@@ -34,29 +34,16 @@ LABEL org.opencontainers.image.title="wolf-scanners" \
 ENV DEBIAN_FRONTEND=noninteractive \
     WOLF_SCANNERS_VARIANT=default
 
-# Base packages. Note we no longer need libxml2-dev because semgrep is upstream.
-#
-# Node is installed from the NodeSource apt repo because Debian 13
-# (trixie) dropped the standalone `npm` package, and the bundled
-# corepack only writes shims to user-scope (~/.cache/node/...) which
-# doesn't resolve at scan time when we run as root in CI / wolf as a
-# different uid. NodeSource's nodejs package bundles npm in /usr/bin.
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        ca-certificates curl wget gnupg \
-    && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
-    && apt-get update && apt-get install -y --no-install-recommends \
-        unzip tar gzip xz-utils \
-        git jq \
-        python3 python3-pip python3-venv python3-dev \
-        nodejs \
-        ruby ruby-dev rubygems \
-        php-cli \
-        build-essential pkg-config \
-        libssl-dev libffi-dev \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+# Base packages come from the committed immutable snapshot and exact direct
+# package pins. NodeSource's nodejs package is consumed as a checksum-verified
+# .deb artifact rather than by executing its moving repository setup script.
+COPY os-packages/ /etc/wolf-scanners/os-packages/
+COPY install/os-packages.sh /usr/local/bin/install-os-packages
+RUN chmod +x /usr/local/bin/install-os-packages \
+    && /usr/local/bin/install-os-packages default
 
 COPY versions.env       /etc/wolf-scanners/versions.env
+COPY go-tools/          /etc/wolf-scanners/go-tools/
 COPY trufflehog-excludes.txt /etc/wolf-scanners/trufflehog-excludes.txt
 COPY wolf-tool-entry    /usr/local/bin/wolf-tool-entry
 COPY smoke-test.sh      /usr/local/bin/smoke-test.sh
@@ -102,7 +89,7 @@ RUN  bash /tmp/install/lang_native.sh
 # the toolchain itself is dead weight (and a CVE surface). Reuse the
 # runtime libs (libssl3, libffi8) — only the -dev / build-essential
 # variants come off.
-RUN apt-get update && apt-get purge -y --auto-remove \
+RUN apt-get purge -y --auto-remove \
         build-essential pkg-config \
         python3-dev ruby-dev \
         libssl-dev libffi-dev \

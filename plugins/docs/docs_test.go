@@ -76,6 +76,13 @@ func TestParseValeOutput(t *testing.T) {
 	}
 }
 
+func TestParseMarkdownlintOutput(t *testing.T) {
+	findings := parseMarkdownlintOutput([]byte("README.md:5:1 MD013/line-length Line length [Expected: 80; Actual: 120]\n"))
+	if len(findings) != 1 || findings[0].ToolName != "markdownlint" || findings[0].RuleID != "MD013" || findings[0].FilePath != "README.md" || findings[0].LineStart != 5 {
+		t.Fatalf("markdownlint finding = %#v", findings)
+	}
+}
+
 func TestDocsPluginMetadata(t *testing.T) {
 	plugins := []struct {
 		plugin models.Plugin

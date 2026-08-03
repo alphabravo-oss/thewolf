@@ -29,11 +29,19 @@ case "$ARCH" in
         tmp="$(mktemp -d)"
         url_new="https://github.com/facebook/infer/releases/download/v${INFER_VERSION}/infer-linux-x86_64-v${INFER_VERSION}.tar.xz"
         url_old="https://github.com/facebook/infer/releases/download/v${INFER_VERSION}/infer-linux64-v${INFER_VERSION}.tar.xz"
-        if curl -fsSL -o "${tmp}/infer.tar.xz" "$url_new"; then
+        if curl --proto '=https' --tlsv1.2 --fail --location --silent --show-error \
+            --proto-redir '=https' --retry 3 --retry-all-errors \
+            -o "${tmp}/infer.tar.xz" "$url_new"; then
+            printf '%s  %s\n' "$INFER_LINUX_AMD64_SHA256" "${tmp}/infer.tar.xz" \
+                | sha256sum --check --strict -
             tar -xJf "${tmp}/infer.tar.xz" -C /opt
             mv "/opt/infer-linux-x86_64-v${INFER_VERSION}" /opt/infer
         else
-            curl -fsSL -o "${tmp}/infer.tar.xz" "$url_old"
+            curl --proto '=https' --tlsv1.2 --fail --location --silent --show-error \
+                --proto-redir '=https' --retry 3 --retry-all-errors \
+                -o "${tmp}/infer.tar.xz" "$url_old"
+            printf '%s  %s\n' "$INFER_LINUX_AMD64_SHA256" "${tmp}/infer.tar.xz" \
+                | sha256sum --check --strict -
             tar -xJf "${tmp}/infer.tar.xz" -C /opt
             mv "/opt/infer-linux64-v${INFER_VERSION}" /opt/infer
         fi
@@ -50,8 +58,10 @@ esac
 
 # --- PMD ---
 tmp="$(mktemp -d)"
-curl -fsSL -o "${tmp}/pmd.zip" \
+curl --proto '=https' --tlsv1.2 --fail --location --silent --show-error \
+    --proto-redir '=https' --retry 3 --retry-all-errors -o "${tmp}/pmd.zip" \
     "https://github.com/pmd/pmd/releases/download/pmd_releases%2F${PMD_VERSION}/pmd-dist-${PMD_VERSION}-bin.zip"
+printf '%s  %s\n' "$PMD_DIST_SHA256" "${tmp}/pmd.zip" | sha256sum --check --strict -
 unzip -q -d /opt "${tmp}/pmd.zip"
 mv "/opt/pmd-bin-${PMD_VERSION}" /opt/pmd
 ln -sf /opt/pmd/bin/pmd /usr/local/bin/pmd
@@ -59,8 +69,10 @@ rm -rf "${tmp}"
 
 # --- detekt ---
 tmp="$(mktemp -d)"
-curl -fsSL -o "${tmp}/detekt.zip" \
+curl --proto '=https' --tlsv1.2 --fail --location --silent --show-error \
+    --proto-redir '=https' --retry 3 --retry-all-errors -o "${tmp}/detekt.zip" \
     "https://github.com/detekt/detekt/releases/download/v${DETEKT_VERSION}/detekt-cli-${DETEKT_VERSION}.zip"
+printf '%s  %s\n' "$DETEKT_DIST_SHA256" "${tmp}/detekt.zip" | sha256sum --check --strict -
 unzip -q -d /opt "${tmp}/detekt.zip"
 mv "/opt/detekt-cli-${DETEKT_VERSION}" /opt/detekt
 ln -sf /opt/detekt/bin/detekt-cli /usr/local/bin/detekt-cli

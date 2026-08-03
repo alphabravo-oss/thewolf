@@ -18,8 +18,8 @@ func init() {
 	plugin.Register(&PMDPlugin{})
 }
 
-func (p *PMDPlugin) Name() string               { return "pmd" }
-func (p *PMDPlugin) Category() models.Category   { return models.CategoryQuality }
+func (p *PMDPlugin) Name() string                 { return "pmd" }
+func (p *PMDPlugin) Category() models.Category    { return models.CategoryQuality }
 func (p *PMDPlugin) Languages() []models.Language { return nil }
 
 func (p *PMDPlugin) CheckAvailable() bool { return container.IsScannersReady() }

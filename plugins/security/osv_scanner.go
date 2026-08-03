@@ -18,8 +18,8 @@ func init() {
 	plugin.Register(&OSVScannerPlugin{})
 }
 
-func (p *OSVScannerPlugin) Name() string             { return "osv-scanner" }
-func (p *OSVScannerPlugin) Category() models.Category { return models.CategorySCA }
+func (p *OSVScannerPlugin) Name() string                 { return "osv-scanner" }
+func (p *OSVScannerPlugin) Category() models.Category    { return models.CategorySCA }
 func (p *OSVScannerPlugin) Languages() []models.Language { return nil }
 
 func (p *OSVScannerPlugin) CheckAvailable() bool { return container.IsScannersReady() }

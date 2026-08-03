@@ -20,8 +20,8 @@ func init() {
 	plugin.Register(&PipAuditPlugin{})
 }
 
-func (p *PipAuditPlugin) Name() string               { return "pip-audit" }
-func (p *PipAuditPlugin) Category() models.Category   { return models.CategorySCA }
+func (p *PipAuditPlugin) Name() string                 { return "pip-audit" }
+func (p *PipAuditPlugin) Category() models.Category    { return models.CategorySCA }
 func (p *PipAuditPlugin) Languages() []models.Language { return []models.Language{models.LangPython} }
 
 func (p *PipAuditPlugin) CheckAvailable() bool { return container.IsScannersReady() }

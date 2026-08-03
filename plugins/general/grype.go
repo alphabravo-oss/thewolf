@@ -17,8 +17,8 @@ func init() {
 	plugin.Register(&GrypePlugin{})
 }
 
-func (p *GrypePlugin) Name() string               { return "grype" }
-func (p *GrypePlugin) Category() models.Category   { return models.CategorySCA }
+func (p *GrypePlugin) Name() string                 { return "grype" }
+func (p *GrypePlugin) Category() models.Category    { return models.CategorySCA }
 func (p *GrypePlugin) Languages() []models.Language { return nil }
 
 func (p *GrypePlugin) CheckAvailable() bool { return container.IsScannersReady() }
@@ -71,7 +71,7 @@ type grypeOutput struct {
 }
 
 type grypeMatch struct {
-	Vulnerability grypeVuln    `json:"vulnerability"`
+	Vulnerability grypeVuln     `json:"vulnerability"`
 	Artifact      grypeArtifact `json:"artifact"`
 }
 
@@ -85,9 +85,9 @@ type grypeVuln struct {
 }
 
 type grypeArtifact struct {
-	Name    string `json:"name"`
-	Version string `json:"version"`
-	Type    string `json:"type"`
+	Name      string `json:"name"`
+	Version   string `json:"version"`
+	Type      string `json:"type"`
 	Locations []struct {
 		Path string `json:"path"`
 	} `json:"locations"`

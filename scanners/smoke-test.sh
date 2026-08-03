@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# shellcheck disable=SC2317  # check() and present() are dispatched via run() further down
+# shellcheck disable=SC2016,SC2317,SC2329  # dpkg format is literal; helpers are dispatched via run()
 # ============================================================
 # wolf-scanners smoke test — variant-aware.
 #
@@ -51,6 +51,57 @@ present() {
     return 0
 }
 
+check_go_module() {
+	local label="$1"; shift
+	local expect="$1"; shift
+	local bin="$1"; shift
+	local path out
+	path="$(command -v "$bin")" || {
+		red "FAIL $label: $bin not on PATH"
+		return 1
+	}
+	if ! out="$("$GO_BIN" version -m "$path" 2>&1)"; then
+		red "FAIL $label: could not inspect Go module build identity"
+		return 1
+	fi
+	if [[ "$out" != *"$expect"* ]]; then
+		red "FAIL $label: expected module version '$expect' not found"
+		return 1
+	fi
+	green "  OK  $label"
+}
+
+check_locked_deb() {
+	local label="$1"; shift
+	local package="$1"; shift
+	local architecture pin_file expected installed
+	architecture="$(dpkg --print-architecture)"
+	pin_file="/etc/wolf-scanners/os-packages/pins/${VARIANT}-${architecture}.txt"
+	expected="$(awk -F= -v package="$package" -v architecture="$architecture" \
+		'$1 == package || $1 == package ":" architecture { print $2; exit }' "$pin_file")"
+	installed="$(dpkg-query -W -f='${Version}' "$package" 2>/dev/null || true)"
+	if [[ -z "$expected" || "$installed" != "$expected" ]]; then
+		red "FAIL $label: installed package '$installed' does not match locked '$expected'"
+		return 1
+	fi
+	green "  OK  $label $installed"
+}
+
+check_locked_nodejs() {
+	local architecture artifact_file filename expected installed
+	architecture="$(dpkg --print-architecture)"
+	artifact_file="/etc/wolf-scanners/os-packages/artifacts/${VARIANT}-${architecture}.txt"
+	filename="$(awk -F '\t' '$1 == "nodejs" { print $4; exit }' "$artifact_file")"
+	expected="${filename#nodejs_}"
+	expected="${expected%_"${architecture}".deb}"
+	installed="$(dpkg-query -W -f='${Version}' nodejs 2>/dev/null || true)"
+	if [[ -z "$filename" || "$installed" != "$expected" ]]; then
+		red "FAIL nodejs/npm-audit: installed package '$installed' does not match locked '$expected'"
+		return 1
+	fi
+	green "  OK  nodejs/npm-audit package $installed"
+}
+
 fails=0
 run() { "$@" || fails=$((fails+1)); }
 
@@ -68,28 +119,37 @@ if [[ "$VARIANT" == "default" ]]; then
     run check "ruff $RUFF_VERSION"                     "$RUFF_VERSION"            ruff --version
     run check "mypy $MYPY_VERSION"                     "$MYPY_VERSION"            mypy --version
     run check "pip-audit $PIP_AUDIT_VERSION"           "$PIP_AUDIT_VERSION"       pip-audit --version
+	run check "core pip vendored msgpack 1.2.1" "1.2.1" /opt/wolf-scanners/py-core/bin/python -c 'import pip._vendor.msgpack as m; print(m.__version__)'
+	run check "language pip vendored msgpack 1.2.1" "1.2.1" /opt/wolf-scanners/py-lang/bin/python -c 'import pip._vendor.msgpack as m; print(m.__version__)'
     run check "radon $RADON_VERSION"                   "$RADON_VERSION"           radon --version
     run check "vulture $VULTURE_VERSION"               "$VULTURE_VERSION"         vulture --version
-    run present "gosec"                                                       gosec
-    run present "staticcheck"                                                 staticcheck
+    GO_BIN="$(command -v go || echo /usr/local/go-toolchain/bin/go)"
+    run check_go_module "gosec $GOSEC_VERSION module identity" "$GOSEC_VERSION" gosec
+    run check "staticcheck $STATICCHECK_VERSION" "$STATICCHECK_VERSION" staticcheck -version
     run check "govulncheck $GOVULNCHECK_VERSION"       "$GOVULNCHECK_VERSION"     govulncheck -version
-    run present "gokart"                                                      gokart
+    run check_go_module "gokart $GOKART_VERSION module identity" "$GOKART_VERSION" gokart
     # The Go toolchain is retained (not the GOPATH module cache) so that
     # gosec/govulncheck can resolve std-lib modules at runtime via the
     # stripped toolchain. Prove GOROOT (src + bin) still resolves the
     # standard library after the slimming in go-tools.sh.
-    GO_BIN="$(command -v go || echo /usr/local/go-toolchain/bin/go)"
     run check "go env GOROOT" "/usr/local/go-toolchain" "$GO_BIN" env GOROOT
     run check "go list std (toolchain resolves modules)" "fmt" "$GO_BIN" list std
     run check "eslint $ESLINT_VERSION"                 "$ESLINT_VERSION"          eslint --version
     run check "markdownlint $MARKDOWNLINT_VERSION"     "$MARKDOWNLINT_VERSION"    markdownlint --version
-    run present "npm (for npm-audit)"                                         npm
+	run check_locked_nodejs
+	run check "npm $NPM_VERSION" "$NPM_VERSION" npm --version
+	run check "npm bundled brace-expansion 5.0.9" "5.0.9" node -p 'require("/usr/lib/node_modules/npm/node_modules/brace-expansion/package.json").version'
     run check "brakeman $BRAKEMAN_VERSION"             "$BRAKEMAN_VERSION"        brakeman --version
     run check "rubocop $RUBOCOP_VERSION"               "$RUBOCOP_VERSION"         rubocop --version
     run check "phpstan $PHPSTAN_VERSION"               "$PHPSTAN_VERSION"         phpstan --version
-    run present "swiftlint (best-effort)"                                     swiftlint
-    run present "cppcheck"                                                    cppcheck
-    run present "shellcheck"                                                  shellcheck
+    case "$(uname -m)" in
+        x86_64|amd64) run check "swiftlint $SWIFTLINT_VERSION" "$SWIFTLINT_VERSION" swiftlint --version ;;
+        *) echo "  SKIP swiftlint (manifest restricts bundled binary to linux/amd64)" ;;
+    esac
+	run check_locked_deb "cppcheck" cppcheck
+	run check "cppcheck invocation" "Cppcheck" cppcheck --version
+	run check_locked_deb "shellcheck" shellcheck
+	run check "shellcheck invocation" "ShellCheck" shellcheck --version
 fi
 
 if [[ "$VARIANT" == "jvm" ]]; then
@@ -109,7 +169,8 @@ fi
 if [[ "$VARIANT" == "rust" ]]; then
     echo ""
     echo "[Rust tools]"
-    run present "cargo-clippy" cargo-clippy
+    run check "rust toolchain $RUST_TOOLCHAIN (owns cargo-clippy)" "$RUST_TOOLCHAIN" rustc --version
+    run check "cargo-clippy from rust $RUST_TOOLCHAIN" "clippy" cargo-clippy --version
 fi
 
 if [[ "$VARIANT" == "codeql" ]]; then

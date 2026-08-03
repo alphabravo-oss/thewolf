@@ -98,8 +98,8 @@ func (p *GoKartPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]
 type gokartResult struct {
 	Runs []struct {
 		Results []struct {
-			RuleID    string `json:"ruleId"`
-			Message   struct {
+			RuleID  string `json:"ruleId"`
+			Message struct {
 				Text string `json:"text"`
 			} `json:"message"`
 			Level     string `json:"level"`

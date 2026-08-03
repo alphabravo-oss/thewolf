@@ -63,17 +63,17 @@ func (p *ScorecardPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) 
 }
 
 type scorecardOutput struct {
-	Date       string           `json:"date"`
-	Repo       struct{ Name string } `json:"repo"`
-	Scorecard  struct{ Version string } `json:"scorecard"`
-	Score      float64          `json:"score"`
-	Checks     []scorecardCheck `json:"checks"`
+	Date      string                   `json:"date"`
+	Repo      struct{ Name string }    `json:"repo"`
+	Scorecard struct{ Version string } `json:"scorecard"`
+	Score     float64                  `json:"score"`
+	Checks    []scorecardCheck         `json:"checks"`
 }
 
 type scorecardCheck struct {
-	Name          string   `json:"name"`
-	Score         int      `json:"score"` // -1 to 10
-	Reason        string   `json:"reason"`
+	Name          string `json:"name"`
+	Score         int    `json:"score"` // -1 to 10
+	Reason        string `json:"reason"`
 	Documentation struct {
 		URL string `json:"url"`
 	} `json:"documentation"`

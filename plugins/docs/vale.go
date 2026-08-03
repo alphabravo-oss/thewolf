@@ -31,8 +31,8 @@ func init() {
 	plugin.Register(&ValePlugin{})
 }
 
-func (p *ValePlugin) Name() string               { return "vale" }
-func (p *ValePlugin) Category() models.Category   { return models.CategoryDocs }
+func (p *ValePlugin) Name() string                 { return "vale" }
+func (p *ValePlugin) Category() models.Category    { return models.CategoryDocs }
 func (p *ValePlugin) Languages() []models.Language { return nil }
 
 func (p *ValePlugin) CheckAvailable() bool { return container.IsScannersReady() }
@@ -80,7 +80,7 @@ func (p *ValePlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]mo
 // Vale outputs: { "file.md": [ { ... }, ... ] }
 type valeAlert struct {
 	Action struct {
-		Name   string `json:"name"`
+		Name   string   `json:"name"`
 		Params []string `json:"params"`
 	} `json:"Action"`
 	Check    string `json:"Check"`

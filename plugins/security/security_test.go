@@ -116,6 +116,26 @@ func TestParseNucleiOutput(t *testing.T) {
 	}
 }
 
+func TestParseBearerOutput(t *testing.T) {
+	findings, err := parseBearerOutput([]byte(`{"high":[{"id":"ruby_rails_sql_injection","title":"SQL injection","description":"Untrusted query","cwe_ids":["89"],"filename":"app/models/user.rb","line_number":12,"snippet_end_line":13,"data_type":{"name":"SQL"}}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(findings) != 1 || findings[0].ToolName != "bearer" || findings[0].RuleID != "ruby_rails_sql_injection" || findings[0].CWEID != "CWE-89" || findings[0].Severity != models.SeverityHigh {
+		t.Fatalf("bearer finding = %#v", findings)
+	}
+}
+
+func TestParseScorecardOutput(t *testing.T) {
+	findings, err := parseScorecardOutput([]byte(`{"checks":[{"name":"Branch-Protection","score":2,"reason":"Protection is incomplete","documentation":{"url":"https://example.invalid/docs"},"details":["fixture"]},{"name":"Maintained","score":10}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(findings) != 1 || findings[0].ToolName != "scorecard" || findings[0].RuleID != "Branch-Protection" || findings[0].Severity != models.SeverityCritical {
+		t.Fatalf("scorecard finding = %#v", findings)
+	}
+}
+
 func TestMapNucleiSeverity(t *testing.T) {
 	tests := []struct {
 		input    string

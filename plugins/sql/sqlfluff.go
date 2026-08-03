@@ -24,7 +24,7 @@ func init() {
 	plugin.Register(&SQLFluffPlugin{})
 }
 
-func (p *SQLFluffPlugin) Name() string             { return "sqlfluff" }
+func (p *SQLFluffPlugin) Name() string              { return "sqlfluff" }
 func (p *SQLFluffPlugin) Category() models.Category { return models.CategoryQuality }
 func (p *SQLFluffPlugin) Languages() []models.Language {
 	return []models.Language{models.LangSQL}
@@ -73,7 +73,7 @@ func (p *SQLFluffPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) (
 }
 
 type sqlfluffResult struct {
-	Filepath   string             `json:"filepath"`
+	Filepath   string              `json:"filepath"`
 	Violations []sqlfluffViolation `json:"violations"`
 }
 

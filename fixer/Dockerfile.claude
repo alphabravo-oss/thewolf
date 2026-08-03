@@ -1,3 +1,6 @@
+# check=skip=InvalidDefaultArgInFrom
+# WOLF_FIXER_BASE_REF intentionally has no mutable default; the release
+# pipeline must provide the verified base image by digest.
 # ============================================================
 # checkov:skip=CKV_DOCKER_2 — worker container, not a service.
 #
@@ -18,22 +21,46 @@
 # Build via internal/scannerbuild FixerVariants ("claude").
 # ============================================================
 
-# Pin the base by version tag (not :latest) — the scanner-image build
-# subsystem always passes --build-arg WOLF_VERSION and tags the base as
-# wolf-fixer:<version> alongside :latest, so this resolves to the matching
-# immutable version at build time (default `dev` for manual local builds).
-ARG WOLF_VERSION=dev
-FROM alphabravodevops/wolf-fixer:${WOLF_VERSION} AS base
+ARG WOLF_FIXER_BASE_REF
+FROM ${WOLF_FIXER_BASE_REF} AS base
+
+ARG CLAUDE_CODE_VERSION=2.1.220
+ARG CLAUDE_CODE_INTEGRITY=sha512-ogBrvwkqF9f8okmnXKxmRNHuvtFxFEffe5pWdqOV3iQDxlUOKirFqnyWC7NGXXnDA4WkkbPH8pvSbwyCR2Auyw==
+ARG CLAUDE_CODE_LINUX_AMD64_INTEGRITY=sha512-3CGFCnI0gpgsqNeJruFALBDGJaKXOuok3alQEg56ty2yOPpIrOx/r2Y0+T4uhJl7kP5Hzw4IFkxo4DZKWvzQ7Q==
+ARG CLAUDE_CODE_LINUX_ARM64_INTEGRITY=sha512-VHFI8mKruIntKn7eq81sbyS19/KWmQcmJQsS/C+j9M/E+w0s4UytgsL7DADPjBE/GByNiKoRtLYDMntCjRlOdA==
 
 ENV WOLF_FIXER_VARIANT=claude \
     WOLF_FIXER_ENGINE=claude
 
+LABEL dev.wolf.fixer.variant="claude" \
+      dev.wolf.fixer.auth-mode="interactive-session" \
+      dev.wolf.fixer.cli.version="${CLAUDE_CODE_VERSION}"
+
 USER root
 
-# Claude Code CLI (npm-distributed). Pinned major; refresh via versions.
-RUN npm install -g @anthropic-ai/claude-code \
-    && command -v claude \
-    && claude --version || true
+# Validate the immutable npm integrity before installing the exact version.
+# Read package metadata instead of executing Claude's Bun payload here: the
+# latter is not reliable under qemu during legitimate cross-platform builds.
+# Native-platform runtime smoke in CI still executes `claude --version`.
+RUN set -eux; \
+    actual_integrity="$(npm --cache /tmp/npm-cache view "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" dist.integrity)"; \
+    test "$actual_integrity" = "$CLAUDE_CODE_INTEGRITY"; \
+    arch="$(dpkg --print-architecture)"; \
+    case "$arch" in \
+      amd64) native_package="@anthropic-ai/claude-code-linux-x64"; native_integrity="$CLAUDE_CODE_LINUX_AMD64_INTEGRITY" ;; \
+      arm64) native_package="@anthropic-ai/claude-code-linux-arm64"; native_integrity="$CLAUDE_CODE_LINUX_ARM64_INTEGRITY" ;; \
+      *) echo "unsupported architecture: $arch" >&2; exit 65 ;; \
+    esac; \
+    actual_native_integrity="$(npm --cache /tmp/npm-cache view "${native_package}@${CLAUDE_CODE_VERSION}" dist.integrity)"; \
+    test "$actual_native_integrity" = "$native_integrity"; \
+    npm --cache /tmp/npm-cache install --prefix /opt/wolf/claude --omit=dev \
+      "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"; \
+    node /opt/wolf/claude/node_modules/@anthropic-ai/claude-code/install.cjs; \
+    ln -s /opt/wolf/claude/node_modules/.bin/claude /usr/local/bin/claude; \
+    command -v claude; \
+    installed_version="$(node -p "require('/opt/wolf/claude/node_modules/@anthropic-ai/claude-code/package.json').version")"; \
+    test "$installed_version" = "$CLAUDE_CODE_VERSION"; \
+    rm -rf /tmp/npm-cache
 
 USER wolf
 WORKDIR /workspace

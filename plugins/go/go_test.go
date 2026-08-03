@@ -117,3 +117,24 @@ func TestParseStaticcheckOutput(t *testing.T) {
 		t.Errorf("finding[1].LineStart = %d, want %d", f.LineStart, 30)
 	}
 }
+
+func TestParseGoKartOutput(t *testing.T) {
+	findings, err := parseGoKartOutput([]byte(`{"runs":[{"results":[{"ruleId":"G107","message":{"text":"URL provided to HTTP request as taint input"},"level":"error","locations":[{"physicalLocation":{"artifactLocation":{"uri":"client.go"},"region":{"startLine":21,"endLine":21}}}]}]}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(findings) != 1 || findings[0].ToolName != "gokart" || findings[0].RuleID != "G107" || findings[0].LineStart != 21 || findings[0].Severity != models.SeverityHigh {
+		t.Fatalf("gokart finding = %#v", findings)
+	}
+}
+
+func TestParseGovulncheckOutput(t *testing.T) {
+	data := []byte("{\"osv\":{\"id\":\"GO-2026-0001\",\"summary\":\"fixture vulnerability\",\"details\":\"fixture details\"}}\n{\"finding\":{\"osv\":\"GO-2026-0001\",\"trace\":[{\"position\":{\"filename\":\"main.go\",\"line\":14}}]}}\n")
+	findings, err := parseGovulncheckOutput(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(findings) != 1 || findings[0].ToolName != "govulncheck" || findings[0].RuleID != "GO-2026-0001" || findings[0].FilePath != "main.go" || findings[0].LineStart != 14 {
+		t.Fatalf("govulncheck finding = %#v", findings)
+	}
+}

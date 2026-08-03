@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # ============================================================
 # Install SwiftLint from the precompiled portable release.
-# SwiftLint's Linux/ARM64 support is partial — best-effort install.
+# SwiftLint's portable Linux release is amd64-only. Supported architectures
+# fail closed on download, checksum, archive, or layout errors.
 # ============================================================
-set -uo pipefail
+set -euo pipefail
 
 # shellcheck disable=SC1091
 source /etc/wolf-scanners/versions.env
@@ -11,26 +12,24 @@ source /etc/wolf-scanners/versions.env
 arch="$(uname -m)"
 case "$arch" in
     x86_64)  asset="portable_swiftlint.zip" ;;
-    aarch64) asset="portable_swiftlint.zip" ;;
+    aarch64|arm64)
+        echo "swiftlint: upstream portable release is linux/amd64-only — skipping"
+        exit 0
+        ;;
     *) echo "swiftlint: unsupported arch $arch — skipping" >&2; exit 0 ;;
 esac
 
 tmp="$(mktemp -d)"
-if ! curl -fsSL -o "${tmp}/swiftlint.zip" \
-    "https://github.com/realm/SwiftLint/releases/download/${SWIFTLINT_VERSION}/${asset}"; then
-    echo "WARNING: swiftlint download failed (likely no ${arch} release); skipping"
-    rm -rf "${tmp}"
-    exit 0
-fi
-if ! unzip -q -d "${tmp}/swiftlint" "${tmp}/swiftlint.zip" 2>/dev/null; then
-    echo "WARNING: swiftlint unzip failed; skipping"
-    rm -rf "${tmp}"
-    exit 0
-fi
-if [[ -f "${tmp}/swiftlint/swiftlint" ]]; then
-    install -m 0755 "${tmp}/swiftlint/swiftlint" /usr/local/bin/swiftlint
-    echo "SwiftLint installed."
-else
-    echo "WARNING: swiftlint binary not found in package; skipping"
-fi
+trap 'rm -rf "$tmp"' EXIT
+curl --proto '=https' --tlsv1.2 --fail --location --silent --show-error \
+    --proto-redir '=https' --retry 3 --retry-all-errors \
+    "https://github.com/realm/SwiftLint/releases/download/${SWIFTLINT_VERSION}/${asset}" \
+    -o "${tmp}/swiftlint.zip"
+printf '%s  %s\n' "$SWIFTLINT_PORTABLE_SHA256" "${tmp}/swiftlint.zip" \
+    | sha256sum --check --strict -
+unzip -q -d "${tmp}/swiftlint" "${tmp}/swiftlint.zip"
+test -f "${tmp}/swiftlint/swiftlint"
+install -m 0755 "${tmp}/swiftlint/swiftlint" /usr/local/bin/swiftlint
 rm -rf "${tmp}"
+trap - EXIT
+echo "SwiftLint installed."

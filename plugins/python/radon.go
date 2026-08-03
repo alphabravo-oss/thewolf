@@ -18,8 +18,8 @@ func init() {
 	plugin.Register(&RadonPlugin{})
 }
 
-func (p *RadonPlugin) Name() string               { return "radon" }
-func (p *RadonPlugin) Category() models.Category   { return models.CategoryQuality }
+func (p *RadonPlugin) Name() string                 { return "radon" }
+func (p *RadonPlugin) Category() models.Category    { return models.CategoryQuality }
 func (p *RadonPlugin) Languages() []models.Language { return []models.Language{models.LangPython} }
 
 func (p *RadonPlugin) CheckAvailable() bool { return container.IsScannersReady() }

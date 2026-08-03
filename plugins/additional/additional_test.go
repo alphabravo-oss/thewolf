@@ -109,6 +109,23 @@ func TestParseShellcheckOutput(t *testing.T) {
 	}
 }
 
+func TestParseDetektOutput(t *testing.T) {
+	findings, err := parseDetektOutput([]byte(`<?xml version="1.0"?><checkstyle><file name="src/Main.kt"><error line="7" column="2" severity="error" message="Unsafe call" source="detekt.PotentialBug.UnsafeCall"/></file></checkstyle>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(findings) != 1 || findings[0].ToolName != "detekt" || findings[0].RuleID != "PotentialBug.UnsafeCall" || findings[0].LineStart != 7 || findings[0].Severity != models.SeverityHigh {
+		t.Fatalf("detekt finding = %#v", findings)
+	}
+}
+
+func TestParseYamllintOutput(t *testing.T) {
+	findings := parseYamllintOutput([]byte("deployment.yaml:3:5: [error] trailing spaces (trailing-spaces)\n"))
+	if len(findings) != 1 || findings[0].ToolName != "yamllint" || findings[0].RuleID != "trailing-spaces" || findings[0].LineStart != 3 || findings[0].Severity != models.SeverityMedium {
+		t.Fatalf("yamllint finding = %#v", findings)
+	}
+}
+
 func TestAdditionalPluginMetadata(t *testing.T) {
 	plugins := []struct {
 		plugin   models.Plugin

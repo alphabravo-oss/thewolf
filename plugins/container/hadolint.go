@@ -19,8 +19,8 @@ func init() {
 	plugin.Register(&HadolintPlugin{})
 }
 
-func (p *HadolintPlugin) Name() string               { return "hadolint" }
-func (p *HadolintPlugin) Category() models.Category   { return models.CategoryContainer }
+func (p *HadolintPlugin) Name() string                 { return "hadolint" }
+func (p *HadolintPlugin) Category() models.Category    { return models.CategoryContainer }
 func (p *HadolintPlugin) Languages() []models.Language { return nil }
 
 func (p *HadolintPlugin) CheckAvailable() bool { return container.IsScannersReady() }

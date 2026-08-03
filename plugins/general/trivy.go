@@ -17,8 +17,8 @@ func init() {
 	plugin.Register(&TrivyPlugin{})
 }
 
-func (p *TrivyPlugin) Name() string               { return "trivy" }
-func (p *TrivyPlugin) Category() models.Category   { return models.CategorySCA }
+func (p *TrivyPlugin) Name() string                 { return "trivy" }
+func (p *TrivyPlugin) Category() models.Category    { return models.CategorySCA }
 func (p *TrivyPlugin) Languages() []models.Language { return nil }
 
 func (p *TrivyPlugin) CheckAvailable() bool { return container.IsScannersReady() }
@@ -40,8 +40,8 @@ func (p *TrivyPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]m
 		container.Options{
 			RepoDir: opts.RepoPath,
 			ExtraEnv: map[string]string{
-				"HOME":             "/tmp",
-				"TRIVY_CACHE_DIR":  "/var/lib/wolf-db/trivy",
+				"HOME":            "/tmp",
+				"TRIVY_CACHE_DIR": "/var/lib/wolf-db/trivy",
 			},
 		},
 		"trivy", "fs", "--format", "json", "--cache-dir", "/var/lib/wolf-db/trivy", "/scan")
@@ -66,7 +66,7 @@ type trivyOutput struct {
 }
 
 type trivyResult struct {
-	Target          string             `json:"Target"`
+	Target          string               `json:"Target"`
 	Vulnerabilities []trivyVulnerability `json:"Vulnerabilities"`
 }
 

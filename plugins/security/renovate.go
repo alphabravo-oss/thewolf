@@ -51,12 +51,12 @@ func (p *RenovatePlugin) Execute(ctx context.Context, opts models.ExecuteOpts) (
 		container.Options{
 			RepoDir: opts.RepoPath,
 			ExtraEnv: map[string]string{
-				"RENOVATE_DRY_RUN":               "full",
-				"RENOVATE_AUTODISCOVER":          "false",
-				"RENOVATE_PLATFORM":              "local",
-				"RENOVATE_BASE_DIR":              "/tmp/renovate",
-				"RENOVATE_CACHE_DIR":             "/tmp/renovate-cache",
-				"LOG_FORMAT":                     "json",
+				"RENOVATE_DRY_RUN":      "full",
+				"RENOVATE_AUTODISCOVER": "false",
+				"RENOVATE_PLATFORM":     "local",
+				"RENOVATE_BASE_DIR":     "/tmp/renovate",
+				"RENOVATE_CACHE_DIR":    "/tmp/renovate-cache",
+				"LOG_FORMAT":            "json",
 				// Debug level emits the "packageFiles with updates"
 				// log line that has every detected upgrade. Info
 				// level only prints summary counts so we'd miss the
@@ -71,8 +71,8 @@ func (p *RenovatePlugin) Execute(ctx context.Context, opts models.ExecuteOpts) (
 				// undefined" inside getBranchCommit. Skip onboarding
 				// + the dashboard-issue creator since neither makes
 				// sense in detect-only mode anyway.
-				"RENOVATE_ONBOARDING":            "false",
-				"RENOVATE_DEPENDENCY_DASHBOARD":  "false",
+				"RENOVATE_ONBOARDING":           "false",
+				"RENOVATE_DEPENDENCY_DASHBOARD": "false",
 			},
 		},
 		"renovate")
@@ -81,7 +81,7 @@ func (p *RenovatePlugin) Execute(ctx context.Context, opts models.ExecuteOpts) (
 		return nil, plugin.WrapExecError("renovate", err)
 	}
 
-	findings, perr := parseRenovateOutput(out, opts.OnOutput)
+	findings, perr := parseRenovateOutputWithMetrics(out, opts.OnOutput, opts.OnParseError)
 	if perr != nil {
 		return nil, perr
 	}
@@ -140,6 +140,12 @@ type renovateVulnInfo struct {
 // scan. Other log lines (debug, info noise) are forwarded to OnOutput
 // for live tailing when set, but never produce findings on their own.
 func parseRenovateOutput(data []byte, onOutput func(string)) ([]models.Finding, error) {
+	return parseRenovateOutputWithMetrics(data, onOutput, nil)
+}
+
+func parseRenovateOutputWithMetrics(
+	data []byte, onOutput func(string), onParseError func(error),
+) ([]models.Finding, error) {
 	seen := make(map[string]struct{})
 	var findings []models.Finding
 
@@ -155,6 +161,7 @@ func parseRenovateOutput(data []byte, onOutput func(string)) ([]models.Finding, 
 		}
 		var line renovateLogLine
 		if err := json.Unmarshal(raw, &line); err != nil {
+			notifyParseError(onParseError, err)
 			continue
 		}
 		// Forward non-update messages to the live log stream.

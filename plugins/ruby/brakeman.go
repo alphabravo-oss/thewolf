@@ -17,7 +17,7 @@ func init() {
 	plugin.Register(&BrakemanPlugin{})
 }
 
-func (p *BrakemanPlugin) Name() string             { return "brakeman" }
+func (p *BrakemanPlugin) Name() string              { return "brakeman" }
 func (p *BrakemanPlugin) Category() models.Category { return models.CategorySAST }
 func (p *BrakemanPlugin) Languages() []models.Language {
 	return []models.Language{models.LangRuby}

@@ -17,8 +17,8 @@ func init() {
 	plugin.Register(&SyftPlugin{})
 }
 
-func (p *SyftPlugin) Name() string               { return "syft" }
-func (p *SyftPlugin) Category() models.Category   { return models.CategorySBOM }
+func (p *SyftPlugin) Name() string                 { return "syft" }
+func (p *SyftPlugin) Category() models.Category    { return models.CategorySBOM }
 func (p *SyftPlugin) Languages() []models.Language { return nil }
 
 func (p *SyftPlugin) CheckAvailable() bool { return container.IsScannersReady() }
@@ -39,6 +39,7 @@ func (p *SyftPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]mo
 	if err != nil && len(out) == 0 {
 		return nil, plugin.WrapExecError("syft", err)
 	}
+	plugin.SaveRaw(opts, out, "json")
 
 	findings, perr := parseSyftOutput(out)
 	if perr != nil {
@@ -55,11 +56,11 @@ type syftOutput struct {
 }
 
 type syftArtifact struct {
-	Name      string `json:"name"`
-	Version   string `json:"version"`
-	Type      string `json:"type"`
-	Language  string `json:"language"`
-	Licenses  []struct {
+	Name     string `json:"name"`
+	Version  string `json:"version"`
+	Type     string `json:"type"`
+	Language string `json:"language"`
+	Licenses []struct {
 		Value string `json:"value"`
 	} `json:"licenses"`
 	Locations []struct {

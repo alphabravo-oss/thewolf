@@ -17,7 +17,7 @@ func init() {
 	plugin.Register(&SwiftLintPlugin{})
 }
 
-func (p *SwiftLintPlugin) Name() string             { return "swiftlint" }
+func (p *SwiftLintPlugin) Name() string              { return "swiftlint" }
 func (p *SwiftLintPlugin) Category() models.Category { return models.CategoryQuality }
 func (p *SwiftLintPlugin) Languages() []models.Language {
 	return []models.Language{models.LangSwift}

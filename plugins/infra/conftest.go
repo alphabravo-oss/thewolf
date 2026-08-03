@@ -79,12 +79,12 @@ func findConftestPolicyDir(repo string) string {
 }
 
 type conftestResult struct {
-	Filename   string             `json:"filename"`
-	Namespace  string             `json:"namespace"`
-	Successes  int                `json:"successes"`
-	Failures   []conftestMessage  `json:"failures"`
-	Warnings   []conftestMessage  `json:"warnings"`
-	Exceptions []conftestMessage  `json:"exceptions"`
+	Filename   string            `json:"filename"`
+	Namespace  string            `json:"namespace"`
+	Successes  int               `json:"successes"`
+	Failures   []conftestMessage `json:"failures"`
+	Warnings   []conftestMessage `json:"warnings"`
+	Exceptions []conftestMessage `json:"exceptions"`
 }
 
 type conftestMessage struct {

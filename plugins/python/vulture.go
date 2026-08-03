@@ -20,8 +20,8 @@ func init() {
 	plugin.Register(&VulturePlugin{})
 }
 
-func (p *VulturePlugin) Name() string               { return "vulture" }
-func (p *VulturePlugin) Category() models.Category   { return models.CategoryQuality }
+func (p *VulturePlugin) Name() string                 { return "vulture" }
+func (p *VulturePlugin) Category() models.Category    { return models.CategoryQuality }
 func (p *VulturePlugin) Languages() []models.Language { return []models.Language{models.LangPython} }
 
 func (p *VulturePlugin) CheckAvailable() bool { return container.IsScannersReady() }

@@ -1,0 +1,141 @@
+# Deterministic scanner compatibility policy. Resource limits are evaluated
+# against recorded execution evidence, never as wall-clock unit microbenchmarks.
+schemaVersion: wolf.scanners/quality-policy/v1
+expectedToolCount: 49
+
+parserContract:
+  # The final component is the authoritative tools.yaml/plugin registration key.
+  adapterNamespace: wolf/plugin
+  command: [wolf, scan, "--repo", "{fixture}", "--tools", "{tool}", "--out", "{output}"]
+  resultSchema: wolf.scan-result/v1
+  requiredFields: [tool, ruleId, severity, path, line, message, fingerprint]
+
+thresholdProfiles:
+  light:
+    durationMs: 120000
+    outputBytes: 16777216
+    peakMemoryBytes: 1073741824
+    maxParseErrors: 0
+    maxFindings: 10000
+  medium:
+    durationMs: 300000
+    outputBytes: 67108864
+    peakMemoryBytes: 4294967296
+    maxParseErrors: 0
+    maxFindings: 25000
+  heavy:
+    durationMs: 1200000
+    outputBytes: 268435456
+    peakMemoryBytes: 8589934592
+    maxParseErrors: 0
+    maxFindings: 100000
+  network:
+    durationMs: 1200000
+    outputBytes: 268435456
+    peakMemoryBytes: 8589934592
+    maxParseErrors: 0
+    maxFindings: 100000
+
+# executable-fixture runs in a Wolf-built image; gated-executable requires its
+# exact-digest upstream image and possibly network/database access; structural
+# is reserved for licensing/platform constraints and requires a rationale.
+tools:
+  bandit: {family: python, strategy: executable-fixture, parserOwned: true, parserFormat: json, thresholdProfile: light}
+  bearer: {family: security, strategy: gated-executable, parserOwned: true, parserFormat: json, thresholdProfile: medium, rationale: "Runs only in the exact-digest upstream image."}
+  brakeman: {family: ruby, strategy: executable-fixture, parserOwned: true, parserFormat: json, thresholdProfile: medium}
+  checkov: {family: infrastructure, strategy: gated-executable, parserOwned: true, parserFormat: json, thresholdProfile: heavy, rationale: "Runs only in the exact-digest upstream image."}
+  clippy: {family: rust, strategy: executable-fixture, parserOwned: true, parserFormat: json-lines, thresholdProfile: medium}
+  codeql: {family: codeql, strategy: structural, parserOwned: true, parserFormat: json, thresholdProfile: heavy, rationale: "CodeQL execution is license-gated and amd64-only; CI validates its pinned distribution, parser corpus, and declared platform without representing a licensed scan as locally executable."}
+  conftest: {family: infrastructure, strategy: gated-executable, parserOwned: true, parserFormat: json, thresholdProfile: medium, rationale: "Runs only in the exact-digest upstream image."}
+  cppcheck: {family: cpp, strategy: executable-fixture, parserOwned: true, parserFormat: xml, thresholdProfile: medium}
+  detect-secrets: {family: secrets, strategy: executable-fixture, parserOwned: true, parserFormat: json, thresholdProfile: light}
+  detekt: {family: jvm, strategy: executable-fixture, parserOwned: true, parserFormat: xml, thresholdProfile: medium}
+  dockle: {family: container, strategy: gated-executable, parserOwned: true, parserFormat: json, thresholdProfile: medium, rationale: "Requires an exact-digest upstream image and a Docker/OCI image fixture."}
+  eslint: {family: javascript, strategy: executable-fixture, parserOwned: true, parserFormat: json, thresholdProfile: light}
+  gitleaks: {family: secrets, strategy: gated-executable, parserOwned: true, parserFormat: json, thresholdProfile: medium, rationale: "Runs only in the exact-digest upstream image."}
+  gokart: {family: go, strategy: executable-fixture, parserOwned: true, parserFormat: json, thresholdProfile: medium}
+  gosec: {family: go, strategy: executable-fixture, parserOwned: true, parserFormat: json, thresholdProfile: medium}
+  govulncheck: {family: dependency, strategy: gated-executable, parserOwned: true, parserFormat: json-lines, thresholdProfile: network, rationale: "Requires the pinned Go vulnerability database/network fixture gate."}
+  grype: {family: dependency, strategy: gated-executable, parserOwned: true, parserFormat: json, thresholdProfile: network, rationale: "Requires an exact-digest upstream image and pinned vulnerability database evidence."}
+  hadolint: {family: container, strategy: gated-executable, parserOwned: true, parserFormat: json, thresholdProfile: light, rationale: "Runs only in the exact-digest upstream image."}
+  infer: {family: cpp, strategy: executable-fixture, parserOwned: true, parserFormat: json, thresholdProfile: heavy}
+  kics: {family: infrastructure, strategy: gated-executable, parserOwned: true, parserFormat: json, thresholdProfile: heavy, rationale: "Runs only in the exact-digest upstream image."}
+  kube-linter: {family: kubernetes, strategy: gated-executable, parserOwned: true, parserFormat: json, thresholdProfile: medium, rationale: "The upstream image is currently published for linux/amd64 only."}
+  kubescape: {family: kubernetes, strategy: gated-executable, parserOwned: true, parserFormat: json, thresholdProfile: network, rationale: "Requires an exact-digest upstream image and its controlled rules database access."}
+  markdownlint: {family: documentation, strategy: executable-fixture, parserOwned: true, parserFormat: json, thresholdProfile: light}
+  mypy: {family: python, strategy: executable-fixture, parserOwned: true, parserFormat: text, thresholdProfile: light}
+  npm-audit: {family: dependency, strategy: gated-executable, parserOwned: true, parserFormat: json, thresholdProfile: network, rationale: "Requires a pinned dependency manifest and controlled npm registry access."}
+  nuclei: {family: dast, strategy: gated-executable, parserOwned: true, parserFormat: json-lines, thresholdProfile: network, rationale: "Requires a loopback-only test target and pinned templates; public network scanning is prohibited in fixtures."}
+  osv-scanner: {family: dependency, strategy: gated-executable, parserOwned: true, parserFormat: json, thresholdProfile: network, rationale: "Requires the exact-digest upstream image and pinned vulnerability database evidence."}
+  phpstan: {family: php, strategy: executable-fixture, parserOwned: true, parserFormat: json, thresholdProfile: medium}
+  pip-audit: {family: dependency, strategy: gated-executable, parserOwned: true, parserFormat: json, thresholdProfile: network, rationale: "Requires a pinned Python package index fixture or controlled network access."}
+  pluto: {family: kubernetes, strategy: gated-executable, parserOwned: true, parserFormat: json, thresholdProfile: medium, rationale: "Runs only in the exact-digest upstream image."}
+  pmd: {family: jvm, strategy: executable-fixture, parserOwned: true, parserFormat: json, thresholdProfile: medium}
+  radon: {family: python, strategy: executable-fixture, parserOwned: true, parserFormat: json, thresholdProfile: light}
+  renovate: {family: dependency, strategy: gated-executable, parserOwned: true, parserFormat: json, thresholdProfile: network, rationale: "Requires controlled package-manager endpoints and never receives production credentials in fixtures."}
+  rubocop: {family: ruby, strategy: executable-fixture, parserOwned: true, parserFormat: json, thresholdProfile: light}
+  ruff: {family: python, strategy: executable-fixture, parserOwned: true, parserFormat: json, thresholdProfile: light}
+  scorecard: {family: supply-chain, strategy: gated-executable, parserOwned: true, parserFormat: json, thresholdProfile: network, rationale: "The upstream image is amd64-only and repository API calls require controlled test credentials."}
+  semgrep: {family: polyglot, strategy: gated-executable, parserOwned: true, parserFormat: json, thresholdProfile: heavy, rationale: "Runs only in the exact-digest upstream image with pinned local rules."}
+  shellcheck: {family: shell, strategy: executable-fixture, parserOwned: true, parserFormat: json, thresholdProfile: light}
+  spectral: {family: documentation, strategy: gated-executable, parserOwned: true, parserFormat: json, thresholdProfile: light, rationale: "The exact-digest upstream image is amd64-only."}
+  sqlfluff: {family: sql, strategy: executable-fixture, parserOwned: true, parserFormat: json, thresholdProfile: medium}
+  staticcheck: {family: go, strategy: executable-fixture, parserOwned: true, parserFormat: json, thresholdProfile: medium}
+  swiftlint: {family: swift, strategy: executable-fixture, parserOwned: true, parserFormat: json, thresholdProfile: medium}
+  syft: {family: sbom, strategy: gated-executable, parserOwned: true, parserFormat: json, thresholdProfile: medium, allowEmptyFindings: true, rationale: "Syft emits inventory as a raw SBOM artifact rather than converting packages into vulnerability findings; an empty normalized finding set is expected only when a valid raw document was parsed."}
+  tflint: {family: infrastructure, strategy: gated-executable, parserOwned: true, parserFormat: json, thresholdProfile: medium, rationale: "Runs only in the exact-digest upstream image with plugin downloads disabled."}
+  trivy: {family: dependency, strategy: gated-executable, parserOwned: true, parserFormat: json, thresholdProfile: network, rationale: "Requires the exact-digest upstream image and the locked vulnerability database identity."}
+  trufflehog: {family: secrets, strategy: gated-executable, parserOwned: true, parserFormat: json-lines, thresholdProfile: medium, rationale: "Runs only in the exact-digest upstream image against a local fake-secret fixture."}
+  vale: {family: documentation, strategy: gated-executable, parserOwned: true, parserFormat: json, thresholdProfile: light, rationale: "Runs only in the exact-digest upstream image with checked-in styles."}
+  vulture: {family: python, strategy: executable-fixture, parserOwned: true, parserFormat: text, thresholdProfile: light}
+  yamllint: {family: documentation, strategy: executable-fixture, parserOwned: true, parserFormat: text, thresholdProfile: light}
+
+scannerVariants:
+  codeql:
+    dockerfile: scanners/Dockerfile.codeql
+    platforms: [linux/amd64]
+    strategy: structural
+    rationale: "License-gated CodeQL is platform-validated but not impersonated by an unlicensed fixture run."
+  default:
+    dockerfile: scanners/Dockerfile
+    platforms: [linux/amd64, linux/arm64]
+    strategy: executable
+  jvm:
+    dockerfile: scanners/Dockerfile.jvm
+    platforms: [linux/amd64, linux/arm64]
+    strategy: executable
+  rust:
+    dockerfile: scanners/Dockerfile.rust
+    platforms: [linux/amd64, linux/arm64]
+    strategy: executable
+
+# Fixer platforms are built and smoke-tested without credentials for both
+# supported architectures. Publication, signature, and provenance verification
+# remain separate gates because local compatibility tests cannot attest a
+# remote registry artifact.
+fixerVariants:
+  base:
+    dockerfile: fixer/Dockerfile.base
+    platforms: [linux/amd64, linux/arm64]
+    strategy: executable
+  claude:
+    dockerfile: fixer/Dockerfile.claude
+    platforms: [linux/amd64, linux/arm64]
+    strategy: executable
+  codex:
+    dockerfile: fixer/Dockerfile.codex
+    platforms: [linux/amd64, linux/arm64]
+    strategy: executable
+  api:
+    dockerfile: fixer/Dockerfile.api
+    platforms: [linux/amd64, linux/arm64]
+    strategy: executable
+
+vulnerabilityDatabase:
+  provider: trivy
+  repository: ghcr.io/aquasecurity/trivy-db
+  lockFile: scanners/quality/trivy-db.lock.json
+  maxAgeHours: 192
+
+# Every exception must be tool/rule/kind scoped, justified, and time bounded.
+toleratedDeltas: []

@@ -43,26 +43,26 @@ Wolf scanner metadata is authored in `scanners/tools.yaml`. This table is genera
 | `brakeman` | sast | default | `6.2.2` (`BRAKEMAN_VERSION`) | `gem:brakeman` | - | `rubygems:brakeman` |
 | `cppcheck` | sast | default | - | `apt:cppcheck` | - | `debian:cppcheck` |
 | `detect-secrets` | secrets | default | `1.5.0` (`DETECT_SECRETS_VERSION`) | `pip:detect-secrets` | - | `pypi:detect-secrets` |
-| `eslint` | quality | default | `9.13.0` (`ESLINT_VERSION`) | `npm:eslint` | - | `npm:eslint` |
+| `eslint` | quality | default | `10.8.0` (`ESLINT_VERSION`) | `npm:eslint` | - | `npm:eslint` |
 | `gokart` | sast | default | `0.5.1` (`GOKART_VERSION`) | `go:github.com/praetorian-inc/gokart` | - | `go:github.com/praetorian-inc/gokart` |
-| `gosec` | sast | default | `2.22.5` (`GOSEC_VERSION`) | `go:github.com/securego/gosec/v2/cmd/gosec` | - | `go:github.com/securego/gosec/v2` |
-| `govulncheck` | sca | default | `1.3.0` (`GOVULNCHECK_VERSION`) | `go:golang.org/x/vuln/cmd/govulncheck` | - | `go:golang.org/x/vuln` |
-| `markdownlint` | docs | default | `0.42.0` (`MARKDOWNLINT_VERSION`) | `npm:markdownlint-cli` | - | `npm:markdownlint-cli` |
+| `gosec` | sast | default | `2.28.0` (`GOSEC_VERSION`) | `go:github.com/securego/gosec/v2/cmd/gosec` | - | `go:github.com/securego/gosec/v2` |
+| `govulncheck` | sca | default | `1.6.0` (`GOVULNCHECK_VERSION`) | `go:golang.org/x/vuln/cmd/govulncheck` | - | `go:golang.org/x/vuln` |
+| `markdownlint` | docs | default | `0.49.1` (`MARKDOWNLINT_VERSION`) | `npm:markdownlint-cli` | - | `npm:markdownlint-cli` |
 | `mypy` | quality | default | `1.13.0` (`MYPY_VERSION`) | `pip:mypy` | - | `pypi:mypy` |
-| `npm-audit` | sca | default | - | `nodejs:npm` | - | `toolchain:npm` |
+| `npm-audit` | sca | default | `12.0.2` (`NPM_VERSION`) | `nodejs:npm` | - | `toolchain:npm` |
 | `phpstan` | sast | default | `1.12.7` (`PHPSTAN_VERSION`) | `composer:phpstan/phpstan` | - | `packagist:phpstan/phpstan` |
 | `pip-audit` | sca | default | `2.7.3` (`PIP_AUDIT_VERSION`) | `pip:pip-audit` | - | `pypi:pip-audit` |
 | `radon` | quality | default | `6.0.1` (`RADON_VERSION`) | `pip:radon` | - | `pypi:radon` |
 | `rubocop` | quality | default | `1.66.1` (`RUBOCOP_VERSION`) | `gem:rubocop` | - | `rubygems:rubocop` |
 | `ruff` | quality | default | `0.7.1` (`RUFF_VERSION`) | `pip:ruff` | - | `pypi:ruff` |
 | `shellcheck` | quality | default | - | `apt:shellcheck` | - | `debian:shellcheck` |
-| `sqlfluff` | quality | default | `3.2.5` (`SQLFLUFF_VERSION`) | `pip:sqlfluff` | - | `pypi:sqlfluff` |
+| `sqlfluff` | quality | default | `4.2.2` (`SQLFLUFF_VERSION`) | `pip:sqlfluff` | - | `pypi:sqlfluff` |
 | `staticcheck` | quality | default | `0.7.0` (`STATICCHECK_VERSION`) | `go:honnef.co/go/tools/cmd/staticcheck` | - | `go:honnef.co/go/tools` |
 | `swiftlint` | quality | default | `0.57.0` (`SWIFTLINT_VERSION`) | `github_release:realm/SwiftLint` | - | `github:realm/SwiftLint` |
 | `vulture` | quality | default | `2.13` (`VULTURE_VERSION`) | `pip:vulture` | - | `pypi:vulture` |
 | `yamllint` | quality | default | `1.35.1` (`YAMLLINT_VERSION`) | `pip:yamllint` | - | `pypi:yamllint` |
 | `clippy` | quality | rust bucket | `1.82.0` (`RUST_TOOLCHAIN`) | `wolf-scanners-rust` | - | `rust:stable` |
-| `codeql` | sast | codeql bucket | `2.19.3` (`CODEQL_VERSION`) | `wolf-scanners-codeql` | - | `github:github/codeql-cli-binaries` |
+| `codeql` | sast | codeql bucket | `2.26.1` (`CODEQL_VERSION`) | `wolf-scanners-codeql` | - | `github:github/codeql-cli-binaries` |
 | `detekt` | sast | jvm bucket | `1.23.7` (`DETEKT_VERSION`) | `wolf-scanners-jvm` | - | `github:detekt/detekt` |
 | `infer` | sast | jvm bucket | `1.2.0` (`INFER_VERSION`) | `wolf-scanners-jvm` | - | `github:facebook/infer` |
-| `pmd` | quality | jvm bucket | `7.7.0` (`PMD_VERSION`) | `wolf-scanners-jvm` | - | `github:pmd/pmd` |
+| `pmd` | quality | jvm bucket | `7.26.0` (`PMD_VERSION`) | `wolf-scanners-jvm` | - | `github:pmd/pmd` |

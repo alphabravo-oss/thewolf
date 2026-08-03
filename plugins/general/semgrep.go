@@ -19,8 +19,8 @@ func init() {
 	plugin.Register(&SemgrepPlugin{})
 }
 
-func (p *SemgrepPlugin) Name() string               { return "semgrep" }
-func (p *SemgrepPlugin) Category() models.Category   { return models.CategorySAST }
+func (p *SemgrepPlugin) Name() string                 { return "semgrep" }
+func (p *SemgrepPlugin) Category() models.Category    { return models.CategorySAST }
 func (p *SemgrepPlugin) Languages() []models.Language { return nil }
 
 func (p *SemgrepPlugin) CheckAvailable() bool { return container.IsScannersReady() }

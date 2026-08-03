@@ -19,8 +19,8 @@ func init() {
 	plugin.Register(&KubescapePlugin{})
 }
 
-func (p *KubescapePlugin) Name() string             { return "kubescape" }
-func (p *KubescapePlugin) Category() models.Category { return models.CategoryInfra }
+func (p *KubescapePlugin) Name() string                 { return "kubescape" }
+func (p *KubescapePlugin) Category() models.Category    { return models.CategoryInfra }
 func (p *KubescapePlugin) Languages() []models.Language { return nil }
 
 func (p *KubescapePlugin) CheckAvailable() bool { return container.IsScannersReady() }
@@ -65,7 +65,7 @@ type kubescapeOutput struct {
 }
 
 type kubescapeResult struct {
-	ResourceID string                  `json:"resourceID"`
+	ResourceID string                   `json:"resourceID"`
 	Controls   []kubescapeControlResult `json:"controls"`
 }
 

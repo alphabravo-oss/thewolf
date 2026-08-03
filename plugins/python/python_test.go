@@ -73,6 +73,30 @@ func TestParseBanditOutput(t *testing.T) {
 	}
 }
 
+func TestParseBanditRealE2EOutput(t *testing.T) {
+	path := os.Getenv("WOLF_BANDIT_E2E_OUTPUT")
+	if path == "" {
+		t.Skip("WOLF_BANDIT_E2E_OUTPUT is set only by gated Compose/Kind scanner execution")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	findings, err := parseBanditOutput(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(findings) == 0 {
+		t.Fatal("real Bandit scanner output produced no normalized findings")
+	}
+	for _, finding := range findings {
+		if finding.ToolName != "bandit" || finding.RuleID == "" ||
+			finding.FilePath == "" || finding.LineStart < 1 {
+			t.Fatalf("malformed normalized Bandit finding: %#v", finding)
+		}
+	}
+}
+
 func TestParseRuffOutput(t *testing.T) {
 	data := loadTestdata(t, "ruff_output.json")
 	findings, err := parseRuffOutput(data)

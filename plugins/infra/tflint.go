@@ -17,8 +17,8 @@ func init() {
 	plugin.Register(&TFLintPlugin{})
 }
 
-func (p *TFLintPlugin) Name() string             { return "tflint" }
-func (p *TFLintPlugin) Category() models.Category { return models.CategoryInfra }
+func (p *TFLintPlugin) Name() string                 { return "tflint" }
+func (p *TFLintPlugin) Category() models.Category    { return models.CategoryInfra }
 func (p *TFLintPlugin) Languages() []models.Language { return nil }
 
 func (p *TFLintPlugin) CheckAvailable() bool { return container.IsScannersReady() }

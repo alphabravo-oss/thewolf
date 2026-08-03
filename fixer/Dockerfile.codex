@@ -1,3 +1,6 @@
+# check=skip=InvalidDefaultArgInFrom
+# WOLF_FIXER_BASE_REF intentionally has no mutable default; the release
+# pipeline must provide the verified base image by digest.
 # ============================================================
 # checkov:skip=CKV_DOCKER_2 — worker container, not a service.
 #
@@ -17,22 +20,40 @@
 # Build via internal/scannerbuild FixerVariants ("codex").
 # ============================================================
 
-# Pin the base by version tag (not :latest) — the scanner-image build
-# subsystem always passes --build-arg WOLF_VERSION and tags the base as
-# wolf-fixer:<version> alongside :latest, so this resolves to the matching
-# immutable version at build time (default `dev` for manual local builds).
-ARG WOLF_VERSION=dev
-FROM alphabravodevops/wolf-fixer:${WOLF_VERSION} AS base
+ARG WOLF_FIXER_BASE_REF
+FROM ${WOLF_FIXER_BASE_REF} AS base
+
+ARG CODEX_VERSION=0.146.0
+ARG CODEX_INTEGRITY=sha512-yG3sPWNda/2YAIQIDq9MrrjoCTIQ7rxYM5IasrG3VBcuhCLTkgeg/JzqmJq1V98RE4MJ5jCxDXXQlOjrditFRw==
+ARG CODEX_LINUX_AMD64_INTEGRITY=sha512-fswvyGprAPCMiOEue/7MKMk7pCjh9kZIJfJX5i9atmfnmGYbYCcUhZsEH9LEP0+0t5xyPqDbfNXY7NSxIVuXxA==
+ARG CODEX_LINUX_ARM64_INTEGRITY=sha512-qiYDxkkEFnXG7joadJW6Q+XcgyDXCpGdpa9nk/c+i0gEomur1j7bHvx12NfWWCF/y8Tqri6ay+FLuC2MjdehtA==
 
 ENV WOLF_FIXER_VARIANT=codex \
     WOLF_FIXER_ENGINE=codex
 
+LABEL dev.wolf.fixer.variant="codex" \
+      dev.wolf.fixer.auth-mode="interactive-session" \
+      dev.wolf.fixer.cli.version="${CODEX_VERSION}"
+
 USER root
 
-# Codex CLI (npm-distributed). Pinned major; refresh via versions.
-RUN npm install -g @openai/codex \
-    && command -v codex \
-    && codex --version || true
+RUN set -eux; \
+    actual_integrity="$(npm --cache /tmp/npm-cache view "@openai/codex@${CODEX_VERSION}" dist.integrity)"; \
+    test "$actual_integrity" = "$CODEX_INTEGRITY"; \
+    arch="$(dpkg --print-architecture)"; \
+    case "$arch" in \
+      amd64) native_version="${CODEX_VERSION}-linux-x64"; native_integrity="$CODEX_LINUX_AMD64_INTEGRITY" ;; \
+      arm64) native_version="${CODEX_VERSION}-linux-arm64"; native_integrity="$CODEX_LINUX_ARM64_INTEGRITY" ;; \
+      *) echo "unsupported architecture: $arch" >&2; exit 65 ;; \
+    esac; \
+    actual_native_integrity="$(npm --cache /tmp/npm-cache view "@openai/codex@${native_version}" dist.integrity)"; \
+    test "$actual_native_integrity" = "$native_integrity"; \
+    npm --cache /tmp/npm-cache install --prefix /opt/wolf/codex --omit=dev \
+      "@openai/codex@${CODEX_VERSION}"; \
+    ln -s /opt/wolf/codex/node_modules/.bin/codex /usr/local/bin/codex; \
+    command -v codex; \
+    codex --version; \
+    rm -rf /tmp/npm-cache
 
 USER wolf
 WORKDIR /workspace

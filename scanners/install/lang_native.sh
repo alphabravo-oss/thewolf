@@ -4,11 +4,9 @@
 # ============================================================
 set -euo pipefail
 
-export DEBIAN_FRONTEND=noninteractive
-apt-get update
-apt-get install -y --no-install-recommends \
-    cppcheck
-apt-get clean
-rm -rf /var/lib/apt/lists/*
+command -v cppcheck >/dev/null 2>&1 || {
+    echo "cppcheck was not installed by the locked OS package layer" >&2
+    exit 1
+}
 
 echo "C/C++ scanners installed."

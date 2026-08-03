@@ -21,8 +21,11 @@ case "$ARCH" in
 esac
 
 tmp="$(mktemp -d)"
-curl -fsSL -o "${tmp}/codeql.tgz" \
+curl --proto '=https' --tlsv1.2 --fail --location --silent --show-error \
+    --proto-redir '=https' --retry 3 --retry-all-errors -o "${tmp}/codeql.tgz" \
     "https://github.com/github/codeql-action/releases/download/codeql-bundle-v${CODEQL_VERSION}/${CODEQL_ASSET}"
+printf '%s  %s\n' "$CODEQL_LINUX_AMD64_SHA256" "${tmp}/codeql.tgz" \
+    | sha256sum --check --strict -
 mkdir -p /opt/codeql
 tar -xzf "${tmp}/codeql.tgz" -C /opt/codeql --strip-components=1
 ln -sf /opt/codeql/codeql /usr/local/bin/codeql

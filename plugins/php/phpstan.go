@@ -17,7 +17,7 @@ func init() {
 	plugin.Register(&PHPStanPlugin{})
 }
 
-func (p *PHPStanPlugin) Name() string             { return "phpstan" }
+func (p *PHPStanPlugin) Name() string              { return "phpstan" }
 func (p *PHPStanPlugin) Category() models.Category { return models.CategorySAST }
 func (p *PHPStanPlugin) Languages() []models.Language {
 	return []models.Language{models.LangPHP}

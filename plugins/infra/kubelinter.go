@@ -18,8 +18,8 @@ func init() {
 	plugin.Register(&KubeLinterPlugin{})
 }
 
-func (p *KubeLinterPlugin) Name() string             { return "kube-linter" }
-func (p *KubeLinterPlugin) Category() models.Category { return models.CategoryInfra }
+func (p *KubeLinterPlugin) Name() string                 { return "kube-linter" }
+func (p *KubeLinterPlugin) Category() models.Category    { return models.CategoryInfra }
 func (p *KubeLinterPlugin) Languages() []models.Language { return nil }
 
 func (p *KubeLinterPlugin) CheckAvailable() bool { return container.IsScannersReady() }

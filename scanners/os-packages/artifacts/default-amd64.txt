@@ -1,0 +1,2 @@
+# name<TAB>url<TAB>sha256<TAB>filename; generated, DO NOT EDIT.
+nodejs	https://deb.nodesource.com/node_22.x/pool/main/n/nodejs/nodejs_22.23.2-1nodesource1_amd64.deb	eed0c5f0ab411f28783f81f051fcf7928ae8bf833e2df11f48f3fa78270025cb	nodejs_22.23.2-1nodesource1_amd64.deb

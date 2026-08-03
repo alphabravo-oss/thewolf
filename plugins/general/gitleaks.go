@@ -17,8 +17,8 @@ func init() {
 	plugin.Register(&GitleaksPlugin{})
 }
 
-func (p *GitleaksPlugin) Name() string               { return "gitleaks" }
-func (p *GitleaksPlugin) Category() models.Category   { return models.CategorySecrets }
+func (p *GitleaksPlugin) Name() string                 { return "gitleaks" }
+func (p *GitleaksPlugin) Category() models.Category    { return models.CategorySecrets }
 func (p *GitleaksPlugin) Languages() []models.Language { return nil }
 
 func (p *GitleaksPlugin) CheckAvailable() bool { return container.IsScannersReady() }
@@ -61,14 +61,14 @@ func (p *GitleaksPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) (
 }
 
 type gitleaksFinding struct {
-	Description string `json:"Description"`
-	File        string `json:"File"`
-	StartLine   int    `json:"StartLine"`
-	EndLine     int    `json:"EndLine"`
-	Match       string `json:"Match"`
-	RuleID      string `json:"RuleID"`
+	Description string  `json:"Description"`
+	File        string  `json:"File"`
+	StartLine   int     `json:"StartLine"`
+	EndLine     int     `json:"EndLine"`
+	Match       string  `json:"Match"`
+	RuleID      string  `json:"RuleID"`
 	Entropy     float64 `json:"Entropy"`
-	Secret      string `json:"Secret"`
+	Secret      string  `json:"Secret"`
 }
 
 func parseGitleaksOutput(data []byte) ([]models.Finding, error) {
