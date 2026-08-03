@@ -129,3 +129,36 @@ func TestStripAgentConfigSymlinkDirRegression(t *testing.T) {
 		t.Errorf("removed=%v, want [.opencode]", removed)
 	}
 }
+
+// TestStripAgentConfigDanglingSymlinkRegression pins the os.Lstat requirement.
+// When a symlink target exists, both Lstat and Stat succeed — identical control
+// flow — so only a dangling symlink can distinguish them. Swapping Lstat for Stat
+// would silently skip dangling config symlinks, leaving attacker-planted symlinks
+// that override Wolf's permissions. This test catches that specific regression.
+// Do NOT create the symlink target — the point is to test the dangling case.
+func TestStripAgentConfigDanglingSymlinkRegression(t *testing.T) {
+	worktree := t.TempDir()
+	nonexistentPath := filepath.Join(t.TempDir(), "nope") // Never created; target does not exist
+
+	symlinkPath := filepath.Join(worktree, "opencode.json")
+	if err := os.Symlink(nonexistentPath, symlinkPath); err != nil {
+		t.Fatal(err)
+	}
+
+	removed, err := StripAgentConfig(worktree)
+	if err != nil {
+		t.Fatalf("StripAgentConfig: %v", err)
+	}
+
+	// Symlink must be in removed slice — this assertion fires under a Stat swap,
+	// because Stat on a dangling symlink returns an error, hits os.IsNotExist(err),
+	// and continues without adding the name.
+	if len(removed) != 1 || removed[0] != "opencode.json" {
+		t.Errorf("dangling symlink not removed: removed=%v, want [opencode.json]", removed)
+	}
+
+	// Symlink itself must be gone (checked with Lstat, which does not follow).
+	if _, err := os.Lstat(symlinkPath); !os.IsNotExist(err) {
+		t.Errorf("dangling symlink still present after strip: Lstat err=%v", err)
+	}
+}
