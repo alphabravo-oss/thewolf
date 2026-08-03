@@ -203,6 +203,14 @@ wolf sarif export "$SCAN" > findings.sarif    # feed your dashboards
 ```
 
 Interactive API docs ship with the product at **`/api/v1/docs`** (Swagger UI) and **`/api/v1/docs/redoc`** — no internet required.
+For durable remote scans from CI or another service—including one-shot Git/SSH
+sources, credentials, idempotency, SSE replay, workers, and Kubernetes native
+Jobs—see **[`docs/remote-scanning-api.md`](docs/remote-scanning-api.md)**.
+For the independently scheduled scanner image/toolchain supply chain—including
+daily discovery, configurable weekly complete-set rebuilds, a seven-day
+maximum stable-image age, on-demand operations, immutable releases, canary
+rollout, and rollback—see
+**[`docs/scanner-release-management.md`](docs/scanner-release-management.md)**.
 
 ---
 
@@ -299,10 +307,12 @@ The CLI variants need a **one-time interactive login**; the API variant is the z
 
 ```bash
 # 1. Start the worker container with a volume for the agent session.
+# Resolve the approved release once and use its immutable digest here.
+export WOLF_FIXER_IMAGE='docker.io/alphabravodevops/wolf-fixer-claude@sha256:<approved-digest>'
 docker run -d --name wolf-fixer \
   -v wolf-fixer-session:/home/wolf/.config \
   -e WOLF_API_URL=https://wolf.internal \
-  alphabravodevops/wolf-fixer-claude:latest
+  "$WOLF_FIXER_IMAGE"
 
 # 2. Authenticate once — interactively — into that volume.
 docker exec -it wolf-fixer claude login    # opens an auth URL; paste the token

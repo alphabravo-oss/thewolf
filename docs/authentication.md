@@ -16,6 +16,56 @@ The **first account created becomes admin**. The role is resolved per-request, s
 promoting/demoting a user (Settings → Users, or `wolf user set-role <id> --role admin`)
 takes effect immediately without re-issuing tokens.
 
+## Human scanner supply-chain personas
+
+Ordinary users retain their existing owner-scoped product access and default to
+read-only scanner **Viewer** access. Administrators assign scanner permissions
+under **Settings → Users → Scanner access**. System administrators always have
+implicit full access and do not need a scanner persona.
+
+| Persona ID | Capability |
+|---|---|
+| `viewer` | Read scanner inventory, operations, evidence, notifications, and audit history. |
+| `scanner_operator` | Run discovery, create/retry candidates, promote releases, and control rollouts. |
+| `release_approver` | Approve/reject candidates, record bounded exceptions, and publish approved candidates. |
+| `registry_administrator` | Manage registry targets, reconciliation, repair, and guarded quarantine cleanup. |
+| `supply_chain_administrator` | Full scanner administration, including policy, signing, notification retry, deprecation, and revocation. |
+| `auditor` | Read-only scanner evidence and immutable scanner audit access, retained as explicit audit metadata. |
+
+`scanner_operator`, `release_approver`, and `registry_administrator` are
+composable so separation-of-duties can be modeled deliberately. `viewer` and
+`auditor` are standalone read-only personas. `supply_chain_administrator` is
+exclusive and replaces other scanner persona assignments. Server-side policy
+and candidate creator/approver separation remain authoritative regardless of
+what the UI displays.
+
+Assign with the CLI:
+
+```bash
+wolf user scanner-access USER_ID \
+  --persona scanner_operator \
+  --persona release_approver
+
+# Revoke elevated access without ending the user's browser session.
+wolf user scanner-access USER_ID --persona viewer
+```
+
+Or call the administrator API directly:
+
+```http
+PUT /api/v1/users/USER_ID/scanner-supply-chain-access
+Authorization: Bearer ADMIN_CREDENTIAL
+Content-Type: application/json
+
+{"personas":["registry_administrator"]}
+```
+
+The API accepts only the six predefined persona IDs, never arbitrary scopes.
+Assignments are loaded from persistent storage on every browser request, so a
+grant or revocation applies to the next request without logout, login, token
+rotation, or waiting for a session cache to expire. API keys remain bound to
+their own explicit scopes and are not elevated by the owner's human persona.
+
 ## Registration
 
 Self-service registration is **off by default**. Admins create accounts under
@@ -61,7 +111,7 @@ Scoped, revocable credentials for the CLI, CI, and agents.
   The secret (`wolf_…`) is **shown once** — only a hash + an 8-char prefix are stored,
   so it's never recoverable.
 - **Scopes:** `read:<resource>` / `write:<resource>` (repos, scans, findings, fixes,
-  loops, config) plus the `admin` super-scope. Aliases: `read-only`, `read-write`,
+  loops, config, credentials) plus the `admin` super-scope. Aliases: `read-only`, `read-write`,
   `full`/`all`.
 - **Expiry:** default 90 days; choose 30/90/365/never.
 - **Why they bypass 2FA:** an API key is itself a strong, deliberately-minted secret
@@ -100,4 +150,5 @@ deployment (TLS, reverse proxy, hardened Docker socket) see
 ## See also
 
 - [`deployment.md`](deployment.md) — TLS, reverse proxy, public-server checklist.
+- [`remote-scanning-api.md`](remote-scanning-api.md) — headless scans, source credentials, and workers.
 - [`audit.md`](audit.md) — the classified audit log.

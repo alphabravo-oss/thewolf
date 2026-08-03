@@ -1,0 +1,256 @@
+name: exact remote scan deployment qualification
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/remote-scan-deployment-qualification.yml"
+      - "scripts/e2e/remote-scan-*.sh"
+      - "deploy/helm/wolf/**"
+      - "docker-compose.yml"
+      - "scanners/ci/test-remote-scan-deployment-workflow.py"
+  workflow_dispatch:
+    inputs:
+      qualification_id:
+        description: "Optional qualification-* change-record identity"
+        required: false
+        type: string
+      runtime_image:
+        description: "Exact qualified Wolf runtime repository@sha256"
+        required: true
+        type: string
+      scanner_image:
+        description: "Exact qualified default scanner repository@sha256"
+        required: true
+        type: string
+      postgres_image:
+        description: "Exact qualified PostgreSQL repository@sha256"
+        required: true
+        type: string
+
+concurrency:
+  group: remote-scan-deployment-qualification-${{ github.run_id }}-${{ github.run_attempt }}
+  cancel-in-progress: false
+
+jobs:
+  validate-contract:
+    name: Validate qualification contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Validate workflow and harnesses
+        run: |
+          python3 scanners/ci/test-remote-scan-deployment-workflow.py
+          shellcheck scripts/e2e/remote-scan-api-smoke.sh \
+            scripts/e2e/remote-scan-native.sh \
+            scripts/e2e/remote-scan-compose.sh \
+            scripts/e2e/remote-scan-kind.sh
+          bash deploy/helm/wolf/tests/render-security.sh
+
+  prepare:
+    name: Bind protected exact-image qualification
+    needs: validate-contract
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      qualification_id: ${{ steps.bind.outputs.qualification_id }}
+      runtime_image: ${{ steps.bind.outputs.runtime_image }}
+      scanner_image: ${{ steps.bind.outputs.scanner_image }}
+      postgres_image: ${{ steps.bind.outputs.postgres_image }}
+    steps:
+      - name: Validate protected ref and immutable inputs
+        id: bind
+        env:
+          REF: ${{ github.ref }}
+          INPUT_ID: ${{ inputs.qualification_id }}
+          RUNTIME_IMAGE: ${{ inputs.runtime_image }}
+          SCANNER_IMAGE: ${{ inputs.scanner_image }}
+          POSTGRES_IMAGE: ${{ inputs.postgres_image }}
+        run: |
+          [[ "$REF" == refs/heads/main ]] || {
+            echo "deployment qualification is trusted only from main" >&2
+            exit 2
+          }
+          for name in RUNTIME_IMAGE SCANNER_IMAGE POSTGRES_IMAGE; do
+            value="${!name}"
+            [[ "$value" =~ ^[^[:space:]@]+@sha256:[a-f0-9]{64}$ ]] || {
+              echo "$name must be an exact repository@sha256 reference" >&2
+              exit 2
+            }
+          done
+          qualification_id="${INPUT_ID:-qualification-${GITHUB_RUN_ID}-a${GITHUB_RUN_ATTEMPT}}"
+          [[ "$qualification_id" =~ ^qualification-[a-z0-9][a-z0-9._-]{0,111}$ ]] || {
+            echo "invalid qualification identity" >&2
+            exit 2
+          }
+          {
+            echo "qualification_id=$qualification_id"
+            echo "runtime_image=$RUNTIME_IMAGE"
+            echo "scanner_image=$SCANNER_IMAGE"
+            echo "postgres_image=$POSTGRES_IMAGE"
+          } >>"$GITHUB_OUTPUT"
+
+  native:
+    name: Native ${{ matrix.database }} API and worker
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    environment: scanner-release-qualification
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        database: [sqlite, postgres]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Extract the exact runtime binary
+        env:
+          RUNTIME_IMAGE: ${{ needs.prepare.outputs.runtime_image }}
+        run: |
+          mkdir -p build/remote-scan-qualification
+          docker pull "$RUNTIME_IMAGE"
+          container_id="$(docker create "$RUNTIME_IMAGE")"
+          trap 'docker rm -f "$container_id" >/dev/null 2>&1 || true' EXIT
+          docker cp "$container_id:/usr/local/bin/wolf" build/remote-scan-qualification/wolf
+          chmod 0555 build/remote-scan-qualification/wolf
+      - name: Run native exact-scanner qualification and restart recovery
+        env:
+          WOLF_RUN_REMOTE_SCAN_NATIVE_E2E: "1"
+          WOLF_E2E_DATABASE: ${{ matrix.database }}
+          WOLF_E2E_WOLF_BINARY: ${{ github.workspace }}/build/remote-scan-qualification/wolf
+          WOLF_E2E_SCANNER_IMAGE: ${{ needs.prepare.outputs.scanner_image }}
+          WOLF_E2E_POSTGRES_IMAGE: ${{ needs.prepare.outputs.postgres_image }}
+        run: |
+          scripts/e2e/remote-scan-native.sh |
+            tee "build/remote-scan-qualification/native-${{ matrix.database }}.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: remote-scan-${{ needs.prepare.outputs.qualification_id }}-native-${{ matrix.database }}
+          path: build/remote-scan-qualification/native-${{ matrix.database }}.json
+          if-no-files-found: error
+          retention-days: 365
+
+  compose:
+    name: Compose ${{ matrix.database }} API and worker
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    environment: scanner-release-qualification
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        database: [sqlite, postgres]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run Compose exact-image qualification and restart recovery
+        env:
+          WOLF_RUN_REMOTE_SCAN_COMPOSE_E2E: "1"
+          WOLF_E2E_DATABASE: ${{ matrix.database }}
+          WOLF_E2E_RUNTIME_IMAGE: ${{ needs.prepare.outputs.runtime_image }}
+          WOLF_E2E_SCANNER_IMAGE: ${{ needs.prepare.outputs.scanner_image }}
+          WOLF_E2E_POSTGRES_IMAGE: ${{ needs.prepare.outputs.postgres_image }}
+        run: |
+          mkdir -p build/remote-scan-qualification
+          scripts/e2e/remote-scan-compose.sh |
+            tee "build/remote-scan-qualification/compose-${{ matrix.database }}.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: remote-scan-${{ needs.prepare.outputs.qualification_id }}-compose-${{ matrix.database }}
+          path: build/remote-scan-qualification/compose-${{ matrix.database }}.json
+          if-no-files-found: error
+          retention-days: 365
+
+  kind:
+    name: Kind PostgreSQL API, worker, and scanner Jobs
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    environment: scanner-release-qualification
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: 1.26.5
+          cache: false
+      - name: Install pinned Kind and verify deployment tools
+        run: |
+          go install sigs.k8s.io/kind@v0.30.0
+          kind version
+          helm version
+          kubectl version --client=true
+      - name: Run Kind exact-image qualification and rollout recovery
+        env:
+          WOLF_RUN_REMOTE_SCAN_KIND_E2E: "1"
+          WOLF_E2E_RUNTIME_IMAGE: ${{ needs.prepare.outputs.runtime_image }}
+          WOLF_E2E_SCANNER_IMAGE: ${{ needs.prepare.outputs.scanner_image }}
+          WOLF_E2E_POSTGRES_IMAGE: ${{ needs.prepare.outputs.postgres_image }}
+          WOLF_E2E_KIND_MEMORY_PVS: "0"
+        run: |
+          mkdir -p build/remote-scan-qualification
+          scripts/e2e/remote-scan-kind.sh |
+            tee build/remote-scan-qualification/kind-postgres.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: remote-scan-${{ needs.prepare.outputs.qualification_id }}-kind-postgres
+          path: build/remote-scan-qualification/kind-postgres.json
+          if-no-files-found: error
+          retention-days: 365
+
+  closure:
+    name: Require complete deployment matrix
+    needs: [prepare, native, compose, kind]
+    if: always() && needs.prepare.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: remote-scan-${{ needs.prepare.outputs.qualification_id }}-*
+          path: build/remote-scan-qualification
+          merge-multiple: true
+      - name: Verify the exact five-receipt closure
+        env:
+          NATIVE_RESULT: ${{ needs.native.result }}
+          COMPOSE_RESULT: ${{ needs.compose.result }}
+          KIND_RESULT: ${{ needs.kind.result }}
+        run: |
+          [[ "$NATIVE_RESULT" == success && "$COMPOSE_RESULT" == success && "$KIND_RESULT" == success ]]
+          mapfile -t receipts < <(find build/remote-scan-qualification -type f -name '*.json' | sort)
+          [[ "${#receipts[@]}" -eq 5 ]]
+          jq -s -e 'length == 5 and all(.[]; .result == "passed" and .restartRecoveryVerified == true)' \
+            "${receipts[@]}" >/dev/null
+          sha256sum "${receipts[@]}" >build/remote-scan-qualification/closure.sha256
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: remote-scan-${{ needs.prepare.outputs.qualification_id }}-closure
+          path: build/remote-scan-qualification/
+          if-no-files-found: error
+          retention-days: 365

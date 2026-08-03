@@ -2,7 +2,7 @@
 # checkov:skip=CKV_DOCKER_2 — bucket images are one-shot scanner containers, not long-lived services
 # Stage 1: Build the Go binary
 # ============================================================
-FROM golang:1.26-alpine AS builder
+FROM golang:1.26.5-alpine@sha256:0178a641fbb4858c5f1b48e34bdaabe0350a330a1b1149aabd498d0699ff5fb2 AS builder
 
 RUN apk add --no-cache gcc musl-dev sqlite-dev git
 
@@ -29,12 +29,180 @@ RUN CGO_ENABLED=1 go build \
     -tags 'sqlite_omit_load_extension netgo osusergo' \
     -o /wolf ./cmd/wolf/
 
+# The managed release lanes are separate trust and dependency boundaries.
+# Build static, lane-locked entrypoints so one image cannot select another
+# lane at runtime. scannertools is shared only by the fixed and quality lanes.
+RUN mkdir -p /release-adapters \
+    && CGO_ENABLED=0 go build -trimpath -ldflags '-s -w' \
+      -o /release-adapters/fixed ./cmd/wolf-scanner-release-fixed-adapter \
+    && CGO_ENABLED=0 go build -trimpath -ldflags '-s -w' \
+      -o /release-adapters/quality ./cmd/wolf-scanner-release-quality-adapter \
+    && CGO_ENABLED=0 go build -trimpath -ldflags '-s -w' \
+      -o /release-adapters/integration ./cmd/wolf-scanner-release-integration-adapter \
+    && CGO_ENABLED=0 go build -trimpath -ldflags '-s -w' \
+      -o /release-adapters/scannertools ./cmd/scannertools \
+    && CGO_ENABLED=0 go test -c -trimpath \
+      -o /release-adapters/python-parser-qualification.test ./plugins/python \
+    && CGO_ENABLED=0 go test -c -trimpath \
+      -o /release-adapters/scanner-rollout-qualification.test ./internal/scannerrollout
+RUN CGO_ENABLED=0 go build -trimpath -ldflags '-s -w' \
+      -o /release-adapters/synccontext ./internal/scannerbuild/cmd/synccontext
+
+# ============================================================
+# Pinned adapter tools
+# ============================================================
+FROM alpine:3.24@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS scanner-release-oras-tool
+
+ARG TARGETARCH
+ARG ORAS_VERSION=1.3.2
+ARG ORAS_AMD64_SHA256=9229ccc6d17bb282039ad4a69abb16dcb887a5bce567c075d731d9b3c7ad8eaf
+ARG ORAS_ARM64_SHA256=8db4a223bd6034deff198e791ea7cb3af0840df25b7e9f370e2f1f3fd20d389b
+
+RUN apk add --no-cache ca-certificates \
+    && case "${TARGETARCH}" in \
+      amd64) oras_arch=amd64; oras_sha="${ORAS_AMD64_SHA256}" ;; \
+      arm64) oras_arch=arm64; oras_sha="${ORAS_ARM64_SHA256}" ;; \
+      *) echo "unsupported adapter target architecture: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac \
+    && mkdir -p /downloads/oras /out/bin /out/licenses/oras \
+    && wget -q -O /downloads/oras.tar.gz \
+      "https://github.com/oras-project/oras/releases/download/v${ORAS_VERSION}/oras_${ORAS_VERSION}_linux_${oras_arch}.tar.gz" \
+    && echo "${oras_sha}  /downloads/oras.tar.gz" | sha256sum -c - \
+    && tar -xzf /downloads/oras.tar.gz -C /downloads/oras LICENSE oras \
+    && install -m 0555 /downloads/oras/oras /out/bin/oras \
+    && install -m 0444 /downloads/oras/LICENSE /out/licenses/oras/LICENSE
+
+FROM alpine:3.24@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS scanner-release-trivy-tool
+
+ARG TARGETARCH
+ARG TRIVY_VERSION=0.70.0
+ARG TRIVY_AMD64_SHA256=8b4376d5d6befe5c24d503f10ff136d9e0c49f9127a4279fd110b727929a5aa9
+ARG TRIVY_ARM64_SHA256=2f6bb988b553a1bbac6bdd1ce890f5e412439564e17522b88a4541b4f364fc8d
+
+RUN apk add --no-cache ca-certificates \
+    && case "${TARGETARCH}" in \
+      amd64) trivy_arch=64bit; trivy_sha="${TRIVY_AMD64_SHA256}" ;; \
+      arm64) trivy_arch=ARM64; trivy_sha="${TRIVY_ARM64_SHA256}" ;; \
+      *) echo "unsupported adapter target architecture: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac \
+    && mkdir -p /downloads/trivy /out/bin /out/licenses/trivy \
+    && wget -q -O /downloads/trivy.tar.gz \
+      "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-${trivy_arch}.tar.gz" \
+    && echo "${trivy_sha}  /downloads/trivy.tar.gz" | sha256sum -c - \
+    && tar -xzf /downloads/trivy.tar.gz -C /downloads/trivy LICENSE trivy \
+    && install -m 0555 /downloads/trivy/trivy /out/bin/trivy \
+    && install -m 0444 /downloads/trivy/LICENSE /out/licenses/trivy/LICENSE
+
+# ============================================================
+# Managed scanner-release adapter images
+# ============================================================
+FROM alpine:3.24@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS scanner-release-fixed-adapter
+
+LABEL org.opencontainers.image.title="Wolf fixed release adapter" \
+      org.opencontainers.image.source="https://github.com/alphabravocompany/thewolf"
+
+RUN apk add --no-cache ca-certificates tzdata git \
+    && addgroup -S wolf \
+    && adduser -S wolf -G wolf
+
+COPY --from=builder --chmod=0555 /release-adapters/fixed /usr/local/bin/wolf-release-adapter
+COPY --from=builder --chmod=0555 /release-adapters/scannertools /usr/local/bin/scannertools
+COPY --from=builder --chmod=0555 /release-adapters/synccontext /usr/local/bin/synccontext
+COPY --from=builder /usr/local/go /usr/local/go
+COPY --from=scanner-release-oras-tool --chmod=0555 /out/bin/oras /usr/local/bin/oras
+COPY --from=scanner-release-oras-tool /out/licenses/oras /usr/share/licenses/oras
+
+ENV HOME=/tmp PATH=/usr/local/go/bin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+WORKDIR /workspace
+USER wolf
+ENTRYPOINT ["/usr/local/bin/wolf-release-adapter"]
+
+FROM alpine:3.24@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS scanner-release-quality-adapter
+
+LABEL org.opencontainers.image.title="Wolf quality release adapter" \
+      org.opencontainers.image.source="https://github.com/alphabravocompany/thewolf" \
+      org.opencontainers.image.version.trivy="0.70.0" \
+      org.opencontainers.image.version.oras="1.3.2"
+
+RUN apk add --no-cache ca-certificates tzdata docker-cli git \
+    && addgroup -S wolf \
+    && adduser -S wolf -G wolf
+
+COPY --from=builder --chmod=0555 /release-adapters/quality /usr/local/bin/wolf-release-adapter
+COPY --from=builder --chmod=0555 /release-adapters/scannertools /usr/local/bin/scannertools
+COPY --from=scanner-release-oras-tool --chmod=0555 /out/bin/oras /usr/local/bin/oras
+COPY --from=scanner-release-trivy-tool --chmod=0555 /out/bin/trivy /usr/local/bin/trivy
+COPY --from=scanner-release-oras-tool /out/licenses/oras /usr/share/licenses/oras
+COPY --from=scanner-release-trivy-tool /out/licenses/trivy /usr/share/licenses/trivy
+
+ENV HOME=/tmp
+WORKDIR /workspace
+USER wolf
+ENTRYPOINT ["/usr/local/bin/wolf-release-adapter"]
+
+FROM alpine:3.24@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS scanner-release-integration-adapter
+
+LABEL org.opencontainers.image.title="Wolf integration release adapter" \
+      org.opencontainers.image.source="https://github.com/alphabravocompany/thewolf"
+
+# The four qualification entrypoints and their fixed Compose fixture helper
+# use trusted precompiled qualification binaries, jq and Python timing helpers
+# in addition to Docker/Compose, kind and kubectl. Candidate checkout code is
+# never compiled or executed in this credential-bearing lane.
+RUN apk add --no-cache ca-certificates tzdata bash docker-cli docker-cli-compose \
+      jq kind kubectl python3 \
+    && addgroup -S wolf \
+    && adduser -S wolf -G wolf \
+    && mkdir -p /usr/local/libexec/wolf/release-qualification
+
+COPY --from=builder --chmod=0555 /release-adapters/integration /usr/local/bin/wolf-release-adapter
+COPY --from=builder --chmod=0555 /release-adapters/python-parser-qualification.test \
+  /usr/local/libexec/wolf/release-qualification/python-parser-qualification.test
+COPY --from=builder --chmod=0555 /release-adapters/scanner-rollout-qualification.test \
+  /usr/local/libexec/wolf/release-qualification/scanner-rollout-qualification.test
+COPY --from=scanner-release-oras-tool --chmod=0555 /out/bin/oras /usr/local/bin/oras
+COPY --from=scanner-release-oras-tool /out/licenses/oras /usr/share/licenses/oras
+COPY --chmod=0555 scripts/e2e/scanner-rollout-compose.sh scripts/e2e/scanner-rollout-kind.sh \
+  scripts/e2e/scanner-rollout-compose-fixture-adapter.sh \
+  scripts/e2e/scanner-quality-compose.sh scripts/e2e/scanner-quality-kind.sh \
+  /usr/local/libexec/wolf/release-qualification/
+
+ENV HOME=/tmp
+WORKDIR /workspace
+USER wolf
+ENTRYPOINT ["/usr/local/bin/wolf-release-adapter"]
+
+# ============================================================
+# Dedicated proposal-worker runtime
+# ============================================================
+# Proposal generation validates a freshly fetched exact Git commit with the
+# repository's pinned scannertools command. Keep the Go toolchain in this
+# narrowly scoped image; the API/runtime image below remains minimal.
+FROM golang:1.26.5-alpine@sha256:0178a641fbb4858c5f1b48e34bdaabe0350a330a1b1149aabd498d0699ff5fb2 AS proposal-runtime
+
+LABEL org.opencontainers.image.title="Wolf scanner proposal runtime" \
+      org.opencontainers.image.description="Non-root worker for generating and validating immutable scanner release proposals" \
+      org.opencontainers.image.source="https://github.com/alphabravocompany/thewolf"
+
+RUN apk add --no-cache ca-certificates tzdata git \
+    && addgroup -S wolf \
+    && adduser -S wolf -G wolf
+
+COPY --from=builder /wolf /usr/local/bin/wolf
+
+RUN mkdir -p /home/wolf/.wolf \
+    && chown -R wolf:wolf /home/wolf
+
+USER wolf
+ENTRYPOINT ["wolf"]
+CMD ["scanner-release-worker", "--role=proposal"]
+
 # ============================================================
 # Stage 2: Build the Vite UI (ui/, pnpm)
 # ============================================================
-FROM node:22-alpine AS ui-builder
+FROM node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32 AS ui-builder
 
-RUN npm install -g pnpm@9
+RUN npm install -g pnpm@9.15.9
 
 WORKDIR /app/ui
 
@@ -49,20 +217,23 @@ RUN pnpm build
 # ============================================================
 # Stage 3: Minimal runtime
 # ============================================================
-FROM alpine:3.20 AS runtime
+FROM alpine:3.24@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS runtime
 
 LABEL org.opencontainers.image.title="The Wolf" \
       org.opencontainers.image.description="AI-Powered Code Analysis & Fix Engine" \
       org.opencontainers.image.source="https://github.com/alphabravocompany/thewolf" \
       org.opencontainers.image.vendor="WolfCorp"
 
-RUN apk add --no-cache ca-certificates tzdata docker-cli git \
+RUN apk add --no-cache ca-certificates tzdata docker-cli docker-cli-buildx git \
     && addgroup -S wolf \
     && adduser -S wolf -G wolf \
     && addgroup -S docker \
-    && adduser wolf docker
+    && adduser wolf docker \
+    && test -x /usr/libexec/docker/cli-plugins/docker-buildx
 
 COPY --from=builder /wolf /usr/local/bin/wolf
+COPY --from=builder /app/scanners/tools.yaml /usr/share/wolf/scanners/tools.yaml
+COPY --from=builder /app/scanners/scanner-lock.yaml /usr/share/wolf/scanners/scanner-lock.yaml
 
 # Copy the SPA build output. The Go server's MountStaticUI auto-discovers
 # this path; WOLF_UI_DIR can override it.

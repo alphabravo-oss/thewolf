@@ -1,0 +1,905 @@
+{{- if .Values.scannerRelease.scheduler.enabled }}
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "wolf.fullname" . }}-scanner-release-scheduler
+  labels:
+    {{- include "wolf.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: scanner-release-scheduler
+  policyTypes: [Egress]
+  egress:
+    - ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+        - {protocol: TCP, port: 5432}
+---
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "wolf.fullname" . }}-scanner-release-scheduler
+  labels:
+    {{- include "wolf.labels" . | nindent 4 }}
+    app.kubernetes.io/component: scanner-release-scheduler
+spec:
+  replicas: {{ .Values.scannerRelease.scheduler.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: scanner-release-scheduler
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: wolf
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: scanner-release-scheduler
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: scheduler
+          image: {{ include "wolf.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["scanner-release-worker", "--role=scheduler"]
+          env:
+            - {name: WOLF_DB_DRIVER, value: postgres}
+            - name: WOLF_DB_DSN
+              valueFrom: {secretKeyRef: {name: {{ include "wolf.fullname" . }}, key: postgres-dsn}}
+            - {name: WOLF_SCANNER_DEFINITION_COMMIT, value: {{ required "scannerRelease.scheduler.definitionCommit is required" .Values.scannerRelease.scheduler.definitionCommit | quote }}}
+            - {name: WOLF_SCANNER_RELEASE_TIMEZONE, value: {{ .Values.scannerRelease.scheduler.timezone | quote }}}
+            - {name: WOLF_SCANNER_RELEASE_DAILY_TIME, value: {{ .Values.scannerRelease.scheduler.dailyTime | quote }}}
+            - {name: WOLF_SCANNER_RELEASE_WEEKLY_TIME, value: {{ .Values.scannerRelease.scheduler.weeklyTime | quote }}}
+            - {name: WOLF_SCANNER_RELEASE_WEEKLY_DAY, value: {{ .Values.scannerRelease.scheduler.weeklyDay | quote }}}
+            - {name: WOLF_SCANNER_RELEASE_POLICY_SCOPE, value: {{ .Values.scannerRelease.scheduler.policyScope | quote }}}
+          resources:
+            {{- toYaml .Values.resources.scannerRelease | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+{{- end }}
+{{- if .Values.scannerRelease.discovery.enabled }}
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "wolf.fullname" . }}-scanner-release-discovery
+  labels:
+    {{- include "wolf.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: scanner-release-discovery
+  policyTypes: [Egress]
+  egress:
+    - ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+        - {protocol: TCP, port: 443}
+        - {protocol: TCP, port: 5432}
+---
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "wolf.fullname" . }}-scanner-release-discovery
+  labels:
+    {{- include "wolf.labels" . | nindent 4 }}
+    app.kubernetes.io/component: scanner-release-discovery
+spec:
+  replicas: {{ .Values.scannerRelease.discovery.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: scanner-release-discovery
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: wolf
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: scanner-release-discovery
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: discovery
+          image: {{ include "wolf.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - scanner-release-worker
+            - --role=discovery
+            - --definition-commit={{ required "scannerRelease.discovery.definitionCommit is required" .Values.scannerRelease.discovery.definitionCommit }}
+            - --discovery-manifest={{ .Values.scannerRelease.discovery.manifestPath }}
+            - --discovery-lock={{ .Values.scannerRelease.discovery.lockPath }}
+            - --discovery-max-concurrency={{ .Values.scannerRelease.discovery.maxConcurrency }}
+            - --discovery-per-host-concurrency={{ .Values.scannerRelease.discovery.perHostConcurrency }}
+            - --discovery-item-timeout={{ .Values.scannerRelease.discovery.itemTimeout }}
+            - --discovery-source-attempts={{ .Values.scannerRelease.discovery.sourceAttempts }}
+          env:
+            - {name: WOLF_DB_DRIVER, value: postgres}
+            - name: WOLF_DB_DSN
+              valueFrom: {secretKeyRef: {name: {{ include "wolf.fullname" . }}, key: postgres-dsn}}
+          resources:
+            {{- toYaml .Values.resources.scannerRelease | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+            {{- if .Values.scannerRelease.discovery.existingConfigMap }}
+            - {name: scanner-definitions, mountPath: {{ dir .Values.scannerRelease.discovery.manifestPath | quote }}, readOnly: true}
+            {{- end }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        {{- if .Values.scannerRelease.discovery.existingConfigMap }}
+        - name: scanner-definitions
+          configMap:
+            name: {{ .Values.scannerRelease.discovery.existingConfigMap }}
+            items:
+              - {key: {{ .Values.scannerRelease.discovery.manifestKey }}, path: {{ base .Values.scannerRelease.discovery.manifestPath }}}
+              - {key: {{ .Values.scannerRelease.discovery.lockKey }}, path: {{ base .Values.scannerRelease.discovery.lockPath }}}
+        {{- end }}
+---
+{{- end }}
+{{- if .Values.scannerRelease.proposal.enabled }}
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "wolf.fullname" . }}-scanner-release-proposal
+  labels:
+    {{- include "wolf.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: scanner-release-proposal
+  policyTypes: [Egress]
+  egress:
+    - ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+        - {protocol: TCP, port: 443}
+        - {protocol: TCP, port: 5432}
+---
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "wolf.fullname" . }}-scanner-release-proposal
+  labels:
+    {{- include "wolf.labels" . | nindent 4 }}
+    app.kubernetes.io/component: scanner-release-proposal
+spec:
+  replicas: {{ .Values.scannerRelease.proposal.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: scanner-release-proposal
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: wolf
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: scanner-release-proposal
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: proposal
+          image: {{ required "scannerRelease.proposal.image is required when proposal is enabled" .Values.scannerRelease.proposal.image }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - scanner-release-worker
+            - --role=proposal
+            - --proposal-executor={{ required "scannerRelease.proposal.executorPath is required when proposal is enabled" .Values.scannerRelease.proposal.executorPath }}
+            - --proposal-executor-max-output={{ printf "%d" (int .Values.scannerRelease.proposal.maxOutputBytes) }}
+            - --proposal-poll={{ .Values.scannerRelease.proposal.pollInterval }}
+            - --proposal-heartbeat={{ .Values.scannerRelease.proposal.heartbeatInterval }}
+            - --proposal-lease-duration={{ .Values.scannerRelease.proposal.leaseDuration }}
+            - --proposal-drain-timeout={{ .Values.scannerRelease.proposal.drainTimeout }}
+            - --proposal-executor-env=GOMODCACHE
+            - --proposal-executor-env=GOCACHE
+            - --proposal-executor-env=GOPATH
+            {{- range .Values.scannerRelease.proposal.executorArgs }}
+            - {{ printf "--proposal-executor-arg=%s" . | quote }}
+            {{- end }}
+            {{- range .Values.scannerRelease.proposal.executorEnvironment }}
+            - {{ printf "--proposal-executor-env=%s" .name | quote }}
+            {{- end }}
+          env:
+            - {name: WOLF_DB_DRIVER, value: postgres}
+            - {name: GOMODCACHE, value: /tmp/go-mod}
+            - {name: GOCACHE, value: /tmp/go-cache}
+            - {name: GOPATH, value: /tmp/go}
+            - name: WOLF_DB_DSN
+              valueFrom: {secretKeyRef: {name: {{ include "wolf.fullname" . }}, key: postgres-dsn}}
+            {{- with .Values.scannerRelease.proposal.executorEnvironment }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.resources.scannerRelease | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+{{- end }}
+{{- if .Values.scannerRelease.alert.enabled }}
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "wolf.fullname" . }}-scanner-release-alert
+  labels:
+    {{- include "wolf.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: scanner-release-alert
+  policyTypes: [Egress]
+  egress:
+    - ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+        - {protocol: TCP, port: 5432}
+---
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "wolf.fullname" . }}-scanner-release-alert
+  labels:
+    {{- include "wolf.labels" . | nindent 4 }}
+    app.kubernetes.io/component: scanner-release-alert
+spec:
+  replicas: {{ .Values.scannerRelease.alert.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: scanner-release-alert
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: wolf
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: scanner-release-alert
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: alert
+          image: {{ include "wolf.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - scanner-release-worker
+            - --role=alert
+            - --policy-scope={{ .Values.scannerRelease.alert.policyScope }}
+            - --alert-interval={{ .Values.scannerRelease.alert.interval }}
+            - --alert-heartbeat={{ .Values.scannerRelease.alert.heartbeatInterval }}
+            - --alert-lease-duration={{ .Values.scannerRelease.alert.leaseDuration }}
+          env:
+            - {name: WOLF_DB_DRIVER, value: postgres}
+            - name: WOLF_DB_DSN
+              valueFrom: {secretKeyRef: {name: {{ include "wolf.fullname" . }}, key: postgres-dsn}}
+          resources:
+            {{- toYaml .Values.resources.scannerRelease | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+{{- end }}
+{{- if .Values.scannerRelease.notification.enabled }}
+{{- if not (or .Values.scannerRelease.notification.webhook.path .Values.scannerRelease.notification.email.path .Values.scannerRelease.notification.siem.path) }}
+{{- fail "at least one scannerRelease.notification adapter path is required when notification delivery is enabled" }}
+{{- end }}
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "wolf.fullname" . }}-scanner-release-notification
+  labels:
+    {{- include "wolf.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: scanner-release-notification
+  policyTypes: [Egress]
+  egress:
+    - ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+        - {protocol: TCP, port: 5432}
+        {{- range .Values.scannerRelease.notification.egressPorts }}
+        - {protocol: TCP, port: {{ . }}}
+        {{- end }}
+---
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "wolf.fullname" . }}-scanner-release-notification
+  labels:
+    {{- include "wolf.labels" . | nindent 4 }}
+    app.kubernetes.io/component: scanner-release-notification
+spec:
+  replicas: {{ .Values.scannerRelease.notification.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: scanner-release-notification
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: wolf
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: scanner-release-notification
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 90
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: notification
+          image: {{ required "scannerRelease.notification.image is required when notification delivery is enabled" .Values.scannerRelease.notification.image }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - scanner-release-worker
+            - --role=notification
+            - --notification-adapter-max-output={{ printf "%d" (int .Values.scannerRelease.notification.maxOutputBytes) }}
+            - --notification-poll={{ .Values.scannerRelease.notification.pollInterval }}
+            - --notification-heartbeat={{ .Values.scannerRelease.notification.heartbeatInterval }}
+            - --notification-lease-duration={{ .Values.scannerRelease.notification.leaseDuration }}
+            - --notification-delivery-timeout={{ .Values.scannerRelease.notification.deliveryTimeout }}
+            - --notification-drain-timeout={{ .Values.scannerRelease.notification.drainTimeout }}
+            - --notification-base-backoff={{ .Values.scannerRelease.notification.baseBackoff }}
+            - --notification-max-backoff={{ .Values.scannerRelease.notification.maxBackoff }}
+            {{- if .Values.scannerRelease.notification.webhook.path }}
+            - --notification-webhook-adapter={{ .Values.scannerRelease.notification.webhook.path }}
+            {{- range .Values.scannerRelease.notification.webhook.args }}
+            - {{ printf "--notification-webhook-adapter-arg=%s" . | quote }}
+            {{- end }}
+            {{- end }}
+            {{- if .Values.scannerRelease.notification.email.path }}
+            - --notification-email-adapter={{ .Values.scannerRelease.notification.email.path }}
+            {{- range .Values.scannerRelease.notification.email.args }}
+            - {{ printf "--notification-email-adapter-arg=%s" . | quote }}
+            {{- end }}
+            {{- end }}
+            {{- if .Values.scannerRelease.notification.siem.path }}
+            - --notification-siem-adapter={{ .Values.scannerRelease.notification.siem.path }}
+            {{- range .Values.scannerRelease.notification.siem.args }}
+            - {{ printf "--notification-siem-adapter-arg=%s" . | quote }}
+            {{- end }}
+            {{- end }}
+            {{- range .Values.scannerRelease.notification.adapterEnvironment }}
+            - {{ printf "--notification-adapter-env=%s" .name | quote }}
+            {{- end }}
+          env:
+            - {name: WOLF_DB_DRIVER, value: postgres}
+            - name: WOLF_DB_DSN
+              valueFrom: {secretKeyRef: {name: {{ include "wolf.fullname" . }}, key: postgres-dsn}}
+            {{- with .Values.scannerRelease.notification.adapterEnvironment }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.resources.scannerRelease | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+{{- end }}
+{{- if .Values.scannerRelease.rollout.enabled }}
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "wolf.fullname" . }}-scanner-release-rollout
+  labels:
+    {{- include "wolf.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: scanner-release-rollout
+  policyTypes: [Egress]
+  egress:
+    - ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+        - {protocol: TCP, port: 5432}
+---
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "wolf.fullname" . }}-scanner-release-rollout
+  labels:
+    {{- include "wolf.labels" . | nindent 4 }}
+    app.kubernetes.io/component: scanner-release-rollout
+spec:
+  replicas: {{ .Values.scannerRelease.rollout.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: scanner-release-rollout
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: wolf
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: scanner-release-rollout
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: rollout
+          image: {{ include "wolf.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - scanner-release-worker
+            - --role=rollout
+            - --rollout-poll={{ .Values.scannerRelease.rollout.pollInterval }}
+            - --rollout-reconcile={{ .Values.scannerRelease.rollout.reconcileInterval }}
+            - --rollout-heartbeat={{ .Values.scannerRelease.rollout.heartbeatInterval }}
+            - --rollout-lease-duration={{ .Values.scannerRelease.rollout.leaseDuration }}
+            - --rollout-cohort-timeout={{ .Values.scannerRelease.rollout.cohortTimeout }}
+            - --rollout-worker-active-within={{ .Values.scannerRelease.rollout.workerActiveWithin }}
+          env:
+            - {name: WOLF_DB_DRIVER, value: postgres}
+            - name: WOLF_DB_DSN
+              valueFrom: {secretKeyRef: {name: {{ include "wolf.fullname" . }}, key: postgres-dsn}}
+          resources:
+            {{- toYaml .Values.resources.scannerRelease | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+{{- end }}
+{{- if .Values.scannerRelease.registry.enabled }}
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "wolf.fullname" . }}-scanner-release-registry
+  labels:
+    {{- include "wolf.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: scanner-release-registry
+  policyTypes: [Egress]
+  egress:
+    - ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+        - {protocol: TCP, port: 5432}
+        {{- range .Values.scannerRelease.registry.egressPorts }}
+        - {protocol: TCP, port: {{ . }}}
+        {{- end }}
+---
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "wolf.fullname" . }}-scanner-release-registry
+  labels:
+    {{- include "wolf.labels" . | nindent 4 }}
+    app.kubernetes.io/component: scanner-release-registry
+spec:
+  replicas: {{ .Values.scannerRelease.registry.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: scanner-release-registry
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: wolf
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: scanner-release-registry
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: registry
+          image: {{ include "wolf.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - scanner-release-worker
+            - --role=registry
+            - --registry-poll={{ .Values.scannerRelease.registry.pollInterval }}
+            - --registry-heartbeat={{ .Values.scannerRelease.registry.heartbeatInterval }}
+            - --registry-lease-duration={{ .Values.scannerRelease.registry.leaseDuration }}
+            - --registry-operation-timeout={{ .Values.scannerRelease.registry.operationTimeout }}
+            - --registry-drain-timeout={{ .Values.scannerRelease.registry.drainTimeout }}
+            - --registry-base-backoff={{ .Values.scannerRelease.registry.baseBackoff }}
+            - --registry-max-backoff={{ .Values.scannerRelease.registry.maxBackoff }}
+          env:
+            - {name: WOLF_DB_DRIVER, value: postgres}
+            - name: WOLF_DB_DSN
+              valueFrom: {secretKeyRef: {name: {{ include "wolf.fullname" . }}, key: postgres-dsn}}
+          resources:
+            {{- toYaml .Values.resources.scannerRelease | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+{{- end }}
+{{- if .Values.scannerRelease.builder.enabled }}
+{{- $builderBackend := .Values.scannerRelease.builder.backend | default "command" }}
+{{- $managed := .Values.scannerRelease.builder.managed }}
+{{- $managedKubernetes := $managed.kubernetes }}
+{{- $fixed := $managed.adapters.fixed }}
+{{- $quality := $managed.adapters.quality }}
+{{- $integration := $managed.adapters.integration }}
+{{- if not (has $builderBackend (list "command" "local" "buildx" "kubernetes-job" "managed")) }}
+{{- fail (printf "scannerRelease.builder.backend must be command, local, buildx, kubernetes-job, or managed; got %q" $builderBackend) }}
+{{- end }}
+{{- if and (ne $builderBackend "command") (not (regexMatch "@sha256:[0-9a-f]{64}$" .Values.scannerRelease.builder.stepImage)) }}
+{{- fail "scannerRelease.builder.stepImage must be digest-pinned for built-in backends" }}
+{{- end }}
+{{- if eq $builderBackend "managed" }}
+{{- if not .Values.networkPolicy.enabled }}
+{{- fail "networkPolicy.enabled must be true for managed releases" }}
+{{- end }}
+{{- $managedNetworkPolicy := $managed.networkPolicy }}
+{{- if not $managedNetworkPolicy.dns.namespaceSelectorLabels }}
+{{- fail "scannerRelease.builder.managed.networkPolicy.dns.namespaceSelectorLabels is required" }}
+{{- end }}
+{{- range $lane := list "fixed" "quality" "integration" "signer" }}
+{{- if not (index $managedNetworkPolicy.destinations $lane) }}
+{{- fail (printf "scannerRelease.builder.managed.networkPolicy.destinations.%s requires at least one explicit CIDR/port destination" $lane) }}
+{{- end }}
+{{- end }}
+{{- if not (regexMatch "@sha256:[0-9a-f]{64}$" .Values.scannerRelease.builder.image) }}
+{{- fail "scannerRelease.builder.image must be a dedicated digest-pinned managed coordinator image" }}
+{{- end }}
+{{- if not (regexMatch "^https://[^/?#@]+/[^?#@]+$" $managed.sourceURL) }}
+{{- fail "scannerRelease.builder.managed.sourceURL must be a credential-free HTTPS repository URL" }}
+{{- end }}
+{{- $primaryRegistryID := required "scannerRelease.builder.managed.primaryRegistryID is required" $managed.primaryRegistryID }}
+{{- $mirrorRegistryID := required "scannerRelease.builder.managed.mirrorRegistryID is required" $managed.mirrorRegistryID }}
+{{- if eq $primaryRegistryID $mirrorRegistryID }}
+{{- fail "scannerRelease.builder.managed primary and mirror registry IDs must differ" }}
+{{- end }}
+{{- $dockerConfigSecret := required "scannerRelease.builder.managed.dockerConfigSecret is required" $managed.dockerConfigSecret }}
+{{- if not .Values.scannerRelease.builder.push }}
+{{- fail "scannerRelease.builder.push must be true for managed releases" }}
+{{- end }}
+{{- if not (and (has "linux/amd64" .Values.scannerRelease.builder.platforms) (has "linux/arm64" .Values.scannerRelease.builder.platforms)) }}
+{{- fail "scannerRelease.builder.platforms must include linux/amd64 and linux/arm64 for managed releases" }}
+{{- end }}
+{{- $namespace := required "scannerRelease.builder.managed.kubernetes.namespace is required" $managedKubernetes.namespace }}
+{{- if ne $namespace .Release.Namespace }}
+{{- fail "scannerRelease.builder.managed.kubernetes.namespace must equal the Helm release namespace" }}
+{{- end }}
+{{- $buildxNamespace := required "scannerRelease.builder.managed.kubernetes.buildxNamespace is required" $managedKubernetes.buildxNamespace }}
+{{- if eq $namespace $buildxNamespace }}
+{{- fail "managed Buildx and release Jobs must use separate Kubernetes namespaces" }}
+{{- end }}
+{{- if not (regexMatch "^https://[^/?#]+$" $managedKubernetes.apiServer) }}
+{{- fail "scannerRelease.builder.managed.kubernetes.apiServer must be an HTTPS origin" }}
+{{- end }}
+{{- $workspacePVC := required "scannerRelease.builder.managed.kubernetes.workspacePVC is required" $managedKubernetes.workspacePVC }}
+{{- if not .Values.scannerRelease.signing.enabled }}
+{{- fail "scannerRelease.signing.enabled must be true for managed releases" }}
+{{- end }}
+{{- $signerProfileSecret := required "scannerRelease.signing.profileSecret is required for managed releases" .Values.scannerRelease.signing.profileSecret }}
+{{- if and (not .Values.scannerRelease.signing.credentialSecret) (not .Values.scannerRelease.signing.workloadIdentity) }}
+{{- fail "managed signing requires scannerRelease.signing.credentialSecret or workloadIdentity" }}
+{{- end }}
+{{- range $name, $adapter := dict "fixed" $fixed "quality" $quality "integration" $integration }}
+{{- if not (regexMatch "@sha256:[0-9a-f]{64}$" $adapter.image) }}
+{{- fail (printf "scannerRelease.builder.managed.adapters.%s.image must be digest-pinned" $name) }}
+{{- end }}
+{{- if and (not $adapter.registryCredentialSecret) (not $adapter.workloadIdentity) }}
+{{- fail (printf "managed adapter %s requires registryCredentialSecret or workloadIdentity" $name) }}
+{{- end }}
+{{- end }}
+{{- if not $fixed.registryCredentialSecret }}
+{{- fail "managed fixed adapter requires registryCredentialSecret with registry config.json; workloadIdentity cannot replace it" }}
+{{- end }}
+{{- if or (not $quality.registryCredentialSecret) (not $quality.engineCredentialSecret) }}
+{{- fail "managed quality adapter requires distinct registryCredentialSecret and engineCredentialSecret values" }}
+{{- end }}
+{{- if or (not $integration.registryCredentialSecret) (not $integration.engineCredentialSecret) }}
+{{- fail "managed integration adapter requires distinct registryCredentialSecret and engineCredentialSecret values" }}
+{{- end }}
+{{- $coordinatorSA := include "wolf.scannerReleaseBuilderServiceAccountName" . }}
+{{- $buildkitSA := include "wolf.scannerReleaseBuildkitServiceAccountName" . }}
+{{- $signerSA := include "wolf.scannerReleaseSignerServiceAccountName" . }}
+{{- $fixedSA := include "wolf.scannerReleaseFixedServiceAccountName" . }}
+{{- $qualitySA := include "wolf.scannerReleaseQualityServiceAccountName" . }}
+{{- $integrationSA := include "wolf.scannerReleaseIntegrationServiceAccountName" . }}
+{{- $serviceAccounts := list $coordinatorSA $buildkitSA $signerSA $fixedSA $qualitySA $integrationSA }}
+{{- if ne (len (uniq $serviceAccounts)) (len $serviceAccounts) }}
+{{- fail "managed coordinator, BuildKit, signer, and adapter service accounts must all be distinct" }}
+{{- end }}
+{{- $credentialSecrets := compact (list $managed.gitAuthorizationSecret $managed.dockerConfigSecret .Values.scannerRelease.signing.profileSecret .Values.scannerRelease.signing.credentialSecret $fixed.registryCredentialSecret $quality.registryCredentialSecret $quality.engineCredentialSecret $integration.registryCredentialSecret $integration.engineCredentialSecret) }}
+{{- if ne (len (uniq $credentialSecrets)) (len $credentialSecrets) }}
+{{- fail "managed Git, Docker, signer profile/credential, and adapter credential Secrets must all be distinct" }}
+{{- end }}
+{{- range .Values.scannerRelease.builder.environment }}
+{{- if or (hasPrefix "WOLF_SCANNER_" .name) (has .name (list "DOCKER_CONFIG" "KUBECONFIG")) }}
+{{- fail (printf "scannerRelease.builder.environment cannot override managed reserved variable %s" .name) }}
+{{- end }}
+{{- end }}
+{{- range .Values.scannerRelease.signing.environment }}
+{{- if hasPrefix "WOLF_" .name }}
+{{- fail (printf "scannerRelease.signing.environment cannot override reserved variable %s" .name) }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "wolf.fullname" . }}-scanner-release-builder
+  labels:
+    {{- include "wolf.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: scanner-release-builder
+  policyTypes: [Egress]
+  egress:
+    - ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+        - {protocol: TCP, port: 22}
+        - {protocol: TCP, port: 443}
+        - {protocol: TCP, port: 5432}
+---
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "wolf.fullname" . }}-scanner-release-builder
+  labels:
+    {{- include "wolf.labels" . | nindent 4 }}
+    app.kubernetes.io/component: scanner-release-builder
+spec:
+  replicas: {{ .Values.scannerRelease.builder.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: scanner-release-builder
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: wolf
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: scanner-release-builder
+    spec:
+      serviceAccountName: {{ if or (eq $builderBackend "kubernetes-job") (eq $builderBackend "managed") }}{{ include "wolf.scannerReleaseBuilderServiceAccountName" . }}{{ else }}{{ include "wolf.workerServiceAccountName" . }}{{ end }}
+      automountServiceAccountToken: {{ or (eq $builderBackend "kubernetes-job") (eq $builderBackend "managed") }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: builder
+          image: {{ default (include "wolf.image" .) .Values.scannerRelease.builder.image }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - scanner-release-worker
+            - --role=build
+            - --executor-backend={{ $builderBackend }}
+            {{- if eq $builderBackend "command" }}
+            - --executor={{ required "scannerRelease.builder.executorPath is required" .Values.scannerRelease.builder.executorPath }}
+            {{- end }}
+            - --max-parallel-steps={{ .Values.scannerRelease.builder.maxParallelSteps }}
+            - --max-step-attempts={{ .Values.scannerRelease.builder.maxStepAttempts }}
+            {{- range .Values.scannerRelease.builder.platforms }}
+            - --platform={{ . }}
+            {{- end }}
+          env:
+            - {name: WOLF_DB_DRIVER, value: postgres}
+            - name: WOLF_DB_DSN
+              valueFrom: {secretKeyRef: {name: {{ include "wolf.fullname" . }}, key: postgres-dsn}}
+            - {name: WOLF_SCANNER_RELEASE_WORKSPACE, value: /workspace}
+            {{- if ne $builderBackend "command" }}
+            - {name: WOLF_SCANNER_RELEASE_STEP_IMAGE, value: {{ .Values.scannerRelease.builder.stepImage | quote }}}
+            - {name: WOLF_SCANNER_RELEASE_STEP_PROGRAM, value: {{ .Values.scannerRelease.builder.stepProgram | quote }}}
+            {{- end }}
+            {{- if eq $builderBackend "kubernetes-job" }}
+            - name: WOLF_SCANNER_RELEASE_K8S_NAMESPACE
+              valueFrom: {fieldRef: {fieldPath: metadata.namespace}}
+            - {name: WOLF_SCANNER_RELEASE_K8S_INSTANCE, value: {{ .Release.Name | quote }} }
+            - {name: WOLF_SCANNER_RELEASE_WORKSPACE_PVC, value: {{ printf "%s-workspace" (include "wolf.fullname" .) | quote }}}
+            - {name: WOLF_SCANNER_RELEASE_STEP_SERVICE_ACCOUNT, value: {{ include "wolf.scannerServiceAccountName" . | quote }}}
+            {{- if .Values.scannerRelease.signing.enabled }}
+            - {name: WOLF_SCANNER_SIGNER_PROFILE_SECRET, value: {{ required "scannerRelease.signing.profileSecret is required" .Values.scannerRelease.signing.profileSecret | quote }}}
+            - {name: WOLF_SCANNER_SIGNER_ADAPTER, value: {{ .Values.scannerRelease.signing.adapterPath | quote }}}
+            - {name: WOLF_SCANNER_SIGNER_WORKLOAD_IDENTITY, value: {{ .Values.scannerRelease.signing.workloadIdentity | quote }}}
+            {{- with .Values.scannerRelease.signing.credentialSecret }}
+            - {name: WOLF_SCANNER_SIGNER_CREDENTIAL_SECRET, value: {{ . | quote }}}
+            {{- end }}
+            {{- end }}
+            {{- end }}
+            {{- if eq $builderBackend "managed" }}
+            - {name: WOLF_SCANNER_RELEASE_SOURCE_URL, value: {{ $managed.sourceURL | quote }} }
+            - {name: WOLF_SCANNER_RELEASE_PRIMARY_REGISTRY_ID, value: {{ $managed.primaryRegistryID | quote }} }
+            - {name: WOLF_SCANNER_RELEASE_MIRROR_REGISTRY_ID, value: {{ $managed.mirrorRegistryID | quote }} }
+            - {name: WOLF_SCANNER_RELEASE_GIT_PATH, value: /usr/bin/git}
+            {{- if $managed.gitAuthorizationSecret }}
+            - {name: WOLF_SCANNER_RELEASE_GIT_AUTHORIZATION_FILE, value: /run/wolf/git/authorization}
+            {{- end }}
+            - {name: WOLF_SCANNER_RELEASE_BUILDX_NAMESPACE, value: {{ $managedKubernetes.buildxNamespace | quote }} }
+            - {name: WOLF_SCANNER_RELEASE_BUILDKIT_SERVICE_ACCOUNT, value: {{ include "wolf.scannerReleaseBuildkitServiceAccountName" . | quote }} }
+            - {name: WOLF_SCANNER_RELEASE_BUILDX_DOCKER_CONFIG, value: /run/wolf/buildx-docker}
+            - {name: WOLF_SCANNER_RELEASE_BUILDX_PATH, value: {{ .Values.scannerRelease.builder.buildxPath | quote }} }
+            - {name: WOLF_SCANNER_RELEASE_BUILDX_PUSH, value: "true"}
+            - {name: WOLF_SCANNER_RELEASE_K8S_API_SERVER, value: {{ $managedKubernetes.apiServer | quote }} }
+            - {name: WOLF_SCANNER_RELEASE_K8S_NAMESPACE, value: {{ $managedKubernetes.namespace | quote }} }
+            - {name: WOLF_SCANNER_RELEASE_K8S_INSTANCE, value: {{ .Release.Name | quote }} }
+            - {name: WOLF_SCANNER_RELEASE_WORKSPACE_PVC, value: {{ $managedKubernetes.workspacePVC | quote }} }
+            - {name: WOLF_SCANNER_RELEASE_K8S_POLL, value: {{ $managedKubernetes.pollInterval | quote }} }
+            - {name: WOLF_SCANNER_RELEASE_K8S_JOB_TTL, value: {{ $managedKubernetes.jobTTLSeconds | quote }} }
+            - {name: WOLF_SCANNER_RELEASE_ADAPTER_PATH, value: {{ $managed.adapterPath | quote }} }
+            - {name: WOLF_SCANNER_RELEASE_FIXED_ADAPTER_IMAGE, value: {{ $fixed.image | quote }} }
+            - {name: WOLF_SCANNER_RELEASE_FIXED_REGISTRY_CREDENTIAL_SECRET, value: {{ $fixed.registryCredentialSecret | quote }} }
+            - {name: WOLF_SCANNER_RELEASE_FIXED_REGISTRY_CREDENTIAL_WORKLOAD_IDENTITY, value: {{ $fixed.workloadIdentity | quote }} }
+            - {name: WOLF_SCANNER_RELEASE_FIXED_SERVICE_ACCOUNT, value: {{ include "wolf.scannerReleaseFixedServiceAccountName" . | quote }} }
+            - {name: WOLF_SCANNER_RELEASE_QUALITY_ADAPTER_IMAGE, value: {{ $quality.image | quote }} }
+            - {name: WOLF_SCANNER_RELEASE_QUALITY_REGISTRY_CREDENTIAL_SECRET, value: {{ $quality.registryCredentialSecret | quote }} }
+            - {name: WOLF_SCANNER_RELEASE_QUALITY_ENGINE_CREDENTIAL_SECRET, value: {{ $quality.engineCredentialSecret | quote }} }
+            - {name: WOLF_SCANNER_RELEASE_QUALITY_REGISTRY_CREDENTIAL_WORKLOAD_IDENTITY, value: {{ $quality.workloadIdentity | quote }} }
+            - {name: WOLF_SCANNER_RELEASE_QUALITY_SERVICE_ACCOUNT, value: {{ include "wolf.scannerReleaseQualityServiceAccountName" . | quote }} }
+            - {name: WOLF_SCANNER_RELEASE_INTEGRATION_ADAPTER_IMAGE, value: {{ $integration.image | quote }} }
+            - {name: WOLF_SCANNER_RELEASE_INTEGRATION_REGISTRY_CREDENTIAL_SECRET, value: {{ $integration.registryCredentialSecret | quote }} }
+            - {name: WOLF_SCANNER_RELEASE_INTEGRATION_ENGINE_CREDENTIAL_SECRET, value: {{ $integration.engineCredentialSecret | quote }} }
+            - {name: WOLF_SCANNER_RELEASE_INTEGRATION_REGISTRY_CREDENTIAL_WORKLOAD_IDENTITY, value: {{ $integration.workloadIdentity | quote }} }
+            - {name: WOLF_SCANNER_RELEASE_INTEGRATION_SERVICE_ACCOUNT, value: {{ include "wolf.scannerReleaseIntegrationServiceAccountName" . | quote }} }
+            - {name: WOLF_SCANNER_SIGNER_PROFILE_FILE, value: /run/wolf/signing/profile/profile.json}
+            - {name: WOLF_SCANNER_SIGNER_PROFILE_SECRET, value: {{ .Values.scannerRelease.signing.profileSecret | quote }} }
+            - {name: WOLF_SCANNER_SIGNER_CREDENTIAL_SECRET, value: {{ .Values.scannerRelease.signing.credentialSecret | quote }} }
+            - {name: WOLF_SCANNER_SIGNER_ADAPTER, value: {{ .Values.scannerRelease.signing.adapterPath | quote }} }
+            - {name: WOLF_SCANNER_SIGNER_WORKLOAD_IDENTITY, value: {{ .Values.scannerRelease.signing.workloadIdentity | quote }} }
+            - {name: WOLF_SCANNER_RELEASE_SIGNER_SERVICE_ACCOUNT, value: {{ include "wolf.scannerReleaseSignerServiceAccountName" . | quote }} }
+            - {name: WOLF_SCANNER_SIGNER_JOURNAL, value: {{ .Values.scannerRelease.signing.journalPath | quote }} }
+            {{- $signerEnvironmentNames := list }}
+            {{- range .Values.scannerRelease.signing.environment }}
+            {{- $signerEnvironmentNames = append $signerEnvironmentNames .name }}
+            {{- end }}
+            {{- if $signerEnvironmentNames }}
+            - {name: WOLF_SCANNER_SIGNER_ENV, value: {{ join "," $signerEnvironmentNames | quote }} }
+            {{- end }}
+            {{- with .Values.scannerRelease.signing.environment }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+            {{- end }}
+            {{- if eq $builderBackend "buildx" }}
+            - {name: WOLF_SCANNER_RELEASE_REGISTRY, value: {{ required "scannerRelease.builder.registry is required for buildx" .Values.scannerRelease.builder.registry | quote }}}
+            - {name: WOLF_SCANNER_RELEASE_BUILDX_PATH, value: {{ .Values.scannerRelease.builder.buildxPath | quote }}}
+            - {name: WOLF_SCANNER_RELEASE_CONTAINER_ENGINE, value: {{ .Values.scannerRelease.builder.containerEnginePath | quote }}}
+            - {name: WOLF_SCANNER_RELEASE_BUILDX_PUSH, value: {{ .Values.scannerRelease.builder.push | quote }}}
+            {{- end }}
+            {{- with .Values.scannerRelease.builder.environment }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.resources.scannerRelease | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          volumeMounts:
+            - {name: workspace, mountPath: /workspace}
+            - {name: tmp, mountPath: /tmp}
+            {{- if eq $builderBackend "managed" }}
+            - {name: buildx-docker, mountPath: /run/wolf/buildx-docker, readOnly: true}
+            - {name: signer-profile, mountPath: /run/wolf/signing/profile, readOnly: true}
+            {{- if .Values.scannerRelease.signing.credentialSecret }}
+            - {name: signer-credentials, mountPath: /run/wolf/signing/credentials, readOnly: true}
+            {{- end }}
+            {{- if $managed.gitAuthorizationSecret }}
+            - {name: git-authorization, mountPath: /run/wolf/git, readOnly: true}
+            {{- end }}
+            {{- end }}
+      volumes:
+        - name: workspace
+          persistentVolumeClaim:
+            claimName: {{ if eq $builderBackend "managed" }}{{ $managedKubernetes.workspacePVC }}{{ else }}{{ include "wolf.fullname" . }}-workspace{{ end }}
+        - name: tmp
+          emptyDir: {}
+        {{- if eq $builderBackend "managed" }}
+        - name: buildx-docker
+          secret:
+            secretName: {{ $managed.dockerConfigSecret }}
+            items:
+              - {key: {{ $managed.dockerConfigKey }}, path: config.json}
+        - name: signer-profile
+          secret:
+            secretName: {{ .Values.scannerRelease.signing.profileSecret }}
+            items:
+              - {key: profile.json, path: profile.json}
+        {{- if .Values.scannerRelease.signing.credentialSecret }}
+        - name: signer-credentials
+          secret: {secretName: {{ .Values.scannerRelease.signing.credentialSecret }} }
+        {{- end }}
+        {{- if $managed.gitAuthorizationSecret }}
+        - name: git-authorization
+          secret:
+            secretName: {{ $managed.gitAuthorizationSecret }}
+            items:
+              - {key: {{ $managed.gitAuthorizationKey }}, path: authorization}
+        {{- end }}
+        {{- end }}
+{{- end }}

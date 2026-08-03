@@ -1,0 +1,127 @@
+{{- $scannerReleaseValues := .Values.scannerRelease | default dict -}}
+{{- $scannerReleaseMode := get $scannerReleaseValues "mode" | default "read_only" -}}
+{{- $offlineBundleValues := get $scannerReleaseValues "offlineBundles" | default dict -}}
+{{- $imageVerifierValues := get $offlineBundleValues "imageVerifier" | default dict -}}
+{{- $portableTrustSecret := get $offlineBundleValues "portableTrustPolicySecret" | default "" -}}
+{{- $imageVerifierEnabled := get $imageVerifierValues "enabled" | default false -}}
+{{- $imageTrustSecret := get $imageVerifierValues "trustPolicySecret" | default "" -}}
+{{- if and $imageVerifierEnabled (not $imageTrustSecret) -}}
+{{- fail "scannerRelease.offlineBundles.imageVerifier.trustPolicySecret is required when image verification is enabled" -}}
+{{- end -}}
+{{- $legacyBuildEndpoints := true -}}
+{{- if hasKey $scannerReleaseValues "legacyBuildEndpoints" -}}
+{{- $legacyBuildEndpoints = get $scannerReleaseValues "legacyBuildEndpoints" -}}
+{{- end -}}
+{{- if not (has $scannerReleaseMode (list "disabled" "read_only" "candidate" "canary" "stable_control")) -}}
+{{- fail (printf "scannerRelease.mode must be one of disabled, read_only, candidate, canary, stable_control; got %q" $scannerReleaseMode) -}}
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "wolf.fullname" . }}-api
+  labels:
+    {{- include "wolf.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: wolf
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: api
+    spec:
+      serviceAccountName: {{ include "wolf.fullname" . }}-api
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: wolf
+          image: {{ include "wolf.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["serve", "--bind", "0.0.0.0:8778"{{ if .Values.apiOnly }}, "--api-only"{{ end }}]
+          env:
+            - {name: WOLF_DB_DRIVER, value: postgres}
+            - name: WOLF_DB_DSN
+              valueFrom: {secretKeyRef: {name: {{ include "wolf.fullname" . }}, key: postgres-dsn}}
+            - name: WOLF_MASTER_KEY
+              valueFrom: {secretKeyRef: {name: {{ include "wolf.fullname" . }}, key: master-key}}
+            - {name: WOLF_SCAN_EXECUTION_MODE, value: queue}
+            - {name: WOLF_SCAN_RUNTIME, value: kubernetes}
+            - {name: WOLF_SCANNER_RELEASE_MODE, value: {{ $scannerReleaseMode | quote }}}
+            - {name: WOLF_SCANNER_LEGACY_BUILD_ENDPOINTS, value: {{ $legacyBuildEndpoints | quote }}}
+            - {name: WOLF_ARTIFACTS_ROOT, value: /artifacts}
+            - {name: WOLF_GIT_ALLOWED_CIDRS, value: {{ .Values.gitAllowedCIDRs | quote }}}
+            {{- if $portableTrustSecret }}
+            - {name: WOLF_SCANNER_BUNDLE_TRUST_POLICY_FILE, value: /run/wolf/offline-bundles/portable/trust-policy.json}
+            {{- end }}
+            {{- if $imageVerifierEnabled }}
+            - {name: WOLF_SCANNER_BUNDLE_IMAGE_VERIFIER, value: {{ get $imageVerifierValues "path" | quote }}}
+            - {name: WOLF_SCANNER_BUNDLE_IMAGE_TRUST_POLICY_FILE, value: /run/wolf/offline-bundles/images/trust-policy.json}
+            {{- end }}
+          ports:
+            - {name: http, containerPort: 8778}
+          readinessProbe:
+            httpGet: {path: /api/v1/ready, port: http}
+          livenessProbe:
+            httpGet: {path: /api/v1/health, port: http}
+          resources:
+            {{- toYaml .Values.resources.api | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          volumeMounts:
+            - {name: artifacts, mountPath: /artifacts}
+            - {name: tmp, mountPath: /tmp}
+            {{- if $portableTrustSecret }}
+            - {name: portable-bundle-trust, mountPath: /run/wolf/offline-bundles/portable, readOnly: true}
+            {{- end }}
+            {{- if $imageVerifierEnabled }}
+            - {name: image-signature-trust, mountPath: /run/wolf/offline-bundles/images, readOnly: true}
+            {{- end }}
+      volumes:
+        - name: artifacts
+          persistentVolumeClaim: {claimName: {{ include "wolf.fullname" . }}-artifacts}
+        - name: tmp
+          emptyDir: {}
+        {{- if $portableTrustSecret }}
+        - name: portable-bundle-trust
+          secret:
+            secretName: {{ $portableTrustSecret }}
+            defaultMode: 0444
+            items:
+              - key: {{ get $offlineBundleValues "portableTrustPolicyKey" | quote }}
+                path: trust-policy.json
+        {{- end }}
+        {{- if $imageVerifierEnabled }}
+        - name: image-signature-trust
+          secret:
+            secretName: {{ $imageTrustSecret }}
+            defaultMode: 0444
+            items:
+              - key: {{ get $imageVerifierValues "trustPolicyKey" | quote }}
+                path: trust-policy.json
+        {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "wolf.fullname" . }}
+  labels:
+    {{- include "wolf.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: api
+  ports:
+    - {name: http, port: {{ .Values.service.port }}, targetPort: http}

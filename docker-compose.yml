@@ -42,6 +42,12 @@ services:
       # daemon (same as the source side of the bind, since the daemon sees
       # the host filesystem). They diverge in non-compose deployments.
       - ${WOLF_REPOS_ROOT:-./repos}:/repos:ro
+      - ${WOLF_HOST_WORKSPACE_ROOT:-./workspaces}:/workspaces
+      # Public offline-import trust policies are mounted separately from all
+      # signer credentials. The verifier executable is deployment-owned.
+      - ${WOLF_SCANNER_BUNDLE_TRUST_POLICY_HOST_FILE:-./deploy/scanner-release-managed/bundle-trust.disabled}:/run/wolf/offline-bundles/portable/trust-policy.json:ro
+      - ${WOLF_SCANNER_BUNDLE_IMAGE_VERIFIER_HOST_FILE:-./deploy/scanner-release-managed/bundle-image-verifier.disabled}:/run/wolf/offline-bundles/images/verifier:ro
+      - ${WOLF_SCANNER_BUNDLE_IMAGE_TRUST_POLICY_HOST_FILE:-./deploy/scanner-release-managed/bundle-image-trust.disabled}:/run/wolf/offline-bundles/images/trust-policy.json:ro
     environment:
       - WOLF_MASTER_KEY=${WOLF_MASTER_KEY:-}
       # First-run admin. Bootstrapped only when BOTH are set and no user with
@@ -52,6 +58,15 @@ services:
       - WOLF_ADMIN_PASSWORD=${WOLF_ADMIN_PASSWORD:-}
       - WOLF_DB_DRIVER=${WOLF_DB_DRIVER:-sqlite}
       - WOLF_DB_DSN=${WOLF_DB_DSN:-}
+      # Durable API submission. The separate scan-worker service claims and
+      # executes pending scans; set "inline" only as a one-release rollback.
+      - WOLF_SCAN_EXECUTION_MODE=${WOLF_SCAN_EXECUTION_MODE:-queue}
+      # Scanner release management defaults to observation only. Existing
+      # scan execution is unchanged; candidate/canary/stable control requires
+      # explicit staged enablement after qualification.
+      - WOLF_SCANNER_RELEASE_MODE=${WOLF_SCANNER_RELEASE_MODE:-read_only}
+      - WOLF_SCANNER_LEGACY_BUILD_ENDPOINTS=${WOLF_SCANNER_LEGACY_BUILD_ENDPOINTS:-true}
+      - WOLF_ARTIFACTS_ROOT=/home/wolf/.wolf/artifacts
       - WOLF_LOG_LEVEL=${WOLF_LOG_LEVEL:-info}
       # Scanner image references (per-bucket; Option B from PLAN.md §5.1).
       # WOLF_SCANNERS_TAG defaults to a release tag instead of :latest so
@@ -75,6 +90,13 @@ services:
       # compose deployment this is the absolute resolution of WOLF_REPOS_ROOT.
       - WOLF_HOST_REPOS_ROOT=${WOLF_HOST_REPOS_ROOT:-${WOLF_REPOS_ROOT:-./repos}}
       - WOLF_IN_CONTAINER_REPOS_ROOT=/repos
+      - WOLF_WORKSPACE_ROOT=/workspaces
+      - WOLF_HOST_WORKSPACE_ROOT=${WOLF_HOST_WORKSPACE_ROOT:-${PWD}/workspaces}
+      - WOLF_IN_CONTAINER_WORKSPACE_ROOT=/workspaces
+      - WOLF_GIT_ALLOWED_CIDRS=${WOLF_GIT_ALLOWED_CIDRS:-}
+      - WOLF_SCANNER_BUNDLE_TRUST_POLICY_FILE=${WOLF_SCANNER_BUNDLE_TRUST_POLICY_FILE:-}
+      - WOLF_SCANNER_BUNDLE_IMAGE_VERIFIER=${WOLF_SCANNER_BUNDLE_IMAGE_VERIFIER:-}
+      - WOLF_SCANNER_BUNDLE_IMAGE_TRUST_POLICY_FILE=${WOLF_SCANNER_BUNDLE_IMAGE_TRUST_POLICY_FILE:-}
       # Allow the "Add local repo → Browse…" picker to walk the read-only
       # repos bind. Defaults to /repos so the UI sees the same tree the
       # scanner does; override to expose additional roots if you mount more.
@@ -100,6 +122,693 @@ services:
         reservations:
           cpus: "0.5"
           memory: 256M
+
+  scan-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${WOLF_VERSION:-dev}
+        COMMIT: ${WOLF_COMMIT:-unknown}
+        BUILD_DATE: ${WOLF_BUILD_DATE:-unknown}
+    command:
+      - scan-worker
+      - --backend=docker
+      - --capacity=${WOLF_SCAN_WORKER_CAPACITY:-1}
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    volumes:
+      - wolf-data:/home/wolf/.wolf
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${WOLF_REPOS_ROOT:-./repos}:/repos:ro
+      - ${WOLF_HOST_WORKSPACE_ROOT:-./workspaces}:/workspaces
+    environment:
+      - WOLF_MASTER_KEY=${WOLF_MASTER_KEY:-}
+      - WOLF_DB_DRIVER=${WOLF_DB_DRIVER:-sqlite}
+      - WOLF_DB_DSN=${WOLF_DB_DSN:-}
+      - WOLF_LOG_LEVEL=${WOLF_LOG_LEVEL:-info}
+      - WOLF_SCAN_EXECUTION_MODE=queue
+      - WOLF_ARTIFACTS_ROOT=/home/wolf/.wolf/artifacts
+      - WOLF_SCANNERS_TAG=${WOLF_SCANNERS_TAG:-2.0.0}
+      - WOLF_SCANNERS_IMAGE=${WOLF_SCANNERS_IMAGE:-alphabravodevops/wolf-scanners:${WOLF_SCANNERS_TAG:-2.0.0}}
+      - WOLF_SCANNERS_IMAGE_JVM=${WOLF_SCANNERS_IMAGE_JVM:-alphabravodevops/wolf-scanners-jvm:${WOLF_SCANNERS_TAG:-2.0.0}}
+      - WOLF_SCANNERS_IMAGE_RUST=${WOLF_SCANNERS_IMAGE_RUST:-alphabravodevops/wolf-scanners-rust:${WOLF_SCANNERS_TAG:-2.0.0}}
+      - WOLF_SCANNERS_IMAGE_CODEQL=${WOLF_SCANNERS_IMAGE_CODEQL:-alphabravodevops/wolf-scanners-codeql:${WOLF_SCANNERS_TAG:-2.0.0}}
+      - WOLF_SCANNERS_PULL_POLICY=${WOLF_SCANNERS_PULL_POLICY:-IfNotPresent}
+      - WOLF_SCANNERS_NETWORK=${WOLF_SCANNERS_NETWORK:-bridge}
+      - WOLF_SCANNERS_MEMORY=${WOLF_SCANNERS_MEMORY:-2g}
+      - WOLF_SCANNERS_CPUS=${WOLF_SCANNERS_CPUS:-1.5}
+      - WOLF_SCANNERS_DB_VOLUME=${WOLF_SCANNERS_DB_VOLUME:-${HOME}/.wolf/scanner-cache}
+      - WOLF_HOST_REPOS_ROOT=${WOLF_HOST_REPOS_ROOT:-${WOLF_REPOS_ROOT:-./repos}}
+      - WOLF_IN_CONTAINER_REPOS_ROOT=/repos
+      - WOLF_WORKSPACE_ROOT=/workspaces
+      - WOLF_HOST_WORKSPACE_ROOT=${WOLF_HOST_WORKSPACE_ROOT:-${PWD}/workspaces}
+      - WOLF_IN_CONTAINER_WORKSPACE_ROOT=/workspaces
+      - WOLF_GIT_ALLOWED_CIDRS=${WOLF_GIT_ALLOWED_CIDRS:-}
+    depends_on:
+      wolf:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+        required: false
+    networks:
+      - wolf-net
+    restart: unless-stopped
+    deploy:
+      replicas: ${WOLF_SCAN_WORKERS:-1}
+      resources:
+        limits:
+          cpus: "4.0"
+          memory: 4G
+        reservations:
+          cpus: "1.0"
+          memory: 512M
+
+  # Durable daily discovery and weekly candidate scheduler. Opt in with:
+  #   docker compose --profile scanner-release up -d
+  # Build execution is intentionally a separate role because its executor and
+  # registry credentials belong on a hardened builder, not the API host.
+  scanner-release-scheduler:
+    profiles: ["scanner-release"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${WOLF_VERSION:-dev}
+        COMMIT: ${WOLF_COMMIT:-unknown}
+        BUILD_DATE: ${WOLF_BUILD_DATE:-unknown}
+    command: ["scanner-release-worker", "--role=scheduler"]
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    volumes:
+      - wolf-data:/home/wolf/.wolf
+    environment:
+      - WOLF_DB_DRIVER=${WOLF_DB_DRIVER:-sqlite}
+      - WOLF_DB_DSN=${WOLF_DB_DSN:-}
+      - WOLF_LOG_LEVEL=${WOLF_LOG_LEVEL:-info}
+      - WOLF_SCANNER_DEFINITION_COMMIT=${WOLF_SCANNER_DEFINITION_COMMIT:-${WOLF_COMMIT:-unknown}}
+      - WOLF_SCANNER_RELEASE_TIMEZONE=${WOLF_SCANNER_RELEASE_TIMEZONE:-UTC}
+      - WOLF_SCANNER_RELEASE_DAILY_TIME=${WOLF_SCANNER_RELEASE_DAILY_TIME:-02:00}
+      - WOLF_SCANNER_RELEASE_WEEKLY_TIME=${WOLF_SCANNER_RELEASE_WEEKLY_TIME:-03:00}
+      - WOLF_SCANNER_RELEASE_WEEKLY_DAY=${WOLF_SCANNER_RELEASE_WEEKLY_DAY:-Sunday}
+      - WOLF_SCANNER_RELEASE_POLICY_SCOPE=${WOLF_SCANNER_RELEASE_POLICY_SCOPE:-global}
+    depends_on:
+      wolf:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+        required: false
+    networks:
+      - wolf-net
+    restart: unless-stopped
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.1"
+          memory: 64M
+
+  # Durable online source resolution for queued discovery runs. This role has
+  # no Docker socket or build credentials; it only needs DB access and HTTPS
+  # egress to upstream package and image registries.
+  scanner-release-discovery:
+    profiles: ["scanner-release"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${WOLF_VERSION:-dev}
+        COMMIT: ${WOLF_COMMIT:-unknown}
+        BUILD_DATE: ${WOLF_BUILD_DATE:-unknown}
+    command: ["scanner-release-worker", "--role=discovery"]
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    volumes:
+      - wolf-data:/home/wolf/.wolf
+    environment:
+      - WOLF_DB_DRIVER=${WOLF_DB_DRIVER:-sqlite}
+      - WOLF_DB_DSN=${WOLF_DB_DSN:-}
+      - WOLF_LOG_LEVEL=${WOLF_LOG_LEVEL:-info}
+      - WOLF_SCANNER_DEFINITION_COMMIT=${WOLF_SCANNER_DEFINITION_COMMIT:-${WOLF_COMMIT:-unknown}}
+      - WOLF_SCANNER_DISCOVERY_MANIFEST=/usr/share/wolf/scanners/tools.yaml
+      - WOLF_SCANNER_DISCOVERY_LOCK=/usr/share/wolf/scanners/scanner-lock.yaml
+    depends_on:
+      wolf:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+        required: false
+    networks:
+      - wolf-net
+    restart: unless-stopped
+    deploy:
+      replicas: ${WOLF_SCANNER_DISCOVERY_WORKERS:-1}
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.1"
+          memory: 64M
+
+  # Durable definition proposal execution. The dedicated target retains the
+  # Go toolchain needed to validate an exact fetched definition commit. Only
+  # explicitly named environment variables enter the built-in child process.
+  scanner-release-proposal:
+    profiles: ["scanner-release-proposal"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: proposal-runtime
+      args:
+        VERSION: ${WOLF_VERSION:-dev}
+        COMMIT: ${WOLF_COMMIT:-unknown}
+        BUILD_DATE: ${WOLF_BUILD_DATE:-unknown}
+    command:
+      - scanner-release-worker
+      - --role=proposal
+      - --proposal-executor=/usr/local/bin/wolf
+      - --proposal-executor-arg=scanner-proposal-executor
+      - --proposal-executor-env=WOLF_SCANNER_PROPOSAL_REPOSITORY_URL
+      - --proposal-executor-env=WOLF_SCANNER_PROPOSAL_GITHUB_API
+      - --proposal-executor-env=WOLF_SCANNER_PROPOSAL_GITHUB_OWNER
+      - --proposal-executor-env=WOLF_SCANNER_PROPOSAL_GITHUB_REPOSITORY
+      - --proposal-executor-env=WOLF_SCANNER_PROPOSAL_GITHUB_TOKEN
+      - --proposal-executor-env=WOLF_SCANNER_PROPOSAL_GITHUB_TOKEN_FILE
+      - --proposal-executor-env=WOLF_SCANNER_PROPOSAL_BASE_BRANCH
+      - --proposal-executor-env=WOLF_SCANNER_PROPOSAL_BRANCH_PREFIX
+      - --proposal-executor-env=WOLF_SCANNER_PROPOSAL_LOCK_URI_PREFIX
+      - --proposal-executor-env=WOLF_SCANNER_PROPOSAL_LABELS
+      - --proposal-executor-env=WOLF_SCANNER_PROPOSAL_REQUIRE_STATUS
+      - --proposal-executor-env=GOMODCACHE
+      - --proposal-executor-env=GOCACHE
+      - --proposal-executor-env=GOPATH
+      - --proposal-executor-max-output=${WOLF_SCANNER_PROPOSAL_MAX_OUTPUT:-4194304}
+      - --proposal-poll=${WOLF_SCANNER_PROPOSAL_POLL:-3s}
+      - --proposal-heartbeat=${WOLF_SCANNER_PROPOSAL_HEARTBEAT:-10s}
+      - --proposal-lease-duration=${WOLF_SCANNER_PROPOSAL_LEASE_DURATION:-45s}
+      - --proposal-drain-timeout=${WOLF_SCANNER_PROPOSAL_DRAIN_TIMEOUT:-1m}
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    volumes:
+      - wolf-data:/home/wolf/.wolf
+    environment:
+      - WOLF_DB_DRIVER=${WOLF_DB_DRIVER:-sqlite}
+      - WOLF_DB_DSN=${WOLF_DB_DSN:-}
+      - WOLF_LOG_LEVEL=${WOLF_LOG_LEVEL:-info}
+      - WOLF_SCANNER_PROPOSAL_REPOSITORY_URL=${WOLF_SCANNER_PROPOSAL_REPOSITORY_URL:-}
+      - WOLF_SCANNER_PROPOSAL_GITHUB_API=${WOLF_SCANNER_PROPOSAL_GITHUB_API:-https://api.github.com}
+      - WOLF_SCANNER_PROPOSAL_GITHUB_OWNER=${WOLF_SCANNER_PROPOSAL_GITHUB_OWNER:-}
+      - WOLF_SCANNER_PROPOSAL_GITHUB_REPOSITORY=${WOLF_SCANNER_PROPOSAL_GITHUB_REPOSITORY:-thewolf}
+      - WOLF_SCANNER_PROPOSAL_GITHUB_TOKEN=${WOLF_SCANNER_PROPOSAL_GITHUB_TOKEN:-}
+      - WOLF_SCANNER_PROPOSAL_GITHUB_TOKEN_FILE=${WOLF_SCANNER_PROPOSAL_GITHUB_TOKEN_FILE:-}
+      - WOLF_SCANNER_PROPOSAL_BASE_BRANCH=${WOLF_SCANNER_PROPOSAL_BASE_BRANCH:-main}
+      - WOLF_SCANNER_PROPOSAL_BRANCH_PREFIX=${WOLF_SCANNER_PROPOSAL_BRANCH_PREFIX:-wolf/scanner-release}
+      - WOLF_SCANNER_PROPOSAL_LOCK_URI_PREFIX=${WOLF_SCANNER_PROPOSAL_LOCK_URI_PREFIX:-}
+      - WOLF_SCANNER_PROPOSAL_LABELS=${WOLF_SCANNER_PROPOSAL_LABELS:-scanner-release}
+      - WOLF_SCANNER_PROPOSAL_REQUIRE_STATUS=${WOLF_SCANNER_PROPOSAL_REQUIRE_STATUS:-true}
+      - GOMODCACHE=/tmp/go-mod
+      - GOCACHE=/tmp/go-cache
+      - GOPATH=/tmp/go
+    depends_on:
+      wolf:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+        required: false
+    networks:
+      - wolf-net
+    restart: unless-stopped
+    deploy:
+      replicas: ${WOLF_SCANNER_PROPOSAL_WORKERS:-1}
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.1"
+          memory: 64M
+
+  # Durable notification outbox delivery. Opt in only after installing
+  # shell-free adapter executables in the read-only host directory:
+  #   docker compose --profile scanner-release-notifications up -d
+  # Policy destinations are opaque aliases (for example webhook:security);
+  # adapters own endpoint and credential resolution outside Wolf's database.
+  scanner-release-notification:
+    profiles: ["scanner-release-notifications"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${WOLF_VERSION:-dev}
+        COMMIT: ${WOLF_COMMIT:-unknown}
+        BUILD_DATE: ${WOLF_BUILD_DATE:-unknown}
+    command:
+      - scanner-release-worker
+      - --role=notification
+      - --notification-webhook-adapter=${WOLF_SCANNER_NOTIFICATION_WEBHOOK_ADAPTER:-/opt/wolf-notification-adapters/webhook}
+      - --notification-email-adapter=${WOLF_SCANNER_NOTIFICATION_EMAIL_ADAPTER:-/opt/wolf-notification-adapters/email}
+      - --notification-siem-adapter=${WOLF_SCANNER_NOTIFICATION_SIEM_ADAPTER:-/opt/wolf-notification-adapters/siem}
+      - --notification-adapter-max-output=${WOLF_SCANNER_NOTIFICATION_MAX_OUTPUT:-65536}
+      - --notification-poll=${WOLF_SCANNER_NOTIFICATION_POLL:-2s}
+      - --notification-heartbeat=${WOLF_SCANNER_NOTIFICATION_HEARTBEAT:-10s}
+      - --notification-lease-duration=${WOLF_SCANNER_NOTIFICATION_LEASE_DURATION:-45s}
+      - --notification-delivery-timeout=${WOLF_SCANNER_NOTIFICATION_DELIVERY_TIMEOUT:-30s}
+      - --notification-drain-timeout=${WOLF_SCANNER_NOTIFICATION_DRAIN_TIMEOUT:-1m}
+      - --notification-base-backoff=${WOLF_SCANNER_NOTIFICATION_BASE_BACKOFF:-15s}
+      - --notification-max-backoff=${WOLF_SCANNER_NOTIFICATION_MAX_BACKOFF:-30m}
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    volumes:
+      - wolf-data:/home/wolf/.wolf
+      - ${WOLF_SCANNER_NOTIFICATION_ADAPTERS_HOST:-./deploy/scanner-notification-adapters}:/opt/wolf-notification-adapters:ro
+    environment:
+      - WOLF_DB_DRIVER=${WOLF_DB_DRIVER:-sqlite}
+      - WOLF_DB_DSN=${WOLF_DB_DSN:-}
+      - WOLF_LOG_LEVEL=${WOLF_LOG_LEVEL:-info}
+      - WOLF_SCANNER_NOTIFICATION_ADAPTER_ENV=${WOLF_SCANNER_NOTIFICATION_ADAPTER_ENV:-}
+    depends_on:
+      wolf:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+        required: false
+    networks:
+      - wolf-net
+    restart: unless-stopped
+    deploy:
+      replicas: ${WOLF_SCANNER_NOTIFICATION_WORKERS:-1}
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.1"
+          memory: 64M
+
+  # Replica-safe operational alert evaluation. Alert thresholds are read from
+  # the enabled policy and are disabled by default.
+  #   docker compose --profile scanner-release-alerts up -d
+  scanner-release-alert:
+    profiles: ["scanner-release-alerts"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${WOLF_VERSION:-dev}
+        COMMIT: ${WOLF_COMMIT:-unknown}
+        BUILD_DATE: ${WOLF_BUILD_DATE:-unknown}
+    command:
+      - scanner-release-worker
+      - --role=alert
+      - --policy-scope=${WOLF_SCANNER_RELEASE_POLICY_SCOPE:-global}
+      - --alert-interval=${WOLF_SCANNER_ALERT_INTERVAL:-5m}
+      - --alert-heartbeat=${WOLF_SCANNER_ALERT_HEARTBEAT:-30s}
+      - --alert-lease-duration=${WOLF_SCANNER_ALERT_LEASE_DURATION:-2m}
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    volumes:
+      - wolf-data:/home/wolf/.wolf
+    environment:
+      - WOLF_DB_DRIVER=${WOLF_DB_DRIVER:-sqlite}
+      - WOLF_DB_DSN=${WOLF_DB_DSN:-}
+      - WOLF_LOG_LEVEL=${WOLF_LOG_LEVEL:-info}
+    depends_on:
+      wolf:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+        required: false
+    networks:
+      - wolf-net
+    restart: unless-stopped
+    deploy:
+      replicas: ${WOLF_SCANNER_ALERT_WORKERS:-1}
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.1"
+          memory: 64M
+
+  # Durable canary/cohort rollout reconciliation. The built-in runtime adapter
+  # changes desired release assignments through worker status persistence and
+  # does not require a Docker or Kubernetes control-plane socket.
+  scanner-release-rollout:
+    profiles: ["scanner-release"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${WOLF_VERSION:-dev}
+        COMMIT: ${WOLF_COMMIT:-unknown}
+        BUILD_DATE: ${WOLF_BUILD_DATE:-unknown}
+    command: ["scanner-release-worker", "--role=rollout"]
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    volumes:
+      - wolf-data:/home/wolf/.wolf
+    environment:
+      - WOLF_DB_DRIVER=${WOLF_DB_DRIVER:-sqlite}
+      - WOLF_DB_DSN=${WOLF_DB_DSN:-}
+      - WOLF_LOG_LEVEL=${WOLF_LOG_LEVEL:-info}
+    depends_on:
+      wolf:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+        required: false
+    networks:
+      - wolf-net
+    restart: unless-stopped
+    deploy:
+      replicas: ${WOLF_SCANNER_ROLLOUT_WORKERS:-1}
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.1"
+          memory: 64M
+
+  # Digest-exact mirror reconciliation, repair, and guarded quarantine
+  # cleanup. This role has no container-engine socket and resolves only the
+  # opaque registry credentials explicitly assigned to each registry target.
+  scanner-release-registry:
+    profiles: ["scanner-release-registry"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${WOLF_VERSION:-dev}
+        COMMIT: ${WOLF_COMMIT:-unknown}
+        BUILD_DATE: ${WOLF_BUILD_DATE:-unknown}
+    command:
+      - scanner-release-worker
+      - --role=registry
+      - --registry-poll=${WOLF_SCANNER_REGISTRY_POLL:-2s}
+      - --registry-heartbeat=${WOLF_SCANNER_REGISTRY_HEARTBEAT:-10s}
+      - --registry-lease-duration=${WOLF_SCANNER_REGISTRY_LEASE:-45s}
+      - --registry-operation-timeout=${WOLF_SCANNER_REGISTRY_TIMEOUT:-30m}
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    volumes:
+      - wolf-data:/home/wolf/.wolf
+    environment:
+      - WOLF_DB_DRIVER=${WOLF_DB_DRIVER:-sqlite}
+      - WOLF_DB_DSN=${WOLF_DB_DSN:-}
+      - WOLF_LOG_LEVEL=${WOLF_LOG_LEVEL:-info}
+    depends_on:
+      wolf:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+        required: false
+    networks:
+      - wolf-net
+    restart: unless-stopped
+    deploy:
+      replicas: ${WOLF_SCANNER_REGISTRY_WORKERS:-1}
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+        reservations:
+          cpus: "0.1"
+          memory: 128M
+
+  # Built-in local/offline release-step sandbox. This socket is mounted only
+  # into the dedicated builder role; the API service receives no additional
+  # release-builder access. Prefer a rootless Podman/Docker socket in
+  # production. The immutable step image must implement scanner-release-step
+  # or contain Wolf plus /usr/local/bin/wolf-release-command-executor.
+  scanner-release-builder:
+    profiles: ["scanner-release-builder"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${WOLF_VERSION:-dev}
+        COMMIT: ${WOLF_COMMIT:-unknown}
+        BUILD_DATE: ${WOLF_BUILD_DATE:-unknown}
+    command:
+      - scanner-release-worker
+      - --role=build
+      - --executor-backend=local
+      - --max-parallel-steps=${WOLF_SCANNER_RELEASE_MAX_PARALLEL:-2}
+      - --max-step-attempts=${WOLF_SCANNER_RELEASE_MAX_ATTEMPTS:-2}
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    volumes:
+      - wolf-data:/home/wolf/.wolf
+      - ${WOLF_SCANNER_RELEASE_WORKSPACE_HOST:-${PWD}/scanner-release-workspaces}:/workspace
+      - ${WOLF_SCANNER_RELEASE_ENGINE_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
+      - ${WOLF_SCANNER_SIGNER_PROFILE_HOST_FILE:-./deploy/signing/profile.disabled.json}:/run/wolf/signing/profile.json:ro
+      - ${WOLF_SCANNER_SIGNER_CREDENTIAL_HOST_DIR:-./deploy/signing/credentials-disabled}:/run/wolf/signing/credentials:ro
+    environment:
+      - WOLF_DB_DRIVER=${WOLF_DB_DRIVER:-sqlite}
+      - WOLF_DB_DSN=${WOLF_DB_DSN:-}
+      - WOLF_LOG_LEVEL=${WOLF_LOG_LEVEL:-info}
+      - WOLF_SCANNER_RELEASE_WORKSPACE=/workspace
+      - WOLF_SCANNER_RELEASE_HOST_WORKSPACE=${WOLF_SCANNER_RELEASE_WORKSPACE_HOST:-${PWD}/scanner-release-workspaces}
+      - WOLF_SCANNER_RELEASE_CONTAINER_ENGINE=/usr/bin/docker
+      - WOLF_SCANNER_RELEASE_STEP_IMAGE=${WOLF_SCANNER_RELEASE_STEP_IMAGE:-}
+      - WOLF_SCANNER_RELEASE_STEP_PROGRAM=${WOLF_SCANNER_RELEASE_STEP_PROGRAM:-/usr/local/bin/wolf}
+      - WOLF_SCANNER_SIGNER_PROFILE_HOST_FILE=${WOLF_SCANNER_SIGNER_PROFILE_HOST_FILE:-}
+      - WOLF_SCANNER_SIGNER_CREDENTIAL_HOST_DIR=${WOLF_SCANNER_SIGNER_CREDENTIAL_HOST_DIR:-}
+      - WOLF_SCANNER_SIGNER_ADAPTER=${WOLF_SCANNER_SIGNER_ADAPTER:-}
+      - WOLF_SCANNER_SIGNER_NETWORK=${WOLF_SCANNER_SIGNER_NETWORK:-none}
+      - DOCKER_HOST=${WOLF_SCANNER_RELEASE_ENGINE_HOST:-unix:///var/run/docker.sock}
+    depends_on:
+      wolf:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+        required: false
+    networks:
+      - wolf-net
+    restart: unless-stopped
+    deploy:
+      replicas: ${WOLF_SCANNER_RELEASE_BUILDERS:-1}
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+
+  # Complete managed scanner-release factory. This coordinator has no image
+  # engine socket: Buildx creates operation-scoped BuildKit controllers in the
+  # configured Kubernetes namespace and all other work runs as bounded Jobs.
+  # Run deploy/compose/tests/managed-config.sh before starting this profile.
+  scanner-release-managed-builder:
+    profiles: ["scanner-release-managed"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${WOLF_VERSION:-dev}
+        COMMIT: ${WOLF_COMMIT:-unknown}
+        BUILD_DATE: ${WOLF_BUILD_DATE:-unknown}
+    command:
+      - scanner-release-worker
+      - --role=build
+      - --executor-backend=managed
+      - --platform=linux/amd64
+      - --platform=linux/arm64
+      - --max-parallel-steps=${WOLF_SCANNER_RELEASE_MAX_PARALLEL:-2}
+      - --max-step-attempts=${WOLF_SCANNER_RELEASE_MAX_ATTEMPTS:-2}
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    volumes:
+      - wolf-data:/home/wolf/.wolf
+      - ${WOLF_SCANNER_RELEASE_WORKSPACE_HOST:-./deploy/scanner-release-managed/workspace-disabled}:/workspace
+      - ${WOLF_SCANNER_RELEASE_KUBECONFIG_HOST_FILE:-./deploy/scanner-release-managed/kubeconfig.disabled}:/run/wolf/kubernetes/kubeconfig:ro
+      - ${WOLF_SCANNER_RELEASE_K8S_TOKEN_HOST_FILE:-./deploy/scanner-release-managed/token.disabled}:/run/wolf/kubernetes/token:ro
+      - ${WOLF_SCANNER_RELEASE_K8S_CA_HOST_FILE:-./deploy/scanner-release-managed/ca.disabled}:/run/wolf/kubernetes/ca.crt:ro
+      - ${WOLF_SCANNER_RELEASE_BUILDX_DOCKER_CONFIG_HOST_DIR:-./deploy/scanner-release-managed/docker-config-disabled}:/run/wolf/buildx-docker:ro
+      - ${WOLF_SCANNER_RELEASE_GIT_AUTHORIZATION_HOST_FILE:-./deploy/scanner-release-managed/git-authorization.disabled}:/run/wolf/git/authorization:ro
+      - ${WOLF_SCANNER_SIGNER_PROFILE_HOST_FILE:-./deploy/signing/profile.disabled.json}:/run/wolf/signing/profile.json:ro
+      - ${WOLF_SCANNER_SIGNER_CREDENTIAL_HOST_DIR:-./deploy/signing/credentials-disabled}:/run/wolf/signing/credentials:ro
+      - ${WOLF_SCANNER_SIGNER_ADAPTER_HOST_FILE:-./deploy/scanner-release-managed/signer-adapter.disabled}:/opt/wolf/managed/signer-adapter:ro
+    environment:
+      - WOLF_MASTER_KEY=${WOLF_MASTER_KEY:-}
+      - WOLF_DB_DRIVER=${WOLF_DB_DRIVER:-sqlite}
+      - WOLF_DB_DSN=${WOLF_DB_DSN:-}
+      - WOLF_LOG_LEVEL=${WOLF_LOG_LEVEL:-info}
+      - WOLF_SCANNER_RELEASE_WORKSPACE=/workspace
+      - WOLF_SCANNER_RELEASE_EXECUTOR_BACKEND=managed
+      - WOLF_SCANNER_RELEASE_SOURCE_URL=${WOLF_SCANNER_RELEASE_SOURCE_URL:-}
+      - WOLF_SCANNER_RELEASE_PRIMARY_REGISTRY_ID=${WOLF_SCANNER_RELEASE_PRIMARY_REGISTRY_ID:-}
+      - WOLF_SCANNER_RELEASE_MIRROR_REGISTRY_ID=${WOLF_SCANNER_RELEASE_MIRROR_REGISTRY_ID:-}
+      - WOLF_SCANNER_RELEASE_GIT_PATH=/usr/bin/git
+      - WOLF_SCANNER_RELEASE_GIT_AUTHORIZATION_FILE=${WOLF_SCANNER_RELEASE_GIT_AUTHORIZATION_FILE:-}
+      - WOLF_SCANNER_RELEASE_BUILDX_PATH=/usr/libexec/docker/cli-plugins/docker-buildx
+      - WOLF_SCANNER_RELEASE_BUILDX_PUSH=true
+      - WOLF_SCANNER_RELEASE_BUILDX_NAMESPACE=${WOLF_SCANNER_RELEASE_BUILDX_NAMESPACE:-}
+      - WOLF_SCANNER_RELEASE_BUILDKIT_SERVICE_ACCOUNT=${WOLF_SCANNER_RELEASE_BUILDKIT_SERVICE_ACCOUNT:-}
+      - WOLF_SCANNER_RELEASE_BUILDX_DOCKER_CONFIG=/run/wolf/buildx-docker
+      - WOLF_SCANNER_RELEASE_K8S_API_SERVER=${WOLF_SCANNER_RELEASE_K8S_API_SERVER:-https://kubernetes.default.svc}
+      - WOLF_SCANNER_RELEASE_K8S_NAMESPACE=${WOLF_SCANNER_RELEASE_K8S_NAMESPACE:-}
+      - WOLF_SCANNER_RELEASE_K8S_INSTANCE=${WOLF_SCANNER_RELEASE_K8S_INSTANCE:-wolf-compose}
+      - WOLF_SCANNER_RELEASE_K8S_TOKEN_FILE=/run/wolf/kubernetes/token
+      - WOLF_SCANNER_RELEASE_K8S_CA_FILE=/run/wolf/kubernetes/ca.crt
+      - WOLF_SCANNER_RELEASE_WORKSPACE_PVC=${WOLF_SCANNER_RELEASE_WORKSPACE_PVC:-}
+      - WOLF_SCANNER_RELEASE_K8S_POLL=${WOLF_SCANNER_RELEASE_K8S_POLL:-1s}
+      - WOLF_SCANNER_RELEASE_K8S_JOB_TTL=${WOLF_SCANNER_RELEASE_K8S_JOB_TTL:-300}
+      - WOLF_SCANNER_RELEASE_STEP_IMAGE=${WOLF_SCANNER_RELEASE_STEP_IMAGE:-}
+      - WOLF_SCANNER_RELEASE_STEP_PROGRAM=${WOLF_SCANNER_RELEASE_STEP_PROGRAM:-/usr/local/bin/wolf}
+      - WOLF_SCANNER_RELEASE_ADAPTER_PATH=${WOLF_SCANNER_RELEASE_ADAPTER_PATH:-/usr/local/bin/wolf-release-adapter}
+      - WOLF_SCANNER_RELEASE_FIXED_ADAPTER_IMAGE=${WOLF_SCANNER_RELEASE_FIXED_ADAPTER_IMAGE:-}
+      - WOLF_SCANNER_RELEASE_FIXED_REGISTRY_CREDENTIAL_SECRET=${WOLF_SCANNER_RELEASE_FIXED_REGISTRY_CREDENTIAL_SECRET:-}
+      - WOLF_SCANNER_RELEASE_FIXED_REGISTRY_CREDENTIAL_WORKLOAD_IDENTITY=${WOLF_SCANNER_RELEASE_FIXED_REGISTRY_CREDENTIAL_WORKLOAD_IDENTITY:-false}
+      - WOLF_SCANNER_RELEASE_FIXED_SERVICE_ACCOUNT=${WOLF_SCANNER_RELEASE_FIXED_SERVICE_ACCOUNT:-}
+      - WOLF_SCANNER_RELEASE_QUALITY_ADAPTER_IMAGE=${WOLF_SCANNER_RELEASE_QUALITY_ADAPTER_IMAGE:-}
+      - WOLF_SCANNER_RELEASE_QUALITY_REGISTRY_CREDENTIAL_SECRET=${WOLF_SCANNER_RELEASE_QUALITY_REGISTRY_CREDENTIAL_SECRET:-}
+      - WOLF_SCANNER_RELEASE_QUALITY_ENGINE_CREDENTIAL_SECRET=${WOLF_SCANNER_RELEASE_QUALITY_ENGINE_CREDENTIAL_SECRET:-}
+      - WOLF_SCANNER_RELEASE_QUALITY_REGISTRY_CREDENTIAL_WORKLOAD_IDENTITY=${WOLF_SCANNER_RELEASE_QUALITY_REGISTRY_CREDENTIAL_WORKLOAD_IDENTITY:-false}
+      - WOLF_SCANNER_RELEASE_QUALITY_SERVICE_ACCOUNT=${WOLF_SCANNER_RELEASE_QUALITY_SERVICE_ACCOUNT:-}
+      - WOLF_SCANNER_RELEASE_INTEGRATION_ADAPTER_IMAGE=${WOLF_SCANNER_RELEASE_INTEGRATION_ADAPTER_IMAGE:-}
+      - WOLF_SCANNER_RELEASE_INTEGRATION_REGISTRY_CREDENTIAL_SECRET=${WOLF_SCANNER_RELEASE_INTEGRATION_REGISTRY_CREDENTIAL_SECRET:-}
+      - WOLF_SCANNER_RELEASE_INTEGRATION_ENGINE_CREDENTIAL_SECRET=${WOLF_SCANNER_RELEASE_INTEGRATION_ENGINE_CREDENTIAL_SECRET:-}
+      - WOLF_SCANNER_RELEASE_INTEGRATION_REGISTRY_CREDENTIAL_WORKLOAD_IDENTITY=${WOLF_SCANNER_RELEASE_INTEGRATION_REGISTRY_CREDENTIAL_WORKLOAD_IDENTITY:-false}
+      - WOLF_SCANNER_RELEASE_INTEGRATION_SERVICE_ACCOUNT=${WOLF_SCANNER_RELEASE_INTEGRATION_SERVICE_ACCOUNT:-}
+      - WOLF_SCANNER_SIGNER_PROFILE_FILE=/run/wolf/signing/profile.json
+      - WOLF_SCANNER_SIGNER_PROFILE_SECRET=${WOLF_SCANNER_SIGNER_PROFILE_SECRET:-}
+      - WOLF_SCANNER_SIGNER_CREDENTIAL_SECRET=${WOLF_SCANNER_SIGNER_CREDENTIAL_SECRET:-}
+      - WOLF_SCANNER_SIGNER_ADAPTER=/opt/wolf/managed/signer-adapter
+      - WOLF_SCANNER_SIGNER_WORKLOAD_IDENTITY=${WOLF_SCANNER_SIGNER_WORKLOAD_IDENTITY:-false}
+      - WOLF_SCANNER_RELEASE_SIGNER_SERVICE_ACCOUNT=${WOLF_SCANNER_RELEASE_SIGNER_SERVICE_ACCOUNT:-}
+      - WOLF_SCANNER_SIGNER_JOURNAL=/workspace/.wolf-signing/coordinator-journal
+      - WOLF_SCANNER_SIGNER_ENV=${WOLF_SCANNER_SIGNER_ENV:-}
+      - KUBECONFIG=/run/wolf/kubernetes/kubeconfig
+    depends_on:
+      wolf:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+        required: false
+    networks:
+      - wolf-net
+    restart: unless-stopped
+    deploy:
+      replicas: ${WOLF_SCANNER_RELEASE_MANAGED_BUILDERS:-1}
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+
+  # Opt-in durable custom image builder. Only this execution role receives the
+  # image-engine socket for custom builds; API handlers enqueue fixed embedded
+  # variants and never decrypt registry credentials or invoke Docker.
+  scanner-custom-build-worker:
+    profiles: ["scanner-custom-build"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${WOLF_VERSION:-dev}
+        COMMIT: ${WOLF_COMMIT:-unknown}
+        BUILD_DATE: ${WOLF_BUILD_DATE:-unknown}
+    command: ["scanner-custom-build-worker"]
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    volumes:
+      - wolf-data:/home/wolf/.wolf
+      - ${WOLF_SCANNER_CUSTOM_BUILD_ENGINE_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
+    environment:
+      - WOLF_DB_DRIVER=${WOLF_DB_DRIVER:-sqlite}
+      - WOLF_DB_DSN=${WOLF_DB_DSN:-}
+      - WOLF_MASTER_KEY=${WOLF_MASTER_KEY:-}
+      - WOLF_LOG_LEVEL=${WOLF_LOG_LEVEL:-info}
+      - WOLF_SCANNER_CUSTOM_BUILD_WORKER_ID=${WOLF_SCANNER_CUSTOM_BUILD_WORKER_ID:-}
+      - WOLF_SCANNER_CUSTOM_BUILD_POLL_INTERVAL=${WOLF_SCANNER_CUSTOM_BUILD_POLL_INTERVAL:-2s}
+      - WOLF_SCANNER_CUSTOM_BUILD_HEARTBEAT_INTERVAL=${WOLF_SCANNER_CUSTOM_BUILD_HEARTBEAT_INTERVAL:-10s}
+      - WOLF_SCANNER_CUSTOM_BUILD_LEASE_DURATION=${WOLF_SCANNER_CUSTOM_BUILD_LEASE_DURATION:-45s}
+      - WOLF_SCANNER_CUSTOM_BUILD_OPERATION_TIMEOUT=${WOLF_SCANNER_CUSTOM_BUILD_OPERATION_TIMEOUT:-2h}
+      - WOLF_SCANNER_CUSTOM_BUILD_OBSERVABILITY_ADDR=:9092
+      - DOCKER_HOST=${WOLF_SCANNER_CUSTOM_BUILD_ENGINE_HOST:-unix:///var/run/docker.sock}
+    depends_on:
+      wolf:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+        required: false
+    networks:
+      - wolf-net
+    restart: unless-stopped
+    deploy:
+      replicas: ${WOLF_SCANNER_CUSTOM_BUILD_WORKERS:-1}
+      resources:
+        limits:
+          cpus: "4.0"
+          memory: 4G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
 
   postgres:
     image: postgres:16-alpine

@@ -1,11 +1,16 @@
 # Trivy CVE allowlist for the wolf-scanners images.
 #
-# Each entry is a CVE ID, one per line. Include a comment explaining
-# WHY this CVE is acceptable for THIS image — never a blanket bypass.
-# When upstream releases a fix, the entry should be removed.
+# Each entry is a CVE/GHSA ID, one per line. Every exception must identify an
+# owner, a fixed expiry no more than 180 days away, a reason, and its image
+# scope. The release workflow validates this metadata before building.
 #
 # Format:
-#   CVE-YYYY-NNNNN  # reason (image: <which one>, decided <date>, expires <date or "until upstream fix">)
+#   CVE-YYYY-NNNNN # owner=<team/email>; expires=YYYY-MM-DD; reason=<why accepted>; images=<exact-image-scope-or-all>
+#
+# The release workflow validates this source and renders a separate plain
+# Trivy ignore file for each scanner, fixer, runtime, proposal, and adapter
+# image. An exception scoped to one image can therefore never suppress the
+# same vulnerability ID in another image.
 #
 # Empty for now — add entries only when a real CVE blocks publishing
 # AND the fix isn't available upstream. ignore-unfixed is set in the

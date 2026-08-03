@@ -34,8 +34,8 @@ SCANNERS_REF   := $(SCANNERS_IMAGE):$(SCANNERS_TAG)
 GOLANGCI_LINT := $(shell command -v golangci-lint 2>/dev/null)
 AIR           := $(shell command -v air 2>/dev/null || echo $(shell go env GOPATH)/bin/air)
 
-.PHONY: all build test lint vet fmt ui-build dev dev-api dev-ui docker docker-buildx docker-up docker-down clean help \
-        scanners-build scanners-buildx scanners-buildx-all scanners-buildx-setup scanners-smoke scanners-push scanners-validate scanners-docs scanners-docs-check scanners-upstream-check scanners-bump dev-scanners test-integration
+.PHONY: all build test lint vet fmt ui-build dev dev-api dev-ui docker docker-buildx docker-up docker-down clean help helm-validate \
+        scanners-build scanners-buildx scanners-buildx-all scanners-buildx-setup scanners-smoke scanners-push scanners-validate scanners-quality scanners-docs scanners-docs-check scanners-upstream-check scanners-bump scanners-os-packages-check scanners-os-packages-refresh scanners-vulnerability-dbs-check scanners-vulnerability-dbs-refresh dev-scanners test-integration
 
 ## all: Build everything (Go binary + UI)
 all: build ui-build
@@ -96,6 +96,10 @@ ui-build:
 		echo "==> No UI package.json found at $(UI_DIR), skipping"; \
 	fi
 
+## helm-validate: Lint and verify immutable-image and network-policy chart invariants
+helm-validate:
+	bash deploy/helm/wolf/tests/render-security.sh
+
 ## ui-dev-install: One-time install for local dev (after a fresh clone)
 ui-dev-install:
 	cd $(UI_DIR) && npm install
@@ -129,10 +133,49 @@ dev-ui:
 ## ui-dev: (alias) Start UI development server
 ui-dev: dev-ui
 
-## scanners-validate: Validate scanner manifest, version pins, image routing, and generated docs
-scanners-validate: scanners-docs-check
+## scanners-validate: Validate scanner manifest, version pins, image routing, embedded context, generated docs, and OS package lock
+scanners-validate: scanners-docs-check scanners-os-packages-check scanners-vulnerability-dbs-check scanners-context-check scanners-quality
 	@echo "==> Validating scanner metadata..."
 	go run ./cmd/scannertools validate
+
+## scanners-context-check: Verify the embedded scanner/fixer build context is canonical
+scanners-context-check:
+	@echo "==> Checking embedded scanner/fixer build context..."
+	go run ./internal/scannerbuild/cmd/synccontext --check
+
+## scanners-quality: Validate complete tool/variant fixture, parser, threshold, and vulnerability-DB coverage
+scanners-quality:
+	@echo "==> Validating deterministic scanner quality policy and corpus..."
+	go run ./cmd/scannertools quality
+
+## scanners-os-packages-check: Offline validation of the committed OS package lock and generated build inputs
+scanners-os-packages-check:
+	@echo "==> Checking locked scanner OS package snapshot..."
+	go run ./cmd/scannertools os-packages --check
+
+## scanners-os-packages-refresh: Explicit network refresh (usage: make scanners-os-packages-refresh SNAPSHOT=20260730T000000Z)
+scanners-os-packages-refresh:
+	@if [ -z "$(SNAPSHOT)" ]; then \
+		echo "usage: make scanners-os-packages-refresh SNAPSHOT=YYYYMMDDTHHMMSSZ"; \
+		exit 2; \
+	fi
+	go run ./cmd/scannertools os-packages --refresh --snapshot "$(SNAPSHOT)"
+	go generate ./internal/scannerbuild/...
+	go run ./cmd/scannertools lock
+	go run ./cmd/scannertools os-packages --check
+
+## scanners-vulnerability-dbs-check: Validate both exact Trivy DB locks offline
+scanners-vulnerability-dbs-check:
+	@echo "==> Checking locked Trivy vulnerability database identities..."
+	go run ./cmd/scannertools vulnerability-dbs --check
+
+## scanners-vulnerability-dbs-refresh: Resolve both Trivy DB tags into reviewable 8-day locks
+scanners-vulnerability-dbs-refresh:
+	@echo "==> Refreshing exact Trivy vulnerability database identities..."
+	go run ./cmd/scannertools vulnerability-dbs --refresh $(if $(RECORDED_AT),--recorded-at "$(RECORDED_AT)",)
+	go run ./internal/scannerbuild/cmd/synccontext
+	go run ./cmd/scannertools lock
+	go run ./cmd/scannertools vulnerability-dbs --check
 
 ## scanners-docs: Regenerate scanner tool documentation from scanners/tools.yaml
 scanners-docs:

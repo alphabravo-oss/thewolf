@@ -36,12 +36,17 @@ Thumbs.db
 # Go
 vendor/
 
+# Python tooling caches
+__pycache__/
+*.py[cod]
+
 # Node / Next.js
 node_modules/
 .next/
 ui/node_modules/
 ui/.next/
 ui/out/
+.pnpm-store/
 
 # Air (hot reload)
 tmp/
@@ -52,6 +57,7 @@ tmp/
 
 # Wolf runtime artifacts
 .wolf/
+.codex-security/
 
 # Scan artifacts output dir (local dev). Anchored to the repo root so it does
 # NOT match the internal/artifacts/ Go source package.

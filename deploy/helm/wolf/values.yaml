@@ -1,0 +1,378 @@
+image:
+  repository: ghcr.io/alphabravo-oss/thewolf
+  # Production installs must set an immutable sha256 digest. Mutable tags are
+  # an explicit development-only compatibility escape hatch.
+  digest: ""
+  tag: latest
+  allowMutableTag: false
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+worker:
+  replicaCount: 1
+  capacity: 1
+  serviceAccountName: ""
+scannerRelease:
+  # Fail-closed default. Advance through candidate, canary, and stable_control
+  # only after qualifying each stage; existing scan execution remains intact.
+  mode: read_only
+  # Deprecated synchronous /scanners/images/*/build endpoints. Disable only
+  # after all callers have moved to durable scanner release candidates.
+  legacyBuildEndpoints: true
+  offlineBundles:
+    # Optional public trust policy for the portable release-manifest
+    # signature. No private signing material belongs in this Secret.
+    portableTrustPolicySecret: ""
+    portableTrustPolicyKey: trust-policy.json
+    imageVerifier:
+      # V2 imports fail closed unless this verifier is configured or the
+      # caller invokes the explicitly audited allow_unverified break glass.
+      enabled: false
+      # Absolute executable path baked into the immutable API image.
+      path: /usr/local/bin/wolf-offline-image-verifier
+      # Independent public trust policy for OCI image signatures.
+      trustPolicySecret: ""
+      trustPolicyKey: image-trust-policy.json
+  customBuild:
+    # Opt-in because this role receives an image-engine socket. API pods never
+    # receive that socket and only enqueue durable operations.
+    enabled: false
+    replicaCount: 1
+    image: ""
+    # The bundled chart supports only an explicit node-local Unix socket.
+    # It rejects remote/unauthenticated TCP engines.
+    engineMode: node-local
+    # Node-local sockets only. Prefer a dedicated/rootless engine socket.
+    # Remote Docker requires a separately managed mTLS deployment.
+    dockerHostPath: /var/run/docker.sock
+    pollInterval: 2s
+    heartbeatInterval: 10s
+    leaseDuration: 45s
+    operationTimeout: 2h
+    observabilityAddress: ":9092"
+  discovery:
+    enabled: false
+    replicaCount: 1
+    definitionCommit: ""
+    manifestPath: /usr/share/wolf/scanners/tools.yaml
+    lockPath: /usr/share/wolf/scanners/scanner-lock.yaml
+    # Optional ConfigMap containing manifestKey and lockKey. Leave empty to
+    # consume the immutable definitions baked into the Wolf image.
+    existingConfigMap: ""
+    manifestKey: tools.yaml
+    lockKey: scanner-lock.yaml
+    maxConcurrency: 8
+    perHostConcurrency: 2
+    itemTimeout: 30s
+    sourceAttempts: 3
+  scheduler:
+    enabled: false
+    replicaCount: 1
+    timezone: UTC
+    dailyTime: "02:00"
+    weeklyTime: "03:00"
+    weeklyDay: Sunday
+    policyScope: global
+    definitionCommit: ""
+  proposal:
+    enabled: false
+    replicaCount: 1
+    # Build/publish Dockerfile target proposal-runtime. It contains the Wolf
+    # entrypoint plus the Go/Git tools needed to validate an exact remote
+    # definition commit; do not use the minimal API image for this role.
+    image: ""
+    executorPath: /usr/local/bin/wolf
+    executorArgs: [scanner-proposal-executor]
+    maxOutputBytes: 4194304
+    pollInterval: 3s
+    heartbeatInterval: 10s
+    leaseDuration: 45s
+    drainTimeout: 1m
+    # Kubernetes EnvVar objects. Secret values should use valueFrom.secretKeyRef.
+    # Every name is also added to the proposal child's explicit allowlist.
+    executorEnvironment: []
+  notification:
+    enabled: false
+    replicaCount: 1
+    # Dedicated image containing any configured shell-free adapters. Wolf
+    # persists only opaque aliases; the adapters own endpoint/secret lookup.
+    image: ""
+    webhook:
+      path: ""
+      args: []
+    email:
+      path: ""
+      args: []
+    siem:
+      path: ""
+      args: []
+    maxOutputBytes: 65536
+    pollInterval: 2s
+    heartbeatInterval: 10s
+    leaseDuration: 45s
+    deliveryTimeout: 30s
+    drainTimeout: 1m
+    baseBackoff: 15s
+    maxBackoff: 30m
+    # Kubernetes EnvVar objects. Prefer valueFrom.secretKeyRef and *_FILE
+    # variables; each name is explicitly allowlisted into adapter children.
+    adapterEnvironment: []
+    # Additional external adapter destination ports allowed when the chart's
+    # egress NetworkPolicy is enabled. DNS and PostgreSQL are added separately.
+    egressPorts: [443]
+  alert:
+    enabled: false
+    replicaCount: 1
+    policyScope: global
+    interval: 5m
+    heartbeatInterval: 30s
+    leaseDuration: 2m
+  rollout:
+    enabled: false
+    replicaCount: 1
+    pollInterval: 2s
+    reconcileInterval: 15s
+    heartbeatInterval: 10s
+    leaseDuration: 45s
+    cohortTimeout: 1h
+    workerActiveWithin: 2m
+  registry:
+    # Opt-in because this role receives outbound access to configured OCI
+    # registries and can perform policy-authorized content repair/deletion.
+    enabled: false
+    replicaCount: 1
+    pollInterval: 2s
+    heartbeatInterval: 10s
+    leaseDuration: 45s
+    operationTimeout: 30m
+    drainTimeout: 2m
+    baseBackoff: 15s
+    maxBackoff: 30m
+    # Registry HTTPS ports allowed by the dedicated NetworkPolicy.
+    egressPorts: [443]
+  builder:
+    enabled: false
+    replicaCount: 1
+    # command preserves the original external executor contract. The built-in
+    # choices are local, buildx, kubernetes-job, and managed. Managed composes
+    # Buildx, Kubernetes Jobs, isolated adapter lanes, registry publication,
+    # and signing into the complete first-party release pipeline.
+    backend: command
+    executorPath: ""
+    # Required and digest-pinned for every built-in backend. The image must
+    # contain Wolf plus the fixed scanner release step executor, or an
+    # equivalent program implementing the documented Invocation contract.
+    stepImage: ""
+    stepProgram: /usr/local/bin/wolf
+    registry: ""
+    # Installed by the standard Wolf runtime image's docker-cli-buildx package.
+    buildxPath: /usr/libexec/docker/cli-plugins/docker-buildx
+    containerEnginePath: /usr/bin/podman
+    push: true
+    platforms: ["linux/amd64"]
+    maxParallelSteps: 2
+    maxStepAttempts: 2
+    # Bake the executor into a dedicated Wolf builder image or mount it by
+    # extending the chart. Host environment is not inherited automatically.
+    image: ""
+    # Additional Kubernetes EnvVar objects for file-based registry/KMS
+    # configuration. Candidate input is never interpolated into an argv.
+    environment: []
+    managed:
+      # Credential-free HTTPS URL for the exact scanner-definition commit.
+      sourceURL: ""
+      # IDs of registry targets already registered in Wolf. They must differ;
+      # the immutable execution context binds every push/mirror operation to
+      # these snapshots.
+      primaryRegistryID: ""
+      mirrorRegistryID: ""
+      # Optional Secret containing a single bounded Git HTTP Authorization
+      # value. Public definition repositories leave this empty.
+      gitAuthorizationSecret: ""
+      gitAuthorizationKey: authorization
+      # Existing kubernetes.io/dockerconfigjson (or Opaque) Secret containing
+      # only the primary target's config.json credentials.
+      dockerConfigSecret: ""
+      dockerConfigKey: .dockerconfigjson
+      adapterPath: /usr/local/bin/wolf-release-adapter
+      kubernetes:
+        apiServer: https://kubernetes.default.svc
+        # Managed mode requires this to equal the Helm release namespace so
+        # its namespace-scoped Role cannot accidentally authorize another one.
+        namespace: ""
+        # BuildKit controllers run in a separately administered namespace with
+        # only the Buildx Role below; no release Job or API identity is placed
+        # there.
+        buildxNamespace: ""
+        # Existing RWX PVC shared by the coordinator and release Jobs. Use the
+        # chart PVC (<release>-wolf-workspace) unless providing an equivalent.
+        workspacePVC: ""
+        coordinatorServiceAccountName: ""
+        buildkitServiceAccountName: ""
+        pollInterval: 1s
+        jobTTLSeconds: 300
+      # Generated Jobs are selected by a release-scoped instance label and the
+      # stable wolf.security/lane label. Managed installs fail closed until an
+      # operator explicitly lists every external destination CIDR and port
+      # needed by each active lane. Hostnames are intentionally unsupported:
+      # resolve registry, remote-engine, vulnerability-database, and KMS
+      # endpoints into deployment-controlled network ranges.
+      networkPolicy:
+        dns:
+          # The namespace label is standard on supported Kubernetes versions.
+          # DNS pod labels vary by distribution, so the default selects every
+          # pod in kube-system but only permits TCP/UDP 53. Narrow it when the
+          # cluster's CoreDNS/kube-dns labels are known.
+          namespaceSelectorLabels:
+            kubernetes.io/metadata.name: kube-system
+          podSelectorLabels: {}
+        destinations:
+          # Ordinary is used by the standalone kubernetes-job backend. It is
+          # not part of managed routing, but gets the same default-deny/DNS
+          # policy when generated Jobs use this chart.
+          ordinary: []
+          # Example entry:
+          # - cidr: 203.0.113.10/32
+          #   ports:
+          #     - {protocol: TCP, port: 443}
+          fixed: []
+          quality: []
+          integration: []
+          signer: []
+      # Every lane uses a different immutable image, credential boundary, and
+      # workload identity/service account. Build and publish the images from
+      # Dockerfile targets scanner-release-fixed-adapter,
+      # scanner-release-quality-adapter, and
+      # scanner-release-integration-adapter, then configure their exact
+      # image@sha256 references here.
+      #
+      # Each registry Secret contains only config.json. Quality and integration
+      # use a second, distinct engine Secret containing engine.json, ca.pem,
+      # cert.pem, and key.pem. engine.json uses schema
+      # wolf.scanner-release-engine/v1 and a tcp://host:port endpoint for a
+      # separately administered remote Docker Engine over mTLS. Quality may
+      # additionally declare quality_network plus an exact
+      # quality_network_policy_digest; the adapter requires an internal,
+      # policy-labelled wolf-quality-* fixture network or uses network=none.
+      # Nuclei also requires quality_targets.nuclei to name an HTTP service on
+      # that exact internal network. Dockle uses a corpus archive, not a socket.
+      # Workload identity may supplement any lane but cannot replace these
+      # files.
+      adapters:
+        fixed:
+          image: ""
+          registryCredentialSecret: ""
+          workloadIdentity: false
+          serviceAccountName: ""
+          serviceAccountAnnotations: {}
+        quality:
+          image: ""
+          registryCredentialSecret: ""
+          engineCredentialSecret: ""
+          workloadIdentity: false
+          serviceAccountName: ""
+          serviceAccountAnnotations: {}
+        integration:
+          image: ""
+          registryCredentialSecret: ""
+          engineCredentialSecret: ""
+          workloadIdentity: false
+          serviceAccountName: ""
+          serviceAccountAnnotations: {}
+  signing:
+    enabled: false
+    # Existing Secret containing profile.json. The document contains opaque
+    # KMS/HSM/keyless references only, never private-key bytes.
+    profileSecret: ""
+    # Optional existing Secret mounted at /run/wolf/signing/credentials.
+    credentialSecret: ""
+    # Absolute adapter path baked into the Wolf/step image.
+    adapterPath: /usr/local/bin/wolf-signer-adapter
+    workloadIdentity: false
+    # Managed signing Jobs use a dedicated service account; the deterministic
+    # default is separate from all three adapter identities and BuildKit.
+    serviceAccountName: ""
+    # Durable coordinator/provider idempotency evidence lives on the workspace
+    # PVC. This must remain an absolute path.
+    journalPath: /workspace/.wolf-signing/coordinator-journal
+    # Optional Kubernetes EnvVar objects. Their names are explicitly
+    # allowlisted into the signer adapter process.
+    environment: []
+    # AWS IRSA, GCP Workload Identity, or Azure workload-identity annotations.
+    serviceAccountAnnotations: {}
+scanner:
+  serviceAccountName: ""
+  defaultImage: alphabravodevops/wolf-scanners:2.0.0
+  jvmImage: alphabravodevops/wolf-scanners-jvm:2.0.0
+  rustImage: alphabravodevops/wolf-scanners-rust:2.0.0
+  codeqlImage: ""
+  imagePullPolicy: IfNotPresent
+  memory: 2Gi
+  cpu: 1500m
+  timeout: 30m
+  jobTTLSeconds: 300
+  networkClass: offline
+
+service:
+  type: ClusterIP
+  port: 8778
+
+postgres:
+  image: postgres
+  # Pin the exact approved PostgreSQL image. A combined image@sha256 reference
+  # in image is also accepted.
+  digest: ""
+  allowMutableImage: false
+  database: wolf
+  username: wolf
+  password: ""
+  storage: 10Gi
+  # Empty selects the cluster default provisioner. Set an explicit class for
+  # production or static-volume qualification environments.
+  storageClassName: ""
+  # Numeric identity inside the pinned PostgreSQL image. The default matches
+  # the supported Alpine image family; set both values to 999 when qualifying
+  # a Debian-based official image. The pod never starts as root merely to
+  # chown a volume.
+  runAsUser: 70
+  runAsGroup: 70
+
+workspace:
+  storageClassName: ""
+  accessModes: [ReadWriteMany]
+  size: 50Gi
+artifacts:
+  storageClassName: ""
+  accessModes: [ReadWriteMany]
+  size: 20Gi
+
+masterKey: ""
+apiOnly: false
+gitAllowedCIDRs: ""
+
+resources:
+  api:
+    requests: {cpu: 200m, memory: 256Mi}
+    limits: {cpu: "1", memory: 1Gi}
+  worker:
+    requests: {cpu: 500m, memory: 512Mi}
+    limits: {cpu: "2", memory: 2Gi}
+  scannerRelease:
+    requests: {cpu: 200m, memory: 256Mi}
+    limits: {cpu: "1", memory: 1Gi}
+  customBuild:
+    requests: {cpu: 500m, memory: 512Mi}
+    limits: {cpu: "4", memory: 4Gi}
+
+networkPolicy:
+  enabled: true
+  allowedIngressNamespaces: []
+  # Network-required scanner Jobs receive no egress unless operators list the
+  # exact destination CIDRs (including DNS resolvers) approved for scanners.
+  scannerEgressCIDRs: []
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70

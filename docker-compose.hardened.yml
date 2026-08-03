@@ -18,7 +18,10 @@
 
 services:
   docker-socket-proxy:
-    image: tecnativa/docker-socket-proxy:latest
+    # Keep the default immutable so a routine restart cannot silently change
+    # this privileged boundary. Operators may override it only with another
+    # reviewed tag@sha256 reference.
+    image: ${WOLF_DOCKER_SOCKET_PROXY_IMAGE:-tecnativa/docker-socket-proxy:v0.5.0@sha256:1f5038b54f06c3e18422902cf00ba21803d1c97805aae032e5e6673d532d3459}
     restart: unless-stopped
     # The ONLY container with the real socket, mounted read-only. It exposes a
     # filtered TCP API on :2375, reachable only on the internal wolf-net.
@@ -60,6 +63,30 @@ services:
     volumes: !override
       - wolf-data:/home/wolf/.wolf
       - ${WOLF_REPOS_ROOT:-./repos}:/repos:ro
+      - ${WOLF_HOST_WORKSPACE_ROOT:-./workspaces}:/workspaces
+      - ${WOLF_SCANNER_BUNDLE_TRUST_POLICY_HOST_FILE:-./deploy/scanner-release-managed/bundle-trust.disabled}:/run/wolf/offline-bundles/portable/trust-policy.json:ro
+      - ${WOLF_SCANNER_BUNDLE_IMAGE_VERIFIER_HOST_FILE:-./deploy/scanner-release-managed/bundle-image-verifier.disabled}:/run/wolf/offline-bundles/images/verifier:ro
+      - ${WOLF_SCANNER_BUNDLE_IMAGE_TRUST_POLICY_HOST_FILE:-./deploy/scanner-release-managed/bundle-image-trust.disabled}:/run/wolf/offline-bundles/images/trust-policy.json:ro
+    depends_on:
+      docker-socket-proxy:
+        condition: service_started
+
+  scan-worker:
+    environment:
+      - DOCKER_HOST=tcp://docker-socket-proxy:2375
+    volumes: !override
+      - wolf-data:/home/wolf/.wolf
+      - ${WOLF_REPOS_ROOT:-./repos}:/repos:ro
+      - ${WOLF_HOST_WORKSPACE_ROOT:-./workspaces}:/workspaces
+    depends_on:
+      docker-socket-proxy:
+        condition: service_started
+
+  scanner-custom-build-worker:
+    environment:
+      - DOCKER_HOST=tcp://docker-socket-proxy:2375
+    volumes: !override
+      - wolf-data:/home/wolf/.wolf
     depends_on:
       docker-socket-proxy:
         condition: service_started

@@ -6,6 +6,7 @@
 
 # Dependency trees + build output
 **/node_modules
+.pnpm-store/
 ui/dist
 /dist
 
@@ -16,6 +17,8 @@ ui/dist
 
 # Local runtime data, caches, and scan output (never belongs in the image)
 .wolf/
+.wolf-*
+.codex-security/
 /artifacts
 FINDINGS/
 *.log

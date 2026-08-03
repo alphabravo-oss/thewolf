@@ -1,0 +1,136 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "wolf.fullname" . }}-default-deny
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "wolf.fullname" . }}-api
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: api
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - ports: [{protocol: TCP, port: 8778}]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/component: postgres}
+      ports: [{protocol: TCP, port: 5432}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "wolf.fullname" . }}-worker
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: scan-worker
+  policyTypes: [Egress]
+  egress:
+    - ports:
+        - {protocol: TCP, port: 443}
+        - {protocol: TCP, port: 22}
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+        - {protocol: TCP, port: 5432}
+---
+{{- if .Values.scannerRelease.customBuild.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "wolf.fullname" . }}-scanner-custom-build
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: scanner-custom-build
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - ports: [{protocol: TCP, port: 9092}]
+  egress:
+    - ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+        - {protocol: TCP, port: 443}
+        - {protocol: TCP, port: 5432}
+---
+{{- end }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "wolf.fullname" . }}-scanner-network-required
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: wolf-scanner
+      wolf.dev/network: network-required
+  policyTypes: [Egress]
+  {{- if .Values.networkPolicy.scannerEgressCIDRs }}
+  egress:
+    - to:
+        {{- range .Values.networkPolicy.scannerEgressCIDRs }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+        {{- end }}
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+        - {protocol: TCP, port: 443}
+  {{- else }}
+  egress: []
+  {{- end }}
+{{- if and .Values.scannerRelease.builder.enabled (has (.Values.scannerRelease.builder.backend | default "command") (list "kubernetes-job" "managed")) }}
+{{- $executionNetwork := .Values.scannerRelease.builder.managed.networkPolicy }}
+{{- range $lane := list "ordinary" "fixed" "quality" "integration" "signer" }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ printf "%s-release-%s-egress" (include "wolf.fullname" $) $lane | trunc 63 | trimSuffix "-" }}
+  labels:
+    {{- include "wolf.labels" $ | nindent 4 }}
+    wolf.security/lane: {{ $lane }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: wolf-scanner-release
+      app.kubernetes.io/instance: {{ $.Release.Name }}
+      app.kubernetes.io/component: step
+      wolf.security/lane: {{ $lane }}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              {{- toYaml $executionNetwork.dns.namespaceSelectorLabels | nindent 14 }}
+          podSelector:
+            matchLabels:
+              {{- toYaml $executionNetwork.dns.podSelectorLabels | nindent 14 }}
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+    {{- range (index $executionNetwork.destinations $lane) }}
+    - to:
+        - ipBlock:
+            cidr: {{ .cidr | quote }}
+            {{- with .except }}
+            except:
+              {{- toYaml . | nindent 14 }}
+            {{- end }}
+      ports:
+        {{- range .ports }}
+        - {protocol: {{ .protocol }}, port: {{ .port }}}
+        {{- end }}
+    {{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

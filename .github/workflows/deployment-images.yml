@@ -1,0 +1,1139 @@
+# Immutable release transaction for Wolf deployment/control-plane images.
+# This factory deliberately does not modify wolf-scanner-releases: the canonical
+# scanner/fixer release continues to contain exactly its established eight image
+# variants. Deployment images have an independent aggregate and trust boundary.
+name: wolf deployment images release factory
+
+# checkov:skip=CKV_GHA_7:dispatch values are validated against strict allowlists.
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Dockerfile"
+      - ".dockerignore"
+      - "cmd/**"
+      - "internal/**"
+      - "plugins/**"
+      - "scanners/**"
+      - "scripts/e2e/**"
+      - "ui/**"
+      - "go.mod"
+      - "go.sum"
+      - ".github/workflows/deployment-images.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "Dockerfile"
+      - ".dockerignore"
+      - "cmd/**"
+      - "internal/**"
+      - "plugins/**"
+      - "scanners/**"
+      - "scripts/e2e/**"
+      - "ui/**"
+      - "go.mod"
+      - "go.sum"
+      - ".github/workflows/deployment-images.yml"
+  schedule:
+    - cron: "23 4 * * 1"
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: "Publish a complete immutable set or replay its registry closure"
+        required: true
+        type: choice
+        default: publish
+        options: [publish, verify]
+      release_id:
+        description: "Verify: required deployment-set-* ID; publish: optional attempt-unique ID"
+        required: false
+        type: string
+      channel:
+        description: "Mutable channel moved only after complete primary/mirror closure"
+        required: true
+        type: choice
+        default: none
+        options: [none, candidate, stable]
+
+env:
+  PRIMARY_REGISTRY: ghcr.io
+  PRIMARY_NAMESPACE: alphabravocompany
+  MIRROR_REGISTRY: docker.io
+  MIRROR_NAMESPACE: alphabravodevops
+  TRIVY_VERSION: v0.70.0
+  TRIVY_IGNORED_LICENSES: GPL-1.0-only,GPL-1.0-or-later,GPL-2.0-only,GPL-2.0-or-later,GPL-2.0-with-autoconf-exception+,GPL-2.0-with-bison-exception+,GPL-3.0-only,GPL-3.0-or-later,GPL-3.0-with-autoconf-exception+,LGPL-2.0-only,LGPL-2.0-or-later,LGPL-2.1-only,LGPL-2.1-or-later,LGPL-3.0-only,LGPL-3.0-or-later,Sleepycat
+
+concurrency:
+  group: deployment-image-factory-${{ github.event_name }}-${{ github.event.schedule || github.event.inputs.operation || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate-contract:
+    name: Validate deployment image factory contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Validate scripts and policy
+        run: |
+          python3 scanners/ci/test_build_deployment_image_manifest.py
+          python3 scanners/ci/test-deployment-image-workflow.py
+          bash -n scanners/ci/smoke-deployment-image.sh
+          bash -n scanners/ci/verify-deployment-image.sh
+
+  prepare:
+    name: Resolve trusted deployment image operation
+    needs: validate-contract
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      operation: ${{ steps.meta.outputs.operation }}
+      run_publish: ${{ steps.meta.outputs.run_publish }}
+      run_verify: ${{ steps.meta.outputs.run_verify }}
+      release_id: ${{ steps.meta.outputs.release_id }}
+      staging_tag: ${{ steps.meta.outputs.staging_tag }}
+      alias: ${{ steps.meta.outputs.alias }}
+      lock_digest: ${{ steps.definition.outputs.lock_digest }}
+      definition_digest: ${{ steps.definition.outputs.definition_digest }}
+      source_date: ${{ steps.definition.outputs.source_date }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 1
+
+      - name: Bind source and scanner definition
+        id: definition
+        run: |
+          lock_digest="$(awk '$1 == "lockDigest:" {print $2; exit}' scanners/scanner-lock.yaml)"
+          definition_digest="$(awk '$1 == "digest:" {print $2; exit}' scanners/scanner-lock.yaml)"
+          [[ "$lock_digest" =~ ^sha256:[a-f0-9]{64}$ ]]
+          [[ "$definition_digest" =~ ^sha256:[a-f0-9]{64}$ ]]
+          source_date="$(git show -s --format=%cI "$GITHUB_SHA")"
+          {
+            echo "lock_digest=$lock_digest"
+            echo "definition_digest=$definition_digest"
+            echo "source_date=$source_date"
+          } >>"$GITHUB_OUTPUT"
+
+      - name: Validate event trust and release identity
+        id: meta
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_OPERATION: ${{ github.event.inputs.operation }}
+          INPUT_RELEASE_ID: ${{ github.event.inputs.release_id }}
+          INPUT_CHANNEL: ${{ github.event.inputs.channel }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          [[ "$REF_NAME" == main ]] || {
+            echo "deployment image publication and verification are trusted only from main" >&2
+            exit 2
+          }
+          operation=publish
+          [[ "$EVENT_NAME" != workflow_dispatch ]] || operation="$INPUT_OPERATION"
+          [[ "$operation" == publish || "$operation" == verify ]] || exit 2
+
+          generated="deployment-set-$(date -u +%Y.%W).r${RUN_ID}-a${RUN_ATTEMPT}"
+          release_id="${INPUT_RELEASE_ID:-$generated}"
+          [[ "$release_id" =~ ^deployment-set-[a-z0-9][a-z0-9._-]{0,111}$ ]] || {
+            echo "invalid deployment image release ID" >&2
+            exit 2
+          }
+          if [[ "$operation" == verify ]]; then
+            [[ -n "$INPUT_RELEASE_ID" ]] || {
+              echo "verify requires an exact immutable release ID" >&2
+              exit 2
+            }
+          elif [[ -n "$INPUT_RELEASE_ID" && "$release_id" != *".r${RUN_ID}-a${RUN_ATTEMPT}" ]]; then
+            echo "a supplied publish ID must end in the current run/attempt identity" >&2
+            exit 2
+          fi
+
+          alias=
+          if [[ "$EVENT_NAME" == schedule ]]; then
+            alias=candidate
+          elif [[ "$EVENT_NAME" == workflow_dispatch ]]; then
+            case "$INPUT_CHANNEL" in
+              none) alias= ;;
+              candidate|stable) alias="$INPUT_CHANNEL" ;;
+              *) exit 2 ;;
+            esac
+          fi
+          if [[ "$alias" == stable && "$EVENT_NAME" != workflow_dispatch ]]; then
+            echo "stable is manual-only" >&2
+            exit 2
+          fi
+          [[ "$operation" == publish || -z "$alias" ]] || {
+            echo "verification never moves a channel" >&2
+            exit 2
+          }
+          staging_tag="build-${RUN_ID}-${RUN_ATTEMPT}-${GITHUB_SHA:0:12}"
+          {
+            echo "operation=$operation"
+            echo "run_publish=$([[ $operation == publish ]] && echo true || echo false)"
+            echo "run_verify=$([[ $operation == verify ]] && echo true || echo false)"
+            echo "release_id=$release_id"
+            echo "staging_tag=$staging_tag"
+            echo "alias=$alias"
+          } >>"$GITHUB_OUTPUT"
+
+  build-staging:
+    name: Stage ${{ matrix.variant }} multi-platform index
+    needs: prepare
+    if: needs.prepare.outputs.run_publish == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {variant: runtime, target: runtime, image: wolf-runtime}
+          - {variant: proposal, target: proposal-runtime, image: wolf-proposal-runtime}
+          - {variant: release-fixed, target: scanner-release-fixed-adapter, image: wolf-release-fixed-adapter}
+          - {variant: release-quality, target: scanner-release-quality-adapter, image: wolf-release-quality-adapter}
+          - {variant: release-integration, target: scanner-release-integration-adapter, image: wolf-release-integration-adapter}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3
+        with:
+          platforms: all
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ${{ env.PRIMARY_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push unique staging index
+        id: build
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5
+        with:
+          context: .
+          file: Dockerfile
+          target: ${{ matrix.target }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ env.PRIMARY_REGISTRY }}/${{ env.PRIMARY_NAMESPACE }}/${{ matrix.image }}:${{ needs.prepare.outputs.staging_tag }}
+          build-args: |
+            VERSION=${{ needs.prepare.outputs.release_id }}
+            COMMIT=${{ github.sha }}
+            BUILD_DATE=${{ needs.prepare.outputs.source_date }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ needs.prepare.outputs.release_id }}
+            dev.wolf.deployment-images.release-id=${{ needs.prepare.outputs.release_id }}
+            dev.wolf.deployment-images.lock-digest=${{ needs.prepare.outputs.lock_digest }}
+            dev.wolf.deployment-images.definition-digest=${{ needs.prepare.outputs.definition_digest }}
+            dev.wolf.deployment-images.variant=${{ matrix.variant }}
+            dev.wolf.deployment-images.image-kind=deployment
+          annotations: |
+            index:org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            index:org.opencontainers.image.revision=${{ github.sha }}
+            index:org.opencontainers.image.version=${{ needs.prepare.outputs.release_id }}
+            index:dev.wolf.deployment-images.release-id=${{ needs.prepare.outputs.release_id }}
+            index:dev.wolf.deployment-images.lock-digest=${{ needs.prepare.outputs.lock_digest }}
+            index:dev.wolf.deployment-images.definition-digest=${{ needs.prepare.outputs.definition_digest }}
+            index:dev.wolf.deployment-images.variant=${{ matrix.variant }}
+            index:dev.wolf.deployment-images.image-kind=deployment
+            index:dev.wolf.deployment-images.platforms=linux/amd64,linux/arm64
+          provenance: false
+          sbom: false
+          no-cache: ${{ github.event_name == 'schedule' }}
+          cache-from: type=gha,scope=deployment-${{ matrix.variant }}
+          cache-to: type=gha,scope=deployment-${{ matrix.variant }},mode=max
+
+      - name: Record staging digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+          VARIANT: ${{ matrix.variant }}
+          IMAGE: ${{ matrix.image }}
+        run: |
+          [[ "$DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]
+          mkdir -p build/staging
+          jq -n --arg variant "$VARIANT" --arg image "$IMAGE" --arg digest "$DIGEST" \
+            '{variant:$variant,image:$image,digest:$digest}' >"build/staging/${VARIANT}.json"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: deployment-staging-${{ matrix.variant }}
+          path: build/staging/${{ matrix.variant }}.json
+          if-no-files-found: error
+          retention-days: 30
+
+  exact-child-quality:
+    name: Exact published child quality (${{ matrix.variant }}, ${{ matrix.platform }})
+    needs: [prepare, build-staging]
+    if: needs.prepare.outputs.run_publish == 'true'
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {variant: runtime, image: wolf-runtime, platform: linux/amd64, arch: amd64}
+          - {variant: runtime, image: wolf-runtime, platform: linux/arm64, arch: arm64}
+          - {variant: proposal, image: wolf-proposal-runtime, platform: linux/amd64, arch: amd64}
+          - {variant: proposal, image: wolf-proposal-runtime, platform: linux/arm64, arch: arm64}
+          - {variant: release-fixed, image: wolf-release-fixed-adapter, platform: linux/amd64, arch: amd64}
+          - {variant: release-fixed, image: wolf-release-fixed-adapter, platform: linux/arm64, arch: arm64}
+          - {variant: release-quality, image: wolf-release-quality-adapter, platform: linux/amd64, arch: amd64}
+          - {variant: release-quality, image: wolf-release-quality-adapter, platform: linux/arm64, arch: arm64}
+          - {variant: release-integration, image: wolf-release-integration-adapter, platform: linux/amd64, arch: amd64}
+          - {variant: release-integration, image: wolf-release-integration-adapter, platform: linux/arm64, arch: arm64}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ${{ env.PRIMARY_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve exact staged index and child digest
+        id: child
+        env:
+          REPOSITORY: ${{ env.PRIMARY_REGISTRY }}/${{ env.PRIMARY_NAMESPACE }}/${{ matrix.image }}
+          STAGING_TAG: ${{ needs.prepare.outputs.staging_tag }}
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          raw="$(docker buildx imagetools inspect "${REPOSITORY}:${STAGING_TAG}" --raw)"
+          index_digest="$(docker buildx imagetools inspect "${REPOSITORY}:${STAGING_TAG}" \
+            --format '{{json .Manifest}}' | jq -er '.digest | select(test("^sha256:[a-f0-9]{64}$"))')"
+          os="${PLATFORM%/*}"
+          arch="${PLATFORM#*/}"
+          child_digest="$(jq -er --arg os "$os" --arg arch "$arch" '
+            [.manifests[] | select(.platform.os == $os and .platform.architecture == $arch)]
+            | if length == 1 then .[0].digest else error("exact child platform missing or duplicated") end
+          ' <<<"$raw")"
+          [[ "$index_digest" =~ ^sha256:[a-f0-9]{64}$ ]]
+          [[ "$child_digest" =~ ^sha256:[a-f0-9]{64}$ ]]
+          {
+            echo "index_digest=$index_digest"
+            echo "child_digest=$child_digest"
+            echo "child_ref=${REPOSITORY}@${child_digest}"
+          } >>"$GITHUB_OUTPUT"
+
+      - name: Pull and smoke exact child on its native architecture
+        env:
+          CHILD_REF: ${{ steps.child.outputs.child_ref }}
+          PLATFORM: ${{ matrix.platform }}
+          VARIANT: ${{ matrix.variant }}
+        run: |
+          docker pull --platform "$PLATFORM" "$CHILD_REF"
+          scanners/ci/smoke-deployment-image.sh "$CHILD_REF" "$PLATFORM" "$VARIANT"
+
+      - name: Verify locked vulnerability database identity
+        env:
+          VARIANT: ${{ matrix.variant }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          mkdir -p build/child-quality
+          scanners/ci/validate-trivy-exceptions.py .trivyignore \
+            --image "$VARIANT" --output "build/child-quality/${VARIANT}-${ARCH}.trivyignore"
+          main_ref="$(scanners/ci/verify-trivy-db.sh scanners/quality/trivy-db.lock.json "build/child-quality/${VARIANT}-${ARCH}.trivy-db.json")"
+          java_ref="$(scanners/ci/verify-trivy-db.sh scanners/quality/trivy-java-db.lock.json "build/child-quality/${VARIANT}-${ARCH}.trivy-java-db.json")"
+          echo "TRIVY_DB_REPOSITORY=$main_ref" >>"$GITHUB_ENV"
+          echo "TRIVY_JAVA_DB_REPOSITORY=$java_ref" >>"$GITHUB_ENV"
+
+      - name: Gate exact child vulnerability, secret, and license policy
+        uses: aquasecurity/trivy-action@dc5a429b52fcf669ce959baa2c2dd26090d2a6c4 # 0.32.0
+        with:
+          image-ref: ${{ steps.child.outputs.child_ref }}
+          scanners: vuln,secret,license
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true
+          format: table
+          trivyignores: build/child-quality/${{ matrix.variant }}-${{ matrix.arch }}.trivyignore
+          ignored-licenses: ${{ env.TRIVY_IGNORED_LICENSES }}
+          version: ${{ env.TRIVY_VERSION }}
+
+      - name: Generate exact child SPDX
+        uses: aquasecurity/trivy-action@dc5a429b52fcf669ce959baa2c2dd26090d2a6c4 # 0.32.0
+        with:
+          image-ref: ${{ steps.child.outputs.child_ref }}
+          scanners: vuln
+          exit-code: "0"
+          format: spdx-json
+          output: build/child-quality/${{ matrix.variant }}-${{ matrix.arch }}.spdx.json
+          version: ${{ env.TRIVY_VERSION }}
+
+      - name: Create content-addressed exact-child quality receipt
+        env:
+          RELEASE_ID: ${{ needs.prepare.outputs.release_id }}
+          VARIANT: ${{ matrix.variant }}
+          IMAGE: ${{ matrix.image }}
+          PLATFORM: ${{ matrix.platform }}
+          ARCH: ${{ matrix.arch }}
+          INDEX_DIGEST: ${{ steps.child.outputs.index_digest }}
+          CHILD_DIGEST: ${{ steps.child.outputs.child_digest }}
+        run: |
+          sbom="build/child-quality/${VARIANT}-${ARCH}.spdx.json"
+          jq -e '.spdxVersion == "SPDX-2.3" and (.packages | length > 0) and (.relationships | length > 0)' "$sbom" >/dev/null
+          sbom_sha="sha256:$(sha256sum "$sbom" | awk '{print $1}')"
+          jq -n --arg release "$RELEASE_ID" --arg variant "$VARIANT" --arg image "$IMAGE" \
+            --arg platform "$PLATFORM" --arg index "$INDEX_DIGEST" --arg child "$CHILD_DIGEST" \
+            --arg sbom "$sbom_sha" --arg revision "$GITHUB_SHA" '{
+              schemaVersion:"wolf.deployment-images.child-quality/v1",
+              releaseId:$release,variant:$variant,image:$image,platform:$platform,
+              indexDigest:$index,childDigest:$child,sourceRevision:$revision,
+              gates:{nativeSmoke:true,vulnerability:true,secret:true,license:true,spdx:true},
+              sbomSha256:$sbom
+            }' >"build/child-quality/${VARIANT}-${ARCH}.receipt.json"
+          sha256sum "build/child-quality/${VARIANT}-${ARCH}.receipt.json" \
+            >"build/child-quality/${VARIANT}-${ARCH}.receipt.sha256"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: deployment-child-quality-${{ matrix.variant }}-${{ matrix.arch }}
+          path: |
+            build/child-quality/${{ matrix.variant }}-${{ matrix.arch }}.receipt.json
+            build/child-quality/${{ matrix.variant }}-${{ matrix.arch }}.receipt.sha256
+            build/child-quality/${{ matrix.variant }}-${{ matrix.arch }}.spdx.json
+            build/child-quality/${{ matrix.variant }}-${{ matrix.arch }}.trivy-db.json
+            build/child-quality/${{ matrix.variant }}-${{ matrix.arch }}.trivy-java-db.json
+          if-no-files-found: error
+          retention-days: 365
+
+  commit-images:
+    name: Commit immutable ${{ matrix.variant }} image closure
+    needs: [prepare, exact-child-quality]
+    if: needs.prepare.outputs.run_publish == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {variant: runtime, image: wolf-runtime}
+          - {variant: proposal, image: wolf-proposal-runtime}
+          - {variant: release-fixed, image: wolf-release-fixed-adapter}
+          - {variant: release-quality, image: wolf-release-quality-adapter}
+          - {variant: release-integration, image: wolf-release-integration-adapter}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: oras-project/setup-oras@22ce207df3b08e061f537244349aac6ae1d214f6 # v1.2.4
+        with:
+          version: 1.3.0
+      - uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5 # v3.10.1
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ${{ env.PRIMARY_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Require complete Docker Hub credentials
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          [[ -n "$DOCKERHUB_USERNAME" && -n "$DOCKERHUB_TOKEN" ]] || {
+            echo "deployment image publication requires its Docker Hub mirror" >&2
+            exit 1
+          }
+
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ${{ env.MIRROR_REGISTRY }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: deployment-child-quality-${{ matrix.variant }}-*
+          path: build/quality
+          merge-multiple: true
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: deployment-staging-${{ matrix.variant }}
+          path: build/staging
+
+      - name: Rebind both quality receipts to the unchanged staging index
+        id: staged
+        env:
+          VARIANT: ${{ matrix.variant }}
+          IMAGE: ${{ matrix.image }}
+          RELEASE_ID: ${{ needs.prepare.outputs.release_id }}
+          REPOSITORY: ${{ env.PRIMARY_REGISTRY }}/${{ env.PRIMARY_NAMESPACE }}/${{ matrix.image }}
+          STAGING_TAG: ${{ needs.prepare.outputs.staging_tag }}
+        run: |
+          mapfile -t receipts < <(compgen -G "build/quality/${VARIANT}-*.receipt.json" | sort)
+          [[ ${#receipts[@]} -eq 2 ]] || {
+            echo "exactly two platform receipts are required for $VARIANT" >&2
+            exit 1
+          }
+          index_digest="$(docker buildx imagetools inspect "${REPOSITORY}:${STAGING_TAG}" \
+            --format '{{json .Manifest}}' | jq -er '.digest | select(test("^sha256:[a-f0-9]{64}$"))')"
+          [[ "$index_digest" =~ ^sha256:[a-f0-9]{64}$ ]]
+          jq -e --arg variant "$VARIANT" --arg image "$IMAGE" --arg digest "$index_digest" \
+            '.variant == $variant and .image == $image and .digest == $digest' \
+            "build/staging/${VARIANT}.json" >/dev/null
+          for receipt in "${receipts[@]}"; do
+            jq -e --arg release "$RELEASE_ID" --arg variant "$VARIANT" --arg image "$IMAGE" \
+              --arg index "$index_digest" '
+                .schemaVersion == "wolf.deployment-images.child-quality/v1" and
+                .releaseId == $release and .variant == $variant and .image == $image and
+                .indexDigest == $index and
+                .gates == {nativeSmoke:true,vulnerability:true,secret:true,license:true,spdx:true}
+              ' "$receipt" >/dev/null
+          done
+          platforms="$(jq -rs '[.[].platform] | sort | join(",")' "${receipts[@]}")"
+          [[ "$platforms" == linux/amd64,linux/arm64 ]]
+          {
+            echo "digest=$index_digest"
+            echo "repository=$REPOSITORY"
+          } >>"$GITHUB_OUTPUT"
+
+      - name: Verify exact staging metadata and platform set
+        env:
+          REF: ${{ steps.staged.outputs.repository }}:${{ needs.prepare.outputs.staging_tag }}
+          DIGEST: ${{ steps.staged.outputs.digest }}
+        run: |
+          scanners/ci/verify-deployment-image.sh "$REF" "$DIGEST" \
+            "${{ needs.prepare.outputs.release_id }}" \
+            "${{ needs.prepare.outputs.lock_digest }}" \
+            "${{ needs.prepare.outputs.definition_digest }}" \
+            "${{ github.server_url }}/${{ github.repository }}" \
+            "$GITHUB_SHA" "${{ matrix.variant }}"
+
+      - name: Build deterministic two-platform SPDX index
+        env:
+          VARIANT: ${{ matrix.variant }}
+        run: |
+          scanners/ci/aggregate-spdx.py \
+            --release-id "${{ needs.prepare.outputs.release_id }}-${VARIANT}" \
+            --created "${{ needs.prepare.outputs.source_date }}" \
+            --output "build/quality/${VARIANT}.spdx.json" \
+            "build/quality/${VARIANT}-amd64.spdx.json" \
+            "build/quality/${VARIANT}-arm64.spdx.json"
+
+      - name: Keyless-sign exact staged index
+        env:
+          REPOSITORY: ${{ steps.staged.outputs.repository }}
+          DIGEST: ${{ steps.staged.outputs.digest }}
+        run: cosign sign --yes "${REPOSITORY}@${DIGEST}"
+
+      - name: Generate GitHub index provenance
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-name: ${{ steps.staged.outputs.repository }}
+          subject-digest: ${{ steps.staged.outputs.digest }}
+          push-to-registry: true
+
+      - name: Attest two-platform SPDX index
+        uses: actions/attest-sbom@bd218ad0dbcb3e146bd073d1d9c6d78e08aa8a0b # v2.4.0
+        with:
+          subject-name: ${{ steps.staged.outputs.repository }}
+          subject-digest: ${{ steps.staged.outputs.digest }}
+          sbom-path: build/quality/${{ matrix.variant }}.spdx.json
+          push-to-registry: true
+
+      - name: Verify primary signature, provenance, SBOM, and immutable tag
+        env:
+          REPOSITORY: ${{ steps.staged.outputs.repository }}
+          DIGEST: ${{ steps.staged.outputs.digest }}
+          RELEASE_ID: ${{ needs.prepare.outputs.release_id }}
+          CERTIFICATE_IDENTITY: ${{ github.server_url }}/${{ github.repository }}/.github/workflows/deployment-images.yml@refs/heads/main
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cosign verify --certificate-identity "$CERTIFICATE_IDENTITY" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            "${REPOSITORY}@${DIGEST}" >/dev/null
+          gh attestation verify "oci://${REPOSITORY}@${DIGEST}" --repo "$GITHUB_REPOSITORY" \
+            --source-digest "$GITHUB_SHA" >/dev/null
+          gh attestation verify "oci://${REPOSITORY}@${DIGEST}" --repo "$GITHUB_REPOSITORY" \
+            --source-digest "$GITHUB_SHA" --predicate-type https://spdx.dev/Document/v2.3 >/dev/null
+          scanners/ci/promote-image.sh "${REPOSITORY}@${DIGEST}" "$REPOSITORY" \
+            "$RELEASE_ID" "$DIGEST" linux/amd64,linux/arm64 ""
+          oras discover --format json "${REPOSITORY}@${DIGEST}" \
+            | jq -S --arg digest "$DIGEST" '
+                if ([.referrers[] | select(.artifactType == "application/vnd.dev.cosign.simplesigning.v1+json")] | length) < 1 or
+                   ([.referrers[] | select(.artifactType == "application/vnd.dev.sigstore.bundle.v0.3+json")] | length) < 2
+                then error("primary deployment image referrer closure is incomplete")
+                else {subjectDigest:$digest,referrers:(.referrers | sort_by(.artifactType,.digest))} end
+              ' >build/quality/primary.referrers.json
+
+      - name: Recursively mirror the signed primary graph at its immutable ID
+        env:
+          PRIMARY: ${{ steps.staged.outputs.repository }}
+          MIRROR: ${{ env.MIRROR_REGISTRY }}/${{ env.MIRROR_NAMESPACE }}/${{ matrix.image }}
+          DIGEST: ${{ steps.staged.outputs.digest }}
+          RELEASE_ID: ${{ needs.prepare.outputs.release_id }}
+        run: |
+          if descriptor="$(oras manifest fetch --descriptor "${MIRROR}:${RELEASE_ID}" 2>/dev/null)"; then
+            [[ "$(jq -r .digest <<<"$descriptor")" == "$DIGEST" ]] || {
+              echo "immutable mirror tag already names a different digest" >&2
+              exit 1
+            }
+          else
+            oras copy --recursive "${PRIMARY}@${DIGEST}" "${MIRROR}:${RELEASE_ID}"
+          fi
+          [[ "$(oras manifest fetch --descriptor "${MIRROR}:${RELEASE_ID}" | jq -r .digest)" == "$DIGEST" ]]
+
+      - name: Keyless-sign mirrored image identity
+        env:
+          MIRROR: ${{ env.MIRROR_REGISTRY }}/${{ env.MIRROR_NAMESPACE }}/${{ matrix.image }}
+          DIGEST: ${{ steps.staged.outputs.digest }}
+        run: cosign sign --yes "${MIRROR}@${DIGEST}"
+
+      - name: Generate mirror index provenance
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-name: ${{ env.MIRROR_REGISTRY }}/${{ env.MIRROR_NAMESPACE }}/${{ matrix.image }}
+          subject-digest: ${{ steps.staged.outputs.digest }}
+          push-to-registry: true
+
+      - name: Attest mirror two-platform SPDX index
+        uses: actions/attest-sbom@bd218ad0dbcb3e146bd073d1d9c6d78e08aa8a0b # v2.4.0
+        with:
+          subject-name: ${{ env.MIRROR_REGISTRY }}/${{ env.MIRROR_NAMESPACE }}/${{ matrix.image }}
+          subject-digest: ${{ steps.staged.outputs.digest }}
+          sbom-path: build/quality/${{ matrix.variant }}.spdx.json
+          push-to-registry: true
+
+      - name: Verify mirror digest, signature, attestations, and recursive referrer parity
+        env:
+          MIRROR: ${{ env.MIRROR_REGISTRY }}/${{ env.MIRROR_NAMESPACE }}/${{ matrix.image }}
+          DIGEST: ${{ steps.staged.outputs.digest }}
+          CERTIFICATE_IDENTITY: ${{ github.server_url }}/${{ github.repository }}/.github/workflows/deployment-images.yml@refs/heads/main
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          scanners/ci/verify-deployment-image.sh "${MIRROR}@${DIGEST}" "$DIGEST" \
+            "${{ needs.prepare.outputs.release_id }}" \
+            "${{ needs.prepare.outputs.lock_digest }}" \
+            "${{ needs.prepare.outputs.definition_digest }}" \
+            "${{ github.server_url }}/${{ github.repository }}" \
+            "$GITHUB_SHA" "${{ matrix.variant }}"
+          cosign verify --certificate-identity "$CERTIFICATE_IDENTITY" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            "${MIRROR}@${DIGEST}" >/dev/null
+          gh attestation verify "oci://${MIRROR}@${DIGEST}" --repo "$GITHUB_REPOSITORY" \
+            --source-digest "$GITHUB_SHA" >/dev/null
+          gh attestation verify "oci://${MIRROR}@${DIGEST}" --repo "$GITHUB_REPOSITORY" \
+            --source-digest "$GITHUB_SHA" --predicate-type https://spdx.dev/Document/v2.3 >/dev/null
+          oras discover --format json "${MIRROR}@${DIGEST}" \
+            | jq -S --arg digest "$DIGEST" \
+              '{subjectDigest:$digest,referrers:(.referrers | sort_by(.artifactType,.digest))}' \
+              >build/quality/mirror.referrers.json
+          jq -e --slurpfile mirror build/quality/mirror.referrers.json '
+            [.referrers[].digest] as $primary |
+            [$mirror[0].referrers[].digest] as $mirrored |
+            ($primary - $mirrored | length) == 0
+          ' build/quality/primary.referrers.json >/dev/null
+          jq -e '
+            ([.referrers[] | select(.artifactType == "application/vnd.dev.cosign.simplesigning.v1+json")] | length) >= 1 and
+            ([.referrers[] | select(.artifactType == "application/vnd.dev.sigstore.bundle.v0.3+json")] | length) >= 2
+          ' build/quality/mirror.referrers.json >/dev/null
+
+      - name: Write immutable image publication receipt
+        env:
+          VARIANT: ${{ matrix.variant }}
+          IMAGE: ${{ matrix.image }}
+          RELEASE_ID: ${{ needs.prepare.outputs.release_id }}
+          DIGEST: ${{ steps.staged.outputs.digest }}
+          PRIMARY: ${{ steps.staged.outputs.repository }}
+          MIRROR: ${{ env.MIRROR_REGISTRY }}/${{ env.MIRROR_NAMESPACE }}/${{ matrix.image }}
+        run: |
+          children='[]'
+          receipts=(
+            "build/quality/${VARIANT}-amd64.receipt.json"
+            "build/quality/${VARIANT}-arm64.receipt.json"
+          )
+          for receipt in "${receipts[@]}"; do
+            receipt_sha="sha256:$(sha256sum "$receipt" | awk '{print $1}')"
+            child="$(jq --arg receipt "$receipt_sha" '{platform:.platform,digest:.childDigest,qualityReceiptSha256:$receipt}' "$receipt")"
+            children="$(jq --argjson child "$child" '. + [$child]' <<<"$children")"
+          done
+          children="$(jq 'sort_by(.platform)' <<<"$children")"
+          primary_ref="sha256:$(sha256sum build/quality/primary.referrers.json | awk '{print $1}')"
+          mirror_ref="sha256:$(sha256sum build/quality/mirror.referrers.json | awk '{print $1}')"
+          mkdir -p build/image-publication
+          jq -n --arg release "$RELEASE_ID" --arg variant "$VARIANT" --arg image "$IMAGE" \
+            --arg digest "$DIGEST" --arg primary "$PRIMARY" --arg mirror "$MIRROR" \
+            --arg primary_ref "$primary_ref" --arg mirror_ref "$mirror_ref" \
+            --argjson children "$children" '{
+              schemaVersion:"wolf.deployment-images.image-publication/v1",
+              releaseId:$release,variant:$variant,image:$image,digest:$digest,
+              platforms:["linux/amd64","linux/arm64"],children:$children,
+              primary:{repository:$primary,verified:true,signatureVerified:true,
+                provenanceVerified:true,sbomVerified:true,referrersSha256:$primary_ref},
+              mirror:{repository:$mirror,verified:true,recursiveCopyVerified:true,
+                signatureVerified:true,provenanceVerified:true,sbomVerified:true,
+                sourceReferrerParityVerified:true,referrersSha256:$mirror_ref}
+            }' >"build/image-publication/${VARIANT}.image.json"
+          cp "build/quality/${VARIANT}.spdx.json" "build/image-publication/${VARIANT}.spdx.json"
+          sha256sum "build/image-publication/${VARIANT}.image.json" \
+            >"build/image-publication/${VARIANT}.image.sha256"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: deployment-image-publication-${{ matrix.variant }}
+          path: build/image-publication/
+          if-no-files-found: error
+          retention-days: 365
+
+  commit-aggregate:
+    name: Commit signed deployment image aggregate and channels
+    needs: [prepare, commit-images]
+    if: needs.prepare.outputs.run_publish == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: oras-project/setup-oras@22ce207df3b08e061f537244349aac6ae1d214f6 # v1.2.4
+        with:
+          version: 1.3.0
+      - uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5 # v3.10.1
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ${{ env.PRIMARY_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ${{ env.MIRROR_REGISTRY }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: deployment-image-publication-*
+          path: build/image-publication
+          merge-multiple: true
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: deployment-child-quality-*
+          path: build/child-quality
+          merge-multiple: true
+
+      - name: Build exact five-image manifest and ten-child SPDX index
+        run: |
+          shopt -s nullglob
+          receipts=(build/image-publication/*.image.json)
+          sboms=(build/child-quality/*.spdx.json)
+          [[ ${#receipts[@]} -eq 5 ]]
+          [[ ${#sboms[@]} -eq 10 ]]
+          mkdir -p build/deployment-release
+          scanners/ci/build-deployment-image-manifest.py \
+            --release-id "${{ needs.prepare.outputs.release_id }}" \
+            --revision "$GITHUB_SHA" \
+            --source "${{ github.server_url }}/${{ github.repository }}" \
+            --created "${{ needs.prepare.outputs.source_date }}" \
+            --output build/deployment-release/deployment-images.json \
+            "${receipts[@]}"
+          scanners/ci/aggregate-spdx.py \
+            --release-id "${{ needs.prepare.outputs.release_id }}" \
+            --created "${{ needs.prepare.outputs.source_date }}" \
+            --output build/deployment-release/deployment-images.spdx.json \
+            "${sboms[@]}"
+
+      - name: Push aggregate to a unique staging reference
+        id: aggregate
+        env:
+          REPOSITORY: ${{ env.PRIMARY_REGISTRY }}/${{ env.PRIMARY_NAMESPACE }}/wolf-deployment-image-releases
+          STAGING_TAG: ${{ needs.prepare.outputs.staging_tag }}
+          RELEASE_ID: ${{ needs.prepare.outputs.release_id }}
+          LOCK_DIGEST: ${{ needs.prepare.outputs.lock_digest }}
+          DEFINITION_DIGEST: ${{ needs.prepare.outputs.definition_digest }}
+        run: |
+          (
+            cd build/deployment-release
+            oras push "${REPOSITORY}:${STAGING_TAG}" \
+              --artifact-type application/vnd.wolf.deployment-images.release.v1 \
+              --annotation "org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}" \
+              --annotation "org.opencontainers.image.revision=${GITHUB_SHA}" \
+              --annotation "org.opencontainers.image.version=${RELEASE_ID}" \
+              --annotation "dev.wolf.deployment-images.release-id=${RELEASE_ID}" \
+              --annotation "dev.wolf.deployment-images.lock-digest=${LOCK_DIGEST}" \
+              --annotation "dev.wolf.deployment-images.definition-digest=${DEFINITION_DIGEST}" \
+              deployment-images.json:application/vnd.wolf.deployment-images.release.manifest.v1+json \
+              deployment-images.spdx.json:application/spdx+json
+          )
+          digest="$(oras manifest fetch --descriptor "${REPOSITORY}:${STAGING_TAG}" | jq -er '.digest | select(test("^sha256:[a-f0-9]{64}$"))')"
+          echo "repository=$REPOSITORY" >>"$GITHUB_OUTPUT"
+          echo "digest=$digest" >>"$GITHUB_OUTPUT"
+
+      - name: Keyless-sign aggregate staging digest
+        env:
+          REPOSITORY: ${{ steps.aggregate.outputs.repository }}
+          DIGEST: ${{ steps.aggregate.outputs.digest }}
+        run: cosign sign --yes "${REPOSITORY}@${DIGEST}"
+
+      - name: Generate GitHub aggregate provenance
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-name: ${{ steps.aggregate.outputs.repository }}
+          subject-digest: ${{ steps.aggregate.outputs.digest }}
+          push-to-registry: true
+
+      - name: Attest aggregate SPDX index
+        uses: actions/attest-sbom@bd218ad0dbcb3e146bd073d1d9c6d78e08aa8a0b # v2.4.0
+        with:
+          subject-name: ${{ steps.aggregate.outputs.repository }}
+          subject-digest: ${{ steps.aggregate.outputs.digest }}
+          sbom-path: build/deployment-release/deployment-images.spdx.json
+          push-to-registry: true
+
+      - name: Verify primary aggregate and create immutable tag
+        env:
+          REPOSITORY: ${{ steps.aggregate.outputs.repository }}
+          DIGEST: ${{ steps.aggregate.outputs.digest }}
+          RELEASE_ID: ${{ needs.prepare.outputs.release_id }}
+          CERTIFICATE_IDENTITY: ${{ github.server_url }}/${{ github.repository }}/.github/workflows/deployment-images.yml@refs/heads/main
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          manifest="$(oras manifest fetch "${REPOSITORY}@${DIGEST}")"
+          jq -e \
+            --arg release "$RELEASE_ID" \
+            --arg lock "${{ needs.prepare.outputs.lock_digest }}" \
+            --arg definition "${{ needs.prepare.outputs.definition_digest }}" '
+              .mediaType == "application/vnd.oci.image.manifest.v1+json" and
+              .artifactType == "application/vnd.wolf.deployment-images.release.v1" and
+              .annotations["dev.wolf.deployment-images.release-id"] == $release and
+              .annotations["dev.wolf.deployment-images.lock-digest"] == $lock and
+              .annotations["dev.wolf.deployment-images.definition-digest"] == $definition and
+              ([.layers[].mediaType] | sort) == ([
+                "application/spdx+json",
+                "application/vnd.wolf.deployment-images.release.manifest.v1+json"
+              ] | sort)
+            ' <<<"$manifest" >/dev/null
+          cosign verify --certificate-identity "$CERTIFICATE_IDENTITY" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            "${REPOSITORY}@${DIGEST}" >/dev/null
+          gh attestation verify "oci://${REPOSITORY}@${DIGEST}" --repo "$GITHUB_REPOSITORY" \
+            --source-digest "$GITHUB_SHA" >/dev/null
+          gh attestation verify "oci://${REPOSITORY}@${DIGEST}" --repo "$GITHUB_REPOSITORY" \
+            --source-digest "$GITHUB_SHA" --predicate-type https://spdx.dev/Document/v2.3 >/dev/null
+          oras discover --format json "${REPOSITORY}@${DIGEST}" \
+            | jq -S --arg digest "$DIGEST" \
+              '{subjectDigest:$digest,referrers:(.referrers | sort_by(.artifactType,.digest))}' \
+              >build/deployment-release/primary.referrers.json
+          if descriptor="$(oras manifest fetch --descriptor "${REPOSITORY}:${RELEASE_ID}" 2>/dev/null)"; then
+            [[ "$(jq -r .digest <<<"$descriptor")" == "$DIGEST" ]] || {
+              echo "immutable aggregate ID already names a different digest" >&2
+              exit 1
+            }
+          else
+            oras copy "${REPOSITORY}@${DIGEST}" "${REPOSITORY}:${RELEASE_ID}"
+          fi
+
+      - name: Recursively mirror primary aggregate at immutable ID
+        env:
+          PRIMARY: ${{ steps.aggregate.outputs.repository }}
+          MIRROR: ${{ env.MIRROR_REGISTRY }}/${{ env.MIRROR_NAMESPACE }}/wolf-deployment-image-releases
+          DIGEST: ${{ steps.aggregate.outputs.digest }}
+          RELEASE_ID: ${{ needs.prepare.outputs.release_id }}
+        run: |
+          if descriptor="$(oras manifest fetch --descriptor "${MIRROR}:${RELEASE_ID}" 2>/dev/null)"; then
+            [[ "$(jq -r .digest <<<"$descriptor")" == "$DIGEST" ]] || {
+              echo "immutable mirrored aggregate ID names a different digest" >&2
+              exit 1
+            }
+          else
+            oras copy --recursive "${PRIMARY}@${DIGEST}" "${MIRROR}:${RELEASE_ID}"
+          fi
+          [[ "$(oras manifest fetch --descriptor "${MIRROR}:${RELEASE_ID}" | jq -r .digest)" == "$DIGEST" ]]
+
+      - name: Keyless-sign mirrored aggregate identity
+        env:
+          MIRROR: ${{ env.MIRROR_REGISTRY }}/${{ env.MIRROR_NAMESPACE }}/wolf-deployment-image-releases
+          DIGEST: ${{ steps.aggregate.outputs.digest }}
+        run: cosign sign --yes "${MIRROR}@${DIGEST}"
+
+      - name: Generate mirror aggregate provenance
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-name: ${{ env.MIRROR_REGISTRY }}/${{ env.MIRROR_NAMESPACE }}/wolf-deployment-image-releases
+          subject-digest: ${{ steps.aggregate.outputs.digest }}
+          push-to-registry: true
+
+      - name: Attest mirror aggregate SPDX index
+        uses: actions/attest-sbom@bd218ad0dbcb3e146bd073d1d9c6d78e08aa8a0b # v2.4.0
+        with:
+          subject-name: ${{ env.MIRROR_REGISTRY }}/${{ env.MIRROR_NAMESPACE }}/wolf-deployment-image-releases
+          subject-digest: ${{ steps.aggregate.outputs.digest }}
+          sbom-path: build/deployment-release/deployment-images.spdx.json
+          push-to-registry: true
+
+      - name: Verify full mirror aggregate closure and recursive referrer parity
+        env:
+          MIRROR: ${{ env.MIRROR_REGISTRY }}/${{ env.MIRROR_NAMESPACE }}/wolf-deployment-image-releases
+          DIGEST: ${{ steps.aggregate.outputs.digest }}
+          CERTIFICATE_IDENTITY: ${{ github.server_url }}/${{ github.repository }}/.github/workflows/deployment-images.yml@refs/heads/main
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cosign verify --certificate-identity "$CERTIFICATE_IDENTITY" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            "${MIRROR}@${DIGEST}" >/dev/null
+          gh attestation verify "oci://${MIRROR}@${DIGEST}" --repo "$GITHUB_REPOSITORY" \
+            --source-digest "$GITHUB_SHA" >/dev/null
+          gh attestation verify "oci://${MIRROR}@${DIGEST}" --repo "$GITHUB_REPOSITORY" \
+            --source-digest "$GITHUB_SHA" --predicate-type https://spdx.dev/Document/v2.3 >/dev/null
+          oras discover --format json "${MIRROR}@${DIGEST}" \
+            | jq -S --arg digest "$DIGEST" \
+              '{subjectDigest:$digest,referrers:(.referrers | sort_by(.artifactType,.digest))}' \
+              >build/deployment-release/mirror.referrers.json
+          jq -e --slurpfile mirror build/deployment-release/mirror.referrers.json '
+            [.referrers[].digest] as $primary |
+            [$mirror[0].referrers[].digest] as $mirrored |
+            ($primary - $mirrored | length) == 0
+          ' build/deployment-release/primary.referrers.json >/dev/null
+          jq -e '
+            ([.referrers[] | select(.artifactType == "application/vnd.dev.cosign.simplesigning.v1+json")] | length) >= 1 and
+            ([.referrers[] | select(.artifactType == "application/vnd.dev.sigstore.bundle.v0.3+json")] | length) >= 2
+          ' build/deployment-release/mirror.referrers.json >/dev/null
+
+      - name: Create final content-addressed closure receipt
+        env:
+          RELEASE_ID: ${{ needs.prepare.outputs.release_id }}
+          DIGEST: ${{ steps.aggregate.outputs.digest }}
+        run: |
+          manifest_sha="sha256:$(sha256sum build/deployment-release/deployment-images.json | awk '{print $1}')"
+          sbom_sha="sha256:$(sha256sum build/deployment-release/deployment-images.spdx.json | awk '{print $1}')"
+          primary_refs="sha256:$(sha256sum build/deployment-release/primary.referrers.json | awk '{print $1}')"
+          mirror_refs="sha256:$(sha256sum build/deployment-release/mirror.referrers.json | awk '{print $1}')"
+          jq -n --arg release "$RELEASE_ID" --arg digest "$DIGEST" \
+            --arg manifest "$manifest_sha" --arg sbom "$sbom_sha" \
+            --arg primary "$primary_refs" --arg mirror "$mirror_refs" '{
+              schemaVersion:"wolf.deployment-images.release-closure/v1",
+              releaseId:$release,aggregateDigest:$digest,manifestSha256:$manifest,
+              aggregateSpdxSha256:$sbom,imageCount:5,platformTupleCount:10,
+              primary:{verified:true,referrersSha256:$primary},
+              mirror:{verified:true,recursiveCopyVerified:true,
+                sourceReferrerParityVerified:true,referrersSha256:$mirror},
+              aliasesMoved:false,passed:true
+            }' >build/deployment-release/closure.json
+          sha256sum build/deployment-release/closure.json >build/deployment-release/closure.sha256
+
+      - name: Move image channels only after complete aggregate closure
+        if: needs.prepare.outputs.alias != ''
+        env:
+          ALIAS: ${{ needs.prepare.outputs.alias }}
+        run: |
+          jq -e '.passed == true and .imageCount == 5 and .platformTupleCount == 10 and .aliasesMoved == false' \
+            build/deployment-release/closure.json >/dev/null
+          for receipt in build/image-publication/*.image.json; do
+            digest="$(jq -r .digest "$receipt")"
+            primary="$(jq -r .primary.repository "$receipt")"
+            mirror="$(jq -r .mirror.repository "$receipt")"
+            scanners/ci/promote-image.sh "${mirror}@${digest}" "$mirror" \
+              "${{ needs.prepare.outputs.release_id }}" "$digest" linux/amd64,linux/arm64 "$ALIAS"
+            scanners/ci/promote-image.sh "${primary}@${digest}" "$primary" \
+              "${{ needs.prepare.outputs.release_id }}" "$digest" linux/amd64,linux/arm64 "$ALIAS"
+          done
+
+      - name: Move mirror aggregate channel after image channels
+        if: needs.prepare.outputs.alias != ''
+        env:
+          MIRROR: ${{ env.MIRROR_REGISTRY }}/${{ env.MIRROR_NAMESPACE }}/wolf-deployment-image-releases
+          DIGEST: ${{ steps.aggregate.outputs.digest }}
+          ALIAS: ${{ needs.prepare.outputs.alias }}
+        run: |
+          oras copy "${MIRROR}@${DIGEST}" "${MIRROR}:${ALIAS}"
+          [[ "$(oras manifest fetch --descriptor "${MIRROR}:${ALIAS}" | jq -r .digest)" == "$DIGEST" ]]
+
+      - name: Move primary aggregate channel last
+        if: needs.prepare.outputs.alias != ''
+        env:
+          PRIMARY: ${{ steps.aggregate.outputs.repository }}
+          DIGEST: ${{ steps.aggregate.outputs.digest }}
+          ALIAS: ${{ needs.prepare.outputs.alias }}
+        run: |
+          oras copy "${PRIMARY}@${DIGEST}" "${PRIMARY}:${ALIAS}"
+          [[ "$(oras manifest fetch --descriptor "${PRIMARY}:${ALIAS}" | jq -r .digest)" == "$DIGEST" ]]
+          jq '.aliasesMoved = true' build/deployment-release/closure.json \
+            >build/deployment-release/closure.final.json
+          sha256sum build/deployment-release/closure.final.json \
+            >build/deployment-release/closure.final.sha256
+
+      - name: Upload aggregate publication and closure evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: deployment-image-release-${{ needs.prepare.outputs.release_id }}
+          path: |
+            build/deployment-release/
+            build/image-publication/*.image.json
+          if-no-files-found: error
+          retention-days: 365
+
+  verify-release:
+    name: Replay immutable deployment image release closure
+    needs: prepare
+    if: needs.prepare.outputs.run_verify == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: oras-project/setup-oras@22ce207df3b08e061f537244349aac6ae1d214f6 # v1.2.4
+        with:
+          version: 1.3.0
+      - uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5 # v3.10.1
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ${{ env.PRIMARY_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Require and log in to Docker Hub mirror
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          [[ -n "$DOCKERHUB_USERNAME" && -n "$DOCKERHUB_TOKEN" ]] || {
+            echo "closure replay requires Docker Hub credentials" >&2
+            exit 1
+          }
+
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ${{ env.MIRROR_REGISTRY }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Fetch and byte-compare primary and mirrored aggregate payloads
+        id: aggregate
+        env:
+          PRIMARY: ${{ env.PRIMARY_REGISTRY }}/${{ env.PRIMARY_NAMESPACE }}/wolf-deployment-image-releases
+          MIRROR: ${{ env.MIRROR_REGISTRY }}/${{ env.MIRROR_NAMESPACE }}/wolf-deployment-image-releases
+          RELEASE_ID: ${{ needs.prepare.outputs.release_id }}
+        run: |
+          mkdir -p build/verify/primary build/verify/mirror
+          primary_descriptor="$(oras manifest fetch --descriptor "${PRIMARY}:${RELEASE_ID}")"
+          mirror_descriptor="$(oras manifest fetch --descriptor "${MIRROR}:${RELEASE_ID}")"
+          digest="$(jq -er '.digest | select(test("^sha256:[a-f0-9]{64}$"))' <<<"$primary_descriptor")"
+          [[ "$(jq -r .digest <<<"$mirror_descriptor")" == "$digest" ]]
+          manifest="$(oras manifest fetch "${PRIMARY}@${digest}")"
+          lock="$(jq -er '.annotations["dev.wolf.deployment-images.lock-digest"] | select(test("^sha256:[a-f0-9]{64}$"))' <<<"$manifest")"
+          definition="$(jq -er '.annotations["dev.wolf.deployment-images.definition-digest"] | select(test("^sha256:[a-f0-9]{64}$"))' <<<"$manifest")"
+          jq -e --arg release "$RELEASE_ID" '
+            .mediaType == "application/vnd.oci.image.manifest.v1+json" and
+            .artifactType == "application/vnd.wolf.deployment-images.release.v1" and
+            .annotations["dev.wolf.deployment-images.release-id"] == $release and
+            ([.layers[].mediaType] | sort) == ([
+              "application/spdx+json",
+              "application/vnd.wolf.deployment-images.release.manifest.v1+json"
+            ] | sort)
+          ' <<<"$manifest" >/dev/null
+          oras pull -o build/verify/primary "${PRIMARY}@${digest}"
+          oras pull -o build/verify/mirror "${MIRROR}@${digest}"
+          cmp build/verify/primary/deployment-images.json build/verify/mirror/deployment-images.json
+          cmp build/verify/primary/deployment-images.spdx.json build/verify/mirror/deployment-images.spdx.json
+          revision="$(jq -er '.revision | select(test("^[a-f0-9]{40}$"))' build/verify/primary/deployment-images.json)"
+          source="$(jq -er '.source | select(startswith("https://"))' build/verify/primary/deployment-images.json)"
+          jq -e --arg release "$RELEASE_ID" '
+            .schemaVersion == "wolf.deployment-images.release/v1" and
+            .releaseId == $release and .platforms == ["linux/amd64","linux/arm64"] and
+            (.images | length) == 5 and ([.images[].variant] | unique | length) == 5
+          ' build/verify/primary/deployment-images.json >/dev/null
+          {
+            echo "digest=$digest"
+            echo "lock=$lock"
+            echo "definition=$definition"
+            echo "revision=$revision"
+            echo "source=$source"
+          } >>"$GITHUB_OUTPUT"
+
+      - name: Replay aggregate signature, attestations, and recursive mirror parity
+        env:
+          PRIMARY: ${{ env.PRIMARY_REGISTRY }}/${{ env.PRIMARY_NAMESPACE }}/wolf-deployment-image-releases
+          MIRROR: ${{ env.MIRROR_REGISTRY }}/${{ env.MIRROR_NAMESPACE }}/wolf-deployment-image-releases
+          DIGEST: ${{ steps.aggregate.outputs.digest }}
+          REVISION: ${{ steps.aggregate.outputs.revision }}
+          CERTIFICATE_IDENTITY: ${{ github.server_url }}/${{ github.repository }}/.github/workflows/deployment-images.yml@refs/heads/main
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for repository in "$PRIMARY" "$MIRROR"; do
+            cosign verify --certificate-identity "$CERTIFICATE_IDENTITY" \
+              --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+              "${repository}@${DIGEST}" >/dev/null
+            gh attestation verify "oci://${repository}@${DIGEST}" --repo "$GITHUB_REPOSITORY" \
+              --source-digest "$REVISION" >/dev/null
+            gh attestation verify "oci://${repository}@${DIGEST}" --repo "$GITHUB_REPOSITORY" \
+              --source-digest "$REVISION" --predicate-type https://spdx.dev/Document/v2.3 >/dev/null
+          done
+          oras discover --format json "${PRIMARY}@${DIGEST}" >build/verify/primary.aggregate-referrers.json
+          oras discover --format json "${MIRROR}@${DIGEST}" >build/verify/mirror.aggregate-referrers.json
+          jq -e --slurpfile mirror build/verify/mirror.aggregate-referrers.json '
+            [.referrers[].digest] as $primary |
+            [$mirror[0].referrers[].digest] as $mirrored |
+            ($primary - $mirrored | length) == 0
+          ' build/verify/primary.aggregate-referrers.json >/dev/null
+
+      - name: Replay every image digest, signature, attestation, and mirror closure
+        env:
+          RELEASE_ID: ${{ needs.prepare.outputs.release_id }}
+          LOCK_DIGEST: ${{ steps.aggregate.outputs.lock }}
+          DEFINITION_DIGEST: ${{ steps.aggregate.outputs.definition }}
+          REVISION: ${{ steps.aggregate.outputs.revision }}
+          SOURCE: ${{ steps.aggregate.outputs.source }}
+          CERTIFICATE_IDENTITY: ${{ github.server_url }}/${{ github.repository }}/.github/workflows/deployment-images.yml@refs/heads/main
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          expected_primary="${PRIMARY_REGISTRY}/${PRIMARY_NAMESPACE}"
+          expected_mirror="${MIRROR_REGISTRY}/${MIRROR_NAMESPACE}"
+          while IFS= read -r image; do
+            variant="$(jq -r .variant <<<"$image")"
+            name="$(jq -r .image <<<"$image")"
+            digest="$(jq -r .digest <<<"$image")"
+            primary="$(jq -r .primary.repository <<<"$image")"
+            mirror="$(jq -r .mirror.repository <<<"$image")"
+            [[ "$primary" == "${expected_primary}/${name}" ]]
+            [[ "$mirror" == "${expected_mirror}/${name}" ]]
+            for repository in "$primary" "$mirror"; do
+              scanners/ci/verify-deployment-image.sh "${repository}@${digest}" "$digest" \
+                "$RELEASE_ID" "$LOCK_DIGEST" "$DEFINITION_DIGEST" \
+                "$SOURCE" "$REVISION" "$variant"
+              cosign verify --certificate-identity "$CERTIFICATE_IDENTITY" \
+                --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+                "${repository}@${digest}" >/dev/null
+              gh attestation verify "oci://${repository}@${digest}" --repo "$GITHUB_REPOSITORY" \
+                --source-digest "$REVISION" >/dev/null
+              gh attestation verify "oci://${repository}@${digest}" --repo "$GITHUB_REPOSITORY" \
+                --source-digest "$REVISION" --predicate-type https://spdx.dev/Document/v2.3 >/dev/null
+            done
+            oras discover --format json "${primary}@${digest}" >build/verify/primary.image-referrers.json
+            oras discover --format json "${mirror}@${digest}" >build/verify/mirror.image-referrers.json
+            jq -e --slurpfile mirror build/verify/mirror.image-referrers.json '
+              [.referrers[].digest] as $primary |
+              [$mirror[0].referrers[].digest] as $mirrored |
+              ($primary - $mirrored | length) == 0
+            ' build/verify/primary.image-referrers.json >/dev/null
+          done < <(jq -c '.images[]' build/verify/primary/deployment-images.json)
+
+      - name: Upload replay evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: deployment-image-verification-${{ needs.prepare.outputs.release_id }}
+          path: build/verify/
+          if-no-files-found: error
+          retention-days: 365

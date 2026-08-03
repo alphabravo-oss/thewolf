@@ -1,15 +1,20 @@
-# Build, smoke-test, and publish the four wolf-scanners images
-# (default, jvm, rust, codeql). See PLAN.md §5.9.
+# Scanner release factory for every Wolf-owned scanner and fixer image.
 #
-# Security: all event-controlled inputs are funneled through env: variables
-# rather than interpolated directly into run: blocks, per:
-#   https://github.blog/security/vulnerability-research/how-to-catch-github-actions-workflow-injections-before-attackers-do/
-name: wolf-scanners image
+# The factory has two schedules:
+#   * daily read-only update discovery (02:17 UTC);
+#   * weekly complete candidate build (Sunday 03:43 UTC).
+#
+# Published artifacts first receive a unique staging tag. After every required
+# quality, security, SBOM, signature, provenance, and platform gate passes, the
+# workflow creates an immutable candidate/release tag. Channel and legacy tags
+# move only after the signed aggregate release manifest commits successfully.
+#
+# Security: event and dispatch values are passed through env and validated by
+# scanners/ci/release-meta.sh. They are never interpolated into run scripts.
+name: wolf-scanners release factory
 
-# checkov:skip=CKV_GHA_7:false positive — Checkov matches the workflow_dispatch.inputs.tag input name as if it were a uses: tag.
+# checkov:skip=CKV_GHA_7:workflow_dispatch fields are validated against strict allowlists before use.
 
-# Least-privilege default. Jobs that push to ghcr.io escalate to
-# packages:write at the job level.
 permissions:
   contents: read
 
@@ -18,39 +23,194 @@ on:
     branches: [main]
     paths:
       - "scanners/**"
+      - "fixer/**"
+      - "cmd/**"
+      - "internal/**"
+      - "plugins/**"
+      - "go.mod"
+      - "go.sum"
+      - "Dockerfile"
+      - "ui/**"
+      - "scripts/e2e/**"
+      - ".dockerignore"
+      - "internal/scannerbuild/context/**"
+      - ".github/workflows/scanners-image.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "scanners/**"
+      - "fixer/**"
+      - "cmd/**"
+      - "internal/**"
+      - "plugins/**"
+      - "go.mod"
+      - "go.sum"
+      - "Dockerfile"
+      - "ui/**"
+      - "scripts/e2e/**"
+      - ".dockerignore"
+      - "internal/scannerbuild/context/**"
       - ".github/workflows/scanners-image.yml"
   release:
     types: [published]
+  schedule:
+    - cron: "17 2 * * *"
+    - cron: "43 3 * * 0"
   workflow_dispatch:
     inputs:
-      tag:
-        description: "Image tag override (defaults to wolf version)"
+      operation:
+        description: "Discovery, package/DB refresh, candidate build, approved release, rebuild, or verification"
+        required: true
+        type: choice
+        default: discover
+        options:
+          - validate
+          - discover
+          - refresh-os-packages
+          - refresh-vulnerability-dbs
+          - candidate
+          - security-rebuild
+          - release
+          - verify
+      os_package_snapshot:
+        description: "Required for refresh-os-packages: immutable Debian snapshot YYYYMMDDTHHMMSSZ"
         required: false
-        default: ""
+        type: string
+      candidate_id:
+        description: "Candidate: optional generated ID. Release: required exact scanner-candidate-* ID to promote"
+        required: false
+        type: string
+      release_id:
+        description: "Required for release/verify: scanner-set-YYYY.WW.N"
+        required: false
+        type: string
+      publish:
+        description: "Publish candidate/rebuild artifacts after gates pass"
+        required: true
+        type: boolean
+        default: true
+      channel:
+        description: "Move a channel only after aggregate publication succeeds"
+        required: true
+        type: choice
+        default: none
+        options:
+          - none
+          - candidate
+          - stable
+      mirror_mode:
+        description: "auto degrades safely; required blocks; disabled never contacts Docker Hub"
+        required: true
+        type: choice
+        default: auto
+        options:
+          - auto
+          - required
+          - disabled
 
 env:
-  REGISTRY: ghcr.io
-  ORG: alphabravocompany
-  # Docker Hub mirror. Pushes only fire when DOCKERHUB_USERNAME is set
-  # in the org/repo secrets — otherwise the step skips and ghcr is the
-  # only destination. Login uses the docker.io default host.
-  DOCKERHUB_ORG: alphabravodevops
+  PRIMARY_REGISTRY: ghcr.io
+  PRIMARY_NAMESPACE: alphabravocompany
+  MIRROR_REGISTRY: docker.io
+  MIRROR_NAMESPACE: alphabravodevops
+  TRIVY_VERSION: v0.70.0
+  # These licenses permit redistribution subject to their notices/source
+  # obligations. Unknown, proprietary, and every unlisted license still fail.
+  TRIVY_IGNORED_LICENSES: GPL-1.0-only,GPL-1.0-or-later,GPL-2.0-only,GPL-2.0-or-later,GPL-2.0-with-autoconf-exception+,GPL-2.0-with-bison-exception+,GPL-3.0-only,GPL-3.0-or-later,GPL-3.0-with-autoconf-exception+,LGPL-2.0-only,LGPL-2.0-or-later,LGPL-2.1-only,LGPL-2.1-or-later,LGPL-3.0-only,LGPL-3.0-or-later,Sleepycat
+
+concurrency:
+  group: >-
+    scanner-factory-${{ github.event_name }}-${{
+      github.event.schedule || github.event.inputs.operation || github.ref
+    }}
+  cancel-in-progress: false
 
 jobs:
-  build:
+  prepare:
+    name: Resolve factory operation
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    strategy:
-      fail-fast: false
-      matrix:
-        variant:
-          - { name: "default", dockerfile: "Dockerfile",        image: "wolf-scanners",        platforms: "linux/amd64,linux/arm64" }
-          - { name: "jvm",     dockerfile: "Dockerfile.jvm",    image: "wolf-scanners-jvm",    platforms: "linux/amd64,linux/arm64" }
-          - { name: "rust",    dockerfile: "Dockerfile.rust",   image: "wolf-scanners-rust",   platforms: "linux/amd64,linux/arm64" }
-          - { name: "codeql",  dockerfile: "Dockerfile.codeql", image: "wolf-scanners-codeql", platforms: "linux/amd64" }
+    outputs:
+      operation: ${{ steps.meta.outputs.operation }}
+      run_discovery: ${{ steps.meta.outputs.run_discovery }}
+      run_validation: ${{ steps.meta.outputs.run_validation }}
+      run_build: ${{ steps.meta.outputs.run_build }}
+      run_os_package_refresh: ${{ steps.meta.outputs.run_os_package_refresh }}
+      run_vulnerability_db_refresh: ${{ steps.meta.outputs.run_vulnerability_db_refresh }}
+      publish: ${{ steps.meta.outputs.publish }}
+      immutable_id: ${{ steps.meta.outputs.immutable_id }}
+      candidate_id: ${{ steps.meta.outputs.candidate_id }}
+      aliases: ${{ steps.meta.outputs.aliases }}
+      mirror_mode: ${{ steps.meta.outputs.mirror_mode }}
+      os_package_snapshot: ${{ steps.meta.outputs.os_package_snapshot }}
+      lock_digest: ${{ steps.definition.outputs.lock_digest }}
+      definition_digest: ${{ steps.definition.outputs.definition_digest }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
+      - name: Resolve immutable scanner definition identity
+        id: definition
+        run: |
+          lock_digest="$(awk '$1 == "lockDigest:" {print $2; exit}' scanners/scanner-lock.yaml)"
+          definition_digest="$(awk '$1 == "digest:" {print $2; exit}' scanners/scanner-lock.yaml)"
+          [[ "$lock_digest" =~ ^sha256:[a-f0-9]{64}$ ]]
+          [[ "$definition_digest" =~ ^sha256:[a-f0-9]{64}$ ]]
+          echo "lock_digest=$lock_digest" >>"$GITHUB_OUTPUT"
+          echo "definition_digest=$definition_digest" >>"$GITHUB_OUTPUT"
+
+      - name: Resolve and validate event metadata
+        id: meta
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_SCHEDULE: ${{ github.event.schedule }}
+          RELEASE_TAG_NAME: ${{ github.event.release.tag_name }}
+          REF_NAME: ${{ github.ref_name }}
+          GIT_SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          INPUT_OPERATION: ${{ github.event.inputs.operation }}
+          INPUT_OS_PACKAGE_SNAPSHOT: ${{ github.event.inputs.os_package_snapshot }}
+          INPUT_CANDIDATE_ID: ${{ github.event.inputs.candidate_id }}
+          INPUT_RELEASE_ID: ${{ github.event.inputs.release_id }}
+          INPUT_PUBLISH: ${{ github.event.inputs.publish }}
+          INPUT_CHANNEL: ${{ github.event.inputs.channel }}
+          INPUT_MIRROR_MODE: ${{ github.event.inputs.mirror_mode }}
+        run: scanners/ci/release-meta.sh resolve
+
+      - name: Record operation summary
+        env:
+          OPERATION: ${{ steps.meta.outputs.operation }}
+          IMMUTABLE_ID: ${{ steps.meta.outputs.immutable_id }}
+          PUBLISH: ${{ steps.meta.outputs.publish }}
+          ALIASES: ${{ steps.meta.outputs.aliases }}
+          MIRROR_MODE: ${{ steps.meta.outputs.mirror_mode }}
+          OS_PACKAGE_REFRESH: ${{ steps.meta.outputs.run_os_package_refresh }}
+          VULNERABILITY_DB_REFRESH: ${{ steps.meta.outputs.run_vulnerability_db_refresh }}
+          OS_PACKAGE_SNAPSHOT: ${{ steps.meta.outputs.os_package_snapshot }}
+          LOCK_DIGEST: ${{ steps.definition.outputs.lock_digest }}
+          DEFINITION_DIGEST: ${{ steps.definition.outputs.definition_digest }}
+        run: |
+          {
+            echo "## Scanner release factory"
+            echo
+            echo "- Operation: \`$OPERATION\`"
+            echo "- Definition commit: \`$GITHUB_SHA\`"
+            echo "- Definition digest: \`$DEFINITION_DIGEST\`"
+            echo "- Lock digest: \`$LOCK_DIGEST\`"
+            echo "- Immutable ID: \`${IMMUTABLE_ID:-not applicable}\`"
+            echo "- Publish: \`$PUBLISH\`"
+            echo "- Post-commit aliases: \`${ALIASES:-none}\`"
+            echo "- Docker Hub mirror: \`$MIRROR_MODE\`"
+            echo "- OS package refresh: \`$OS_PACKAGE_REFRESH\`"
+            echo "- Vulnerability DB refresh: \`$VULNERABILITY_DB_REFRESH\`"
+            echo "- Requested package snapshot: \`${OS_PACKAGE_SNAPSHOT:-automatic previous UTC day}\`"
+          } >>"$GITHUB_STEP_SUMMARY"
+
+  os_package_refresh:
+    name: Propose immutable OS package refresh
+    needs: prepare
+    if: needs.prepare.outputs.run_os_package_refresh == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
@@ -59,152 +219,2934 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Validate scanner metadata
+      - name: Resolve immutable snapshot timestamp
+        id: snapshot
+        env:
+          REQUESTED_SNAPSHOT: ${{ needs.prepare.outputs.os_package_snapshot }}
+        run: |
+          snapshot="$REQUESTED_SNAPSHOT"
+          if [[ -z "$snapshot" ]]; then
+            snapshot="$(date --utc --date='yesterday' +%Y%m%dT000000Z)"
+          fi
+          [[ "$snapshot" =~ ^[0-9]{8}T[0-9]{6}Z$ ]] || {
+            echo "invalid immutable snapshot timestamp" >&2
+            exit 2
+          }
+          echo "value=$snapshot" >>"$GITHUB_OUTPUT"
+
+      - name: Refresh exact package pins and dependent definition lock
+        env:
+          SNAPSHOT: ${{ steps.snapshot.outputs.value }}
+        run: make scanners-os-packages-refresh SNAPSHOT="$SNAPSHOT"
+
+      - name: Create reviewable package refresh proposal
+        env:
+          SNAPSHOT: ${{ steps.snapshot.outputs.value }}
+        run: |
+          mkdir -p build/os-package-refresh
+          git diff --binary -- \
+            scanners/os-packages.yaml \
+            scanners/os-packages.lock.yaml \
+            scanners/os-packages \
+            scanners/scanner-lock.yaml \
+            internal/scannerbuild/context/os-packages.yaml \
+            internal/scannerbuild/context/os-packages.lock.yaml \
+            internal/scannerbuild/context/os-packages \
+            >build/os-package-refresh/changes.patch
+          cp scanners/os-packages.lock.yaml build/os-package-refresh/
+          cp scanners/scanner-lock.yaml build/os-package-refresh/
+          sha256sum build/os-package-refresh/* >build/os-package-refresh/SHA256SUMS
+          {
+            echo "## OS package refresh proposal"
+            echo
+            echo "- Snapshot: \`$SNAPSHOT\`"
+            echo "- Review artifact: \`scanner-os-packages-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT\`"
+            echo "- No repository or registry mutation was performed."
+          } >>"$GITHUB_STEP_SUMMARY"
+
+      - name: Upload reviewable refresh proposal
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: scanner-os-packages-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/os-package-refresh/
+          if-no-files-found: error
+          retention-days: 30
+
+  vulnerability_db_refresh:
+    name: Propose exact Trivy database lock refresh
+    needs: prepare
+    if: needs.prepare.outputs.run_vulnerability_db_refresh == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Resolve both database tags into bounded exact-digest locks
+        run: |
+          recorded_at="$(date --utc +%Y-%m-%dT%H:%M:%SZ)"
+          make scanners-vulnerability-dbs-refresh RECORDED_AT="$recorded_at"
+
+      - name: Create reviewable vulnerability database proposal
+        run: |
+          mkdir -p build/vulnerability-db-refresh
+          git diff --binary -- \
+            scanners/quality/trivy-db.lock.json \
+            scanners/quality/trivy-java-db.lock.json \
+            scanners/scanner-lock.yaml \
+            internal/scannerbuild/context \
+            >build/vulnerability-db-refresh/changes.patch
+          cp scanners/quality/trivy-db.lock.json build/vulnerability-db-refresh/
+          cp scanners/quality/trivy-java-db.lock.json build/vulnerability-db-refresh/
+          cp scanners/scanner-lock.yaml build/vulnerability-db-refresh/
+          sha256sum build/vulnerability-db-refresh/* >build/vulnerability-db-refresh/SHA256SUMS
+          {
+            echo "## Vulnerability database refresh proposal"
+            echo
+            echo "Both Trivy database tags were resolved independently and converted to exact-digest, eight-day locks."
+            echo "Apply and review the proposal before the committed locks expire; no repository or release channel was mutated."
+          } >>"$GITHUB_STEP_SUMMARY"
+
+      - name: Upload reviewable vulnerability database proposal
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: scanner-vulnerability-dbs-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/vulnerability-db-refresh/
+          if-no-files-found: error
+          retention-days: 14
+
+  discovery:
+    name: Discover scanner updates
+    needs: prepare
+    if: needs.prepare.outputs.run_discovery == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Validate manifest before discovery
         run: make scanners-validate
 
-      - name: Compute tags
-        id: meta
+      - name: Run bounded read-only discovery
         env:
-          RELEASE_TAG_NAME: ${{ github.event.release.tag_name }}
-          INPUT_TAG: ${{ github.event.inputs.tag }}
-          REF_NAME: ${{ github.ref_name }}
-          IMAGE_NAME: ${{ matrix.variant.image }}
+          DEFINITION_COMMIT: ${{ github.sha }}
         run: |
-          set -e
-          version="${RELEASE_TAG_NAME#v}"
-          if [ -n "$INPUT_TAG" ]; then
-            version="$INPUT_TAG"
-          fi
-          if [ -z "$version" ] && [ "$REF_NAME" = "main" ]; then
-            version="main"
-          fi
-          # Validate the version against an allowlist (semver-ish or 'main') to
-          # avoid command injection via crafted tags.
-          case "$version" in
-            main|[0-9]*) : ;;
-            *) echo "refusing unsafe version: $version" >&2; exit 1 ;;
-          esac
-          ghcr_image="${REGISTRY}/${ORG}/${IMAGE_NAME}"
-          dh_image="${DOCKERHUB_ORG}/${IMAGE_NAME}"
-          # Build tag list per registry. Each registry gets the same
-          # set: :VERSION, :MAJOR.MINOR, :MAJOR, plus :latest on real
-          # releases and :main / :main-<sha> on main branch builds.
-          mk_tags() {
-            local img="$1"
-            local out="${img}:${version}"
-            if [ "$version" = "main" ]; then
-              short=$(git rev-parse --short HEAD)
-              out="${out},${img}:main-${short}"
-            else
-              major=$(echo "$version" | cut -d. -f1)
-              majmin=$(echo "$version" | cut -d. -f1,2)
-              if [ "$majmin" != "$version" ]; then
-                out="${out},${img}:${majmin}"
-              fi
-              if [ "$major" != "$version" ] && [ "$major" != "$majmin" ]; then
-                out="${out},${img}:${major}"
-              fi
-              # :latest only on real releases — never on main builds.
-              out="${out},${img}:latest"
-            fi
-            echo "$out"
-          }
-          ghcr_tags=$(mk_tags "$ghcr_image")
-          dh_tags=$(mk_tags "$dh_image")
-          # Combined list goes to the multi-registry push step. If
-          # DOCKERHUB_USERNAME isn't set, the docker.io login step
-          # below skips and the docker.io tags get dropped from the
-          # final push tag list (we handle that there).
-          tags="${ghcr_tags},${dh_tags}"
-          echo "tags=${tags}"             >> "$GITHUB_OUTPUT"
-          echo "ghcr_tags=${ghcr_tags}"   >> "$GITHUB_OUTPUT"
-          echo "version=${version}"       >> "$GITHUB_OUTPUT"
+          go run ./scanners/ci/discover \
+            --definition-commit "$DEFINITION_COMMIT" \
+            --concurrency 6 \
+            --per-tool-timeout 30s \
+            --overall-timeout 15m \
+            --minimum-coverage 0.70 \
+            --output build/scanner-discovery.json \
+            --github-summary "$GITHUB_STEP_SUMMARY"
 
-      # QEMU enables cross-arch builds for arm64 on amd64 runners.
-      # Without it, docker buildx silently produces single-arch images
-      # even with multi-platform requested.
+      - name: Upload discovery evidence
+        if: always() && hashFiles('build/scanner-discovery.json') != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: scanner-discovery-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/scanner-discovery.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Record update review separately from the weekly immutable rebuild
+        if: github.event_name == 'schedule' && github.event.schedule == '43 3 * * 0'
+        run: |
+          if ! jq -e '
+            .schema_version == "wolf.scanners.discovery/v1"
+            and .counts.update_available == 0
+            and .counts.failed == 0
+          ' build/scanner-discovery.json >/dev/null; then
+            {
+              echo
+              echo "> [!WARNING]"
+              echo "> Discovery found updates or unresolved sources. The weekly no-cache candidate still rebuilds the last reviewed immutable lock; promotion remains gated until proposals are reviewed."
+            } >>"$GITHUB_STEP_SUMMARY"
+          fi
+
+  validate:
+    name: Validate release definition
+    needs: [prepare, os_package_refresh, vulnerability_db_refresh, discovery]
+    if: >-
+      always() &&
+      needs.prepare.outputs.run_validation == 'true' &&
+      (needs.os_package_refresh.result == 'success' || needs.os_package_refresh.result == 'skipped') &&
+      (needs.vulnerability_db_refresh.result == 'success' || needs.vulnerability_db_refresh.result == 'skipped') &&
+      (needs.discovery.result == 'success' || needs.discovery.result == 'skipped')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Validate scanner metadata and generated files
+        run: make scanners-validate
+
+      - name: Require immutable upstream image resolutions
+        run: go run ./cmd/scannertools lock --check --require-resolved --json
+
+      - name: Execute every parser's valid and hostile compatibility corpus
+        run: go test ./plugins/... ./internal/scannerquality -count=1
+
+      - name: Verify embedded release-definition parity
+        run: |
+          cmp scanners/tools.yaml internal/scannerbuild/context/tools.yaml
+          cmp scanners/versions.env internal/scannerbuild/context/versions.env
+          cmp scanners/os-packages.yaml internal/scannerbuild/context/os-packages.yaml
+          cmp scanners/os-packages.lock.yaml internal/scannerbuild/context/os-packages.lock.yaml
+          diff -ru scanners/os-packages internal/scannerbuild/context/os-packages
+          cmp fixer/Dockerfile.base internal/scannerbuild/context/fixer/Dockerfile.base
+          cmp fixer/Dockerfile.api internal/scannerbuild/context/fixer/Dockerfile.api
+          cmp fixer/Dockerfile.claude internal/scannerbuild/context/fixer/Dockerfile.claude
+          cmp fixer/Dockerfile.codex internal/scannerbuild/context/fixer/Dockerfile.codex
+
+      - name: Validate upstream image platforms
+        run: make scanners-upstream-check
+
+      - name: Test release-factory helpers
+        run: |
+          go test ./scanners/ci/discover
+          python3 scanners/ci/test_aggregate_spdx.py
+          python3 scanners/ci/test_trivy_exceptions.py
+          scanners/ci/validate-trivy-exceptions.py
+          scanners/ci/test-release-scripts.sh
+          scanners/ci/test-workflow-policy.py
+
+      - name: Shellcheck release and scanner scripts
+        run: shellcheck scanners/ci/*.sh scanners/smoke-test.sh scanners/install/*.sh
+
+  quality:
+    name: Quality (${{ matrix.variant }}, ${{ matrix.platform }})
+    needs: [prepare, validate]
+    if: needs.prepare.outputs.run_build == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: default
+            dockerfile: Dockerfile
+            image: wolf-scanners
+            platform: linux/amd64
+            arch: amd64
+          - variant: default
+            dockerfile: Dockerfile
+            image: wolf-scanners
+            platform: linux/arm64
+            arch: arm64
+          - variant: jvm
+            dockerfile: Dockerfile.jvm
+            image: wolf-scanners-jvm
+            platform: linux/amd64
+            arch: amd64
+          - variant: jvm
+            dockerfile: Dockerfile.jvm
+            image: wolf-scanners-jvm
+            platform: linux/arm64
+            arch: arm64
+          - variant: rust
+            dockerfile: Dockerfile.rust
+            image: wolf-scanners-rust
+            platform: linux/amd64
+            arch: amd64
+          - variant: rust
+            dockerfile: Dockerfile.rust
+            image: wolf-scanners-rust
+            platform: linux/arm64
+            arch: arm64
+          - variant: codeql
+            dockerfile: Dockerfile.codeql
+            image: wolf-scanners-codeql
+            platform: linux/amd64
+            arch: amd64
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
       - uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3
         with:
-          platforms: ${{ matrix.variant.platforms }}
+          platforms: all
 
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
-      - name: Validate upstream scanner images
-        run: make scanners-upstream-check
-
-      # ghcr login — always present (GITHUB_TOKEN is automatic).
-      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+      - name: Build platform image for strict smoke
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5
         with:
-          registry: ${{ env.REGISTRY }}
+          context: scanners/
+          file: scanners/${{ matrix.dockerfile }}
+          platforms: ${{ matrix.platform }}
+          push: false
+          load: true
+          tags: ${{ matrix.image }}:quality-${{ matrix.arch }}
+          build-args: |
+            WOLF_VERSION=${{ needs.prepare.outputs.immutable_id }}
+          provenance: false
+          sbom: false
+          cache-from: type=gha,scope=scanner-${{ matrix.variant }}-${{ matrix.arch }}
+          cache-to: type=gha,scope=scanner-${{ matrix.variant }}-${{ matrix.arch }},mode=max
+
+      - name: Strict version and invocation smoke
+        env:
+          IMAGE: ${{ matrix.image }}:quality-${{ matrix.arch }}
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          docker run --rm \
+            --platform "$PLATFORM" \
+            --network none \
+            -e WOLF_SMOKE_STRICT=1 \
+            "$IMAGE" \
+            /usr/local/bin/smoke-test.sh
+
+      - name: Verify locked vulnerability database identity
+        env:
+          EVIDENCE: build/scanner-evidence/${{ matrix.variant }}-${{ matrix.arch }}.trivy-db.json
+          VARIANT: ${{ matrix.variant }}
+        run: |
+          scanners/ci/validate-trivy-exceptions.py .trivyignore \
+            --image "$VARIANT" \
+            --output "${EVIDENCE%.trivy-db.json}.trivyignore"
+          main_ref="$(scanners/ci/verify-trivy-db.sh scanners/quality/trivy-db.lock.json "$EVIDENCE")"
+          java_ref="$(scanners/ci/verify-trivy-db.sh scanners/quality/trivy-java-db.lock.json "${EVIDENCE%.json}.java.json")"
+          echo "TRIVY_DB_REPOSITORY=$main_ref" >>"$GITHUB_ENV"
+          echo "TRIVY_JAVA_DB_REPOSITORY=$java_ref" >>"$GITHUB_ENV"
+
+      - name: Final-image vulnerability, secret, and license gate
+        uses: aquasecurity/trivy-action@dc5a429b52fcf669ce959baa2c2dd26090d2a6c4 # 0.32.0
+        with:
+          image-ref: ${{ matrix.image }}:quality-${{ matrix.arch }}
+          scanners: vuln,secret,license
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true
+          format: table
+          trivyignores: build/scanner-evidence/${{ matrix.variant }}-${{ matrix.arch }}.trivyignore
+          ignored-licenses: ${{ env.TRIVY_IGNORED_LICENSES }}
+          version: ${{ env.TRIVY_VERSION }}
+
+      - uses: aquasecurity/trivy-action@dc5a429b52fcf669ce959baa2c2dd26090d2a6c4 # 0.32.0
+        with:
+          image-ref: ${{ matrix.image }}:quality-${{ matrix.arch }}
+          scanners: vuln
+          exit-code: "0"
+          format: spdx-json
+          output: build/scanner-evidence/${{ matrix.variant }}-${{ matrix.arch }}.spdx.json
+          version: ${{ env.TRIVY_VERSION }}
+
+      - name: Validate SPDX document
+        env:
+          SBOM: build/scanner-evidence/${{ matrix.variant }}-${{ matrix.arch }}.spdx.json
+        run: |
+          jq -e '
+            .spdxVersion == "SPDX-2.3"
+            and (.packages | type == "array" and length > 0)
+            and (.relationships | type == "array" and length > 0)
+          ' "$SBOM" >/dev/null
+          sha256sum "$SBOM" >"${SBOM}.sha256"
+
+      - name: Upload platform evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: scanner-evidence-${{ matrix.variant }}-${{ matrix.arch }}
+          path: build/scanner-evidence/
+          if-no-files-found: error
+          retention-days: 90
+
+  fixer-quality:
+    name: Fixer quality (${{ matrix.variant }}, ${{ matrix.platform }})
+    needs: [prepare, validate]
+    if: needs.prepare.outputs.run_build == 'true'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: base
+            dockerfile: fixer/Dockerfile.base
+            image: wolf-fixer
+            platform: linux/amd64
+            arch: amd64
+            runner: ubuntu-24.04
+            auth_mode: none
+          - variant: base
+            dockerfile: fixer/Dockerfile.base
+            image: wolf-fixer
+            platform: linux/arm64
+            arch: arm64
+            runner: ubuntu-24.04-arm
+            auth_mode: none
+          - variant: api
+            dockerfile: fixer/Dockerfile.api
+            image: wolf-fixer-api
+            platform: linux/amd64
+            arch: amd64
+            runner: ubuntu-24.04
+            auth_mode: api-key
+          - variant: api
+            dockerfile: fixer/Dockerfile.api
+            image: wolf-fixer-api
+            platform: linux/arm64
+            arch: arm64
+            runner: ubuntu-24.04-arm
+            auth_mode: api-key
+          - variant: claude
+            dockerfile: fixer/Dockerfile.claude
+            image: wolf-fixer-claude
+            platform: linux/amd64
+            arch: amd64
+            runner: ubuntu-24.04
+            auth_mode: interactive-session
+          - variant: claude
+            dockerfile: fixer/Dockerfile.claude
+            image: wolf-fixer-claude
+            platform: linux/arm64
+            arch: arm64
+            runner: ubuntu-24.04-arm
+            auth_mode: interactive-session
+          - variant: codex
+            dockerfile: fixer/Dockerfile.codex
+            image: wolf-fixer-codex
+            platform: linux/amd64
+            arch: amd64
+            runner: ubuntu-24.04
+            auth_mode: interactive-session
+          - variant: codex
+            dockerfile: fixer/Dockerfile.codex
+            image: wolf-fixer-codex
+            platform: linux/arm64
+            arch: arm64
+            runner: ubuntu-24.04-arm
+            auth_mode: interactive-session
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Verify exact native runner architecture
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          case "$ARCH:$RUNNER_ARCH" in
+            amd64:X64|arm64:ARM64) ;;
+            *) echo "matrix architecture $ARCH does not match native runner $RUNNER_ARCH" >&2; exit 1 ;;
+          esac
+
+      - name: Build exact-platform fixer artifact
+        env:
+          VARIANT: ${{ matrix.variant }}
+          DOCKERFILE: ${{ matrix.dockerfile }}
+          IMAGE: ${{ matrix.image }}:quality-${{ matrix.arch }}
+          PLATFORM: ${{ matrix.platform }}
+          ARCH: ${{ matrix.arch }}
+          WOLF_VERSION: ${{ needs.prepare.outputs.immutable_id }}
+        run: |
+          base="wolf-fixer:quality-${ARCH}"
+          docker buildx build \
+            --platform "$PLATFORM" \
+            --load \
+            --build-arg "WOLF_VERSION=$WOLF_VERSION" \
+            --tag "$base" \
+            --file fixer/Dockerfile.base \
+            .
+          if [[ "$VARIANT" != base ]]; then
+            docker buildx build \
+              --platform "$PLATFORM" \
+              --load \
+              --build-arg "WOLF_FIXER_BASE_REF=$base" \
+              --tag "$IMAGE" \
+              --file "$DOCKERFILE" \
+              .
+          fi
+
+      - name: Strict fixer version and auth-boundary smoke
+        env:
+          VARIANT: ${{ matrix.variant }}
+          IMAGE: ${{ matrix.image }}:quality-${{ matrix.arch }}
+          PLATFORM: ${{ matrix.platform }}
+          AUTH_MODE: ${{ matrix.auth_mode }}
+        run: |
+          docker run --rm --platform "$PLATFORM" --network none \
+            --entrypoint /usr/local/bin/wolf "$IMAGE" version
+          case "$VARIANT" in
+            claude)
+              docker run --rm --platform "$PLATFORM" --network none \
+                --entrypoint claude "$IMAGE" --version
+              ;;
+            codex)
+              docker run --rm --platform "$PLATFORM" --network none \
+                --entrypoint codex "$IMAGE" --version
+              ;;
+          esac
+          test "$(docker image inspect "$IMAGE" --format '{{.Config.User}}')" = wolf
+          test "$(docker image inspect "$IMAGE" --format '{{index .Config.Labels "dev.wolf.fixer.auth-mode"}}')" = "$AUTH_MODE"
+
+      - name: Verify locked vulnerability database identity
+        env:
+          EVIDENCE: build/fixer-evidence/${{ matrix.variant }}-${{ matrix.arch }}.trivy-db.json
+          VARIANT: ${{ matrix.variant }}
+        run: |
+          scanners/ci/validate-trivy-exceptions.py .trivyignore \
+            --image "fixer-$VARIANT" \
+            --output "${EVIDENCE%.trivy-db.json}.trivyignore"
+          main_ref="$(scanners/ci/verify-trivy-db.sh scanners/quality/trivy-db.lock.json "$EVIDENCE")"
+          java_ref="$(scanners/ci/verify-trivy-db.sh scanners/quality/trivy-java-db.lock.json "${EVIDENCE%.json}.java.json")"
+          echo "TRIVY_DB_REPOSITORY=$main_ref" >>"$GITHUB_ENV"
+          echo "TRIVY_JAVA_DB_REPOSITORY=$java_ref" >>"$GITHUB_ENV"
+
+      - name: Final fixer vulnerability, secret, and license gate
+        uses: aquasecurity/trivy-action@dc5a429b52fcf669ce959baa2c2dd26090d2a6c4 # 0.32.0
+        with:
+          image-ref: ${{ matrix.image }}:quality-${{ matrix.arch }}
+          scanners: vuln,secret,license
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true
+          format: table
+          trivyignores: build/fixer-evidence/${{ matrix.variant }}-${{ matrix.arch }}.trivyignore
+          ignored-licenses: ${{ env.TRIVY_IGNORED_LICENSES }}
+          version: ${{ env.TRIVY_VERSION }}
+
+      - uses: aquasecurity/trivy-action@dc5a429b52fcf669ce959baa2c2dd26090d2a6c4 # 0.32.0
+        with:
+          image-ref: ${{ matrix.image }}:quality-${{ matrix.arch }}
+          scanners: vuln
+          exit-code: "0"
+          format: spdx-json
+          output: build/fixer-evidence/${{ matrix.variant }}-${{ matrix.arch }}.spdx.json
+          version: ${{ env.TRIVY_VERSION }}
+
+      - name: Validate fixer SPDX document
+        env:
+          SBOM: build/fixer-evidence/${{ matrix.variant }}-${{ matrix.arch }}.spdx.json
+        run: |
+          jq -e '
+            .spdxVersion == "SPDX-2.3"
+            and (.packages | type == "array" and length > 0)
+            and (.relationships | type == "array" and length > 0)
+          ' "$SBOM" >/dev/null
+          sha256sum "$SBOM" >"${SBOM}.sha256"
+
+      - name: Upload fixer platform evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: fixer-evidence-${{ matrix.variant }}-${{ matrix.arch }}
+          path: build/fixer-evidence/
+          if-no-files-found: error
+          retention-days: 90
+
+  runtime-quality:
+    name: Runtime quality (${{ matrix.variant }}, ${{ matrix.platform }})
+    needs: [prepare, validate]
+    if: needs.prepare.outputs.run_build == 'true'
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: runtime
+            target: runtime
+            image: wolf-runtime
+            platform: linux/amd64
+            arch: amd64
+          - variant: runtime
+            target: runtime
+            image: wolf-runtime
+            platform: linux/arm64
+            arch: arm64
+          - variant: proposal
+            target: proposal-runtime
+            image: wolf-proposal-runtime
+            platform: linux/amd64
+            arch: amd64
+          - variant: proposal
+            target: proposal-runtime
+            image: wolf-proposal-runtime
+            platform: linux/arm64
+            arch: arm64
+          - variant: release-fixed
+            target: scanner-release-fixed-adapter
+            image: wolf-release-fixed-adapter
+            platform: linux/amd64
+            arch: amd64
+          - variant: release-fixed
+            target: scanner-release-fixed-adapter
+            image: wolf-release-fixed-adapter
+            platform: linux/arm64
+            arch: arm64
+          - variant: release-quality
+            target: scanner-release-quality-adapter
+            image: wolf-release-quality-adapter
+            platform: linux/amd64
+            arch: amd64
+          - variant: release-quality
+            target: scanner-release-quality-adapter
+            image: wolf-release-quality-adapter
+            platform: linux/arm64
+            arch: arm64
+          - variant: release-integration
+            target: scanner-release-integration-adapter
+            image: wolf-release-integration-adapter
+            platform: linux/amd64
+            arch: amd64
+          - variant: release-integration
+            target: scanner-release-integration-adapter
+            image: wolf-release-integration-adapter
+            platform: linux/arm64
+            arch: arm64
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Build final runtime target
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5
+        with:
+          context: .
+          file: Dockerfile
+          target: ${{ matrix.target }}
+          platforms: ${{ matrix.platform }}
+          push: false
+          load: true
+          tags: ${{ matrix.image }}:quality-${{ matrix.arch }}
+          build-args: |
+            VERSION=${{ needs.prepare.outputs.immutable_id }}
+            COMMIT=${{ github.sha }}
+          provenance: false
+          sbom: false
+          cache-from: type=gha,scope=runtime-${{ matrix.variant }}-${{ matrix.arch }}
+          cache-to: type=gha,scope=runtime-${{ matrix.variant }}-${{ matrix.arch }},mode=max
+
+      - name: Strict runtime and lane-boundary smoke
+        env:
+          VARIANT: ${{ matrix.variant }}
+          IMAGE: ${{ matrix.image }}:quality-${{ matrix.arch }}
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          test "$(docker image inspect "$IMAGE" --format '{{.Config.User}}')" = wolf
+          test "$(docker image inspect "$IMAGE" --format '{{index .Config.Labels "org.opencontainers.image.source"}}')" = \
+            https://github.com/alphabravocompany/thewolf
+          docker run --rm --platform "$PLATFORM" --network none \
+            --entrypoint /bin/sh "$IMAGE" -ec 'test "$(id -u)" -ne 0'
+          case "$VARIANT" in
+            runtime)
+              docker run --rm --platform "$PLATFORM" --network none \
+                --entrypoint wolf "$IMAGE" version
+              docker run --rm --platform "$PLATFORM" --network none \
+                --entrypoint /bin/sh "$IMAGE" -ec '
+                  test -s /usr/share/wolf/scanners/scanner-lock.yaml
+                  test -s /usr/share/wolf/scanners/tools.yaml
+                  test -s /usr/share/wolf/ui/dist/index.html
+                  test -x /usr/libexec/docker/cli-plugins/docker-buildx
+                '
+              ;;
+            proposal)
+              docker run --rm --platform "$PLATFORM" --network none \
+                --entrypoint wolf "$IMAGE" version
+              test "$(docker image inspect "$IMAGE" --format '{{json .Config.Cmd}}')" = \
+                '["scanner-release-worker","--role=proposal"]'
+              ;;
+            release-fixed)
+              docker run --rm --platform "$PLATFORM" --network none \
+                --entrypoint /bin/sh "$IMAGE" -ec '
+                  test -x /usr/local/bin/wolf-release-adapter
+                  test -x /usr/local/bin/scannertools
+                  test -x /usr/local/bin/synccontext
+                  test -x /usr/local/bin/oras
+                  test -x /usr/local/go/bin/go
+                '
+              ;;
+            release-quality)
+              docker run --rm --platform "$PLATFORM" --network none \
+                --entrypoint /bin/sh "$IMAGE" -ec '
+                  test -x /usr/local/bin/wolf-release-adapter
+                  test -x /usr/local/bin/scannertools
+                  test -x /usr/local/bin/oras
+                  test -x /usr/local/bin/trivy
+                  trivy --version | grep -F "Version: 0.70.0"
+                '
+              ;;
+            release-integration)
+              docker run --rm --platform "$PLATFORM" --network none \
+                --entrypoint /bin/sh "$IMAGE" -ec '
+                  test -x /usr/local/bin/wolf-release-adapter
+                  test -x /usr/local/bin/oras
+                  test -x /usr/local/libexec/wolf/release-qualification/python-parser-qualification.test
+                  test -x /usr/local/libexec/wolf/release-qualification/scanner-rollout-qualification.test
+                  kind version
+                  kubectl version --client=true
+                  docker compose version
+                '
+              ;;
+            *)
+              echo "unsupported runtime quality variant: $VARIANT" >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Verify locked vulnerability database identity
+        env:
+          EVIDENCE: build/runtime-evidence/${{ matrix.variant }}-${{ matrix.arch }}.trivy-db.json
+          VARIANT: ${{ matrix.variant }}
+        run: |
+          scanners/ci/validate-trivy-exceptions.py .trivyignore \
+            --image "$VARIANT" \
+            --output "${EVIDENCE%.trivy-db.json}.trivyignore"
+          main_ref="$(scanners/ci/verify-trivy-db.sh scanners/quality/trivy-db.lock.json "$EVIDENCE")"
+          java_ref="$(scanners/ci/verify-trivy-db.sh scanners/quality/trivy-java-db.lock.json "${EVIDENCE%.json}.java.json")"
+          echo "TRIVY_DB_REPOSITORY=$main_ref" >>"$GITHUB_ENV"
+          echo "TRIVY_JAVA_DB_REPOSITORY=$java_ref" >>"$GITHUB_ENV"
+
+      - name: Final runtime vulnerability, secret, and license gate
+        uses: aquasecurity/trivy-action@dc5a429b52fcf669ce959baa2c2dd26090d2a6c4 # 0.32.0
+        with:
+          image-ref: ${{ matrix.image }}:quality-${{ matrix.arch }}
+          scanners: vuln,secret,license
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true
+          format: table
+          trivyignores: build/runtime-evidence/${{ matrix.variant }}-${{ matrix.arch }}.trivyignore
+          ignored-licenses: ${{ env.TRIVY_IGNORED_LICENSES }}
+          version: ${{ env.TRIVY_VERSION }}
+
+      - name: Generate runtime SPDX SBOM
+        uses: aquasecurity/trivy-action@dc5a429b52fcf669ce959baa2c2dd26090d2a6c4 # 0.32.0
+        with:
+          image-ref: ${{ matrix.image }}:quality-${{ matrix.arch }}
+          scanners: vuln
+          exit-code: "0"
+          format: spdx-json
+          output: build/runtime-evidence/${{ matrix.variant }}-${{ matrix.arch }}.spdx.json
+          version: ${{ env.TRIVY_VERSION }}
+
+      - name: Validate runtime SPDX document
+        env:
+          SBOM: build/runtime-evidence/${{ matrix.variant }}-${{ matrix.arch }}.spdx.json
+        run: |
+          jq -e '
+            .spdxVersion == "SPDX-2.3"
+            and (.packages | type == "array" and length > 0)
+            and (.relationships | type == "array" and length > 0)
+          ' "$SBOM" >/dev/null
+          sha256sum "$SBOM" >"${SBOM}.sha256"
+
+      - name: Upload runtime platform evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: runtime-evidence-${{ matrix.variant }}-${{ matrix.arch }}
+          path: build/runtime-evidence/
+          if-no-files-found: error
+          retention-days: 90
+
+  resolve-release-candidate:
+    name: Verify exact candidate closure for release
+    needs: prepare
+    if: needs.prepare.outputs.operation == 'release'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: read
+    outputs:
+      candidate_manifest_digest: ${{ steps.verify.outputs.candidate_manifest_digest }}
+      verification_evidence_digest: ${{ steps.verify.outputs.verification_evidence_digest }}
+      definition_commit: ${{ steps.verify.outputs.definition_commit }}
+      definition_digest: ${{ steps.verify.outputs.definition_digest }}
+      lock_digest: ${{ steps.verify.outputs.lock_digest }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ${{ env.PRIMARY_REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Docker Hub login — optional. Skipped silently if the secret
-      # isn't set, in which case the push step below is told to ship
-      # only the ghcr tags.
-      - name: Login to Docker Hub
-        id: dockerhub
-        if: ${{ secrets.DOCKERHUB_USERNAME != '' }}
+      - name: Require Docker Hub mirror credentials
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          [[ -n "$DOCKERHUB_USERNAME" && -n "$DOCKERHUB_TOKEN" ]] || {
+            echo "protected release requires complete Docker Hub mirror credentials" >&2
+            exit 1
+          }
+
+      - name: Log in to Docker Hub mirror
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
+          registry: ${{ env.MIRROR_REGISTRY }}
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # Build (amd64 only, loaded into the runner's docker daemon) so
-      # we can smoke-test before publishing. The cache is shared with
-      # the multi-arch push below so we don't rebuild the amd64 layers.
-      - name: Build (load locally for smoke test)
+      - uses: oras-project/setup-oras@22ce207df3b08e061f537244349aac6ae1d214f6 # v1.2.4
+        with:
+          version: 1.3.0
+
+      - uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5 # v3.10.1
+
+      - name: Verify signatures, attestations, mirrors, annotations, and platform closure
+        id: verify
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CANDIDATE_ID: ${{ needs.prepare.outputs.candidate_id }}
+          RELEASE_REPOSITORY: ${{ env.PRIMARY_REGISTRY }}/${{ env.PRIMARY_NAMESPACE }}/wolf-scanner-releases
+          MIRROR_RELEASE_REPOSITORY: ${{ env.MIRROR_REGISTRY }}/${{ env.MIRROR_NAMESPACE }}/wolf-scanner-releases
+        run: |
+          scanners/ci/verify-release-closure.sh \
+            "$RELEASE_REPOSITORY" "$MIRROR_RELEASE_REPOSITORY" \
+            "$CANDIDATE_ID" build/candidate-verification true
+
+      - name: Upload content-addressed candidate verification evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: scanner-candidate-verification-${{ needs.prepare.outputs.candidate_id }}
+          path: build/candidate-verification/
+          if-no-files-found: error
+          retention-days: 365
+
+  release-approval:
+    name: Approve scanner release publication
+    needs: [prepare, resolve-release-candidate]
+    if: >-
+      always() &&
+      needs.prepare.outputs.operation == 'release' &&
+      needs.resolve-release-candidate.result == 'success' &&
+      needs.resolve-release-candidate.outputs.candidate_manifest_digest != '' &&
+      needs.resolve-release-candidate.outputs.verification_evidence_digest != ''
+    runs-on: ubuntu-latest
+    outputs:
+      receipt_digest: ${{ steps.receipt.outputs.digest }}
+    environment:
+      name: scanner-release
+    steps:
+      - name: Record protected-environment approval receipt
+        id: receipt
+        env:
+          RELEASE_ID: ${{ needs.prepare.outputs.immutable_id }}
+          CANDIDATE_ID: ${{ needs.prepare.outputs.candidate_id }}
+          CANDIDATE_MANIFEST_DIGEST: ${{ needs.resolve-release-candidate.outputs.candidate_manifest_digest }}
+          VERIFICATION_EVIDENCE_DIGEST: ${{ needs.resolve-release-candidate.outputs.verification_evidence_digest }}
+          LOCK_DIGEST: ${{ needs.resolve-release-candidate.outputs.lock_digest }}
+          DEFINITION_DIGEST: ${{ needs.resolve-release-candidate.outputs.definition_digest }}
+          DEFINITION_COMMIT: ${{ needs.resolve-release-candidate.outputs.definition_commit }}
+          WORKFLOW_DEFINITION_COMMIT: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          mkdir -p build/release-approval
+          jq -nS \
+            --arg releaseId "$RELEASE_ID" \
+            --arg candidateId "$CANDIDATE_ID" \
+            --arg candidateManifestDigest "$CANDIDATE_MANIFEST_DIGEST" \
+            --arg verificationEvidenceDigest "$VERIFICATION_EVIDENCE_DIGEST" \
+            --arg lockDigest "$LOCK_DIGEST" \
+            --arg definitionDigest "$DEFINITION_DIGEST" \
+            --arg definitionCommit "$DEFINITION_COMMIT" \
+            --arg workflowDefinitionCommit "$WORKFLOW_DEFINITION_COMMIT" \
+            --arg runId "$RUN_ID" \
+            --arg runAttempt "$RUN_ATTEMPT" \
+            '{
+              schemaVersion: "wolf.scanners.protected-approval/v2",
+              releaseId: $releaseId,
+              candidateId: $candidateId,
+              candidateManifestDigest: $candidateManifestDigest,
+              verificationEvidenceDigest: $verificationEvidenceDigest,
+              lockDigest: $lockDigest,
+              definitionDigest: $definitionDigest,
+              definitionCommit: $definitionCommit,
+              workflowDefinitionCommit: $workflowDefinitionCommit,
+              workflowRun: {id: $runId, attempt: $runAttempt},
+              protectedEnvironment: "scanner-release",
+              approvalEnforcedBy: "github-protected-environment"
+            }' >build/release-approval/receipt.json
+          digest="sha256:$(sha256sum build/release-approval/receipt.json | awk '{print $1}')"
+          echo "digest=$digest" >>"$GITHUB_OUTPUT"
+          echo "Protected environment approved publication of \`$RELEASE_ID\`." \
+            >>"$GITHUB_STEP_SUMMARY"
+
+      - name: Upload protected approval receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: scanner-release-approval-${{ needs.prepare.outputs.immutable_id }}
+          path: build/release-approval/receipt.json
+          if-no-files-found: error
+          retention-days: 365
+
+  publish:
+    name: Publish immutable ${{ matrix.variant }}
+    needs: [prepare, quality, fixer-quality, runtime-quality, release-approval]
+    if: >-
+      always() &&
+      needs.quality.result == 'success' &&
+      needs.fixer-quality.result == 'success' &&
+      needs.runtime-quality.result == 'success' &&
+      (needs.release-approval.result == 'success' ||
+       needs.prepare.outputs.operation != 'release') &&
+      (needs.prepare.outputs.operation != 'release' ||
+       needs.release-approval.outputs.receipt_digest != '') &&
+      needs.prepare.outputs.run_build == 'true' &&
+      needs.prepare.outputs.publish == 'true' &&
+      github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: default
+            image_kind: scanner
+            context: scanners
+            dockerfile: scanners/Dockerfile
+            image: wolf-scanners
+            platforms: linux/amd64,linux/arm64
+          - variant: jvm
+            image_kind: scanner
+            context: scanners
+            dockerfile: scanners/Dockerfile.jvm
+            image: wolf-scanners-jvm
+            platforms: linux/amd64,linux/arm64
+          - variant: rust
+            image_kind: scanner
+            context: scanners
+            dockerfile: scanners/Dockerfile.rust
+            image: wolf-scanners-rust
+            platforms: linux/amd64,linux/arm64
+          - variant: codeql
+            image_kind: scanner
+            context: scanners
+            dockerfile: scanners/Dockerfile.codeql
+            image: wolf-scanners-codeql
+            platforms: linux/amd64
+          - variant: fixer-base
+            image_kind: fixer
+            context: .
+            dockerfile: fixer/Dockerfile.base
+            image: wolf-fixer
+            platforms: linux/amd64,linux/arm64
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3
+        with:
+          platforms: all
+
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ${{ env.PRIMARY_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve mirror availability
+        id: mirror-config
+        env:
+          MODE: ${{ needs.prepare.outputs.mirror_mode }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          configured=false
+          if [[ -n "$DOCKERHUB_USERNAME" || -n "$DOCKERHUB_TOKEN" ]]; then
+            [[ -n "$DOCKERHUB_USERNAME" && -n "$DOCKERHUB_TOKEN" ]] || {
+              echo "Docker Hub credentials are only partially configured" >&2
+              exit 1
+            }
+            configured=true
+          fi
+          if [[ "$MODE" == required && "$configured" != true ]]; then
+            echo "Docker Hub mirror is required but credentials are unavailable" >&2
+            exit 1
+          fi
+          enabled=false
+          [[ "$MODE" == disabled || "$configured" != true ]] || enabled=true
+          echo "enabled=$enabled" >>"$GITHUB_OUTPUT"
+
+      - name: Log in to Docker Hub mirror
+        if: steps.mirror-config.outputs.enabled == 'true'
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ${{ env.MIRROR_REGISTRY }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5 # v3.10.1
+
+      - uses: oras-project/setup-oras@22ce207df3b08e061f537244349aac6ae1d214f6 # v1.2.4
+
+      - name: Resolve safe image references
+        id: refs
+        env:
+          PRIMARY_REPOSITORY: ${{ env.PRIMARY_REGISTRY }}/${{ env.PRIMARY_NAMESPACE }}
+          MIRROR_REPOSITORY: ${{ env.MIRROR_REGISTRY }}/${{ env.MIRROR_NAMESPACE }}
+          IMAGE_NAME: ${{ matrix.image }}
+          IMMUTABLE_ID: ${{ needs.prepare.outputs.immutable_id }}
+          ALIASES: ${{ needs.prepare.outputs.aliases }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: scanners/ci/release-meta.sh tags
+
+      - name: Build and push unique staging image
+        id: build
         uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5
         with:
-          context: scanners/
-          file: scanners/${{ matrix.variant.dockerfile }}
-          platforms: linux/amd64
-          push: false
-          load: true
-          tags: ${{ matrix.variant.image }}:test
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          platforms: ${{ matrix.platforms }}
+          push: true
+          tags: ${{ steps.refs.outputs.staging_ref }}
           build-args: |
-            WOLF_VERSION=${{ steps.meta.outputs.version }}
-          cache-from: type=gha,scope=${{ matrix.variant.name }}
-          cache-to: type=gha,scope=${{ matrix.variant.name }},mode=max
+            WOLF_VERSION=${{ needs.prepare.outputs.immutable_id }}
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.version=${{ needs.prepare.outputs.immutable_id }}
+            dev.wolf.release.variant=${{ matrix.variant }}
+            dev.wolf.release.image-kind=${{ matrix.image_kind }}
+            dev.wolf.release.id=${{ needs.prepare.outputs.immutable_id }}
+            dev.wolf.release.lock-digest=${{ needs.prepare.outputs.lock_digest }}
+            dev.wolf.release.definition-digest=${{ needs.prepare.outputs.definition_digest }}
+          annotations: |
+            index:org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            index:org.opencontainers.image.revision=${{ github.sha }}
+            index:org.opencontainers.image.version=${{ needs.prepare.outputs.immutable_id }}
+            index:dev.wolf.release.variant=${{ matrix.variant }}
+            index:dev.wolf.release.image-kind=${{ matrix.image_kind }}
+            index:dev.wolf.release.platforms=${{ matrix.platforms }}
+            index:dev.wolf.release.id=${{ needs.prepare.outputs.immutable_id }}
+            index:dev.wolf.release.lock-digest=${{ needs.prepare.outputs.lock_digest }}
+            index:dev.wolf.release.definition-digest=${{ needs.prepare.outputs.definition_digest }}
+          provenance: mode=max
+          sbom: true
+          no-cache: >-
+            ${{
+              (github.event_name == 'schedule' &&
+               github.event.schedule == '43 3 * * 0') ||
+              needs.prepare.outputs.operation == 'security-rebuild'
+            }}
+          cache-from: type=gha,scope=scanner-${{ matrix.variant }}-publish
+          cache-to: type=gha,scope=scanner-${{ matrix.variant }}-publish,mode=max
 
-      - name: Smoke test
+      - name: Verify staged digest and exact platform set
         env:
-          IMAGE_NAME: ${{ matrix.variant.image }}
-        run: docker run --rm "${IMAGE_NAME}:test" /usr/local/bin/smoke-test.sh
+          REF: ${{ steps.refs.outputs.staging_ref }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+          PLATFORMS: ${{ matrix.platforms }}
+          RELEASE_ID: ${{ needs.prepare.outputs.immutable_id }}
+          LOCK_DIGEST: ${{ needs.prepare.outputs.lock_digest }}
+          DEFINITION_DIGEST: ${{ needs.prepare.outputs.definition_digest }}
+          SOURCE_URL: ${{ github.server_url }}/${{ github.repository }}
+          REVISION: ${{ github.sha }}
+          VARIANT: ${{ matrix.variant }}
+          IMAGE_KIND: ${{ matrix.image_kind }}
+        run: >-
+          scanners/ci/verify-image.sh "$REF" "$DIGEST" "$PLATFORMS"
+          "$RELEASE_ID" "$LOCK_DIGEST" "$DEFINITION_DIGEST"
+          "$SOURCE_URL" "$REVISION" "$RELEASE_ID" "$VARIANT" "$IMAGE_KIND"
 
-      # Trivy CVE gate. Fails the workflow if the smoke-built image
-      # contains any HIGH or CRITICAL vulnerability that isn't on the
-      # repo-level allowlist (.trivyignore). Scans the local-loaded
-      # amd64 image; arm64 layers share the same userspace so the
-      # signal is equivalent.
-      #
-      # On a real release (when image bloat is impossible to dodge
-      # because some upstream tool is on an old base layer), the
-      # allowlist .trivyignore documents accepted exceptions with a
-      # # comment and an expiry date.
-      - name: Trivy CVE scan
-        uses: aquasecurity/trivy-action@dc5a429b52fcf669ce959baa2c2dd26090d2a6c4 # 0.32.0
+      - name: Scan pushed digest and create image SPDX SBOM
+        run: mkdir -p build/scanner-publish
+
+      - name: Verify locked vulnerability database identity
+        env:
+          VARIANT: ${{ matrix.variant }}
+        run: |
+          scanners/ci/validate-trivy-exceptions.py .trivyignore \
+            --image "$VARIANT" \
+            --output "build/scanner-publish/${VARIANT}.trivyignore"
+          main_ref="$(scanners/ci/verify-trivy-db.sh scanners/quality/trivy-db.lock.json build/scanner-publish/${{ matrix.variant }}.trivy-db.json)"
+          java_ref="$(scanners/ci/verify-trivy-db.sh scanners/quality/trivy-java-db.lock.json build/scanner-publish/${{ matrix.variant }}.trivy-java-db.json)"
+          echo "TRIVY_DB_REPOSITORY=$main_ref" >>"$GITHUB_ENV"
+          echo "TRIVY_JAVA_DB_REPOSITORY=$java_ref" >>"$GITHUB_ENV"
+
+      - uses: aquasecurity/trivy-action@dc5a429b52fcf669ce959baa2c2dd26090d2a6c4 # 0.32.0
         with:
-          image-ref: ${{ matrix.variant.image }}:test
+          image-ref: ${{ steps.refs.outputs.primary_repository }}@${{ steps.build.outputs.digest }}
+          scanners: vuln,secret,license
           severity: HIGH,CRITICAL
-          exit-code: '1'
+          exit-code: "1"
           ignore-unfixed: true
           format: table
-          trivyignores: .trivyignore
+          trivyignores: build/scanner-publish/${{ matrix.variant }}.trivyignore
+          ignored-licenses: ${{ env.TRIVY_IGNORED_LICENSES }}
+          version: ${{ env.TRIVY_VERSION }}
 
-      # Multi-arch push to both registries. The 'tags' input accepts a
-      # comma-separated list spanning multiple registries — buildkit
-      # pushes once per arch to each tag. If DOCKERHUB_USERNAME wasn't
-      # set, fall back to ghcr-only.
-      - name: Push (multi-arch)
-        if: github.event_name == 'release' || github.ref == 'refs/heads/main'
+      - uses: aquasecurity/trivy-action@dc5a429b52fcf669ce959baa2c2dd26090d2a6c4 # 0.32.0
+        with:
+          image-ref: ${{ steps.refs.outputs.primary_repository }}@${{ steps.build.outputs.digest }}
+          scanners: vuln
+          exit-code: "0"
+          format: spdx-json
+          output: build/scanner-publish/${{ matrix.variant }}.spdx.json
+          version: ${{ env.TRIVY_VERSION }}
+
+      - name: Validate image SPDX SBOM
+        env:
+          SBOM: build/scanner-publish/${{ matrix.variant }}.spdx.json
+        run: |
+          jq -e '
+            .spdxVersion == "SPDX-2.3"
+            and (.packages | type == "array" and length > 0)
+            and (.relationships | type == "array" and length > 0)
+          ' "$SBOM" >/dev/null
+          sha256sum "$SBOM" >"${SBOM}.sha256"
+
+      - name: Keyless-sign staged image digest
+        env:
+          IMAGE: ${{ steps.refs.outputs.primary_repository }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: cosign sign --yes "${IMAGE}@${DIGEST}"
+
+      - name: Generate GitHub build provenance
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-name: ${{ steps.refs.outputs.primary_repository }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      - name: Attest image SPDX SBOM
+        uses: actions/attest-sbom@bd218ad0dbcb3e146bd073d1d9c6d78e08aa8a0b # v2.4.0
+        with:
+          subject-name: ${{ steps.refs.outputs.primary_repository }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          sbom-path: build/scanner-publish/${{ matrix.variant }}.spdx.json
+          push-to-registry: true
+
+      - name: Verify keyless signature and GitHub attestations
+        id: primary-evidence
+        env:
+          IMAGE: ${{ steps.refs.outputs.primary_repository }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+          CERTIFICATE_IDENTITY: ${{ github.server_url }}/${{ github.repository }}/.github/workflows/scanners-image.yml@${{ github.ref }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p build/scanner-publish
+          cosign verify --output json \
+            --certificate-identity "$CERTIFICATE_IDENTITY" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            "${IMAGE}@${DIGEST}" >build/scanner-publish/primary.signature-verification.json
+          gh attestation verify "oci://${IMAGE}@${DIGEST}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --source-digest "$GITHUB_SHA" \
+            --format json >build/scanner-publish/primary.provenance-verification.json
+          gh attestation verify "oci://${IMAGE}@${DIGEST}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --source-digest "$GITHUB_SHA" \
+            --predicate-type https://spdx.dev/Document/v2.3 \
+            --format json >build/scanner-publish/primary.sbom-verification.json
+          oras discover --format json "${IMAGE}@${DIGEST}" \
+            | jq -S --arg digest "$DIGEST" '
+                if (.referrers | type) != "array" or (.referrers | length) < 3 or
+                   any(.referrers[]; (.digest | test("^sha256:[a-f0-9]{64}$") | not))
+                then error("image supply-chain referrer set is incomplete")
+                else {subjectDigest: $digest, referrers: (.referrers | sort_by(.digest))}
+                end
+              ' >build/scanner-publish/primary.referrers.json
+          for evidence in signature-verification provenance-verification sbom-verification referrers; do
+            value="sha256:$(sha256sum "build/scanner-publish/primary.${evidence}.json" | awk '{print $1}')"
+            echo "${evidence//-/_}_digest=$value" >>"$GITHUB_OUTPUT"
+          done
+
+      - name: Create or verify immutable primary image tag
+        env:
+          SOURCE: ${{ steps.refs.outputs.primary_repository }}@${{ steps.build.outputs.digest }}
+          TARGET: ${{ steps.refs.outputs.primary_repository }}
+          IMMUTABLE_ID: ${{ needs.prepare.outputs.immutable_id }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+          PLATFORMS: ${{ matrix.platforms }}
+        run: scanners/ci/promote-image.sh "$SOURCE" "$TARGET" "$IMMUTABLE_ID" "$DIGEST" "$PLATFORMS" ""
+
+      - name: Mirror immutable image and sign its digest
+        id: mirror
+        if: steps.mirror-config.outputs.enabled == 'true'
+        continue-on-error: ${{ needs.prepare.outputs.mirror_mode == 'auto' }}
+        env:
+          SOURCE: ${{ steps.refs.outputs.primary_repository }}@${{ steps.build.outputs.digest }}
+          TARGET: ${{ steps.refs.outputs.mirror_repository }}
+          IMMUTABLE_ID: ${{ needs.prepare.outputs.immutable_id }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+          PLATFORMS: ${{ matrix.platforms }}
+          RELEASE_ID: ${{ needs.prepare.outputs.immutable_id }}
+          LOCK_DIGEST: ${{ needs.prepare.outputs.lock_digest }}
+          DEFINITION_DIGEST: ${{ needs.prepare.outputs.definition_digest }}
+          SOURCE_URL: ${{ github.server_url }}/${{ github.repository }}
+          REVISION: ${{ github.sha }}
+          VARIANT: ${{ matrix.variant }}
+          IMAGE_KIND: ${{ matrix.image_kind }}
+          CERTIFICATE_IDENTITY: ${{ github.server_url }}/${{ github.repository }}/.github/workflows/scanners-image.yml@${{ github.ref }}
+        run: |
+          scanners/ci/promote-image.sh "$SOURCE" "$TARGET" "$IMMUTABLE_ID" "$DIGEST" "$PLATFORMS" ""
+          cosign sign --yes "${TARGET}@${DIGEST}"
+          cosign verify \
+            --certificate-identity "$CERTIFICATE_IDENTITY" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            "${TARGET}@${DIGEST}" >/dev/null
+
+      - name: Generate mirror build provenance
+        if: steps.mirror-config.outputs.enabled == 'true' && steps.mirror.outcome == 'success'
+        continue-on-error: ${{ needs.prepare.outputs.mirror_mode == 'auto' }}
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-name: ${{ steps.refs.outputs.mirror_repository }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      - name: Attest mirror SPDX SBOM
+        if: steps.mirror-config.outputs.enabled == 'true' && steps.mirror.outcome == 'success'
+        continue-on-error: ${{ needs.prepare.outputs.mirror_mode == 'auto' }}
+        uses: actions/attest-sbom@bd218ad0dbcb3e146bd073d1d9c6d78e08aa8a0b # v2.4.0
+        with:
+          subject-name: ${{ steps.refs.outputs.mirror_repository }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          sbom-path: build/scanner-publish/${{ matrix.variant }}.spdx.json
+          push-to-registry: true
+
+      - name: Verify mirror image, signature, provenance, and SBOM
+        id: mirror-evidence
+        if: steps.mirror-config.outputs.enabled == 'true' && steps.mirror.outcome == 'success'
+        continue-on-error: ${{ needs.prepare.outputs.mirror_mode == 'auto' }}
+        env:
+          IMAGE: ${{ steps.refs.outputs.mirror_repository }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+          PLATFORMS: ${{ matrix.platforms }}
+          RELEASE_ID: ${{ needs.prepare.outputs.immutable_id }}
+          LOCK_DIGEST: ${{ needs.prepare.outputs.lock_digest }}
+          DEFINITION_DIGEST: ${{ needs.prepare.outputs.definition_digest }}
+          SOURCE_URL: ${{ github.server_url }}/${{ github.repository }}
+          REVISION: ${{ github.sha }}
+          VARIANT: ${{ matrix.variant }}
+          IMAGE_KIND: ${{ matrix.image_kind }}
+          CERTIFICATE_IDENTITY: ${{ github.server_url }}/${{ github.repository }}/.github/workflows/scanners-image.yml@${{ github.ref }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          scanners/ci/verify-image.sh "${IMAGE}@${DIGEST}" "$DIGEST" "$PLATFORMS" \
+            "$RELEASE_ID" "$LOCK_DIGEST" "$DEFINITION_DIGEST" \
+            "$SOURCE_URL" "$REVISION" "$RELEASE_ID" "$VARIANT" "$IMAGE_KIND"
+          cosign verify \
+            --certificate-identity "$CERTIFICATE_IDENTITY" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            "${IMAGE}@${DIGEST}" >/dev/null
+          gh attestation verify "oci://${IMAGE}@${DIGEST}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --source-digest "$GITHUB_SHA" >/dev/null
+          gh attestation verify "oci://${IMAGE}@${DIGEST}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --source-digest "$GITHUB_SHA" \
+            --predicate-type https://spdx.dev/Document/v2.3 >/dev/null
+          oras discover --format json "${IMAGE}@${DIGEST}" \
+            | jq -S --arg digest "$DIGEST" '
+                if (.referrers | type) != "array" or (.referrers | length) < 3 or
+                   any(.referrers[]; (.digest | test("^sha256:[a-f0-9]{64}$") | not))
+                then error("mirror supply-chain referrer set is incomplete")
+                else {subjectDigest: $digest, referrers: (.referrers | sort_by(.digest))}
+                end
+              ' >build/scanner-publish/mirror.referrers.json
+          echo "referrers_digest=sha256:$(sha256sum build/scanner-publish/mirror.referrers.json | awk '{print $1}')" >>"$GITHUB_OUTPUT"
+
+      - name: Write immutable image metadata
+        env:
+          VARIANT: ${{ matrix.variant }}
+          IMAGE_KIND: ${{ matrix.image_kind }}
+          IMAGE_NAME: ${{ matrix.image }}
+          PLATFORMS: ${{ matrix.platforms }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+          PRIMARY_REPOSITORY: ${{ steps.refs.outputs.primary_repository }}
+          MIRROR_REPOSITORY: ${{ steps.refs.outputs.mirror_repository }}
+          MIRROR_ENABLED: ${{ steps.mirror-config.outputs.enabled }}
+          MIRROR_EVIDENCE_OUTCOME: ${{ steps.mirror-evidence.outcome }}
+          SBOM: build/scanner-publish/${{ matrix.variant }}.spdx.json
+          RELEASE_ID: ${{ needs.prepare.outputs.immutable_id }}
+          LOCK_DIGEST: ${{ needs.prepare.outputs.lock_digest }}
+          DEFINITION_DIGEST: ${{ needs.prepare.outputs.definition_digest }}
+          APPROVAL_RECEIPT_DIGEST: ${{ needs.release-approval.outputs.receipt_digest }}
+          SIGNATURE_EVIDENCE_DIGEST: ${{ steps.primary-evidence.outputs.signature_verification_digest }}
+          PROVENANCE_EVIDENCE_DIGEST: ${{ steps.primary-evidence.outputs.provenance_verification_digest }}
+          SBOM_EVIDENCE_DIGEST: ${{ steps.primary-evidence.outputs.sbom_verification_digest }}
+          PRIMARY_REFERRERS_DIGEST: ${{ steps.primary-evidence.outputs.referrers_digest }}
+          MIRROR_REFERRERS_DIGEST: ${{ steps.mirror-evidence.outputs.referrers_digest }}
+        run: |
+          mirror=null
+          if [[ "$MIRROR_ENABLED" == true && "$MIRROR_EVIDENCE_OUTCOME" == success ]]; then
+            mirror="$(jq -n --arg repository "$MIRROR_REPOSITORY" --arg referrers "$MIRROR_REFERRERS_DIGEST" '{
+              repository: $repository,
+              verified: true,
+              referrersSha256: $referrers,
+              signatureVerified: true,
+              provenanceVerified: true,
+              sbomVerified: true
+            }')"
+          fi
+          sbom_sha="sha256:$(sha256sum "$SBOM" | awk '{print $1}')"
+          jq -n \
+            --arg variant "$VARIANT" \
+            --arg image_kind "$IMAGE_KIND" \
+            --arg image "$IMAGE_NAME" \
+            --arg digest "$DIGEST" \
+            --arg platforms "$PLATFORMS" \
+            --arg repository "$PRIMARY_REPOSITORY" \
+            --arg sbom "$sbom_sha" \
+            --arg release_id "$RELEASE_ID" \
+            --arg lock_digest "$LOCK_DIGEST" \
+            --arg definition_digest "$DEFINITION_DIGEST" \
+            --arg approval_receipt "$APPROVAL_RECEIPT_DIGEST" \
+            --arg signature_evidence "$SIGNATURE_EVIDENCE_DIGEST" \
+            --arg provenance_evidence "$PROVENANCE_EVIDENCE_DIGEST" \
+            --arg sbom_evidence "$SBOM_EVIDENCE_DIGEST" \
+            --arg primary_referrers "$PRIMARY_REFERRERS_DIGEST" \
+            --argjson mirror "$mirror" \
+            '{
+              variant: $variant,
+              imageKind: $image_kind,
+              image: $image,
+              releaseId: $release_id,
+              lockDigest: $lock_digest,
+              definitionDigest: $definition_digest,
+              approvalReceiptDigest: (if $approval_receipt == "" then null else $approval_receipt end),
+              digest: $digest,
+              platforms: ($platforms | split(",")),
+              primary: {repository: $repository, verified: true},
+              mirror: $mirror,
+              sbom_sha256: $sbom,
+              evidence: {
+                signatureVerificationSha256: $signature_evidence,
+                provenanceVerificationSha256: $provenance_evidence,
+                sbomVerificationSha256: $sbom_evidence,
+                referrersSha256: $primary_referrers
+              },
+              signatureVerified: true,
+              provenanceVerified: true,
+              sbomVerified: true
+            }' >"build/scanner-publish/${VARIANT}.image.json"
+
+      - name: Upload immutable publication metadata
+        if: always() && hashFiles('build/scanner-publish/*.image.json') != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: scanner-publish-${{ matrix.variant }}
+          path: build/scanner-publish/
+          if-no-files-found: error
+          retention-days: 365
+
+  publish-fixer-engines:
+    name: Publish immutable ${{ matrix.variant }}
+    needs: [prepare, publish, release-approval]
+    if: >-
+      always() &&
+      needs.publish.result == 'success' &&
+      (needs.prepare.outputs.operation != 'release' ||
+       (needs.release-approval.result == 'success' &&
+        needs.release-approval.outputs.receipt_digest != '')) &&
+      needs.prepare.outputs.run_build == 'true' &&
+      needs.prepare.outputs.publish == 'true' &&
+      github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: fixer-api
+            dockerfile: fixer/Dockerfile.api
+            image: wolf-fixer-api
+            platforms: linux/amd64,linux/arm64
+          - variant: fixer-claude
+            dockerfile: fixer/Dockerfile.claude
+            image: wolf-fixer-claude
+            platforms: linux/amd64,linux/arm64
+          - variant: fixer-codex
+            dockerfile: fixer/Dockerfile.codex
+            image: wolf-fixer-codex
+            platforms: linux/amd64,linux/arm64
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: scanner-publish-fixer-base
+          path: build/fixer-base-publication
+
+      - uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3
+        with:
+          platforms: all
+
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ${{ env.PRIMARY_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve mirror availability
+        id: mirror-config
+        env:
+          MODE: ${{ needs.prepare.outputs.mirror_mode }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          configured=false
+          if [[ -n "$DOCKERHUB_USERNAME" || -n "$DOCKERHUB_TOKEN" ]]; then
+            [[ -n "$DOCKERHUB_USERNAME" && -n "$DOCKERHUB_TOKEN" ]] || {
+              echo "Docker Hub credentials are only partially configured" >&2
+              exit 1
+            }
+            configured=true
+          fi
+          if [[ "$MODE" == required && "$configured" != true ]]; then
+            echo "Docker Hub mirror is required but credentials are unavailable" >&2
+            exit 1
+          fi
+          enabled=false
+          [[ "$MODE" == disabled || "$configured" != true ]] || enabled=true
+          echo "enabled=$enabled" >>"$GITHUB_OUTPUT"
+
+      - name: Log in to Docker Hub mirror
+        if: steps.mirror-config.outputs.enabled == 'true'
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ${{ env.MIRROR_REGISTRY }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5 # v3.10.1
+
+      - uses: oras-project/setup-oras@22ce207df3b08e061f537244349aac6ae1d214f6 # v1.2.4
+
+      - name: Verify and bind exact published fixer base
+        id: base
+        env:
+          METADATA: build/fixer-base-publication/fixer-base.image.json
+          RELEASE_ID: ${{ needs.prepare.outputs.immutable_id }}
+          LOCK_DIGEST: ${{ needs.prepare.outputs.lock_digest }}
+          DEFINITION_DIGEST: ${{ needs.prepare.outputs.definition_digest }}
+          SOURCE_URL: ${{ github.server_url }}/${{ github.repository }}
+          REVISION: ${{ github.sha }}
+          VARIANT: ${{ matrix.variant }}
+          CERTIFICATE_IDENTITY: ${{ github.server_url }}/${{ github.repository }}/.github/workflows/scanners-image.yml@${{ github.ref }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          jq -e --arg release "$RELEASE_ID" --arg lock "$LOCK_DIGEST" --arg definition "$DEFINITION_DIGEST" '
+            .variant == "fixer-base"
+            and .imageKind == "fixer"
+            and .image == "wolf-fixer"
+            and (.digest | test("^sha256:[a-f0-9]{64}$"))
+            and (.platforms | sort) == (["linux/amd64", "linux/arm64"] | sort)
+            and .signatureVerified == true
+            and .provenanceVerified == true
+            and .releaseId == $release
+            and .lockDigest == $lock
+            and .definitionDigest == $definition
+            and (.evidence.referrersSha256 | test("^sha256:[a-f0-9]{64}$"))
+          ' "$METADATA" >/dev/null
+          repository="$(jq -r .primary.repository "$METADATA")"
+          digest="$(jq -r .digest "$METADATA")"
+          reference="${repository}@${digest}"
+          scanners/ci/verify-image.sh "$reference" "$digest" "linux/amd64,linux/arm64" \
+            "$RELEASE_ID" "$LOCK_DIGEST" "$DEFINITION_DIGEST" \
+            "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" "$GITHUB_SHA" "$RELEASE_ID" "fixer-base" "fixer"
+          cosign verify \
+            --certificate-identity "$CERTIFICATE_IDENTITY" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            "$reference" >/dev/null
+          gh attestation verify "oci://${reference}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --source-digest "$GITHUB_SHA" >/dev/null
+          echo "reference=$reference" >>"$GITHUB_OUTPUT"
+
+      - name: Resolve safe image references
+        id: refs
+        env:
+          PRIMARY_REPOSITORY: ${{ env.PRIMARY_REGISTRY }}/${{ env.PRIMARY_NAMESPACE }}
+          MIRROR_REPOSITORY: ${{ env.MIRROR_REGISTRY }}/${{ env.MIRROR_NAMESPACE }}
+          IMAGE_NAME: ${{ matrix.image }}
+          IMMUTABLE_ID: ${{ needs.prepare.outputs.immutable_id }}
+          ALIASES: ${{ needs.prepare.outputs.aliases }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: scanners/ci/release-meta.sh tags
+
+      - name: Build engine from exact base digest and push staging image
+        id: build
         uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5
         with:
-          context: scanners/
-          file: scanners/${{ matrix.variant.dockerfile }}
-          platforms: linux/amd64,linux/arm64
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: ${{ matrix.platforms }}
           push: true
-          tags: ${{ steps.dockerhub.outcome == 'success' && steps.meta.outputs.tags || steps.meta.outputs.ghcr_tags }}
+          tags: ${{ steps.refs.outputs.staging_ref }}
           build-args: |
-            WOLF_VERSION=${{ steps.meta.outputs.version }}
-          cache-from: type=gha,scope=${{ matrix.variant.name }}
+            WOLF_FIXER_BASE_REF=${{ steps.base.outputs.reference }}
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.version=${{ needs.prepare.outputs.immutable_id }}
+            dev.wolf.release.variant=${{ matrix.variant }}
+            dev.wolf.release.image-kind=fixer
+            dev.wolf.release.id=${{ needs.prepare.outputs.immutable_id }}
+            dev.wolf.release.lock-digest=${{ needs.prepare.outputs.lock_digest }}
+            dev.wolf.release.definition-digest=${{ needs.prepare.outputs.definition_digest }}
+            dev.wolf.fixer.base=${{ steps.base.outputs.reference }}
+          annotations: |
+            index:org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            index:org.opencontainers.image.revision=${{ github.sha }}
+            index:org.opencontainers.image.version=${{ needs.prepare.outputs.immutable_id }}
+            index:dev.wolf.release.variant=${{ matrix.variant }}
+            index:dev.wolf.release.image-kind=fixer
+            index:dev.wolf.release.platforms=${{ matrix.platforms }}
+            index:dev.wolf.release.id=${{ needs.prepare.outputs.immutable_id }}
+            index:dev.wolf.release.lock-digest=${{ needs.prepare.outputs.lock_digest }}
+            index:dev.wolf.release.definition-digest=${{ needs.prepare.outputs.definition_digest }}
+          provenance: mode=max
+          sbom: true
+          no-cache: >-
+            ${{
+              (github.event_name == 'schedule' &&
+               github.event.schedule == '43 3 * * 0') ||
+              needs.prepare.outputs.operation == 'security-rebuild'
+            }}
+          cache-from: type=gha,scope=scanner-${{ matrix.variant }}-publish
+          cache-to: type=gha,scope=scanner-${{ matrix.variant }}-publish,mode=max
+
+      - name: Verify staged engine digest and exact platform set
+        env:
+          REF: ${{ steps.refs.outputs.staging_ref }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+          PLATFORMS: ${{ matrix.platforms }}
+          RELEASE_ID: ${{ needs.prepare.outputs.immutable_id }}
+          LOCK_DIGEST: ${{ needs.prepare.outputs.lock_digest }}
+          DEFINITION_DIGEST: ${{ needs.prepare.outputs.definition_digest }}
+          SOURCE_URL: ${{ github.server_url }}/${{ github.repository }}
+          REVISION: ${{ github.sha }}
+          VARIANT: ${{ matrix.variant }}
+        run: >-
+          scanners/ci/verify-image.sh "$REF" "$DIGEST" "$PLATFORMS"
+          "$RELEASE_ID" "$LOCK_DIGEST" "$DEFINITION_DIGEST"
+          "$SOURCE_URL" "$REVISION" "$RELEASE_ID" "$VARIANT" "fixer"
+
+      - name: Create engine publication evidence directory
+        run: mkdir -p build/scanner-publish
+
+      - name: Verify locked vulnerability database identity
+        env:
+          VARIANT: ${{ matrix.variant }}
+        run: |
+          scanners/ci/validate-trivy-exceptions.py .trivyignore \
+            --image "$VARIANT" \
+            --output "build/scanner-publish/${VARIANT}.trivyignore"
+          main_ref="$(scanners/ci/verify-trivy-db.sh scanners/quality/trivy-db.lock.json build/scanner-publish/${{ matrix.variant }}.trivy-db.json)"
+          java_ref="$(scanners/ci/verify-trivy-db.sh scanners/quality/trivy-java-db.lock.json build/scanner-publish/${{ matrix.variant }}.trivy-java-db.json)"
+          echo "TRIVY_DB_REPOSITORY=$main_ref" >>"$GITHUB_ENV"
+          echo "TRIVY_JAVA_DB_REPOSITORY=$java_ref" >>"$GITHUB_ENV"
+
+      - name: Scan pushed engine vulnerability, secret, and license policy
+        uses: aquasecurity/trivy-action@dc5a429b52fcf669ce959baa2c2dd26090d2a6c4 # 0.32.0
+        with:
+          image-ref: ${{ steps.refs.outputs.primary_repository }}@${{ steps.build.outputs.digest }}
+          scanners: vuln,secret,license
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true
+          format: table
+          trivyignores: build/scanner-publish/${{ matrix.variant }}.trivyignore
+          ignored-licenses: ${{ env.TRIVY_IGNORED_LICENSES }}
+          version: ${{ env.TRIVY_VERSION }}
+
+      - name: Generate engine SPDX SBOM
+        uses: aquasecurity/trivy-action@dc5a429b52fcf669ce959baa2c2dd26090d2a6c4 # 0.32.0
+        with:
+          image-ref: ${{ steps.refs.outputs.primary_repository }}@${{ steps.build.outputs.digest }}
+          scanners: vuln
+          exit-code: "0"
+          format: spdx-json
+          output: build/scanner-publish/${{ matrix.variant }}.spdx.json
+          version: ${{ env.TRIVY_VERSION }}
+
+      - name: Validate engine SPDX SBOM
+        env:
+          SBOM: build/scanner-publish/${{ matrix.variant }}.spdx.json
+        run: |
+          jq -e '
+            .spdxVersion == "SPDX-2.3"
+            and (.packages | type == "array" and length > 0)
+            and (.relationships | type == "array" and length > 0)
+          ' "$SBOM" >/dev/null
+          sha256sum "$SBOM" >"${SBOM}.sha256"
+
+      - name: Keyless-sign staged engine digest
+        env:
+          IMAGE: ${{ steps.refs.outputs.primary_repository }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: cosign sign --yes "${IMAGE}@${DIGEST}"
+
+      - name: Generate engine build provenance
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-name: ${{ steps.refs.outputs.primary_repository }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      - name: Attest engine SPDX SBOM
+        uses: actions/attest-sbom@bd218ad0dbcb3e146bd073d1d9c6d78e08aa8a0b # v2.4.0
+        with:
+          subject-name: ${{ steps.refs.outputs.primary_repository }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          sbom-path: build/scanner-publish/${{ matrix.variant }}.spdx.json
+          push-to-registry: true
+
+      - name: Verify engine signature and GitHub attestations
+        id: primary-evidence
+        env:
+          IMAGE: ${{ steps.refs.outputs.primary_repository }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+          CERTIFICATE_IDENTITY: ${{ github.server_url }}/${{ github.repository }}/.github/workflows/scanners-image.yml@${{ github.ref }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cosign verify --output json \
+            --certificate-identity "$CERTIFICATE_IDENTITY" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            "${IMAGE}@${DIGEST}" >build/scanner-publish/primary.signature-verification.json
+          gh attestation verify "oci://${IMAGE}@${DIGEST}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --source-digest "$GITHUB_SHA" \
+            --format json >build/scanner-publish/primary.provenance-verification.json
+          gh attestation verify "oci://${IMAGE}@${DIGEST}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --source-digest "$GITHUB_SHA" \
+            --predicate-type https://spdx.dev/Document/v2.3 \
+            --format json >build/scanner-publish/primary.sbom-verification.json
+          oras discover --format json "${IMAGE}@${DIGEST}" \
+            | jq -S --arg digest "$DIGEST" '
+                if (.referrers | type) != "array" or (.referrers | length) < 3 or
+                   any(.referrers[]; (.digest | test("^sha256:[a-f0-9]{64}$") | not))
+                then error("engine supply-chain referrer set is incomplete")
+                else {subjectDigest: $digest, referrers: (.referrers | sort_by(.digest))}
+                end
+              ' >build/scanner-publish/primary.referrers.json
+          for evidence in signature-verification provenance-verification sbom-verification referrers; do
+            value="sha256:$(sha256sum "build/scanner-publish/primary.${evidence}.json" | awk '{print $1}')"
+            echo "${evidence//-/_}_digest=$value" >>"$GITHUB_OUTPUT"
+          done
+
+      - name: Create or verify immutable primary engine tag
+        env:
+          SOURCE: ${{ steps.refs.outputs.primary_repository }}@${{ steps.build.outputs.digest }}
+          TARGET: ${{ steps.refs.outputs.primary_repository }}
+          IMMUTABLE_ID: ${{ needs.prepare.outputs.immutable_id }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+          PLATFORMS: ${{ matrix.platforms }}
+          RELEASE_ID: ${{ needs.prepare.outputs.immutable_id }}
+          LOCK_DIGEST: ${{ needs.prepare.outputs.lock_digest }}
+          DEFINITION_DIGEST: ${{ needs.prepare.outputs.definition_digest }}
+          SOURCE_URL: ${{ github.server_url }}/${{ github.repository }}
+          REVISION: ${{ github.sha }}
+          VARIANT: ${{ matrix.variant }}
+        run: scanners/ci/promote-image.sh "$SOURCE" "$TARGET" "$IMMUTABLE_ID" "$DIGEST" "$PLATFORMS" ""
+
+      - name: Mirror immutable engine and sign its digest
+        id: mirror
+        if: steps.mirror-config.outputs.enabled == 'true'
+        continue-on-error: ${{ needs.prepare.outputs.mirror_mode == 'auto' }}
+        env:
+          SOURCE: ${{ steps.refs.outputs.primary_repository }}@${{ steps.build.outputs.digest }}
+          TARGET: ${{ steps.refs.outputs.mirror_repository }}
+          IMMUTABLE_ID: ${{ needs.prepare.outputs.immutable_id }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+          PLATFORMS: ${{ matrix.platforms }}
+          CERTIFICATE_IDENTITY: ${{ github.server_url }}/${{ github.repository }}/.github/workflows/scanners-image.yml@${{ github.ref }}
+        run: |
+          scanners/ci/promote-image.sh "$SOURCE" "$TARGET" "$IMMUTABLE_ID" "$DIGEST" "$PLATFORMS" ""
+          cosign sign --yes "${TARGET}@${DIGEST}"
+          cosign verify \
+            --certificate-identity "$CERTIFICATE_IDENTITY" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            "${TARGET}@${DIGEST}" >/dev/null
+
+      - name: Generate mirror engine build provenance
+        if: steps.mirror-config.outputs.enabled == 'true' && steps.mirror.outcome == 'success'
+        continue-on-error: ${{ needs.prepare.outputs.mirror_mode == 'auto' }}
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-name: ${{ steps.refs.outputs.mirror_repository }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      - name: Attest mirror engine SPDX SBOM
+        if: steps.mirror-config.outputs.enabled == 'true' && steps.mirror.outcome == 'success'
+        continue-on-error: ${{ needs.prepare.outputs.mirror_mode == 'auto' }}
+        uses: actions/attest-sbom@bd218ad0dbcb3e146bd073d1d9c6d78e08aa8a0b # v2.4.0
+        with:
+          subject-name: ${{ steps.refs.outputs.mirror_repository }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          sbom-path: build/scanner-publish/${{ matrix.variant }}.spdx.json
+          push-to-registry: true
+
+      - name: Verify mirror engine, signature, provenance, and SBOM
+        id: mirror-evidence
+        if: steps.mirror-config.outputs.enabled == 'true' && steps.mirror.outcome == 'success'
+        continue-on-error: ${{ needs.prepare.outputs.mirror_mode == 'auto' }}
+        env:
+          IMAGE: ${{ steps.refs.outputs.mirror_repository }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+          PLATFORMS: ${{ matrix.platforms }}
+          RELEASE_ID: ${{ needs.prepare.outputs.immutable_id }}
+          LOCK_DIGEST: ${{ needs.prepare.outputs.lock_digest }}
+          DEFINITION_DIGEST: ${{ needs.prepare.outputs.definition_digest }}
+          SOURCE_URL: ${{ github.server_url }}/${{ github.repository }}
+          REVISION: ${{ github.sha }}
+          VARIANT: ${{ matrix.variant }}
+          CERTIFICATE_IDENTITY: ${{ github.server_url }}/${{ github.repository }}/.github/workflows/scanners-image.yml@${{ github.ref }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          scanners/ci/verify-image.sh "${IMAGE}@${DIGEST}" "$DIGEST" "$PLATFORMS" \
+            "$RELEASE_ID" "$LOCK_DIGEST" "$DEFINITION_DIGEST" \
+            "$SOURCE_URL" "$REVISION" "$RELEASE_ID" "$VARIANT" "fixer"
+          cosign verify \
+            --certificate-identity "$CERTIFICATE_IDENTITY" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            "${IMAGE}@${DIGEST}" >/dev/null
+          gh attestation verify "oci://${IMAGE}@${DIGEST}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --source-digest "$GITHUB_SHA" >/dev/null
+          gh attestation verify "oci://${IMAGE}@${DIGEST}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --source-digest "$GITHUB_SHA" \
+            --predicate-type https://spdx.dev/Document/v2.3 >/dev/null
+          oras discover --format json "${IMAGE}@${DIGEST}" \
+            | jq -S --arg digest "$DIGEST" '
+                if (.referrers | type) != "array" or (.referrers | length) < 3 or
+                   any(.referrers[]; (.digest | test("^sha256:[a-f0-9]{64}$") | not))
+                then error("mirror engine supply-chain referrer set is incomplete")
+                else {subjectDigest: $digest, referrers: (.referrers | sort_by(.digest))}
+                end
+              ' >build/scanner-publish/mirror.referrers.json
+          echo "referrers_digest=sha256:$(sha256sum build/scanner-publish/mirror.referrers.json | awk '{print $1}')" >>"$GITHUB_OUTPUT"
+
+      - name: Write immutable engine metadata
+        env:
+          VARIANT: ${{ matrix.variant }}
+          IMAGE_NAME: ${{ matrix.image }}
+          PLATFORMS: ${{ matrix.platforms }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+          BASE_REFERENCE: ${{ steps.base.outputs.reference }}
+          PRIMARY_REPOSITORY: ${{ steps.refs.outputs.primary_repository }}
+          MIRROR_REPOSITORY: ${{ steps.refs.outputs.mirror_repository }}
+          MIRROR_ENABLED: ${{ steps.mirror-config.outputs.enabled }}
+          MIRROR_EVIDENCE_OUTCOME: ${{ steps.mirror-evidence.outcome }}
+          SBOM: build/scanner-publish/${{ matrix.variant }}.spdx.json
+          RELEASE_ID: ${{ needs.prepare.outputs.immutable_id }}
+          LOCK_DIGEST: ${{ needs.prepare.outputs.lock_digest }}
+          DEFINITION_DIGEST: ${{ needs.prepare.outputs.definition_digest }}
+          APPROVAL_RECEIPT_DIGEST: ${{ needs.release-approval.outputs.receipt_digest }}
+          SIGNATURE_EVIDENCE_DIGEST: ${{ steps.primary-evidence.outputs.signature_verification_digest }}
+          PROVENANCE_EVIDENCE_DIGEST: ${{ steps.primary-evidence.outputs.provenance_verification_digest }}
+          SBOM_EVIDENCE_DIGEST: ${{ steps.primary-evidence.outputs.sbom_verification_digest }}
+          PRIMARY_REFERRERS_DIGEST: ${{ steps.primary-evidence.outputs.referrers_digest }}
+          MIRROR_REFERRERS_DIGEST: ${{ steps.mirror-evidence.outputs.referrers_digest }}
+        run: |
+          mirror=null
+          if [[ "$MIRROR_ENABLED" == true && "$MIRROR_EVIDENCE_OUTCOME" == success ]]; then
+            mirror="$(jq -n --arg repository "$MIRROR_REPOSITORY" --arg referrers "$MIRROR_REFERRERS_DIGEST" '{
+              repository: $repository,
+              verified: true,
+              referrersSha256: $referrers,
+              signatureVerified: true,
+              provenanceVerified: true,
+              sbomVerified: true
+            }')"
+          fi
+          sbom_sha="sha256:$(sha256sum "$SBOM" | awk '{print $1}')"
+          jq -n \
+            --arg variant "$VARIANT" \
+            --arg image "$IMAGE_NAME" \
+            --arg digest "$DIGEST" \
+            --arg platforms "$PLATFORMS" \
+            --arg repository "$PRIMARY_REPOSITORY" \
+            --arg base_reference "$BASE_REFERENCE" \
+            --arg sbom "$sbom_sha" \
+            --arg release_id "$RELEASE_ID" \
+            --arg lock_digest "$LOCK_DIGEST" \
+            --arg definition_digest "$DEFINITION_DIGEST" \
+            --arg approval_receipt "$APPROVAL_RECEIPT_DIGEST" \
+            --arg signature_evidence "$SIGNATURE_EVIDENCE_DIGEST" \
+            --arg provenance_evidence "$PROVENANCE_EVIDENCE_DIGEST" \
+            --arg sbom_evidence "$SBOM_EVIDENCE_DIGEST" \
+            --arg primary_referrers "$PRIMARY_REFERRERS_DIGEST" \
+            --argjson mirror "$mirror" \
+            '{
+              variant: $variant,
+              imageKind: "fixer",
+              image: $image,
+              releaseId: $release_id,
+              lockDigest: $lock_digest,
+              definitionDigest: $definition_digest,
+              approvalReceiptDigest: (if $approval_receipt == "" then null else $approval_receipt end),
+              digest: $digest,
+              platforms: ($platforms | split(",")),
+              baseReference: $base_reference,
+              primary: {repository: $repository, verified: true},
+              mirror: $mirror,
+              sbom_sha256: $sbom,
+              evidence: {
+                signatureVerificationSha256: $signature_evidence,
+                provenanceVerificationSha256: $provenance_evidence,
+                sbomVerificationSha256: $sbom_evidence,
+                referrersSha256: $primary_referrers
+              },
+              signatureVerified: true,
+              provenanceVerified: true,
+              sbomVerified: true
+            }' >"build/scanner-publish/${VARIANT}.image.json"
+
+      - name: Upload immutable engine publication metadata
+        if: always() && hashFiles('build/scanner-publish/*.image.json') != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: scanner-publish-${{ matrix.variant }}
+          path: build/scanner-publish/
+          if-no-files-found: error
+          retention-days: 365
+
+  published-platform-quality:
+    name: Published artifact quality (${{ matrix.variant }}, ${{ matrix.platform }})
+    needs: [prepare, publish, publish-fixer-engines]
+    if: >-
+      always() &&
+      needs.publish.result == 'success' &&
+      needs.publish-fixer-engines.result == 'success' &&
+      needs.prepare.outputs.operation != 'release' &&
+      needs.prepare.outputs.publish == 'true' &&
+      github.event_name != 'pull_request'
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {variant: default, image_kind: scanner, platform: linux/amd64, arch: amd64, auth_mode: none}
+          - {variant: default, image_kind: scanner, platform: linux/arm64, arch: arm64, auth_mode: none}
+          - {variant: jvm, image_kind: scanner, platform: linux/amd64, arch: amd64, auth_mode: none}
+          - {variant: jvm, image_kind: scanner, platform: linux/arm64, arch: arm64, auth_mode: none}
+          - {variant: rust, image_kind: scanner, platform: linux/amd64, arch: amd64, auth_mode: none}
+          - {variant: rust, image_kind: scanner, platform: linux/arm64, arch: arm64, auth_mode: none}
+          - {variant: codeql, image_kind: scanner, platform: linux/amd64, arch: amd64, auth_mode: none}
+          - {variant: fixer-base, image_kind: fixer, platform: linux/amd64, arch: amd64, auth_mode: none}
+          - {variant: fixer-base, image_kind: fixer, platform: linux/arm64, arch: arm64, auth_mode: none}
+          - {variant: fixer-api, image_kind: fixer, platform: linux/amd64, arch: amd64, auth_mode: api-key}
+          - {variant: fixer-api, image_kind: fixer, platform: linux/arm64, arch: arm64, auth_mode: api-key}
+          - {variant: fixer-claude, image_kind: fixer, platform: linux/amd64, arch: amd64, auth_mode: interactive-session}
+          - {variant: fixer-claude, image_kind: fixer, platform: linux/arm64, arch: arm64, auth_mode: interactive-session}
+          - {variant: fixer-codex, image_kind: fixer, platform: linux/amd64, arch: amd64, auth_mode: interactive-session}
+          - {variant: fixer-codex, image_kind: fixer, platform: linux/arm64, arch: arm64, auth_mode: interactive-session}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: scanner-publish-${{ matrix.variant }}
+          path: build/published-metadata
+
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+        with:
+          driver: docker
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ${{ env.PRIMARY_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve exact published child manifest
+        id: child
+        env:
+          VARIANT: ${{ matrix.variant }}
+          IMAGE_KIND: ${{ matrix.image_kind }}
+          PLATFORM: ${{ matrix.platform }}
+          ARCH: ${{ matrix.arch }}
+          RELEASE_ID: ${{ needs.prepare.outputs.immutable_id }}
+          LOCK_DIGEST: ${{ needs.prepare.outputs.lock_digest }}
+          DEFINITION_DIGEST: ${{ needs.prepare.outputs.definition_digest }}
+        run: |
+          metadata="build/published-metadata/${VARIANT}.image.json"
+          jq -e \
+            --arg variant "$VARIANT" \
+            --arg kind "$IMAGE_KIND" \
+            --arg release "$RELEASE_ID" \
+            --arg lock "$LOCK_DIGEST" \
+            --arg definition "$DEFINITION_DIGEST" \
+            '.variant == $variant and .imageKind == $kind and
+             .releaseId == $release and .lockDigest == $lock and
+             .definitionDigest == $definition and .primary.verified == true' \
+            "$metadata" >/dev/null
+          repository="$(jq -er .primary.repository "$metadata")"
+          index_digest="$(jq -er '.digest | select(test("^sha256:[a-f0-9]{64}$"))' "$metadata")"
+          index_ref="${repository}@${index_digest}"
+          docker buildx imagetools inspect --raw "$index_ref" \
+            >build/published-metadata/index.json
+          child_digest="$(jq -er \
+            --arg arch "$ARCH" \
+            '[.manifests[] | select(.platform.os == "linux" and
+              .platform.architecture == $arch) | .digest] |
+             if length == 1 then .[0] else error("published platform child is absent or duplicated") end |
+             select(test("^sha256:[a-f0-9]{64}$"))' \
+            build/published-metadata/index.json)"
+          {
+            echo "index_ref=$index_ref"
+            echo "index_digest=$index_digest"
+            echo "repository=$repository"
+            echo "child_digest=$child_digest"
+            echo "child_ref=${repository}@${child_digest}"
+          } >>"$GITHUB_OUTPUT"
+
+      - name: Strict smoke against exact published child
+        env:
+          VARIANT: ${{ matrix.variant }}
+          IMAGE_KIND: ${{ matrix.image_kind }}
+          PLATFORM: ${{ matrix.platform }}
+          AUTH_MODE: ${{ matrix.auth_mode }}
+          CHILD_REF: ${{ steps.child.outputs.child_ref }}
+        run: |
+          mkdir -p build/published-quality
+          docker pull --platform "$PLATFORM" "$CHILD_REF" >/dev/null
+          test "$(docker image inspect "$CHILD_REF" --format '{{.Config.User}}')" = wolf
+          if [[ "$IMAGE_KIND" == scanner ]]; then
+            docker run --rm --platform "$PLATFORM" --network none \
+              -e WOLF_SMOKE_STRICT=1 "$CHILD_REF" \
+              /usr/local/bin/smoke-test.sh \
+              | tee build/published-quality/smoke.log
+          else
+            docker run --rm --platform "$PLATFORM" --network none \
+              --entrypoint /usr/local/bin/wolf "$CHILD_REF" version \
+              | tee build/published-quality/smoke.log
+            case "$VARIANT" in
+              fixer-claude)
+                docker run --rm --platform "$PLATFORM" --network none \
+                  --entrypoint claude "$CHILD_REF" --version \
+                  | tee -a build/published-quality/smoke.log
+                ;;
+              fixer-codex)
+                docker run --rm --platform "$PLATFORM" --network none \
+                  --entrypoint codex "$CHILD_REF" --version \
+                  | tee -a build/published-quality/smoke.log
+                ;;
+            esac
+            test "$(docker image inspect "$CHILD_REF" \
+              --format '{{index .Config.Labels "dev.wolf.fixer.auth-mode"}}')" = "$AUTH_MODE"
+          fi
+
+      - name: Verify locked vulnerability database identity
+        env:
+          EVIDENCE: build/published-quality/trivy-db.json
+          VARIANT: ${{ matrix.variant }}
+        run: |
+          scanners/ci/validate-trivy-exceptions.py .trivyignore \
+            --image "$VARIANT" \
+            --output build/published-quality/image.trivyignore
+          main_ref="$(scanners/ci/verify-trivy-db.sh scanners/quality/trivy-db.lock.json "$EVIDENCE")"
+          java_ref="$(scanners/ci/verify-trivy-db.sh scanners/quality/trivy-java-db.lock.json build/published-quality/trivy-java-db.json)"
+          echo "TRIVY_DB_REPOSITORY=$main_ref" >>"$GITHUB_ENV"
+          echo "TRIVY_JAVA_DB_REPOSITORY=$java_ref" >>"$GITHUB_ENV"
+
+      - name: Scan exact published child vulnerability, secret, and license policy
+        uses: aquasecurity/trivy-action@dc5a429b52fcf669ce959baa2c2dd26090d2a6c4 # 0.32.0
+        with:
+          image-ref: ${{ steps.child.outputs.child_ref }}
+          scanners: vuln,secret,license
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true
+          format: json
+          output: build/published-quality/security.json
+          trivyignores: build/published-quality/image.trivyignore
+          ignored-licenses: ${{ env.TRIVY_IGNORED_LICENSES }}
+          version: ${{ env.TRIVY_VERSION }}
+
+      - name: Generate exact published child SPDX SBOM
+        uses: aquasecurity/trivy-action@dc5a429b52fcf669ce959baa2c2dd26090d2a6c4 # 0.32.0
+        with:
+          image-ref: ${{ steps.child.outputs.child_ref }}
+          scanners: vuln
+          exit-code: "0"
+          format: spdx-json
+          output: build/published-quality/image.spdx.json
+          version: ${{ env.TRIVY_VERSION }}
+
+      - name: Create content-addressed platform quality receipt
+        env:
+          VARIANT: ${{ matrix.variant }}
+          IMAGE_KIND: ${{ matrix.image_kind }}
+          PLATFORM: ${{ matrix.platform }}
+          RELEASE_ID: ${{ needs.prepare.outputs.immutable_id }}
+          LOCK_DIGEST: ${{ needs.prepare.outputs.lock_digest }}
+          DEFINITION_DIGEST: ${{ needs.prepare.outputs.definition_digest }}
+          INDEX_DIGEST: ${{ steps.child.outputs.index_digest }}
+          CHILD_DIGEST: ${{ steps.child.outputs.child_digest }}
+        run: |
+          jq -e '
+            .spdxVersion == "SPDX-2.3"
+            and (.packages | type == "array" and length > 0)
+            and (.relationships | type == "array" and length > 0)
+          ' build/published-quality/image.spdx.json >/dev/null
+          jq -nS \
+            --arg releaseId "$RELEASE_ID" \
+            --arg variant "$VARIANT" \
+            --arg imageKind "$IMAGE_KIND" \
+            --arg platform "$PLATFORM" \
+            --arg lockDigest "$LOCK_DIGEST" \
+            --arg definitionDigest "$DEFINITION_DIGEST" \
+            --arg indexDigest "$INDEX_DIGEST" \
+            --arg childDigest "$CHILD_DIGEST" \
+            --arg smokeSha256 "sha256:$(sha256sum build/published-quality/smoke.log | awk '{print $1}')" \
+            --arg securitySha256 "sha256:$(sha256sum build/published-quality/security.json | awk '{print $1}')" \
+            --arg sbomSha256 "sha256:$(sha256sum build/published-quality/image.spdx.json | awk '{print $1}')" \
+            --arg trivyDbEvidenceSha256 "sha256:$(sha256sum build/published-quality/trivy-db.json | awk '{print $1}')" \
+            --arg trivyJavaDbEvidenceSha256 "sha256:$(sha256sum build/published-quality/trivy-java-db.json | awk '{print $1}')" \
+            '{
+              schemaVersion: "wolf.scanners.published-platform-quality/v1",
+              releaseId: $releaseId,
+              variant: $variant,
+              imageKind: $imageKind,
+              platform: $platform,
+              lockDigest: $lockDigest,
+              definitionDigest: $definitionDigest,
+              indexDigest: $indexDigest,
+              childDigest: $childDigest,
+              evidence: {
+                smokeSha256: $smokeSha256,
+                securitySha256: $securitySha256,
+                sbomSha256: $sbomSha256,
+                trivyDbEvidenceSha256: $trivyDbEvidenceSha256,
+                trivyJavaDbEvidenceSha256: $trivyJavaDbEvidenceSha256
+              },
+              passed: true
+            }' >build/published-quality/receipt.json
+          sha256sum build/published-quality/receipt.json \
+            >build/published-quality/receipt.sha256
+
+      - name: Upload exact published platform evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: scanner-published-quality-${{ matrix.variant }}-${{ matrix.arch }}
+          path: build/published-quality/
+          if-no-files-found: error
+          retention-days: 365
+
+  integration-quality:
+    name: Exact candidate Compose and Kind qualification
+    needs: [prepare, publish, publish-fixer-engines, published-platform-quality]
+    if: >-
+      always() &&
+      needs.publish.result == 'success' &&
+      needs.publish-fixer-engines.result == 'success' &&
+      needs.published-platform-quality.result == 'success' &&
+      needs.prepare.outputs.operation != 'release' &&
+      needs.prepare.outputs.publish == 'true' &&
+      github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: read
+    env:
+      DOCKER_CONFIG: /tmp/wolf-release-docker-config-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: scanner-publish-default
+          path: build/candidate-metadata
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: scanner-published-quality-*
+          path: build/platform-quality
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ${{ env.PRIMARY_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build trusted integration qualification adapter
+        env:
+          RELEASE_ID: ${{ needs.prepare.outputs.immutable_id }}
+        run: |
+          mkdir -p build/integration-quality
+          docker build \
+            --target scanner-release-integration-adapter \
+            --build-arg "VERSION=$RELEASE_ID" \
+            --build-arg "COMMIT=$GITHUB_SHA" \
+            --tag wolf-release-integration:qualification .
+          candidate="$(jq -er '.primary.repository + "@" + .digest' \
+            build/candidate-metadata/default.image.json)"
+          docker pull docker.io/library/alpine:3.23.3 >/dev/null
+          old_ref="$(docker image inspect docker.io/library/alpine:3.23.3 \
+            --format '{{index .RepoDigests 0}}')"
+          old="docker.io/library/alpine@${old_ref##*@}"
+          [[ "$candidate" =~ ^[^[:space:]@]+@sha256:[a-f0-9]{64}$ ]]
+          [[ "$old" =~ ^[^[:space:]@]+@sha256:[a-f0-9]{64}$ ]]
+          [[ "$candidate" != "$old" ]]
+          {
+            echo "CANDIDATE_IMAGE=$candidate"
+            echo "STABLE_FIXTURE_IMAGE=$old"
+            echo "DOCKER_SOCKET_GID=$(stat -c '%g' /var/run/docker.sock)"
+          } >>"$GITHUB_ENV"
+
+      - name: Run exact-digest Compose and Kind scanner and rollout gates
+        env:
+          RELEASE_ID: ${{ needs.prepare.outputs.immutable_id }}
+        run: |
+          run_gate() {
+            script="$1"
+            shift
+            docker run --rm --network host \
+              --group-add "$DOCKER_SOCKET_GID" \
+              -v /var/run/docker.sock:/var/run/docker.sock \
+              -v "$DOCKER_CONFIG:/run/wolf/docker-config:ro" \
+              -e DOCKER_CONFIG=/run/wolf/docker-config \
+              "$@" \
+              --entrypoint "$script" \
+              wolf-release-integration:qualification
+          }
+          run_gate /usr/local/libexec/wolf/release-qualification/scanner-quality-compose.sh \
+            -e WOLF_RUN_SCANNER_COMPOSE_E2E=1 \
+            -e "WOLF_SCANNER_E2E_IMAGE=$CANDIDATE_IMAGE" \
+            >build/integration-quality/compose-scanner.log
+          run_gate /usr/local/libexec/wolf/release-qualification/scanner-rollout-compose.sh \
+            -e WOLF_RUN_ROLLOUT_COMPOSE_E2E=1 \
+            -e "WOLF_ROLLOUT_COMPOSE_E2E_NEW_TAG=$CANDIDATE_IMAGE" \
+            -e "WOLF_ROLLOUT_COMPOSE_E2E_OLD_TAG=$STABLE_FIXTURE_IMAGE" \
+            >build/integration-quality/compose-rollout.log
+          run_gate /usr/local/libexec/wolf/release-qualification/scanner-quality-kind.sh \
+            -e WOLF_RUN_SCANNER_KIND_E2E=1 \
+            -e "WOLF_SCANNER_E2E_IMAGE=$CANDIDATE_IMAGE" \
+            -e WOLF_KIND_API_ADDRESS=127.0.0.1 \
+            -e WOLF_KIND_QUALITY_API_PORT=56443 \
+            >build/integration-quality/kind-scanner.log
+          run_gate /usr/local/libexec/wolf/release-qualification/scanner-rollout-kind.sh \
+            -e WOLF_RUN_ROLLOUT_KIND_E2E=1 \
+            -e "WOLF_ROLLOUT_KIND_E2E_IMAGE=$CANDIDATE_IMAGE" \
+            -e "WOLF_ROLLOUT_KIND_E2E_OLD_IMAGE=$STABLE_FIXTURE_IMAGE" \
+            -e WOLF_KIND_API_ADDRESS=127.0.0.1 \
+            -e WOLF_KIND_ROLLOUT_API_PORT=57443 \
+            >build/integration-quality/kind-rollout.log
+
+      - name: Create complete candidate qualification receipt
+        env:
+          RELEASE_ID: ${{ needs.prepare.outputs.immutable_id }}
+          LOCK_DIGEST: ${{ needs.prepare.outputs.lock_digest }}
+          DEFINITION_DIGEST: ${{ needs.prepare.outputs.definition_digest }}
+        run: |
+          mapfile -d '' receipts < <(find build/platform-quality -name receipt.json -print0 | sort -z)
+          [[ "${#receipts[@]}" -eq 15 ]]
+          jq -sS 'sort_by(.variant, .platform)' "${receipts[@]}" \
+            >build/integration-quality/platform-receipts.json
+          jq -e \
+            --arg release "$RELEASE_ID" \
+            --arg lock "$LOCK_DIGEST" \
+            --arg definition "$DEFINITION_DIGEST" '
+              length == 15 and
+              all(.[]; .releaseId == $release and .lockDigest == $lock and
+                .definitionDigest == $definition and .passed == true) and
+              ([.[] | (.variant + ":" + .platform)] | unique | length) == 15
+            ' build/integration-quality/platform-receipts.json >/dev/null
+          jq -nS \
+            --arg releaseId "$RELEASE_ID" \
+            --arg lockDigest "$LOCK_DIGEST" \
+            --arg definitionDigest "$DEFINITION_DIGEST" \
+            --arg candidateImage "$CANDIDATE_IMAGE" \
+            --arg platformReceiptsSha256 "sha256:$(sha256sum build/integration-quality/platform-receipts.json | awk '{print $1}')" \
+            --arg composeScannerSha256 "sha256:$(sha256sum build/integration-quality/compose-scanner.log | awk '{print $1}')" \
+            --arg composeRolloutSha256 "sha256:$(sha256sum build/integration-quality/compose-rollout.log | awk '{print $1}')" \
+            --arg kindScannerSha256 "sha256:$(sha256sum build/integration-quality/kind-scanner.log | awk '{print $1}')" \
+            --arg kindRolloutSha256 "sha256:$(sha256sum build/integration-quality/kind-rollout.log | awk '{print $1}')" \
+            '{
+              schemaVersion: "wolf.scanners.candidate-qualification/v1",
+              releaseId: $releaseId,
+              lockDigest: $lockDigest,
+              definitionDigest: $definitionDigest,
+              candidateImage: $candidateImage,
+              platformReceiptCount: 15,
+              evidence: {
+                platformReceiptsSha256: $platformReceiptsSha256,
+                composeScannerSha256: $composeScannerSha256,
+                composeRolloutSha256: $composeRolloutSha256,
+                kindScannerSha256: $kindScannerSha256,
+                kindRolloutSha256: $kindRolloutSha256
+              },
+              passed: true
+            }' >build/integration-quality/candidate-qualification.json
+          sha256sum build/integration-quality/candidate-qualification.json \
+            >build/integration-quality/candidate-qualification.sha256
+
+      - name: Upload content-addressed candidate qualification
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: scanner-candidate-qualification-${{ needs.prepare.outputs.immutable_id }}
+          path: build/integration-quality/
+          if-no-files-found: error
+          retention-days: 365
+
+  release-manifest:
+    name: Commit aggregate scanner and fixer release
+    needs: [prepare, publish, publish-fixer-engines, integration-quality, release-approval]
+    if: >-
+      always() &&
+      needs.publish.result == 'success' &&
+      needs.publish-fixer-engines.result == 'success' &&
+      needs.integration-quality.result == 'success' &&
+      needs.prepare.outputs.operation != 'release' &&
+      (needs.prepare.outputs.operation != 'release' ||
+       (needs.release-approval.result == 'success' &&
+        needs.release-approval.outputs.receipt_digest != '')) &&
+      needs.prepare.outputs.publish == 'true' &&
+      github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: scanner-publish-*
+          path: build/release-evidence
+          merge-multiple: true
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: scanner-candidate-qualification-${{ needs.prepare.outputs.immutable_id }}
+          path: build/candidate-qualification
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        if: needs.prepare.outputs.operation == 'release'
+        with:
+          name: scanner-release-approval-${{ needs.prepare.outputs.immutable_id }}
+          path: build/release-approval
+
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ${{ env.PRIMARY_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve mirror availability
+        id: mirror-config
+        env:
+          MODE: ${{ needs.prepare.outputs.mirror_mode }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          configured=false
+          if [[ -n "$DOCKERHUB_USERNAME" || -n "$DOCKERHUB_TOKEN" ]]; then
+            [[ -n "$DOCKERHUB_USERNAME" && -n "$DOCKERHUB_TOKEN" ]] || {
+              echo "Docker Hub credentials are only partially configured" >&2
+              exit 1
+            }
+            configured=true
+          fi
+          if [[ "$MODE" == required && "$configured" != true ]]; then
+            echo "Docker Hub mirror is required but credentials are unavailable" >&2
+            exit 1
+          fi
+          enabled=false
+          [[ "$MODE" == disabled || "$configured" != true ]] || enabled=true
+          echo "enabled=$enabled" >>"$GITHUB_OUTPUT"
+
+      - name: Log in to Docker Hub mirror
+        if: steps.mirror-config.outputs.enabled == 'true'
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ${{ env.MIRROR_REGISTRY }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - uses: oras-project/setup-oras@22ce207df3b08e061f537244349aac6ae1d214f6 # v1.2.4
+        with:
+          version: 1.3.0
+
+      - uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5 # v3.10.1
+
+      - name: Build canonical scanner release manifest
+        env:
+          SCANNER_RELEASE_ID: ${{ needs.prepare.outputs.immutable_id }}
+          DEFINITION_COMMIT: ${{ github.sha }}
+          DEFINITION_DIGEST: ${{ needs.prepare.outputs.definition_digest }}
+          LOCK_DIGEST: ${{ needs.prepare.outputs.lock_digest }}
+          APPROVAL_RECEIPT_SHA256: ${{ needs.release-approval.outputs.receipt_digest }}
+          OPERATION: ${{ needs.prepare.outputs.operation }}
+        run: |
+          jq -e \
+            --arg release "$SCANNER_RELEASE_ID" \
+            --arg lock "$LOCK_DIGEST" \
+            --arg definition "$DEFINITION_DIGEST" '
+              .schemaVersion == "wolf.scanners.candidate-qualification/v1" and
+              .releaseId == $release and .lockDigest == $lock and
+              .definitionDigest == $definition and
+              .platformReceiptCount == 15 and .passed == true
+            ' build/candidate-qualification/candidate-qualification.json >/dev/null
+          cp build/candidate-qualification/candidate-qualification.json \
+            build/candidate-qualification.json
+          export QUALIFICATION_RECEIPT_SHA256
+          QUALIFICATION_RECEIPT_SHA256="sha256:$(sha256sum build/candidate-qualification.json | awk '{print $1}')"
+          export SOURCE_DATE
+          SOURCE_DATE="$(git show -s --format=%cI "$GITHUB_SHA")"
+          scanners/ci/aggregate-spdx.py \
+            --release-id "$SCANNER_RELEASE_ID" \
+            --created "$SOURCE_DATE" \
+            --output build/scanner-release.spdx.json \
+            build/release-evidence/*.spdx.json
+          export AGGREGATE_SBOM_SHA256
+          AGGREGATE_SBOM_SHA256="sha256:$(sha256sum build/scanner-release.spdx.json | awk '{print $1}')"
+          scanners/ci/build-release-manifest.sh \
+            build/scanner-release.json \
+            build/release-evidence/*.image.json \
+            >build/scanner-release.sha256
+
+      - name: Push, sign, and attest aggregate manifest staging artifact
+        id: aggregate
+        env:
+          RELEASE_REPOSITORY: ${{ env.PRIMARY_REGISTRY }}/${{ env.PRIMARY_NAMESPACE }}/wolf-scanner-releases
+          IMMUTABLE_ID: ${{ needs.prepare.outputs.immutable_id }}
+          LOCK_DIGEST: ${{ needs.prepare.outputs.lock_digest }}
+          DEFINITION_DIGEST: ${{ needs.prepare.outputs.definition_digest }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          staging="build-${IMMUTABLE_ID}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          (
+            cd build
+            oras push "${RELEASE_REPOSITORY}:${staging}" \
+              --artifact-type application/vnd.wolf.scanner.release.v1 \
+              --annotation "dev.wolf.release.id=${IMMUTABLE_ID}" \
+              --annotation "dev.wolf.release.lock-digest=${LOCK_DIGEST}" \
+              --annotation "dev.wolf.release.definition-digest=${DEFINITION_DIGEST}" \
+              "scanner-release.json:application/vnd.wolf.scanner.release.manifest.v1+json" \
+              "scanner-release.spdx.json:application/spdx+json" \
+              "candidate-qualification.json:application/vnd.wolf.scanner.candidate-qualification.v1+json"
+          )
+          digest="$(oras manifest fetch --descriptor "${RELEASE_REPOSITORY}:${staging}" | jq -r .digest)"
+          [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]
+          cosign sign --yes "${RELEASE_REPOSITORY}@${digest}"
+          echo "repository=$RELEASE_REPOSITORY" >>"$GITHUB_OUTPUT"
+          echo "digest=$digest" >>"$GITHUB_OUTPUT"
+
+      - name: Generate aggregate release provenance
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-name: ${{ steps.aggregate.outputs.repository }}
+          subject-digest: ${{ steps.aggregate.outputs.digest }}
+          push-to-registry: true
+
+      - name: Attest aggregate release SPDX SBOM
+        uses: actions/attest-sbom@bd218ad0dbcb3e146bd073d1d9c6d78e08aa8a0b # v2.4.0
+        with:
+          subject-name: ${{ steps.aggregate.outputs.repository }}
+          subject-digest: ${{ steps.aggregate.outputs.digest }}
+          sbom-path: build/scanner-release.spdx.json
+          push-to-registry: true
+
+      - name: Verify and create immutable release-manifest tag
+        env:
+          RELEASE_REPOSITORY: ${{ steps.aggregate.outputs.repository }}
+          DIGEST: ${{ steps.aggregate.outputs.digest }}
+          IMMUTABLE_ID: ${{ needs.prepare.outputs.immutable_id }}
+          CERTIFICATE_IDENTITY: ${{ github.server_url }}/${{ github.repository }}/.github/workflows/scanners-image.yml@${{ github.ref }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cosign verify \
+            --certificate-identity "$CERTIFICATE_IDENTITY" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            "${RELEASE_REPOSITORY}@${DIGEST}" >/dev/null
+          gh attestation verify "oci://${RELEASE_REPOSITORY}@${DIGEST}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --source-digest "$GITHUB_SHA" >/dev/null
+          gh attestation verify "oci://${RELEASE_REPOSITORY}@${DIGEST}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --source-digest "$GITHUB_SHA" \
+            --predicate-type https://spdx.dev/Document/v2.3 >/dev/null
+          oras discover --format json "${RELEASE_REPOSITORY}@${DIGEST}" \
+            | jq -S --arg digest "$DIGEST" '
+                if (.referrers | type) != "array" or (.referrers | length) < 3 or
+                   any(.referrers[]; (.digest | test("^sha256:[a-f0-9]{64}$") | not))
+                then error("aggregate supply-chain referrer set is incomplete")
+                else {subjectDigest: $digest, referrers: (.referrers | sort_by(.digest))}
+                end
+              ' >build/scanner-release.referrers.json
+          if descriptor="$(oras manifest fetch --descriptor "${RELEASE_REPOSITORY}:${IMMUTABLE_ID}" 2>/dev/null)"; then
+            existing="$(jq -r .digest <<<"$descriptor")"
+            [[ "$existing" == "$DIGEST" ]] || {
+              echo "immutable release ID already points at a different digest" >&2
+              exit 1
+            }
+          else
+            oras copy "${RELEASE_REPOSITORY}@${DIGEST}" "${RELEASE_REPOSITORY}:${IMMUTABLE_ID}"
+          fi
+          actual="$(oras manifest fetch --descriptor "${RELEASE_REPOSITORY}:${IMMUTABLE_ID}" | jq -r .digest)"
+          [[ "$actual" == "$DIGEST" ]]
+
+      - name: Mirror immutable aggregate manifest
+        id: mirror-release
+        if: steps.mirror-config.outputs.enabled == 'true'
+        continue-on-error: ${{ needs.prepare.outputs.mirror_mode == 'auto' }}
+        env:
+          RELEASE_REPOSITORY: ${{ steps.aggregate.outputs.repository }}
+          MIRROR_RELEASE_REPOSITORY: ${{ env.MIRROR_REGISTRY }}/${{ env.MIRROR_NAMESPACE }}/wolf-scanner-releases
+          DIGEST: ${{ steps.aggregate.outputs.digest }}
+          IMMUTABLE_ID: ${{ needs.prepare.outputs.immutable_id }}
+          CERTIFICATE_IDENTITY: ${{ github.server_url }}/${{ github.repository }}/.github/workflows/scanners-image.yml@${{ github.ref }}
+        run: |
+          if descriptor="$(oras manifest fetch --descriptor "${MIRROR_RELEASE_REPOSITORY}:${IMMUTABLE_ID}" 2>/dev/null)"; then
+            existing="$(jq -r .digest <<<"$descriptor")"
+            [[ "$existing" == "$DIGEST" ]] || {
+              echo "immutable mirrored release ID points at a different digest" >&2
+              exit 1
+            }
+          else
+            oras copy \
+              "${RELEASE_REPOSITORY}@${DIGEST}" \
+              "${MIRROR_RELEASE_REPOSITORY}:${IMMUTABLE_ID}"
+          fi
+          actual="$(oras manifest fetch --descriptor "${MIRROR_RELEASE_REPOSITORY}:${IMMUTABLE_ID}" | jq -r .digest)"
+          [[ "$actual" == "$DIGEST" ]]
+          cosign sign --yes "${MIRROR_RELEASE_REPOSITORY}@${DIGEST}"
+          cosign verify \
+            --certificate-identity "$CERTIFICATE_IDENTITY" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            "${MIRROR_RELEASE_REPOSITORY}@${DIGEST}" >/dev/null
+
+      - name: Generate mirror aggregate provenance
+        id: mirror-release-provenance
+        if: steps.mirror-release.outcome == 'success'
+        continue-on-error: ${{ needs.prepare.outputs.mirror_mode == 'auto' }}
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-name: ${{ env.MIRROR_REGISTRY }}/${{ env.MIRROR_NAMESPACE }}/wolf-scanner-releases
+          subject-digest: ${{ steps.aggregate.outputs.digest }}
+          push-to-registry: true
+
+      - name: Attest mirror aggregate SPDX SBOM
+        id: mirror-release-sbom
+        if: steps.mirror-release.outcome == 'success'
+        continue-on-error: ${{ needs.prepare.outputs.mirror_mode == 'auto' }}
+        uses: actions/attest-sbom@bd218ad0dbcb3e146bd073d1d9c6d78e08aa8a0b # v2.4.0
+        with:
+          subject-name: ${{ env.MIRROR_REGISTRY }}/${{ env.MIRROR_NAMESPACE }}/wolf-scanner-releases
+          subject-digest: ${{ steps.aggregate.outputs.digest }}
+          sbom-path: build/scanner-release.spdx.json
+          push-to-registry: true
+
+      - name: Verify mirror aggregate signature, provenance, and SBOM
+        id: mirror-release-evidence
+        if: >-
+          steps.mirror-release.outcome == 'success' &&
+          steps.mirror-release-provenance.outcome == 'success' &&
+          steps.mirror-release-sbom.outcome == 'success'
+        continue-on-error: ${{ needs.prepare.outputs.mirror_mode == 'auto' }}
+        env:
+          MIRROR_RELEASE_REPOSITORY: ${{ env.MIRROR_REGISTRY }}/${{ env.MIRROR_NAMESPACE }}/wolf-scanner-releases
+          DIGEST: ${{ steps.aggregate.outputs.digest }}
+          CERTIFICATE_IDENTITY: ${{ github.server_url }}/${{ github.repository }}/.github/workflows/scanners-image.yml@${{ github.ref }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cosign verify \
+            --certificate-identity "$CERTIFICATE_IDENTITY" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            "${MIRROR_RELEASE_REPOSITORY}@${DIGEST}" >/dev/null
+          gh attestation verify "oci://${MIRROR_RELEASE_REPOSITORY}@${DIGEST}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --source-digest "$GITHUB_SHA" >/dev/null
+          gh attestation verify "oci://${MIRROR_RELEASE_REPOSITORY}@${DIGEST}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --source-digest "$GITHUB_SHA" \
+            --predicate-type https://spdx.dev/Document/v2.3 >/dev/null
+
+      - name: Move image aliases after aggregate commit
+        if: needs.prepare.outputs.aliases != ''
+        env:
+          ALIASES: ${{ needs.prepare.outputs.aliases }}
+          IMMUTABLE_ID: ${{ needs.prepare.outputs.immutable_id }}
+          OPERATION: ${{ needs.prepare.outputs.operation }}
+          APPROVAL_RECEIPT_DIGEST: ${{ needs.release-approval.outputs.receipt_digest }}
+        run: |
+          if [[ ",$ALIASES," == *,stable,* ]]; then
+            [[ "$OPERATION" == release && "$APPROVAL_RECEIPT_DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]
+            jq -e --arg approval "$APPROVAL_RECEIPT_DIGEST" \
+              '.approvalReceiptDigest == $approval' build/scanner-release.json >/dev/null
+            actual_approval="sha256:$(sha256sum build/release-approval/receipt.json | awk '{print $1}')"
+            [[ "$actual_approval" == "$APPROVAL_RECEIPT_DIGEST" ]]
+          fi
+          for metadata in build/release-evidence/*.image.json; do
+            primary="$(jq -r .primary.repository "$metadata")"
+            digest="$(jq -r .digest "$metadata")"
+            platforms="$(jq -r '.platforms | join(",")' "$metadata")"
+            scanners/ci/promote-image.sh \
+              "${primary}@${digest}" "$primary" "$IMMUTABLE_ID" "$digest" "$platforms" "$ALIASES"
+            mirror="$(jq -r '.mirror.repository // empty' "$metadata")"
+            if [[ -n "$mirror" ]]; then
+              scanners/ci/promote-image.sh \
+                "${mirror}@${digest}" "$mirror" "$IMMUTABLE_ID" "$digest" "$platforms" "$ALIASES"
+            fi
+          done
+
+      - name: Move mirrored aggregate alias
+        if: >-
+          needs.prepare.outputs.aliases != '' &&
+          steps.mirror-release-evidence.outcome == 'success'
+        env:
+          MIRROR_RELEASE_REPOSITORY: ${{ env.MIRROR_REGISTRY }}/${{ env.MIRROR_NAMESPACE }}/wolf-scanner-releases
+          DIGEST: ${{ steps.aggregate.outputs.digest }}
+          ALIASES: ${{ needs.prepare.outputs.aliases }}
+        run: |
+          IFS=, read -ra values <<<"$ALIASES"
+          for alias in "${values[@]}"; do
+            [[ -n "$alias" ]] || continue
+            oras copy \
+              "${MIRROR_RELEASE_REPOSITORY}@${DIGEST}" \
+              "${MIRROR_RELEASE_REPOSITORY}:${alias}"
+            actual="$(oras manifest fetch --descriptor "${MIRROR_RELEASE_REPOSITORY}:${alias}" | jq -r .digest)"
+            [[ "$actual" == "$DIGEST" ]]
+          done
+
+      - name: Move aggregate alias last
+        if: needs.prepare.outputs.aliases != ''
+        env:
+          RELEASE_REPOSITORY: ${{ steps.aggregate.outputs.repository }}
+          DIGEST: ${{ steps.aggregate.outputs.digest }}
+          ALIASES: ${{ needs.prepare.outputs.aliases }}
+        run: |
+          IFS=, read -ra values <<<"$ALIASES"
+          for alias in "${values[@]}"; do
+            [[ -n "$alias" ]] || continue
+            oras copy "${RELEASE_REPOSITORY}@${DIGEST}" "${RELEASE_REPOSITORY}:${alias}"
+            actual="$(oras manifest fetch --descriptor "${RELEASE_REPOSITORY}:${alias}" | jq -r .digest)"
+            [[ "$actual" == "$DIGEST" ]]
+          done
+
+      - name: Upload signed aggregate release evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: scanner-release-${{ needs.prepare.outputs.immutable_id }}
+          path: |
+            build/scanner-release.json
+            build/scanner-release.spdx.json
+            build/scanner-release.sha256
+            build/scanner-release.referrers.json
+            build/candidate-qualification.json
+            build/release-evidence/*.image.json
+            build/release-approval/receipt.json
+          if-no-files-found: error
+          retention-days: 365
+
+  promote-release:
+    name: Promote verified candidate without rebuilding
+    needs: [prepare, resolve-release-candidate, release-approval]
+    if: >-
+      always() &&
+      needs.prepare.outputs.operation == 'release' &&
+      needs.resolve-release-candidate.result == 'success' &&
+      needs.release-approval.result == 'success' &&
+      needs.release-approval.outputs.receipt_digest != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: scanner-candidate-verification-${{ needs.prepare.outputs.candidate_id }}
+          path: build/approved-candidate
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: scanner-release-approval-${{ needs.prepare.outputs.immutable_id }}
+          path: build/release-approval
+
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ${{ env.PRIMARY_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log in to required Docker Hub mirror
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ${{ env.MIRROR_REGISTRY }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - uses: oras-project/setup-oras@22ce207df3b08e061f537244349aac6ae1d214f6 # v1.2.4
+        with:
+          version: 1.3.0
+
+      - uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5 # v3.10.1
+
+      - name: Re-verify candidate closure after approval
+        id: reverify
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CANDIDATE_ID: ${{ needs.prepare.outputs.candidate_id }}
+          RELEASE_REPOSITORY: ${{ env.PRIMARY_REGISTRY }}/${{ env.PRIMARY_NAMESPACE }}/wolf-scanner-releases
+          MIRROR_RELEASE_REPOSITORY: ${{ env.MIRROR_REGISTRY }}/${{ env.MIRROR_NAMESPACE }}/wolf-scanner-releases
+        run: |
+          scanners/ci/verify-release-closure.sh \
+            "$RELEASE_REPOSITORY" "$MIRROR_RELEASE_REPOSITORY" \
+            "$CANDIDATE_ID" build/reverified-candidate true
+
+      - name: Validate approved evidence and create promoted manifest
+        env:
+          RELEASE_ID: ${{ needs.prepare.outputs.immutable_id }}
+          CANDIDATE_ID: ${{ needs.prepare.outputs.candidate_id }}
+          CANDIDATE_MANIFEST_DIGEST: ${{ needs.resolve-release-candidate.outputs.candidate_manifest_digest }}
+          VERIFICATION_EVIDENCE_DIGEST: ${{ needs.resolve-release-candidate.outputs.verification_evidence_digest }}
+          APPROVAL_RECEIPT_DIGEST: ${{ needs.release-approval.outputs.receipt_digest }}
+          REVERIFIED_CANDIDATE_MANIFEST_DIGEST: ${{ steps.reverify.outputs.candidate_manifest_digest }}
+          REVERIFIED_VERIFICATION_EVIDENCE_DIGEST: ${{ steps.reverify.outputs.verification_evidence_digest }}
+          PROMOTION_COMMIT: ${{ github.sha }}
+        run: |
+          approved_report=build/approved-candidate/candidate-verification.json
+          approved_manifest=build/approved-candidate/payload/scanner-release.json
+          approved_evidence="sha256:$(sha256sum "$approved_report" | awk '{print $1}')"
+          approval_digest="sha256:$(sha256sum build/release-approval/receipt.json | awk '{print $1}')"
+          [[ "$approved_evidence" == "$VERIFICATION_EVIDENCE_DIGEST" ]]
+          [[ "$approval_digest" == "$APPROVAL_RECEIPT_DIGEST" ]]
+          [[ "$REVERIFIED_CANDIDATE_MANIFEST_DIGEST" == "$CANDIDATE_MANIFEST_DIGEST" ]]
+          [[ "$REVERIFIED_VERIFICATION_EVIDENCE_DIGEST" == "$VERIFICATION_EVIDENCE_DIGEST" ]]
+          jq -e --arg candidate "$CANDIDATE_ID" --arg digest "$CANDIDATE_MANIFEST_DIGEST" \
+            '.candidate.id == $candidate and .candidate.ociDigest == $digest and .closureVerified == true' \
+            build/reverified-candidate/candidate-verification.json >/dev/null
+          export SOURCE_DATE
+          SOURCE_DATE="$(git show -s --format=%cI "$GITHUB_SHA")"
+          scanners/ci/promote-release-manifest.sh \
+            "$approved_manifest" "$CANDIDATE_MANIFEST_DIGEST" \
+            "$approved_report" build/release-approval/receipt.json \
+            build/scanner-release.json >build/scanner-release.sha256
+          cp build/approved-candidate/payload/scanner-release.spdx.json \
+            build/scanner-release.spdx.json
+          cp build/approved-candidate/payload/candidate-qualification.json \
+            build/candidate-qualification.json
+          cp "$approved_report" build/candidate-verification.json
+          cp build/release-approval/receipt.json build/protected-approval.json
+
+      - name: Push and sign protected release aggregate
+        id: aggregate
+        env:
+          RELEASE_REPOSITORY: ${{ env.PRIMARY_REGISTRY }}/${{ env.PRIMARY_NAMESPACE }}/wolf-scanner-releases
+          RELEASE_ID: ${{ needs.prepare.outputs.immutable_id }}
+          CANDIDATE_ID: ${{ needs.prepare.outputs.candidate_id }}
+          LOCK_DIGEST: ${{ needs.resolve-release-candidate.outputs.lock_digest }}
+          DEFINITION_DIGEST: ${{ needs.resolve-release-candidate.outputs.definition_digest }}
+        run: |
+          staging="build-${RELEASE_ID}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          (
+            cd build
+            oras push "${RELEASE_REPOSITORY}:${staging}" \
+              --artifact-type application/vnd.wolf.scanner.release.v1 \
+              --annotation "dev.wolf.release.id=${RELEASE_ID}" \
+              --annotation "dev.wolf.release.promoted-from=${CANDIDATE_ID}" \
+              --annotation "dev.wolf.release.lock-digest=${LOCK_DIGEST}" \
+              --annotation "dev.wolf.release.definition-digest=${DEFINITION_DIGEST}" \
+              "scanner-release.json:application/vnd.wolf.scanner.release.manifest.v1+json" \
+              "scanner-release.spdx.json:application/spdx+json" \
+              "candidate-qualification.json:application/vnd.wolf.scanner.candidate-qualification.v1+json" \
+              "candidate-verification.json:application/vnd.wolf.scanner.candidate-verification.v1+json" \
+              "protected-approval.json:application/vnd.wolf.scanner.protected-approval.v2+json"
+          )
+          digest="$(oras manifest fetch --descriptor "${RELEASE_REPOSITORY}:${staging}" | jq -er '.digest | select(test("^sha256:[a-f0-9]{64}$"))')"
+          cosign sign --yes "${RELEASE_REPOSITORY}@${digest}"
+          echo "repository=$RELEASE_REPOSITORY" >>"$GITHUB_OUTPUT"
+          echo "digest=$digest" >>"$GITHUB_OUTPUT"
+
+      - name: Generate protected release provenance
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-name: ${{ steps.aggregate.outputs.repository }}
+          subject-digest: ${{ steps.aggregate.outputs.digest }}
+          push-to-registry: true
+
+      - name: Attest protected release SPDX SBOM
+        uses: actions/attest-sbom@bd218ad0dbcb3e146bd073d1d9c6d78e08aa8a0b # v2.4.0
+        with:
+          subject-name: ${{ steps.aggregate.outputs.repository }}
+          subject-digest: ${{ steps.aggregate.outputs.digest }}
+          sbom-path: build/scanner-release.spdx.json
+          push-to-registry: true
+
+      - name: Verify and create immutable protected release tag
+        env:
+          RELEASE_REPOSITORY: ${{ steps.aggregate.outputs.repository }}
+          DIGEST: ${{ steps.aggregate.outputs.digest }}
+          RELEASE_ID: ${{ needs.prepare.outputs.immutable_id }}
+          CERTIFICATE_IDENTITY: ${{ github.server_url }}/${{ github.repository }}/.github/workflows/scanners-image.yml@${{ github.ref }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cosign verify \
+            --certificate-identity "$CERTIFICATE_IDENTITY" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            "${RELEASE_REPOSITORY}@${DIGEST}" >build/release.signature.json
+          gh attestation verify "oci://${RELEASE_REPOSITORY}@${DIGEST}" \
+            --repo "$GITHUB_REPOSITORY" --source-digest "$GITHUB_SHA" \
+            >build/release.provenance.json
+          gh attestation verify "oci://${RELEASE_REPOSITORY}@${DIGEST}" \
+            --repo "$GITHUB_REPOSITORY" --source-digest "$GITHUB_SHA" \
+            --predicate-type https://spdx.dev/Document/v2.3 \
+            >build/release.sbom-verification.json
+          oras discover --format json "${RELEASE_REPOSITORY}@${DIGEST}" \
+            | jq -S --arg digest "$DIGEST" '
+                if (.referrers | type) != "array" or (.referrers | length) < 3
+                   or any(.referrers[]; (.digest | test("^sha256:[a-f0-9]{64}$") | not))
+                then error("protected release referrer set is incomplete")
+                else {subjectDigest: $digest, referrers: (.referrers | sort_by(.artifactType, .digest))}
+                end
+              ' >build/scanner-release.referrers.json
+          if descriptor="$(oras manifest fetch --descriptor "${RELEASE_REPOSITORY}:${RELEASE_ID}" 2>/dev/null)"; then
+            [[ "$(jq -r .digest <<<"$descriptor")" == "$DIGEST" ]] || {
+              echo "immutable release ID already resolves to a different digest" >&2
+              exit 1
+            }
+          else
+            oras copy "${RELEASE_REPOSITORY}@${DIGEST}" "${RELEASE_REPOSITORY}:${RELEASE_ID}"
+          fi
+
+      - name: Mirror, sign, and verify protected release aggregate
+        id: mirror
+        env:
+          RELEASE_REPOSITORY: ${{ steps.aggregate.outputs.repository }}
+          MIRROR_RELEASE_REPOSITORY: ${{ env.MIRROR_REGISTRY }}/${{ env.MIRROR_NAMESPACE }}/wolf-scanner-releases
+          DIGEST: ${{ steps.aggregate.outputs.digest }}
+          RELEASE_ID: ${{ needs.prepare.outputs.immutable_id }}
+          CERTIFICATE_IDENTITY: ${{ github.server_url }}/${{ github.repository }}/.github/workflows/scanners-image.yml@${{ github.ref }}
+        run: |
+          if descriptor="$(oras manifest fetch --descriptor "${MIRROR_RELEASE_REPOSITORY}:${RELEASE_ID}" 2>/dev/null)"; then
+            [[ "$(jq -r .digest <<<"$descriptor")" == "$DIGEST" ]]
+          else
+            oras copy "${RELEASE_REPOSITORY}@${DIGEST}" "${MIRROR_RELEASE_REPOSITORY}:${RELEASE_ID}"
+          fi
+          cosign sign --yes "${MIRROR_RELEASE_REPOSITORY}@${DIGEST}"
+          cosign verify \
+            --certificate-identity "$CERTIFICATE_IDENTITY" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            "${MIRROR_RELEASE_REPOSITORY}@${DIGEST}" >/dev/null
+
+      - name: Generate mirror protected release provenance
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-name: ${{ env.MIRROR_REGISTRY }}/${{ env.MIRROR_NAMESPACE }}/wolf-scanner-releases
+          subject-digest: ${{ steps.aggregate.outputs.digest }}
+          push-to-registry: true
+
+      - name: Attest mirror protected release SPDX SBOM
+        uses: actions/attest-sbom@bd218ad0dbcb3e146bd073d1d9c6d78e08aa8a0b # v2.4.0
+        with:
+          subject-name: ${{ env.MIRROR_REGISTRY }}/${{ env.MIRROR_NAMESPACE }}/wolf-scanner-releases
+          subject-digest: ${{ steps.aggregate.outputs.digest }}
+          sbom-path: build/scanner-release.spdx.json
+          push-to-registry: true
+
+      - name: Verify mirror aggregate attestations
+        env:
+          MIRROR_RELEASE_REPOSITORY: ${{ env.MIRROR_REGISTRY }}/${{ env.MIRROR_NAMESPACE }}/wolf-scanner-releases
+          DIGEST: ${{ steps.aggregate.outputs.digest }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh attestation verify "oci://${MIRROR_RELEASE_REPOSITORY}@${DIGEST}" \
+            --repo "$GITHUB_REPOSITORY" --source-digest "$GITHUB_SHA" >/dev/null
+          gh attestation verify "oci://${MIRROR_RELEASE_REPOSITORY}@${DIGEST}" \
+            --repo "$GITHUB_REPOSITORY" --source-digest "$GITHUB_SHA" \
+            --predicate-type https://spdx.dev/Document/v2.3 >/dev/null
+
+      - name: Replay complete protected release closure before aliases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_ID: ${{ needs.prepare.outputs.immutable_id }}
+          RELEASE_REPOSITORY: ${{ env.PRIMARY_REGISTRY }}/${{ env.PRIMARY_NAMESPACE }}/wolf-scanner-releases
+          MIRROR_RELEASE_REPOSITORY: ${{ env.MIRROR_REGISTRY }}/${{ env.MIRROR_NAMESPACE }}/wolf-scanner-releases
+        run: |
+          scanners/ci/verify-release-closure.sh \
+            "$RELEASE_REPOSITORY" "$MIRROR_RELEASE_REPOSITORY" \
+            "$RELEASE_ID" build/final-release-verification true
+
+      - name: Move mirrored image release and channel aliases
+        env:
+          RELEASE_ID: ${{ needs.prepare.outputs.immutable_id }}
+          ALIASES: ${{ needs.prepare.outputs.aliases }}
+        run: |
+          while IFS=$'\t' read -r repository digest platforms; do
+            scanners/ci/promote-image.sh \
+              "${repository}@${digest}" "$repository" "$RELEASE_ID" \
+              "$digest" "$platforms" "$ALIASES"
+          done < <(jq -r '.images[] | [
+            .mirror.repository, .digest, (.platforms | join(","))
+          ] | @tsv' build/scanner-release.json)
+
+      - name: Move primary image release and channel aliases
+        env:
+          RELEASE_ID: ${{ needs.prepare.outputs.immutable_id }}
+          ALIASES: ${{ needs.prepare.outputs.aliases }}
+        run: |
+          while IFS=$'\t' read -r repository digest platforms; do
+            scanners/ci/promote-image.sh \
+              "${repository}@${digest}" "$repository" "$RELEASE_ID" \
+              "$digest" "$platforms" "$ALIASES"
+          done < <(jq -r '.images[] | [
+            .primary.repository, .digest, (.platforms | join(","))
+          ] | @tsv' build/scanner-release.json)
+
+      - name: Move mirrored aggregate channel alias
+        env:
+          MIRROR_RELEASE_REPOSITORY: ${{ env.MIRROR_REGISTRY }}/${{ env.MIRROR_NAMESPACE }}/wolf-scanner-releases
+          DIGEST: ${{ steps.aggregate.outputs.digest }}
+          ALIASES: ${{ needs.prepare.outputs.aliases }}
+        run: |
+          IFS=, read -ra resolved_aliases <<<"$ALIASES"
+          for alias in "${resolved_aliases[@]}"; do
+            [[ -n "$alias" ]] || continue
+            oras copy "${MIRROR_RELEASE_REPOSITORY}@${DIGEST}" "${MIRROR_RELEASE_REPOSITORY}:${alias}"
+            [[ "$(oras manifest fetch --descriptor "${MIRROR_RELEASE_REPOSITORY}:${alias}" | jq -r .digest)" == "$DIGEST" ]]
+          done
+
+      - name: Move primary aggregate channel alias last
+        env:
+          RELEASE_REPOSITORY: ${{ steps.aggregate.outputs.repository }}
+          DIGEST: ${{ steps.aggregate.outputs.digest }}
+          ALIASES: ${{ needs.prepare.outputs.aliases }}
+        run: |
+          IFS=, read -ra resolved_aliases <<<"$ALIASES"
+          for alias in "${resolved_aliases[@]}"; do
+            [[ -n "$alias" ]] || continue
+            oras copy "${RELEASE_REPOSITORY}@${DIGEST}" "${RELEASE_REPOSITORY}:${alias}"
+            [[ "$(oras manifest fetch --descriptor "${RELEASE_REPOSITORY}:${alias}" | jq -r .digest)" == "$DIGEST" ]]
+          done
+
+      - name: Upload protected promotion evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: scanner-release-${{ needs.prepare.outputs.immutable_id }}
+          path: |
+            build/scanner-release.json
+            build/scanner-release.spdx.json
+            build/scanner-release.sha256
+            build/scanner-release.referrers.json
+            build/release.signature.json
+            build/release.provenance.json
+            build/release.sbom-verification.json
+            build/candidate-qualification.json
+            build/release-approval/receipt.json
+            build/approved-candidate/candidate-verification.json
+            build/reverified-candidate/candidate-verification.json
+            build/final-release-verification/
+          if-no-files-found: error
+          retention-days: 365
+
+  verify-release:
+    name: Verify existing immutable scanner release
+    needs: prepare
+    if: needs.prepare.outputs.operation == 'verify'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ${{ env.PRIMARY_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Require and log in to Docker Hub mirror
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          [[ -n "$DOCKERHUB_USERNAME" && -n "$DOCKERHUB_TOKEN" ]] || {
+            echo "release verification requires Docker Hub mirror credentials" >&2
+            exit 1
+          }
+
+      - name: Log in to Docker Hub for release verification
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ${{ env.MIRROR_REGISTRY }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - uses: oras-project/setup-oras@22ce207df3b08e061f537244349aac6ae1d214f6 # v1.2.4
+        with:
+          version: 1.3.0
+
+      - uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5 # v3.10.1
+
+      - name: Replay full release, approval, mirror, image, signature, and attestation closure
+        env:
+          RELEASE_ID: ${{ needs.prepare.outputs.immutable_id }}
+          RELEASE_REPOSITORY: ${{ env.PRIMARY_REGISTRY }}/${{ env.PRIMARY_NAMESPACE }}/wolf-scanner-releases
+          MIRROR_RELEASE_REPOSITORY: ${{ env.MIRROR_REGISTRY }}/${{ env.MIRROR_NAMESPACE }}/wolf-scanner-releases
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          scanners/ci/verify-release-closure.sh \
+            "$RELEASE_REPOSITORY" "$MIRROR_RELEASE_REPOSITORY" \
+            "$RELEASE_ID" build/release-verification true
+
+      - name: Upload replayed release verification evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: scanner-release-verification-${{ needs.prepare.outputs.immutable_id }}
+          path: build/release-verification/
+          if-no-files-found: error
+          retention-days: 365

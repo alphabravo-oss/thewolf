@@ -1,0 +1,94 @@
+# Deterministic scanner-management browser, visual, and automated a11y checks.
+name: UI browser regression
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "ui/**"
+      - "internal/api/openapi/**"
+      - "internal/api/routes/scanner*.go"
+      - "internal/api/routes/handler.go"
+      - "internal/api/scanner*.go"
+      - "internal/api/server.go"
+      - "internal/auth/**"
+      - "internal/scanner*/**"
+      - "internal/models/scanner*.go"
+      - "cmd/wolf/scanner*.go"
+      - ".github/workflows/ui-browser.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "ui/**"
+      - "internal/api/openapi/**"
+      - "internal/api/routes/scanner*.go"
+      - "internal/api/routes/handler.go"
+      - "internal/api/scanner*.go"
+      - "internal/api/server.go"
+      - "internal/auth/**"
+      - "internal/scanner*/**"
+      - "internal/models/scanner*.go"
+      - "cmd/wolf/scanner*.go"
+      - ".github/workflows/ui-browser.yml"
+
+concurrency:
+  group: ui-browser-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scanner-management:
+    name: Scanner management browser regression
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: ui
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+
+      - name: Enable pinned package manager
+        run: |
+          corepack enable
+          corepack prepare pnpm@9.15.0 --activate
+
+      - name: Install locked UI dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type-check UI
+        run: pnpm typecheck
+
+      - name: Lint UI
+        run: pnpm lint
+
+      - name: Run UI unit tests
+        run: pnpm test
+
+      - name: Build production UI
+        run: pnpm build
+
+      - name: Install browser engines and system libraries
+        run: pnpm exec playwright install --with-deps chromium firefox
+
+      - name: Type-check browser harness
+        run: pnpm test:e2e:typecheck
+
+      - name: Run browser, visual, and automated accessibility checks
+        run: pnpm test:e2e
+
+      - name: Upload browser failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: scanner-management-browser-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ui/playwright-report/
+            ui/test-results/
+          if-no-files-found: ignore
+          retention-days: 14

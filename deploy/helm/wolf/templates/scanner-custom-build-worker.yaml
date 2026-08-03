@@ -1,0 +1,77 @@
+{{- if .Values.scannerRelease.customBuild.enabled }}
+{{- if ne .Values.scannerRelease.customBuild.engineMode "node-local" }}
+{{- fail "scannerRelease.customBuild.engineMode supports only node-local; remote Docker requires a separately managed mutually authenticated TLS deployment" }}
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "wolf.fullname" . }}-scanner-custom-build
+  labels:
+    {{- include "wolf.labels" . | nindent 4 }}
+    app.kubernetes.io/component: scanner-custom-build
+spec:
+  replicas: {{ .Values.scannerRelease.customBuild.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: scanner-custom-build
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: wolf
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: scanner-custom-build
+    spec:
+      # This worker talks only to PostgreSQL and its node-local image engine;
+      # it has no Kubernetes API permissions or projected service-account token.
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: custom-build-worker
+          image: {{ default (include "wolf.image" .) .Values.scannerRelease.customBuild.image }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["scanner-custom-build-worker"]
+          env:
+            - {name: WOLF_DB_DRIVER, value: postgres}
+            - name: WOLF_DB_DSN
+              valueFrom: {secretKeyRef: {name: {{ include "wolf.fullname" . }}, key: postgres-dsn}}
+            - name: WOLF_MASTER_KEY
+              valueFrom: {secretKeyRef: {name: {{ include "wolf.fullname" . }}, key: master-key}}
+            - {name: WOLF_SCANNER_CUSTOM_BUILD_POLL_INTERVAL, value: {{ .Values.scannerRelease.customBuild.pollInterval | quote }}}
+            - {name: WOLF_SCANNER_CUSTOM_BUILD_HEARTBEAT_INTERVAL, value: {{ .Values.scannerRelease.customBuild.heartbeatInterval | quote }}}
+            - {name: WOLF_SCANNER_CUSTOM_BUILD_LEASE_DURATION, value: {{ .Values.scannerRelease.customBuild.leaseDuration | quote }}}
+            - {name: WOLF_SCANNER_CUSTOM_BUILD_OPERATION_TIMEOUT, value: {{ .Values.scannerRelease.customBuild.operationTimeout | quote }}}
+            - {name: WOLF_SCANNER_CUSTOM_BUILD_OBSERVABILITY_ADDR, value: {{ .Values.scannerRelease.customBuild.observabilityAddress | quote }}}
+            # The chart intentionally supports only the explicit node-local
+            # socket below. Remote engines require a separately hardened
+            # deployment with mutually authenticated TLS and scoped policy.
+            - {name: DOCKER_HOST, value: "unix:///var/run/docker.sock"}
+          ports:
+            - {name: health, containerPort: 9092}
+          readinessProbe:
+            httpGet: {path: /ready, port: health}
+          livenessProbe:
+            httpGet: {path: /health, port: health}
+          resources:
+            {{- toYaml .Values.resources.customBuild | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          volumeMounts:
+            - {name: image-engine, mountPath: /var/run/docker.sock}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: image-engine
+          hostPath:
+            path: {{ required "scannerRelease.customBuild.dockerHostPath is required" .Values.scannerRelease.customBuild.dockerHostPath }}
+            type: Socket
+        - name: tmp
+          emptyDir: {}
+{{- end }}

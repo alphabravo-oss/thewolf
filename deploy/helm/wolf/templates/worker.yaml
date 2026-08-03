@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "wolf.fullname" . }}-scan-worker
+  labels:
+    {{- include "wolf.labels" . | nindent 4 }}
+    app.kubernetes.io/component: scan-worker
+spec:
+  replicas: {{ .Values.worker.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: scan-worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: wolf
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: scan-worker
+    spec:
+      serviceAccountName: {{ include "wolf.workerServiceAccountName" . }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: worker
+          image: {{ include "wolf.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["scan-worker", "--backend=kubernetes", "--capacity={{ .Values.worker.capacity }}"]
+          env:
+            - {name: WOLF_DB_DRIVER, value: postgres}
+            - name: WOLF_DB_DSN
+              valueFrom: {secretKeyRef: {name: {{ include "wolf.fullname" . }}, key: postgres-dsn}}
+            - name: WOLF_MASTER_KEY
+              valueFrom: {secretKeyRef: {name: {{ include "wolf.fullname" . }}, key: master-key}}
+            - {name: WOLF_SCAN_EXECUTION_MODE, value: queue}
+            - {name: WOLF_SCAN_RUNTIME, value: kubernetes}
+            - {name: WOLF_ARTIFACTS_ROOT, value: /artifacts}
+            - {name: WOLF_WORKSPACE_ROOT, value: /workspace}
+            - {name: WOLF_K8S_WORKSPACE_PVC, value: {{ include "wolf.fullname" . }}-workspace}
+            - {name: WOLF_K8S_WOLF_IMAGE, value: {{ include "wolf.image" . | quote }}}
+            - {name: WOLF_K8S_SCANNER_SERVICE_ACCOUNT, value: {{ include "wolf.scannerServiceAccountName" . | quote }}}
+            - {name: WOLF_K8S_IMAGE_PULL_POLICY, value: {{ .Values.scanner.imagePullPolicy | quote }}}
+            - {name: WOLF_K8S_SCANNER_TIMEOUT, value: {{ .Values.scanner.timeout | quote }}}
+            - {name: WOLF_K8S_JOB_TTL_SECONDS, value: {{ .Values.scanner.jobTTLSeconds | quote }}}
+            - {name: WOLF_K8S_NETWORK_CLASS, value: {{ .Values.scanner.networkClass | quote }}}
+            - {name: WOLF_SCANNERS_IMAGE, value: {{ .Values.scanner.defaultImage | quote }}}
+            - {name: WOLF_SCANNERS_IMAGE_JVM, value: {{ .Values.scanner.jvmImage | quote }}}
+            - {name: WOLF_SCANNERS_IMAGE_RUST, value: {{ .Values.scanner.rustImage | quote }}}
+            {{- if .Values.scanner.codeqlImage }}
+            - {name: WOLF_SCANNERS_IMAGE_CODEQL, value: {{ .Values.scanner.codeqlImage | quote }}}
+            {{- end }}
+            - {name: WOLF_SCANNERS_MEMORY, value: {{ .Values.scanner.memory | quote }}}
+            - {name: WOLF_SCANNERS_CPUS, value: {{ .Values.scanner.cpu | quote }}}
+            - {name: WOLF_GIT_ALLOWED_CIDRS, value: {{ .Values.gitAllowedCIDRs | quote }}}
+          resources:
+            {{- toYaml .Values.resources.worker | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          volumeMounts:
+            - {name: workspace, mountPath: /workspace}
+            - {name: artifacts, mountPath: /artifacts}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: workspace
+          persistentVolumeClaim: {claimName: {{ include "wolf.fullname" . }}-workspace}
+        - name: artifacts
+          persistentVolumeClaim: {claimName: {{ include "wolf.fullname" . }}-artifacts}
+        - name: tmp
+          emptyDir: {}
