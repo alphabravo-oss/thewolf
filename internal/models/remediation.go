@@ -30,21 +30,25 @@ type RemediationSession struct {
 	Status           RemediationStatus `json:"status" db:"status"`
 	PlanGateEnabled  bool              `json:"plan_gate_enabled" db:"plan_gate_enabled"`
 	PatchGateEnabled bool              `json:"patch_gate_enabled" db:"patch_gate_enabled"`
-	MaxTurns         int               `json:"max_turns" db:"max_turns"`
-	TurnsUsedPlan    int               `json:"turns_used_plan" db:"turns_used_plan"`
-	TurnsUsedExecute int               `json:"turns_used_execute" db:"turns_used_execute"`
-	TokensUsed       int64             `json:"tokens_used" db:"tokens_used"`
-	CostUsed         float64           `json:"cost_used" db:"cost_used"`
-	Provider         string            `json:"provider" db:"provider"`
-	Model            string            `json:"model" db:"model"`
-	BranchName       string            `json:"branch_name" db:"branch_name"`
-	WorktreePath     string            `json:"-" db:"worktree_path"`
-	PRURL            string            `json:"pr_url" db:"pr_url"`
-	FailureReason    string            `json:"failure_reason" db:"failure_reason"`
-	CreatedAt        time.Time         `json:"created_at" db:"created_at"`
-	UpdatedAt        time.Time         `json:"updated_at" db:"updated_at"`
-	StartedAt        *time.Time        `json:"started_at,omitempty" db:"started_at"`
-	CompletedAt      *time.Time        `json:"completed_at,omitempty" db:"completed_at"`
+	// MaxTurns is the budget applied to EACH phase, not the session as a
+	// whole — the plan run and the execute run each get up to this many
+	// turns, which is why TurnsUsedPlan and TurnsUsedExecute are tracked
+	// separately below rather than sharing one counter.
+	MaxTurns         int        `json:"max_turns" db:"max_turns"`
+	TurnsUsedPlan    int        `json:"turns_used_plan" db:"turns_used_plan"`
+	TurnsUsedExecute int        `json:"turns_used_execute" db:"turns_used_execute"`
+	TokensUsed       int64      `json:"tokens_used" db:"tokens_used"`
+	CostUsed         float64    `json:"cost_used" db:"cost_used"`
+	Provider         string     `json:"provider" db:"provider"`
+	Model            string     `json:"model" db:"model"`
+	BranchName       string     `json:"branch_name" db:"branch_name"`
+	WorktreePath     string     `json:"-" db:"worktree_path"`
+	PRURL            string     `json:"pr_url" db:"pr_url"`
+	FailureReason    string     `json:"failure_reason" db:"failure_reason"`
+	CreatedAt        time.Time  `json:"created_at" db:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at" db:"updated_at"`
+	StartedAt        *time.Time `json:"started_at,omitempty" db:"started_at"`
+	CompletedAt      *time.Time `json:"completed_at,omitempty" db:"completed_at"`
 }
 
 // RemediationPlan is a persisted triage plan awaiting or past its gate.

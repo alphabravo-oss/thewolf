@@ -31,9 +31,10 @@ func NewRunner(store db.Store, d driver.Driver, cfg Config) *Runner {
 	return &Runner{store: store, driver: d, cfg: cfg}
 }
 
-// Run advances a session as far as its gates allow. With both gates off it
-// runs to completion; with a gate on it stops at the corresponding review
-// state and returns nil, to be resumed by an approval.
+// Run advances a pending session as far as its gates allow. With both gates
+// off it runs to completion; with a gate on it stops at the corresponding
+// review state and returns nil, to be resumed by an approval. Only a
+// pending session may be started this way — see the status check below.
 func (r *Runner) Run(ctx context.Context, sessionID string) error {
 	if !r.cfg.Enabled {
 		return errors.New("remediation is disabled (WOLF_REMEDIATE_ENABLED=false)")
@@ -53,6 +54,15 @@ func (r *Runner) Run(ctx context.Context, sessionID string) error {
 	if err != nil {
 		return fmt.Errorf("load session: %w", err)
 	}
+	// Run always starts a session's plan phase from scratch. Calling it on
+	// anything but a fresh session would resurrect a terminal one (re-plan a
+	// completed run, clear FailureReason, write a second patch set) or
+	// re-plan a session already sitting in plan_review instead of resuming
+	// it. Task 9 widens this to the resumable approval states explicitly;
+	// until then only a pending session may start.
+	if sess.Status != models.RemediationPending {
+		return fmt.Errorf("session %s is not pending (status=%q)", sessionID, sess.Status)
+	}
 	if (!sess.PlanGateEnabled || !sess.PatchGateEnabled) && !r.cfg.AllowYolo {
 		return errors.New("gates disabled but WOLF_REMEDIATE_ALLOW_YOLO=false")
 	}
@@ -66,16 +76,33 @@ func (r *Runner) Run(ctx context.Context, sessionID string) error {
 	return r.runExecutePhase(ctx, sess)
 }
 
-func (r *Runner) runPlanPhase(ctx context.Context, sess *models.RemediationSession) error {
-	if err := r.transition(ctx, sess, models.RemediationPlanning, ""); err != nil {
-		return err
+// runPlanPhase runs the read-only triage pass and saves its plan. The
+// deferred call below catches every error return so a transient failure
+// (a DB blip loading findings, a failed plan write) marks the session
+// failed instead of leaving it stuck in "planning" forever — the orphaned
+// row Task 10a's recovery would otherwise have to clean up.
+func (r *Runner) runPlanPhase(ctx context.Context, sess *models.RemediationSession) (err error) {
+	started := time.Now()
+	sess.StartedAt = &started
+	if terr := r.transition(ctx, sess, models.RemediationPlanning, ""); terr != nil {
+		return terr
 	}
-	findings, err := r.store.ListFindingsByScan(ctx, sess.ScanID)
-	if err != nil {
-		return fmt.Errorf("load findings: %w", err)
+	defer func() {
+		if err != nil {
+			status := models.RemediationFailed
+			if errors.Is(err, driver.ErrBudgetExhausted) {
+				status = models.RemediationExhausted
+			}
+			r.failSession(ctx, sess, status, err)
+		}
+	}()
+
+	findings, ferr := r.store.ListFindingsByScan(ctx, sess.ScanID)
+	if ferr != nil {
+		return fmt.Errorf("load findings: %w", ferr)
 	}
 
-	p, usage, err := r.driver.Plan(ctx, driver.PlanRequest{
+	p, usage, perr := r.driver.Plan(ctx, driver.PlanRequest{
 		WorktreePath: sess.WorktreePath,
 		Findings:     findings,
 		MaxTurns:     r.cfg.ClampTurns(sess.MaxTurns),
@@ -84,15 +111,24 @@ func (r *Runner) runPlanPhase(ctx context.Context, sess *models.RemediationSessi
 		OnEvent:      r.eventSink(ctx, sess.ID),
 	})
 	sess.TurnsUsedPlan = usage.Turns
-	if err != nil {
-		status := models.RemediationFailed
-		if errors.Is(err, driver.ErrBudgetExhausted) {
-			status = models.RemediationExhausted
-		}
-		_ = r.transition(ctx, sess, status, err.Error())
-		return err
+	sess.TokensUsed += usage.Tokens
+	sess.CostUsed += usage.Cost
+	if perr != nil {
+		return perr
 	}
 	return r.savePlan(ctx, sess, p)
+}
+
+// failSession marks a session terminal after an error from a phase function,
+// logging rather than discarding a failure to persist that transition — an
+// unlogged write failure here would leave a broken session that never shows
+// up as broken, the same hazard the event sink below guards against.
+func (r *Runner) failSession(ctx context.Context, sess *models.RemediationSession, status models.RemediationStatus, cause error) {
+	if err := r.transition(ctx, sess, status, cause.Error()); err != nil {
+		wolflog.L().Error().Err(err).Str("session", sess.ID).
+			Str("target_status", string(status)).
+			Msg("transition remediation session after failure")
+	}
 }
 
 // savePlan persists the triage plan. sess.TurnsUsedPlan was already set by
@@ -120,25 +156,39 @@ func (r *Runner) savePlan(ctx context.Context, sess *models.RemediationSession, 
 // gate, so a resumed session (a fresh Runner, possibly after a restart) must
 // be able to reach this phase with only the database row to go on.
 //
+// As in runPlanPhase, every error return below is caught by the deferred
+// failSession call so a transient failure marks the session failed instead
+// of leaving it stuck in "executing" forever.
+//
 // Phase 3 replaces the completed branch below with apply/rescan/PR.
-func (r *Runner) runExecutePhase(ctx context.Context, sess *models.RemediationSession) error {
-	if err := r.transition(ctx, sess, models.RemediationExecuting, ""); err != nil {
-		return err
+func (r *Runner) runExecutePhase(ctx context.Context, sess *models.RemediationSession) (err error) {
+	if terr := r.transition(ctx, sess, models.RemediationExecuting, ""); terr != nil {
+		return terr
 	}
-	findings, err := r.store.ListFindingsByScan(ctx, sess.ScanID)
-	if err != nil {
-		return fmt.Errorf("load findings: %w", err)
+	defer func() {
+		if err != nil {
+			status := models.RemediationFailed
+			if errors.Is(err, driver.ErrBudgetExhausted) {
+				status = models.RemediationExhausted
+			}
+			r.failSession(ctx, sess, status, err)
+		}
+	}()
+
+	findings, ferr := r.store.ListFindingsByScan(ctx, sess.ScanID)
+	if ferr != nil {
+		return fmt.Errorf("load findings: %w", ferr)
 	}
-	saved, err := r.store.GetRemediationPlan(ctx, sess.ID)
-	if err != nil {
-		return fmt.Errorf("load plan: %w", err)
+	saved, perr := r.store.GetRemediationPlan(ctx, sess.ID)
+	if perr != nil {
+		return fmt.Errorf("load plan: %w", perr)
 	}
-	p, err := plan.Parse([]byte(saved.PlanJSON))
-	if err != nil {
-		return fmt.Errorf("parse saved plan: %w", err)
+	p, perr := plan.Parse([]byte(saved.PlanJSON))
+	if perr != nil {
+		return fmt.Errorf("parse saved plan: %w", perr)
 	}
 
-	series, usage, err := r.driver.Execute(ctx, driver.ExecuteRequest{
+	series, usage, eerr := r.driver.Execute(ctx, driver.ExecuteRequest{
 		WorktreePath: sess.WorktreePath,
 		Plan:         p,
 		Findings:     findings,
@@ -148,17 +198,27 @@ func (r *Runner) runExecutePhase(ctx context.Context, sess *models.RemediationSe
 		OnEvent:      r.eventSink(ctx, sess.ID),
 	})
 	sess.TurnsUsedExecute = usage.Turns
-	if err != nil {
-		status := models.RemediationFailed
-		if errors.Is(err, driver.ErrBudgetExhausted) {
-			status = models.RemediationExhausted
+	sess.TokensUsed += usage.Tokens
+	sess.CostUsed += usage.Cost
+	if eerr != nil {
+		// A budget-exhausted run still returns whatever the agent actually
+		// committed: driver/exec.go collects those real, paid-for commits on
+		// purpose rather than discarding them on timeout. Salvage them here,
+		// best-effort, before the deferred call above marks the session
+		// exhausted — otherwise a genuine partial fix silently vanishes from
+		// the patch table. A save failure here is logged, not escalated: the
+		// exhaustion itself is still the true, and more important, outcome.
+		if errors.Is(eerr, driver.ErrBudgetExhausted) && series != nil {
+			if serr := r.savePatches(ctx, sess.ID, series.Patches); serr != nil {
+				wolflog.L().Error().Err(serr).Str("session", sess.ID).
+					Msg("save salvaged patches after budget exhaustion")
+			}
 		}
-		_ = r.transition(ctx, sess, status, err.Error())
-		return err
+		return eerr
 	}
 
-	if err := r.savePatches(ctx, sess.ID, series.Patches); err != nil {
-		return err
+	if serr := r.savePatches(ctx, sess.ID, series.Patches); serr != nil {
+		return serr
 	}
 	if sess.PatchGateEnabled {
 		return r.transition(ctx, sess, models.RemediationPatchReview, "")
@@ -217,15 +277,28 @@ func (r *Runner) eventSink(ctx context.Context, sessionID string) func(meter.Eve
 	seq := r.lastEventSeq(ctx, sessionID)
 	return func(e meter.Event) {
 		seq++
+		// Part carries only the step's stop reason, token counts, and cost —
+		// no credential can reach it — so it's safe to persist verbatim as
+		// the event's redacted payload, giving SSE replay more than a bare
+		// type string. json.Marshal on this concrete struct cannot fail in
+		// practice; a failure here still leaves the event's other fields
+		// worth persisting, so it's logged rather than dropping the event.
+		payload, merr := json.Marshal(e.Part)
+		if merr != nil {
+			wolflog.L().Error().Err(merr).
+				Str("session", sessionID).Int("seq", seq).
+				Msg("marshal remediation event payload")
+		}
 		// Never discard this error. A dropped append is a hole in the audit
 		// trail and a gap SSE replay cannot tell apart from "no activity",
 		// which is exactly how the per-call sequence bug stayed invisible.
 		if err := r.store.AppendRemediationEvent(ctx, &models.RemediationEvent{
-			ID:        fmt.Sprintf("%s-%d", sessionID, seq),
-			SessionID: sessionID,
-			Seq:       seq,
-			Type:      e.Type,
-			CreatedAt: time.Now(),
+			ID:          fmt.Sprintf("%s-%d", sessionID, seq),
+			SessionID:   sessionID,
+			Seq:         seq,
+			Type:        e.Type,
+			PayloadJSON: string(payload),
+			CreatedAt:   time.Now(),
 		}); err != nil {
 			wolflog.L().Error().Err(err).
 				Str("session", sessionID).Int("seq", seq).
