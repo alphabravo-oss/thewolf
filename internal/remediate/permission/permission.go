@@ -62,12 +62,29 @@ func Execute() ([]byte, error) {
 				// Default-deny: an unlisted command is refused, not allowed.
 				// Under --auto an "ask" would degrade to allow, so the
 				// fallback must be deny.
-				"*":        "deny",
-				"git *":    "allow",
-				"npm *":    "allow",
-				"go *":     "allow",
-				"make *":   "allow",
-				"pytest *": "allow",
+				"*": "deny",
+				// Scoped subcommands, never the bare binary: "git *" would
+				// permit push/remote add, "npm *" would permit install
+				// (network fetch plus arbitrary postinstall script
+				// execution), and "go *" would permit get/run — each
+				// reopens the egress the deny default exists to close. The
+				// agent edits, builds, tests, and commits; it never pushes,
+				// installs, or fetches. Wolf pushes the branch from the
+				// host, outside this container.
+				"git add *":      "allow",
+				"git commit *":   "allow",
+				"git checkout *": "allow",
+				"git diff *":     "allow",
+				"git log *":      "allow",
+				"git status *":   "allow",
+				"go build *":     "allow",
+				"go test *":      "allow",
+				"go vet *":       "allow",
+				"gofmt *":        "allow",
+				"npm test *":     "allow",
+				"npm run *":      "allow",
+				"make *":         "allow",
+				"pytest *":       "allow",
 				// Redundant under *: deny, but kept to document intent if the
 				// allowlist is ever widened.
 				"rm -rf *": "deny",

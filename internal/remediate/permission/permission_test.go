@@ -55,7 +55,9 @@ func TestExecuteDeniesDangerousPaths(t *testing.T) {
 }
 
 // The hard deny list must hold under --auto, where "ask" degrades to allow.
-// Anything that must not happen has to be "deny", never "ask".
+// Anything that must not happen has to be "deny", never "ask". (The
+// exhaustive "no ask anywhere" scan across every field of both documents
+// lives in TestNoAskRulesAnywhere.)
 func TestNoAskRulesForDangerousActions(t *testing.T) {
 	doc, err := Execute()
 	if err != nil {
@@ -85,8 +87,81 @@ func TestNoAskRulesForDangerousActions(t *testing.T) {
 			}
 		}
 	}
+}
 
-	// No rule anywhere may be "ask": under --auto it silently becomes allow.
+// The "ask" scan must cover every rule surface in every document: an edit
+// or bash rule left at "ask" degrades to allow under --auto regardless of
+// which document or field it lives in, so this checks both fields of both
+// Triage and Execute rather than just execute's bash map.
+func TestNoAskRulesAnywhere(t *testing.T) {
+	assertNoAsk := func(t *testing.T, label string, rules map[string]string) {
+		t.Helper()
+		for pattern, effect := range rules {
+			if effect == "ask" {
+				t.Errorf("%s[%q] = \"ask\" — degrades to allow under --auto", label, pattern)
+			}
+		}
+	}
+
+	triageDoc, err := Triage()
+	if err != nil {
+		t.Fatalf("Triage: %v", err)
+	}
+	var triage struct {
+		Permission struct {
+			Edit any               `json:"edit"`
+			Bash map[string]string `json:"bash"`
+		} `json:"permission"`
+	}
+	if err := json.Unmarshal(triageDoc, &triage); err != nil {
+		t.Fatalf("unmarshal triage: %v", err)
+	}
+	if triage.Permission.Edit == "ask" {
+		t.Errorf("triage edit = \"ask\" — degrades to allow under --auto")
+	}
+	assertNoAsk(t, "triage.bash", triage.Permission.Bash)
+
+	executeDoc, err := Execute()
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	var execute struct {
+		Permission struct {
+			Edit map[string]string `json:"edit"`
+			Bash map[string]string `json:"bash"`
+		} `json:"permission"`
+	}
+	if err := json.Unmarshal(executeDoc, &execute); err != nil {
+		t.Fatalf("unmarshal execute: %v", err)
+	}
+	assertNoAsk(t, "execute.edit", execute.Permission.Edit)
+	assertNoAsk(t, "execute.bash", execute.Permission.Bash)
+}
+
+// Triage must be as tightly locked down as execute: bash defaults to deny
+// (a triage-side command nobody enumerated must be refused, not permitted)
+// and edit must be the literal string "deny", never a map that could later
+// grow an "ask" or "allow" entry by accident.
+func TestTriageBashDefaultsToDeny(t *testing.T) {
+	doc, err := Triage()
+	if err != nil {
+		t.Fatalf("Triage: %v", err)
+	}
+	var parsed struct {
+		Permission struct {
+			Edit any               `json:"edit"`
+			Bash map[string]string `json:"bash"`
+		} `json:"permission"`
+	}
+	if err := json.Unmarshal(doc, &parsed); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if got := parsed.Permission.Bash["*"]; got != "deny" {
+		t.Fatalf("bash[\"*\"] = %q, want \"deny\"", got)
+	}
+	if parsed.Permission.Edit != "deny" {
+		t.Errorf("edit = %v, want \"deny\" — triage must never write", parsed.Permission.Edit)
+	}
 	for pattern, effect := range parsed.Permission.Bash {
 		if effect == "ask" {
 			t.Errorf("bash[%q] = \"ask\" — degrades to allow under --auto", pattern)
@@ -119,8 +194,22 @@ func TestExecuteBashDefaultsToDeny(t *testing.T) {
 			t.Errorf("bash[%q] = allow, want refusal via the deny default", unlisted)
 		}
 	}
-	// The build tooling the agent legitimately needs stays allowed.
-	for _, allowed := range []string{"git *", "npm *", "go *"} {
+	// The bare binaries must stay refused too: "git *", "npm *", and "go *"
+	// each reopen egress (push, install, get) that the deny default exists
+	// to close. Only the scoped subcommands below may be allowed.
+	for _, mustStayBare := range []string{"git *", "npm *", "go *"} {
+		if parsed.Permission.Bash[mustStayBare] == "allow" {
+			t.Errorf("bash[%q] = allow, want refusal via the deny default — only scoped subcommands may be allowed", mustStayBare)
+		}
+	}
+	// The build tooling the agent legitimately needs stays allowed, scoped
+	// to the subcommands it actually uses (edit, build, test, commit) —
+	// never as the bare binary.
+	for _, allowed := range []string{
+		"git add *", "git commit *", "git checkout *", "git diff *", "git log *", "git status *",
+		"go build *", "go test *", "go vet *", "gofmt *",
+		"npm test *", "npm run *", "make *", "pytest *",
+	} {
 		if parsed.Permission.Bash[allowed] != "allow" {
 			t.Errorf("bash[%q] = %q, want \"allow\"", allowed, parsed.Permission.Bash[allowed])
 		}
