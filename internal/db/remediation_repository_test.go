@@ -145,6 +145,65 @@ func TestRemediationEventSeqIsUniquePerSession(t *testing.T) {
 	}
 }
 
+// TestRejectRemediationPlan is the regression guard for the gap Task 5 left
+// open: remediation_plans.rejected_reason had no writer anywhere in the
+// system until this method existed. Approved_by/approved_at are written too
+// (recording who acted and when, not that they approved) so the row carries
+// a complete record of the decision, matching ApproveRemediationPlan's shape.
+func TestRejectRemediationPlan(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+	seed := &models.RemediationSession{
+		ID: "rs-reject-1", UserID: "u-1", RepoID: "r-1", ScanID: "sc-1",
+		Status: models.RemediationPlanReview, CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	}
+	if err := store.CreateRemediationSession(ctx, seed); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	if err := store.SaveRemediationPlan(ctx, &models.RemediationPlan{
+		SessionID: seed.ID, PlanJSON: `{"summary":"x"}`, CreatedAt: time.Now(),
+	}); err != nil {
+		t.Fatalf("SaveRemediationPlan: %v", err)
+	}
+
+	if err := store.RejectRemediationPlan(ctx, seed.ID, "u-approver", "wrong approach"); err != nil {
+		t.Fatalf("RejectRemediationPlan: %v", err)
+	}
+
+	got, err := store.GetRemediationPlan(ctx, seed.ID)
+	if err != nil {
+		t.Fatalf("GetRemediationPlan: %v", err)
+	}
+	if got.RejectedReason != "wrong approach" {
+		t.Errorf("RejectedReason = %q, want %q", got.RejectedReason, "wrong approach")
+	}
+	if got.ApprovedBy != "u-approver" {
+		t.Errorf("ApprovedBy = %q, want %q", got.ApprovedBy, "u-approver")
+	}
+	if got.ApprovedAt == nil {
+		t.Error("ApprovedAt not recorded")
+	}
+}
+
+// RejectRemediationPlan targets the latest plan row for a session, matching
+// ApproveRemediationPlan/GetRemediationPlan; a session with no plan row at
+// all must fail rather than silently succeed.
+func TestRejectRemediationPlanNoRows(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+	seed := &models.RemediationSession{
+		ID: "rs-reject-2", UserID: "u-1", RepoID: "r-1", ScanID: "sc-1",
+		Status: models.RemediationPlanReview, CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	}
+	if err := store.CreateRemediationSession(ctx, seed); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	if err := store.RejectRemediationPlan(ctx, seed.ID, "u-approver", "no plan yet"); err == nil {
+		t.Fatal("RejectRemediationPlan succeeded with no plan row, want error")
+	}
+}
+
 // TestRemediationSessionBooleansRoundTripPostgres is the direct regression
 // guard for the plan_gate_enabled/patch_gate_enabled INTEGER-vs-BOOLEAN
 // defect: lib/pq encodes a Go bool as the literal "true"/"false" regardless

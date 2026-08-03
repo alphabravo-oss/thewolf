@@ -226,6 +226,91 @@ func (r *Runner) runExecutePhase(ctx context.Context, sess *models.RemediationSe
 	return r.transition(ctx, sess, models.RemediationCompleted, "")
 }
 
+// ApprovePlan records approval on the plan row and resumes the session into
+// its execute phase. This is the sanctioned way to advance a session sitting
+// in plan_review — Run refuses anything but a pending session, specifically
+// so a held session can only move forward through here. Resumption reloads
+// everything from sess (freshly read above) and the store inside
+// runExecutePhase; no in-memory state survives from the original Run call,
+// so this works identically after a server restart.
+func (r *Runner) ApprovePlan(ctx context.Context, sessionID, approverID string) error {
+	sess, err := r.store.GetRemediationSession(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+	if sess.Status != models.RemediationPlanReview {
+		return fmt.Errorf("session %s is %s, not awaiting plan approval", sessionID, sess.Status)
+	}
+	if err := r.store.ApproveRemediationPlan(ctx, sessionID, approverID); err != nil {
+		return err
+	}
+	return r.runExecutePhase(ctx, sess)
+}
+
+// RejectPlan terminates the session without ever reaching the execute phase,
+// so no code is written for a plan a human declined.
+func (r *Runner) RejectPlan(ctx context.Context, sessionID, approverID, reason string) error {
+	sess, err := r.store.GetRemediationSession(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+	if sess.Status != models.RemediationPlanReview {
+		return fmt.Errorf("session %s is %s, not awaiting plan approval", sessionID, sess.Status)
+	}
+	// Persist the reason on the plan row as well as the session. The plan is
+	// what a human reviewed and declined, so the rejection belongs beside it —
+	// otherwise remediation_plans.rejected_reason is never written by anything.
+	if err := r.store.RejectRemediationPlan(ctx, sessionID, approverID, reason); err != nil {
+		return err
+	}
+	return r.transition(ctx, sess, models.RemediationRejected, reason)
+}
+
+// ApprovePatches records approval and resumes the session into the landing
+// phase, the patch-review counterpart to ApprovePlan.
+func (r *Runner) ApprovePatches(ctx context.Context, sessionID, approverID string) error {
+	sess, err := r.store.GetRemediationSession(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+	if sess.Status != models.RemediationPatchReview {
+		return fmt.Errorf("session %s is %s, not awaiting patch approval", sessionID, sess.Status)
+	}
+	// Unlike ApproveRemediationPlan, there is no store write here recording
+	// approverID against the patch rows themselves — Task 13's landing phase
+	// owns that, alongside the apply/rescan/PR work it actually gates.
+	return r.runLandingPhase(ctx, sess)
+}
+
+// RejectPatches terminates the session without landing any patch. The patch
+// rows already saved to remediation_patches are left in place — they are the
+// audit trail of what the agent produced and a human declined, not scratch
+// state to discard.
+func (r *Runner) RejectPatches(ctx context.Context, sessionID, approverID, reason string) error {
+	sess, err := r.store.GetRemediationSession(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+	if sess.Status != models.RemediationPatchReview {
+		return fmt.Errorf("session %s is %s, not awaiting patch approval", sessionID, sess.Status)
+	}
+	return r.transition(ctx, sess, models.RemediationRejected, reason)
+}
+
+// runLandingPhase applies approved patches, rescans, and opens a PR. Until
+// Task 13 replaces this body, it does nothing but complete the session — but
+// it is already shaped like runPlanPhase/runExecutePhase (named return plus
+// a single defer routing any error through failSession) so Task 13 can drop
+// real work in here without restructuring how a failure gets handled.
+func (r *Runner) runLandingPhase(ctx context.Context, sess *models.RemediationSession) (err error) {
+	defer func() {
+		if err != nil {
+			r.failSession(ctx, sess, models.RemediationFailed, err)
+		}
+	}()
+	return r.transition(ctx, sess, models.RemediationCompleted, "")
+}
+
 // savePatches converts the driver's patch series into stored rows.
 // FilesChanged and FindingIDs are JSON-encoded to text to match
 // models.RemediationPatch's column format; nil slices are normalized to

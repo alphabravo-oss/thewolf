@@ -299,6 +299,11 @@ type Store interface {
 	// GetRemediationPlan returns the most recently saved plan for a session.
 	GetRemediationPlan(ctx context.Context, sessionID string) (*models.RemediationPlan, error)
 	ApproveRemediationPlan(ctx context.Context, sessionID, approverID string) error
+	// RejectRemediationPlan records a plan-gate rejection on the latest plan
+	// row (approved_by, approved_at, rejected_reason) — the write
+	// ApproveRemediationPlan has no counterpart for, so a rejection has
+	// somewhere to land beside the plan a human actually reviewed.
+	RejectRemediationPlan(ctx context.Context, sessionID, approverID, reason string) error
 	SaveRemediationPatches(ctx context.Context, sessionID string, patches []models.RemediationPatch) error
 	ListRemediationPatches(ctx context.Context, sessionID string) ([]models.RemediationPatch, error)
 	// AppendRemediationEvent and ListRemediationEvents back the SSE replay

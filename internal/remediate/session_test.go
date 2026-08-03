@@ -321,3 +321,157 @@ func TestRunPersistsEvents(t *testing.T) {
 		}
 	}
 }
+
+// A plan-gated session holds at plan_review and, once approved, resumes into
+// the execute phase purely from the persisted session/plan rows — proving
+// the "nothing held open across a gate" invariant the package doc promises.
+func TestPlanGateHoldsThenResumes(t *testing.T) {
+	store := newTestStore(t)
+	sess := seedSession(t, store, func(s *models.RemediationSession) {
+		s.PlanGateEnabled = true
+		s.PatchGateEnabled = false
+	})
+	d := driver.NewFake([]meter.Event{{Type: "assistant"}}, fixturePlan())
+	r := NewRunner(store, d, Config{Enabled: true, MaxTurns: 10, AllowYolo: true})
+
+	if err := r.Run(context.Background(), sess.ID); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	held, _ := store.GetRemediationSession(context.Background(), sess.ID)
+	if held.Status != models.RemediationPlanReview {
+		t.Fatalf("Status = %q, want %q", held.Status, models.RemediationPlanReview)
+	}
+
+	if err := r.ApprovePlan(context.Background(), sess.ID, "u-approver"); err != nil {
+		t.Fatalf("ApprovePlan: %v", err)
+	}
+	done, _ := store.GetRemediationSession(context.Background(), sess.ID)
+	if done.Status != models.RemediationCompleted {
+		t.Fatalf("Status after approval = %q, want %q", done.Status, models.RemediationCompleted)
+	}
+}
+
+// Rejecting a held plan terminates the session without ever reaching the
+// execute phase.
+func TestRejectPlanTerminatesSession(t *testing.T) {
+	store := newTestStore(t)
+	sess := seedSession(t, store, func(s *models.RemediationSession) {
+		s.PlanGateEnabled = true
+	})
+	r := NewRunner(store, driver.NewFake([]meter.Event{{Type: "assistant"}}, fixturePlan()),
+		Config{Enabled: true, MaxTurns: 10, AllowYolo: true})
+	_ = r.Run(context.Background(), sess.ID)
+
+	if err := r.RejectPlan(context.Background(), sess.ID, "u-approver", "wrong approach"); err != nil {
+		t.Fatalf("RejectPlan: %v", err)
+	}
+	got, _ := store.GetRemediationSession(context.Background(), sess.ID)
+	if got.Status != models.RemediationRejected {
+		t.Errorf("Status = %q, want %q", got.Status, models.RemediationRejected)
+	}
+}
+
+// ApprovePlan is the sanctioned way to advance a plan_review session; it must
+// refuse a session that never reached that state (here, still pending)
+// rather than resurrecting it the way Run's own precondition already
+// forbids for a different reason.
+func TestApprovePlanRejectsWrongState(t *testing.T) {
+	store := newTestStore(t)
+	sess := seedSession(t, store, nil) // still pending
+	r := NewRunner(store, driver.NewFake(nil, fixturePlan()), Config{Enabled: true, AllowYolo: true})
+
+	if err := r.ApprovePlan(context.Background(), sess.ID, "u-1"); err == nil {
+		t.Fatal("ApprovePlan on a pending session succeeded, want error")
+	}
+}
+
+// RejectPlan must also refuse a session outside plan_review.
+func TestRejectPlanRejectsWrongState(t *testing.T) {
+	store := newTestStore(t)
+	sess := seedSession(t, store, nil) // still pending
+	r := NewRunner(store, driver.NewFake(nil, fixturePlan()), Config{Enabled: true, AllowYolo: true})
+
+	if err := r.RejectPlan(context.Background(), sess.ID, "u-1", "no"); err == nil {
+		t.Fatal("RejectPlan on a pending session succeeded, want error")
+	}
+}
+
+// A patch-gated session holds at patch_review and, once approved, resumes
+// into the landing phase — a stub that transitions straight to completed
+// until Task 13 replaces it with apply/rescan/PR.
+func TestPatchGateHoldsThenResumes(t *testing.T) {
+	store := newTestStore(t)
+	sess := seedSession(t, store, func(s *models.RemediationSession) {
+		s.PlanGateEnabled = false
+		s.PatchGateEnabled = true
+	})
+	d := driver.NewFake([]meter.Event{{Type: "assistant"}}, fixturePlan())
+	r := NewRunner(store, d, Config{Enabled: true, MaxTurns: 10, AllowYolo: true})
+
+	if err := r.Run(context.Background(), sess.ID); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	held, _ := store.GetRemediationSession(context.Background(), sess.ID)
+	if held.Status != models.RemediationPatchReview {
+		t.Fatalf("Status = %q, want %q", held.Status, models.RemediationPatchReview)
+	}
+
+	if err := r.ApprovePatches(context.Background(), sess.ID, "u-approver"); err != nil {
+		t.Fatalf("ApprovePatches: %v", err)
+	}
+	done, _ := store.GetRemediationSession(context.Background(), sess.ID)
+	if done.Status != models.RemediationCompleted {
+		t.Fatalf("Status after approval = %q, want %q", done.Status, models.RemediationCompleted)
+	}
+}
+
+// Rejecting held patches terminates the session; the patch rows already
+// written to remediation_patches are left in place as an audit trail rather
+// than deleted.
+func TestRejectPatchesTerminatesSession(t *testing.T) {
+	store := newTestStore(t)
+	sess := seedSession(t, store, func(s *models.RemediationSession) {
+		s.PlanGateEnabled = false
+		s.PatchGateEnabled = true
+	})
+	d := driver.NewFake([]meter.Event{{Type: "assistant"}}, fixturePlan())
+	// NewFake defaults Series to an empty PatchSeries; give it a real patch so
+	// savePatches (which no-ops on an empty slice) actually writes a row for
+	// this test to prove is preserved.
+	d.Series = &driver.PatchSeries{Patches: []driver.Patch{{CommitSHA: "c1", Message: "fix"}}}
+	r := NewRunner(store, d, Config{Enabled: true, MaxTurns: 10, AllowYolo: true})
+	_ = r.Run(context.Background(), sess.ID)
+
+	if err := r.RejectPatches(context.Background(), sess.ID, "u-approver", "regressed tests"); err != nil {
+		t.Fatalf("RejectPatches: %v", err)
+	}
+	got, _ := store.GetRemediationSession(context.Background(), sess.ID)
+	if got.Status != models.RemediationRejected {
+		t.Errorf("Status = %q, want %q", got.Status, models.RemediationRejected)
+	}
+	if len(listPatches(t, store, sess.ID)) == 0 {
+		t.Error("rejection deleted the patch audit trail, want it preserved")
+	}
+}
+
+// ApprovePatches/RejectPatches are the sanctioned way to advance a
+// patch_review session; both must refuse any other state.
+func TestApprovePatchesRejectsWrongState(t *testing.T) {
+	store := newTestStore(t)
+	sess := seedSession(t, store, nil) // still pending
+	r := NewRunner(store, driver.NewFake(nil, fixturePlan()), Config{Enabled: true, AllowYolo: true})
+
+	if err := r.ApprovePatches(context.Background(), sess.ID, "u-1"); err == nil {
+		t.Fatal("ApprovePatches on a pending session succeeded, want error")
+	}
+}
+
+func TestRejectPatchesRejectsWrongState(t *testing.T) {
+	store := newTestStore(t)
+	sess := seedSession(t, store, nil) // still pending
+	r := NewRunner(store, driver.NewFake(nil, fixturePlan()), Config{Enabled: true, AllowYolo: true})
+
+	if err := r.RejectPatches(context.Background(), sess.ID, "u-1", "no"); err == nil {
+		t.Fatal("RejectPatches on a pending session succeeded, want error")
+	}
+}

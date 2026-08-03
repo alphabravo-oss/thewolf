@@ -131,6 +131,31 @@ func (r *remediationRepository) ApproveRemediationPlan(ctx context.Context, sess
 	return nil
 }
 
+// RejectRemediationPlan is ApproveRemediationPlan's counterpart: same
+// latest-row targeting, but also writes rejected_reason so a plan-gate
+// rejection is recorded beside the plan a human actually reviewed and
+// declined, not just on the session row.
+func (r *remediationRepository) RejectRemediationPlan(ctx context.Context, sessionID, approverID, reason string) error {
+	now := time.Now().UTC()
+	result, err := r.db.ExecContext(ctx, r.db.Rebind(
+		`UPDATE remediation_plans SET approved_by = ?, approved_at = ?, rejected_reason = ?
+		 WHERE id = (
+		   SELECT id FROM remediation_plans WHERE session_id = ?
+		   ORDER BY created_at DESC, id DESC LIMIT 1
+		 )`), approverID, now, reason, sessionID)
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected != 1 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
 func (r *remediationRepository) SaveRemediationPatches(ctx context.Context, sessionID string, patches []models.RemediationPatch) error {
 	if len(patches) == 0 {
 		return nil
@@ -228,6 +253,10 @@ func (s *SQLiteStore) ApproveRemediationPlan(ctx context.Context, sessionID, app
 	return newRemediationRepository(s.db).ApproveRemediationPlan(ctx, sessionID, approverID)
 }
 
+func (s *SQLiteStore) RejectRemediationPlan(ctx context.Context, sessionID, approverID, reason string) error {
+	return newRemediationRepository(s.db).RejectRemediationPlan(ctx, sessionID, approverID, reason)
+}
+
 func (s *SQLiteStore) SaveRemediationPatches(ctx context.Context, sessionID string, patches []models.RemediationPatch) error {
 	return newRemediationRepository(s.db).SaveRemediationPatches(ctx, sessionID, patches)
 }
@@ -270,6 +299,10 @@ func (s *PostgresStore) GetRemediationPlan(ctx context.Context, sessionID string
 
 func (s *PostgresStore) ApproveRemediationPlan(ctx context.Context, sessionID, approverID string) error {
 	return newRemediationRepository(s.db).ApproveRemediationPlan(ctx, sessionID, approverID)
+}
+
+func (s *PostgresStore) RejectRemediationPlan(ctx context.Context, sessionID, approverID, reason string) error {
+	return newRemediationRepository(s.db).RejectRemediationPlan(ctx, sessionID, approverID, reason)
 }
 
 func (s *PostgresStore) SaveRemediationPatches(ctx context.Context, sessionID string, patches []models.RemediationPatch) error {
