@@ -1234,8 +1234,14 @@ CREATE TABLE IF NOT EXISTS remediation_sessions (
     scan_id TEXT NOT NULL,
     loop_id TEXT,
     status TEXT NOT NULL DEFAULT 'pending',
-    plan_gate_enabled INTEGER NOT NULL DEFAULT 1,
-    patch_gate_enabled INTEGER NOT NULL DEFAULT 1,
+    -- BOOLEAN, not INTEGER: these map to Go bool fields, and lib/pq encodes a
+    -- Go bool as the literal text true/false regardless of the target column's
+    -- OID. Against an INTEGER column Postgres then fails with "invalid input
+    -- syntax for type integer". SQLite accepts BOOLEAN (NUMERIC affinity,
+    -- stores 0/1), so one spelling serves both. Matches migrations 006, 012,
+    -- 014, 016, 023, 042, 043, 046.
+    plan_gate_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    patch_gate_enabled BOOLEAN NOT NULL DEFAULT TRUE,
     max_turns INTEGER NOT NULL DEFAULT 20,
     turns_used_plan INTEGER NOT NULL DEFAULT 0,
     turns_used_execute INTEGER NOT NULL DEFAULT 0,
@@ -2079,6 +2085,7 @@ git commit -m "feat(remediate): gate policy"
 **Interfaces:**
 - Consumes: `gate.Policy`, `gate.DecisionHold`.
 - Produces: `Runner.ApprovePlan(ctx, sessionID, approverID string) error`, `Runner.RejectPlan(ctx, sessionID, approverID, reason string) error`, `Runner.ApprovePatches(ctx, sessionID, approverID string) error`, `Runner.RejectPatches(ctx, sessionID, approverID, reason string) error`.
+- **Also adds one `Store` method** (Task 5 deliberately omitted it): `RejectRemediationPlan(ctx context.Context, sessionID, approverID, reason string) error`, writing `approved_by`, `approved_at`, and `rejected_reason` on the latest plan row for the session. Without it, `remediation_plans.rejected_reason` has no writer anywhere in the system. Implement it for both SQLite and Postgres alongside the existing remediation methods.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -2169,6 +2176,12 @@ func (r *Runner) RejectPlan(ctx context.Context, sessionID, approverID, reason s
 	}
 	if sess.Status != models.RemediationPlanReview {
 		return fmt.Errorf("session %s is %s, not awaiting plan approval", sessionID, sess.Status)
+	}
+	// Persist the reason on the plan row as well as the session. The plan is
+	// what a human reviewed and declined, so the rejection belongs beside it —
+	// otherwise remediation_plans.rejected_reason is never written by anything.
+	if err := r.store.RejectRemediationPlan(ctx, sessionID, approverID, reason); err != nil {
+		return err
 	}
 	return r.transition(ctx, sess, models.RemediationRejected, reason)
 }
