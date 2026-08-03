@@ -5,8 +5,14 @@ CREATE TABLE IF NOT EXISTS remediation_sessions (
     scan_id TEXT NOT NULL,
     loop_id TEXT,
     status TEXT NOT NULL DEFAULT 'pending',
-    plan_gate_enabled INTEGER NOT NULL DEFAULT 1,
-    patch_gate_enabled INTEGER NOT NULL DEFAULT 1,
+    -- BOOLEAN, not INTEGER: lib/pq encodes a Go bool parameter as the literal
+    -- text "true"/"false" regardless of the target column's OID (it only
+    -- consults the OID for []byte and time.Time), and Postgres infers an
+    -- INTEGER column's placeholder type as integer, so writes would fail
+    -- with "invalid input syntax for type integer". SQLite accepts BOOLEAN
+    -- too (NUMERIC affinity, stores 0/1), so one spelling serves both.
+    plan_gate_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    patch_gate_enabled BOOLEAN NOT NULL DEFAULT TRUE,
     max_turns INTEGER NOT NULL DEFAULT 20,
     turns_used_plan INTEGER NOT NULL DEFAULT 0,
     turns_used_execute INTEGER NOT NULL DEFAULT 0,

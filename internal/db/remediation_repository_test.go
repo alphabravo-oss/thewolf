@@ -2,8 +2,11 @@ package db
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 )
@@ -29,6 +32,13 @@ func TestRemediationSessionRoundTrip(t *testing.T) {
 	if got.Status != models.RemediationPending || got.MaxTurns != 20 {
 		t.Errorf("round trip mismatch: %+v", got)
 	}
+	// Postgres columns are BOOLEAN, not INTEGER: lib/pq encodes a Go bool
+	// as the literal "true"/"false" regardless of column OID, and an
+	// INTEGER column rejects that text. This is the field pair that
+	// silently broke every session write on Postgres.
+	if !got.PlanGateEnabled || !got.PatchGateEnabled {
+		t.Errorf("gate booleans did not round trip: %+v", got)
+	}
 
 	got.Status = models.RemediationPlanning
 	got.TurnsUsedPlan = 5
@@ -38,6 +48,9 @@ func TestRemediationSessionRoundTrip(t *testing.T) {
 	again, _ := store.GetRemediationSession(ctx, "rs-1")
 	if again.Status != models.RemediationPlanning || again.TurnsUsedPlan != 5 {
 		t.Errorf("update not persisted: %+v", again)
+	}
+	if !again.PlanGateEnabled || !again.PatchGateEnabled {
+		t.Errorf("gate booleans did not survive update: %+v", again)
 	}
 }
 
@@ -66,9 +79,76 @@ func TestRemediationEventsOrderedBySeq(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListRemediationEvents: %v", err)
 	}
+	if len(events) != 3 {
+		t.Fatalf("len(events) = %d, want 3", len(events))
+	}
 	for i, e := range events {
 		if e.Seq != i+1 {
 			t.Fatalf("events[%d].Seq = %d, want %d", i, e.Seq, i+1)
 		}
+	}
+
+	// afterSeq is an exclusive lower bound (seq > afterSeq), not inclusive —
+	// no event has Seq == 0 above, so that call alone can't tell ">" from
+	// ">=". Assert the boundary directly against a seq that does exist.
+	after2, err := store.ListRemediationEvents(ctx, "rs-2", 2)
+	if err != nil {
+		t.Fatalf("ListRemediationEvents(afterSeq=2): %v", err)
+	}
+	if len(after2) != 1 || after2[0].Seq != 3 {
+		t.Fatalf("ListRemediationEvents(afterSeq=2) = %+v, want exactly one event with Seq=3", after2)
+	}
+}
+
+// TestRemediationSessionBooleansRoundTripPostgres is the direct regression
+// guard for the plan_gate_enabled/patch_gate_enabled INTEGER-vs-BOOLEAN
+// defect: lib/pq encodes a Go bool as the literal "true"/"false" regardless
+// of the target column's OID, so an INTEGER column rejects the write outright
+// on Postgres while SQLite (bool -> 1/0) stays silently green. Follows the
+// isolated-schema convention in scan_release_recovery_test.go /
+// scanner_release_backup_repository_test.go; skips cleanly without
+// WOLF_TEST_POSTGRES_DSN so CI without Postgres stays green.
+func TestRemediationSessionBooleansRoundTripPostgres(t *testing.T) {
+	dsn := os.Getenv("WOLF_TEST_POSTGRES_DSN")
+	if dsn == "" {
+		t.Skip("WOLF_TEST_POSTGRES_DSN is not configured")
+	}
+	admin, err := NewPostgres(dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	schema := "remediation_" + uuid.NewString()
+	if _, err := admin.db.Exec(`CREATE SCHEMA "` + schema + `"`); err != nil {
+		_ = admin.Close()
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = admin.db.Exec(`DROP SCHEMA IF EXISTS "` + schema + `" CASCADE`)
+		_ = admin.Close()
+	})
+	store, err := NewPostgres(postgresDSNWithSearchPath(t, dsn, schema))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	ctx := context.Background()
+	// One gate true, the other false: proves both directions round trip
+	// rather than the column merely defaulting to true.
+	s := &models.RemediationSession{
+		ID: "rs-pg-1", UserID: "u-1", RepoID: "r-1", ScanID: "sc-1",
+		Status: models.RemediationPending, MaxTurns: 20,
+		PlanGateEnabled: true, PatchGateEnabled: false,
+		CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	}
+	if err := store.CreateRemediationSession(ctx, s); err != nil {
+		t.Fatalf("CreateRemediationSession: %v", err)
+	}
+	got, err := store.GetRemediationSession(ctx, s.ID)
+	if err != nil {
+		t.Fatalf("GetRemediationSession: %v", err)
+	}
+	if !got.PlanGateEnabled || got.PatchGateEnabled {
+		t.Fatalf("gate booleans mismatch on Postgres: %+v", got)
 	}
 }
