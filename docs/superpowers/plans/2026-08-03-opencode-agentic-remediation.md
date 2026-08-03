@@ -2808,8 +2808,14 @@ Replaces artifact-only output with branch, rescan, delta, and PR.
 - Test: `internal/remediate/workspace_test.go`
 
 **Interfaces:**
-- Consumes: `workspace.Prepare`, `workspace.Options`, `workspace.Workspace` from `internal/fix/workspace`.
-- Produces: `Runner.prepareWorkspace(ctx, sess) (*workspace.Workspace, error)`, `remediate.BranchName(sessionID string) string`.
+- Consumes: `workspace.Prepare`, `workspace.Options`, `workspace.Workspace` from `internal/fix/workspace`; `StripAgentConfig` from Task 4a.
+- Produces: `Runner.prepareWorkspace(ctx, sess) (*workspace.Workspace, error)`, `remediate.BranchName(sessionID string) string`, `cloneLocalForRemediation(ctx, sourcePath string) (*models.Repo, func(), error)`.
+
+**Two constraints this task must satisfy, both found by review of Task 4:**
+
+1. **Local repos are cloned, never worktree-added.** `git worktree add` leaves a `.git` file pointing at the parent repository's object store, which the driver must mount read-write into the container — giving an agent under `--auto` write access to the user's real refs and objects. `git clone --local` hardlinks objects (cheap, no network) and yields a disposable `.git` directory. `cloneLocalForRemediation` does the clone and returns a `*models.Repo` describing the copy plus a cleanup func. Write a test asserting the prepared workspace's git dir is NOT inside the source repository.
+
+2. **Retry must work.** `BranchName` is deterministic, and `git worktree add -b <existing>` fails with `fatal: a branch named '...' already exists` — so retrying a local session currently dies here before reaching the driver. Cloning fixes this incidentally (each run clones fresh), but add a test that runs `prepareWorkspace` twice for the same session ID and succeeds both times.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -2859,22 +2865,54 @@ func BranchName(sessionID string) string {
 	return "wolf/remediation-" + sessionID
 }
 
-// prepareWorkspace creates the isolated worktree the agent edits. The default
+// prepareWorkspace creates the isolated workspace the agent edits. The default
 // branch is never checked out for writing.
+//
+// Local repositories are cloned, not worktree-added. `git worktree add` leaves
+// a .git FILE pointing at the parent repository's object store, which the
+// driver must then mount read-write into the container — handing an agent
+// running under --auto write access to the user's real refs and objects, not
+// just to an ephemeral checkout. `git clone --local` hardlinks objects (cheap,
+// no network) and produces a self-contained, disposable .git directory, so the
+// blast radius stops at the scratch clone.
+//
+// This is why the remediate path does not reuse workspace.prepareLocal.
+// GitHub-sourced repos already clone, so they go through workspace.Prepare
+// unchanged.
 func (r *Runner) prepareWorkspace(ctx context.Context, sess *models.RemediationSession) (*workspace.Workspace, error) {
 	repo, err := r.store.GetRepoByID(ctx, sess.RepoID)
 	if err != nil {
 		return nil, fmt.Errorf("load repo: %w", err)
 	}
-	ws, err := workspace.Prepare(ctx, workspace.Options{
-		Repo:   repo,
-		Branch: BranchName(sess.ID),
-	})
+
+	opts := workspace.Options{Repo: repo, Branch: BranchName(sess.ID)}
+	if repo.SourceType == models.SourceTypeLocal {
+		// Clone into scratch first, then let workspace.Prepare operate on the
+		// disposable copy rather than the user's checkout.
+		cloned, cleanup, err := cloneLocalForRemediation(ctx, repo.SourcePath)
+		if err != nil {
+			return nil, fmt.Errorf("clone local repo: %w", err)
+		}
+		r.registerCleanup(sess.ID, cleanup)
+		opts.Repo = cloned
+	}
+
+	ws, err := workspace.Prepare(ctx, opts)
 	if err != nil {
 		return nil, fmt.Errorf("prepare workspace: %w", err)
 	}
 	sess.WorktreePath = ws.Path()
 	sess.BranchName = ws.Branch()
+
+	// Repo-supplied agent config outranks Wolf's injected document, so strip it
+	// before any driver call. See Task 4a.
+	removed, err := StripAgentConfig(ws.Path())
+	if err != nil {
+		return nil, fmt.Errorf("strip agent config: %w", err)
+	}
+	for _, path := range removed {
+		r.recordEvent(ctx, sess.ID, "worktree.config_stripped", path)
+	}
 	return ws, nil
 }
 ```
