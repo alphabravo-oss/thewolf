@@ -84,7 +84,6 @@ export function BuildConsole({ target }: { target: BuildTarget | null }) {
     });
 
     return () => ctrl.abort();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [variant, push, multiArch, nonce]);
 
   // Auto-scroll to the newest line as output streams in.

@@ -2,7 +2,6 @@
 // GET /repos/{id}/fixable. Only rendered when autofix_enabled is on (the whole
 // fix surface is dark otherwise). Green "fixable" when writable; muted
 // "not fixable" with the reason as a tooltip when not.
-import { useQuery } from "@tanstack/react-query";
 import { ShieldCheckIcon, ShieldXIcon } from "lucide-react";
 import { useAutofixEnabled, useRepoFixable } from "@/lib/fixes";
 

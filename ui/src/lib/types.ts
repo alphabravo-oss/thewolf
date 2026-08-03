@@ -205,6 +205,10 @@ export interface Scan {
   commit_sha?: string;
   dirty_state?: string;
   prepared_workspace?: string;
+  scanner_release_id?: string;
+  release_manifest_digest?: string;
+  rescan_of_scan_id?: string;
+  release_selection_reason?: string;
   status: ScanStatus;
   // The API stores these as JSON-encoded strings, NOT arrays. Use
   // parseToolList() to get a real string[] for length / iteration.
@@ -361,6 +365,7 @@ export interface ApiResponse<T> {
 }
 
 export interface ApiMeta {
+  next_cursor?: string;
   page?: number;
   per_page?: number;
   total?: number;

@@ -15,7 +15,7 @@ import {
   RepeatIcon,
   ContainerIcon,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { WolfLogo } from "./wolf-logo";
 import { api } from "@/lib/api";
 import { useFlag } from "@/lib/flags";
@@ -53,10 +53,9 @@ function usePrimaryNav(): NavItem[] {
           { label: "Loops", to: "/loops", icon: RepeatIcon },
         ]
       : []),
-    // Scanner-image management is admin-only. (Audit moved into Settings.)
-    ...(isAdmin
-      ? [{ label: "Scanners", to: "/scanners", icon: ContainerIcon }]
-      : []),
+    // The scanner fleet is visible to every authenticated persona. Server
+    // scopes and the page capability boundary independently gate mutations.
+    { label: "Scanners", to: "/scanners", icon: ContainerIcon },
   ];
 }
 
@@ -86,9 +85,88 @@ export function Sidebar() {
 
   // Mobile drawer. Auto-closes on route change.
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(() =>
+    typeof window === "undefined"
+      ? false
+      : window.matchMedia("(min-width: 768px)").matches,
+  );
+  const openButtonRef = useRef<HTMLButtonElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const drawerRef = useRef<HTMLElement>(null);
+
   useEffect(() => {
     setMobileOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    const desktopQuery = window.matchMedia("(min-width: 768px)");
+    const updateViewport = () => {
+      setIsDesktop(desktopQuery.matches);
+      if (desktopQuery.matches) setMobileOpen(false);
+    };
+
+    updateViewport();
+    desktopQuery.addEventListener("change", updateViewport);
+    return () => desktopQuery.removeEventListener("change", updateViewport);
+  }, []);
+
+  useEffect(() => {
+    if (!mobileOpen || isDesktop) return;
+
+    closeButtonRef.current?.focus();
+    const drawer = drawerRef.current;
+    if (!drawer) return;
+
+    const focusableSelector = [
+      "a[href]",
+      "button:not([disabled])",
+      "input:not([disabled])",
+      "select:not([disabled])",
+      "textarea:not([disabled])",
+      '[tabindex]:not([tabindex="-1"])',
+    ].join(",");
+    const focusableElements = () =>
+      [...drawer.querySelectorAll<HTMLElement>(focusableSelector)].filter(
+        (element) =>
+          !element.hidden &&
+          element.getAttribute("aria-hidden") !== "true" &&
+          element.getClientRects().length > 0,
+      );
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setMobileOpen(false);
+        window.requestAnimationFrame(() => openButtonRef.current?.focus());
+        return;
+      }
+      if (event.key !== "Tab") return;
+
+      const elements = focusableElements();
+      if (elements.length === 0) {
+        event.preventDefault();
+        return;
+      }
+      const first = elements[0];
+      const last = elements[elements.length - 1];
+      const active = document.activeElement;
+      if (event.shiftKey && (active === first || !drawer.contains(active))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (active === last || !drawer.contains(active))) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isDesktop, mobileOpen]);
+
+  function closeMobileMenu() {
+    setMobileOpen(false);
+    window.requestAnimationFrame(() => openButtonRef.current?.focus());
+  }
 
   function isActive(to: string) {
     if (to === "/") return pathname === "/";
@@ -99,32 +177,46 @@ export function Sidebar() {
     <>
       {/* Mobile hamburger — fixed top-left, only visible <md. */}
       <button
+        ref={openButtonRef}
         type="button"
         className={cn(
           "md:hidden fixed top-3 left-3 z-30 size-9 grid place-items-center rounded-md",
           "bg-card border border-border shadow-md",
         )}
         aria-label="Open menu"
+        aria-controls="primary-navigation"
+        aria-expanded={mobileOpen}
+        aria-haspopup="dialog"
         onClick={() => setMobileOpen(true)}
       >
-        <MenuIcon className="size-4" />
+        <MenuIcon className="size-4" aria-hidden="true" />
       </button>
 
       {/* Backdrop for mobile drawer. */}
       {mobileOpen && (
-        <div
-          className="md:hidden fixed inset-0 z-40 bg-background/80 backdrop-blur-sm animate-fade-in"
-          onClick={() => setMobileOpen(false)}
+        <button
+          type="button"
+          tabIndex={-1}
+          aria-label="Close navigation menu"
+          className="md:hidden fixed inset-0 z-40 border-0 bg-background/80 p-0 backdrop-blur-sm animate-fade-in"
+          onClick={closeMobileMenu}
         />
       )}
 
       <aside
+        id="primary-navigation"
+        ref={drawerRef}
+        role={isDesktop ? undefined : "dialog"}
+        aria-modal={!isDesktop && mobileOpen ? true : undefined}
+        aria-label={isDesktop ? undefined : "Primary navigation"}
+        aria-hidden={!isDesktop && !mobileOpen ? true : undefined}
+        inert={!isDesktop && !mobileOpen ? true : undefined}
         className={cn(
           "z-50 w-60 shrink-0 bg-sidebar border-r border-sidebar-border flex flex-col",
           // Desktop: always visible inline.
           "md:static md:flex md:translate-x-0",
           // Mobile: off-canvas drawer, slides in.
-          "fixed top-0 left-0 h-screen transition-transform duration-200 ease-out",
+          "fixed top-0 left-0 h-dvh overscroll-contain transition-transform duration-200 ease-out",
           mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0",
         )}
       >
@@ -135,18 +227,19 @@ export function Sidebar() {
               <span className="text-[0.9rem] font-semibold tracking-tight text-foreground">
                 The Wolf
               </span>
-              <span className="text-3xs uppercase tracking-[0.16em] text-faint">
+              <span className="text-3xs uppercase tracking-[0.16em] text-muted-foreground">
                 by AlphaBravo
               </span>
             </div>
           </Link>
           <button
+            ref={closeButtonRef}
             type="button"
-            onClick={() => setMobileOpen(false)}
+            onClick={closeMobileMenu}
             className="md:hidden size-7 grid place-items-center rounded-md hover:bg-sidebar-accent"
             aria-label="Close menu"
           >
-            <XIcon className="size-4" />
+            <XIcon className="size-4" aria-hidden="true" />
           </button>
         </div>
 
@@ -162,7 +255,7 @@ export function Sidebar() {
             <NavLink key={item.to} item={item} active={isActive(item.to)} />
           ))}
 
-          <div className="pt-2 mt-1 border-t border-sidebar-border flex items-center justify-between px-2 text-2xs text-faint">
+          <div className="pt-2 mt-1 border-t border-sidebar-border flex items-center justify-between px-2 text-2xs text-muted-foreground">
             <span className="tabular-nums">
               {versionQ.data ? `v${versionQ.data}` : ""}
             </span>

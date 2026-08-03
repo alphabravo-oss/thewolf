@@ -29,17 +29,36 @@ import {
   UploadCloudIcon,
   UsersIcon,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useMe } from "@/lib/me";
-import type { AdminSecret, ApiToken, ApiTokenCreated, RemoteNode } from "@/lib/types";
-import { BuildConsole, type BuildTarget } from "@/components/scanners/build-console";
-import { DockerHubCredentialCard } from "@/components/scanners/dockerhub-credential";
+import type {
+  AdminSecret,
+  ApiToken,
+  ApiTokenCreated,
+  RemoteNode,
+} from "@/lib/types";
 import {
-  useScannerImages,
-  type ScannerImageStatus,
-} from "@/lib/scanner-build";
+  CustomBuildCreateDialog,
+  type CustomBuildCreateDefaults,
+} from "@/components/scanner-custom-builds/custom-build-create-dialog";
+import { DockerHubCredentialCard } from "@/components/scanners/dockerhub-credential";
+import type {
+  CustomBuildOperationReceipt,
+  CustomBuildVariantName,
+} from "@/lib/scanner-custom-build";
+import { useScannerImages, type ScannerImageStatus } from "@/lib/scanner-build";
+import { useRuntimeCapabilities } from "@/lib/runtime-capabilities";
+import { safeErrorMessage } from "@/lib/safe-display";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 // Legacy personal ?tab= values that have NO admin tab of the same name now
 // redirect to /account. (apikeys/secrets/nodes are kept here as ADMIN tabs —
@@ -72,7 +91,14 @@ export const Route = createFileRoute("/_authed/settings")({
   component: SettingsPage,
 });
 
-type TabKey = "general" | "users" | "apikeys" | "secrets" | "nodes" | "scanners" | "audit";
+type TabKey =
+  | "general"
+  | "users"
+  | "apikeys"
+  | "secrets"
+  | "nodes"
+  | "scanners"
+  | "audit";
 
 // Settings is the admin surface: system config + a global, cross-user
 // oversight view of API keys / secrets / nodes, plus the audit log. Personal
@@ -90,50 +116,77 @@ const TABS: { key: TabKey; label: string; Icon: typeof SettingsIcon }[] = [
 function SettingsPage() {
   const { tab } = Route.useSearch();
   const navigate = useNavigate();
-  const activeTab: TabKey = TABS.some((t) => t.key === tab) ? (tab as TabKey) : "general";
+  const activeTabRef = useRef<HTMLButtonElement>(null);
+  const activeTab: TabKey = TABS.some((t) => t.key === tab)
+    ? (tab as TabKey)
+    : "general";
+
+  useEffect(() => {
+    activeTabRef.current?.scrollIntoView({
+      block: "nearest",
+      inline: "nearest",
+    });
+  }, [activeTab]);
 
   return (
-    <div className="page stack page--narrow">
+    <div className="page stack page--narrow min-w-0">
       <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
       <p className="text-sm text-muted-foreground -mt-2">
-        Administration &amp; global oversight. Manage your own profile, keys, and secrets under{" "}
+        Administration &amp; global oversight. Manage your own profile, keys,
+        and secrets under{" "}
         <button
           type="button"
-          onClick={() => navigate({ to: "/account", search: { section: "profile" } })}
+          onClick={() =>
+            navigate({ to: "/account", search: { section: "profile" } })
+          }
           className="text-foreground hover:underline"
         >
           Account
         </button>
         .
       </p>
-      <nav className="flex gap-1 border-b border-border/40">
-        {TABS.map(({ key, label, Icon }) => {
-          const active = activeTab === key;
-          return (
-            <button
-              key={key}
-              type="button"
-              onClick={() => navigate({ to: "/settings", search: { tab: key } })}
-              className={
-                "inline-flex items-center gap-1.5 px-3 h-9 text-sm border-b-2 -mb-px " +
-                (active
-                  ? "border-primary text-foreground"
-                  : "border-transparent text-muted-foreground hover:text-foreground")
-              }
-            >
-              <Icon className="size-4" /> {label}
-            </button>
-          );
-        })}
+      <nav
+        aria-label="Administration settings"
+        className="max-w-full overflow-x-auto overscroll-x-contain border-b border-border/40"
+      >
+        <div className="flex min-w-max gap-1">
+          {TABS.map(({ key, label, Icon }) => {
+            const active = activeTab === key;
+            return (
+              <button
+                key={key}
+                ref={active ? activeTabRef : undefined}
+                type="button"
+                aria-current={active ? "page" : undefined}
+                onClick={() =>
+                  navigate({ to: "/settings", search: { tab: key } })
+                }
+                className={
+                  "-mb-px inline-flex h-9 items-center gap-1.5 border-b-2 px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring " +
+                  (active
+                    ? "border-primary text-foreground"
+                    : "border-transparent text-muted-foreground hover:text-foreground")
+                }
+              >
+                <Icon className="size-4" aria-hidden="true" /> {label}
+              </button>
+            );
+          })}
+        </div>
       </nav>
 
-      {activeTab === "general" && <GeneralTab />}
-      {activeTab === "users" && <UsersTab />}
-      {activeTab === "apikeys" && <AdminApiKeysTab />}
-      {activeTab === "secrets" && <AdminSecretsTab />}
-      {activeTab === "nodes" && <AdminNodesTab />}
-      {activeTab === "scanners" && <ScannersTab />}
-      {activeTab === "audit" && <AuditTab />}
+      <section aria-labelledby="active-settings-section" className="min-w-0">
+        <h2 id="active-settings-section" className="sr-only">
+          {TABS.find((item) => item.key === activeTab)?.label} settings
+        </h2>
+        {activeTab === "general" && <GeneralTab />}
+        {activeTab === "users" && <UsersTab />}
+        {activeTab === "apikeys" && <AdminApiKeysTab />}
+        {activeTab === "secrets" && <AdminSecretsTab />}
+        {activeTab === "nodes" && <AdminNodesTab />}
+        {activeTab === "scanners" && <ScannersTab />}
+        {activeTab === "audit" && <AuditTab />}
+      </section>
     </div>
   );
 }
@@ -148,7 +201,8 @@ function SettingsPage() {
 function useOwnerLookup() {
   const q = useQuery({
     queryKey: ["users"],
-    queryFn: async () => (await api.get<{ id: string; email: string }[]>("/users")).data ?? [],
+    queryFn: async () =>
+      (await api.get<{ id: string; email: string }[]>("/users")).data ?? [],
   });
   const map = new Map((q.data ?? []).map((u) => [u.id, u.email]));
   return (id?: string) => (id ? (map.get(id) ?? `${id.slice(0, 8)}…`) : "—");
@@ -163,7 +217,8 @@ function AdminApiKeysTab() {
   const ownerOf = useOwnerLookup();
   const q = useQuery({
     queryKey: ["admin", "tokens"],
-    queryFn: async () => (await api.get<ApiToken[]>("/admin/tokens")).data ?? [],
+    queryFn: async () =>
+      (await api.get<ApiToken[]>("/admin/tokens")).data ?? [],
   });
   const revoke = useMutation({
     mutationFn: (id: string) => api.delete(`/auth/tokens/${id}`),
@@ -171,13 +226,14 @@ function AdminApiKeysTab() {
       toast.success("Key revoked");
       qc.invalidateQueries({ queryKey: ["admin", "tokens"] });
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Revoke failed"),
+    onError: (e) =>
+      toast.error(e instanceof Error ? e.message : "Revoke failed"),
   });
   return (
     <div className="space-y-2">
       <p className="text-xs text-muted-foreground">
-        Every user's API keys. Keys are hash-only — names, scopes, and usage are visible; the
-        secret itself is never recoverable.
+        Every user's API keys. Keys are hash-only — names, scopes, and usage are
+        visible; the secret itself is never recoverable.
       </p>
       <AdminCard>
         {q.isLoading ? (
@@ -203,21 +259,30 @@ function AdminApiKeysTab() {
                   <td className="px-4 py-2">
                     {t.name}
                     {t.revoked_at && (
-                      <span className="ml-1 text-[10px] uppercase text-muted-foreground">revoked</span>
+                      <span className="ml-1 text-[10px] uppercase text-muted-foreground">
+                        revoked
+                      </span>
                     )}
                   </td>
-                  <td className="px-4 py-2 font-mono text-xs text-muted-foreground">{t.token_prefix}…</td>
+                  <td className="px-4 py-2 font-mono text-xs text-muted-foreground">
+                    {t.token_prefix}…
+                  </td>
                   <td className="px-4 py-2">
                     <div className="flex flex-wrap gap-1">
                       {t.scopes.map((s) => (
-                        <span key={s} className="text-[10px] font-mono rounded bg-muted/40 border border-border/40 px-1.5 py-0.5">
+                        <span
+                          key={s}
+                          className="text-[10px] font-mono rounded bg-muted/40 border border-border/40 px-1.5 py-0.5"
+                        >
                           {s}
                         </span>
                       ))}
                     </div>
                   </td>
                   <td className="px-4 py-2 text-xs text-muted-foreground">
-                    {t.expires_at ? new Date(t.expires_at).toLocaleDateString() : "never"}
+                    {t.expires_at
+                      ? new Date(t.expires_at).toLocaleDateString()
+                      : "never"}
                   </td>
                   <td className="px-4 py-2 text-right">
                     {!t.revoked_at && (
@@ -245,7 +310,8 @@ function AdminSecretsTab() {
   const ownerOf = useOwnerLookup();
   const q = useQuery({
     queryKey: ["admin", "secrets"],
-    queryFn: async () => (await api.get<AdminSecret[]>("/admin/secrets")).data ?? [],
+    queryFn: async () =>
+      (await api.get<AdminSecret[]>("/admin/secrets")).data ?? [],
   });
   const del = useMutation({
     mutationFn: (id: string) => api.delete(`/config/secrets/${id}`),
@@ -253,13 +319,14 @@ function AdminSecretsTab() {
       toast.success("Secret deleted");
       qc.invalidateQueries({ queryKey: ["admin", "secrets"] });
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Delete failed"),
+    onError: (e) =>
+      toast.error(e instanceof Error ? e.message : "Delete failed"),
   });
   return (
     <div className="space-y-2">
       <p className="text-xs text-muted-foreground">
-        Every user's secrets. Values are <strong>masked</strong> — you can see a secret exists and
-        delete it, but never read another user's value.
+        Every user's secrets. Values are <strong>masked</strong> — you can see a
+        secret exists and delete it, but never read another user's value.
       </p>
       <AdminCard>
         {q.isLoading ? (
@@ -283,12 +350,18 @@ function AdminSecretsTab() {
                   <td className="px-4 py-2">{ownerOf(s.user_id)}</td>
                   <td className="px-4 py-2 font-mono text-xs">{s.key_type}</td>
                   <td className="px-4 py-2">{s.key_name}</td>
-                  <td className="px-4 py-2 font-mono text-xs text-muted-foreground">{s.value}</td>
+                  <td className="px-4 py-2 font-mono text-xs text-muted-foreground">
+                    {s.value}
+                  </td>
                   <td className="px-4 py-2 text-right">
                     <button
                       type="button"
                       onClick={() => {
-                        if (window.confirm(`Delete ${ownerOf(s.user_id)}'s secret "${s.key_name}"?`))
+                        if (
+                          window.confirm(
+                            `Delete ${ownerOf(s.user_id)}'s secret "${s.key_name}"?`,
+                          )
+                        )
                           del.mutate(s.id);
                       }}
                       className="inline-flex items-center gap-1 h-7 px-2 rounded-md border border-red-500/40 text-red-300 hover:bg-red-500/10 text-xs"
@@ -319,7 +392,8 @@ function AdminNodesTab() {
       toast.success("Node deleted");
       qc.invalidateQueries({ queryKey: ["admin", "nodes"] });
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Delete failed"),
+    onError: (e) =>
+      toast.error(e instanceof Error ? e.message : "Delete failed"),
   });
   return (
     <div className="space-y-2">
@@ -348,12 +422,18 @@ function AdminNodesTab() {
                   <td className="px-4 py-2 font-mono text-xs text-muted-foreground">
                     {n.username}@{n.host}:{n.port}
                   </td>
-                  <td className="px-4 py-2 text-xs">{n.enabled ? "yes" : "no"}</td>
+                  <td className="px-4 py-2 text-xs">
+                    {n.enabled ? "yes" : "no"}
+                  </td>
                   <td className="px-4 py-2 text-right">
                     <button
                       type="button"
                       onClick={() => {
-                        if (window.confirm(`Delete ${ownerOf(n.user_id)}'s node "${n.name}"?`))
+                        if (
+                          window.confirm(
+                            `Delete ${ownerOf(n.user_id)}'s node "${n.name}"?`,
+                          )
+                        )
                           del.mutate(n.id);
                       }}
                       className="inline-flex items-center gap-1 h-7 px-2 rounded-md border border-red-500/40 text-red-300 hover:bg-red-500/10 text-xs"
@@ -407,7 +487,12 @@ function SeverityBadge({ severity }: { severity?: string }) {
         ? "bg-amber-500/15 text-amber-400 border-amber-500/30"
         : "bg-muted/40 text-muted-foreground border-border/40";
   return (
-    <span className={"rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide border " + cls}>
+    <span
+      className={
+        "rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide border " +
+        cls
+      }
+    >
       {severity}
     </span>
   );
@@ -424,7 +509,16 @@ function AuditTab() {
   const [page, setPage] = useState(1);
 
   const q = useQuery({
-    queryKey: ["audit-log", search, method, category, severity, sort, order, page],
+    queryKey: [
+      "audit-log",
+      search,
+      method,
+      category,
+      severity,
+      sort,
+      order,
+      page,
+    ],
     queryFn: async () => {
       const params = new URLSearchParams({
         page: String(page),
@@ -436,7 +530,9 @@ function AuditTab() {
       if (method) params.set("method", method);
       if (category) params.set("category", category);
       if (severity) params.set("severity", severity);
-      const res = await api.get<AuditEntry[]>(`/audit-log?${params.toString()}`);
+      const res = await api.get<AuditEntry[]>(
+        `/audit-log?${params.toString()}`,
+      );
       return { entries: res.data ?? [], total: res.meta?.total ?? 0 };
     },
     placeholderData: (prev) => prev, // keep the current page visible while the next loads
@@ -523,13 +619,19 @@ function AuditTab() {
         {q.isLoading && !q.data ? (
           <div className="p-5 text-sm text-muted-foreground">Loading…</div>
         ) : entries.length === 0 ? (
-          <div className="p-5 text-sm text-muted-foreground">No matching audit entries.</div>
+          <div className="p-5 text-sm text-muted-foreground">
+            No matching audit entries.
+          </div>
         ) : (
           <table className="w-full text-sm">
             <thead className="text-xs text-muted-foreground border-b border-border/30">
               <tr>
                 <th className="text-left px-4 py-2">
-                  <button type="button" onClick={() => toggleSort("time")} className="hover:text-foreground">
+                  <button
+                    type="button"
+                    onClick={() => toggleSort("time")}
+                    className="hover:text-foreground"
+                  >
                     When {sortMark("time")}
                   </button>
                 </th>
@@ -540,7 +642,11 @@ function AuditTab() {
                 <th className="text-left px-4 py-2">Source</th>
                 <th className="text-left px-4 py-2">Request</th>
                 <th className="text-right px-4 py-2">
-                  <button type="button" onClick={() => toggleSort("status")} className="hover:text-foreground">
+                  <button
+                    type="button"
+                    onClick={() => toggleSort("status")}
+                    className="hover:text-foreground"
+                  >
                     Status {sortMark("status")}
                   </button>
                 </th>
@@ -555,17 +661,25 @@ function AuditTab() {
                   <td className="px-4 py-2">
                     <SeverityBadge severity={e.severity} />
                   </td>
-                  <td className="px-4 py-2 font-mono text-xs">{e.event_type || e.action}</td>
-                  <td className="px-4 py-2 text-xs text-muted-foreground capitalize">{e.category || "—"}</td>
+                  <td className="px-4 py-2 font-mono text-xs">
+                    {e.event_type || e.action}
+                  </td>
+                  <td className="px-4 py-2 text-xs text-muted-foreground capitalize">
+                    {e.category || "—"}
+                  </td>
                   <td className="px-4 py-2 text-xs">{ownerOf(e.user_id)}</td>
-                  <td className="px-4 py-2 font-mono text-xs text-muted-foreground">{e.ip || "—"}</td>
+                  <td className="px-4 py-2 font-mono text-xs text-muted-foreground">
+                    {e.ip || "—"}
+                  </td>
                   <td className="px-4 py-2 font-mono text-xs text-muted-foreground">
                     {e.method} {e.path}
                   </td>
                   <td
                     className={
                       "px-4 py-2 text-right text-xs tabular-nums " +
-                      (e.status_code >= 400 ? "text-red-300" : "text-muted-foreground")
+                      (e.status_code >= 400
+                        ? "text-red-300"
+                        : "text-muted-foreground")
                     }
                   >
                     {e.status_code}
@@ -627,7 +741,8 @@ export function AccountTab() {
       setEmail(me.data.email);
     }
   }, [me.data]);
-  const emailChanged = !!me.data && email.trim().toLowerCase() !== me.data.email;
+  const emailChanged =
+    !!me.data && email.trim().toLowerCase() !== me.data.email;
 
   const [curPw, setCurPw] = useState("");
   const [newPw, setNewPw] = useState("");
@@ -649,17 +764,22 @@ export function AccountTab() {
   });
   const password = useMutation({
     mutationFn: () =>
-      api.put("/auth/password", { current_password: curPw, new_password: newPw }),
+      api.put("/auth/password", {
+        current_password: curPw,
+        new_password: newPw,
+      }),
     onSuccess: () => {
       toast.success("Password updated");
       setCurPw("");
       setNewPw("");
       setConfirmPw("");
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Update failed"),
+    onError: (e) =>
+      toast.error(e instanceof Error ? e.message : "Update failed"),
   });
 
-  if (me.isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (me.isLoading)
+    return <p className="text-sm text-muted-foreground">Loading…</p>;
   const pwMismatch = confirmPw.length > 0 && confirmPw !== newPw;
 
   return (
@@ -688,7 +808,8 @@ export function AccountTab() {
         {emailChanged && (
           <label className="block space-y-1">
             <span className="text-xs text-muted-foreground">
-              Current password <span className="text-amber-400">(required to change email)</span>
+              Current password{" "}
+              <span className="text-amber-400">(required to change email)</span>
             </span>
             <input
               type="password"
@@ -777,14 +898,18 @@ export function AccountTab() {
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={() => navigate({ to: "/settings", search: { tab: "apikeys" } })}
+            onClick={() =>
+              navigate({ to: "/settings", search: { tab: "apikeys" } })
+            }
             className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border/40 text-sm hover:bg-muted/40"
           >
             <KeyRoundIcon className="size-4" /> API Keys
           </button>
           <button
             type="button"
-            onClick={() => navigate({ to: "/settings", search: { tab: "security" } })}
+            onClick={() =>
+              navigate({ to: "/settings", search: { tab: "security" } })
+            }
             className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border/40 text-sm hover:bg-muted/40"
           >
             <LockIcon className="size-4" /> Two-factor auth
@@ -854,7 +979,9 @@ function GeneralTab() {
   const q = useQuery({
     queryKey: ["settings"],
     queryFn: async () => {
-      const r = await api.get<SettingRow[] | Record<string, string>>("/settings");
+      const r = await api.get<SettingRow[] | Record<string, string>>(
+        "/settings",
+      );
       // The endpoint returns either an array of {key,value} or a map.
       // Normalize to a map for the form below.
       const out: Record<string, string> = {};
@@ -867,7 +994,8 @@ function GeneralTab() {
     },
   });
   const m = useMutation({
-    mutationFn: (updates: Record<string, string>) => api.put("/settings", updates),
+    mutationFn: (updates: Record<string, string>) =>
+      api.put("/settings", updates),
     onSuccess: () => {
       toast.success("Settings saved");
       qc.invalidateQueries({ queryKey: ["settings"] });
@@ -875,7 +1003,8 @@ function GeneralTab() {
     onError: (e) => toast.error(e instanceof Error ? e.message : "Save failed"),
   });
 
-  if (q.isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (q.isLoading)
+    return <p className="text-sm text-muted-foreground">Loading…</p>;
   const settings = q.data ?? {};
 
   return (
@@ -883,7 +1012,10 @@ function GeneralTab() {
       {GENERAL_KNOBS.map((knob) => {
         const current = settings[knob.key] ?? "";
         return (
-          <div key={knob.key} className="grid md:grid-cols-[1fr_240px] gap-4 items-start">
+          <div
+            key={knob.key}
+            className="grid md:grid-cols-[1fr_240px] gap-4 items-start"
+          >
             <div>
               <label className="text-sm font-medium inline-flex items-center gap-1.5">
                 {knob.label}
@@ -893,7 +1025,9 @@ function GeneralTab() {
                   </span>
                 )}
               </label>
-              <p className="text-xs text-muted-foreground mt-0.5">{knob.help}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {knob.help}
+              </p>
             </div>
             {knob.type === "bool" ? (
               <BoolToggle
@@ -954,7 +1088,8 @@ function BoolToggle({
     >
       <span
         className={
-          "size-2 rounded-full " + (value ? "bg-emerald-400" : "bg-muted-foreground/50")
+          "size-2 rounded-full " +
+          (value ? "bg-emerald-400" : "bg-muted-foreground/50")
         }
       />
       {value ? "Enabled" : "Disabled"}
@@ -1038,11 +1173,16 @@ export function SecurityTab() {
       setRecovery(null);
       setCode("");
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Could not start setup"),
+    onError: (e) =>
+      toast.error(e instanceof Error ? e.message : "Could not start setup"),
   });
   const activate = useMutation({
     mutationFn: async () =>
-      (await api.post<{ recovery_codes: string[] }>("/auth/mfa/activate", { code })).data,
+      (
+        await api.post<{ recovery_codes: string[] }>("/auth/mfa/activate", {
+          code,
+        })
+      ).data,
     onSuccess: (d) => {
       setRecovery(d?.recovery_codes ?? []);
       setSetup(null);
@@ -1050,7 +1190,8 @@ export function SecurityTab() {
       qc.invalidateQueries({ queryKey: ["mfa-status"] });
       toast.success("Two-factor authentication enabled");
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "That code is not valid"),
+    onError: (e) =>
+      toast.error(e instanceof Error ? e.message : "That code is not valid"),
   });
   const disable = useMutation({
     mutationFn: async () => api.post("/auth/mfa/disable", { code }),
@@ -1059,10 +1200,12 @@ export function SecurityTab() {
       qc.invalidateQueries({ queryKey: ["mfa-status"] });
       toast.success("Two-factor authentication disabled");
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "That code is not valid"),
+    onError: (e) =>
+      toast.error(e instanceof Error ? e.message : "That code is not valid"),
   });
 
-  if (status.isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (status.isLoading)
+    return <p className="text-sm text-muted-foreground">Loading…</p>;
   const enabled = status.data?.enabled ?? false;
   const required = status.data?.required ?? false;
 
@@ -1073,8 +1216,9 @@ export function SecurityTab() {
         <div>
           <h2 className="text-sm font-medium">Two-factor authentication</h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Protect your account with a time-based code from an authenticator app
-            (Google Authenticator, 1Password, Authy, …) in addition to your password.
+            Protect your account with a time-based code from an authenticator
+            app (Google Authenticator, 1Password, Authy, …) in addition to your
+            password.
           </p>
         </div>
         <span
@@ -1092,14 +1236,19 @@ export function SecurityTab() {
       {/* One-time recovery codes, shown right after activation. */}
       {recovery && (
         <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-4 space-y-2">
-          <p className="text-sm font-medium text-amber-300">Save your recovery codes</p>
+          <p className="text-sm font-medium text-amber-300">
+            Save your recovery codes
+          </p>
           <p className="text-xs text-muted-foreground">
-            Each code works once if you lose your device. Store them somewhere safe —
-            they won't be shown again.
+            Each code works once if you lose your device. Store them somewhere
+            safe — they won't be shown again.
           </p>
           <div className="grid grid-cols-2 gap-1.5 font-mono text-sm">
             {recovery.map((c) => (
-              <span key={c} className="rounded bg-muted/40 px-2 py-1 tracking-wider">
+              <span
+                key={c}
+                className="rounded bg-muted/40 px-2 py-1 tracking-wider"
+              >
                 {c}
               </span>
             ))}
@@ -1121,7 +1270,8 @@ export function SecurityTab() {
       {setup && (
         <div className="space-y-3">
           <p className="text-sm">
-            1. Scan this with your authenticator app, then enter the 6-digit code to confirm.
+            1. Scan this with your authenticator app, then enter the 6-digit
+            code to confirm.
           </p>
           <div className="flex items-start gap-4">
             {/* Solid white box with a generous quiet zone — a QR needs a white
@@ -1192,7 +1342,8 @@ export function SecurityTab() {
         <div className="space-y-2">
           {required ? (
             <p className="text-xs text-muted-foreground">
-              Your administrator requires two-factor authentication, so it can't be turned off.
+              Your administrator requires two-factor authentication, so it can't
+              be turned off.
             </p>
           ) : (
             <div className="flex items-center gap-2">
@@ -1245,9 +1396,21 @@ const API_SCOPES = [
 
 // Role presets map to the scope aliases the backend (apikey.ParseScopes) knows.
 const ROLE_PRESETS = [
-  { key: "read-only", label: "Read-only", help: "Read every resource; no writes." },
-  { key: "read-write", label: "Read & write", help: "Read and write everything except admin." },
-  { key: "admin", label: "Admin (full)", help: "Full access, including settings and users." },
+  {
+    key: "read-only",
+    label: "Read-only",
+    help: "Read every resource; no writes.",
+  },
+  {
+    key: "read-write",
+    label: "Read & write",
+    help: "Read and write everything except admin.",
+  },
+  {
+    key: "admin",
+    label: "Admin (full)",
+    help: "Full access, including settings and users.",
+  },
   { key: "custom", label: "Custom", help: "Pick exact scopes." },
 ] as const;
 
@@ -1266,7 +1429,8 @@ export function ApiKeysTab() {
   });
 
   const [name, setName] = useState("");
-  const [role, setRole] = useState<(typeof ROLE_PRESETS)[number]["key"]>("read-only");
+  const [role, setRole] =
+    useState<(typeof ROLE_PRESETS)[number]["key"]>("read-only");
   const [customScopes, setCustomScopes] = useState<string[]>(["read:scans"]);
   const [expiryDays, setExpiryDays] = useState(90);
   const [created, setCreated] = useState<ApiTokenCreated | null>(null);
@@ -1287,7 +1451,8 @@ export function ApiKeysTab() {
       setName("");
       qc.invalidateQueries({ queryKey: ["api-tokens"] });
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Could not create key"),
+    onError: (e) =>
+      toast.error(e instanceof Error ? e.message : "Could not create key"),
   });
   const revoke = useMutation({
     mutationFn: (id: string) => api.delete(`/auth/tokens/${id}`),
@@ -1295,25 +1460,38 @@ export function ApiKeysTab() {
       toast.success("Key revoked");
       qc.invalidateQueries({ queryKey: ["api-tokens"] });
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Revoke failed"),
+    onError: (e) =>
+      toast.error(e instanceof Error ? e.message : "Revoke failed"),
   });
 
   const toggleScope = (s: string) =>
-    setCustomScopes((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]));
+    setCustomScopes((prev) =>
+      prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s],
+    );
 
   const canCreate =
-    name.trim().length > 0 && (role !== "custom" || customScopes.length > 0) && !create.isPending;
+    name.trim().length > 0 &&
+    (role !== "custom" || customScopes.length > 0) &&
+    !create.isPending;
 
-  const origin = typeof window !== "undefined" ? window.location.origin : "https://wolf.example.com";
+  const origin =
+    typeof window !== "undefined"
+      ? window.location.origin
+      : "https://wolf.example.com";
 
   return (
     <section className="space-y-4 max-w-2xl">
       <p className="text-sm text-muted-foreground">
         API keys are scoped, revocable credentials for the{" "}
-        <code className="text-foreground">wolf</code> CLI, CI pipelines, and agents. They{" "}
-        <strong>bypass two-factor auth</strong> by design, so treat them like passwords. Browse the
-        full API at{" "}
-        <a href="/api/v1/docs" target="_blank" rel="noreferrer" className="text-foreground hover:underline">
+        <code className="text-foreground">wolf</code> CLI, CI pipelines, and
+        agents. They <strong>bypass two-factor auth</strong> by design, so treat
+        them like passwords. Browse the full API at{" "}
+        <a
+          href="/api/v1/docs"
+          target="_blank"
+          rel="noreferrer"
+          className="text-foreground hover:underline"
+        >
           /api/v1/docs
         </a>
         .
@@ -1341,7 +1519,9 @@ export function ApiKeysTab() {
             </button>
           </div>
           <div className="space-y-1">
-            <p className="text-xs text-muted-foreground">Use it with the CLI:</p>
+            <p className="text-xs text-muted-foreground">
+              Use it with the CLI:
+            </p>
             <pre className="path text-xs rounded bg-muted/50 p-2 overflow-x-auto">
               {`export WOLF_SERVER=${origin}\nexport WOLF_TOKEN=${created.token}\nwolf scans list`}
             </pre>
@@ -1420,7 +1600,13 @@ export function ApiKeysTab() {
                   onChange={() => toggleScope(s)}
                   className="size-3.5 accent-primary"
                 />
-                <span className={s === "admin" ? "text-amber-300 font-mono" : "font-mono"}>{s}</span>
+                <span
+                  className={
+                    s === "admin" ? "text-amber-300 font-mono" : "font-mono"
+                  }
+                >
+                  {s}
+                </span>
               </label>
             ))}
           </div>
@@ -1442,7 +1628,9 @@ export function ApiKeysTab() {
         {q.isLoading ? (
           <div className="p-5 text-sm text-muted-foreground">Loading…</div>
         ) : !q.data || q.data.length === 0 ? (
-          <div className="p-5 text-sm text-muted-foreground">No API keys yet.</div>
+          <div className="p-5 text-sm text-muted-foreground">
+            No API keys yet.
+          </div>
         ) : (
           <table className="w-full text-sm">
             <thead className="text-xs text-muted-foreground border-b border-border/30">
@@ -1457,9 +1645,13 @@ export function ApiKeysTab() {
             <tbody>
               {q.data.map((t) => {
                 const revoked = !!t.revoked_at;
-                const expired = !!t.expires_at && new Date(t.expires_at) < new Date();
+                const expired =
+                  !!t.expires_at && new Date(t.expires_at) < new Date();
                 return (
-                  <tr key={t.id} className="border-t border-border/20 align-top">
+                  <tr
+                    key={t.id}
+                    className="border-t border-border/20 align-top"
+                  >
                     <td className="px-4 py-2">
                       <div className="font-medium">{t.name}</div>
                       {(revoked || expired) && (
@@ -1468,7 +1660,9 @@ export function ApiKeysTab() {
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-2 font-mono text-xs text-muted-foreground">{t.token_prefix}…</td>
+                    <td className="px-4 py-2 font-mono text-xs text-muted-foreground">
+                      {t.token_prefix}…
+                    </td>
                     <td className="px-4 py-2">
                       <div className="flex flex-wrap gap-1">
                         {t.scopes.map((s) => (
@@ -1482,7 +1676,9 @@ export function ApiKeysTab() {
                       </div>
                     </td>
                     <td className="px-4 py-2 text-xs text-muted-foreground">
-                      {t.expires_at ? new Date(t.expires_at).toLocaleDateString() : "never"}
+                      {t.expires_at
+                        ? new Date(t.expires_at).toLocaleDateString()
+                        : "never"}
                     </td>
                     <td className="px-4 py-2 text-right">
                       {!revoked && (
@@ -1544,7 +1740,8 @@ export function SecretsTab() {
       toast.success("Secret deleted");
       qc.invalidateQueries({ queryKey: ["secrets"] });
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Delete failed"),
+    onError: (e) =>
+      toast.error(e instanceof Error ? e.message : "Delete failed"),
   });
   const create = useMutation({
     mutationFn: (body: { key_type: string; key_name: string; value: string }) =>
@@ -1553,17 +1750,23 @@ export function SecretsTab() {
       toast.success("Secret added");
       qc.invalidateQueries({ queryKey: ["secrets"] });
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Create failed"),
+    onError: (e) =>
+      toast.error(e instanceof Error ? e.message : "Create failed"),
   });
 
   return (
     <section className="space-y-4">
-      <NewSecretForm onSubmit={(b) => create.mutate(b)} disabled={create.isPending} />
+      <NewSecretForm
+        onSubmit={(b) => create.mutate(b)}
+        disabled={create.isPending}
+      />
       <div className="glass-card overflow-hidden">
         {q.isLoading ? (
           <div className="p-5 text-sm text-muted-foreground">Loading…</div>
         ) : !q.data || q.data.length === 0 ? (
-          <div className="p-5 text-sm text-muted-foreground">No secrets stored.</div>
+          <div className="p-5 text-sm text-muted-foreground">
+            No secrets stored.
+          </div>
         ) : (
           <table className="w-full text-sm">
             <thead className="text-xs text-muted-foreground border-b border-border/30">
@@ -1579,12 +1782,18 @@ export function SecretsTab() {
                 <tr key={s.id} className="border-t border-border/20">
                   <td className="px-4 py-2 font-mono text-xs">{s.key_type}</td>
                   <td className="px-4 py-2">{s.key_name}</td>
-                  <td className="px-4 py-2 font-mono text-xs text-muted-foreground">{s.value}</td>
+                  <td className="px-4 py-2 font-mono text-xs text-muted-foreground">
+                    {s.value}
+                  </td>
                   <td className="px-4 py-2 text-right">
                     <button
                       type="button"
                       onClick={() => {
-                        if (window.confirm(`Delete secret "${s.key_name}"? This cannot be undone.`)) {
+                        if (
+                          window.confirm(
+                            `Delete secret "${s.key_name}"? This cannot be undone.`,
+                          )
+                        ) {
                           del.mutate(s.id);
                         }
                       }}
@@ -1669,7 +1878,13 @@ function NewSecretForm({
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <label className="block">
       <span className="block text-xs text-muted-foreground mb-1">{label}</span>
@@ -1705,7 +1920,8 @@ export function NodesTab() {
       toast.success("Node added");
       qc.invalidateQueries({ queryKey: ["remote-nodes"] });
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Create failed"),
+    onError: (e) =>
+      toast.error(e instanceof Error ? e.message : "Create failed"),
   });
   const update = useMutation({
     mutationFn: ({ id, body }: { id: string; body: Record<string, unknown> }) =>
@@ -1713,7 +1929,8 @@ export function NodesTab() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["remote-nodes"] });
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Update failed"),
+    onError: (e) =>
+      toast.error(e instanceof Error ? e.message : "Update failed"),
   });
   const check = useMutation({
     mutationFn: (id: string) => api.post(`/nodes/${id}/check`),
@@ -1732,7 +1949,8 @@ export function NodesTab() {
       toast.success("Node deleted");
       qc.invalidateQueries({ queryKey: ["remote-nodes"] });
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Delete failed"),
+    onError: (e) =>
+      toast.error(e instanceof Error ? e.message : "Delete failed"),
   });
 
   return (
@@ -1746,7 +1964,9 @@ export function NodesTab() {
         {nodes.isLoading ? (
           <div className="p-5 text-sm text-muted-foreground">Loading…</div>
         ) : !nodes.data || nodes.data.length === 0 ? (
-          <div className="p-5 text-sm text-muted-foreground">No remote nodes configured.</div>
+          <div className="p-5 text-sm text-muted-foreground">
+            No remote nodes configured.
+          </div>
         ) : (
           <table className="w-full text-sm">
             <thead className="text-xs text-muted-foreground border-b border-border/30">
@@ -1764,7 +1984,9 @@ export function NodesTab() {
                   <td className="px-4 py-2">
                     <div className="font-medium">{n.name}</div>
                     {n.base_path && (
-                      <div className="text-xs text-muted-foreground font-mono">{n.base_path}</div>
+                      <div className="text-xs text-muted-foreground font-mono">
+                        {n.base_path}
+                      </div>
                     )}
                   </td>
                   <td className="px-4 py-2 font-mono text-xs">
@@ -1772,14 +1994,24 @@ export function NodesTab() {
                   </td>
                   <td className="px-4 py-2 text-xs">{n.auth_type}</td>
                   <td className="px-4 py-2 text-xs">
-                    <span className={n.enabled ? "text-emerald-500" : "text-muted-foreground"}>
+                    <span
+                      className={
+                        n.enabled ? "text-emerald-500" : "text-muted-foreground"
+                      }
+                    >
                       {n.enabled ? "enabled" : "disabled"}
                     </span>
                     {n.last_check_status && (
-                      <span className="text-muted-foreground"> · {n.last_check_status}</span>
+                      <span className="text-muted-foreground">
+                        {" "}
+                        · {n.last_check_status}
+                      </span>
                     )}
                     {n.last_check_error && (
-                      <div className="text-destructive truncate max-w-[240px]" title={n.last_check_error}>
+                      <div
+                        className="text-destructive truncate max-w-[240px]"
+                        title={n.last_check_error}
+                      >
                         {n.last_check_error}
                       </div>
                     )}
@@ -1794,11 +2026,20 @@ export function NodesTab() {
                         aria-label="Check node"
                         title="Check node"
                       >
-                        {check.isPending ? <Loader2Icon className="size-4 animate-spin" /> : <CheckIcon className="size-4" />}
+                        {check.isPending ? (
+                          <Loader2Icon className="size-4 animate-spin" />
+                        ) : (
+                          <CheckIcon className="size-4" />
+                        )}
                       </button>
                       <button
                         type="button"
-                        onClick={() => update.mutate({ id: n.id, body: { enabled: !n.enabled } })}
+                        onClick={() =>
+                          update.mutate({
+                            id: n.id,
+                            body: { enabled: !n.enabled },
+                          })
+                        }
                         disabled={update.isPending}
                         className="h-8 px-2 rounded-md border border-border/40 text-xs hover:bg-muted/40 disabled:opacity-50"
                       >
@@ -1807,7 +2048,12 @@ export function NodesTab() {
                       <button
                         type="button"
                         onClick={() => {
-                          if (window.confirm(`Delete node "${n.name}"? Repos using it must be removed first.`)) del.mutate(n.id);
+                          if (
+                            window.confirm(
+                              `Delete node "${n.name}"? Repos using it must be removed first.`,
+                            )
+                          )
+                            del.mutate(n.id);
                         }}
                         disabled={del.isPending}
                         className="size-8 grid place-items-center rounded-md hover:bg-destructive/10 text-destructive disabled:opacity-50"
@@ -1840,12 +2086,16 @@ function NewNodeForm({
   const [host, setHost] = useState("");
   const [port, setPort] = useState("22");
   const [username, setUsername] = useState("");
-  const [authType, setAuthType] = useState<"private_key" | "password">("private_key");
+  const [authType, setAuthType] = useState<"private_key" | "password">(
+    "private_key",
+  );
   const [secretId, setSecretId] = useState("");
   const [knownHosts, setKnownHosts] = useState("");
   const [basePath, setBasePath] = useState("");
   const allowedSecrets = secrets.filter((s) =>
-    authType === "private_key" ? s.key_type === "ssh_private_key" : s.key_type === "ssh_password",
+    authType === "private_key"
+      ? s.key_type === "ssh_private_key"
+      : s.key_type === "ssh_password",
   );
 
   return (
@@ -1875,42 +2125,99 @@ function NewNodeForm({
     >
       <div className="grid md:grid-cols-[1fr_1fr_90px_1fr] gap-2">
         <Field label="Name">
-          <input required value={name} onChange={(e) => setName(e.target.value)} placeholder="dev-box" className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm" />
+          <input
+            required
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="dev-box"
+            className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm"
+          />
         </Field>
         <Field label="Host">
-          <input required value={host} onChange={(e) => setHost(e.target.value)} placeholder="dev.example.com" className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm font-mono" />
+          <input
+            required
+            value={host}
+            onChange={(e) => setHost(e.target.value)}
+            placeholder="dev.example.com"
+            className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm font-mono"
+          />
         </Field>
         <Field label="Port">
-          <input required value={port} onChange={(e) => setPort(e.target.value)} inputMode="numeric" className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm" />
+          <input
+            required
+            value={port}
+            onChange={(e) => setPort(e.target.value)}
+            inputMode="numeric"
+            className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm"
+          />
         </Field>
         <Field label="Username">
-          <input required value={username} onChange={(e) => setUsername(e.target.value)} placeholder="alice" className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm" />
+          <input
+            required
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            placeholder="alice"
+            className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm"
+          />
         </Field>
       </div>
       <div className="grid md:grid-cols-[180px_1fr_1fr_auto] gap-2 items-end">
         <Field label="Auth">
-          <select value={authType} onChange={(e) => { setAuthType(e.target.value as "private_key" | "password"); setSecretId(""); }} className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm">
+          <select
+            value={authType}
+            onChange={(e) => {
+              setAuthType(e.target.value as "private_key" | "password");
+              setSecretId("");
+            }}
+            className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm"
+          >
             <option value="private_key">Private key</option>
             <option value="password">Password</option>
           </select>
         </Field>
         <Field label="Credential secret">
-          <select value={secretId} onChange={(e) => setSecretId(e.target.value)} className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm">
+          <select
+            value={secretId}
+            onChange={(e) => setSecretId(e.target.value)}
+            className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm"
+          >
             <option value="">Select secret…</option>
             {allowedSecrets.map((s) => (
-              <option key={s.id} value={s.id}>{s.key_name}</option>
+              <option key={s.id} value={s.id}>
+                {s.key_name}
+              </option>
             ))}
           </select>
         </Field>
         <Field label="Base path">
-          <input value={basePath} onChange={(e) => setBasePath(e.target.value)} placeholder="/home/alice/code" className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm font-mono" />
+          <input
+            value={basePath}
+            onChange={(e) => setBasePath(e.target.value)}
+            placeholder="/home/alice/code"
+            className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm font-mono"
+          />
         </Field>
-        <button type="submit" disabled={disabled || !secretId || !name.trim() || !host.trim() || !username.trim()} className="inline-flex items-center gap-1 h-9 px-3 rounded-md bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50">
+        <button
+          type="submit"
+          disabled={
+            disabled ||
+            !secretId ||
+            !name.trim() ||
+            !host.trim() ||
+            !username.trim()
+          }
+          className="inline-flex items-center gap-1 h-9 px-3 rounded-md bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
+        >
           <PlusIcon className="size-4" /> Add
         </button>
       </div>
       <Field label="Known hosts">
-        <textarea value={knownHosts} onChange={(e) => setKnownHosts(e.target.value)} placeholder="dev.example.com ssh-ed25519 AAAA…" className="w-full min-h-20 px-2 py-2 rounded-md bg-muted/40 border border-border/40 text-sm font-mono" />
+        <textarea
+          value={knownHosts}
+          onChange={(e) => setKnownHosts(e.target.value)}
+          placeholder="dev.example.com ssh-ed25519 AAAA…"
+          className="w-full min-h-20 px-2 py-2 rounded-md bg-muted/40 border border-border/40 text-sm font-mono"
+        />
       </Field>
     </form>
   );
@@ -1928,7 +2235,54 @@ interface UserSummary {
   role: string;
   created_at: string;
   updated_at: string;
+  scanner_supply_chain_personas: ScannerPersonaID[];
+  scanner_supply_chain_scopes: string[];
 }
+
+type ScannerPersonaID =
+  | "viewer"
+  | "scanner_operator"
+  | "release_approver"
+  | "registry_administrator"
+  | "supply_chain_administrator"
+  | "auditor";
+
+const SCANNER_PERSONA_PRESETS: Array<{
+  id: ScannerPersonaID;
+  label: string;
+  help: string;
+}> = [
+  {
+    id: "viewer",
+    label: "Viewer",
+    help: "Read scanner inventory, operations, evidence, and audit history.",
+  },
+  {
+    id: "scanner_operator",
+    label: "Scanner operator",
+    help: "Run discovery, build candidates, promote releases, and control rollouts.",
+  },
+  {
+    id: "release_approver",
+    label: "Release approver",
+    help: "Approve, reject, except, and publish verified candidates.",
+  },
+  {
+    id: "registry_administrator",
+    label: "Registry administrator",
+    help: "Manage registry targets, reconciliation, repair, and quarantine cleanup.",
+  },
+  {
+    id: "supply_chain_administrator",
+    label: "Supply-chain administrator",
+    help: "Full scanner administration, including policy, signing, and revocation.",
+  },
+  {
+    id: "auditor",
+    label: "Auditor",
+    help: "Read-only evidence and immutable scanner audit access.",
+  },
+];
 
 function UsersTab() {
   const qc = useQueryClient();
@@ -1941,13 +2295,18 @@ function UsersTab() {
     queryFn: async () => (await api.get<UserSummary[]>("/users")).data ?? [],
   });
   const create = useMutation({
-    mutationFn: (body: { email: string; password: string; role: string }) =>
-      api.post("/users", body),
+    mutationFn: (body: {
+      email: string;
+      password: string;
+      role: string;
+      scanner_supply_chain_personas?: ScannerPersonaID[];
+    }) => api.post("/users", body),
     onSuccess: () => {
       toast.success("User created");
       qc.invalidateQueries({ queryKey: ["users"] });
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Create failed"),
+    onError: (e) =>
+      toast.error(e instanceof Error ? e.message : "Create failed"),
   });
   const setRole = useMutation({
     mutationFn: ({ id, role }: { id: string; role: string }) =>
@@ -1956,7 +2315,23 @@ function UsersTab() {
       toast.success("Role updated");
       qc.invalidateQueries({ queryKey: ["users"] });
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Role change failed"),
+    onError: (e) =>
+      toast.error(e instanceof Error ? e.message : "Role change failed"),
+  });
+  const setScannerAccess = useMutation({
+    mutationFn: ({
+      id,
+      personas,
+    }: {
+      id: string;
+      personas: ScannerPersonaID[];
+    }) => api.put(`/users/${id}/scanner-supply-chain-access`, { personas }),
+    onSuccess: () => {
+      toast.success("Scanner access updated");
+      qc.invalidateQueries({ queryKey: ["users"] });
+    },
+    onError: (error) =>
+      toast.error(safeErrorMessage(error, "Scanner access update failed")),
   });
   const del = useMutation({
     mutationFn: (id: string) => api.delete(`/users/${id}`),
@@ -1964,13 +2339,17 @@ function UsersTab() {
       toast.success("User deleted");
       qc.invalidateQueries({ queryKey: ["users"] });
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Delete failed"),
+    onError: (e) =>
+      toast.error(e instanceof Error ? e.message : "Delete failed"),
   });
   const meId = meQ.data?.id;
   const adminCount = (q.data ?? []).filter((u) => u.role === "admin").length;
   return (
     <section className="space-y-4">
-      <NewUserForm onSubmit={(b) => create.mutate(b)} disabled={create.isPending} />
+      <NewUserForm
+        onSubmit={(b) => create.mutate(b)}
+        disabled={create.isPending}
+      />
       <div className="glass-card overflow-hidden">
         {q.isLoading ? (
           <div className="p-5 text-sm text-muted-foreground">Loading…</div>
@@ -1980,6 +2359,7 @@ function UsersTab() {
               <tr>
                 <th className="text-left px-4 py-2">Email</th>
                 <th className="text-left px-4 py-2">Role</th>
+                <th className="text-left px-4 py-2">Scanner access</th>
                 <th className="text-left px-4 py-2">Created</th>
                 <th className="text-right px-4 py-2 w-12"></th>
               </tr>
@@ -2008,15 +2388,39 @@ function UsersTab() {
                         <select
                           value={isAdmin ? "admin" : "user"}
                           disabled={setRole.isPending || lockDemote}
-                          onChange={(e) => setRole.mutate({ id: u.id, role: e.target.value })}
+                          onChange={(e) =>
+                            setRole.mutate({ id: u.id, role: e.target.value })
+                          }
                           className="h-7 px-1.5 rounded-md bg-muted/40 border border-border/40 text-xs disabled:opacity-60"
                           title={
-                            lockDemote ? "There must be at least one admin" : "Change role"
+                            lockDemote
+                              ? "There must be at least one admin"
+                              : "Change role"
                           }
                         >
                           <option value="user">User</option>
                           <option value="admin">Admin</option>
                         </select>
+                      )}
+                    </td>
+                    <td className="px-4 py-2">
+                      {isAdmin ? (
+                        <div>
+                          <span className="text-xs font-medium">
+                            Full access
+                          </span>
+                          <p className="text-[11px] text-muted-foreground">
+                            Inherited from system administrator
+                          </p>
+                        </div>
+                      ) : (
+                        <ScannerAccessDialog
+                          user={u}
+                          disabled={setScannerAccess.isPending}
+                          onSave={(personas) =>
+                            setScannerAccess.mutateAsync({ id: u.id, personas })
+                          }
+                        />
                       )}
                     </td>
                     <td className="px-4 py-2 text-xs text-muted-foreground">
@@ -2027,7 +2431,11 @@ function UsersTab() {
                         <button
                           type="button"
                           onClick={() => {
-                            if (window.confirm(`Delete user "${u.email}"? This cannot be undone.`)) {
+                            if (
+                              window.confirm(
+                                `Delete user "${u.email}"? This cannot be undone.`,
+                              )
+                            ) {
                               del.mutate(u.id);
                             }
                           }}
@@ -2066,22 +2474,191 @@ function RoleBadge({ role }: { role: string }) {
   );
 }
 
+function ScannerAccessDialog({
+  user,
+  disabled,
+  onSave,
+}: {
+  user: UserSummary;
+  disabled?: boolean;
+  onSave: (personas: ScannerPersonaID[]) => Promise<unknown>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [personas, setPersonas] = useState<ScannerPersonaID[]>(["viewer"]);
+  const [saving, setSaving] = useState(false);
+  const assigned = normalizeDisplayedPersonas(
+    user.scanner_supply_chain_personas,
+  );
+
+  function openEditor() {
+    setPersonas(assigned);
+    setOpen(true);
+  }
+
+  async function save() {
+    setSaving(true);
+    try {
+      await onSave(personas.length ? personas : ["viewer"]);
+      setOpen(false);
+    } catch {
+      // The mutation owns the safe operator-facing error toast. Keep the
+      // dialog open so the administrator can correct and retry.
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <>
+      <div className="flex max-w-sm flex-wrap items-center gap-1.5">
+        {assigned.map((persona) => (
+          <span
+            key={persona}
+            className="rounded border border-border/50 bg-muted/40 px-1.5 py-0.5 text-[11px]"
+          >
+            {scannerPersonaLabel(persona)}
+          </span>
+        ))}
+        <button
+          type="button"
+          onClick={openEditor}
+          disabled={disabled}
+          className="rounded-md border border-border/60 px-2 py-1 text-xs hover:bg-muted/40 disabled:opacity-50"
+          aria-label={`Manage scanner access for ${user.email}`}
+        >
+          Manage
+        </button>
+      </div>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Scanner access for {user.email}</DialogTitle>
+            <DialogDescription>
+              Assign server-owned personas. Operational personas can be
+              combined; Viewer, Auditor, and Supply-chain administrator are
+              exclusive presets.
+            </DialogDescription>
+          </DialogHeader>
+          <ScannerPersonaChecklist value={personas} onChange={setPersonas} />
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              disabled={saving}
+              className="h-9 rounded-md border border-border/60 px-3 text-sm"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => void save()}
+              disabled={saving}
+              className="h-9 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground disabled:opacity-50"
+            >
+              {saving ? "Saving…" : "Save scanner access"}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+function ScannerPersonaChecklist({
+  value,
+  onChange,
+}: {
+  value: ScannerPersonaID[];
+  onChange: (personas: ScannerPersonaID[]) => void;
+}) {
+  function toggle(persona: ScannerPersonaID, checked: boolean) {
+    if (!checked) {
+      const next = value.filter((current) => current !== persona);
+      onChange(next.length ? next : ["viewer"]);
+      return;
+    }
+    if (
+      persona === "viewer" ||
+      persona === "auditor" ||
+      persona === "supply_chain_administrator"
+    ) {
+      onChange([persona]);
+      return;
+    }
+    onChange([
+      ...value.filter(
+        (current) =>
+          current !== "viewer" &&
+          current !== "auditor" &&
+          current !== "supply_chain_administrator" &&
+          current !== persona,
+      ),
+      persona,
+    ]);
+  }
+
+  return (
+    <fieldset className="grid gap-2 sm:grid-cols-2">
+      <legend className="sr-only">Scanner supply-chain personas</legend>
+      {SCANNER_PERSONA_PRESETS.map((preset) => (
+        <label
+          key={preset.id}
+          className="flex cursor-pointer items-start gap-3 rounded-md border border-border/60 p-3 hover:bg-muted/30"
+        >
+          <input
+            type="checkbox"
+            checked={value.includes(preset.id)}
+            onChange={(event) => toggle(preset.id, event.target.checked)}
+            className="mt-1 size-4 accent-primary"
+          />
+          <span>
+            <span className="block text-sm font-medium">{preset.label}</span>
+            <span className="block text-xs text-muted-foreground">
+              {preset.help}
+            </span>
+          </span>
+        </label>
+      ))}
+    </fieldset>
+  );
+}
+
+function normalizeDisplayedPersonas(
+  personas: ScannerPersonaID[] | undefined,
+): ScannerPersonaID[] {
+  return personas?.length ? personas : ["viewer"];
+}
+
+function scannerPersonaLabel(persona: ScannerPersonaID): string {
+  return (
+    SCANNER_PERSONA_PRESETS.find((preset) => preset.id === persona)?.label ??
+    persona
+  );
+}
+
 function NewUserForm({
   onSubmit,
   disabled,
 }: {
-  onSubmit: (b: { email: string; password: string; role: string }) => void;
+  onSubmit: (b: {
+    email: string;
+    password: string;
+    role: string;
+    scanner_supply_chain_personas?: ScannerPersonaID[];
+  }) => void;
   disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("user");
+  const [personas, setPersonas] = useState<ScannerPersonaID[]>(["viewer"]);
 
   function reset() {
     setEmail("");
     setPassword("");
     setRole("user");
+    setPersonas(["viewer"]);
     setOpen(false);
   }
 
@@ -2106,7 +2683,14 @@ function NewUserForm({
       onSubmit={(e) => {
         e.preventDefault();
         if (!email.trim() || password.length < 12) return;
-        onSubmit({ email: email.trim().toLowerCase(), password, role });
+        onSubmit({
+          email: email.trim().toLowerCase(),
+          password,
+          role,
+          ...(role === "user"
+            ? { scanner_supply_chain_personas: personas }
+            : {}),
+        });
         reset();
       }}
     >
@@ -2114,7 +2698,6 @@ function NewUserForm({
         <Field label="Email">
           <input
             required
-            autoFocus
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -2144,6 +2727,21 @@ function NewUserForm({
           </select>
         </Field>
       </div>
+      {role === "user" ? (
+        <div className="space-y-2 border-t border-border/40 pt-3">
+          <div>
+            <h3 className="text-sm font-medium">Scanner supply-chain access</h3>
+            <p className="text-xs text-muted-foreground">
+              Start least-privileged. Operational personas can be combined.
+            </p>
+          </div>
+          <ScannerPersonaChecklist value={personas} onChange={setPersonas} />
+        </div>
+      ) : (
+        <p className="rounded-md border border-border/50 bg-muted/30 p-3 text-xs text-muted-foreground">
+          System administrators receive implicit full scanner access.
+        </p>
+      )}
       <div className="flex items-center gap-2">
         <button
           type="submit"
@@ -2242,22 +2840,28 @@ interface ScannerVersionCheck {
 
 function ScannersTab() {
   const qc = useQueryClient();
+  const navigate = useNavigate();
+  const runtimeQ = useRuntimeCapabilities();
+  const dockerImageManagement = runtimeQ.data?.docker_image_management ?? true;
   const cfgQ = useQuery({
     queryKey: ["scanners-config"],
-    queryFn: async () => (await api.get<ScannersConfig>("/scanners/config")).data,
+    queryFn: async () =>
+      (await api.get<ScannersConfig>("/scanners/config")).data,
+    enabled: dockerImageManagement,
   });
   const [doctor, setDoctor] = useState<DoctorResult | null>(null);
   const [pull, setPull] = useState<PullResult | null>(null);
 
   const doctorMut = useMutation({
-    mutationFn: async () => (await api.post<DoctorResult>("/scanners/doctor")).data,
+    mutationFn: async () =>
+      (await api.post<DoctorResult>("/scanners/doctor")).data,
     onSuccess: (d) => {
       setDoctor(d);
       if (d?.overall_ok) toast.success("All scanner checks passed");
       else toast.error("Scanner checks failed — see report below");
     },
     onError: (e) =>
-      toast.error(e instanceof Error ? e.message : "Doctor failed"),
+      toast.error(safeErrorMessage(e, "Scanner diagnostics could not run.")),
   });
 
   const pullMut = useMutation({
@@ -2274,15 +2878,38 @@ function ScannersTab() {
       qc.invalidateQueries({ queryKey: ["scanners-config"] });
     },
     onError: (e) =>
-      toast.error(e instanceof Error ? e.message : "Pull failed"),
+      toast.error(safeErrorMessage(e, "Scanner images could not be pulled.")),
   });
 
-  if (cfgQ.isLoading) {
-    return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (runtimeQ.isLoading || (dockerImageManagement && cfgQ.isLoading)) {
+    return (
+      <p className="text-sm text-muted-foreground" role="status">
+        Loading scanner runtime…
+      </p>
+    );
+  }
+  if (runtimeQ.data && !runtimeQ.data.docker_image_management) {
+    return (
+      <section className="space-y-4">
+        <ScannerReleaseManagementLink
+          onOpen={() => navigate({ to: "/scanners" })}
+        />
+        <div className="glass-card p-5">
+          <h3 className="text-sm font-medium">
+            Scanner runtime is managed by Kubernetes
+          </h3>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Image pull, build, and local Docker diagnostics are unavailable in
+            this deployment. Scanner images and policies are managed by the
+            cluster operator.
+          </p>
+        </div>
+      </section>
+    );
   }
   if (cfgQ.isError || !cfgQ.data) {
     return (
-      <p className="text-sm text-destructive">
+      <p className="text-sm text-destructive" role="alert">
         Failed to load scanner config — is the container backend initialized?
       </p>
     );
@@ -2312,6 +2939,9 @@ function ScannersTab() {
 
   return (
     <section className="space-y-4">
+      <ScannerReleaseManagementLink
+        onOpen={() => navigate({ to: "/scanners" })}
+      />
       {/* Operator actions row. Doctor + Set up are the two day-1 buttons. */}
       <div className="glass-card p-5">
         <div className="flex flex-wrap items-center gap-2">
@@ -2363,7 +2993,11 @@ function ScannersTab() {
 
         {/* Doctor result panel. */}
         {doctor && (
-          <div className="mt-4 rounded-md border border-border/40 bg-muted/20 p-3 text-sm space-y-1">
+          <div
+            className="mt-4 rounded-md border border-border/40 bg-muted/20 p-3 text-sm space-y-1"
+            role={doctor.overall_ok ? "status" : "alert"}
+            aria-live="polite"
+          >
             <div className="flex items-center gap-2 mb-1">
               {doctor.overall_ok ? (
                 <CheckIcon className="size-4 text-emerald-400" />
@@ -2371,9 +3005,7 @@ function ScannersTab() {
                 <span className="text-destructive">●</span>
               )}
               <span className="font-medium">
-                {doctor.overall_ok
-                  ? "All checks passed"
-                  : "Some checks failed"}
+                {doctor.overall_ok ? "All checks passed" : "Some checks failed"}
               </span>
             </div>
             <ul className="text-xs space-y-0.5 font-mono">
@@ -2389,7 +3021,10 @@ function ScannersTab() {
                     {c.detail && (
                       <span className="text-muted-foreground">
                         {" "}
-                        — {c.detail}
+                        —{" "}
+                        {c.ok
+                          ? "Check completed."
+                          : "Check failed. Review server logs."}
                       </span>
                     )}
                   </span>
@@ -2401,7 +3036,11 @@ function ScannersTab() {
 
         {/* Pull result panel. */}
         {pull && (
-          <div className="mt-4 rounded-md border border-border/40 bg-muted/20 p-3 text-sm space-y-1">
+          <div
+            className="mt-4 rounded-md border border-border/40 bg-muted/20 p-3 text-sm space-y-1"
+            role={pull.errors?.length ? "alert" : "status"}
+            aria-live="polite"
+          >
             <div className="font-medium mb-1">
               Pulled {pull.pulled?.length ?? 0} image
               {(pull.pulled?.length ?? 0) === 1 ? "" : "s"}
@@ -2415,7 +3054,8 @@ function ScannersTab() {
               <ul className="text-xs space-y-0.5 font-mono text-destructive">
                 {pull.errors.map((e, i) => (
                   <li key={i}>
-                    {e.image}: {e.error}
+                    {e.image}: Pull failed. Review registry access and server
+                    logs.
                   </li>
                 ))}
               </ul>
@@ -2447,7 +3087,10 @@ function ScannersTab() {
           <h3 className="text-sm font-medium mb-2">Per-tool image overrides</h3>
           <ul className="text-sm space-y-1">
             {Object.entries(cfg.image_overrides).map(([tool, image]) => (
-              <li key={tool} className="flex items-center gap-3 font-mono text-xs">
+              <li
+                key={tool}
+                className="flex items-center gap-3 font-mono text-xs"
+              >
                 <span className="text-muted-foreground w-24">{tool}</span>
                 <code>{image}</code>
               </li>
@@ -2456,6 +3099,29 @@ function ScannersTab() {
         </div>
       )}
     </section>
+  );
+}
+
+function ScannerReleaseManagementLink({ onOpen }: { onOpen: () => void }) {
+  return (
+    <div className="glass-card flex flex-col gap-3 border-primary/20 p-5 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <h3 className="text-sm font-medium">Scanner release management</h3>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Scheduled update discovery, signed candidates, approvals, registry
+          health, canary rollouts, and rollback now live in the dedicated
+          supply-chain console. Inventory, image troubleshooting, and custom
+          builds remain here.
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={onOpen}
+        className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        Open supply-chain console
+      </button>
+    </div>
   );
 }
 
@@ -2479,7 +3145,7 @@ function ScannerToolsPanel() {
       qc.invalidateQueries({ queryKey: ["scanner-tools"] });
     },
     onError: (e) =>
-      toast.error(e instanceof Error ? e.message : "Version check failed"),
+      toast.error(safeErrorMessage(e, "Scanner version checks could not run.")),
   });
   const checkOne = useMutation({
     mutationFn: async (name: string) =>
@@ -2493,7 +3159,9 @@ function ScannerToolsPanel() {
       qc.invalidateQueries({ queryKey: ["scanner-tools"] });
     },
     onError: (e) =>
-      toast.error(e instanceof Error ? e.message : "Version check failed"),
+      toast.error(
+        safeErrorMessage(e, "The scanner version check could not run."),
+      ),
   });
 
   const tools = q.data ?? [];
@@ -2509,7 +3177,10 @@ function ScannerToolsPanel() {
           <p className="text-xs text-muted-foreground mt-0.5">
             {tools.length} tools
             {updateCount > 0 && (
-              <span className="text-amber-300"> · {updateCount} update available</span>
+              <span className="text-amber-300">
+                {" "}
+                · {updateCount} update available
+              </span>
             )}
           </p>
         </div>
@@ -2529,9 +3200,13 @@ function ScannerToolsPanel() {
       </div>
 
       {q.isLoading ? (
-        <p className="text-xs text-muted-foreground">Loading scanner tools…</p>
+        <p className="text-xs text-muted-foreground" role="status">
+          Loading scanner tools…
+        </p>
       ) : q.isError ? (
-        <p className="text-xs text-destructive">Failed to load scanner tools.</p>
+        <p className="text-xs text-destructive" role="alert">
+          Failed to load scanner tools.
+        </p>
       ) : tools.length > 0 ? (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -2548,9 +3223,14 @@ function ScannerToolsPanel() {
             </thead>
             <tbody>
               {tools.map((tool) => (
-                <tr key={tool.name} className="border-b border-border/15 last:border-0">
+                <tr
+                  key={tool.name}
+                  className="border-b border-border/15 last:border-0"
+                >
                   <td className="py-2 pr-3">
-                    <div className="font-medium">{tool.display_name || tool.name}</div>
+                    <div className="font-medium">
+                      {tool.display_name || tool.name}
+                    </div>
                     <div className="text-[11px] text-muted-foreground">
                       {tool.name} · {tool.category}
                     </div>
@@ -2570,11 +3250,15 @@ function ScannerToolsPanel() {
                   <td className="py-2 pr-3 max-w-[260px]">
                     <div
                       className="font-mono text-xs truncate"
-                      title={tool.configured_image || tool.canonical_image || ""}
+                      title={
+                        tool.configured_image || tool.canonical_image || ""
+                      }
                     >
                       {tool.configured_image || tool.canonical_image || "—"}
                     </div>
-                    {(tool.image_present !== undefined || tool.overridden || tool.uses_latest_tag) && (
+                    {(tool.image_present !== undefined ||
+                      tool.overridden ||
+                      tool.uses_latest_tag) && (
                       <div className="mt-1 flex gap-1">
                         {tool.image_present !== undefined && (
                           <span
@@ -2609,7 +3293,8 @@ function ScannerToolsPanel() {
                       className="inline-flex items-center justify-center h-7 w-7 rounded-md border border-border/60 hover:bg-muted/30 disabled:opacity-50"
                       title={`Check ${tool.name}`}
                     >
-                      {checkOne.isPending && checkOne.variables === tool.name ? (
+                      {checkOne.isPending &&
+                      checkOne.variables === tool.name ? (
                         <Loader2Icon className="size-3.5 animate-spin" />
                       ) : (
                         <RefreshCwIcon className="size-3.5" />
@@ -2653,7 +3338,11 @@ function FreshnessPill({ tool }: { tool: ScannerToolStatus }) {
   return (
     <span
       className={`text-[10px] uppercase tracking-wide border rounded px-1.5 py-0.5 ${className}`}
-      title={tool.version_check_error || tool.version_checked_at || status}
+      title={
+        tool.version_check_error
+          ? "Version check failed. Review server logs."
+          : tool.version_checked_at || status
+      }
     >
       {status.replaceAll("_", " ")}
     </span>
@@ -2665,7 +3354,7 @@ function FreshnessPill({ tool }: { tool: ScannerToolStatus }) {
 // default repo (wolf-scanners) to find the variant's image in GET
 // /scanners/images so we can show its local vs. remote digest.
 const SCANNER_VARIANTS: {
-  name: string;
+  name: CustomBuildVariantName;
   label: string;
   suffix: string;
   // licenseNote surfaces a usage restriction the operator must clear before
@@ -2709,7 +3398,7 @@ function statusForVariant(
   return images.find((img) => repoOf(img.image).endsWith(suffix));
 }
 
-// ScannerImagesPanel — per-variant rebuild rows + a live build console.
+// ScannerImagesPanel — per-variant inventory + durable custom-build adapter.
 //
 // Every variant always shows a "Rebuild (local)" button (a `--load` build into
 // the local Docker daemon) regardless of whether DockerHub credentials exist —
@@ -2717,8 +3406,9 @@ function statusForVariant(
 // configured, a small "push to DockerHub" toggle appears beside each button,
 // turning the action into "Rebuild & push". With no secret, the toggle is
 // replaced by a one-line hint linking to the DockerHub credential card below;
-// the build button stays active either way. A header "Rebuild all" action runs
-// all four variants in sequence.
+// the build button stays active either way. The legacy entry points now queue
+// the same durable worker-owned operation used by the Custom builds workspace;
+// inventory and button labels remain stable for existing operators.
 function ScannerImagesPanel() {
   const imagesQ = useScannerImages();
   const images = imagesQ.data ?? [];
@@ -2744,15 +3434,27 @@ function ScannerImagesPanel() {
   // builder on the host running Wolf.
   const [multiArch, setMultiArch] = useState(false);
 
-  // The build the console should stream. Bumping `nonce` re-runs the same one.
-  const [target, setTarget] = useState<BuildTarget | null>(null);
-  const startBuild = (variant: string, push: boolean) =>
-    setTarget((prev) => ({
+  const [buildDefaults, setBuildDefaults] =
+    useState<CustomBuildCreateDefaults>();
+  const [buildDialogOpen, setBuildDialogOpen] = useState(false);
+  const [acceptedBuild, setAcceptedBuild] =
+    useState<CustomBuildOperationReceipt>();
+  const startBuild = (
+    variant: NonNullable<CustomBuildCreateDefaults["variant"]>,
+    requestedPush: boolean,
+  ) => {
+    const localOnly = variant === "codeql";
+    const effectivePush = localOnly ? false : requestedPush || multiArch;
+    setBuildDefaults({
       variant,
-      push: push || multiArch,
-      multiArch,
-      nonce: (prev?.nonce ?? 0) + 1,
-    }));
+      push: effectivePush,
+      platforms:
+        effectivePush && multiArch
+          ? ["linux/amd64", "linux/arm64"]
+          : ["linux/amd64"],
+    });
+    setBuildDialogOpen(true);
+  };
 
   return (
     <div className="space-y-4">
@@ -2804,7 +3506,8 @@ function ScannerImagesPanel() {
         <ul className="space-y-2 text-sm">
           {SCANNER_VARIANTS.map((v) => {
             const status = statusForVariant(images, v.suffix);
-            const push = hasDockerHubToken && !v.localOnly && !!pushVariants[v.name];
+            const push =
+              hasDockerHubToken && !v.localOnly && !!pushVariants[v.name];
             return (
               <li
                 key={v.name}
@@ -2872,7 +3575,8 @@ function ScannerImagesPanel() {
 
                 {v.licenseNote && (
                   <p className="basis-full text-xs text-amber-300/90 bg-amber-500/5 border border-amber-500/20 rounded px-2 py-1.5">
-                    ⚠ <span className="font-medium">License:</span> {v.licenseNote}
+                    ⚠ <span className="font-medium">License:</span>{" "}
+                    {v.licenseNote}
                   </p>
                 )}
               </li>
@@ -2893,7 +3597,42 @@ function ScannerImagesPanel() {
         )}
       </div>
 
-      <BuildConsole target={target} />
+      {acceptedBuild ? (
+        <div
+          className="glass-card border-emerald-500/30 p-4"
+          role="status"
+          aria-live="polite"
+        >
+          <p className="text-sm font-medium">Durable custom build queued</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Operation <code>{acceptedBuild.id}</code> is {acceptedBuild.state}.
+            It continues after navigation or reload.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <a
+              href={`/scanners?tab=custom_builds&custom_build=${encodeURIComponent(acceptedBuild.id)}${acceptedBuild.operation_id ? `&custom_build_operation_id=${encodeURIComponent(acceptedBuild.operation_id)}` : ""}${acceptedBuild.trace_id ? `&custom_build_trace_id=${encodeURIComponent(acceptedBuild.trace_id)}` : ""}`}
+              className="inline-flex h-8 items-center rounded-md border border-border/60 px-3 text-xs font-medium hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              Open Custom Build
+            </a>
+            {acceptedBuild.operation_id ? (
+              <a
+                href={`/scanners?tab=audit&operation_id=${encodeURIComponent(acceptedBuild.operation_id)}${acceptedBuild.trace_id ? `&trace_id=${encodeURIComponent(acceptedBuild.trace_id)}` : ""}`}
+                className="inline-flex h-8 items-center rounded-md border border-border/60 px-3 text-xs font-medium hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                Open operation audit
+              </a>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      <CustomBuildCreateDialog
+        open={buildDialogOpen}
+        onOpenChange={setBuildDialogOpen}
+        defaults={buildDefaults}
+        onAccepted={setAcceptedBuild}
+      />
 
       <div id="dockerhub-credential">
         <DockerHubCredentialCard />
@@ -2929,7 +3668,10 @@ function ImagesPanel() {
       toast.success(`Pulled ${image}`);
       qc.invalidateQueries({ queryKey: ["scanner-images"] });
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Pull failed"),
+    onError: (e) =>
+      toast.error(
+        safeErrorMessage(e, "The scanner image could not be pulled."),
+      ),
   });
 
   return (
@@ -2953,8 +3695,12 @@ function ImagesPanel() {
       </div>
 
       {q.isLoading ? (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-muted-foreground" role="status">
           Probing local + remote digests…
+        </p>
+      ) : q.isError ? (
+        <p className="text-xs text-destructive" role="alert">
+          Failed to probe scanner image digests.
         </p>
       ) : q.data && q.data.length > 0 ? (
         <ul className="space-y-2 text-sm">
@@ -2966,7 +3712,11 @@ function ImagesPanel() {
               <div className="font-mono text-xs flex-1 min-w-0 break-all">
                 {img.image}
               </div>
-              <DigestPill label="local" value={img.local_digest} err={img.local_error} />
+              <DigestPill
+                label="local"
+                value={img.local_digest}
+                err={img.local_error}
+              />
               <DigestPill
                 label="remote"
                 value={img.remote_digest}
@@ -2977,7 +3727,8 @@ function ImagesPanel() {
                   update available
                 </span>
               )}
-              {(img.updates_available || (!img.local_digest && !img.local_error)) && (
+              {(img.updates_available ||
+                (!img.local_digest && !img.local_error)) && (
                 <button
                   type="button"
                   onClick={() => pullOne.mutate(img.image)}
@@ -3017,7 +3768,7 @@ function DigestPill({
     return (
       <span
         className="text-[10px] uppercase tracking-wide text-red-300 bg-red-500/10 border border-red-500/30 rounded px-1.5 py-0.5"
-        title={err}
+        title={`${label} registry probe failed. Review server logs.`}
       >
         {label}: error
       </span>
@@ -3027,7 +3778,11 @@ function DigestPill({
     return (
       <span
         className="text-[10px] uppercase tracking-wide text-muted-foreground bg-muted/20 border border-border/30 rounded px-1.5 py-0.5"
-        title={label === "local" ? "image not pulled yet — use 'Set up scanners' or the per-image Update" : "no manifest available"}
+        title={
+          label === "local"
+            ? "image not pulled yet — use 'Set up scanners' or the per-image Update"
+            : "no manifest available"
+        }
       >
         {label}: {label === "local" ? "not pulled" : "—"}
       </span>

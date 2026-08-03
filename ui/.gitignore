@@ -2,6 +2,8 @@ node_modules
 dist
 .vite
 *.local
+playwright-report
+test-results
 
 # TanStack Router generates this at build/dev. Re-generated on demand.
 src/routeTree.gen.ts

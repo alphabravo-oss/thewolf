@@ -19,12 +19,14 @@ export function BranchSelect({
   onChange,
   defaultBranch,
   className,
+  name = "branch",
 }: {
   repoId: string;
   value: string;
   onChange: (branch: string) => void;
   defaultBranch?: string;
   className?: string;
+  name?: string;
 }) {
   const q = useQuery({
     queryKey: ["repo-branches", repoId],
@@ -49,6 +51,7 @@ export function BranchSelect({
 
   return (
     <select
+      name={name}
       value={value || repoDefault || fallback}
       onChange={(e) => onChange(e.target.value)}
       disabled={!repoId || q.isLoading}

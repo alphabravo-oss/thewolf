@@ -16,7 +16,10 @@ export const Route = createFileRoute("/_authed/scans/")({
   component: ScansPage,
 });
 
-function formatDuration(started?: string | null, completed?: string | null): string {
+function formatDuration(
+  started?: string | null,
+  completed?: string | null,
+): string {
   if (!started || !completed) return "—";
   const ms = new Date(completed).getTime() - new Date(started).getTime();
   if (Number.isNaN(ms) || ms < 0) return "—";
@@ -74,7 +77,9 @@ function ScansPage() {
               <tr>
                 <th className="text-left font-medium px-4 py-2">Status</th>
                 <th className="text-left font-medium px-4 py-2">Scan ID</th>
-                <th className="text-left font-medium px-4 py-2">Repo · Branch</th>
+                <th className="text-left font-medium px-4 py-2">
+                  Repo · Branch
+                </th>
                 <th className="text-left font-medium px-4 py-2">Tools</th>
                 <th className="text-right font-medium px-4 py-2">Findings</th>
                 <th className="text-left font-medium px-4 py-2">Started</th>
@@ -87,7 +92,10 @@ function ScansPage() {
                 const done = parseToolList(s.tools_completed);
                 const failed = parseToolList(s.tools_failed);
                 return (
-                  <tr key={s.id} className="border-t border-border/30 table-row-hover">
+                  <tr
+                    key={s.id}
+                    className="border-t border-border/30 table-row-hover"
+                  >
                     <td className="px-4 py-2">
                       <ScanStatusPill status={s.status} />
                     </td>
@@ -115,9 +123,13 @@ function ScansPage() {
                     </td>
                     <td className="px-4 py-2 text-xs tabular-nums">
                       <span className="text-foreground">{done.length}</span>
-                      <span className="text-muted-foreground">/{sel.length}</span>
+                      <span className="text-muted-foreground">
+                        /{sel.length}
+                      </span>
                       {failed.length > 0 && (
-                        <span className="text-red-400 ml-1">· {failed.length} failed</span>
+                        <span className="text-red-400 ml-1">
+                          · {failed.length} failed
+                        </span>
                       )}
                     </td>
                     <td className="px-4 py-2 text-right font-mono tabular-nums">
@@ -215,7 +227,8 @@ function NewScanForm({ onClose }: { onClose: () => void }) {
       return next;
     });
   };
-  const pickAll = () => setPicked(new Set((scanners.data ?? []).map((s) => s.name)));
+  const pickAll = () =>
+    setPicked(new Set((scanners.data ?? []).map((s) => s.name)));
   const pickNone = () => setPicked(new Set());
 
   return (
@@ -253,6 +266,7 @@ function NewScanForm({ onClose }: { onClose: () => void }) {
           </div>
         ) : (
           <select
+            name="repo_id"
             value={repoId}
             onChange={(e) => {
               setRepoId(e.target.value);
@@ -292,6 +306,7 @@ function NewScanForm({ onClose }: { onClose: () => void }) {
             <button
               type="button"
               onClick={() => setToolMode("auto")}
+              aria-pressed={toolMode === "auto"}
               className={`h-7 px-2.5 rounded-md transition ${
                 toolMode === "auto"
                   ? "bg-primary text-primary-foreground"
@@ -303,6 +318,7 @@ function NewScanForm({ onClose }: { onClose: () => void }) {
             <button
               type="button"
               onClick={() => setToolMode("explicit")}
+              aria-pressed={toolMode === "explicit"}
               className={`h-7 px-2.5 rounded-md transition ${
                 toolMode === "explicit"
                   ? "bg-primary text-primary-foreground"
@@ -316,7 +332,9 @@ function NewScanForm({ onClose }: { onClose: () => void }) {
           {toolMode === "explicit" && (
             <div className="border border-border/40 rounded-md p-3 space-y-2 bg-muted/10">
               {scanners.isLoading ? (
-                <div className="text-xs text-muted-foreground">Loading scanners…</div>
+                <div className="text-xs text-muted-foreground">
+                  Loading scanners…
+                </div>
               ) : (
                 <>
                   <div className="flex items-center justify-between text-xs">
@@ -354,11 +372,16 @@ function NewScanForm({ onClose }: { onClose: () => void }) {
                             >
                               <input
                                 type="checkbox"
+                                name="tools"
+                                value={s.name}
                                 checked={picked.has(s.name)}
                                 onChange={() => togglePick(s.name)}
                                 className="accent-primary"
                               />
-                              <span className="truncate" title={s.languages.join(", ") || "any"}>
+                              <span
+                                className="truncate"
+                                title={s.languages.join(", ") || "any"}
+                              >
                                 {s.name}
                               </span>
                             </label>

@@ -15,7 +15,7 @@ import {
   XCircleIcon,
   XIcon,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import type { Finding, Scan, Severity } from "@/lib/types";
 import { parseToolList } from "@/lib/types";
@@ -24,6 +24,8 @@ import { EmptyState } from "@/components/empty-state";
 import { ScanStatusPill } from "@/components/scan-status-pill";
 import { SeverityBadge } from "@/components/severity-badge";
 import { CheckboxFilterRow } from "@/components/checkbox-filter-row";
+import { ScanReleaseControls } from "@/components/scan-release-controls";
+import { canModify, useMe } from "@/lib/me";
 
 export const Route = createFileRoute("/_authed/scans/$scanId/")({
   component: ScanDetailPage,
@@ -63,6 +65,7 @@ const PAGE_SIZE = 100;
 
 function ScanDetailPage() {
   const { scanId } = Route.useParams();
+  const me = useMe();
 
   const scanQ = useQuery({
     queryKey: ["scan", scanId],
@@ -83,7 +86,7 @@ function ScanDetailPage() {
       const r = await api.get<ToolStatusEntry[]>(`/scans/${scanId}/tools`);
       return r.data ?? [];
     },
-    refetchInterval: (q) => {
+    refetchInterval: () => {
       const status = scanQ.data?.status;
       return status === "running" || status === "pending" ? 3000 : false;
     },
@@ -345,7 +348,11 @@ function ScanDetailPage() {
       </div>
 
       {scan.status === "cancelled" && (
-        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+        <div
+          className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200"
+          role="status"
+          aria-live="polite"
+        >
           <strong>Scan cancelled.</strong>{" "}
           Showing {scan.finding_count.toLocaleString()} findings from{" "}
           {completed.length} of {selected.length} tools that completed before
@@ -364,6 +371,13 @@ function ScanDetailPage() {
           </div>
         </div>
       )}
+
+      <ScanReleaseControls
+        scan={scan}
+        authorized={
+          me.data?.role === "admin" && canModify(me.data, scan.user_id)
+        }
+      />
 
       <ToolsPanel
         tools={toolsQ.data}
@@ -438,6 +452,9 @@ function ScanDetailPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <input
                   type="text"
+                  name="finding_search"
+                  autoComplete="off"
+                  aria-label="Search findings"
                   value={search}
                   onChange={(e) => {
                     setSearch(e.target.value);
@@ -447,6 +464,8 @@ function ScanDetailPage() {
                   className="h-8 px-2 rounded-md bg-background border border-muted/40 w-64"
                 />
                 <select
+                  name="finding_tool_filter"
+                  aria-label="Filter findings by tool"
                   value={filterTool}
                   onChange={(e) => {
                     setFilterTool(e.target.value);
@@ -674,6 +693,7 @@ function downloadBlob(content: string, filename: string, mime: string) {
 function CancelScanButton({ scanId }: { scanId: string }) {
   const qc = useQueryClient();
   const [confirming, setConfirming] = useState(false);
+  const confirmRef = useRef<HTMLButtonElement>(null);
   const m = useMutation({
     mutationFn: () => api.delete(`/scans/${scanId}`),
     onSuccess: () => {
@@ -681,10 +701,14 @@ function CancelScanButton({ scanId }: { scanId: string }) {
       qc.invalidateQueries({ queryKey: ["scan-tools", scanId] });
     },
   });
+  useEffect(() => {
+    if (confirming) confirmRef.current?.focus();
+  }, [confirming]);
   if (confirming) {
     return (
       <div className="flex items-center gap-2">
         <button
+          ref={confirmRef}
           type="button"
           onClick={() => m.mutate()}
           disabled={m.isPending}
@@ -736,6 +760,7 @@ function ToolsPanel({
   // the findings table is the headline and tools are drill-down.
   const scanActive = scanStatus === "running" || scanStatus === "pending";
   const [open, setOpen] = useState(scanActive);
+  const contentId = useId();
   // If the user lands on the page while running, then the scan
   // finishes — leave the panel however the user has it. If they
   // never touched it (open===true and scanActive flips), we keep
@@ -762,6 +787,8 @@ function ToolsPanel({
       <button
         type="button"
         onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        aria-controls={contentId}
         className="flex items-center justify-between w-full"
       >
         <div className="flex items-center gap-2">
@@ -787,7 +814,7 @@ function ToolsPanel({
       </button>
 
       {open && (
-        <>
+        <div id={contentId}>
           {active.length > 0 && (
             <div className="mt-4">
               <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-2">
@@ -838,7 +865,7 @@ function ToolsPanel({
               </div>
             </div>
           )}
-        </>
+        </div>
       )}
     </section>
   );
@@ -911,6 +938,7 @@ function ToolRow({
           <button
             type="button"
             onClick={() => setShowErr(!showErr)}
+            aria-expanded={showErr}
             className="text-[11px] underline text-muted-foreground hover:text-foreground"
           >
             {showErr ? "Hide error" : "Show error"}
@@ -921,6 +949,7 @@ function ToolRow({
             type="button"
             onClick={() => cancel.mutate()}
             disabled={cancel.isPending}
+            aria-label={`Cancel ${tool.name}; the rest of the scan keeps going`}
             title={`Cancel ${tool.name}; the rest of the scan keeps going`}
             className="inline-flex items-center justify-center size-5 rounded hover:bg-red-500/15 text-muted-foreground hover:text-red-300 disabled:opacity-50"
           >

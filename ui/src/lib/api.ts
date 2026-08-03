@@ -37,10 +37,16 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(
+export interface ApiResult<T> {
+  response: ApiResponse<T>;
+  headers: Headers;
+  status: number;
+}
+
+async function requestWithMetadata<T>(
   path: string,
   options: RequestInit = {},
-): Promise<ApiResponse<T>> {
+): Promise<ApiResult<T>> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(options.headers as Record<string, string>),
@@ -60,32 +66,120 @@ async function request<T>(
     }
   }
 
-  if (res.status === 204) return { data: null as T };
-  const body: ApiResponse<T> = await res.json();
+  if (res.status === 204) {
+    return {
+      response: { data: null as T },
+      headers: res.headers,
+      status: res.status,
+    };
+  }
+  const body = (await res.json()) as ApiResponse<T> | T;
   if (!res.ok) {
+    const errorBody = body as ApiResponse<T>;
     throw new ApiError(
       res.status,
-      body.error?.code || "UNKNOWN",
-      body.error?.message || res.statusText,
-      body.error?.details,
+      errorBody.error?.code || "UNKNOWN",
+      errorBody.error?.message || res.statusText,
+      errorBody.error?.details,
     );
   }
-  return body;
+  // Durable command endpoints intentionally return their operation receipt at
+  // the top level (`{id,state,status_url,...}`), while resource reads use the
+  // established `{data: ...}` envelope. Normalize both shapes here so callers
+  // retain one typed client contract.
+  if (
+    typeof body === "object" &&
+    body !== null &&
+    ("data" in body || "error" in body)
+  ) {
+    return {
+      response: body as ApiResponse<T>,
+      headers: res.headers,
+      status: res.status,
+    };
+  }
+  return {
+    response: { data: body as T },
+    headers: res.headers,
+    status: res.status,
+  };
+}
+
+async function request<T>(
+  path: string,
+  options: RequestInit = {},
+): Promise<ApiResponse<T>> {
+  return (await requestWithMetadata<T>(path, options)).response;
+}
+
+async function download(path: string): Promise<{
+  blob: Blob;
+  filename?: string;
+  headers: Headers;
+}> {
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method: "GET",
+    credentials: "include",
+    headers: { Accept: "application/vnd.wolf.scanner-release-bundle.v1+zstd" },
+  });
+  if (res.status === 401) {
+    clearToken();
+    if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
+      window.location.replace("/login");
+    }
+  }
+  if (!res.ok) {
+    let code = "DOWNLOAD_FAILED";
+    let message = res.statusText || "Download failed";
+    try {
+      const body = (await res.json()) as ApiResponse<unknown>;
+      code = body.error?.code || code;
+      message = body.error?.message || message;
+    } catch {
+      // Non-JSON proxy errors intentionally retain the generic status text.
+    }
+    throw new ApiError(res.status, code, message);
+  }
+  const disposition = res.headers.get("Content-Disposition") ?? "";
+  const match = /filename="([^"]+)"/i.exec(disposition);
+  return {
+    blob: await res.blob(),
+    filename: match?.[1],
+    headers: res.headers,
+  };
 }
 
 export const api = {
-  get: <T>(path: string) => request<T>(path),
-  post: <T>(path: string, data?: unknown) =>
+  get: <T>(path: string, options?: RequestInit) => request<T>(path, options),
+  getWithMetadata: <T>(path: string, options?: RequestInit) =>
+    requestWithMetadata<T>(path, options),
+  post: <T>(path: string, data?: unknown, options?: RequestInit) =>
     request<T>(path, {
+      ...options,
       method: "POST",
       body: data ? JSON.stringify(data) : undefined,
     }),
-  put: <T>(path: string, data?: unknown) =>
+  postWithMetadata: <T>(path: string, data?: unknown, options?: RequestInit) =>
+    requestWithMetadata<T>(path, {
+      ...options,
+      method: "POST",
+      body: data ? JSON.stringify(data) : undefined,
+    }),
+  put: <T>(path: string, data?: unknown, options?: RequestInit) =>
     request<T>(path, {
+      ...options,
       method: "PUT",
       body: data ? JSON.stringify(data) : undefined,
     }),
-  delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
+  patch: <T>(path: string, data?: unknown, options?: RequestInit) =>
+    request<T>(path, {
+      ...options,
+      method: "PATCH",
+      body: data ? JSON.stringify(data) : undefined,
+    }),
+  delete: <T>(path: string, options?: RequestInit) =>
+    request<T>(path, { ...options, method: "DELETE" }),
+  download,
 };
 
 export async function hasSession(): Promise<boolean> {

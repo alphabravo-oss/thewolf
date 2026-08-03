@@ -6,6 +6,7 @@ import {
   createRouter,
 } from "@tanstack/react-router";
 import { Toaster } from "@/components/ui/sonner";
+import { ThemeColorSync } from "@/components/theme-color-sync";
 import { ThemeProvider } from "next-themes";
 
 import { routeTree } from "./routeTree.gen";
@@ -63,6 +64,7 @@ createRoot(rootEl).render(
       enableSystem
       disableTransitionOnChange
     >
+      <ThemeColorSync />
       <QueryClientProvider client={queryClient}>
         <RouterProvider router={router} />
         <Toaster position="bottom-right" toastOptions={{ className: "glass-card" }} />
