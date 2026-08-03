@@ -21,10 +21,12 @@ const findingIDsTrailer = "Finding-IDs"
 // nothing but a plan.Plan on the last line of its output.
 //
 // plan.Parse rejects unknown fields, and the exec driver hands it only the
-// LAST stdout line (execDriver.stream keeps a rolling `last`, not the whole
-// transcript), so any prose around the JSON — reasoning before it, a remark
-// after it, a markdown fence around it — breaks the parse. The instructions
-// say so explicitly rather than trusting the model to infer it.
+// last non-empty line of the agent's own final "text" event content — not
+// the raw NDJSON stream, whose true last line is normally a step_finish
+// accounting event, never prose (see execDriver.stream). So any prose
+// around the JSON — reasoning before it, a remark after it, a markdown
+// fence around it — breaks the parse. The instructions say so explicitly
+// rather than trusting the model to infer it.
 func triagePrompt(findings []models.Finding) string {
 	var b strings.Builder
 	b.WriteString("You are triaging findings from an automated security scan, before any code is changed.\n")
@@ -135,28 +137,30 @@ var runGit = func(ctx context.Context, dir string, args ...string) (string, erro
 	return string(out), nil
 }
 
-// collectPatches walks the commits an execute run produced and turns each
-// into a Patch.
+// collectPatches walks the commits an execute run produced, from base
+// (exclusive) to HEAD (inclusive), and turns each into a Patch. base is the
+// worktree's HEAD as of immediately before the run started — execDriver.
+// Execute captures it with a plain `git rev-parse HEAD` right before
+// invoking the agent, because the worktree carries the FULL repository
+// history (workspace.Prepare does `git worktree add <path> -b <branch>` off
+// a local checkout, or a full, non-shallow `git clone` for GitHub, either
+// way on top of everything the repo already had), so an unbounded `git log`
+// from HEAD would return the whole project's history, not just this run's
+// commits. An earlier version of this function derived base from the
+// branch's own reflog "Created from" entry instead; that broke under
+// core.logAllRefUpdates=false (reflog show exits 0 with empty output, no
+// error) and under a mid-run `git checkout <sha>` (permitted by the execute
+// permission document's bash allowlist), silently discarding an otherwise-
+// successful run in both cases. Capturing base directly has neither failure
+// mode.
 //
-// The worktree carries the FULL repository history — workspace.Prepare does
-// `git worktree add <path> -b <branch>` off a local checkout, or a full (not
-// shallow) `git clone` for GitHub, either way on top of everything the repo
-// already had. So a bare `git log` from HEAD returns the whole project's
-// history, not just this run's commits. A freshly created branch's own
-// reflog records exactly where it forked ("branch: Created from HEAD"),
-// which bounds the walk to commits the agent actually made — confirmed
-// against git's real behavior for both `worktree add -b` and `clone` +
-// `checkout -b` before relying on it here.
-func collectPatches(ctx context.Context, worktreePath string) (*PatchSeries, error) {
-	branchOut, err := runGit(ctx, worktreePath, "rev-parse", "--abbrev-ref", "HEAD")
-	if err != nil {
-		return nil, fmt.Errorf("collect patches: resolve branch: %w", err)
-	}
-	branch := strings.TrimSpace(branchOut)
-
-	base, err := forkPoint(ctx, worktreePath, branch)
-	if err != nil {
-		return nil, fmt.Errorf("collect patches: resolve fork point: %w", err)
+// findings is the set Wolf handed the agent this run; it validates the
+// Finding-IDs trailer each commit carries (see commitFindingIDs) so a
+// malformed or hallucinated ID cannot silently corrupt attribution.
+func collectPatches(ctx context.Context, worktreePath, base string, findings []models.Finding) (*PatchSeries, error) {
+	validIDs := make(map[string]struct{}, len(findings))
+	for _, f := range findings {
+		validIDs[f.ID] = struct{}{}
 	}
 
 	out, err := runGit(ctx, worktreePath, "log", "--format=%H", "--reverse", base+"..HEAD")
@@ -166,41 +170,42 @@ func collectPatches(ctx context.Context, worktreePath string) (*PatchSeries, err
 	shas := strings.Fields(out)
 	patches := make([]Patch, 0, len(shas))
 	for _, sha := range shas {
-		p, err := commitPatch(ctx, worktreePath, sha)
+		p, err := commitPatch(ctx, worktreePath, sha, validIDs)
 		if err != nil {
 			return nil, fmt.Errorf("collect patches: %s: %w", sha, err)
 		}
+		if len(p.FindingIDs) == 0 {
+			return nil, fmt.Errorf("collect patches: commit %s has no attributable finding IDs (missing or malformed %s trailer)", sha, findingIDsTrailer)
+		}
 		patches = append(patches, p)
+	}
+
+	if err := checkClean(ctx, worktreePath); err != nil {
+		return nil, err
 	}
 	return &PatchSeries{Patches: patches}, nil
 }
 
-// forkPoint returns the commit branch was created from, read from its own
-// reflog's "branch: Created from" entry — the one record of the branch's
-// starting point that survives without the caller having to know the name of
-// whatever branch it forked from.
-func forkPoint(ctx context.Context, worktreePath, branch string) (string, error) {
-	out, err := runGit(ctx, worktreePath, "reflog", "show", branch)
+// checkClean fails if the agent left uncommitted work behind. `git log`
+// only sees commits — an agent that edits a file and forgets to commit it
+// (or gets interrupted mid-fix) would otherwise report success with the
+// edit silently dropped, since nothing downstream inspects the working
+// tree.
+func checkClean(ctx context.Context, worktreePath string) error {
+	out, err := runGit(ctx, worktreePath, "status", "--porcelain")
 	if err != nil {
-		return "", err
+		return fmt.Errorf("collect patches: check worktree status: %w", err)
 	}
-	for _, line := range strings.Split(out, "\n") {
-		if !strings.Contains(line, "branch: Created from") {
-			continue
-		}
-		fields := strings.Fields(line)
-		if len(fields) == 0 {
-			continue
-		}
-		return fields[0], nil
+	if strings.TrimSpace(out) != "" {
+		return fmt.Errorf("collect patches: worktree has uncommitted changes:\n%s", strings.TrimSpace(out))
 	}
-	return "", fmt.Errorf("no %q entry in %s's reflog", "branch: Created from", branch)
+	return nil
 }
 
 // commitPatch turns one commit into a Patch: `git show --name-only` carries
 // the subject and changed files; a second, body-only `git show` carries the
 // Finding-IDs trailer executePrompt asked the agent to add.
-func commitPatch(ctx context.Context, worktreePath, sha string) (Patch, error) {
+func commitPatch(ctx context.Context, worktreePath, sha string, validIDs map[string]struct{}) (Patch, error) {
 	out, err := runGit(ctx, worktreePath, "show", "--format=%H%n%s", "--name-only", sha)
 	if err != nil {
 		return Patch{}, err
@@ -220,7 +225,7 @@ func commitPatch(ctx context.Context, worktreePath, sha string) (Patch, error) {
 	if err != nil {
 		return Patch{}, err
 	}
-	patch.FindingIDs = commitFindingIDs(body)
+	patch.FindingIDs = commitFindingIDs(body, validIDs)
 	return patch, nil
 }
 
@@ -230,7 +235,16 @@ func commitPatch(ctx context.Context, worktreePath, sha string) (Patch, error) {
 // one this package controls end to end (it wrote the instruction), so a
 // direct scan is simpler and has no git-version-dependent trailer parsing to
 // account for.
-func commitFindingIDs(body string) []string {
+//
+// validIDs is the finding set Wolf actually handed the agent this run — the
+// only IDs a genuine attribution can name — so an ID that isn't in it is
+// dropped rather than trusted. This also catches malformed trailers as a
+// side effect: "f-1 f-2" (space, not comma) parses as one bogus id
+// "f-1 f-2", which matches nothing in validIDs and is dropped; "[f-1, f-2]"
+// splits into "[f-1" and "f-2]", neither of which matches either.
+// collectPatches then rejects a commit outright once it ends up with zero
+// attributed IDs, rather than accepting the corrupted value.
+func commitFindingIDs(body string, validIDs map[string]struct{}) []string {
 	var ids []string
 	for _, line := range strings.Split(body, "\n") {
 		key, val, ok := strings.Cut(line, ":")
@@ -238,9 +252,14 @@ func commitFindingIDs(body string) []string {
 			continue
 		}
 		for _, id := range strings.Split(val, ",") {
-			if id = strings.TrimSpace(id); id != "" {
-				ids = append(ids, id)
+			id = strings.TrimSpace(id)
+			if id == "" {
+				continue
 			}
+			if _, known := validIDs[id]; !known {
+				continue
+			}
+			ids = append(ids, id)
 		}
 	}
 	return ids

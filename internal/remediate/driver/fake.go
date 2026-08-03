@@ -2,6 +2,7 @@ package driver
 
 import (
 	"context"
+	"errors"
 
 	"github.com/alphabravocompany/thewolf/internal/remediate/meter"
 	"github.com/alphabravocompany/thewolf/internal/remediate/plan"
@@ -45,6 +46,13 @@ func (f *Fake) Plan(_ context.Context, req PlanRequest) (*plan.Plan, meter.Usage
 	if f.PlanErr != nil {
 		return nil, m.Usage(), f.PlanErr
 	}
+	// Fake's fields are exported, so a caller can construct &Fake{} directly
+	// (skipping NewFake) and get here with PlanOut unset. Without this guard
+	// that returns a nil *plan.Plan with a nil error — a shape callers don't
+	// expect and will nil-panic on (e.g. plan.Summary).
+	if f.PlanOut == nil {
+		return nil, m.Usage(), errors.New("driver: fake has no PlanOut configured (use NewFake or set it explicitly)")
+	}
 	return f.PlanOut, m.Usage(), nil
 }
 
@@ -55,6 +63,10 @@ func (f *Fake) Execute(_ context.Context, req ExecuteRequest) (*PatchSeries, met
 	}
 	if f.ExecErr != nil {
 		return nil, m.Usage(), f.ExecErr
+	}
+	// Same guard as Plan above, for a &Fake{} constructed with Series unset.
+	if f.Series == nil {
+		return nil, m.Usage(), errors.New("driver: fake has no Series configured (use NewFake or set it explicitly)")
 	}
 	return f.Series, m.Usage(), nil
 }

@@ -47,3 +47,22 @@ func TestFakeStopsAtTurnBudget(t *testing.T) {
 		t.Errorf("Usage.Turns = %d, want 2 (stopped at budget)", usage.Turns)
 	}
 }
+
+// TestFakeZeroValueDoesNotReturnNilResultWithNilError is a regression test:
+// Fake's fields are exported, so a caller can construct &Fake{} directly
+// instead of going through NewFake and forget to set PlanOut/Series. Both
+// methods must fail loudly rather than return a nil result with a nil
+// error, which would nil-panic the first caller that touches the result.
+func TestFakeZeroValueDoesNotReturnNilResultWithNilError(t *testing.T) {
+	f := &Fake{}
+
+	plan, _, err := f.Plan(context.Background(), PlanRequest{MaxTurns: 10})
+	if plan != nil || err == nil {
+		t.Errorf("Plan() = (%v, _, %v), want (nil, _, non-nil)", plan, err)
+	}
+
+	series, _, err := f.Execute(context.Background(), ExecuteRequest{MaxTurns: 10})
+	if series != nil || err == nil {
+		t.Errorf("Execute() = (%v, _, %v), want (nil, _, non-nil)", series, err)
+	}
+}
