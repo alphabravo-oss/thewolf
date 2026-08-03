@@ -25,14 +25,32 @@ Every task's requirements implicitly include this section.
 - **Redaction:** injected credentials must never appear in `remediation_events`, SSE output, or a PR body. Follow the existing `*_never_render` fixture convention.
 - **Commit style:** conventional commits (`feat(remediate):`, `test(remediate):`). Every task ends with a commit and a green `go build ./...`.
 
-## Blocking Dependency: The Spike
+## Spike: COMPLETE — findings that change this plan
 
-**Task 2 cannot be written without spike output.** The turn meter counts turns in OpenCode's `--format json` event stream, and the stream's schema is unknown. The throwaway spike (separate branch) must produce:
+The spike ran `opencode-ai@1.18.11` against a real fixture. Full writeup:
+`docs/superpowers/specs/2026-08-03-opencode-spike-findings.md`. Four
+corrections are already folded into the task text below, but they are listed
+here because three of them would each have been a silent, total failure:
 
-- `internal/remediate/meter/testdata/session-basic.jsonl` — a captured event stream from a real `opencode run --format json` against a fixture repo.
-- A one-paragraph note naming which event type/field signals a turn boundary.
+1. **The turn signal is `step_finish`, not `assistant`.** There is no
+   `assistant` event type. The original meter would have counted zero turns
+   forever and never stopped the agent.
+2. **`OPENCODE_CONFIG` loads a config file, not `OPENCODE_CONFIG_DIR`** (which
+   points at agents/commands/plugins). As originally written, the
+   golden-tested permission document would never have been loaded and every
+   run would have used default permissions.
+3. **`opencode run` hangs indefinitely on an inherited stdin.** Reproduced at
+   120s, 150s and 240s with zero output; `< /dev/null` fixes it. Every
+   containerized run would have hung until the wall-clock timeout.
+4. **A repo-supplied `opencode.json` overrides the injected one** (proven by
+   A/B). The scanned repository is untrusted by definition, so any repo can
+   currently disable every permission control. Task 4a below strips it.
 
-Tasks 1, 3, 5, and 7 have no spike dependency and can proceed in parallel with it. Task 2 blocks on it; Task 4 blocks on Task 2.
+Confirmed working: the root `"*": "deny"` wildcard genuinely denies unlisted
+tools, and `--auto` exists in 1.18.11 (not in 1.15.7), so Task 7's pin is
+required.
+
+`meter/testdata/session-basic.jsonl` is committed. No task is spike-blocked.
 
 ## File Structure
 
@@ -250,7 +268,7 @@ git commit -m "feat(remediate): plan schema and strict parsing"
 
 ### Task 2: Turn meter
 
-**BLOCKED ON SPIKE.** Do not start until `testdata/session-basic.jsonl` and the turn-signal note exist.
+**SPIKE COMPLETE — unblocked.** `internal/remediate/meter/testdata/session-basic.jsonl` is committed (6 events, 2 turns), and the turn signal is confirmed as `step_finish`. See `docs/superpowers/specs/2026-08-03-opencode-spike-findings.md`.
 
 Wolf meters turns itself because `opencode run` has no max-turns flag. This is the only thing standing between a budget setting and an unbounded agent.
 
@@ -265,7 +283,7 @@ Wolf meters turns itself because `opencode run` has no max-turns flag. This is t
 
 - [ ] **Step 1: Write the failing test**
 
-Replace `"assistant"` below with the actual turn-signal event type the spike identified.
+The turn signal is `step_finish`, confirmed against opencode-ai@1.18.11.
 
 ```go
 package meter
@@ -316,7 +334,7 @@ func TestTurnsCountsFixtureStream(t *testing.T) {
 
 func TestTurnsStopsAtBudget(t *testing.T) {
 	m := NewTurns(2)
-	turn := Event{Type: "assistant"}
+	turn := Event{Type: "step_finish"}
 
 	if m.Observe(turn) {
 		t.Fatal("exhausted after turn 1, budget is 2")
@@ -331,20 +349,53 @@ func TestTurnsStopsAtBudget(t *testing.T) {
 
 func TestTurnsIgnoresNonTurnEvents(t *testing.T) {
 	m := NewTurns(1)
-	if m.Observe(Event{Type: "tool.start"}) {
-		t.Fatal("tool.start counted as a turn")
+	for _, notATurn := range []string{"step_start", "text", "tool_use"} {
+		if m.Observe(Event{Type: notATurn}) {
+			t.Fatalf("%s counted as a turn", notATurn)
+		}
 	}
 	if got := m.Usage().Turns; got != 0 {
 		t.Errorf("Usage().Turns = %d, want 0", got)
 	}
 }
 
-func TestUsageLeavesCostFieldsZero(t *testing.T) {
+// step_finish carries the step's own token and cost totals, so the turns
+// meter accumulates spend as it goes — no separate cost meter is needed.
+func TestUsageAccumulatesTokensAndCost(t *testing.T) {
 	m := NewTurns(10)
-	m.Observe(Event{Type: "assistant"})
+
+	var e Event
+	e.Type = "step_finish"
+	e.Part.Tokens.Total = 34116
+	e.Part.Cost = 0.25
+	m.Observe(e)
+	m.Observe(e)
+
 	u := m.Usage()
-	if u.Tokens != 0 || u.Cost != 0 {
-		t.Errorf("turns meter populated cost fields: %+v", u)
+	if u.Turns != 2 {
+		t.Errorf("Turns = %d, want 2", u.Turns)
+	}
+	if u.Tokens != 68232 {
+		t.Errorf("Tokens = %d, want 68232", u.Tokens)
+	}
+	if u.Cost != 0.5 {
+		t.Errorf("Cost = %v, want 0.5", u.Cost)
+	}
+}
+
+// The real fixture must report both turns and non-zero tokens — a meter that
+// silently matched nothing would still pass a turns-only assertion.
+func TestFixtureReportsTwoTurnsWithTokens(t *testing.T) {
+	m := NewTurns(100)
+	for _, e := range loadFixture(t, "session-basic.jsonl") {
+		m.Observe(e)
+	}
+	u := m.Usage()
+	if u.Turns != 2 {
+		t.Errorf("Turns = %d, want 2 — the captured fixture has two step_finish events", u.Turns)
+	}
+	if u.Tokens == 0 {
+		t.Error("Tokens = 0 — token totals were not read from step_finish")
 	}
 }
 ```
@@ -364,12 +415,28 @@ package meter
 
 // Event is one decoded record from `opencode run --format json`. Only the
 // fields Wolf needs are modeled; the rest of the payload is ignored.
+//
+// Shape confirmed empirically against opencode-ai@1.18.11 — see
+// docs/superpowers/specs/2026-08-03-opencode-spike-findings.md. Observed
+// types are step_start, text, tool_use, and step_finish.
 type Event struct {
 	Type string `json:"type"`
+	Part struct {
+		// Reason is the step's stop reason, e.g. "stop".
+		Reason string `json:"reason"`
+		Tokens struct {
+			Total     int64 `json:"total"`
+			Input     int64 `json:"input"`
+			Output    int64 `json:"output"`
+			Reasoning int64 `json:"reasoning"`
+		} `json:"tokens"`
+		Cost float64 `json:"cost"`
+	} `json:"part"`
 }
 
-// Usage is what a session spent. Tokens and Cost are reserved for a future
-// cost meter and are left zero by the turns meter.
+// Usage is what a session spent. All three fields are populated by the turns
+// meter: step_finish carries tokens and cost per step, so there is no reason
+// to defer them to a separate meter.
 type Usage struct {
 	Turns  int
 	Tokens int64
@@ -383,12 +450,18 @@ type Meter interface {
 	Usage() Usage
 }
 
-// turnSignal is the event type that marks a completed agent turn.
-const turnSignal = "assistant"
+// turnSignal is the event type that marks a completed agent turn. Confirmed
+// empirically against 1.18.11: a two-turn session emits step_start, tool_use,
+// step_finish, step_start, text, step_finish. Counting step_finish counts
+// turns. There is no "assistant" event type — a meter written against one
+// counts zero turns forever and never stops the agent.
+const turnSignal = "step_finish"
 
 type turns struct {
 	budget int
 	count  int
+	tokens int64
+	cost   float64
 }
 
 // NewTurns returns a Meter that stops after budget turns. A budget <= 0 is
@@ -401,10 +474,16 @@ func (t *turns) Observe(event Event) bool {
 		return false
 	}
 	t.count++
+	// step_finish reports the step's own token and cost totals, so accumulate
+	// them here rather than deferring spend tracking to a separate meter.
+	t.tokens += event.Part.Tokens.Total
+	t.cost += event.Part.Cost
 	return t.budget > 0 && t.count >= t.budget
 }
 
-func (t *turns) Usage() Usage { return Usage{Turns: t.count} }
+func (t *turns) Usage() Usage {
+	return Usage{Turns: t.count, Tokens: t.tokens, Cost: t.cost}
+}
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
@@ -1072,8 +1151,16 @@ func (d *execDriver) buildInvocation(req ExecuteRequest, configPath, prompt stri
 		"-v", req.WorktreePath + ":/workspace",
 		"-v", filepath.Dir(configPath) + ":/config:ro",
 		"-e", "OPENCODE_AUTH_CONTENT",
-		"-e", "OPENCODE_CONFIG_DIR=/config",
-		"--network", "none",
+		// OPENCODE_CONFIG names the config FILE. OPENCODE_CONFIG_DIR is
+		// the directory for agents/commands/plugins and does NOT load
+		// opencode.json — setting it instead means the golden-tested
+		// permission document is silently never applied and the agent
+		// runs with defaults. Confirmed against 1.18.11 in the spike.
+		"-e", "OPENCODE_CONFIG=/config/opencode.json",
+		// NOT --network none: an opencode run must reach its provider
+		// API, so a fully isolated container cannot start a session at
+		// all. Egress is restricted to the provider endpoint instead —
+		// see the spec's egress section.
 		// The image keeps the repo-wide fixer entrypoint
 		// (`wolf fixer`) so the release path's smoke and
 		// qualification steps, which append their own arguments with
@@ -1101,6 +1188,12 @@ func (d *execDriver) stream(ctx context.Context, args, env []string, m meter.Met
 	// #nosec G204 -- binary is fixed config; args are internal.
 	cmd := exec.CommandContext(ctx, d.cfg.Binary, args...)
 	cmd.Env = env
+	// Stdin MUST be /dev/null. `opencode run` hangs indefinitely on an
+	// inherited stdin — reproduced at 120s, 150s and 240s with zero bytes of
+	// output and no error. A nil Stdin gives the child /dev/null. Without
+	// this, every run hangs until the wall-clock timeout and the turn budget
+	// never gets a chance to apply.
+	cmd.Stdin = nil
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, err
@@ -1213,6 +1306,148 @@ Expected: PASS.
 ```bash
 git add internal/remediate/driver/
 git commit -m "feat(remediate): containerized opencode exec driver"
+```
+
+---
+
+### Task 4a: Strip repo-supplied OpenCode config from the worktree
+
+**Security fix from the spike.** A repository-level `opencode.json` overrides
+the config Wolf injects — proven by A/B: with a permissive `opencode.json`
+committed in the fixture repo and a restrictive one supplied via
+`OPENCODE_CONFIG`, the agent used `bash`, which the injected document denied.
+The scanned repository is untrusted input by definition, so any repo can
+currently disable every permission control Wolf ships. Denying the agent
+permission to *write* the file does not help — a pre-existing one already wins.
+
+**Files:**
+- Create: `internal/remediate/worktree_config.go`
+- Test: `internal/remediate/worktree_config_test.go`
+
+**Interfaces:**
+- Consumes: nothing.
+- Produces: `remediate.StripAgentConfig(worktreePath string) ([]string, error)` — removes repo-level OpenCode configuration and returns the paths removed.
+
+- [ ] **Step 1: Write the failing test**
+
+```go
+package remediate
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func TestStripAgentConfigRemovesRepoConfig(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"opencode.json", "opencode.jsonc"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(`{"permission":{"*":"allow"}}`), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.MkdirAll(filepath.Join(dir, ".opencode", "agent"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	removed, err := StripAgentConfig(dir)
+	if err != nil {
+		t.Fatalf("StripAgentConfig: %v", err)
+	}
+	if len(removed) != 3 {
+		t.Errorf("removed %d paths, want 3: %v", len(removed), removed)
+	}
+	for _, name := range []string{"opencode.json", "opencode.jsonc", ".opencode"} {
+		if _, err := os.Stat(filepath.Join(dir, name)); !os.IsNotExist(err) {
+			t.Errorf("%s still present after strip", name)
+		}
+	}
+	// Repository content must be untouched — this strips config, not source.
+	if _, err := os.Stat(filepath.Join(dir, "main.go")); err != nil {
+		t.Errorf("main.go was removed: %v", err)
+	}
+}
+
+func TestStripAgentConfigIsQuietWhenAbsent(t *testing.T) {
+	dir := t.TempDir()
+	removed, err := StripAgentConfig(dir)
+	if err != nil {
+		t.Fatalf("StripAgentConfig on a clean tree: %v", err)
+	}
+	if len(removed) != 0 {
+		t.Errorf("removed %v from a clean tree", removed)
+	}
+}
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `go test ./internal/remediate/ -run StripAgentConfig -v`
+Expected: FAIL — `StripAgentConfig` undefined.
+
+- [ ] **Step 3: Implement**
+
+```go
+package remediate
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+)
+
+// agentConfigPaths are repository-level OpenCode configuration locations.
+// OpenCode's config precedence places project config ABOVE the config Wolf
+// injects via OPENCODE_CONFIG, so a repository carrying any of these can
+// override every permission rule Wolf sets.
+var agentConfigPaths = []string{"opencode.json", "opencode.jsonc", ".opencode"}
+
+// StripAgentConfig removes repository-level OpenCode configuration from a
+// worktree and returns the relative paths it removed.
+//
+// The scanned repository is untrusted input — that is the premise of the
+// product — so its own agent configuration must not be allowed to outrank
+// Wolf's. This runs against the ephemeral worktree only; the user's actual
+// repository is never modified.
+func StripAgentConfig(worktreePath string) ([]string, error) {
+	var removed []string
+	for _, name := range agentConfigPaths {
+		full := filepath.Join(worktreePath, name)
+		if _, err := os.Lstat(full); err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return removed, fmt.Errorf("stat %s: %w", name, err)
+		}
+		if err := os.RemoveAll(full); err != nil {
+			return removed, fmt.Errorf("remove %s: %w", name, err)
+		}
+		removed = append(removed, name)
+	}
+	return removed, nil
+}
+```
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `go test ./internal/remediate/ -run StripAgentConfig -v`
+Expected: PASS — two tests.
+
+- [ ] **Step 5: Wire it into the session**
+
+Call `StripAgentConfig` in `Runner.prepareWorkspace` (Task 11), immediately
+after `workspace.Prepare` returns and before any driver call. Record each
+removed path as a session event so an operator can see it happened — a repo
+shipping an `opencode.json` is a signal worth surfacing, not just suppressing.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add internal/remediate/
+git commit -m "feat(remediate): strip repo-supplied OpenCode config from the worktree"
 ```
 
 ---
