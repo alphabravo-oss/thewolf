@@ -165,7 +165,13 @@ anything not explicitly denied.
 { "permission": {
     "edit": { "*": "allow", ".github/**": "deny", "**/*.pem": "deny",
               "**/*.key": "deny" },
-    "bash": { "*": "deny", "git *": "allow", "npm *": "allow", "go *": "allow",
+    "bash": { "*": "deny",
+              "git add *": "allow", "git commit *": "allow",
+              "git checkout *": "allow", "git diff *": "allow",
+              "git log *": "allow", "git status *": "allow",
+              "go build *": "allow", "go test *": "allow",
+              "go vet *": "allow", "gofmt *": "allow",
+              "npm test *": "allow", "npm run *": "allow",
               "make *": "allow", "pytest *": "allow",
               "rm -rf *": "deny", "curl *": "deny", "sudo *": "deny" },
     "external_directory": { "*": "deny" } } }
@@ -180,6 +186,21 @@ allow, so a bash fallback of `ask` would permit every command nobody thought to
 denylist — `nc`, `ssh`, `chmod`, `dd`, `base64`. An allowlist refuses the
 unlisted command instead; a blocklist only stops what we remembered to name.
 No rule in either document is `ask`.
+
+**The allowlist names subcommands, not binaries.** `git *` would permit
+`git push` and `git remote add`; `npm *` would permit `npm install`, which
+fetches over the network and runs `postinstall` scripts; `go *` would permit
+`go get` and `go run`. Each is a general-purpose egress and
+arbitrary-code-execution primitive that would reopen what the deny default
+closes. The agent edits, builds, tests, and commits — it never pushes,
+installs, or fetches. Wolf pushes the branch from the host via
+`pr.PushBranch`, outside the container.
+
+Egress is controlled at two layers — this allowlist and the container's
+`--network none` — and neither is sufficient alone. The allowlist cannot stop
+a permitted binary from opening a socket; the network policy cannot stop local
+arbitrary code execution. Do not remove one because the other appears to cover
+it.
 
 `edit` keeps `*: allow` because the agent must be able to modify arbitrary
 source files to fix findings — that is the job. The risk there is bounded by

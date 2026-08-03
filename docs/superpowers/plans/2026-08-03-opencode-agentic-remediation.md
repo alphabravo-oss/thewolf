@@ -605,9 +605,18 @@ func TestExecuteBashDefaultsToDeny(t *testing.T) {
     },
     "bash": {
       "*": "deny",
-      "git *": "allow",
-      "npm *": "allow",
-      "go *": "allow",
+      "git add *": "allow",
+      "git commit *": "allow",
+      "git checkout *": "allow",
+      "git diff *": "allow",
+      "git log *": "allow",
+      "git status *": "allow",
+      "go build *": "allow",
+      "go test *": "allow",
+      "go vet *": "allow",
+      "gofmt *": "allow",
+      "npm test *": "allow",
+      "npm run *": "allow",
       "make *": "allow",
       "pytest *": "allow",
       "rm -rf *": "deny",
@@ -619,6 +628,15 @@ func TestExecuteBashDefaultsToDeny(t *testing.T) {
   }
 }
 ```
+
+Allowlist entries are **subcommands, not bare binaries**. `git *` would permit
+`git push` and `git remote add`; `npm *` would permit `npm install`, which
+fetches over the network and runs `postinstall` scripts; `go *` would permit
+`go get` and `go run`. Each is a general-purpose egress and
+arbitrary-code-execution primitive, which would reopen exactly what the deny
+default closes. The agent needs to edit, build, test, and commit — it never
+needs to push, install, or fetch. Wolf pushes the branch itself from the host
+via `pr.PushBranch` (Task 13), outside the container.
 
 The bash default is `deny`, not `ask`. Under `--auto` an `ask` degrades to
 allow, which would permit any dangerous command nobody thought to denylist
@@ -699,12 +717,27 @@ func Execute() ([]byte, error) {
 				// Default-deny: an unlisted command is refused, not allowed.
 				// Under --auto an "ask" would degrade to allow, so the
 				// fallback must be deny.
-				"*":        "deny",
-				"git *":    "allow",
-				"npm *":    "allow",
-				"go *":     "allow",
-				"make *":   "allow",
-				"pytest *": "allow",
+				"*": "deny",
+				// Subcommands, not bare binaries. "git *" would permit
+				// git push; "npm *" would permit npm install (network plus
+				// postinstall scripts); "go *" would permit go get and
+				// go run. The agent edits, builds, tests, and commits — it
+				// never pushes, installs, or fetches. Wolf pushes from the
+				// host via pr.PushBranch, outside this container.
+				"git add *":      "allow",
+				"git commit *":   "allow",
+				"git checkout *": "allow",
+				"git diff *":     "allow",
+				"git log *":      "allow",
+				"git status *":   "allow",
+				"go build *":     "allow",
+				"go test *":      "allow",
+				"go vet *":       "allow",
+				"gofmt *":        "allow",
+				"npm test *":     "allow",
+				"npm run *":      "allow",
+				"make *":         "allow",
+				"pytest *":       "allow",
 				// Redundant under *: deny, but kept to document intent if the
 				// allowlist is ever widened.
 				"rm -rf *": "deny",
@@ -721,7 +754,7 @@ func Execute() ([]byte, error) {
 - [ ] **Step 5: Run test to verify it passes**
 
 Run: `go test ./internal/remediate/permission/ -v`
-Expected: PASS — three tests.
+Expected: PASS — four tests: `TestTriageIsReadOnly`, `TestExecuteDeniesDangerousPaths`, `TestNoAskRulesForDangerousActions`, `TestExecuteBashDefaultsToDeny`.
 
 - [ ] **Step 6: Commit**
 
