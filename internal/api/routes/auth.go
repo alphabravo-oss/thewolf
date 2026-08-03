@@ -340,7 +340,18 @@ func Me(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: user})
+	info := auth.GetAuthInfo(r.Context())
+	scopes := []string{}
+	personas := []string{}
+	if info != nil {
+		scopes = append(scopes, info.Scopes...)
+		personas = append(personas, info.ScannerPersonas...)
+	}
+	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: struct {
+		*models.User
+		Scopes                     []string `json:"scopes"`
+		ScannerSupplyChainPersonas []string `json:"scanner_supply_chain_personas"`
+	}{User: user, Scopes: scopes, ScannerSupplyChainPersonas: personas}})
 }
 
 func ChangePassword(w http.ResponseWriter, r *http.Request) {

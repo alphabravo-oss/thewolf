@@ -88,6 +88,7 @@ func TestHappyPathConfigResources(t *testing.T) {
 
 	// Users.
 	userID := dataID(t, mustRun(t, cli("user", "create", "--email", "u2@example.com", "--password", "password1234")...))
+	mustRun(t, cli("user", "scanner-access", userID, "--persona", "scanner_operator", "--persona", "release_approver")...)
 	mustRun(t, cli("user", "list")...)
 	mustRun(t, cli("user", "delete", userID)...)
 

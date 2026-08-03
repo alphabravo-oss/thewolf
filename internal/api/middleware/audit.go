@@ -41,15 +41,20 @@ func ClientIP(r *http.Request) string {
 	return host
 }
 
-// Audit returns middleware that records mutating (POST/PUT/PATCH/DELETE)
-// requests via the supplied recorder. Read requests are skipped. The
-// recorder is invoked on its own goroutine so audit logging never blocks
-// or fails a request.
+// Audit returns middleware that records mutating requests and the small set of
+// security-sensitive reads explicitly classified for audit (currently offline
+// release-bundle export). Ordinary reads are skipped. The recorder is invoked
+// on its own goroutine so audit logging never blocks or fails a request.
 func Audit(record func(AuditEntry)) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			switch r.Method {
-			case http.MethodGet, http.MethodHead, http.MethodOptions:
+			case http.MethodGet:
+				if !isAuditedRead(r.URL.Path) {
+					next.ServeHTTP(w, r)
+					return
+				}
+			case http.MethodHead, http.MethodOptions:
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -81,6 +86,15 @@ func Audit(record func(AuditEntry)) func(http.Handler) http.Handler {
 			go record(entry)
 		})
 	}
+}
+
+func isAuditedRead(path string) bool {
+	path = normalizeAuditPath(path)
+	const prefix = "/scanner-supply-chain/releases/"
+	if !strings.HasPrefix(path, prefix) || !strings.HasSuffix(path, "/export") {
+		return false
+	}
+	return strings.Contains(strings.TrimPrefix(path, prefix), "/")
 }
 
 func actionForMethod(method string) string {

@@ -25,6 +25,8 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/db"
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
+	"github.com/alphabravocompany/thewolf/internal/scannerfeature"
+	"github.com/alphabravocompany/thewolf/internal/scannerobservability"
 	"github.com/alphabravocompany/thewolf/internal/wolflog"
 )
 
@@ -53,6 +55,14 @@ type Server struct {
 func NewServer(store db.Store, addr string) *Server {
 	// Initialize route handler with store and plugin registry
 	routes.SetHandler(store, plugin.Global)
+	scannerobservability.Default.SetDatabaseCheck(store.Ping)
+	scannerobservability.Default.SetMaintenanceCheck(func(ctx context.Context) (bool, error) {
+		status, err := store.ScannerReleases().GetReleaseMaintenanceStatus(ctx)
+		if err != nil {
+			return false, err
+		}
+		return status.RestoreActive(time.Now()), nil
+	})
 
 	// Per-request role resolution for RBAC (admin | user). Looked up from the
 	// store so role changes apply immediately without re-issuing tokens.
@@ -61,6 +71,17 @@ func NewServer(store db.Store, addr string) *Server {
 			return u.Role
 		}
 		return ""
+	}
+	auth.HumanAuthorizationResolver = func(ctx context.Context, userID string) (auth.HumanAuthorization, error) {
+		u, err := store.GetUserByID(ctx, userID)
+		if err != nil || u == nil {
+			return auth.HumanAuthorization{}, err
+		}
+		personas, decodeErr := apikey.DecodeScannerPersonas(u.ScannerSupplyChainPersonas)
+		if decodeErr != nil {
+			personas = []string{apikey.ScannerPersonaViewer}
+		}
+		return auth.HumanAuthorization{Role: u.Role, ScannerPersonas: personas}, nil
 	}
 
 	// Folder-model invariant: assign any pre-existing orphan repos to their
@@ -88,6 +109,7 @@ func NewServer(store db.Store, addr string) *Server {
 
 	// Middleware chain
 	r.Use(chimw.RequestID)
+	r.Use(middleware.ScannerOperationTrace)
 	r.Use(chimw.RealIP)
 	r.Use(chimw.Logger)
 	r.Use(chimw.Recoverer)
@@ -97,12 +119,28 @@ func NewServer(store db.Store, addr string) *Server {
 	// (SSE keeps the conn alive). Fast handlers complete in ms either
 	// way; this is the safety-net upper bound, not the expected case.
 	r.Use(chimw.Timeout(15 * time.Minute))
-	r.Use(middleware.MaxBodySize(1 << 20)) // 1 MB body limit
+	r.Use(middleware.MaxBodySizeForRequest(1<<20, func(r *http.Request) int64 {
+		if r.Method == http.MethodPost &&
+			r.URL.Path == "/api/v1/scanner-supply-chain/release-imports" {
+			return routes.ScannerReleaseBundleMaxUploadBytes
+		}
+		return 0
+	})) // 1 MB by default; the streaming bundle import has its own 8 GiB bound.
 	r.Use(generalLimiter.Handler)
 	r.Use(cors.Handler(cors.Options{
-		AllowOriginFunc:  allowedCORSOrigin,
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
+		AllowOriginFunc: allowedCORSOrigin,
+		AllowedMethods:  []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowedHeaders: []string{
+			"Accept", "Authorization", "Content-Type", "Idempotency-Key",
+			"If-Match", "Last-Event-ID", "Traceparent", "X-Wolf-Import-Reason",
+			"X-Wolf-Operation-ID",
+		},
+		ExposedHeaders: []string{
+			"Deprecation", "ETag", "Link", "Retry-After",
+			"X-Wolf-Release-ID", "X-Wolf-Manifest-Digest", "X-Wolf-Bundle-Digest",
+			"X-Wolf-Bundle-Signature-Status", "Traceparent",
+			"X-Wolf-Operation-ID", "X-Wolf-Trace-ID",
+		},
 		AllowCredentials: true,
 		MaxAge:           300,
 	}))
@@ -141,6 +179,7 @@ func NewServer(store db.Store, addr string) *Server {
 		r.Group(func(r chi.Router) {
 			r.Get("/health", routes.Health)
 			r.Get("/ready", routes.Ready)
+			r.Get("/metrics", routes.Metrics)
 			r.Get("/version", routes.Version)
 		})
 
@@ -180,6 +219,17 @@ func NewServer(store db.Store, addr string) *Server {
 			wLoops := auth.RequireScope(apikey.ScopeWriteLoops)
 			rConfig := auth.RequireScope(apikey.ScopeReadConfig)
 			wConfig := auth.RequireScope(apikey.ScopeWriteConfig)
+			rCredentials := auth.RequireScope(apikey.ScopeReadCredentials)
+			wCredentials := auth.RequireScope(apikey.ScopeWriteCredentials)
+			readScannerSupplyChain := auth.RequireScope(apikey.ScopeReadScannerSupplyChain)
+			operateScannerSupplyChain := auth.RequireScope(apikey.ScopeOperateScannerSupplyChain)
+			approveScannerReleases := auth.RequireScope(apikey.ScopeApproveScannerReleases)
+			manageScannerRegistries := auth.RequireScope(apikey.ScopeManageScannerRegistries)
+			adminScannerSupplyChain := auth.RequireScope(apikey.ScopeAdminScannerSupplyChain)
+			readScannerReleaseMode := requireScannerReleaseCapability(scannerfeature.CapabilityRead)
+			candidateScannerReleaseMode := requireScannerReleaseCapability(scannerfeature.CapabilityCandidate)
+			canaryScannerReleaseMode := requireScannerReleaseCapability(scannerfeature.CapabilityCanary)
+			stableScannerReleaseMode := requireScannerReleaseCapability(scannerfeature.CapabilityStable)
 			adminScope := auth.RequireScope(apikey.ScopeAdmin)
 			// adminOnly gates the human admin surface by ROLE. It is chained
 			// WITH the relevant scope (defense in depth): an admin endpoint
@@ -221,6 +271,7 @@ func NewServer(store db.Store, addr string) *Server {
 				r.Get("/", routes.ListUsers)
 				r.Post("/", routes.CreateUserAdmin)
 				r.Put("/{id}/role", routes.UpdateUserRole)
+				r.Put("/{id}/scanner-supply-chain-access", routes.UpdateUserScannerSupplyChainAccess)
 				r.Post("/{id}/mfa/reset", routes.AdminResetUserMFA)
 				r.Delete("/{id}", routes.DeleteUser)
 			})
@@ -239,6 +290,13 @@ func NewServer(store db.Store, addr string) *Server {
 
 			r.Route("/sources", func(r chi.Router) {
 				r.With(wRepos).Post("/github/list-org-repos", routes.ListOrgGitHubRepos)
+			})
+
+			r.Route("/credentials", func(r chi.Router) {
+				r.With(rCredentials).Get("/", routes.ListCredentials)
+				r.With(wCredentials).Post("/", routes.CreateCredential)
+				r.With(rCredentials).Get("/{id}", routes.GetCredential)
+				r.With(wCredentials).Delete("/{id}", routes.DeleteCredential)
 			})
 
 			r.Route("/nodes", func(r chi.Router) {
@@ -272,11 +330,13 @@ func NewServer(store db.Store, addr string) *Server {
 				r.With(rScans).Get("/", routes.ListScans)
 				r.With(rScans).Get("/trends", routes.ScansTrends)
 				r.With(wScans).Post("/", routes.CreateScan)
+				r.With(wScans, operateScannerSupplyChain, readScannerReleaseMode).Post("/{id}/release-rescans", routes.CreateReleaseRescan)
 				// Preflight: which selected scanners are missing their image, so
 				// the UI can prompt to pull before starting (read-scope: no scan
 				// is created).
 				r.With(rScans).Post("/preflight", routes.ScanPreflight)
 				r.With(rScans).Get("/{id}", routes.GetScan)
+				r.With(rScans).Get("/{id}/result", routes.GetScanResult)
 				r.With(rScans).Get("/{id}/findings", routes.GetScanFindings)
 				r.With(rScans).Get("/{id}/findings/stats", routes.GetScanFindingStats)
 				r.With(rScans).Get("/{id}/stream", routes.StreamScan)
@@ -375,13 +435,103 @@ func NewServer(store db.Store, addr string) *Server {
 				r.With(wConfig).With(adminOnly).Post("/tools/{name}/check-update", routes.ScannersCheckUpdate)
 				r.With(rConfig).Get("/images", routes.ScannersImages)
 				r.With(wConfig).With(adminOnly).Post("/images/pull", routes.ScannersPullOne)
-				r.With(wConfig).With(adminOnly).Post("/images/{variant}/build", routes.BuildScannerImage)
-				r.With(wConfig).With(adminOnly).Post("/images/build-all", routes.BuildAllScannerImages)
+				r.With(wConfig).With(adminOnly).With(allowLegacyScannerBuilds).Post("/images/{variant}/build", routes.BuildScannerImage)
+				r.With(wConfig).With(adminOnly).With(allowLegacyScannerBuilds).Post("/images/build-all", routes.BuildAllScannerImages)
+				r.With(rConfig).With(adminOnly).Get("/custom-builds", routes.ListScannerCustomBuilds)
+				r.With(wConfig).With(adminOnly).Post("/custom-builds", routes.CreateScannerCustomBuild)
+				r.With(rConfig).With(adminOnly).Get("/custom-builds/{id}", routes.GetScannerCustomBuild)
+				r.With(rConfig).With(adminOnly).Get("/custom-builds/{id}/events", routes.StreamScannerCustomBuildEvents)
+				r.With(wConfig).With(adminOnly).Post("/custom-builds/{id}/cancel", routes.CancelScannerCustomBuild)
+				r.With(wConfig).With(adminOnly).Post("/custom-builds/{id}/retry", routes.RetryScannerCustomBuild)
 				r.With(rConfig).Get("/config", routes.ScannersConfig)
+				r.With(rConfig).Get("/runtime-capabilities", routes.RuntimeCapabilities)
+				r.With(rConfig).Get("/workers", routes.ListScanWorkers)
 				r.With(rConfig).Get("/list", routes.ScannersList)
 				r.With(rConfig).Post("/plan", routes.ScannersPlan)
 				r.With(wConfig).With(adminOnly).Post("/doctor", routes.ScannersDoctor)
 				r.With(wConfig).With(adminOnly).Post("/pull", routes.ScannersPull)
+			})
+
+			// Durable scanner supply-chain control plane. Existing /scanners
+			// endpoints remain available as compatibility/troubleshooting
+			// surfaces while these resources own release operations.
+			r.Route("/scanner-supply-chain", func(r chi.Router) {
+				r.With(readScannerSupplyChain, readScannerReleaseMode).Get("/overview", routes.ScannerSupplyChainOverview)
+				r.With(readScannerSupplyChain, readScannerReleaseMode).Get("/updates", routes.ScannerSupplyChainListUpdates)
+				r.With(readScannerSupplyChain, readScannerReleaseMode).Get("/policy", routes.ScannerSupplyChainGetPolicy)
+				r.With(adminScannerSupplyChain, candidateScannerReleaseMode).Put("/policy", routes.ScannerSupplyChainPutPolicy)
+				r.With(readScannerSupplyChain, readScannerReleaseMode).Post("/policy/validate", routes.ScannerSupplyChainValidatePolicy)
+				r.With(readScannerSupplyChain, readScannerReleaseMode).Post("/policy/dry-run", routes.ScannerSupplyChainPolicyDryRun)
+				r.With(readScannerSupplyChain, readScannerReleaseMode).Get("/policy/revisions", routes.ScannerSupplyChainListPolicyRevisions)
+				r.With(adminScannerSupplyChain, candidateScannerReleaseMode).Post("/policy/revisions/{revision}/restore", routes.ScannerSupplyChainRestorePolicy)
+
+				r.With(operateScannerSupplyChain, candidateScannerReleaseMode).Post("/discovery-runs", routes.ScannerSupplyChainCreateDiscovery)
+				r.With(readScannerSupplyChain, readScannerReleaseMode).Get("/discovery-runs", routes.ScannerSupplyChainListDiscoveries)
+				r.With(readScannerSupplyChain, readScannerReleaseMode).Get("/discovery-runs/{id}", routes.ScannerSupplyChainGetDiscovery)
+				r.With(operateScannerSupplyChain, candidateScannerReleaseMode).Post("/discovery-runs/{id}/cancel", routes.ScannerSupplyChainCancelDiscovery)
+				r.With(readScannerSupplyChain, readScannerReleaseMode).Get("/discovery-runs/{id}/events", routes.ScannerSupplyChainDiscoveryEvents)
+
+				r.With(operateScannerSupplyChain, candidateScannerReleaseMode).Post("/candidates", routes.ScannerSupplyChainCreateCandidate)
+				r.With(readScannerSupplyChain, readScannerReleaseMode).Get("/candidates", routes.ScannerSupplyChainListCandidates)
+				r.With(readScannerSupplyChain, readScannerReleaseMode).Get("/candidates/{id}", routes.ScannerSupplyChainGetCandidate)
+				r.With(readScannerSupplyChain, readScannerReleaseMode).Get("/candidates/{id}/diffs/{kind}", routes.ScannerSupplyChainGetCandidateDiff)
+				r.With(readScannerSupplyChain, readScannerReleaseMode).Get("/candidates/{id}/events", routes.ScannerSupplyChainCandidateEvents)
+				r.With(operateScannerSupplyChain, candidateScannerReleaseMode).Post("/candidates/{id}/cancel", routes.ScannerSupplyChainCancelCandidate)
+				r.With(operateScannerSupplyChain, candidateScannerReleaseMode).Post("/candidates/{id}/retry", routes.ScannerSupplyChainRetryCandidate)
+				r.With(approveScannerReleases, candidateScannerReleaseMode).Post("/candidates/{id}/approve", routes.ScannerSupplyChainApproveCandidate)
+				r.With(approveScannerReleases, candidateScannerReleaseMode).Post("/candidates/{id}/reject", routes.ScannerSupplyChainRejectCandidate)
+				r.With(approveScannerReleases, candidateScannerReleaseMode).Post("/candidates/{id}/exceptions", routes.ScannerSupplyChainCreateCandidateException)
+				r.With(approveScannerReleases, canaryScannerReleaseMode).Post("/candidates/{id}/publish", routes.ScannerSupplyChainPublishCandidate)
+
+				r.With(readScannerSupplyChain, readScannerReleaseMode).Get("/releases", routes.ScannerSupplyChainListReleases)
+				r.With(readScannerSupplyChain, readScannerReleaseMode).Get("/releases/compare", routes.ScannerSupplyChainCompareReleases)
+				r.With(readScannerSupplyChain, readScannerReleaseMode).Get("/releases/{id}", routes.ScannerSupplyChainGetRelease)
+				r.With(readScannerSupplyChain, readScannerReleaseMode).Get("/releases/{id}/diffs/{kind}", routes.ScannerSupplyChainGetReleaseDiff)
+				r.With(readScannerSupplyChain, readScannerReleaseMode).Get("/releases/{id}/events", routes.ScannerSupplyChainReleaseEvents)
+				r.With(readScannerSupplyChain, readScannerReleaseMode).Get("/releases/{id}/export", routes.ScannerSupplyChainExportReleaseBundle)
+				r.With(readScannerSupplyChain, readScannerReleaseMode).Post("/releases/{id}/verify", routes.ScannerSupplyChainVerifyRelease)
+				r.With(operateScannerSupplyChain, canaryScannerReleaseMode).Post("/releases/{id}/promote", routes.ScannerSupplyChainPromoteRelease)
+				r.With(adminScannerSupplyChain, stableScannerReleaseMode).Post("/releases/{id}/deprecate", routes.ScannerSupplyChainDeprecateRelease)
+				r.With(adminScannerSupplyChain, stableScannerReleaseMode).Post("/releases/{id}/revoke", routes.ScannerSupplyChainRevokeRelease)
+				r.With(adminScannerSupplyChain, candidateScannerReleaseMode).Post("/release-imports", routes.ScannerSupplyChainImportReleaseBundle)
+				r.With(adminScannerSupplyChain, adminOnly, candidateScannerReleaseMode).Post("/legacy-release-imports", routes.ScannerSupplyChainImportLegacyConfig)
+
+				r.With(readScannerSupplyChain, readScannerReleaseMode).Get("/rollouts", routes.ScannerSupplyChainListRollouts)
+				r.With(readScannerSupplyChain, readScannerReleaseMode).Get("/rollouts/{id}", routes.ScannerSupplyChainGetRollout)
+				r.With(readScannerSupplyChain, readScannerReleaseMode).Get("/rollouts/{id}/events", routes.ScannerSupplyChainRolloutEvents)
+				r.With(operateScannerSupplyChain, canaryScannerReleaseMode).Post("/rollouts/{id}/pause", routes.ScannerSupplyChainPauseRollout)
+				r.With(operateScannerSupplyChain, canaryScannerReleaseMode).Post("/rollouts/{id}/resume", routes.ScannerSupplyChainResumeRollout)
+				r.With(operateScannerSupplyChain, canaryScannerReleaseMode).Post("/rollouts/{id}/rollback", routes.ScannerSupplyChainRollbackRollout)
+
+				r.With(manageScannerRegistries, readScannerReleaseMode).Get("/registries", routes.ScannerSupplyChainListRegistries)
+				r.With(manageScannerRegistries, candidateScannerReleaseMode).Post("/registries", routes.ScannerSupplyChainCreateRegistry)
+				r.With(manageScannerRegistries, readScannerReleaseMode).Get("/registries/{id}", routes.ScannerSupplyChainGetRegistry)
+				r.With(manageScannerRegistries, candidateScannerReleaseMode).Patch("/registries/{id}", routes.ScannerSupplyChainPatchRegistry)
+				r.With(manageScannerRegistries, candidateScannerReleaseMode).Delete("/registries/{id}", routes.ScannerSupplyChainDeleteRegistry)
+				r.With(manageScannerRegistries, candidateScannerReleaseMode).Post("/registries/{id}/check", routes.ScannerSupplyChainCheckRegistry)
+				r.With(manageScannerRegistries, candidateScannerReleaseMode).Post("/registries/{id}/reconcile", routes.ScannerSupplyChainReconcileRegistry)
+				r.With(manageScannerRegistries, candidateScannerReleaseMode).Post("/registries/{id}/jobs", routes.ScannerSupplyChainCreateRegistryJob)
+				r.With(manageScannerRegistries, candidateScannerReleaseMode).Post("/registries/{id}/cleanup-jobs", routes.ScannerSupplyChainCreateRegistryCleanupJob)
+				r.With(manageScannerRegistries, readScannerReleaseMode).Get("/registry-jobs", routes.ScannerSupplyChainListRegistryJobs)
+				r.With(manageScannerRegistries, readScannerReleaseMode).Get("/registry-jobs/{id}", routes.ScannerSupplyChainGetRegistryJob)
+				r.With(manageScannerRegistries, readScannerReleaseMode).Get("/registry-jobs/{id}/events", routes.ScannerSupplyChainRegistryJobEvents)
+				r.With(manageScannerRegistries, candidateScannerReleaseMode).Post("/registry-jobs/{id}/retry", routes.ScannerSupplyChainRetryRegistryJob)
+				r.With(manageScannerRegistries, readScannerReleaseMode).Get("/registry-quarantine", routes.ScannerSupplyChainListRegistryQuarantine)
+
+				r.With(adminScannerSupplyChain, readScannerReleaseMode).Get("/signers", routes.ScannerSupplyChainListSigners)
+				r.With(adminScannerSupplyChain, candidateScannerReleaseMode).Post("/signers", routes.ScannerSupplyChainCreateSigner)
+				r.With(adminScannerSupplyChain, readScannerReleaseMode).Get("/signers/{id}", routes.ScannerSupplyChainGetSigner)
+				r.With(adminScannerSupplyChain, candidateScannerReleaseMode).Post("/signers/{id}/rotate", routes.ScannerSupplyChainRotateSigner)
+				r.With(adminScannerSupplyChain, candidateScannerReleaseMode).Post("/signers/{id}/revoke", routes.ScannerSupplyChainRevokeSigner)
+
+				r.With(readScannerSupplyChain, readScannerReleaseMode).Get("/notifications", routes.ScannerSupplyChainListNotifications)
+				r.With(readScannerSupplyChain, readScannerReleaseMode).Get("/notifications/{id}", routes.ScannerSupplyChainGetNotification)
+				r.With(adminScannerSupplyChain, candidateScannerReleaseMode).Post("/notifications/{id}/retry", routes.ScannerSupplyChainRetryNotification)
+				r.With(readScannerSupplyChain, readScannerReleaseMode).Get("/alerts", routes.ScannerSupplyChainListAlerts)
+				r.With(readScannerSupplyChain, readScannerReleaseMode).Get("/alerts/{id}", routes.ScannerSupplyChainGetAlert)
+
+				r.With(readScannerSupplyChain, readScannerReleaseMode).Get("/audit", routes.ScannerSupplyChainAudit)
+				r.With(readScannerSupplyChain, readScannerReleaseMode).Get("/audit/export", routes.ScannerSupplyChainAuditExport)
 			})
 
 			// GET stays open (the UI reads feature flags to gate nav); writes
@@ -413,8 +563,11 @@ func NewServer(store db.Store, addr string) *Server {
 	})
 
 	// Static UI (SPA) — mounted AFTER /api so /api/* routes always win.
-	// Discovery: WOLF_UI_DIR env > /usr/share/wolf/ui/dist > ./ui/dist > ./dist.
-	MountStaticUI(r, os.Getenv("WOLF_UI_DIR"))
+	// Headless installations can disable only the SPA while retaining the API
+	// and OpenAPI documentation.
+	if !envBool("WOLF_API_ONLY") {
+		MountStaticUI(r, os.Getenv("WOLF_UI_DIR"))
+	}
 
 	srv := &Server{
 		Router: r,
@@ -480,13 +633,29 @@ func (s *Server) Start() error {
 	// their executeScan goroutine is gone, so they'll never finish
 	// themselves. Mark them as cancelled so the UI doesn't keep showing
 	// "1 scan running" forever and operators can re-trigger if needed.
-	recoverOrphanScans(s.Store)
+	if !queueExecutionMode() {
+		recoverOrphanScans(s.Store)
+	}
 
 	err := s.httpServer.ListenAndServe()
 	if err == http.ErrServerClosed {
 		return nil
 	}
 	return err
+}
+
+func queueExecutionMode() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("WOLF_SCAN_EXECUTION_MODE"))) {
+	case "queue", "worker", "workers":
+		return true
+	default:
+		return false
+	}
+}
+
+func envBool(name string) bool {
+	value := strings.TrimSpace(os.Getenv(name))
+	return strings.EqualFold(value, "true") || value == "1"
 }
 
 // Shutdown performs a graceful shutdown with the given context deadline.

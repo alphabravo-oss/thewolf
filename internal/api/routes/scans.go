@@ -3,6 +3,7 @@ package routes
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -28,6 +29,7 @@ import (
 	findingdiff "github.com/alphabravocompany/thewolf/internal/finding/diff"
 	findingsuppression "github.com/alphabravocompany/thewolf/internal/finding/suppression"
 	"github.com/alphabravocompany/thewolf/internal/models"
+	scannercontainer "github.com/alphabravocompany/thewolf/internal/plugin/container"
 	promptpkg "github.com/alphabravocompany/thewolf/internal/prompt"
 	"github.com/alphabravocompany/thewolf/internal/scan/coverage"
 	"github.com/alphabravocompany/thewolf/internal/scan/detector"
@@ -38,11 +40,38 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/scan/runner"
 	"github.com/alphabravocompany/thewolf/internal/scan/scorer"
 	"github.com/alphabravocompany/thewolf/internal/scan/suppress"
+	"github.com/alphabravocompany/thewolf/internal/scannerrelease"
+	"github.com/alphabravocompany/thewolf/internal/scannerruntime"
+	kubernetesruntime "github.com/alphabravocompany/thewolf/internal/scannerruntime/kubernetes"
 	scannermanifest "github.com/alphabravocompany/thewolf/internal/scannertools/manifest"
 	"github.com/alphabravocompany/thewolf/internal/scantarget"
 	"github.com/alphabravocompany/thewolf/internal/secrets"
 	"github.com/alphabravocompany/thewolf/internal/wolflog"
 )
+
+// ExecuteQueuedScan runs a scan claimed by a scan-worker. The normalized
+// request is loaded from the durable scan row, so the API process and worker
+// never need to share process memory.
+func ExecuteQueuedScan(ctx context.Context, h *Handler, scan *models.Scan) error {
+	if h == nil || h.Store == nil {
+		return errors.New("scan handler is not initialized")
+	}
+	if scan == nil {
+		return errors.New("scan is required")
+	}
+	var req createScanRequest
+	if scan.RequestJSON != "" && scan.RequestJSON != "{}" {
+		if err := json.Unmarshal([]byte(scan.RequestJSON), &req); err != nil {
+			return fmt.Errorf("decode durable scan request: %w", err)
+		}
+	}
+	req.RepoID = scan.RepoID
+	if req.Branch == "" {
+		req.Branch = scan.Branch
+	}
+	executeScan(ctx, h, scan.ID, scan.UserID, scan.RepoID, req.Branch, req)
+	return nil
+}
 
 // SSEBroker is the package-level SSE broker for scan streaming.
 // Set this before starting the server.
@@ -66,14 +95,51 @@ var (
 
 // createScanRequest is the JSON body for POST /api/scans.
 type createScanRequest struct {
-	RepoID        string   `json:"repo_id"`
-	CollectionID  *string  `json:"collection_id,omitempty"`
-	Branch        string   `json:"branch,omitempty"`
-	Tools         []string `json:"tools,omitempty"`
-	DisabledTools []string `json:"disabled_tools,omitempty"`
-	AIEnabled     bool     `json:"ai_enabled,omitempty"`
-	AIEngine      string   `json:"ai_engine,omitempty"`
-	AIModel       string   `json:"ai_model,omitempty"`
+	RepoID          string             `json:"repo_id"`
+	Source          *scanSourceRequest `json:"source,omitempty"`
+	CollectionID    *string            `json:"collection_id,omitempty"`
+	Branch          string             `json:"branch,omitempty"`
+	Profile         string             `json:"profile,omitempty"`
+	Categories      []string           `json:"categories,omitempty"`
+	Tools           []string           `json:"tools,omitempty"`
+	DisabledTools   []string           `json:"disabled_tools,omitempty"`
+	IncludePaths    []string           `json:"include_paths,omitempty"`
+	ExcludePaths    []string           `json:"exclude_paths,omitempty"`
+	ClientReference string             `json:"client_reference,omitempty"`
+	AIEnabled       bool               `json:"ai_enabled,omitempty"`
+	AIEngine        string             `json:"ai_engine,omitempty"`
+	AIModel         string             `json:"ai_model,omitempty"`
+}
+
+func normalizedScanRequest(req createScanRequest, repoID, branch string) ([]byte, string, error) {
+	req.RepoID = repoID
+	req.Branch = branch
+	normalized := req
+	normalized.Tools = append([]string(nil), req.Tools...)
+	normalized.DisabledTools = append([]string(nil), req.DisabledTools...)
+	normalized.Categories = append([]string(nil), req.Categories...)
+	normalized.IncludePaths = append([]string(nil), req.IncludePaths...)
+	normalized.ExcludePaths = append([]string(nil), req.ExcludePaths...)
+	sort.Strings(normalized.Tools)
+	sort.Strings(normalized.DisabledTools)
+	sort.Strings(normalized.Categories)
+	sort.Strings(normalized.IncludePaths)
+	sort.Strings(normalized.ExcludePaths)
+	data, err := json.Marshal(normalized)
+	if err != nil {
+		return nil, "", err
+	}
+	sum := sha256.Sum256(data)
+	return data, hex.EncodeToString(sum[:]), nil
+}
+
+func queuedScanExecution() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("WOLF_SCAN_EXECUTION_MODE"))) {
+	case "queue", "worker", "workers":
+		return true
+	default:
+		return false
+	}
 }
 
 // CreateScan handles POST /api/scans — create a new scan.
@@ -95,9 +161,28 @@ func CreateScan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.RepoID == "" {
-		response.WriteError(w, http.StatusBadRequest, "validation_error", "repo_id is required")
+	if (req.RepoID == "") == (req.Source == nil) {
+		response.WriteError(w, http.StatusBadRequest, "validation_error", "exactly one of repo_id or source is required")
 		return
+	}
+	if err := validateScanRequestSelectors(h, &req); err != nil {
+		response.WriteError(w, http.StatusBadRequest, "validation_error", err.Error())
+		return
+	}
+	if req.Source != nil {
+		if req.Source.Ref != "" && req.Branch != "" && req.Source.Ref != req.Branch {
+			response.WriteError(w, http.StatusBadRequest, "validation_error", "source.ref conflicts with branch")
+			return
+		}
+		sourceRepo, err := materializeScanSource(r.Context(), h, claims.UserID, req.Source)
+		if err != nil {
+			response.WriteError(w, http.StatusBadRequest, "source_invalid", err.Error())
+			return
+		}
+		req.RepoID = sourceRepo.ID
+		if req.Source.Ref != "" {
+			req.Branch = req.Source.Ref
+		}
 	}
 
 	repo, ok := loadRepoForCaller(w, r, h.Store, req.RepoID, claims)
@@ -145,40 +230,223 @@ func CreateScan(w http.ResponseWriter, r *http.Request) {
 	}
 
 	toolsSelected, _ := json.Marshal(req.Tools)
+	categoriesJSON, _ := json.Marshal(req.Categories)
+	includePathsJSON, _ := json.Marshal(req.IncludePaths)
+	excludePathsJSON, _ := json.Marshal(req.ExcludePaths)
+	requestJSON, requestDigest, err := normalizedScanRequest(req, repo.ID, branch)
+	if err != nil {
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to normalize scan request")
+		return
+	}
+	idempotencyKey := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
+	if len(idempotencyKey) > 255 {
+		response.WriteError(w, http.StatusBadRequest, "validation_error", "Idempotency-Key must be 255 characters or fewer")
+		return
+	}
+	if idempotencyKey != "" {
+		if existing, findErr := h.Store.FindScanByIdempotencyKey(r.Context(), claims.UserID, idempotencyKey); findErr == nil {
+			if existing.RequestDigest != requestDigest {
+				response.WriteError(w, http.StatusConflict, "idempotency_conflict", "Idempotency-Key was already used for a different scan request")
+				return
+			}
+			response.WriteJSON(w, http.StatusCreated, response.SuccessResponse{Data: existing})
+			return
+		} else if !errors.Is(findErr, sql.ErrNoRows) {
+			response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to check idempotency key")
+			return
+		}
+	}
 
 	now := time.Now()
 	scan := &models.Scan{
-		ID:            uuid.New().String(),
-		UserID:        claims.UserID,
-		RepoID:        req.RepoID,
-		CollectionID:  req.CollectionID,
-		Branch:        branch,
-		SourceType:    repo.SourceType,
-		RemoteNodeID:  repo.RemoteNodeID,
-		SourcePath:    repo.SourcePath,
-		Status:        models.ScanStatusPending,
-		ToolsSelected: string(toolsSelected),
-		AIEnabled:     req.AIEnabled,
-		CreatedAt:     now,
-		UpdatedAt:     now,
+		ID:                uuid.New().String(),
+		UserID:            claims.UserID,
+		RepoID:            req.RepoID,
+		CollectionID:      req.CollectionID,
+		Branch:            branch,
+		SourceType:        repo.SourceType,
+		RemoteNodeID:      repo.RemoteNodeID,
+		SourcePath:        repo.SourcePath,
+		SourceFingerprint: repo.SourceFingerprint,
+		Status:            models.ScanStatusPending,
+		ToolsSelected:     string(toolsSelected),
+		RequestJSON:       string(requestJSON),
+		RequestDigest:     requestDigest,
+		ClientReference:   strings.TrimSpace(req.ClientReference),
+		IdempotencyKey:    idempotencyKey,
+		Phase:             "queued",
+		MaxAttempts:       2,
+		Profile:           req.Profile,
+		Categories:        string(categoriesJSON),
+		IncludePaths:      string(includePathsJSON),
+		ExcludePaths:      string(excludePathsJSON),
+		AIEnabled:         req.AIEnabled,
+		CreatedAt:         now,
+		UpdatedAt:         now,
 	}
 
 	if err := h.Store.CreateScan(r.Context(), scan); err != nil {
+		if idempotencyKey != "" {
+			if existing, findErr := h.Store.FindScanByIdempotencyKey(r.Context(), claims.UserID, idempotencyKey); findErr == nil {
+				if existing.RequestDigest != requestDigest {
+					response.WriteError(w, http.StatusConflict, "idempotency_conflict", "Idempotency-Key was already used for a different scan request")
+					return
+				}
+				response.WriteJSON(w, http.StatusCreated, response.SuccessResponse{Data: existing})
+				return
+			}
+		}
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to create scan")
 		return
 	}
 
-	go executeScan(h, scan.ID, claims.UserID, repo.ID, branch, req)
+	publishScanEvent(h, scan.ID, "scan_status", fmt.Sprintf(
+		`{"type":"scan_status","scan_id":"%s","status":"pending","finding_count":0}`, scan.ID,
+	))
+	if !queuedScanExecution() {
+		go executeScan(context.Background(), h, scan.ID, claims.UserID, repo.ID, branch, req)
+	}
 
 	response.WriteJSON(w, http.StatusCreated, response.SuccessResponse{Data: scan})
 }
 
+type releaseRescanRequest struct {
+	ReleaseID string `json:"release_id"`
+	Reason    string `json:"reason"`
+}
+
+// CreateReleaseRescan creates a distinct scan operation pinned to an explicitly
+// selected immutable release. Worker lease retries continue to reuse the
+// original scan row and therefore retain its original release assignment.
+func CreateReleaseRescan(w http.ResponseWriter, r *http.Request) {
+	claims := auth.GetUserFromContext(r.Context())
+	if claims == nil {
+		response.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing user context")
+		return
+	}
+	h := DefaultHandler
+	if h == nil || h.Store == nil {
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "handler not initialized")
+		return
+	}
+	source, ok := loadScanForCaller(w, r, h.Store, chi.URLParam(r, "id"), claims)
+	if !ok {
+		return
+	}
+	var req releaseRescanRequest
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&req); err != nil {
+		response.WriteError(w, http.StatusBadRequest, "bad_request", "invalid request body")
+		return
+	}
+	req.ReleaseID = strings.TrimSpace(req.ReleaseID)
+	req.Reason = strings.TrimSpace(req.Reason)
+	if req.ReleaseID == "" || req.Reason == "" {
+		response.WriteError(w, http.StatusBadRequest, "validation_error", "release_id and reason are required")
+		return
+	}
+	if req.ReleaseID == source.ScannerReleaseID {
+		response.WriteError(w, http.StatusConflict, "release_unchanged", "selected release is already assigned to the source scan")
+		return
+	}
+	inventory, err := h.Store.ScannerReleases().GetReleaseInventory(r.Context(), req.ReleaseID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			response.WriteError(w, http.StatusNotFound, "release_not_found", "scanner release not found")
+		} else {
+			response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to load scanner release")
+		}
+		return
+	}
+	if inventory.Release.Legacy {
+		response.WriteError(w, http.StatusConflict, "legacy_release_unverifiable", "legacy release snapshots are historical evidence and cannot be selected for a managed re-scan")
+		return
+	}
+	if inventory.Release.State == scannerrelease.ReleaseRevoked ||
+		inventory.Release.State == scannerrelease.ReleaseDeprecated {
+		response.WriteError(w, http.StatusConflict, "release_not_runnable", "selected scanner release is not runnable")
+		return
+	}
+	selectedImages, imageReferences, err := selectRuntimeReleaseImages(r.Context(), h, inventory.Images)
+	if err != nil {
+		response.WriteError(w, http.StatusConflict, "release_not_runnable", err.Error())
+		return
+	}
+	releaseSnapshot, err := scannerruntime.SnapshotFromInventory(
+		inventory.Release, inventory.Tools, selectedImages, imageReferences,
+	)
+	if err != nil {
+		response.WriteError(w, http.StatusConflict, "release_not_runnable", err.Error())
+		return
+	}
+	idempotencyKey := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
+	if idempotencyKey == "" {
+		response.WriteError(w, http.StatusPreconditionRequired, "idempotency_key_required", "Idempotency-Key is required")
+		return
+	}
+	if len(idempotencyKey) > 255 {
+		response.WriteError(w, http.StatusBadRequest, "validation_error", "Idempotency-Key must be 255 characters or fewer")
+		return
+	}
+	if existing, findErr := h.Store.FindScanByIdempotencyKey(r.Context(), claims.UserID, idempotencyKey); findErr == nil {
+		if existing.RescanOfScanID != source.ID || existing.ScannerReleaseID != req.ReleaseID ||
+			existing.ReleaseSelectionReason != req.Reason {
+			response.WriteError(w, http.StatusConflict, "idempotency_conflict", "Idempotency-Key was already used for a different scan request")
+			return
+		}
+		response.WriteJSON(w, http.StatusCreated, response.SuccessResponse{Data: existing})
+		return
+	} else if !errors.Is(findErr, sql.ErrNoRows) {
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to check idempotency key")
+		return
+	}
+
+	now := time.Now().UTC()
+	rescan := &models.Scan{
+		ID: uuid.NewString(), UserID: claims.UserID, RepoID: source.RepoID,
+		CollectionID: source.CollectionID, Branch: source.Branch,
+		SourceType: source.SourceType, RemoteNodeID: source.RemoteNodeID,
+		SourcePath: source.SourcePath, SourceFingerprint: source.SourceFingerprint,
+		RequestJSON: source.RequestJSON, RequestDigest: source.RequestDigest,
+		ClientReference: source.ClientReference, IdempotencyKey: idempotencyKey,
+		Phase: "queued", MaxAttempts: source.MaxAttempts,
+		Profile: source.Profile, Categories: source.Categories,
+		IncludePaths: source.IncludePaths, ExcludePaths: source.ExcludePaths,
+		ToolsSelected: source.ToolsSelected, Status: models.ScanStatusPending,
+		AIEnabled: source.AIEnabled, ScannerReleaseID: releaseSnapshot.ReleaseID,
+		ReleaseManifestDigest: releaseSnapshot.ManifestDigest,
+		RescanOfScanID:        source.ID, ReleaseSelectionReason: req.Reason,
+		CreatedAt: now, UpdatedAt: now,
+	}
+	if err := h.Store.CreateScan(r.Context(), rescan); err != nil {
+		if existing, findErr := h.Store.FindScanByIdempotencyKey(r.Context(), claims.UserID, idempotencyKey); findErr == nil &&
+			existing.RescanOfScanID == source.ID && existing.ScannerReleaseID == req.ReleaseID &&
+			existing.ReleaseSelectionReason == req.Reason {
+			response.WriteJSON(w, http.StatusCreated, response.SuccessResponse{Data: existing})
+			return
+		}
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to create release re-scan")
+		return
+	}
+	publishScanEvent(h, rescan.ID, "scan_status", fmt.Sprintf(
+		`{"type":"scan_status","scan_id":"%s","status":"pending","finding_count":0}`, rescan.ID,
+	))
+	if !queuedScanExecution() {
+		var durableRequest createScanRequest
+		if err := json.Unmarshal([]byte(rescan.RequestJSON), &durableRequest); err == nil {
+			go executeScan(context.Background(), h, rescan.ID, rescan.UserID, rescan.RepoID, rescan.Branch, durableRequest)
+		}
+	}
+	response.WriteJSON(w, http.StatusCreated, response.SuccessResponse{Data: rescan})
+}
+
 // executeScan runs the scan in a background goroutine.
-func executeScan(h *Handler, scanID, userID, repoID, branch string, req createScanRequest) {
+func executeScan(parent context.Context, h *Handler, scanID, userID, repoID, branch string, req createScanRequest) {
 	log := wolflog.Component("scan")
 	log.Info().Str("scan_id", scanID).Str("repo_id", repoID).Str("branch", branch).Msg("scan starting")
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(parent)
 
 	activeScansMu.Lock()
 	activeScanCtxs[scanID] = cancel
@@ -194,6 +462,8 @@ func executeScan(h *Handler, scanID, userID, repoID, branch string, req createSc
 		activeScansMu.Unlock()
 		cancel()
 	}()
+	stopCancellationWatch := watchDurableScanCancellation(ctx, h, scanID, cancel)
+	defer stopCancellationWatch()
 
 	// Mark scan as running.
 	now := time.Now()
@@ -202,23 +472,67 @@ func executeScan(h *Handler, scanID, userID, repoID, branch string, req createSc
 		log.Error().Str("scan_id", scanID).Err(err).Msg("failed to load scan record")
 		return
 	}
-	scan.Status = models.ScanStatusRunning
-	scan.StartedAt = &now
-	scan.UpdatedAt = now
-	if err := h.Store.UpdateScan(ctx, scan); err != nil {
+	executionLeaseToken := scan.LeaseToken
+	started, err := h.Store.StartScanExecution(ctx, scanID, executionLeaseToken, now)
+	if err != nil {
+		log.Error().Str("scan_id", scanID).Err(err).Msg("failed to start scan execution")
 		return
 	}
+	if !started {
+		log.Info().Str("scan_id", scanID).Msg("scan claim was cancelled or lost before execution")
+		return
+	}
+	scan, err = h.Store.GetScanByID(ctx, scanID)
+	if err != nil {
+		return
+	}
+	releaseSnapshot, releaseRuntimeConfig, err := resolveScanRelease(ctx, h, scan)
+	if err != nil {
+		failPreparedScan(h, scan, executionLeaseToken, fmt.Errorf("resolve scanner release: %w", err))
+		return
+	}
+	var resumeSelected, resumeCompleted []string
+	_ = json.Unmarshal([]byte(scan.ToolsSelected), &resumeSelected)
+	_ = json.Unmarshal([]byte(scan.ToolsCompleted), &resumeCompleted)
+	if scan.Attempt > 1 {
+		runRecords, _ := h.Store.ListScannerRunRecords(ctx, scanID)
+		completedSet := make(map[string]bool)
+		for _, run := range runRecords {
+			if run.Status == "completed" {
+				completedSet[run.ToolName] = true
+				continue
+			}
+			_ = h.Store.DeleteFindingsByScanTool(ctx, scanID, run.ToolName)
+		}
+		resumeCompleted = resumeCompleted[:0]
+		for toolName := range completedSet {
+			resumeCompleted = append(resumeCompleted, toolName)
+			req.DisabledTools = appendUniqueString(req.DisabledTools, toolName)
+		}
+		sort.Strings(resumeCompleted)
+		completedJSON, _ := json.Marshal(resumeCompleted)
+		scan.ToolsCompleted = string(completedJSON)
+		scan.ToolsFailed = "[]"
+		scan.ToolsErrors = "{}"
+		if retained, listErr := h.Store.ListFindingsByScan(ctx, scanID); listErr == nil {
+			scan.FindingCount = len(retained)
+		}
+		_ = h.Store.UpdateScan(ctx, scan)
+	}
+	publishScanEventForLease(h, scanID, executionLeaseToken, "scan_status", fmt.Sprintf(
+		`{"type":"scan_status","scan_id":"%s","status":"running","finding_count":%d}`, scan.ID, scan.FindingCount,
+	))
 
 	topic := "scan:" + scanID
 
 	repo, err := h.Store.GetRepoByID(ctx, repoID)
 	if err != nil {
-		failPreparedScan(h, scan, topic, fmt.Errorf("load repo: %w", err))
+		failPreparedScan(h, scan, executionLeaseToken, fmt.Errorf("load repo: %w", err))
 		return
 	}
 	prepared, err := (scantarget.Resolver{Store: h.Store}).Prepare(ctx, repo, branch)
 	if err != nil {
-		failPreparedScan(h, scan, topic, err)
+		failPreparedScan(h, scan, executionLeaseToken, err)
 		return
 	}
 	repoPath := prepared.Path
@@ -238,6 +552,7 @@ func executeScan(h *Handler, scanID, userID, repoID, branch string, req createSc
 	scan.RemoteNodeID = prepared.RemoteNodeID
 	scan.SourcePath = prepared.SourcePath
 	scan.CommitSHA = prepared.CommitSHA
+	scan.TreeDigest = prepared.TreeDigest
 	scan.DirtyState = prepared.DirtyState
 	scan.PreparedWorkspace = prepared.PreparedWorkspace
 	_ = h.Store.UpdateScan(ctx, scan)
@@ -294,7 +609,7 @@ func executeScan(h *Handler, scanID, userID, repoID, branch string, req createSc
 	// Track incremental tool completion for DB persistence so polling
 	// clients (and page refreshes) see correct per-tool status mid-scan.
 	var toolStateMu sync.Mutex
-	toolsCompleted := make([]string, 0)
+	toolsCompleted := append([]string(nil), resumeCompleted...)
 	toolsFailed := make([]string, 0)
 	// toolsErrors maps toolName → error message. Persisted so the UI
 	// can render "why" beside the failure indicator.
@@ -304,7 +619,7 @@ func executeScan(h *Handler, scanID, userID, repoID, branch string, req createSc
 	// the runner's callback signature). Without this the live page
 	// always shows "0s" because the SSE payload hardcoded elapsed.
 	toolStartTimes := make(map[string]time.Time)
-	cumulativeFindingCount := 0
+	cumulativeFindingCount := scan.FindingCount
 	activeSuppressions, suppressionErr := h.Store.ListFindingSuppressions(context.Background(), scan.RepoID, false)
 	if suppressionErr != nil {
 		log.Warn().Str("scan_id", scanID).Err(suppressionErr).Msg("failed to load durable suppressions")
@@ -340,33 +655,57 @@ func executeScan(h *Handler, scanID, userID, repoID, branch string, req createSc
 		Msg("scan concurrency configured")
 
 	var scannerPlan *report.ScannerPlan
+	executionTools := toolsForProfile(h, req, detectedLanguages)
 	cfg := runner.RunConfig{
 		RepoPath:           repoPath,
+		ScanID:             scanID,
+		UserID:             scan.UserID,
+		LeaseToken:         executionLeaseToken,
+		Attempt:            scan.Attempt,
 		Branch:             branch,
 		Registry:           h.Registry,
-		Tools:              req.Tools,
+		Tools:              executionTools,
+		ToolsExplicit:      req.Profile == "full" || len(req.Categories) > 0 || len(req.Tools) > 0,
 		DisabledTools:      req.DisabledTools,
+		IncludePaths:       req.IncludePaths,
+		ExcludePaths:       req.ExcludePaths,
 		Concurrency:        scanConcurrency,
 		HeavyConcurrency:   heavyScannerConcurrency,
 		NetworkConcurrency: networkScannerConcurrency,
+		ContainerCfg:       releaseRuntimeConfig,
 		RawOutputDir:       rawDir,
 		OnToolsSelected: func(toolNames []string) {
+			if !scanExecutionOwned(h, scanID, executionLeaseToken) {
+				return
+			}
 			log.Info().Str("scan_id", scanID).Int("count", len(toolNames)).Strs("tools", toolNames).Msg("tools selected")
 			// Persist selected tools immediately so the live page can show all cards. // #nosec G104 -- intentional: response/log write errors are not actionable here
-			selectedJSON, _ := json.Marshal(toolNames)
+			allSelected := append([]string(nil), resumeSelected...)
+			for _, toolName := range toolNames {
+				allSelected = appendUniqueString(allSelected, toolName)
+			}
+			selectedJSON, _ := json.Marshal(allSelected)
 			if s, err := h.Store.GetScanByID(context.Background(), scanID); err == nil {
 				s.ToolsSelected = string(selectedJSON)
+				s.LeaseToken = executionLeaseToken
 				s.UpdatedAt = time.Now()
 				h.Store.UpdateScan(context.Background(), s) // #nosec G104 -- intentional: HTTP write / log errors aren't actionable in this branch
 			}
-			// Also broadcast via SSE so connected clients see the full list.
-			if SSEBroker != nil {
-				toolsJSON, _ := json.Marshal(toolNames)
-				SSEBroker.Publish(topic, sse.Event{
-					Type: "tools_selected",
-					Data: fmt.Sprintf(`{"type":"tools_selected","scan_id":"%s","tools":%s}`, scanID, string(toolsJSON)),
-				})
+			existingRuns, _ := h.Store.ListScannerRunRecords(context.Background(), scanID)
+			existingByTool := make(map[string]models.ScannerRunRecord, len(existingRuns))
+			for _, record := range existingRuns {
+				existingByTool[record.ToolName] = record
 			}
+			for _, toolName := range toolNames {
+				if existing, ok := existingByTool[toolName]; ok && existing.CancelRequestedAt != nil {
+					continue
+				}
+				upsertScannerRunRecord(context.Background(), h, applyScannerRunScope(scannerRunRecordQueued(scanID, toolName, scannerPlan), req, scan, scannerPlan))
+			}
+			// Also broadcast via SSE so connected clients see the full list.
+			toolsJSON, _ := json.Marshal(allSelected)
+			publishScanEventForLease(h, scanID, executionLeaseToken, "tools_selected",
+				fmt.Sprintf(`{"type":"tools_selected","scan_id":"%s","tools":%s}`, scanID, string(toolsJSON)))
 		},
 		OnToolCancelable: func(toolName string, cancel context.CancelFunc) {
 			// Register so DELETE /api/scans/{id}/tools/{name} can fire it.
@@ -377,20 +716,22 @@ func executeScan(h *Handler, scanID, userID, repoID, branch string, req createSc
 			activeScansMu.Unlock()
 		},
 		OnToolStart: func(toolName string) {
+			if !scanExecutionOwned(h, scanID, executionLeaseToken) {
+				return
+			}
 			log.Debug().Str("scan_id", scanID).Str("tool", toolName).Msg("tool starting")
 			startedAt := time.Now().UTC()
 			toolStateMu.Lock()
 			toolStartTimes[toolName] = startedAt
 			toolStateMu.Unlock()
-			upsertScannerRunRecord(context.Background(), h, scannerRunRecordStart(scanID, toolName, scannerPlan, startedAt))
-			if SSEBroker != nil {
-				SSEBroker.Publish(topic, sse.Event{
-					Type: "scan_progress",
-					Data: fmt.Sprintf(`{"type":"scan_progress","scan_id":"%s","tool_name":"%s","status":"running","finding_count":0,"elapsed_ms":0,"progress_pct":0}`, scanID, toolName),
-				})
-			}
+			upsertScannerRunRecord(context.Background(), h, applyScannerRunScope(scannerRunRecordStart(scanID, toolName, scannerPlan, startedAt), req, scan, scannerPlan))
+			publishScanEventForLease(h, scanID, executionLeaseToken, "scan_progress",
+				fmt.Sprintf(`{"type":"scan_progress","scan_id":"%s","tool_name":"%s","status":"running","finding_count":0,"elapsed_ms":0,"progress_pct":0}`, scanID, toolName))
 		},
 		OnToolDone: func(toolName string, toolFindings []models.Finding, toolErr error) {
+			if !scanExecutionOwned(h, scanID, executionLeaseToken) {
+				return
+			}
 			findingCount := len(toolFindings)
 			status := "completed"
 			errMsg := ""
@@ -430,8 +771,21 @@ func executeScan(h *Handler, scanID, userID, repoID, branch string, req createSc
 					toolFindings[i].UpdatedAt = persistAt
 				}
 				toolFindings, _ = findingsuppression.Apply(toolFindings, activeSuppressions, scanBranches, persistAt)
-				if createErr := h.Store.CreateFindings(context.Background(), toolFindings); createErr != nil {
+				var createErr error
+				persisted := true
+				if executionLeaseToken != "" {
+					persisted, createErr = h.Store.CreateFindingsForScanLease(
+						context.Background(), toolFindings, scanID, executionLeaseToken,
+					)
+				} else {
+					createErr = h.Store.CreateFindings(context.Background(), toolFindings)
+				}
+				if createErr != nil {
 					log.Error().Str("scan_id", scanID).Str("tool", toolName).Err(createErr).Msg("failed to persist tool findings")
+				} else if !persisted {
+					log.Warn().Str("scan_id", scanID).Str("tool", toolName).
+						Msg("scan lease changed; rejected stale tool findings")
+					return
 				}
 			}
 
@@ -451,7 +805,7 @@ func executeScan(h *Handler, scanID, userID, repoID, branch string, req createSc
 					// Not a real failure: the tool's image just isn't pulled.
 					// Record it as a skip (actionable: pull the image, rescan)
 					// instead of a scary red failure.
-					upsertScannerRunRecord(context.Background(), h, scannerRunRecordSkipped(scanID, toolName, scannerPlan, "image not pulled"))
+					upsertScannerRunRecord(context.Background(), h, applyScannerRunScope(scannerRunRecordSkipped(scanID, toolName, scannerPlan, "image not pulled"), req, scan, scannerPlan))
 				} else {
 					toolsFailed = append(toolsFailed, toolName)
 					toolsErrors[toolName] = e
@@ -472,6 +826,7 @@ func executeScan(h *Handler, scanID, userID, repoID, branch string, req createSc
 				s.ToolsFailed = string(failedJSON)
 				s.ToolsErrors = string(errorsJSON)
 				s.FindingCount = currentTotal
+				s.LeaseToken = executionLeaseToken
 				s.UpdatedAt = time.Now()
 				h.Store.UpdateScan(context.Background(), s)
 			}
@@ -494,25 +849,20 @@ func executeScan(h *Handler, scanID, userID, repoID, branch string, req createSc
 			if wasCancelled {
 				recordStatus = "cancelled"
 			}
-			upsertScannerRunRecord(context.Background(), h, scannerRunRecordDone(scanID, toolName, scannerPlan, recordStatus, findingCount, errMsg, elapsedMs, recordStartedAt, finishedAt))
+			upsertScannerRunRecord(context.Background(), h, applyScannerRunScope(scannerRunRecordDone(scanID, toolName, scannerPlan, recordStatus, findingCount, errMsg, elapsedMs, recordStartedAt, finishedAt), req, scan, scannerPlan))
 
 			// Broadcast SSE with per-tool count and cumulative total.
-			if SSEBroker != nil {
-				escapedErr, _ := json.Marshal(errMsg)
-				SSEBroker.Publish(topic, sse.Event{
-					Type: "scan_progress",
-					Data: fmt.Sprintf(`{"type":"scan_progress","scan_id":"%s","tool_name":"%s","status":"%s","finding_count":%d,"total_findings":%d,"elapsed_ms":%d,"progress_pct":100,"error":%s}`, scanID, toolName, status, findingCount, currentTotal, elapsedMs, string(escapedErr)),
-				})
-			}
+			escapedErr, _ := json.Marshal(errMsg)
+			publishScanEventForLease(h, scanID, executionLeaseToken, "scan_progress",
+				fmt.Sprintf(`{"type":"scan_progress","scan_id":"%s","tool_name":"%s","status":"%s","finding_count":%d,"total_findings":%d,"elapsed_ms":%d,"progress_pct":100,"error":%s}`, scanID, toolName, status, findingCount, currentTotal, elapsedMs, string(escapedErr)))
 		},
 		OnToolOutput: func(toolName string, line string) {
-			if SSEBroker != nil {
-				escapedLine, _ := json.Marshal(line)
-				SSEBroker.Publish(topic, sse.Event{
-					Type: "tool_output",
-					Data: fmt.Sprintf(`{"type":"tool_output","scan_id":"%s","tool_name":"%s","line":%s}`, scanID, toolName, string(escapedLine)),
-				})
+			if !scanExecutionOwned(h, scanID, executionLeaseToken) {
+				return
 			}
+			escapedLine, _ := json.Marshal(line)
+			publishScanEventForLease(h, scanID, executionLeaseToken, "tool_output",
+				fmt.Sprintf(`{"type":"tool_output","scan_id":"%s","tool_name":"%s","line":%s}`, scanID, toolName, string(escapedLine)))
 			// Append line to per-tool log file.
 			logMu.Lock()
 			f, ok := toolLogs[toolName]
@@ -527,7 +877,7 @@ func executeScan(h *Handler, scanID, userID, repoID, branch string, req createSc
 			logMu.Unlock()
 		},
 	}
-	if len(req.Tools) == 0 {
+	if len(executionTools) == 0 {
 		cfg.Languages = detectedLanguages
 	}
 
@@ -537,9 +887,20 @@ func executeScan(h *Handler, scanID, userID, repoID, branch string, req createSc
 			Registry:      h.Registry,
 			Manifest:      toolManifest,
 			Languages:     detectedLanguages,
-			Tools:         req.Tools,
+			Tools:         executionTools,
 			DisabledTools: req.DisabledTools,
 		}))
+		if releaseSnapshot != nil {
+			applyReleaseToScannerPlan(scannerPlan, releaseSnapshot)
+		} else {
+			// Compatibility/read-only deployments still need truthful scanner
+			// image provenance. The runner falls back to the process-wide
+			// container config when no managed release is assigned, so bind the
+			// report plan to that exact same config before scanner-run rows are
+			// created. This records digest-pinned operator configuration without
+			// inventing a managed release identity.
+			applyContainerImagesToScannerPlan(scannerPlan, scannercontainer.Default())
+		}
 	} else {
 		log.Warn().Err(merr).Str("scan_id", scanID).Msg("scanner tool manifest unavailable; manifest scanner plan omitted")
 	}
@@ -547,7 +908,19 @@ func executeScan(h *Handler, scanID, userID, repoID, branch string, req createSc
 	result, runErr := runner.Run(ctx, cfg)
 	if result != nil {
 		for _, toolName := range result.ToolsSkipped {
-			upsertScannerRunRecord(context.Background(), h, scannerRunRecordSkipped(scanID, toolName, scannerPlan, "tool unavailable"))
+			upsertScannerRunRecord(context.Background(), h, applyScannerRunScope(scannerRunRecordSkipped(scanID, toolName, scannerPlan, "tool unavailable"), req, scan, scannerPlan))
+		}
+		// A reclaimed scan only reruns incomplete tools. Rebuild the
+		// aggregate from durable findings so reports and AI assessment
+		// contain successful tools from earlier attempts as well.
+		if len(resumeCompleted) > 0 {
+			if retained, listErr := h.Store.ListFindingsByScan(context.Background(), scanID); listErr == nil {
+				result.Findings = retained
+			}
+			for _, toolName := range resumeCompleted {
+				result.ToolsRun = appendUniqueString(result.ToolsRun, toolName)
+			}
+			sort.Strings(result.ToolsRun)
 		}
 	}
 
@@ -558,18 +931,27 @@ func executeScan(h *Handler, scanID, userID, repoID, branch string, req createSc
 		log.Error().Str("scan_id", scanID).Err(err).Msg("failed to reload scan after run")
 		return
 	}
+	if executionLeaseToken != "" && scan.LeaseToken != executionLeaseToken {
+		log.Warn().Str("scan_id", scanID).Msg("scan lease changed; stale executor will not finalize")
+		return
+	}
 
 	// Cancel is "sticky": if the user (or orphan-recovery) marked the scan
 	// cancelled while runner.Run was still finishing its tail, don't
 	// flip it back to completed/failed when we land here. Findings
 	// already persisted during the run are preserved either way.
 	if scan.Status == models.ScanStatusCancelled {
+		scan.Phase = "cancelled"
 		log.Info().Str("scan_id", scanID).Msg("scan run finished but was already cancelled; preserving status")
 	} else if runErr != nil {
 		scan.Status = models.ScanStatusFailed
+		scan.Phase = "failed"
+		scan.FailureCode = "scan_failed"
+		scan.FailureMessage = truncateScanError(runErr.Error())
 		log.Error().Str("scan_id", scanID).Err(runErr).Msg("scan run failed")
 	} else {
 		scan.Status = models.ScanStatusCompleted
+		scan.Phase = "completed"
 		log.Info().Str("scan_id", scanID).Str("status", string(scan.Status)).Msg("scan run finished")
 	}
 	scan.CompletedAt = &completedAt
@@ -582,10 +964,10 @@ func executeScan(h *Handler, scanID, userID, repoID, branch string, req createSc
 			failedNames[name] = true
 		}
 
-		completedOnly := make([]string, 0, len(result.ToolsRun))
+		completedOnly := append([]string(nil), resumeCompleted...)
 		for _, name := range result.ToolsRun {
 			if !failedNames[name] {
-				completedOnly = append(completedOnly, name)
+				completedOnly = appendUniqueString(completedOnly, name)
 			}
 		}
 
@@ -775,8 +1157,27 @@ func executeScan(h *Handler, scanID, userID, repoID, branch string, req createSc
 		}
 	}
 
-	// Mark scan complete NOW — tools are done. AI assessment runs in background.
-	_ = h.Store.UpdateScan(context.Background(), scan)
+	// Mark scan complete NOW — tools are done. Queue workers must still own
+	// the lease at the instant of this write; the earlier read is not enough
+	// because a reclaim or cancellation can race finalization.
+	if executionLeaseToken != "" {
+		finalized, finalizeErr := h.Store.FinalizeScan(context.Background(), scan, executionLeaseToken)
+		if finalizeErr != nil {
+			log.Error().Str("scan_id", scanID).Err(finalizeErr).Msg("failed to finalize leased scan")
+			return
+		}
+		if !finalized {
+			log.Warn().Str("scan_id", scanID).Msg("scan lease or status changed; stale executor finalization rejected")
+			return
+		}
+		scan.ClaimedBy = ""
+		scan.LeaseToken = ""
+		scan.LeaseExpiresAt = nil
+		scan.HeartbeatAt = nil
+	} else if updateErr := h.Store.UpdateScan(context.Background(), scan); updateErr != nil {
+		log.Error().Str("scan_id", scanID).Err(updateErr).Msg("failed to finalize inline scan")
+		return
+	}
 	if gateResult, eval, policy, findingCount, gateErr := evaluateAndPersistGateContext(context.Background(), h, scanID, userID); gateErr != nil {
 		log.Warn().Str("scan_id", scanID).Err(gateErr).Msg("quality gate evaluation failed")
 	} else {
@@ -784,12 +1185,8 @@ func executeScan(h *Handler, scanID, userID, repoID, branch string, req createSc
 		log.Info().Str("scan_id", scanID).Str("gate_status", eval.Status).Msg("quality gate evaluated")
 	}
 
-	if SSEBroker != nil {
-		SSEBroker.Publish(topic, sse.Event{
-			Type: "scan_complete",
-			Data: fmt.Sprintf(`{"type":"scan_complete","scan_id":"%s","status":"%s","finding_count":%d}`, scanID, scan.Status, scan.FindingCount),
-		})
-	}
+	publishScanEvent(h, scanID, "scan_complete",
+		fmt.Sprintf(`{"type":"scan_complete","scan_id":"%s","status":"%s","finding_count":%d}`, scanID, scan.Status, scan.FindingCount))
 
 	log.Info().
 		Str("scan_id", scanID).
@@ -821,25 +1218,68 @@ func executeScan(h *Handler, scanID, userID, repoID, branch string, req createSc
 	}
 }
 
-func failPreparedScan(h *Handler, scan *models.Scan, topic string, err error) {
+func scanExecutionOwned(h *Handler, scanID, leaseToken string) bool {
+	if leaseToken == "" {
+		return true
+	}
+	if h == nil || h.Store == nil {
+		return false
+	}
+	current, err := h.Store.GetScanByID(context.Background(), scanID)
+	return err == nil &&
+		current.Status == models.ScanStatusRunning &&
+		current.LeaseToken == leaseToken &&
+		current.CancelRequestedAt == nil
+}
+
+func failPreparedScan(h *Handler, scan *models.Scan, leaseToken string, err error) {
+	if leaseToken != "" {
+		current, getErr := h.Store.GetScanByID(context.Background(), scan.ID)
+		if getErr != nil || current.LeaseToken != leaseToken {
+			return
+		}
+		scan = current
+	}
 	now := time.Now().UTC()
 	scan.Status = models.ScanStatusFailed
+	scan.Phase = "failed"
+	scan.FailureCode = "source_prepare_failed"
 	scan.CompletedAt = &now
 	scan.UpdatedAt = now
 	errMsg := err.Error()
 	if len(errMsg) > 500 {
 		errMsg = errMsg[:500] + "…"
 	}
+	scan.FailureMessage = errMsg
 	errorsJSON, _ := json.Marshal(map[string]string{"prepare": errMsg})
 	scan.ToolsErrors = string(errorsJSON)
-	_ = h.Store.UpdateScan(context.Background(), scan)
-	if SSEBroker != nil {
-		escapedErr, _ := json.Marshal(errMsg)
-		SSEBroker.Publish(topic, sse.Event{
-			Type: "scan_complete",
-			Data: fmt.Sprintf(`{"type":"scan_complete","scan_id":"%s","status":"failed","finding_count":0,"error":%s}`, scan.ID, string(escapedErr)),
-		})
+	if leaseToken != "" {
+		finalized, finalizeErr := h.Store.FinalizeScan(context.Background(), scan, leaseToken)
+		if finalizeErr != nil || !finalized {
+			return
+		}
+	} else if updateErr := h.Store.UpdateScan(context.Background(), scan); updateErr != nil {
+		return
 	}
+	escapedErr, _ := json.Marshal(errMsg)
+	publishScanEvent(h, scan.ID, "scan_complete",
+		fmt.Sprintf(`{"type":"scan_complete","scan_id":"%s","status":"failed","finding_count":0,"error":%s}`, scan.ID, string(escapedErr)))
+}
+
+func truncateScanError(message string) string {
+	if len(message) <= 500 {
+		return message
+	}
+	return message[:500] + "…"
+}
+
+func appendUniqueString(values []string, value string) []string {
+	for _, existing := range values {
+		if existing == value {
+			return values
+		}
+	}
+	return append(values, value)
 }
 
 // ListScans handles GET /api/scans — list scans for the current user.
@@ -952,9 +1392,21 @@ func GetScan(w http.ResponseWriter, r *http.Request) {
 			"remote_node_id":     scan.RemoteNodeID,
 			"source_path":        scan.SourcePath,
 			"commit_sha":         scan.CommitSHA,
+			"tree_digest":        scan.TreeDigest,
 			"dirty_state":        scan.DirtyState,
 			"prepared_workspace": scan.PreparedWorkspace,
 			"status":             scan.Status,
+			"phase":              scan.Phase,
+			"attempt":            scan.Attempt,
+			"failure_code":       scan.FailureCode,
+			"failure_message":    scan.FailureMessage,
+			"execution_backend":  scan.ExecutionBackend,
+			"source_fingerprint": scan.SourceFingerprint,
+			"profile":            scan.Profile,
+			"categories":         scan.Categories,
+			"include_paths":      scan.IncludePaths,
+			"exclude_paths":      scan.ExcludePaths,
+			"client_reference":   scan.ClientReference,
 			"tools_selected":     scan.ToolsSelected,
 			"tools_completed":    scan.ToolsCompleted,
 			"tools_failed":       scan.ToolsFailed,
@@ -970,6 +1422,85 @@ func GetScan(w http.ResponseWriter, r *http.Request) {
 			"artifacts":          artifacts,
 		},
 	})
+}
+
+// GetScanResult returns a compact, automation-oriented summary. Large finding
+// payloads remain paginated behind /findings and report artifacts remain
+// downloadable through their existing endpoints.
+func GetScanResult(w http.ResponseWriter, r *http.Request) {
+	claims := auth.GetUserFromContext(r.Context())
+	if claims == nil {
+		response.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing user context")
+		return
+	}
+	h := DefaultHandler
+	if h == nil {
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "handler not initialized")
+		return
+	}
+	scanID := chi.URLParam(r, "id")
+	scan, ok := loadScanForCaller(w, r, h.Store, scanID, claims)
+	if !ok {
+		return
+	}
+	findings, _ := h.Store.ListFindingsByScan(r.Context(), scanID)
+	findings, _ = suppress.Apply(findings, suppress.DefaultRules())
+	applyGitignoreByRepoID(r.Context(), h, scan.RepoID, findings)
+	severityTotals := map[string]int{"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
+	toolTotals := make(map[string]int)
+	total := 0
+	for _, finding := range findings {
+		if finding.Suppressed {
+			continue
+		}
+		total++
+		severityTotals[string(finding.Severity)]++
+		toolTotals[finding.ToolName]++
+	}
+	runs, _ := h.Store.ListScannerRunRecords(r.Context(), scanID)
+	scopes := make([]map[string]interface{}, 0, len(runs))
+	for _, run := range runs {
+		scopes = append(scopes, map[string]interface{}{
+			"tool_name":       run.ToolName,
+			"status":          run.Status,
+			"requested_scope": json.RawMessage(defaultString(run.RequestedScope, "{}")),
+			"effective_scope": json.RawMessage(defaultString(run.EffectiveScope, "{}")),
+			"scope_message":   run.ScopeMessage,
+		})
+	}
+	gates, _ := h.Store.ListQualityGateResults(r.Context(), scanID)
+	var gate interface{}
+	if len(gates) > 0 {
+		gate = gates[0]
+	}
+	base := "/api/v1/scans/" + scanID
+	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: map[string]interface{}{
+		"id":               scan.ID,
+		"status":           scan.Status,
+		"phase":            scan.Phase,
+		"attempt":          scan.Attempt,
+		"failure_code":     scan.FailureCode,
+		"failure_message":  scan.FailureMessage,
+		"client_reference": scan.ClientReference,
+		"provenance": map[string]interface{}{
+			"repo_id": scan.RepoID, "source_type": scan.SourceType,
+			"source_path": scan.SourcePath, "source_fingerprint": scan.SourceFingerprint,
+			"branch": scan.Branch, "commit_sha": scan.CommitSHA,
+			"tree_digest": scan.TreeDigest, "dirty_state": scan.DirtyState,
+		},
+		"totals": map[string]interface{}{
+			"findings": total, "by_severity": severityTotals, "by_tool": toolTotals,
+		},
+		"scanner_scopes": scopes,
+		"quality_gate":   gate,
+		"links": map[string]string{
+			"self": base, "findings": base + "/findings", "sarif": base + "/sarif",
+			"manifest": base + "/manifest", "report": base + "/report",
+			"scanner_runs": base + "/scanner-runs", "artifacts": base,
+		},
+		"started_at":   scan.StartedAt,
+		"completed_at": scan.CompletedAt,
+	}})
 }
 
 // GetScanFindings handles GET /api/scans/:id/findings — list findings for a scan.
@@ -1162,6 +1693,10 @@ func StreamScan(w http.ResponseWriter, r *http.Request) {
 
 	// Verify scan exists.
 	if _, ok := loadScanForCaller(w, r, h.Store, scanID, claims); !ok {
+		return
+	}
+	if queuedScanExecution() {
+		streamDurableScanEvents(w, r, h, scanID, claims.UserID)
 		return
 	}
 
@@ -1402,14 +1937,15 @@ func CancelScan(w http.ResponseWriter, r *http.Request) {
 
 	now := time.Now()
 	if scan.Status == models.ScanStatusRunning || scan.Status == models.ScanStatusPending {
+		if err := h.Store.RequestScanCancellation(r.Context(), id, now); err != nil {
+			response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to cancel scan")
+			return
+		}
+		if refreshed, err := h.Store.GetScanByID(r.Context(), id); err == nil {
+			scan = refreshed
+		}
 		scan.Status = models.ScanStatusCancelled
 		scan.CompletedAt = &now
-	}
-	scan.UpdatedAt = now
-
-	if err := h.Store.UpdateScan(r.Context(), scan); err != nil {
-		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to cancel scan")
-		return
 	}
 
 	activeScansMu.Lock()
@@ -1427,13 +1963,8 @@ func CancelScan(w http.ResponseWriter, r *http.Request) {
 	}
 	activeScansMu.Unlock()
 
-	// Notify SSE subscribers if broker is available.
-	if SSEBroker != nil {
-		SSEBroker.Publish("scan:"+id, sse.Event{
-			Type: "scan_cancelled",
-			Data: fmt.Sprintf(`{"scan_id":"%s","status":"cancelled"}`, id),
-		})
-	}
+	publishScanEvent(h, id, "scan_cancelled",
+		fmt.Sprintf(`{"scan_id":"%s","status":"cancelled"}`, id))
 
 	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: scan})
 }
@@ -1467,13 +1998,25 @@ func CancelScanTool(w http.ResponseWriter, r *http.Request) {
 	toolCtxs, scanRegistered := activeToolCtxs[scanID]
 	if !scanRegistered {
 		activeScansMu.Unlock()
-		response.WriteError(w, http.StatusConflict, "conflict", "scan is not currently running")
+		if !queueToolCancellation(r.Context(), h, scanID, toolName) {
+			response.WriteError(w, http.StatusNotFound, "not_found", fmt.Sprintf("tool %q is not active or queued in scan %s", toolName, scanID))
+			return
+		}
+		response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: map[string]string{
+			"scan_id": scanID, "tool_name": toolName, "status": "cancelled",
+		}})
 		return
 	}
 	cancel, ok := toolCtxs[toolName]
 	if !ok {
 		activeScansMu.Unlock()
-		response.WriteError(w, http.StatusNotFound, "not_found", fmt.Sprintf("tool %q is not active in scan %s (already finished or never queued)", toolName, scanID))
+		if !queueToolCancellation(r.Context(), h, scanID, toolName) {
+			response.WriteError(w, http.StatusNotFound, "not_found", fmt.Sprintf("tool %q is not active in scan %s (already finished or never queued)", toolName, scanID))
+			return
+		}
+		response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: map[string]string{
+			"scan_id": scanID, "tool_name": toolName, "status": "cancelled",
+		}})
 		return
 	}
 	// Mark intent so OnToolDone replaces the raw "context canceled"
@@ -1484,6 +2027,7 @@ func CancelScanTool(w http.ResponseWriter, r *http.Request) {
 	cancelledTools[scanID][toolName] = true
 	activeScansMu.Unlock()
 
+	_ = h.Store.RequestScannerRunCancellation(r.Context(), scanID, toolName, time.Now().UTC())
 	cancel()
 
 	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{
@@ -1883,13 +2427,9 @@ func runAIAssessment(ctx context.Context, h *Handler, provider ai.Provider, scan
 		if err := h.Store.CreateAILog(context.Background(), logEntry); err != nil {
 			wolflog.Error().Err(err).Msg("Failed to persist AI log")
 		}
-		if SSEBroker != nil {
-			SSEBroker.Publish(topic, sse.Event{
-				Type: "ai_log",
-				Data: fmt.Sprintf(`{"type":"ai_log","scan_id":"%s","provider":"%s","model":"%s","phase":"%s","tool":"%s","duration_ms":%d,"error":"%s"}`,
-					scan.ID, entry.Provider, entry.Model, currentPhase, currentTool, entry.DurationMs, strings.ReplaceAll(entry.Error, `"`, `\"`)),
-			})
-		}
+		publishScanEvent(h, scan.ID, "ai_log",
+			fmt.Sprintf(`{"type":"ai_log","scan_id":"%s","provider":"%s","model":"%s","phase":"%s","tool":"%s","duration_ms":%d,"error":"%s"}`,
+				scan.ID, entry.Provider, entry.Model, currentPhase, currentTool, entry.DurationMs, strings.ReplaceAll(entry.Error, `"`, `\"`)))
 	})
 
 	// Resolve repo context.
@@ -1952,12 +2492,8 @@ func runAIAssessment(ctx context.Context, h *Handler, provider ai.Provider, scan
 	for step, toolName := range toolNames {
 		if ctx.Err() != nil {
 			wolflog.Info().Str("scan_id", scan.ID).Msg("AI assessment: cancelled")
-			if SSEBroker != nil {
-				SSEBroker.Publish(topic, sse.Event{
-					Type: "ai_assessment",
-					Data: fmt.Sprintf(`{"type":"ai_assessment","scan_id":"%s","phase":"cancelled","progress_pct":0}`, scan.ID),
-				})
-			}
+			publishScanEvent(h, scan.ID, "ai_assessment",
+				fmt.Sprintf(`{"type":"ai_assessment","scan_id":"%s","phase":"cancelled","progress_pct":0}`, scan.ID))
 			return
 		}
 		currentPhase = "tool_assess"
@@ -1965,13 +2501,9 @@ func runAIAssessment(ctx context.Context, h *Handler, provider ai.Provider, scan
 		indices := byTool[toolName]
 		pct := ((step + 1) * 80) / totalSteps
 
-		if SSEBroker != nil {
-			SSEBroker.Publish(topic, sse.Event{
-				Type: "ai_assessment",
-				Data: fmt.Sprintf(`{"type":"ai_assessment","scan_id":"%s","phase":"assessing","tool":"%s","step":%d,"total_steps":%d,"progress_pct":%d}`,
-					scan.ID, toolName, step+1, totalSteps, pct),
-			})
-		}
+		publishScanEvent(h, scan.ID, "ai_assessment",
+			fmt.Sprintf(`{"type":"ai_assessment","scan_id":"%s","phase":"assessing","tool":"%s","step":%d,"total_steps":%d,"progress_pct":%d}`,
+				scan.ID, toolName, step+1, totalSteps, pct))
 
 		// Build finding data for prompt package.
 		findingData := make([]promptpkg.FindingData, len(indices))
@@ -2064,25 +2596,17 @@ func runAIAssessment(ctx context.Context, h *Handler, provider ai.Provider, scan
 	// Check cancellation before executive summary.
 	if ctx.Err() != nil {
 		wolflog.Info().Str("scan_id", scan.ID).Msg("AI assessment: cancelled before summary")
-		if SSEBroker != nil {
-			SSEBroker.Publish(topic, sse.Event{
-				Type: "ai_assessment",
-				Data: fmt.Sprintf(`{"type":"ai_assessment","scan_id":"%s","phase":"cancelled","progress_pct":0}`, scan.ID),
-			})
-		}
+		publishScanEvent(h, scan.ID, "ai_assessment",
+			fmt.Sprintf(`{"type":"ai_assessment","scan_id":"%s","phase":"cancelled","progress_pct":0}`, scan.ID))
 		return
 	}
 
 	// Phase 2: Executive summary across all tools.
 	currentPhase = "summary"
 	currentTool = ""
-	if SSEBroker != nil {
-		SSEBroker.Publish(topic, sse.Event{
-			Type: "ai_assessment",
-			Data: fmt.Sprintf(`{"type":"ai_assessment","scan_id":"%s","phase":"summarizing","step":%d,"total_steps":%d,"progress_pct":85}`,
-				scan.ID, totalSteps, totalSteps),
-		})
-	}
+	publishScanEvent(h, scan.ID, "ai_assessment",
+		fmt.Sprintf(`{"type":"ai_assessment","scan_id":"%s","phase":"summarizing","step":%d,"total_steps":%d,"progress_pct":85}`,
+			scan.ID, totalSteps, totalSteps))
 
 	// Sort critical issues by score desc, take top 10.
 	sort.Slice(allCriticalIssues, func(i, j int) bool {
@@ -2168,12 +2692,8 @@ func runAIAssessment(ctx context.Context, h *Handler, provider ai.Provider, scan
 
 	wolflog.Info().Int("summary_len", len(scan.AISummary)).Msg("AI assessment complete")
 
-	if SSEBroker != nil {
-		SSEBroker.Publish(topic, sse.Event{
-			Type: "ai_assessment",
-			Data: fmt.Sprintf(`{"type":"ai_assessment","scan_id":"%s","phase":"complete","progress_pct":100}`, scan.ID),
-		})
-	}
+	publishScanEvent(h, scan.ID, "ai_assessment",
+		fmt.Sprintf(`{"type":"ai_assessment","scan_id":"%s","phase":"complete","progress_pct":100}`, scan.ID))
 }
 
 // extractJSON parses JSON from AI response text, handling markdown fences.
@@ -2278,12 +2798,19 @@ func recordScanArtifact(ctx context.Context, h *Handler, scanID string, artifact
 		return
 	}
 	checksum, _ := fileSHA256(path)
+	storageKey := filepath.ToSlash(filepath.Join(scanID, filepath.Base(path)))
+	if artifacts.Global != nil {
+		if key, keyErr := artifacts.Global.Key(path); keyErr == nil {
+			storageKey = key
+		}
+	}
 	now := time.Now()
 	_ = h.Store.CreateScanArtifact(ctx, &models.ScanArtifact{
 		ID:             uuid.New().String(),
 		ScanID:         scanID,
 		ArtifactType:   artifactType,
 		FilePath:       path,
+		StorageKey:     storageKey,
 		FileSize:       info.Size(),
 		ChecksumSHA256: checksum,
 		RedactionLevel: artifactRedactionLevel(artifactType, path),
@@ -2372,19 +2899,220 @@ func artifactRedactionLevel(artifactType models.ArtifactType, path string) strin
 	}
 }
 
+func resolveScanRelease(
+	ctx context.Context,
+	h *Handler,
+	scan *models.Scan,
+) (*scannerruntime.ReleaseSnapshot, *scannercontainer.Config, error) {
+	if h == nil || h.Store == nil || scan == nil {
+		return nil, nil, errors.New("scan release resolver is unavailable")
+	}
+	releaseID := strings.TrimSpace(scan.ScannerReleaseID)
+	if releaseID == "" {
+		configured, err := h.Store.GetSetting(ctx, "desired_scanner_release_id")
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return nil, nil, fmt.Errorf("read desired scanner release: %w", err)
+		}
+		releaseID = strings.TrimSpace(configured)
+	}
+	if releaseID == "" {
+		// Compatibility mode: deployments that have not selected a managed
+		// release continue using their existing process-wide scanner config.
+		return nil, nil, nil
+	}
+	inventory, err := h.Store.ScannerReleases().GetReleaseInventory(ctx, releaseID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("load release %q: %w", releaseID, err)
+	}
+	if scan.ReleaseManifestDigest != "" &&
+		scan.ReleaseManifestDigest != inventory.Release.ManifestDigest {
+		return nil, nil, errors.New("assigned release manifest digest changed")
+	}
+	selectedImages, references, err := selectRuntimeReleaseImages(ctx, h, inventory.Images)
+	if err != nil {
+		return nil, nil, err
+	}
+	snapshot, err := scannerruntime.SnapshotFromInventory(
+		inventory.Release, inventory.Tools, selectedImages, references,
+	)
+	if err != nil {
+		return nil, nil, err
+	}
+	base := scannercontainer.Default()
+	if base == nil {
+		return nil, nil, errors.New("scanner container runtime configuration is unavailable")
+	}
+	runtimeConfig, err := snapshot.Apply(base)
+	if err != nil {
+		return nil, nil, err
+	}
+	if scan.ScannerReleaseID == "" || scan.ReleaseManifestDigest == "" {
+		scan.ScannerReleaseID = snapshot.ReleaseID
+		scan.ReleaseManifestDigest = snapshot.ManifestDigest
+		if err := h.Store.UpdateScan(ctx, scan); err != nil {
+			return nil, nil, fmt.Errorf("persist scan release assignment: %w", err)
+		}
+	}
+	return snapshot, runtimeConfig, nil
+}
+
+func selectRuntimeReleaseImages(
+	ctx context.Context,
+	h *Handler,
+	images []scannerrelease.ReleaseImage,
+) ([]scannerrelease.ReleaseImage, map[string]string, error) {
+	if len(images) == 0 {
+		return nil, nil, errors.New("scanner release inventory has no images")
+	}
+	targets, err := h.Store.ScannerReleases().ListRegistryTargets(ctx, true)
+	if err != nil {
+		return nil, nil, fmt.Errorf("list scanner registries: %w", err)
+	}
+	targetByID := make(map[string]scannerrelease.RegistryTarget, len(targets))
+	for _, target := range targets {
+		targetByID[target.ID] = target
+	}
+	preferred, prefErr := h.Store.GetSetting(ctx, "scanner_registry_target_id")
+	if prefErr != nil && !errors.Is(prefErr, sql.ErrNoRows) {
+		return nil, nil, fmt.Errorf("read scanner registry target: %w", prefErr)
+	}
+	preferred = strings.TrimSpace(preferred)
+	if preferred == "" {
+		preferred = completeRuntimeRegistryTarget(images, targets)
+	}
+	target, exists := targetByID[preferred]
+	if !exists {
+		return nil, nil, fmt.Errorf("scanner registry target %q is unavailable or disabled", preferred)
+	}
+	selected := make([]scannerrelease.ReleaseImage, 0)
+	references := make(map[string]string)
+	for _, image := range images {
+		if !scannerrelease.IsRuntimeScannerImage(image) {
+			continue
+		}
+		if image.RegistryTargetID != target.ID {
+			continue
+		}
+		if _, duplicate := references[image.ImageKey]; duplicate {
+			return nil, nil, fmt.Errorf("release has duplicate image %q for registry target %q", image.ImageKey, target.ID)
+		}
+		repository := strings.Trim(image.Repository, "/")
+		namespace := strings.Trim(target.Namespace, "/")
+		if namespace != "" && !strings.HasPrefix(repository, namespace+"/") {
+			repository = namespace + "/" + repository
+		}
+		host := strings.TrimSpace(target.Host)
+		if strings.Contains(host, "://") {
+			host = strings.SplitN(host, "://", 2)[1]
+		}
+		references[image.ImageKey] = host + "/" + repository + "@" + image.Digest
+		selected = append(selected, image)
+	}
+	requiredKeys := make(map[string]struct{})
+	for _, image := range images {
+		if !scannerrelease.IsRuntimeScannerImage(image) {
+			continue
+		}
+		requiredKeys[image.ImageKey] = struct{}{}
+	}
+	if len(references) != len(requiredKeys) {
+		return nil, nil, fmt.Errorf(
+			"scanner registry target %q covers %d of %d release images",
+			target.ID, len(references), len(requiredKeys),
+		)
+	}
+	return selected, references, nil
+}
+
+func completeRuntimeRegistryTarget(
+	images []scannerrelease.ReleaseImage,
+	targets []scannerrelease.RegistryTarget,
+) string {
+	required := make(map[string]struct{})
+	coverage := make(map[string]map[string]struct{})
+	for _, image := range images {
+		if !scannerrelease.IsRuntimeScannerImage(image) {
+			continue
+		}
+		required[image.ImageKey] = struct{}{}
+		if coverage[image.RegistryTargetID] == nil {
+			coverage[image.RegistryTargetID] = make(map[string]struct{})
+		}
+		coverage[image.RegistryTargetID][image.ImageKey] = struct{}{}
+	}
+	for _, registryType := range []scannerrelease.RegistryType{
+		scannerrelease.RegistryManaged, scannerrelease.RegistryPrivate,
+		scannerrelease.RegistryAirGap, scannerrelease.RegistryMirror,
+	} {
+		for _, target := range targets {
+			if target.Type == registryType && len(coverage[target.ID]) == len(required) {
+				return target.ID
+			}
+		}
+	}
+	return ""
+}
+
+func applyReleaseToScannerPlan(plan *report.ScannerPlan, snapshot *scannerruntime.ReleaseSnapshot) {
+	if plan == nil || snapshot == nil {
+		return
+	}
+	plan.ScannerReleaseID = snapshot.ReleaseID
+	plan.ReleaseManifestDigest = snapshot.ManifestDigest
+	for index := range plan.Run {
+		plan.Run[index].Image = snapshot.ImageFor(plan.Run[index].Tool)
+	}
+	for index := range plan.Skip {
+		plan.Skip[index].Image = snapshot.ImageFor(plan.Skip[index].Tool)
+	}
+}
+
+func applyContainerImagesToScannerPlan(plan *report.ScannerPlan, config *scannercontainer.Config) {
+	if plan == nil || config == nil {
+		return
+	}
+	for index := range plan.Run {
+		plan.Run[index].Image = config.ImageFor(plan.Run[index].Tool)
+	}
+	for index := range plan.Skip {
+		plan.Skip[index].Image = config.ImageFor(plan.Skip[index].Tool)
+	}
+}
+
 func scannerRunRecordStart(scanID, toolName string, plan *report.ScannerPlan, startedAt time.Time) *models.ScannerRunRecord {
 	meta := scannerRunPlanDecision(plan, toolName)
 	return &models.ScannerRunRecord{
-		ID:           uuid.New().String(),
-		ScanID:       scanID,
-		ToolName:     toolName,
-		Status:       "running",
-		Category:     meta.Category,
-		Image:        meta.Image,
-		ImageDigest:  imageDigestFromRef(meta.Image),
-		CommandJSON:  "{}",
-		ParserStatus: "pending",
-		StartedAt:    &startedAt,
+		ID:                    uuid.New().String(),
+		ScanID:                scanID,
+		ToolName:              toolName,
+		Status:                "running",
+		Category:              meta.Category,
+		Image:                 meta.Image,
+		ImageDigest:           imageDigestFromRef(meta.Image),
+		ScannerReleaseID:      scannerPlanReleaseID(plan),
+		ReleaseManifestDigest: scannerPlanManifestDigest(plan),
+		CommandJSON:           "{}",
+		ParserStatus:          "pending",
+		StartedAt:             &startedAt,
+	}
+}
+
+func scannerRunRecordQueued(scanID, toolName string, plan *report.ScannerPlan) *models.ScannerRunRecord {
+	meta := scannerRunPlanDecision(plan, toolName)
+	return &models.ScannerRunRecord{
+		ID:                    uuid.New().String(),
+		ScanID:                scanID,
+		ToolName:              toolName,
+		Status:                "queued",
+		Category:              meta.Category,
+		Image:                 meta.Image,
+		ImageDigest:           imageDigestFromRef(meta.Image),
+		ScannerReleaseID:      scannerPlanReleaseID(plan),
+		ReleaseManifestDigest: scannerPlanManifestDigest(plan),
+		CommandJSON:           "{}",
+		ParserStatus:          "pending",
+		RequestedScope:        "{}",
+		EffectiveScope:        "{}",
 	}
 }
 
@@ -2397,40 +3125,74 @@ func scannerRunRecordDone(scanID, toolName string, plan *report.ScannerPlan, sta
 		parserStatus = "failed"
 	}
 	return &models.ScannerRunRecord{
-		ID:            uuid.New().String(),
-		ScanID:        scanID,
-		ToolName:      toolName,
-		Status:        status,
-		Category:      meta.Category,
-		Image:         meta.Image,
-		ImageDigest:   imageDigestFromRef(meta.Image),
-		CommandJSON:   "{}",
-		ExitCode:      exitCode,
-		DurationMS:    durationMS,
-		FindingCount:  findingCount,
-		ErrorMessage:  errMsg,
-		ParserStatus:  parserStatus,
-		ParserMessage: errMsg,
-		StartedAt:     startedAt,
-		FinishedAt:    &finishedAt,
+		ID:                    uuid.New().String(),
+		ScanID:                scanID,
+		ToolName:              toolName,
+		Status:                status,
+		Category:              meta.Category,
+		Image:                 meta.Image,
+		ImageDigest:           imageDigestFromRef(meta.Image),
+		ScannerReleaseID:      scannerPlanReleaseID(plan),
+		ReleaseManifestDigest: scannerPlanManifestDigest(plan),
+		CommandJSON:           "{}",
+		ExitCode:              exitCode,
+		DurationMS:            durationMS,
+		FindingCount:          findingCount,
+		ErrorMessage:          errMsg,
+		ParserStatus:          parserStatus,
+		ParserMessage:         errMsg,
+		StartedAt:             startedAt,
+		FinishedAt:            &finishedAt,
 	}
 }
 
 func scannerRunRecordSkipped(scanID, toolName string, plan *report.ScannerPlan, reason string) *models.ScannerRunRecord {
 	meta := scannerRunPlanDecision(plan, toolName)
 	return &models.ScannerRunRecord{
-		ID:            uuid.New().String(),
-		ScanID:        scanID,
-		ToolName:      toolName,
-		Status:        "skipped",
-		Category:      meta.Category,
-		Image:         meta.Image,
-		ImageDigest:   imageDigestFromRef(meta.Image),
-		CommandJSON:   "{}",
-		ErrorMessage:  reason,
-		ParserStatus:  "not_run",
-		ParserMessage: reason,
+		ID:                    uuid.New().String(),
+		ScanID:                scanID,
+		ToolName:              toolName,
+		Status:                "skipped",
+		Category:              meta.Category,
+		Image:                 meta.Image,
+		ImageDigest:           imageDigestFromRef(meta.Image),
+		ScannerReleaseID:      scannerPlanReleaseID(plan),
+		ReleaseManifestDigest: scannerPlanManifestDigest(plan),
+		CommandJSON:           "{}",
+		ErrorMessage:          reason,
+		ParserStatus:          "not_run",
+		ParserMessage:         reason,
 	}
+}
+
+func applyScannerRunScope(record *models.ScannerRunRecord, req createScanRequest, scan *models.Scan, plan *report.ScannerPlan) *models.ScannerRunRecord {
+	if record == nil {
+		return nil
+	}
+	record.RequestedScope = requestedScopeJSON(req)
+	effective := req
+	meta := scannerRunPlanDecision(plan, record.ToolName)
+	if len(req.IncludePaths) > 0 || len(req.ExcludePaths) > 0 {
+		if meta.PathScope == "file_globs" {
+			record.ScopeMessage = "scanner honors include_paths and exclude_paths"
+		} else {
+			effective.IncludePaths = nil
+			effective.ExcludePaths = nil
+			record.ScopeMessage = "scanner is repository-scoped; path selectors could not be enforced, so the full source snapshot was scanned"
+		}
+	}
+	record.EffectiveScope = requestedScopeJSON(effective)
+	if scan != nil {
+		record.Attempt = scan.Attempt
+		record.RuntimeBackend = scan.ExecutionBackend
+		record.LeaseToken = scan.LeaseToken
+		if scan.ExecutionBackend == "kubernetes" {
+			record.RuntimeRef = kubernetesruntime.RuntimeRef(
+				scan.ID, record.ToolName, scan.Attempt, scan.LeaseToken,
+			)
+		}
+	}
+	return record
 }
 
 func upsertScannerRunRecord(ctx context.Context, h *Handler, record *models.ScannerRunRecord) {
@@ -2455,6 +3217,20 @@ func scannerRunPlanDecision(plan *report.ScannerPlan, toolName string) report.Sc
 		}
 	}
 	return report.ScannerPlanDecision{}
+}
+
+func scannerPlanReleaseID(plan *report.ScannerPlan) string {
+	if plan == nil {
+		return ""
+	}
+	return plan.ScannerReleaseID
+}
+
+func scannerPlanManifestDigest(plan *report.ScannerPlan) string {
+	if plan == nil {
+		return ""
+	}
+	return plan.ReleaseManifestDigest
 }
 
 func imageDigestFromRef(ref string) string {
@@ -2559,6 +3335,7 @@ func scanSourceProvenance(scan *models.Scan) *report.SourceProvenance {
 		RepoPath:   scan.SourcePath,
 		Branch:     scan.Branch,
 		CommitSHA:  scan.CommitSHA,
+		TreeDigest: scan.TreeDigest,
 		DirtyState: scan.DirtyState,
 	}
 	source.RemoteNodeID = scanRemoteNodeID(scan)
@@ -3092,6 +3869,14 @@ func GetScanTools(w http.ResponseWriter, r *http.Request) {
 			} else {
 				status = "failed"
 			}
+		case runByTool[name].Status == "running":
+			status = "running"
+		case runByTool[name].Status == "cancelled":
+			status = "cancelled"
+		case runByTool[name].Status == "failed":
+			status = "failed"
+		case runByTool[name].Status == "completed":
+			status = "completed"
 		case scan.Status == models.ScanStatusCancelled:
 			// Scan was cancelled before this tool ever finished; it's
 			// neither completed nor failed — flag as cancelled so the
@@ -3105,6 +3890,9 @@ func GetScanTools(w http.ResponseWriter, r *http.Request) {
 		var run *models.ScannerRunRecord
 		if record, ok := runByTool[name]; ok {
 			run = &record
+			if errs[name] == "" && record.ErrorMessage != "" {
+				errs[name] = record.ErrorMessage
+			}
 		}
 		tools = append(tools, toolStatus{
 			Name:         name,

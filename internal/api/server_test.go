@@ -103,6 +103,20 @@ func TestHealthIsPublic(t *testing.T) {
 	}
 }
 
+func TestScannerReleaseMetricsArePublicAndPrometheusCompatible(t *testing.T) {
+	srv, _, _ := newTestServer(t)
+	w := request(srv, http.MethodGet, "/api/v1/metrics", "", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("metrics: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if contentType := w.Header().Get("Content-Type"); !strings.HasPrefix(contentType, "text/plain") {
+		t.Fatalf("metrics content type = %q", contentType)
+	}
+	if body := w.Body.String(); !strings.Contains(body, "wolf_scanner_release_database_ready 1") {
+		t.Fatalf("metrics do not include database readiness:\n%s", body)
+	}
+}
+
 func TestProtectedEndpointRejectsMissingCredential(t *testing.T) {
 	srv, _, _ := newTestServer(t)
 	w := request(srv, http.MethodGet, "/api/v1/scans", "", nil)

@@ -1,12 +1,11 @@
-// User-management endpoints. Any authenticated user can list / create /
-// delete users. There's no role model yet — for a self-hosted single-org
-// tool this is the simplest workable surface; if we add tenancy or RBAC
-// later, this is the right entry point to gate.
+// User-management handlers are mounted behind the server's administrator
+// middleware. Handler-local authentication checks remain defense in depth.
 package routes
 
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -16,6 +15,7 @@ import (
 
 	"github.com/alphabravocompany/thewolf/internal/api/response"
 	"github.com/alphabravocompany/thewolf/internal/auth"
+	"github.com/alphabravocompany/thewolf/internal/auth/apikey"
 	"github.com/alphabravocompany/thewolf/internal/models"
 )
 
@@ -23,11 +23,13 @@ import (
 // PasswordHash field has json:"-" already, but be explicit here so we
 // don't accidentally widen the surface later.
 type userSummary struct {
-	ID        string    `json:"id"`
-	Email     string    `json:"email"`
-	Role      string    `json:"role"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID                         string    `json:"id"`
+	Email                      string    `json:"email"`
+	Role                       string    `json:"role"`
+	ScannerSupplyChainPersonas []string  `json:"scanner_supply_chain_personas"`
+	ScannerSupplyChainScopes   []string  `json:"scanner_supply_chain_scopes"`
+	CreatedAt                  time.Time `json:"created_at"`
+	UpdatedAt                  time.Time `json:"updated_at"`
 }
 
 func toUserSummary(u models.User) userSummary {
@@ -35,12 +37,24 @@ func toUserSummary(u models.User) userSummary {
 	if role == "" {
 		role = models.RoleUser
 	}
+	personas, _ := apikey.DecodeScannerPersonas(u.ScannerSupplyChainPersonas)
+	scopes, personas, err := apikey.ScannerScopesForPersonas(personas)
+	if err != nil {
+		scopes = apikey.ScopeSet{apikey.ScopeReadScannerSupplyChain}
+		personas = []string{apikey.ScannerPersonaViewer}
+	}
+	if role == models.RoleAdmin {
+		personas = []string{apikey.ScannerPersonaSupplyChainAdministrator}
+		scopes = apikey.ScopeSet{apikey.ScopeAdminScannerSupplyChain}
+	}
 	return userSummary{
-		ID:        u.ID,
-		Email:     u.Email,
-		Role:      role,
-		CreatedAt: u.CreatedAt,
-		UpdatedAt: u.UpdatedAt,
+		ID:                         u.ID,
+		Email:                      u.Email,
+		Role:                       role,
+		ScannerSupplyChainPersonas: personas,
+		ScannerSupplyChainScopes:   append([]string(nil), scopes...),
+		CreatedAt:                  u.CreatedAt,
+		UpdatedAt:                  u.UpdatedAt,
 	}
 }
 
@@ -81,9 +95,10 @@ func ListUsers(w http.ResponseWriter, r *http.Request) {
 }
 
 type adminCreateUserRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
-	Role     string `json:"role"` // admin | user (default user)
+	Email                      string   `json:"email"`
+	Password                   string   `json:"password"`
+	Role                       string   `json:"role"` // admin | user (default user)
+	ScannerSupplyChainPersonas []string `json:"scanner_supply_chain_personas"`
 }
 
 // CreateUserAdmin handles POST /api/users — admin-flavor user creation
@@ -127,14 +142,29 @@ func CreateUserAdmin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	role := validRole(req.Role)
+	encodedPersonas := ""
+	if role != models.RoleAdmin {
+		var normalizeErr error
+		encodedPersonas, _, normalizeErr = apikey.EncodeScannerPersonas(req.ScannerSupplyChainPersonas)
+		if normalizeErr != nil {
+			response.WriteError(w, http.StatusBadRequest, "validation_error", normalizeErr.Error())
+			return
+		}
+	} else if len(req.ScannerSupplyChainPersonas) > 0 {
+		response.WriteError(w, http.StatusBadRequest, "validation_error", "system administrators have implicit full scanner access; do not assign scanner personas")
+		return
+	}
+
 	now := time.Now()
 	u := &models.User{
-		ID:           uuid.New().String(),
-		Email:        req.Email,
-		PasswordHash: hash,
-		Role:         validRole(req.Role),
-		CreatedAt:    now,
-		UpdatedAt:    now,
+		ID:                         uuid.New().String(),
+		Email:                      req.Email,
+		PasswordHash:               hash,
+		Role:                       role,
+		ScannerSupplyChainPersonas: encodedPersonas,
+		CreatedAt:                  now,
+		UpdatedAt:                  now,
 	}
 	if err := h.Store.CreateUser(r.Context(), u); err != nil {
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to create user")
@@ -177,11 +207,75 @@ func UpdateUserRole(w http.ResponseWriter, r *http.Request) {
 		response.WriteError(w, http.StatusNotFound, "not_found", "user not found")
 		return
 	}
+	wasAdmin := u.IsAdmin()
 	u.Role = validRole(req.Role)
+	if wasAdmin && u.Role == models.RoleUser {
+		encodedViewer, _, _ := apikey.EncodeScannerPersonas([]string{apikey.ScannerPersonaViewer})
+		u.ScannerSupplyChainPersonas = encodedViewer
+	}
 	if err := h.Store.UpdateUser(r.Context(), u); err != nil {
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to update user role")
 		return
 	}
+	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: toUserSummary(*u)})
+}
+
+type updateScannerSupplyChainAccessRequest struct {
+	Personas *[]string `json:"personas"`
+}
+
+// UpdateUserScannerSupplyChainAccess replaces a regular user's composable,
+// predefined scanner personas. Arbitrary scopes are never accepted here.
+func UpdateUserScannerSupplyChainAccess(w http.ResponseWriter, r *http.Request) {
+	claims := auth.GetUserFromContext(r.Context())
+	if claims == nil {
+		response.WriteError(w, http.StatusUnauthorized, "unauthorized", "not authenticated")
+		return
+	}
+	h := DefaultHandler
+	if h == nil {
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "handler not initialized")
+		return
+	}
+	id := chi.URLParam(r, "id")
+	if id == claims.UserID {
+		response.WriteError(w, http.StatusBadRequest, "validation_error", "you cannot change your own scanner supply-chain access")
+		return
+	}
+	u, err := h.Store.GetUserByID(r.Context(), id)
+	if err != nil || u == nil {
+		response.WriteError(w, http.StatusNotFound, "not_found", "user not found")
+		return
+	}
+	if u.IsAdmin() {
+		response.WriteError(w, http.StatusBadRequest, "validation_error", "system administrators have implicit full scanner access")
+		return
+	}
+	var req updateScannerSupplyChainAccessRequest
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&req); err != nil {
+		response.WriteError(w, http.StatusBadRequest, "bad_request", "body must contain only a personas array")
+		return
+	}
+	if req.Personas == nil {
+		response.WriteError(w, http.StatusBadRequest, "bad_request", "personas is required")
+		return
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		response.WriteError(w, http.StatusBadRequest, "bad_request", "request body must contain exactly one JSON object")
+		return
+	}
+	encoded, _, err := apikey.EncodeScannerPersonas(*req.Personas)
+	if err != nil {
+		response.WriteError(w, http.StatusBadRequest, "validation_error", err.Error())
+		return
+	}
+	if err := h.Store.UpdateUserScannerSupplyChainPersonas(r.Context(), u.ID, encoded); err != nil {
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to update scanner supply-chain access")
+		return
+	}
+	u.ScannerSupplyChainPersonas = encoded
 	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: toUserSummary(*u)})
 }
 

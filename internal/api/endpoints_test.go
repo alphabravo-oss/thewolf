@@ -19,11 +19,14 @@ var braceRe = regexp.MustCompile(`\{[^}]+\}`)
 // heavyEndpoints may trigger Docker / long-running work; for these we still
 // verify auth + scope but skip the JWT happy-path exercise.
 var heavyEndpoints = map[string]bool{
-	"POST /scanners/doctor":               true,
-	"POST /scanners/pull":                 true,
-	"POST /scanners/images/pull":          true,
-	"POST /scanners/tools/check-updates":  true,
-	"POST /config/plugins/{name}/install": true,
+	"POST /scanners/doctor":                   true,
+	"POST /scanners/pull":                     true,
+	"POST /scanners/images/pull":              true,
+	"POST /scanners/tools/check-updates":      true,
+	"POST /scanners/images/{variant}/build":   true,
+	"POST /scanners/images/build-all":         true,
+	"GET /scanners/custom-builds/{id}/events": true,
+	"POST /config/plugins/{name}/install":     true,
 }
 
 // reqFrom issues a request from a specified client IP. Each test case uses a

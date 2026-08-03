@@ -20,9 +20,11 @@ func normEndpoint(method, path string) string {
 }
 
 // cliExempt lists endpoints intentionally without a dedicated `wolf` command,
-// each with the reason. These are interactive / browser-only flows where a CLI
-// command would make no sense. Everything else MUST have a command.
+// each with the reason. These are interactive/browser flows or machine scrape
+// endpoints where a rendered CLI command would make no sense. Everything else
+// MUST have a command.
 var cliExempt = map[string]string{
+	"GET /metrics":            "Prometheus scrapes the public text endpoint directly",
 	"POST /auth/register":     "self-service signup is a browser flow",
 	"GET /auth/settings":      "public bootstrap info for the login page",
 	"POST /auth/mfa/login":    "part of the interactive `wolf auth login` challenge",

@@ -155,6 +155,7 @@ func NewCommandGroups() []*cobra.Command {
 		newConfigCmd(),
 		newAuthCmd(),
 		newRepoCmd(),
+		newCredentialCmd(),
 		newNodeCmd(),
 		newCollectionCmd(),
 		newBaselineCmd(),

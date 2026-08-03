@@ -51,6 +51,7 @@ var auditRules = []auditRule{
 	// Authorization (users + roles)
 	{http.MethodPost, eq("/users"), "user.created", CatAuthorization, SevWarning},
 	{http.MethodPut, underPrefixSuffix("/users/", "/role"), "user.role.changed", CatAuthorization, SevCritical},
+	{http.MethodPut, underPrefixSuffix("/users/", "/scanner-supply-chain-access"), "user.scanner_supply_chain_access.changed", CatAuthorization, SevCritical},
 	{http.MethodPost, underPrefixSuffix("/users/", "/mfa/reset"), "auth.mfa.reset", CatAuthentication, SevCritical},
 	{http.MethodDelete, underPrefix("/users/"), "user.deleted", CatAuthorization, SevCritical},
 	// Secrets + API keys
@@ -60,22 +61,43 @@ var auditRules = []auditRule{
 	{http.MethodDelete, underPrefix("/config/secrets/"), "secret.deleted", CatSecrets, SevWarning},
 	// Configuration
 	{http.MethodPut, eq("/settings"), "settings.updated", CatConfiguration, SevWarning},
+	{http.MethodPut, eq("/scanner-supply-chain/policy"), "scanner.policy.updated", CatConfiguration, SevCritical},
+	{http.MethodPost, eq("/scanner-supply-chain/registries"), "scanner.registry.created", CatConfiguration, SevCritical},
+	{http.MethodPatch, underPrefix("/scanner-supply-chain/registries/"), "scanner.registry.updated", CatConfiguration, SevCritical},
+	{http.MethodDelete, underPrefix("/scanner-supply-chain/registries/"), "scanner.registry.deleted", CatConfiguration, SevCritical},
+	{http.MethodPost, underPrefixSuffix("/scanner-supply-chain/registries/", "/jobs"), "scanner.registry.repair_queued", CatSystem, SevCritical},
+	{http.MethodPost, underPrefixSuffix("/scanner-supply-chain/registries/", "/cleanup-jobs"), "scanner.registry.cleanup_queued", CatSystem, SevCritical},
+	{http.MethodPost, underPrefixSuffix("/scanner-supply-chain/registry-jobs/", "/retry"), "scanner.registry.job_retried", CatSystem, SevCritical},
+	{http.MethodPost, eq("/scanners/custom-builds"), "scanner.custom_build.queued", CatSystem, SevWarning},
+	{http.MethodPost, underPrefixSuffix("/scanners/custom-builds/", "/cancel"), "scanner.custom_build.cancellation_requested", CatSystem, SevWarning},
+	{http.MethodPost, underPrefixSuffix("/scanners/custom-builds/", "/retry"), "scanner.custom_build.retried", CatSystem, SevWarning},
 	// System
 	{http.MethodPost, underPrefixSuffix("/config/plugins/", "/install"), "plugin.installed", CatSystem, SevWarning},
+	{http.MethodPost, underPrefixSuffix("/scanner-supply-chain/candidates/", "/approve"), "scanner.candidate.approved", CatSystem, SevCritical},
+	{http.MethodPost, underPrefixSuffix("/scanner-supply-chain/candidates/", "/reject"), "scanner.candidate.rejected", CatSystem, SevWarning},
+	{http.MethodPost, underPrefixSuffix("/scanner-supply-chain/candidates/", "/publish"), "scanner.release.published", CatSystem, SevCritical},
+	{http.MethodPost, underPrefixSuffix("/scanner-supply-chain/releases/", "/promote"), "scanner.release.promoted", CatSystem, SevCritical},
+	{http.MethodPost, underPrefixSuffix("/scanner-supply-chain/releases/", "/revoke"), "scanner.release.revoked", CatSystem, SevCritical},
+	{http.MethodPost, underPrefixSuffix("/scanner-supply-chain/rollouts/", "/rollback"), "scanner.rollout.rollback", CatSystem, SevCritical},
+	{http.MethodGet, underPrefixSuffix("/scanner-supply-chain/releases/", "/export"), "scanner.release.bundle_exported", CatSystem, SevInfo},
+	{http.MethodPost, eq("/scanner-supply-chain/release-imports"), "scanner.release.imported", CatSystem, SevCritical},
+	{http.MethodPost, eq("/scanner-supply-chain/legacy-release-imports"), "scanner.release.legacy_imported", CatSystem, SevCritical},
+	{http.MethodPost, underPrefixSuffix("/scans/", "/release-rescans"), "scan.release_rescan.created", CatData, SevWarning},
 }
 
 // categoryByResource gives a better default category for a few resources than a
 // flat "data" when no explicit rule matched.
 var categoryByResource = map[string]string{
-	"settings":     CatConfiguration,
-	"config":       CatConfiguration,
-	"nodes":        CatConfiguration,
-	"policies":     CatConfiguration,
-	"ai-prompts":   CatConfiguration,
-	"ai-providers": CatConfiguration,
-	"scanners":     CatSystem,
-	"admin":        CatSystem,
-	"audit-log":    CatSystem,
+	"settings":             CatConfiguration,
+	"config":               CatConfiguration,
+	"nodes":                CatConfiguration,
+	"policies":             CatConfiguration,
+	"ai-prompts":           CatConfiguration,
+	"ai-providers":         CatConfiguration,
+	"scanners":             CatSystem,
+	"scanner-supply-chain": CatSystem,
+	"admin":                CatSystem,
+	"audit-log":            CatSystem,
 }
 
 // Classify maps an HTTP (method, path) to a semantic audit event, category, and

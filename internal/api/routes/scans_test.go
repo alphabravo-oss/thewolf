@@ -22,6 +22,7 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/db"
 	"github.com/alphabravocompany/thewolf/internal/fix/fixstore"
 	"github.com/alphabravocompany/thewolf/internal/models"
+	"github.com/alphabravocompany/thewolf/internal/secrets"
 )
 
 // testEnv bundles the router, store, and token for scan/finding/fix tests.
@@ -56,6 +57,7 @@ func setupTestEnv(t *testing.T) *testEnv {
 		r.Post("/api/repos/{id}/baselines", routes.CreateRepoBaseline)
 		// Scans
 		r.Post("/api/scans", routes.CreateScan)
+		r.Post("/api/scans/preflight", routes.ScanPreflight)
 		r.Get("/api/scans", routes.ListScans)
 		r.Get("/api/scans/{id}", routes.GetScan)
 		r.Get("/api/scans/{id}/findings", routes.GetScanFindings)
@@ -67,7 +69,16 @@ func setupTestEnv(t *testing.T) *testEnv {
 		r.Get("/api/scans/{id}/artifacts/{artifactId}/download", routes.DownloadArtifact)
 		r.Get("/api/scans/{id}/tools", routes.GetScanTools)
 		r.Get("/api/scans/{id}/scanner-runs", routes.GetScannerRunRecords)
+		r.Get("/api/scans/{id}/stream", routes.StreamScan)
 		r.Delete("/api/scans/{id}", routes.CancelScan)
+		// Source credentials
+		r.Get("/api/credentials", routes.ListCredentials)
+		r.Post("/api/credentials", routes.CreateCredential)
+		r.Get("/api/credentials/{id}", routes.GetCredential)
+		r.Delete("/api/credentials/{id}", routes.DeleteCredential)
+		// Generic secrets
+		r.Get("/api/config/secrets", routes.ListSecrets)
+		r.Post("/api/config/secrets", routes.CreateSecret)
 		// Findings
 		r.Get("/api/findings", routes.ListFindings)
 		r.Get("/api/findings/{id}", routes.GetFinding)
@@ -1005,6 +1016,213 @@ func TestCreateScanMissingRepoID(t *testing.T) {
 	w := env.doRequest(http.MethodPost, "/api/scans", map[string]string{})
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestCreateScanIdempotencyReturnsOriginalAndRejectsConflict(t *testing.T) {
+	t.Setenv("WOLF_SCAN_EXECUTION_MODE", "queue")
+	env := setupTestEnv(t)
+	defer env.Store.Close()
+	repoID := env.createRepo(t)
+
+	request := func(branch string) *httptest.ResponseRecorder {
+		body, _ := json.Marshal(map[string]string{"repo_id": repoID, "branch": branch})
+		req := httptest.NewRequest(http.MethodPost, "/api/scans", bytes.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+env.Token)
+		req.Header.Set("Idempotency-Key", "build-42")
+		w := httptest.NewRecorder()
+		env.Router.ServeHTTP(w, req)
+		return w
+	}
+	first := request("main")
+	second := request("main")
+	if first.Code != http.StatusCreated || second.Code != http.StatusCreated {
+		t.Fatalf("idempotent create status: first=%d second=%d", first.Code, second.Code)
+	}
+	var firstBody, secondBody struct {
+		Data models.Scan `json:"data"`
+	}
+	_ = json.Unmarshal(first.Body.Bytes(), &firstBody)
+	_ = json.Unmarshal(second.Body.Bytes(), &secondBody)
+	if firstBody.Data.ID == "" || firstBody.Data.ID != secondBody.Data.ID {
+		t.Fatalf("expected original scan, first=%q second=%q", firstBody.Data.ID, secondBody.Data.ID)
+	}
+	conflict := request("develop")
+	if conflict.Code != http.StatusConflict || !strings.Contains(conflict.Body.String(), "idempotency_conflict") {
+		t.Fatalf("expected idempotency conflict, got %d: %s", conflict.Code, conflict.Body.String())
+	}
+}
+
+func TestQueuedScanStreamReplaysAfterLastEventIDAndClosesAtTerminal(t *testing.T) {
+	t.Setenv("WOLF_SCAN_EXECUTION_MODE", "queue")
+	env := setupTestEnv(t)
+	defer env.Store.Close()
+	repoID := env.createRepo(t)
+	scan := &models.Scan{
+		ID: uuid.NewString(), UserID: env.UserID, RepoID: repoID, Branch: "main",
+		Status: models.ScanStatusCompleted, Phase: "completed",
+	}
+	if err := env.Store.CreateScan(context.Background(), scan); err != nil {
+		t.Fatal(err)
+	}
+	for _, payload := range []string{
+		`{"type":"scan_status","status":"pending"}`,
+		`{"type":"scan_progress","tool_name":"semgrep","status":"running"}`,
+		`{"type":"scan_complete","status":"completed"}`,
+	} {
+		if err := env.Store.AppendScanEvent(context.Background(), &models.ScanEvent{
+			ScanID: scan.ID, EventType: "scan_event", DataJSON: payload,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/scans/"+scan.ID+"/stream", nil)
+	req.Header.Set("Authorization", "Bearer "+env.Token)
+	req.Header.Set("Last-Event-ID", "1")
+	w := httptest.NewRecorder()
+	env.Router.ServeHTTP(w, req)
+
+	body := w.Body.String()
+	if strings.Contains(body, "id: 1\n") {
+		t.Fatalf("stream replayed acknowledged event: %s", body)
+	}
+	for _, expected := range []string{
+		"id: 2\n",
+		`"type":"scan_progress"`,
+		"id: 3\n",
+		`"type":"scan_complete"`,
+	} {
+		if !strings.Contains(body, expected) {
+			t.Fatalf("stream omitted %q: %s", expected, body)
+		}
+	}
+}
+
+func TestCreateScanWithGitSourceUpsertsVisibleRepo(t *testing.T) {
+	t.Setenv("WOLF_SCAN_EXECUTION_MODE", "queue")
+	env := setupTestEnv(t)
+	defer env.Store.Close()
+	body := map[string]interface{}{
+		"source": map[string]interface{}{
+			"kind": "git", "name": "wolf", "url": "https://github.com/alphabravo-oss/thewolf.git",
+			"ref": "refs/heads/main",
+		},
+		"profile":       "targeted",
+		"include_paths": []string{"internal/**"},
+	}
+	first := env.doRequest(http.MethodPost, "/api/scans", body)
+	second := env.doRequest(http.MethodPost, "/api/scans", body)
+	if first.Code != http.StatusCreated || second.Code != http.StatusCreated {
+		t.Fatalf("source create: first=%d %s second=%d %s", first.Code, first.Body.String(), second.Code, second.Body.String())
+	}
+	repos, err := env.Store.ListReposByUser(context.Background(), env.UserID)
+	if err != nil || len(repos) != 1 {
+		t.Fatalf("expected one upserted repo, repos=%v err=%v", repos, err)
+	}
+	if repos[0].SourceType != models.SourceTypeGit || repos[0].SourceFingerprint == "" {
+		t.Fatalf("unexpected source repo: %#v", repos[0])
+	}
+	var created struct {
+		Data models.Scan `json:"data"`
+	}
+	_ = json.Unmarshal(first.Body.Bytes(), &created)
+	if created.Data.RepoID != repos[0].ID || created.Data.Status != models.ScanStatusPending {
+		t.Fatalf("scan did not reference visible source repo: %#v", created.Data)
+	}
+}
+
+func TestCreateScanWithOneShotSSHSourceUpsertsRepoAndRotatesCredential(t *testing.T) {
+	t.Setenv("WOLF_SCAN_EXECUTION_MODE", "queue")
+	secrets.SetMasterKey([]byte("0123456789abcdef0123456789abcdef"))
+	env := setupTestEnv(t)
+	defer env.Store.Close()
+
+	createCredential := func(name, secret string) string {
+		t.Helper()
+		response := env.doRequest(http.MethodPost, "/api/credentials", map[string]interface{}{
+			"type": "ssh_private_key", "name": name, "secret": secret,
+			"known_hosts":   "192.0.2.10 ssh-ed25519 AAAATest",
+			"allowed_hosts": []string{"192.0.2.10"},
+		})
+		if response.Code != http.StatusCreated {
+			t.Fatalf("create credential: %d %s", response.Code, response.Body.String())
+		}
+		var body struct {
+			Data struct {
+				ID string `json:"id"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+			t.Fatal(err)
+		}
+		return body.Data.ID
+	}
+	firstCredentialID := createCredential("first", "PRIVATE-KEY-ONE")
+	sourceBody := func(credentialID string) map[string]interface{} {
+		return map[string]interface{}{
+			"source": map[string]interface{}{
+				"kind": "ssh", "name": "remote-repo", "host": "192.0.2.10",
+				"port": 22, "username": "scanner", "path": "/srv/repos/app",
+				"base_path": "/srv/repos", "credential_id": credentialID,
+				"known_hosts": "192.0.2.10 ssh-ed25519 AAAATest",
+			},
+		}
+	}
+	first := env.doRequest(http.MethodPost, "/api/scans", sourceBody(firstCredentialID))
+	second := env.doRequest(http.MethodPost, "/api/scans", sourceBody(firstCredentialID))
+	if first.Code != http.StatusCreated || second.Code != http.StatusCreated {
+		t.Fatalf("SSH source create: first=%d %s second=%d %s",
+			first.Code, first.Body.String(), second.Code, second.Body.String())
+	}
+
+	repos, err := env.Store.ListReposByUser(context.Background(), env.UserID)
+	if err != nil || len(repos) != 1 {
+		t.Fatalf("expected one SSH source repo, repos=%v err=%v", repos, err)
+	}
+	nodes, err := env.Store.ListRemoteNodesByUser(context.Background(), env.UserID)
+	if err != nil || len(nodes) != 1 {
+		t.Fatalf("expected one SSH source node, nodes=%v err=%v", nodes, err)
+	}
+
+	secondCredentialID := createCredential("rotated", "PRIVATE-KEY-TWO")
+	rotated := env.doRequest(http.MethodPost, "/api/scans", sourceBody(secondCredentialID))
+	if rotated.Code != http.StatusCreated {
+		t.Fatalf("rotate source credential: %d %s", rotated.Code, rotated.Body.String())
+	}
+	repos, _ = env.Store.ListReposByUser(context.Background(), env.UserID)
+	nodes, _ = env.Store.ListRemoteNodesByUser(context.Background(), env.UserID)
+	if len(repos) != 1 || len(nodes) != 1 || nodes[0].CredentialSecretID == nil ||
+		*nodes[0].CredentialSecretID != secondCredentialID {
+		t.Fatalf("SSH upsert did not converge or rotate credential: repos=%d nodes=%#v",
+			len(repos), nodes)
+	}
+}
+
+func TestCreateScanRejectsAmbiguousSourceAndTraversalScope(t *testing.T) {
+	t.Setenv("WOLF_SCAN_EXECUTION_MODE", "queue")
+	env := setupTestEnv(t)
+	defer env.Store.Close()
+	repoID := env.createRepo(t)
+
+	ambiguous := env.doRequest(http.MethodPost, "/api/scans", map[string]interface{}{
+		"repo_id": repoID,
+		"source":  map[string]string{"kind": "git", "url": "https://example.com/repo.git"},
+	})
+	if ambiguous.Code != http.StatusBadRequest {
+		t.Fatalf("expected ambiguous-source 400, got %d: %s", ambiguous.Code, ambiguous.Body.String())
+	}
+	traversal := env.doRequest(http.MethodPost, "/api/scans", map[string]interface{}{
+		"repo_id": repoID, "include_paths": []string{"../private/**"},
+	})
+	if traversal.Code != http.StatusBadRequest {
+		t.Fatalf("expected traversal 400, got %d: %s", traversal.Code, traversal.Body.String())
+	}
+	windowsAbsolute := env.doRequest(http.MethodPost, "/api/scans", map[string]interface{}{
+		"repo_id": repoID, "include_paths": []string{`C:\private\**`},
+	})
+	if windowsAbsolute.Code != http.StatusBadRequest {
+		t.Fatalf("expected Windows absolute path 400, got %d: %s", windowsAbsolute.Code, windowsAbsolute.Body.String())
 	}
 }
 

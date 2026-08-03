@@ -29,9 +29,13 @@ func isMissingImageErr(msg string) bool {
 // determine which scanners run, so the preflight resolves the same tool set.
 type scanPreflightRequest struct {
 	RepoID        string   `json:"repo_id"`
+	Profile       string   `json:"profile,omitempty"`
+	Categories    []string `json:"categories,omitempty"`
 	Tools         []string `json:"tools,omitempty"`
 	AllScanners   bool     `json:"all_scanners,omitempty"`
 	DisabledTools []string `json:"disabled_tools,omitempty"`
+	IncludePaths  []string `json:"include_paths,omitempty"`
+	ExcludePaths  []string `json:"exclude_paths,omitempty"`
 }
 
 // missingImage is one scanner whose container image is not present locally.
@@ -75,27 +79,50 @@ func ScanPreflight(w http.ResponseWriter, r *http.Request) {
 		response.WriteError(w, http.StatusBadRequest, "validation_error", "repo_id is required")
 		return
 	}
-	repo, err := h.Store.GetRepoByID(r.Context(), req.RepoID)
-	if err != nil || repo == nil {
-		response.WriteError(w, http.StatusNotFound, "not_found", "repo not found")
+	createReq := createScanRequest{
+		RepoID:        req.RepoID,
+		Profile:       req.Profile,
+		Categories:    req.Categories,
+		Tools:         req.Tools,
+		DisabledTools: req.DisabledTools,
+		IncludePaths:  req.IncludePaths,
+		ExcludePaths:  req.ExcludePaths,
+	}
+	if err := validateScanRequestSelectors(h, &createReq); err != nil {
+		response.WriteError(w, http.StatusBadRequest, "validation_error", err.Error())
+		return
+	}
+	repo, ok := loadRepoForCaller(w, r, h.Store, req.RepoID, claims)
+	if !ok {
 		return
 	}
 
+	var languages []models.Language
+	var langCounts map[string]int
+	if repo.DetectedLanguages != "" {
+		_ = json.Unmarshal([]byte(repo.DetectedLanguages), &langCounts)
+	}
+	for language := range langCounts {
+		languages = append(languages, models.Language(language))
+	}
+	sort.Slice(languages, func(i, j int) bool { return languages[i] < languages[j] })
+
+	selectedTools := req.Tools
+	toolsExplicit := len(req.Tools) > 0
+	if req.Profile == "full" || len(req.Categories) > 0 {
+		selectedTools = toolsForProfile(h, createReq, languages)
+		toolsExplicit = true
+	}
 	cfgRun := runner.RunConfig{
 		Registry:      h.Registry,
-		Tools:         req.Tools,
+		Tools:         selectedTools,
+		ToolsExplicit: toolsExplicit,
 		DisabledTools: req.DisabledTools,
 	}
 	// Auto-detect (no explicit tools, not all-scanners): use cached languages
 	// so the estimate matches what the scan would select, without cloning.
-	if len(req.Tools) == 0 && !req.AllScanners {
-		var langCounts map[string]int
-		if repo.DetectedLanguages != "" {
-			_ = json.Unmarshal([]byte(repo.DetectedLanguages), &langCounts)
-		}
-		for l := range langCounts {
-			cfgRun.Languages = append(cfgRun.Languages, models.Language(l))
-		}
+	if !toolsExplicit && !req.AllScanners {
+		cfgRun.Languages = languages
 	}
 	plugins := runner.SelectTools(cfgRun)
 

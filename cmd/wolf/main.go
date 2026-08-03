@@ -93,6 +93,15 @@ func main() {
 		newEnrichCmd(),
 		loopCmd,
 		newFixerCmd(),
+		newScanWorkerCmd(),
+		newScannerReleaseWorkerCmd(),
+		newScannerProposalExecutorCmd(),
+		newScannerCustomBuildWorkerCmd(),
+		newScannerReleaseBackendCmd(),
+		newScannerReleaseStepCmd(),
+		newScannerReleaseBackupCmd(),
+		newScannerJobExecCmd(),
+		newScannerToolWrapperCmd(),
 	)
 	// Every API endpoint as a `wolf <resource> <verb>` command (loop's API
 	// subcommands attach to loopCmd above instead of registering separately).
@@ -200,6 +209,7 @@ func newServeCmd() *cobra.Command {
 	var (
 		addr         string
 		skipScanInit bool
+		apiOnly      bool
 	)
 	cmd := &cobra.Command{
 		Use:   "serve",
@@ -207,6 +217,11 @@ func newServeCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, cancel := signal.NotifyContext(cmd.Context(), syscall.SIGINT, syscall.SIGTERM)
 			defer cancel()
+			if apiOnly {
+				if err := os.Setenv("WOLF_API_ONLY", "true"); err != nil {
+					return fmt.Errorf("enable API-only mode: %w", err)
+				}
+			}
 
 			if !skipScanInit {
 				if err := installScannerBackend(ctx); err != nil {
@@ -314,6 +329,7 @@ func newServeCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&addr, "bind", ":8778", "address:port to bind the HTTP server")
 	cmd.Flags().BoolVar(&skipScanInit, "skip-scan-init", false, "do not pull/probe scanner images at startup")
+	cmd.Flags().BoolVar(&apiOnly, "api-only", false, "serve the API and OpenAPI docs without mounting the SPA")
 	return cmd
 }
 

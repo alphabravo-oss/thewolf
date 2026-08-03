@@ -4,7 +4,6 @@ import (
 	"net/http"
 
 	"github.com/alphabravocompany/thewolf/internal/api/response"
-	"github.com/alphabravocompany/thewolf/internal/secrets"
 )
 
 // AdminListTokens lists every user's API tokens for the admin oversight view.
@@ -54,13 +53,12 @@ func AdminListSecrets(w http.ResponseWriter, r *http.Request) {
 	}
 	masked := make([]adminMaskedSecret, len(secs))
 	for i, s := range secs {
-		decrypted, _ := secrets.Decrypt(s.EncryptedValue)
 		masked[i] = adminMaskedSecret{
 			maskedSecret: maskedSecret{
 				ID:        s.ID,
 				KeyType:   s.KeyType,
 				KeyName:   s.KeyName,
-				Value:     maskValue(decrypted),
+				Value:     maskedStoredSecret(s),
 				CreatedAt: s.CreatedAt,
 			},
 			UserID: s.UserID,

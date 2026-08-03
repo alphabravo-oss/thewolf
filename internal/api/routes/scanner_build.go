@@ -2,12 +2,15 @@ package routes
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 
 	"github.com/alphabravocompany/thewolf/internal/api/response"
 	"github.com/alphabravocompany/thewolf/internal/auth"
@@ -21,10 +24,14 @@ import (
 // scanner_registry_namespace setting is unset. Mirrors the runtime default.
 const defaultScannerNamespace = "alphabravodevops"
 
-// ScannerBuildFn is the indirection point for the docker buildx runner. It is
-// an exported package var so tests can stub it and never invoke a real docker
-// daemon. Defaults to scannerbuild.Build.
-var ScannerBuildFn = scannerbuild.Build
+// ScannerBuildFn is a test-only compatibility seam. Production deliberately
+// leaves it nil: API processes enqueue durable work and never invoke Docker or
+// decrypt registry credentials.
+var ScannerBuildFn func(
+	context.Context,
+	scannerbuild.BuildRequest,
+	func(string),
+) (scannerbuild.BuildResult, error)
 
 // buildScannerBody is the request payload for both build endpoints.
 //   - push: publish to the registry (needs a dockerhub_token secret). Default
@@ -47,8 +54,8 @@ const scannerImageVersionSetting = "scanners_image_version"
 // platforms override is given.
 const defaultMultiArchPlatforms = "linux/amd64,linux/arm64"
 
-// BuildScannerImage builds one wolf-built scanner variant from the embedded
-// context and streams docker buildx output over SSE.
+// BuildScannerImage is the backward-compatible durable build endpoint. It
+// enqueues one custom build and streams its persisted log/event history.
 //
 // Body: {"push": bool} (default false). A push=false build loads the image
 // into the local daemon and needs no credentials. A push=true build requires
@@ -61,8 +68,7 @@ func BuildScannerImage(w http.ResponseWriter, r *http.Request) {
 		response.WriteError(w, http.StatusUnauthorized, "unauthorized", "not authenticated")
 		return
 	}
-	h := DefaultHandler
-	if h == nil {
+	if DefaultHandler == nil {
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "handler not initialized")
 		return
 	}
@@ -75,22 +81,42 @@ func BuildScannerImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	push, platforms := decodeBuildOpts(r)
-	version := resolveBuildVersion(r.Context(), h, push)
-
-	req, ok := buildRequestFor(w, r, h, claims.UserID, variant, push, version, platforms)
+	key, ok := legacyBuildIdempotencyKey(w, r)
 	if !ok {
 		return
 	}
-
+	inventory, _, err := enqueueScannerCustomBuild(
+		r,
+		scannerCustomBuildCreateBody{
+			Variants:  []string{variant},
+			Push:      push,
+			Platforms: splitCustomBuildPlatforms(platforms),
+			Namespace: resolveScannerNamespace(r.Context(), DefaultHandler),
+			Reason:    "legacy scanner image build compatibility request",
+		},
+		key,
+	)
+	if err != nil {
+		legacyScannerBuildError(w, err)
+		return
+	}
+	setLegacyCustomBuildHeaders(w, inventory.Build.ID)
+	if err := executeScannerCustomBuildTestHook(r.Context(), inventory); err != nil {
+		scannerCustomBuildError(w, err)
+		return
+	}
 	flusher, ok := beginSSE(w)
 	if !ok {
 		return
 	}
-	streamOneBuild(r.Context(), w, flusher, req, "")
+	streamPersistedCustomBuild(
+		r.Context(), w, flusher, inventory.Build.ID, 0, false,
+	)
 }
 
-// BuildAllScannerImages builds all four variants in sequence, prefixing each
-// streamed line with [variant]. Same push semantics as BuildScannerImage.
+// BuildAllScannerImages is the backward-compatible durable build-all endpoint.
+// A push request fails closed because CodeQL is local-only and cannot be
+// redistributed.
 //
 // Route: POST /api/v1/scanners/images/build-all
 func BuildAllScannerImages(w http.ResponseWriter, r *http.Request) {
@@ -99,47 +125,85 @@ func BuildAllScannerImages(w http.ResponseWriter, r *http.Request) {
 		response.WriteError(w, http.StatusUnauthorized, "unauthorized", "not authenticated")
 		return
 	}
-	h := DefaultHandler
-	if h == nil {
+	if DefaultHandler == nil {
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "handler not initialized")
 		return
 	}
 
 	push, platforms := decodeBuildOpts(r)
-
-	// Resolve creds once up front so a missing dockerhub_token on a push
-	// build 404s before we open the SSE stream.
-	user, pat := "", ""
-	if push {
-		var ok bool
-		user, pat, ok = resolveDockerHubCreds(w, r, h, claims.UserID)
-		if !ok {
-			return
-		}
+	key, ok := legacyBuildIdempotencyKey(w, r)
+	if !ok {
+		return
 	}
-	namespace := resolveScannerNamespace(r.Context(), h)
-	// One version bump for the whole build-all run, so all four variants share
-	// the same new immutable tag.
-	version := resolveBuildVersion(r.Context(), h, push)
-
+	inventory, _, err := enqueueScannerCustomBuild(
+		r,
+		scannerCustomBuildCreateBody{
+			Variants:  []string{"default", "jvm", "rust", "codeql"},
+			Push:      push,
+			Platforms: splitCustomBuildPlatforms(platforms),
+			Namespace: resolveScannerNamespace(r.Context(), DefaultHandler),
+			Reason:    "legacy scanner build-all compatibility request",
+		},
+		key,
+	)
+	if err != nil {
+		legacyScannerBuildError(w, err)
+		return
+	}
+	setLegacyCustomBuildHeaders(w, inventory.Build.ID)
+	if err := executeScannerCustomBuildTestHook(r.Context(), inventory); err != nil {
+		scannerCustomBuildError(w, err)
+		return
+	}
 	flusher, ok := beginSSE(w)
 	if !ok {
 		return
 	}
-	for _, v := range scannerbuild.Variants {
-		req := scannerbuild.BuildRequest{
-			Variant:       v.Name,
-			Namespace:     namespace,
-			Version:       version,
-			Push:          push,
-			DockerHubUser: user,
-			DockerHubPAT:  pat,
-			Platforms:     platforms,
-		}
-		if !streamOneBuild(r.Context(), w, flusher, req, v.Name) {
-			return
-		}
+	streamPersistedCustomBuild(
+		r.Context(), w, flusher, inventory.Build.ID, 0, true,
+	)
+}
+
+func legacyBuildIdempotencyKey(
+	w http.ResponseWriter,
+	r *http.Request,
+) (string, bool) {
+	value := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
+	if value == "" {
+		return "legacy-build:" + uuid.NewString(), true
 	}
+	if len(value) > 200 || strings.ContainsAny(value, "\r\n") {
+		response.WriteError(w, http.StatusBadRequest, "invalid_idempotency_key", "Idempotency-Key must be at most 200 characters")
+		return "", false
+	}
+	return value, true
+}
+
+func splitCustomBuildPlatforms(platforms string) []string {
+	if strings.TrimSpace(platforms) == "" {
+		return nil
+	}
+	values := strings.Split(platforms, ",")
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		result = append(result, strings.TrimSpace(value))
+	}
+	return result
+}
+
+func setLegacyCustomBuildHeaders(w http.ResponseWriter, id string) {
+	w.Header().Set("X-Wolf-Operation-ID", id)
+	w.Header().Set("Location", scannerCustomBuildBase+"/"+id)
+	w.Header().Set("X-Wolf-Events-URL", scannerCustomBuildBase+"/"+id+"/events")
+}
+
+func legacyScannerBuildError(w http.ResponseWriter, err error) {
+	if errors.Is(err, sql.ErrNoRows) {
+		response.WriteError(w, http.StatusNotFound, "dockerhub_token_missing",
+			"no dockerhub_token secret configured — add a DockerHub username + PAT to publish, or build with push:false to load locally")
+		return
+	}
+	scannerCustomBuildError(w, err)
 }
 
 // decodeBuildOpts reads {push, multi_arch, platforms}, defaulting to a local

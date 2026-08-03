@@ -2,18 +2,30 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/alphabravocompany/thewolf/internal/scannertools/docs"
+	scannerlock "github.com/alphabravocompany/thewolf/internal/scannertools/lock"
 	"github.com/alphabravocompany/thewolf/internal/scannertools/manifest"
 	"github.com/alphabravocompany/thewolf/internal/scannertools/validate"
 	"gopkg.in/yaml.v3"
 )
 
 func bumpTool(root, toolName, newVersion string) error {
+	return bumpToolAt(root, toolName, newVersion, time.Now().UTC(), os.Stdout)
+}
+
+func bumpToolAt(
+	root, toolName, newVersion string,
+	now time.Time,
+	output io.Writer,
+) error {
 	toolName = strings.TrimSpace(toolName)
 	newVersion = strings.TrimSpace(newVersion)
 	if toolName == "" || newVersion == "" {
@@ -43,10 +55,23 @@ func bumpTool(root, toolName, newVersion string) error {
 	if err := bumpVersionsEnv(filepath.Join(root, "scanners", "versions.env"), tool.VersionVariable, newVersion); err != nil {
 		return err
 	}
-	if err := renderDocs(root, false); err != nil {
+	if err := synchronizeEmbeddedDefinition(root); err != nil {
 		return err
 	}
-	changelogPath, err := writeBumpChangelog(root, toolName, oldVersion, newVersion)
+	updatedManifest, err := manifest.LoadFile(manifestPath)
+	if err != nil {
+		return err
+	}
+	if err := writeFileAtomic(
+		filepath.Join(root, "scanners", "TOOLS.md"),
+		docs.Markdown(updatedManifest), 0o644,
+	); err != nil {
+		return err
+	}
+	if err := regenerateLock(root); err != nil {
+		return err
+	}
+	changelogPath, err := writeBumpChangelogAt(root, toolName, oldVersion, newVersion, now)
 	if err != nil {
 		return err
 	}
@@ -54,11 +79,45 @@ func bumpTool(root, toolName, newVersion string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("bumped %s from %s to %s\n", toolName, oldVersion, newVersion)
-	fmt.Printf("wrote %s\n", changelogPath)
-	fmt.Printf("scanner metadata OK: %d tools (%d default, %d bucket, %d upstream), %d version pins\n",
+	fmt.Fprintf(output, "bumped %s from %s to %s\n", toolName, oldVersion, newVersion)
+	fmt.Fprintf(output, "wrote %s\n", changelogPath)
+	fmt.Fprintf(output, "scanner metadata OK: %d tools (%d default, %d bucket, %d upstream), %d version pins\n",
 		result.ToolCount, result.DefaultCount, result.BucketCount, result.UpstreamCount, result.VersionVarCount)
 	return nil
+}
+
+func synchronizeEmbeddedDefinition(root string) error {
+	for _, name := range []string{"tools.yaml", "versions.env"} {
+		source := filepath.Join(root, "scanners", name)
+		data, err := os.ReadFile(source)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(root, "internal", "scannerbuild", "context", name)
+		if err := writeFileAtomic(target, data, 0o644); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func regenerateLock(root string) error {
+	path := filepath.Join(root, scannerlock.DefaultLockPath)
+	var existing *scannerlock.Lock
+	if loaded, err := scannerlock.LoadFile(path); err == nil {
+		existing = loaded
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	generated, err := scannerlock.Generate(context.Background(), root, scannerlock.GenerateOptions{ExistingLock: existing})
+	if err != nil {
+		return err
+	}
+	data, err := generated.MarshalYAML()
+	if err != nil {
+		return err
+	}
+	return writeFileAtomic(path, data, 0o644)
 }
 
 func bumpManifestFile(path, toolName, oldVersion, newVersion string, tool manifest.Tool) error {
@@ -181,11 +240,18 @@ func bumpVersionsEnv(path, variable, newVersion string) error {
 }
 
 func writeBumpChangelog(root, toolName, oldVersion, newVersion string) (string, error) {
+	return writeBumpChangelogAt(root, toolName, oldVersion, newVersion, time.Now().UTC())
+}
+
+func writeBumpChangelogAt(
+	root, toolName, oldVersion, newVersion string,
+	now time.Time,
+) (string, error) {
 	dir := filepath.Join(root, "docs", "superpowers", "changelog", "scanner-bumps")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}
-	date := time.Now().UTC().Format("2006-01-02")
+	date := now.UTC().Format("2006-01-02")
 	filename := fmt.Sprintf("%s-%s-%s-to-%s.md", date, toolName, oldVersion, newVersion)
 	path := filepath.Join(dir, filename)
 	body := fmt.Sprintf(

@@ -870,7 +870,8 @@ func AddLoopSubcommands(loop *cobra.Command) {
 func newUserCmd() *cobra.Command {
 	cmd := group("user", "Manage users (admin)")
 
-	var email, password string
+	var email, password, role string
+	var scannerPersonas []string
 	create := &cobra.Command{
 		Use:         "create",
 		Short:       "Create a user",
@@ -880,11 +881,20 @@ func newUserCmd() *cobra.Command {
 			if email == "" || password == "" {
 				return fmt.Errorf("--email and --password are required")
 			}
-			return runRender(cmd, "POST", "/users", map[string]any{"email": email, "password": password})
+			body := map[string]any{"email": email, "password": password}
+			if cmd.Flags().Changed("role") {
+				body["role"] = role
+			}
+			if cmd.Flags().Changed("scanner-persona") {
+				body["scanner_supply_chain_personas"] = scannerPersonas
+			}
+			return runRender(cmd, "POST", "/users", body)
 		},
 	}
 	create.Flags().StringVar(&email, "email", "", "user email")
 	create.Flags().StringVar(&password, "password", "", "initial password")
+	create.Flags().StringVar(&role, "role", "user", "system role: user or admin")
+	create.Flags().StringArrayVar(&scannerPersonas, "scanner-persona", nil, "scanner access preset (repeatable): viewer, scanner_operator, release_approver, registry_administrator, supply_chain_administrator, or auditor")
 
 	var newRole string
 	setRole := &cobra.Command{
@@ -901,10 +911,28 @@ func newUserCmd() *cobra.Command {
 	}
 	setRole.Flags().StringVar(&newRole, "role", "", "new role: admin or user")
 
+	var accessPersonas []string
+	setScannerAccess := &cobra.Command{
+		Use:         "scanner-access <id>",
+		Short:       "Assign predefined scanner supply-chain personas",
+		Annotations: apiAnno("PUT", "/users/{}/scanner-supply-chain-access"),
+		Args:        cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if !cmd.Flags().Changed("persona") {
+				return fmt.Errorf("at least one --persona is required")
+			}
+			return runRender(cmd, "PUT", "/users/"+args[0]+"/scanner-supply-chain-access", map[string]any{
+				"personas": accessPersonas,
+			})
+		},
+	}
+	setScannerAccess.Flags().StringArrayVar(&accessPersonas, "persona", nil, "access preset (repeatable): viewer, scanner_operator, release_approver, registry_administrator, supply_chain_administrator, or auditor")
+
 	cmd.AddCommand(
 		listCmd("/users", "List users"),
 		create,
 		setRole,
+		setScannerAccess,
 		actionCmd("reset-mfa <id>", "Reset a user's two-factor auth", "POST", "/users/%s/mfa/reset"),
 		deleteCmd("delete <id>", "Delete a user", "/users/%s"),
 	)
@@ -1044,6 +1072,75 @@ func newSecretCmd() *cobra.Command {
 	return cmd
 }
 
+// --- source credentials -----------------------------------------------------
+
+func newCredentialCmd() *cobra.Command {
+	cmd := group("credential", "Manage source credentials")
+
+	var credentialType, name, secret, secretFile, username, knownHosts, knownHostsFile string
+	var allowedHosts []string
+	create := &cobra.Command{
+		Use:         "create",
+		Short:       "Register an encrypted source credential",
+		Annotations: apiAnno("POST", "/credentials"),
+		Args:        cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if credentialType == "" || name == "" || len(allowedHosts) == 0 {
+				return fmt.Errorf("--type, --name, and at least one --allowed-host are required")
+			}
+			if (secret == "") == (secretFile == "") {
+				return fmt.Errorf("exactly one of --secret or --secret-file is required")
+			}
+			secretValue := secret
+			if secretFile != "" {
+				raw, err := os.ReadFile(secretFile)
+				if err != nil {
+					return fmt.Errorf("read credential secret: %w", err)
+				}
+				secretValue = string(raw)
+			}
+			knownHostsValue := knownHosts
+			if knownHostsFile != "" {
+				if knownHosts != "" {
+					return fmt.Errorf("--known-hosts and --known-hosts-file are mutually exclusive")
+				}
+				raw, err := os.ReadFile(knownHostsFile)
+				if err != nil {
+					return fmt.Errorf("read known_hosts: %w", err)
+				}
+				knownHostsValue = string(raw)
+			}
+			body := map[string]any{
+				"type": credentialType, "name": name, "secret": secretValue,
+				"allowed_hosts": allowedHosts,
+			}
+			if username != "" {
+				body["username"] = username
+			}
+			if knownHostsValue != "" {
+				body["known_hosts"] = knownHostsValue
+			}
+			return runRender(cmd, "POST", "/credentials", body)
+		},
+	}
+	create.Flags().StringVar(&credentialType, "type", "", "credential type: git_https, ssh_private_key, ssh_password, github_token, or gitlab_token")
+	create.Flags().StringVar(&name, "name", "", "credential display name")
+	create.Flags().StringVar(&secret, "secret", "", "credential secret (prefer --secret-file to keep it out of shell history)")
+	create.Flags().StringVar(&secretFile, "secret-file", "", "path containing the credential secret")
+	create.Flags().StringVar(&username, "username", "", "username for git_https credentials")
+	create.Flags().StringVar(&knownHosts, "known-hosts", "", "known_hosts line(s) for SSH host-key verification")
+	create.Flags().StringVar(&knownHostsFile, "known-hosts-file", "", "path containing known_hosts line(s)")
+	create.Flags().StringSliceVar(&allowedHosts, "allowed-host", nil, "DNS host the credential may access (repeatable)")
+
+	cmd.AddCommand(
+		listCmd("/credentials", "List source credentials"),
+		getCmd("/credentials", "Get source credential metadata"),
+		create,
+		deleteCmd("delete <id>", "Delete a source credential", "/credentials/%s"),
+	)
+	return cmd
+}
+
 // --- plugins ----------------------------------------------------------------
 
 func newPluginCmd() *cobra.Command {
@@ -1149,6 +1246,20 @@ func newScannerCmd() *cobra.Command {
 			RunE: func(cmd *cobra.Command, _ []string) error { return runRender(cmd, "GET", "/scanners/config", nil) },
 		},
 		&cobra.Command{
+			Use: "capabilities", Short: "Show scanner runtime capabilities",
+			Annotations: apiAnno("GET", "/scanners/runtime-capabilities"), Args: cobra.NoArgs,
+			RunE: func(cmd *cobra.Command, _ []string) error {
+				return runRender(cmd, "GET", "/scanners/runtime-capabilities", nil)
+			},
+		},
+		&cobra.Command{
+			Use: "workers", Short: "List scan workers and lease health",
+			Annotations: apiAnno("GET", "/scanners/workers"), Args: cobra.NoArgs,
+			RunE: func(cmd *cobra.Command, _ []string) error {
+				return runRender(cmd, "GET", "/scanners/workers", nil)
+			},
+		},
+		&cobra.Command{
 			Use: "doctor", Short: "Run scanner diagnostics",
 			Annotations: apiAnno("POST", "/scanners/doctor"), Args: cobra.NoArgs,
 			RunE: func(cmd *cobra.Command, _ []string) error { return runRender(cmd, "POST", "/scanners/doctor", nil) },
@@ -1180,6 +1291,8 @@ func newScannerCmd() *cobra.Command {
 			},
 		},
 	)
+	cmd.AddCommand(newScannerCustomBuildCommands())
+	addScannerSupplyChainCommands(cmd)
 	return cmd
 }
 

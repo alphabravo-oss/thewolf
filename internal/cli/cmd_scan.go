@@ -3,6 +3,7 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/url"
 	"strconv"
 
@@ -47,6 +48,26 @@ func AddScanSubcommands(scan *cobra.Command) {
 	create.Flags().StringVar(&branch, "branch", "", "branch to scan")
 	create.Flags().StringSliceVar(&tools, "tools", nil, "explicit tool list")
 	create.Flags().BoolVar(&aiEnabled, "ai", false, "enable AI enrichment")
+
+	var rescanRelease, rescanReason, rescanKey string
+	releaseRescan := &cobra.Command{
+		Use:         "rescan-release <id>",
+		Short:       "Create a distinct scan pinned to a newly selected scanner release",
+		Annotations: apiAnno("POST", "/scans/{}/release-rescans"),
+		Args:        cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if rescanRelease == "" || rescanReason == "" {
+				return fmt.Errorf("--release and --reason are required")
+			}
+			return runScannerCommand(cmd, http.MethodPost,
+				"/scans/"+url.PathEscape(args[0])+"/release-rescans",
+				map[string]any{"release_id": rescanRelease, "reason": rescanReason},
+				rescanKey, "", false)
+		},
+	}
+	releaseRescan.Flags().StringVar(&rescanRelease, "release", "", "immutable scanner release ID")
+	releaseRescan.Flags().StringVar(&rescanReason, "reason", "", "auditable reason for changing release")
+	releaseRescan.Flags().StringVar(&rescanKey, "idempotency-key", "", "stable command key")
 
 	compare := &cobra.Command{
 		Use:         "compare <id> <other-id>",
@@ -189,6 +210,7 @@ func AddScanSubcommands(scan *cobra.Command) {
 		listCmd("/scans", "List scans"),
 		getCmd("/scans", "Get a scan"),
 		create,
+		releaseRescan,
 		preflight,
 		deleteCmd("cancel <id>", "Cancel a scan", "/scans/%s"),
 		cancelTool,
@@ -198,6 +220,7 @@ func AddScanSubcommands(scan *cobra.Command) {
 		subGetCmd("findings <id>", "List a scan's findings", "/scans/%s/findings"),
 		subGetCmd("stats <id>", "Finding statistics for a scan", "/scans/%s/findings/stats"),
 		subGetCmd("report <id>", "Get a scan's report", "/scans/%s/report"),
+		subGetCmd("result <id>", "Get the stable automation result for a scan", "/scans/%s/result"),
 		subGetCmd("manifest <id>", "Get a scan's manifest", "/scans/%s/manifest"),
 		subGetCmd("sarif <id>", "Get a scan's SARIF output", "/scans/%s/sarif"),
 		subGetCmd("coverage <id>", "Get a scan's coverage", "/scans/%s/coverage"),

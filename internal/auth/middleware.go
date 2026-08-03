@@ -22,10 +22,11 @@ const (
 // (Claims) plus the effective authorization scopes and, when the request
 // was authenticated by an API token rather than a JWT, the token's ID.
 type AuthInfo struct {
-	Claims    *Claims
-	Scopes    apikey.ScopeSet
-	TokenID   string // empty for JWT/UI sessions
-	SessionID string // empty unless authenticated by the wolf_token cookie
+	Claims          *Claims
+	Scopes          apikey.ScopeSet
+	ScannerPersonas []string
+	TokenID         string // empty for JWT/UI sessions
+	SessionID       string // empty unless authenticated by the wolf_token cookie
 }
 
 // ResolvedToken is the principal an APITokenResolver returns for a valid,
@@ -75,6 +76,7 @@ func Middleware(next http.Handler) http.Handler {
 		}
 
 		var info *AuthInfo
+		humanSession := false
 		if source == credentialCookie && LooksLikeSessionToken(cred) {
 			if resolveSession == nil {
 				writeAuthError(w, http.StatusUnauthorized, "unauthorized", "browser sessions are not enabled")
@@ -87,9 +89,9 @@ func Middleware(next http.Handler) http.Handler {
 			}
 			info = &AuthInfo{
 				Claims:    &Claims{UserID: session.UserID, Email: session.Email},
-				Scopes:    apikey.AdminAll(),
 				SessionID: session.SessionID,
 			}
+			humanSession = true
 		} else if apikey.LooksLikeToken(cred) {
 			if resolveAPIToken == nil {
 				writeAuthError(w, http.StatusUnauthorized, "unauthorized", "API tokens are not enabled")
@@ -111,16 +113,38 @@ func Middleware(next http.Handler) http.Handler {
 				writeAuthError(w, http.StatusUnauthorized, "unauthorized", "invalid token")
 				return
 			}
-			// JWT = the UI = fully trusted: every scope.
-			info = &AuthInfo{Claims: claims, Scopes: apikey.AdminAll()}
+			info = &AuthInfo{Claims: claims}
+			humanSession = true
 		}
 
 		// Resolve the principal's role per-request (admin | user) so role
 		// changes take effect immediately. Scopes gate API-token capability;
 		// Role gates the human admin surface (settings, user/node management,
 		// scanner image builds) and cross-owner modification.
-		if RoleResolver != nil && info.Claims != nil && info.Claims.UserID != "" {
+		var scannerPersonas []string
+		if humanSession && HumanAuthorizationResolver != nil && info.Claims != nil && info.Claims.UserID != "" {
+			resolved, err := HumanAuthorizationResolver(r.Context(), info.Claims.UserID)
+			if err != nil {
+				writeAuthError(w, http.StatusUnauthorized, "unauthorized", "current authorization could not be resolved")
+				return
+			}
+			info.Claims.Role = resolved.Role
+			scannerPersonas = resolved.ScannerPersonas
+		} else if humanSession && RoleResolver != nil && info.Claims != nil && info.Claims.UserID != "" {
 			info.Claims.Role = RoleResolver(r.Context(), info.Claims.UserID)
+		}
+		if humanSession {
+			if info.Claims != nil && info.Claims.IsAdmin() {
+				info.Scopes = apikey.AdminAll()
+				info.ScannerPersonas = []string{apikey.ScannerPersonaSupplyChainAdministrator}
+			} else {
+				_, personas, err := apikey.ScannerScopesForPersonas(scannerPersonas)
+				if err != nil {
+					personas = []string{apikey.ScannerPersonaViewer}
+				}
+				info.ScannerPersonas = personas
+				info.Scopes = apikey.UserSessionForScannerPersonas(personas)
+			}
 		}
 
 		ctx := context.WithValue(r.Context(), UserContextKey, info.Claims)
@@ -133,6 +157,16 @@ func Middleware(next http.Handler) http.Handler {
 // server wires it to the store at startup. Kept as a package var so the auth
 // package doesn't depend on the db package.
 var RoleResolver func(ctx context.Context, userID string) string
+
+type HumanAuthorization struct {
+	Role            string
+	ScannerPersonas []string
+}
+
+// HumanAuthorizationResolver reloads a human principal's role and scanner
+// personas for every request. This makes grants and revocations effective for
+// existing browser sessions without token rotation or re-login.
+var HumanAuthorizationResolver func(ctx context.Context, userID string) (HumanAuthorization, error)
 
 // RequireAdmin returns middleware that rejects the request with 403 unless the
 // authenticated principal has the admin role. Used for the settings/admin

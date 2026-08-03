@@ -90,6 +90,7 @@ func newFixerCmd() *cobra.Command {
 			return nil
 		},
 	}
+	cmd.AddCommand(newFixerQualificationCmd())
 	cmd.Flags().BoolVar(&once, "once", false, "process a single job then exit (k8s Job-per-task)")
 	cmd.Flags().StringVar(&workerID, "worker-id", "", "worker identity recorded in claimed_by (default hostname-pid)")
 	cmd.Flags().StringVar(&artifacts, "artifacts", "", "artifacts root for fix logs/diffs (default ~/.wolf/artifacts)")

@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -64,6 +65,38 @@ func TestMaxBodySize_NilBody(t *testing.T) {
 
 	if w.Code != http.StatusNoContent {
 		t.Errorf("expected status 204, got %d", w.Code)
+	}
+}
+
+func TestMaxBodySizeForRequest_UsesOnlyExplicitOverride(t *testing.T) {
+	handler := MaxBodySizeForRequest(5, func(r *http.Request) int64 {
+		if r.URL.Path == "/large-upload" {
+			return 20
+		}
+		return 0
+	})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			var tooLarge *http.MaxBytesError
+			if errors.As(err, &tooLarge) {
+				http.Error(w, "too large", http.StatusRequestEntityTooLarge)
+				return
+			}
+			t.Fatal(err)
+		}
+		_, _ = w.Write(body)
+	}))
+
+	allowed := httptest.NewRecorder()
+	handler.ServeHTTP(allowed, httptest.NewRequest(http.MethodPost, "/large-upload", strings.NewReader("1234567890")))
+	if allowed.Code != http.StatusOK || allowed.Body.String() != "1234567890" {
+		t.Fatalf("override response = %d %q", allowed.Code, allowed.Body.String())
+	}
+
+	rejected := httptest.NewRecorder()
+	handler.ServeHTTP(rejected, httptest.NewRequest(http.MethodPost, "/ordinary", strings.NewReader("1234567890")))
+	if rejected.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("default response = %d %q", rejected.Code, rejected.Body.String())
 	}
 }
 

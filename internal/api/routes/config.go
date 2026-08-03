@@ -32,11 +32,15 @@ type maskedSecret struct {
 	CreatedAt time.Time      `json:"created_at"`
 }
 
-func maskValue(v string) string {
-	if len(v) <= 4 {
-		return strings.Repeat("*", len(v))
-	}
-	return strings.Repeat("*", len(v)-4) + v[len(v)-4:]
+func maskValue(_ string) string {
+	return "********"
+}
+
+func maskedStoredSecret(_ models.Secret) string {
+	// Never derive presentation metadata from secret material. In particular,
+	// do not expose the value's length or suffix and do not honor legacy
+	// persisted masks that contained those details.
+	return maskValue("")
 }
 
 func ListSecrets(w http.ResponseWriter, r *http.Request) {
@@ -59,12 +63,11 @@ func ListSecrets(w http.ResponseWriter, r *http.Request) {
 
 	masked := make([]maskedSecret, len(secs))
 	for i, s := range secs {
-		decrypted, _ := secrets.Decrypt(s.EncryptedValue)
 		masked[i] = maskedSecret{
 			ID:        s.ID,
 			KeyType:   s.KeyType,
 			KeyName:   s.KeyName,
-			Value:     maskValue(decrypted),
+			Value:     maskedStoredSecret(s),
 			CreatedAt: s.CreatedAt,
 		}
 	}
