@@ -554,7 +554,7 @@ func normalizeBuildVariants(
 				return fmt.Errorf("fixer build variant %s has invalid image", name)
 			}
 			switch variant.AuthMode {
-			case "none", "api-key", "interactive-session":
+			case "none", "api-key", "interactive-session", "injected":
 			default:
 				return fmt.Errorf("fixer build variant %s has invalid auth mode", name)
 			}

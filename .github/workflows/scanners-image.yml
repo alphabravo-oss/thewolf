@@ -630,6 +630,20 @@ jobs:
             arch: arm64
             runner: ubuntu-24.04-arm
             auth_mode: interactive-session
+          - variant: opencode
+            dockerfile: fixer/Dockerfile.opencode
+            image: wolf-fixer-opencode
+            platform: linux/amd64
+            arch: amd64
+            runner: ubuntu-24.04
+            auth_mode: injected
+          - variant: opencode
+            dockerfile: fixer/Dockerfile.opencode
+            image: wolf-fixer-opencode
+            platform: linux/arm64
+            arch: arm64
+            runner: ubuntu-24.04-arm
+            auth_mode: injected
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
@@ -681,6 +695,8 @@ jobs:
           docker run --rm --platform "$PLATFORM" --network none \
             --entrypoint /usr/local/bin/wolf "$IMAGE" version
           case "$VARIANT" in
+            base|api)
+              ;;
             claude)
               docker run --rm --platform "$PLATFORM" --network none \
                 --entrypoint claude "$IMAGE" --version
@@ -688,6 +704,14 @@ jobs:
             codex)
               docker run --rm --platform "$PLATFORM" --network none \
                 --entrypoint codex "$IMAGE" --version
+              ;;
+            opencode)
+              docker run --rm --platform "$PLATFORM" --network none \
+                --entrypoint opencode "$IMAGE" --version
+              ;;
+            *)
+              echo "unsupported fixer quality variant: $VARIANT" >&2
+              exit 1
               ;;
           esac
           test "$(docker image inspect "$IMAGE" --format '{{.Config.User}}')" = wolf

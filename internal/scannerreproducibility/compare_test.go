@@ -140,7 +140,7 @@ func TestCompareNormalizesEvidenceOrdering(t *testing.T) {
 func TestValidateRequiresExactImageAndQualityCoverage(t *testing.T) {
 	evidence := testEvidence(t, "managed", "managed-factory", "a")
 	evidence.Release.Images = evidence.Release.Images[:7]
-	if err := Validate(evidence); err == nil || !strings.Contains(err.Error(), "eight-image") {
+	if err := Validate(evidence); err == nil || !strings.Contains(err.Error(), "nine-image") {
 		t.Fatalf("missing image error = %v", err)
 	}
 

@@ -34,14 +34,15 @@ var (
 )
 
 var expectedImages = map[string]imageExpectation{
-	"default":      {Kind: "scanner", Platforms: []string{"linux/amd64", "linux/arm64"}},
-	"jvm":          {Kind: "scanner", Platforms: []string{"linux/amd64", "linux/arm64"}},
-	"rust":         {Kind: "scanner", Platforms: []string{"linux/amd64", "linux/arm64"}},
-	"codeql":       {Kind: "scanner", Platforms: []string{"linux/amd64"}},
-	"fixer-base":   {Kind: "fixer", Platforms: []string{"linux/amd64", "linux/arm64"}},
-	"fixer-api":    {Kind: "fixer", Platforms: []string{"linux/amd64", "linux/arm64"}},
-	"fixer-claude": {Kind: "fixer", Platforms: []string{"linux/amd64", "linux/arm64"}},
-	"fixer-codex":  {Kind: "fixer", Platforms: []string{"linux/amd64", "linux/arm64"}},
+	"default":        {Kind: "scanner", Platforms: []string{"linux/amd64", "linux/arm64"}},
+	"jvm":            {Kind: "scanner", Platforms: []string{"linux/amd64", "linux/arm64"}},
+	"rust":           {Kind: "scanner", Platforms: []string{"linux/amd64", "linux/arm64"}},
+	"codeql":         {Kind: "scanner", Platforms: []string{"linux/amd64"}},
+	"fixer-base":     {Kind: "fixer", Platforms: []string{"linux/amd64", "linux/arm64"}},
+	"fixer-api":      {Kind: "fixer", Platforms: []string{"linux/amd64", "linux/arm64"}},
+	"fixer-claude":   {Kind: "fixer", Platforms: []string{"linux/amd64", "linux/arm64"}},
+	"fixer-codex":    {Kind: "fixer", Platforms: []string{"linux/amd64", "linux/arm64"}},
+	"fixer-opencode": {Kind: "fixer", Platforms: []string{"linux/amd64", "linux/arm64"}},
 }
 
 type imageExpectation struct {
@@ -295,8 +296,8 @@ func Validate(e Evidence) error {
 }
 
 func validateLockImageMatrix(lock scannerlock.Lock) error {
-	if len(lock.ReleaseInputs.Variants) != 4 || len(lock.ReleaseInputs.FixerVariants) != 4 {
-		return errors.New("embedded scanner lock does not declare the canonical eight-image matrix")
+	if len(lock.ReleaseInputs.Variants) != 4 || len(lock.ReleaseInputs.FixerVariants) != 5 {
+		return errors.New("embedded scanner lock does not declare the canonical nine-image matrix")
 	}
 	for variant, expected := range expectedImages {
 		var platforms []string
@@ -326,7 +327,7 @@ func validateReleaseImages(release ReleaseManifest) (map[string]ReleaseImage, er
 		!idPattern.MatchString(release.ReleaseID) || !validTimestamp(release.GeneratedAt) ||
 		strings.TrimSpace(release.Operation) == "" ||
 		release.AggregateSBOM.MediaType != "application/spdx+json" || !digestPattern.MatchString(release.AggregateSBOM.SHA256) {
-		return nil, errors.New("release must contain the canonical eight-image manifest")
+		return nil, errors.New("release must contain the canonical nine-image manifest")
 	}
 	if release.ApprovalReceiptDigest != nil && !digestPattern.MatchString(*release.ApprovalReceiptDigest) {
 		return nil, errors.New("release approval receipt digest is invalid")

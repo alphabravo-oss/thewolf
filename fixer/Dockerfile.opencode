@@ -40,6 +40,11 @@ LABEL dev.wolf.fixer.variant="opencode" \
 
 USER root
 
+# Validate the immutable npm integrity before installing the exact version.
+# Read package metadata instead of executing OpenCode's Bun payload here: the
+# latter is not reliable under qemu during legitimate cross-platform builds
+# (the same reasoning Dockerfile.claude documents for Claude's Bun payload).
+# Native-platform runtime smoke in CI still executes `opencode --version`.
 RUN set -eux; \
     actual_integrity="$(npm --cache /tmp/npm-cache view "opencode-ai@${OPENCODE_VERSION}" dist.integrity)"; \
     test "$actual_integrity" = "$OPENCODE_INTEGRITY"; \
@@ -55,7 +60,8 @@ RUN set -eux; \
       "opencode-ai@${OPENCODE_VERSION}"; \
     ln -s /opt/wolf/opencode/node_modules/.bin/opencode /usr/local/bin/opencode; \
     command -v opencode; \
-    opencode --version; \
+    installed_version="$(node -p "require('/opt/wolf/opencode/node_modules/opencode-ai/package.json').version")"; \
+    test "$installed_version" = "$OPENCODE_VERSION"; \
     rm -rf /tmp/npm-cache
 
 USER wolf
