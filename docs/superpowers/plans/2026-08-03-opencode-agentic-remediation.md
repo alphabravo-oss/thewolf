@@ -3190,6 +3190,19 @@ git commit -m "feat(remediate): scan delta with regression detection"
 
 ### Task 13: Push branch and open PR
 
+> **Scope amendment (human-directed):** land the **branch push only** for now.
+> PR creation is explicitly deferred — build `DeltaTable` (it is the PR body and
+> is worth having ready), push the branch, and record the delta on the session,
+> but do NOT call `pr.CreateGitHubPR` / `pr.CreateGitLabMR` yet. Leave
+> `Runner.land` structured so opening the PR is a later addition rather than a
+> rewrite: land should end at "branch pushed, delta recorded", with the PR call
+> as the obvious next line.
+>
+> Consequence for the session state machine: a completed session's terminal
+> state is reached with `BranchName` and the delta populated and `PRURL` empty.
+> `PRURL` staying empty is therefore a normal outcome, not an error — do not add
+> a check that treats it as one.
+
 **Files:**
 - Create: `internal/remediate/land.go`
 - Test: `internal/remediate/land_test.go`
