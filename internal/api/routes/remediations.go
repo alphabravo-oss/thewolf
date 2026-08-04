@@ -173,8 +173,8 @@ func CreateRemediation(w http.ResponseWriter, r *http.Request) {
 	// the request context — like executeScan, since the driver call behind
 	// it is container-backed and can run for minutes.
 	runner := RemediationRunner
-	dispatchRemediationPhase(sess.ID, func(ctx context.Context) error {
-		return runner.Run(ctx, sess.ID)
+	dispatchRemediationPhase(sess, func(ctx context.Context, owned *models.RemediationSession) error {
+		return runner.Run(ctx, owned.ID)
 	})
 
 	response.WriteJSON(w, http.StatusCreated, response.SuccessResponse{Data: sess})
@@ -308,8 +308,8 @@ func ApproveRemediationPlan(w http.ResponseWriter, r *http.Request) {
 		writeRemediationRunnerError(w, err)
 		return
 	}
-	dispatchRemediationPhase(id, func(ctx context.Context) error {
-		return runner.ExecutePlanPhase(ctx, sess)
+	dispatchRemediationPhase(sess, func(ctx context.Context, owned *models.RemediationSession) error {
+		return runner.ExecutePlanPhase(ctx, owned)
 	})
 	response.WriteJSON(w, http.StatusAccepted, response.SuccessResponse{Data: sess})
 }
@@ -403,8 +403,8 @@ func ApproveRemediationPatches(w http.ResponseWriter, r *http.Request) {
 		writeRemediationRunnerError(w, err)
 		return
 	}
-	dispatchRemediationPhase(id, func(ctx context.Context) error {
-		return runner.ExecuteLandingPhase(ctx, sess)
+	dispatchRemediationPhase(sess, func(ctx context.Context, owned *models.RemediationSession) error {
+		return runner.ExecuteLandingPhase(ctx, owned)
 	})
 	response.WriteJSON(w, http.StatusAccepted, response.SuccessResponse{Data: sess})
 }
@@ -565,25 +565,44 @@ func StreamRemediation(w http.ResponseWriter, r *http.Request) {
 }
 
 // dispatchRemediationPhase runs an already-claimed phase in the background,
-// detached from the request context — which is cancelled the instant the
-// handler returns — via context.Background(), and registered under
-// sessionID so CancelRemediation can reach it. Mirrors scans.go's
+// on its own copy of sess, and returns immediately.
+//
+// Ownership rule: once a phase is dispatched, the background goroutine owns
+// that copy of the session, and nothing else may read or write it. The
+// caller keeps its own sess pointer — e.g. to serialize it in the HTTP
+// response right after dispatching — and that pointer is never touched by
+// the goroutine, so no synchronization is needed between the two. This is
+// not just style: without the copy, a caller that both dispatches sess and
+// then reads it (as every call site here does, immediately, to write the
+// response) races the goroutine's first status transition against
+// response.WriteJSON's field-by-field JSON encoding of the same struct —
+// caught by `go test -race`, not by the plain suite.
+//
+// A shallow copy is sufficient: Runner.transition (session.go) replaces the
+// whole struct value (*sess = next) rather than mutating through nested
+// pointers, so the copy and the original never end up aliasing the same
+// memory.
+//
+// Detached from the request context — which is cancelled the instant the
+// handler returns — via context.Background(), and registered under the
+// session's ID so CancelRemediation can reach it. Mirrors scans.go's
 // executeScan dispatch and loops.go's activeLoopCtxs bookkeeping.
-func dispatchRemediationPhase(sessionID string, phase func(ctx context.Context) error) {
+func dispatchRemediationPhase(sess *models.RemediationSession, phase func(ctx context.Context, sess *models.RemediationSession) error) {
+	owned := *sess
 	ctx, cancel := context.WithCancel(context.Background())
 	activeRemediationsMu.Lock()
-	activeRemediationCtxs[sessionID] = cancel
+	activeRemediationCtxs[owned.ID] = cancel
 	activeRemediationsMu.Unlock()
 
 	go func() {
 		defer func() {
 			activeRemediationsMu.Lock()
-			delete(activeRemediationCtxs, sessionID)
+			delete(activeRemediationCtxs, owned.ID)
 			activeRemediationsMu.Unlock()
 			cancel()
 		}()
-		if err := phase(ctx); err != nil {
-			wolflog.L().Error().Err(err).Str("session", sessionID).Msg("remediation phase failed")
+		if err := phase(ctx, &owned); err != nil {
+			wolflog.L().Error().Err(err).Str("session", owned.ID).Msg("remediation phase failed")
 		}
 	}()
 }
