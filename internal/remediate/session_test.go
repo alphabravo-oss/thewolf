@@ -456,9 +456,12 @@ func TestRunPersistsEvents(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListRemediationEvents: %v", err)
 	}
-	// 2 fixture events, replayed once per phase (plan, then execute).
-	if len(stored) != 4 {
-		t.Fatalf("len(stored) = %d, want 4 (2 events x 2 phases)", len(stored))
+	// 2 fixture events, replayed once per phase (plan, then execute) = 4,
+	// plus the landing phase's own single landing.delta event now that a
+	// patch-ungated session chains straight into landing (Run: plan ->
+	// execute -> landing) instead of stopping at execute.
+	if len(stored) != 5 {
+		t.Fatalf("len(stored) = %d, want 5 (2 events x 2 phases, plus 1 landing.delta)", len(stored))
 	}
 	for i, e := range stored {
 		if e.Seq != i+1 {

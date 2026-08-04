@@ -169,7 +169,13 @@ func (r *Runner) Run(ctx context.Context, sessionID string) error {
 	if sess.PlanGateEnabled {
 		return r.transition(ctx, sess, models.RemediationPlanReview, "")
 	}
-	return r.runExecutePhase(ctx, sess)
+	if err := r.runExecutePhase(ctx, sess); err != nil {
+		return err
+	}
+	if sess.PatchGateEnabled {
+		return nil // stopped at patch_review; ApprovePatches resumes into landing later
+	}
+	return r.runLandingPhase(ctx, sess)
 }
 
 // runPlanPhase runs the read-only triage pass and saves its plan. The
@@ -325,7 +331,15 @@ func (r *Runner) savePlan(ctx context.Context, sess *models.RemediationSession, 
 // failSession call so a transient failure marks the session failed instead
 // of leaving it stuck in "executing" forever.
 //
-// Phase 3 replaces the completed branch below with apply/rescan/PR.
+// On success this function does NOT decide the session's final outcome: a
+// patch-gated session stops here (transitioned to patch_review, to be
+// resumed by ApprovePatches -> runLandingPhase later), but a patch-UNGATED
+// session must still land — push the branch and record the delta — before
+// it is done. That decision belongs to the caller (Run, ExecutePlanPhase),
+// the same way they already decide whether to chain into the execute phase
+// at all; this function returning nil on the ungated path (rather than
+// transitioning straight to Completed itself) is what leaves that decision
+// there instead of duplicating it here.
 func (r *Runner) runExecutePhase(ctx context.Context, sess *models.RemediationSession) (err error) {
 	if terr := r.transition(ctx, sess, models.RemediationExecuting, ""); terr != nil {
 		return terr
@@ -388,7 +402,13 @@ func (r *Runner) runExecutePhase(ctx context.Context, sess *models.RemediationSe
 	if sess.PatchGateEnabled {
 		return r.transition(ctx, sess, models.RemediationPatchReview, "")
 	}
-	return r.transition(ctx, sess, models.RemediationCompleted, "")
+	// Patch-ungated: leave sess in its current, still-committed "executing"
+	// status and return nil. The caller chains straight into
+	// runLandingPhase, whose own claim transition (to "applying") is the
+	// CAS that actually advances the session from here — see this
+	// function's doc comment for why deciding that is the caller's job, not
+	// this function's.
+	return nil
 }
 
 // ClaimPlanApproval performs ApprovePlan's synchronous portion — the
@@ -428,19 +448,33 @@ func (r *Runner) ClaimPlanApproval(ctx context.Context, sessionID, approverID st
 }
 
 // ExecutePlanPhase runs the execute phase for a session already claimed via
-// ClaimPlanApproval. Gated by driverPreflight for the same reason ApprovePlan
-// itself was: the kill switch and wall-clock bound must apply to the driver
-// call regardless of which path reaches it. Resumption reloads everything
-// from sess (passed in) and the store inside runExecutePhase; no in-memory
-// state survives from the original Run call, so this works identically
-// after a server restart.
+// ClaimPlanApproval, then — mirroring Run's own plan -> execute -> landing
+// chain — proceeds straight into landing when the patch gate is off. A
+// plan-gated, patch-ungated session (human approves the plan, then lets it
+// run unattended) reaches this function exactly once, via ApprovePlan, so
+// this is the only place besides Run that can decide to land it; without
+// this chain the session would complete the execute phase and just stop,
+// with no branch ever pushed. Gated by driverPreflight for the same reason
+// ApprovePlan itself was: the kill switch and wall-clock bound must apply to
+// the driver call regardless of which path reaches it — and, now, to the
+// chained landing push too, the same as Run's single preflight already
+// covers its own chained call. Resumption reloads everything from sess
+// (passed in) and the store inside runExecutePhase/runLandingPhase; no
+// in-memory state survives from the original Run call, so this works
+// identically after a server restart.
 func (r *Runner) ExecutePlanPhase(ctx context.Context, sess *models.RemediationSession) error {
 	ctx, cancel, err := r.driverPreflight(ctx)
 	if err != nil {
 		return err
 	}
 	defer cancel()
-	return r.runExecutePhase(ctx, sess)
+	if err := r.runExecutePhase(ctx, sess); err != nil {
+		return err
+	}
+	if sess.PatchGateEnabled {
+		return nil // stopped at patch_review; ApprovePatches resumes into landing later
+	}
+	return r.runLandingPhase(ctx, sess)
 }
 
 // ApprovePlan records approval on the plan row and resumes the session into

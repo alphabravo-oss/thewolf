@@ -13,7 +13,22 @@ import (
 )
 
 // credentialPattern matches token shapes that must never reach a PR body.
-var credentialPattern = regexp.MustCompile(`(?i)(dckr_pat|github_pat|ghp_|sk-|xox[baprs]-)[A-Za-z0-9_\-]+`)
+//
+// The prefix|suffix alternatives (docker/GitHub PAT, GitHub fine-grained
+// tokens gho_/ghp_/ghu_/ghs_/ghr_, OpenAI-shaped sk-, Slack xox[baprs]-) are
+// anchored on \b: without it, "sk-" also matches mid-word inside ordinary
+// English ("Disk-space", "Risk-based"), redacting real prose that happens to
+// contain the substring — a redactor eating real text is its own failure
+// mode, as bad as missing a real credential. AKIA/AIza/eyJ/PEM are fixed,
+// self-contained shapes (AWS access key ID, Google API key, JWT header
+// segment, PEM private key block) rather than prefix+generic-suffix, so they
+// are matched as complete patterns instead of being forced into that shape.
+var credentialPattern = regexp.MustCompile(`(?i)` +
+	`\b(?:dckr_pat|github_pat|gh[opusr]_|sk-|xox[baprs]-)[A-Za-z0-9_\-]+` +
+	`|\bAKIA[0-9A-Z]{16}\b` +
+	`|\bAIza[0-9A-Za-z\-_]{35}\b` +
+	`|\beyJ[A-Za-z0-9_\-]+\.` +
+	`|-----BEGIN [A-Z ]*PRIVATE KEY-----`)
 
 // redactCredentials replaces credential-shaped substrings. Finding titles are
 // derived from scanned source and can contain real secrets.

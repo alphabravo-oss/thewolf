@@ -51,6 +51,58 @@ func TestDeltaTableNeverRendersCredentials(t *testing.T) {
 	}
 }
 
+// redactCredentials must leave ordinary English alone. "sk-" is a credential
+// prefix (OpenAI-shaped keys), but it is also a substring of common
+// hyphenated words — a redactor that eats real text on a false positive is
+// its own failure mode, exactly as bad as missing a real credential.
+func TestRedactCredentialsPreservesOrdinaryText(t *testing.T) {
+	for _, s := range []string{
+		"Disk-space check",
+		"Risk-based auth missing",
+	} {
+		if got := redactCredentials(s); got != s {
+			t.Errorf("redactCredentials(%q) = %q, want unchanged — not a credential", s, got)
+		}
+	}
+}
+
+// redactCredentials must catch every credential shape findings realistically
+// carry: the original docker/GitHub/OpenAI/Slack prefixes, the full set of
+// GitHub token prefixes (gho_/ghu_/ghs_/ghr_, not just ghp_), AWS access key
+// IDs, Google API keys, JWTs, and PEM private key headers.
+func TestRedactCredentialsCatchesKnownShapes(t *testing.T) {
+	cases := []struct {
+		name  string
+		token string
+	}{
+		{"docker pat", "dckr_pat_abc123XYZ"},
+		{"github pat", "github_pat_11ABCDEFG0abcdefghijklmnop"},
+		{"github personal token", "ghp_abcdefghijklmnopqrstuvwxyz0123456789"},
+		{"github oauth token", "gho_abcdefghijklmnopqrstuvwxyz0123456789"},
+		{"github user-to-server token", "ghu_abcdefghijklmnopqrstuvwxyz0123456789"},
+		{"github server-to-server token", "ghs_abcdefghijklmnopqrstuvwxyz0123456789"},
+		{"github refresh token", "ghr_abcdefghijklmnopqrstuvwxyz0123456789"},
+		{"openai-shaped key", "sk-abcdefghijklmnopqrstuvwxyz0123456789"},
+		{"slack bot token", "xoxb-1234567890-abcdefghijklmnop"},
+		{"aws access key id", "AKIAIOSFODNN7EXAMPLE"},
+		{"google api key", "AIza" + strings.Repeat("A", 35)},
+		{"jwt", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."},
+		{"pem private key header", "-----BEGIN RSA PRIVATE KEY-----"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			input := "secret=" + tc.token
+			got := redactCredentials(input)
+			if strings.Contains(got, tc.token) {
+				t.Errorf("redactCredentials(%q) = %q, want %q redacted", input, got, tc.token)
+			}
+			if !strings.Contains(got, "[REDACTED]") {
+				t.Errorf("redactCredentials(%q) = %q, want it to contain [REDACTED]", input, got)
+			}
+		})
+	}
+}
+
 // findingsStore wraps a real db.Store and returns a fixed finding set from
 // ListFindingsByScan, so a test can give runLandingPhase real findings to
 // diff against without seeding a full scans-table row (ScanID here, "sc-1",
@@ -264,4 +316,84 @@ func TestApprovePatchesIsSafeUnderConcurrentApproval(t *testing.T) {
 	if got.Status != models.RemediationCompleted {
 		t.Fatalf("Status = %q, want %q (only the winner's landing run should have landed)", got.Status, models.RemediationCompleted)
 	}
+}
+
+// assertBranchPushed fails the test unless branch exists as a real ref in
+// the git repo at repoPath — the shared assertion for every test in this
+// file that proves a patch-UNGATED session still lands a branch. Before the
+// I1 fix, runExecutePhase transitioned a patch-ungated session straight to
+// Completed itself and never called runLandingPhase at all, so no branch was
+// ever pushed for ANY session with PatchGateEnabled == false — not just the
+// fully-yolo case, but a plan-gated/patch-ungated one too.
+func assertBranchPushed(t *testing.T, repoPath, branch string) {
+	t.Helper()
+	cmd := exec.Command("git", "rev-parse", "--verify", "refs/heads/"+branch)
+	cmd.Dir = repoPath
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("branch %s not found in origin %s: %v\n%s", branch, repoPath, err, out)
+	}
+}
+
+// TestRunYoloLandsBranch is I1's regression guard for the fully-yolo case
+// (both gates off): Run must chain plan -> execute -> landing all the way
+// through, not stop the moment the execute phase itself is done.
+func TestRunYoloLandsBranch(t *testing.T) {
+	store := newTestStore(t)
+	repoPath := seedRepo(t, store, "r-1")
+	sess := seedSession(t, store, func(s *models.RemediationSession) {
+		s.PlanGateEnabled = false
+		s.PatchGateEnabled = false
+	})
+	r := NewRunner(store, driver.NewFake([]meter.Event{{Type: "assistant"}}, fixturePlan()),
+		Config{Enabled: true, MaxTurns: 10, AllowYolo: true})
+
+	if err := r.Run(context.Background(), sess.ID); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	got, _ := store.GetRemediationSession(context.Background(), sess.ID)
+	if got.Status != models.RemediationCompleted {
+		t.Fatalf("Status = %q, want %q", got.Status, models.RemediationCompleted)
+	}
+	assertBranchPushed(t, repoPath, BranchName(sess.ID))
+}
+
+// TestApprovePlanChainsIntoLandingWhenPatchGateOff is I1's regression guard
+// for the second, wider case the reviewer found: a PLAN-gated but
+// PATCH-ungated session (a human approves the plan, then the rest runs
+// unattended) must also land a branch. Before the fix this session reached
+// runExecutePhase via ExecutePlanPhase, which itself transitioned straight
+// to Completed on the patch-ungated path — landing was unreachable from this
+// entry point specifically, not just from Run's yolo path.
+func TestApprovePlanChainsIntoLandingWhenPatchGateOff(t *testing.T) {
+	store := newTestStore(t)
+	repoPath := seedRepo(t, store, "r-1")
+	sess := seedSession(t, store, func(s *models.RemediationSession) {
+		s.PlanGateEnabled = true
+		s.PatchGateEnabled = false
+	})
+	cfg := Config{Enabled: true, MaxTurns: 10, AllowYolo: true}
+	planRunner := NewRunner(store, driver.NewFake([]meter.Event{{Type: "assistant"}}, fixturePlan()), cfg)
+
+	if err := planRunner.Run(context.Background(), sess.ID); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	held, _ := store.GetRemediationSession(context.Background(), sess.ID)
+	if held.Status != models.RemediationPlanReview {
+		t.Fatalf("Status = %q, want %q", held.Status, models.RemediationPlanReview)
+	}
+
+	resumeRunner := NewRunner(store, driver.NewFake([]meter.Event{{Type: "assistant"}}, fixturePlan()), cfg)
+	if err := resumeRunner.ApprovePlan(context.Background(), sess.ID, "u-approver"); err != nil {
+		t.Fatalf("ApprovePlan: %v", err)
+	}
+
+	got, _ := store.GetRemediationSession(context.Background(), sess.ID)
+	if got.Status != models.RemediationCompleted {
+		t.Fatalf("Status = %q, want %q (patch gate off must still reach landing)", got.Status, models.RemediationCompleted)
+	}
+	if got.PRURL != "" {
+		t.Errorf("PRURL = %q, want empty", got.PRURL)
+	}
+	assertBranchPushed(t, repoPath, BranchName(sess.ID))
 }

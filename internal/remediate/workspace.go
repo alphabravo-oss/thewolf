@@ -47,12 +47,23 @@ var stripAgentConfig = StripAgentConfig
 // inode the source repo shares. workspace.Prepare then worktrees off THAT
 // clone, never the user's own repository.
 //
-// Cloning also fixes retry: BranchName is deterministic, and
-// `git worktree add -b <branch>` fails outright once a branch of that name
-// already exists on the repo it runs against. A worktree taken directly off
-// the source repo would carry that branch forward from a prior attempt and
-// die here on the second try. A fresh clone has never seen that branch, so
-// every attempt starts clean.
+// Cloning also fixes retry for the `git worktree add -b <branch>` step:
+// BranchName is deterministic, and that command fails outright once a branch
+// of that name already exists on the repo it runs against. A worktree taken
+// directly off the source repo would carry that branch forward from a prior
+// attempt and die here on the second try. A fresh clone has never seen that
+// branch, so every attempt's worktree add starts clean.
+//
+// That guarantee stops at worktree add, though. Since Task 13, landing
+// pushes this same branch to the ORIGINAL source repo — see
+// cloneLocalForRemediation's own doc comment below — so a session retried
+// under its own BranchName would now collide one step later than before: not
+// at worktree add (a fresh clone still starts clean there), but at the push,
+// against the FIRST attempt's already-landed branch on the real origin — and
+// only after a full paid agentic run, not before one. Unreachable today (a
+// session ID, and so BranchName, is used exactly once; nothing in this
+// subsystem retries a session under its own ID), so this is documentation
+// only — flagged for whoever changes that.
 //
 // GitHub-sourced repos already clone-for-write inside workspace.Prepare, so
 // they pass through unchanged; sess.CloneRoot stays empty for them, since
