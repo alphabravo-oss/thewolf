@@ -692,8 +692,9 @@ func TestApprovePlanRejectsWhenDisabled(t *testing.T) {
 }
 
 // Same guard, patch side: ApprovePatches resumes into the landing phase,
-// which will itself call the driver once Task 13 lands, so it must honor the
-// kill switch too.
+// which pushes the approved branch — real, outward-facing work — so it must
+// honor the kill switch too, even though that work is a push rather than
+// another driver call.
 func TestApprovePatchesRejectsWhenDisabled(t *testing.T) {
 	store := newTestStore(t)
 	sess := seedSession(t, store, func(s *models.RemediationSession) {
@@ -771,9 +772,10 @@ func TestApprovePlanAppliesSessionTimeout(t *testing.T) {
 }
 
 // A patch-gated session holds at patch_review and, once approved, resumes
-// into the landing phase — a stub that transitions straight to completed
-// until Task 13 replaces it with apply/rescan/PR. Uses a fresh Runner for
-// the resume step, same reasoning as TestPlanGateHoldsThenResumes.
+// into the landing phase, which pushes the branch and records the delta
+// (see land_test.go for the assertions specific to that work) before
+// completing. Uses a fresh Runner for the resume step, same reasoning as
+// TestPlanGateHoldsThenResumes.
 func TestPatchGateHoldsThenResumes(t *testing.T) {
 	store := newTestStore(t)
 	sess := seedSession(t, store, func(s *models.RemediationSession) {

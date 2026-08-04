@@ -518,8 +518,12 @@ func (r *Runner) ClaimPatchesApproval(ctx context.Context, sessionID, approverID
 
 // ExecuteLandingPhase runs the landing phase for a session already claimed
 // via ClaimPatchesApproval. Gated by driverPreflight for the same reason as
-// ExecutePlanPhase: the landing phase will itself call the driver once
-// Task 13 replaces its stub body.
+// ExecutePlanPhase — the kill switch and wall-clock bound must apply
+// uniformly across every resume path — even though runLandingPhase itself
+// does not call r.driver: it pushes the approved branch and records the scan
+// delta (see Runner.land), not another agentic run. An admin who has
+// disabled remediation must still be able to stop a session from advancing
+// here, the same as any other phase.
 func (r *Runner) ExecuteLandingPhase(ctx context.Context, sess *models.RemediationSession) error {
 	ctx, cancel, err := r.driverPreflight(ctx)
 	if err != nil {
@@ -567,17 +571,37 @@ func (r *Runner) RejectPatches(ctx context.Context, sessionID, approverID, reaso
 	return nil
 }
 
-// runLandingPhase applies approved patches, rescans, and opens a PR. Until
-// Task 13 replaces this body, it does nothing but complete the session — but
-// it is already shaped like runPlanPhase/runExecutePhase (named return plus
-// a single defer routing any error through failSession) so Task 13 can drop
-// real work in here without restructuring how a failure gets handled.
+// runLandingPhase claims the session into its landing phase, then pushes the
+// approved branch and records the scan delta — see Runner.land's doc comment
+// for exactly where this intentionally stops (PR creation is deferred).
+//
+// Claims BEFORE registering the defer below, matching runPlanPhase/
+// runExecutePhase: real work (the push) now runs between the claim and the
+// final transition, so claiming first is what keeps a second, concurrent
+// caller (a double-clicked approve landing in the gap between
+// ClaimPatchesApproval's read and this function's own write) from also
+// passing that check and running this phase a second time — the same CAS
+// transition() itself protects everywhere else. Task 9's review caught this
+// function registering its defer before its only transition while the body
+// was still a no-op stub; that ordering would have reopened exactly that
+// race the moment real work landed here.
 func (r *Runner) runLandingPhase(ctx context.Context, sess *models.RemediationSession) (err error) {
+	if terr := r.transition(ctx, sess, models.RemediationApplying, ""); terr != nil {
+		return terr
+	}
 	defer func() {
 		if err != nil {
 			r.failSession(ctx, sess, models.RemediationFailed, err)
 		}
 	}()
+
+	d, derr := r.landingDelta(ctx, sess)
+	if derr != nil {
+		return derr
+	}
+	if lerr := r.land(ctx, sess, d); lerr != nil {
+		return lerr
+	}
 	return r.transition(ctx, sess, models.RemediationCompleted, "")
 }
 

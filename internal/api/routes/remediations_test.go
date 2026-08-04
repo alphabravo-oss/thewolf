@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -105,6 +108,50 @@ func (s *remediationServer) withScopes(t *testing.T, req *http.Request, scopes .
 		t.Fatalf("CreateAPIToken: %v", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+plaintext)
+}
+
+// newLandableWorktree creates a real, throwaway git repo with one commit
+// (the "origin" the landing phase pushes to) and a second checkout of it on
+// a fresh branch (the "worktree" a session's landing phase edits and pushes
+// from) — the minimum a real `git push -u origin <branch>` needs to succeed.
+//
+// The landing phase (Task 13) shells out to real git via pr.PushBranch, so
+// any test that drives a session all the way through ApprovePatches into
+// landing needs WorktreePath/BranchName pointing at something real, or the
+// push fails immediately with an invalid-refspec error (BranchName empty)
+// and the session ends up failed instead of completed. Every other
+// seedRemediationSession caller stops before landing (or bypasses it
+// entirely, e.g. plan_review) and does not need this.
+func newLandableWorktree(t *testing.T) (worktreePath, branch string) {
+	t.Helper()
+	run := func(dir string, args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		if dir != "" {
+			cmd.Dir = dir
+		}
+		cmd.Env = append(os.Environ(),
+			"GIT_AUTHOR_NAME=test", "GIT_AUTHOR_EMAIL=test@example.com",
+			"GIT_COMMITTER_NAME=test", "GIT_COMMITTER_EMAIL=test@example.com",
+		)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %s: %s: %v", strings.Join(args, " "), out, err)
+		}
+	}
+
+	origin := t.TempDir()
+	run(origin, "init", "-b", "main")
+	if err := os.WriteFile(filepath.Join(origin, "main.go"), []byte("package main\n\nfunc main() {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run(origin, "add", "-A")
+	run(origin, "commit", "-m", "initial")
+
+	worktreePath = filepath.Join(t.TempDir(), "worktree")
+	run("", "clone", origin, worktreePath)
+	branch = "wolf/remediation-test"
+	run(worktreePath, "checkout", "-b", branch)
+	return worktreePath, branch
 }
 
 // seedRemediationSession persists a session for the server's test user, with
@@ -379,8 +426,11 @@ func TestApprovePatchesRejectsWrongState(t *testing.T) {
 // state instead of asserting on the response body's status.
 func TestApprovePatchesHappyPathCompletes(t *testing.T) {
 	srv := newTestServer(t)
+	worktreePath, branch := newLandableWorktree(t)
 	id := seedRemediationSession(t, srv, func(s *models.RemediationSession) {
 		s.Status = models.RemediationPatchReview
+		s.WorktreePath = worktreePath
+		s.BranchName = branch
 	})
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/remediations/"+id+"/patches/approve", nil)
@@ -490,8 +540,11 @@ func TestDispatchedPhaseDoesNotShareSessionWithHandler(t *testing.T) {
 			settled:  models.RemediationCompleted,
 			seed: func(t *testing.T, s *remediationServer) string {
 				t.Helper()
+				worktreePath, branch := newLandableWorktree(t)
 				return seedRemediationSession(t, s, func(sess *models.RemediationSession) {
 					sess.Status = models.RemediationPatchReview
+					sess.WorktreePath = worktreePath
+					sess.BranchName = branch
 				})
 			},
 		},
