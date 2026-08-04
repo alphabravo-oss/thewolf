@@ -865,6 +865,88 @@ func AddLoopSubcommands(loop *cobra.Command) {
 	)
 }
 
+// --- remediations -------------------------------------------------------------
+
+// remediationRejectCmd builds a "<use> <id>" subcommand that POSTs a
+// formatted reject path with an optional --reason body — reason is not
+// required by the server, so an empty flag sends no body at all.
+func remediationRejectCmd(use, short, pathFmt string) *cobra.Command {
+	var reason string
+	c := &cobra.Command{
+		Use:         use,
+		Short:       short,
+		Args:        cobra.ExactArgs(1),
+		Annotations: apiAnno("POST", pathFmt),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			var body map[string]any
+			if reason != "" {
+				body = map[string]any{"reason": reason}
+			}
+			return runRender(cmd, "POST", fmt.Sprintf(pathFmt, args[0]), body)
+		},
+	}
+	c.Flags().StringVar(&reason, "reason", "", "reason recorded on the rejection")
+	return c
+}
+
+func newRemediationCmd() *cobra.Command {
+	cmd := group("remediation", "Manage agentic remediation sessions")
+
+	var repoID, scanID, provider, model string
+	var maxTurns int
+	var planGate, patchGate bool
+	create := &cobra.Command{
+		Use:         "create",
+		Short:       "Create an agentic remediation session",
+		Annotations: apiAnno("POST", "/remediations"),
+		Args:        cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if repoID == "" || scanID == "" {
+				return fmt.Errorf("--repo and --scan are required")
+			}
+			body := map[string]any{"repo_id": repoID, "scan_id": scanID}
+			if cmd.Flags().Changed("plan-gate") {
+				body["plan_gate_enabled"] = planGate
+			}
+			if cmd.Flags().Changed("patch-gate") {
+				body["patch_gate_enabled"] = patchGate
+			}
+			if provider != "" {
+				body["provider"] = provider
+			}
+			if model != "" {
+				body["model"] = model
+			}
+			if maxTurns > 0 {
+				body["max_turns"] = maxTurns
+			}
+			return runRender(cmd, "POST", "/remediations", body)
+		},
+	}
+	create.Flags().StringVar(&repoID, "repo", "", "repository ID (required)")
+	create.Flags().StringVar(&scanID, "scan", "", "scan ID to remediate (required)")
+	create.Flags().BoolVar(&planGate, "plan-gate", true, "hold for human approval after the triage plan")
+	create.Flags().BoolVar(&patchGate, "patch-gate", true, "hold for human approval before patches land")
+	create.Flags().StringVar(&provider, "provider", "", "AI provider override")
+	create.Flags().StringVar(&model, "model", "", "AI model override")
+	create.Flags().IntVar(&maxTurns, "max-turns", 0, "turn budget per phase")
+
+	cmd.AddCommand(
+		listCmd("/remediations", "List remediation sessions"),
+		getCmd("/remediations", "Get a remediation session"),
+		create,
+		subGetCmd("plan <id>", "Get a remediation session's triage plan", "/remediations/%s/plan"),
+		actionCmd("approve-plan <id>", "Approve a remediation session's plan and resume execution", "POST", "/remediations/%s/plan/approve"),
+		remediationRejectCmd("reject-plan <id>", "Reject a remediation session's plan and terminate it", "/remediations/%s/plan/reject"),
+		subGetCmd("patches <id>", "List a remediation session's patches", "/remediations/%s/patches"),
+		actionCmd("approve-patches <id>", "Approve a remediation session's patches and resume landing", "POST", "/remediations/%s/patches/approve"),
+		remediationRejectCmd("reject-patches <id>", "Reject a remediation session's patches and terminate it", "/remediations/%s/patches/reject"),
+		watchCmd("Stream a remediation session's events", "/remediations/%s/stream"),
+		deleteCmd("cancel <id>", "Cancel a remediation session", "/remediations/%s"),
+	)
+	return cmd
+}
+
 // --- users ------------------------------------------------------------------
 
 func newUserCmd() *cobra.Command {

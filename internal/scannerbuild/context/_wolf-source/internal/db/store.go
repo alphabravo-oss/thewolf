@@ -294,12 +294,32 @@ type Store interface {
 	CreateRemediationSession(ctx context.Context, session *models.RemediationSession) error
 	GetRemediationSession(ctx context.Context, id string) (*models.RemediationSession, error)
 	ListRemediationSessions(ctx context.Context, userID string) ([]models.RemediationSession, error)
+	// ListRemediationSessionsByStatus backs orphan recovery on startup: it
+	// finds every session left mid-run by a process that died, one status at
+	// a time, so the caller can fail each through the same CAS transition
+	// path as any other status change.
+	ListRemediationSessionsByStatus(ctx context.Context, status models.RemediationStatus) ([]models.RemediationSession, error)
 	UpdateRemediationSession(ctx context.Context, session *models.RemediationSession) error
+	// TransitionRemediationSession is UpdateRemediationSession's compare-
+	// and-swap counterpart: the write only lands if the session's current
+	// status still matches fromStatus, so two callers who both observed the
+	// same review state cannot both advance it. A mismatch surfaces as
+	// sql.ErrNoRows.
+	TransitionRemediationSession(ctx context.Context, session *models.RemediationSession, fromStatus models.RemediationStatus) error
 	SaveRemediationPlan(ctx context.Context, plan *models.RemediationPlan) error
 	// GetRemediationPlan returns the most recently saved plan for a session.
 	GetRemediationPlan(ctx context.Context, sessionID string) (*models.RemediationPlan, error)
 	ApproveRemediationPlan(ctx context.Context, sessionID, approverID string) error
+	// RejectRemediationPlan records a plan-gate rejection on the latest plan
+	// row (approved_by, approved_at, rejected_reason) — the write
+	// ApproveRemediationPlan has no counterpart for, so a rejection has
+	// somewhere to land beside the plan a human actually reviewed.
+	RejectRemediationPlan(ctx context.Context, sessionID, approverID, reason string) error
 	SaveRemediationPatches(ctx context.Context, sessionID string, patches []models.RemediationPatch) error
+	// ApproveRemediationPatches records who acted (approved or rejected) on
+	// a session's whole patch set, across every patch row belonging to it —
+	// the write ApprovePatches/RejectPatches otherwise silently discard.
+	ApproveRemediationPatches(ctx context.Context, sessionID, approverID string) error
 	ListRemediationPatches(ctx context.Context, sessionID string) ([]models.RemediationPatch, error)
 	// AppendRemediationEvent and ListRemediationEvents back the SSE replay
 	// stream: events are ordered by seq, never mutated once written.
