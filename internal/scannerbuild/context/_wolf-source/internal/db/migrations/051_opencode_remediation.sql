@@ -38,6 +38,20 @@ CREATE INDEX IF NOT EXISTS idx_remediation_sessions_user ON remediation_sessions
 CREATE INDEX IF NOT EXISTS idx_remediation_sessions_scan ON remediation_sessions(scan_id);
 CREATE INDEX IF NOT EXISTS idx_remediation_sessions_status ON remediation_sessions(status);
 
+-- clone_root deliberately appears twice: once above in CREATE TABLE (for a
+-- database created fresh, after this edit), and again here as a standalone
+-- ADD COLUMN (for a database that already ran an earlier version of this
+-- file). execAdditiveMigration (internal/db/sqlite.go) has no migration
+-- ledger — it re-runs every statement on every startup and swallows
+-- "duplicate column"/"already exists"/"duplicate key" errors. On an
+-- existing table, CREATE TABLE IF NOT EXISTS is a silent NO-OP, not an
+-- error the runner can swallow, so a table created before clone_root
+-- existed would never gain the column without this ALTER. On a fresh
+-- database this statement itself hits "duplicate column" (already created
+-- above) and is swallowed the normal way. Do not remove this as apparent
+-- redundancy — the CREATE TABLE copy alone does not reach a stale database.
+ALTER TABLE remediation_sessions ADD COLUMN clone_root TEXT NOT NULL DEFAULT '';
+
 CREATE TABLE IF NOT EXISTS remediation_plans (
     id TEXT PRIMARY KEY,
     session_id TEXT NOT NULL,

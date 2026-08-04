@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jmoiron/sqlx"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 )
@@ -364,5 +365,126 @@ func TestRemediationSessionBooleansRoundTripPostgres(t *testing.T) {
 	}
 	if !got.PlanGateEnabled || got.PatchGateEnabled {
 		t.Fatalf("gate booleans mismatch on Postgres: %+v", got)
+	}
+}
+
+// preCloneRootMigration051 is migration 051 as of commit 5afc244 — the
+// state of every database that ran this server BEFORE clone_root was added.
+// A literal copy, not derived from the current file: deriving it would make
+// this test track future edits instead of pinning the historical shape it
+// exists to reproduce.
+const preCloneRootMigration051 = `
+CREATE TABLE IF NOT EXISTS remediation_sessions (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    repo_id TEXT NOT NULL,
+    scan_id TEXT NOT NULL,
+    loop_id TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    plan_gate_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    patch_gate_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    max_turns INTEGER NOT NULL DEFAULT 20,
+    turns_used_plan INTEGER NOT NULL DEFAULT 0,
+    turns_used_execute INTEGER NOT NULL DEFAULT 0,
+    tokens_used INTEGER NOT NULL DEFAULT 0,
+    cost_used REAL NOT NULL DEFAULT 0,
+    provider TEXT NOT NULL DEFAULT '',
+    model TEXT NOT NULL DEFAULT '',
+    branch_name TEXT NOT NULL DEFAULT '',
+    worktree_path TEXT NOT NULL DEFAULT '',
+    pr_url TEXT NOT NULL DEFAULT '',
+    failure_reason TEXT NOT NULL DEFAULT '',
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP NOT NULL,
+    started_at TIMESTAMP,
+    completed_at TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_remediation_sessions_user ON remediation_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_remediation_sessions_scan ON remediation_sessions(scan_id);
+CREATE INDEX IF NOT EXISTS idx_remediation_sessions_status ON remediation_sessions(status);
+
+CREATE TABLE IF NOT EXISTS remediation_plans (
+    id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    plan_json TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL,
+    approved_by TEXT NOT NULL DEFAULT '',
+    approved_at TIMESTAMP,
+    rejected_reason TEXT NOT NULL DEFAULT ''
+);
+
+CREATE INDEX IF NOT EXISTS idx_remediation_plans_session ON remediation_plans(session_id);
+
+CREATE TABLE IF NOT EXISTS remediation_patches (
+    id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    commit_sha TEXT NOT NULL,
+    files_changed TEXT NOT NULL DEFAULT '',
+    finding_ids TEXT NOT NULL DEFAULT '',
+    message TEXT NOT NULL DEFAULT '',
+    created_at TIMESTAMP NOT NULL,
+    approved_by TEXT NOT NULL DEFAULT '',
+    approved_at TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_remediation_patches_session ON remediation_patches(session_id);
+
+CREATE TABLE IF NOT EXISTS remediation_events (
+    id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    seq INTEGER NOT NULL,
+    type TEXT NOT NULL,
+    payload_json TEXT NOT NULL DEFAULT '',
+    created_at TIMESTAMP NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_remediation_events_session_seq ON remediation_events(session_id, seq);
+`
+
+// TestMigration051AddsCloneRootToAnAlreadyMigratedDatabase reproduces the
+// exact defect the reviewer flagged: execAdditiveMigration has no migration
+// ledger, so it re-executes every statement on every startup rather than
+// tracking which version last ran. On a database that already has
+// remediation_sessions, CREATE TABLE IF NOT EXISTS is a silent NO-OP — not
+// an error the swallow-list can recognize — so simply adding clone_root
+// inside that CREATE TABLE would never reach a database that ran an earlier
+// version of this migration. This builds exactly that database (via the
+// pinned pre-fix SQL above, not the current file, so this test doesn't
+// silently stop testing anything the next time 051 changes), then runs the
+// CURRENT migration051SQL against it through the real execAdditiveMigration
+// path Migrate() itself uses, and asserts clone_root actually appears.
+func TestMigration051AddsCloneRootToAnAlreadyMigratedDatabase(t *testing.T) {
+	db, err := sqlx.Open("sqlite3", sqliteConnectionDSN(":memory:"))
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	db.SetMaxOpenConns(1) // :memory: only persists for one connection
+	t.Cleanup(func() { _ = db.Close() })
+
+	if _, err := db.Exec(preCloneRootMigration051); err != nil {
+		t.Fatalf("apply pre-clone_root migration 051: %v", err)
+	}
+
+	hasColumn := func() bool {
+		t.Helper()
+		var n int
+		if err := db.Get(&n,
+			"SELECT COUNT(*) FROM pragma_table_info('remediation_sessions') WHERE name = 'clone_root'"); err != nil {
+			t.Fatalf("check clone_root column: %v", err)
+		}
+		return n == 1
+	}
+	if hasColumn() {
+		t.Fatal("test setup invalid: clone_root already present before applying the current migration")
+	}
+
+	// The real path Migrate() uses for this migration.
+	if err := execAdditiveMigration(db, migration051SQL); err != nil {
+		t.Fatalf("apply current migration 051 to an already-migrated database: %v", err)
+	}
+
+	if !hasColumn() {
+		t.Fatal("clone_root is still missing after running the current migration against a database that already had remediation_sessions — CREATE TABLE IF NOT EXISTS alone cannot reach it")
 	}
 }
