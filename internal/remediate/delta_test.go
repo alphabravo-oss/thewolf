@@ -42,3 +42,14 @@ func TestNotRegressedWhenNetBetter(t *testing.T) {
 		t.Fatal("Regressed() = true, want false — net improvement")
 	}
 }
+
+func TestNotRegressedWhenNeutral(t *testing.T) {
+	before := []models.Finding{f("a"), f("b")}
+	after := []models.Finding{f("b"), f("c")}
+
+	// Fixed=1 (a), Remaining=1 (b), New=1 (c): trading one finding for another.
+	// Not regressed because we fixed as many as we added.
+	if ComputeDelta(before, after).Regressed() {
+		t.Fatal("Regressed() = true, want false — neutral trade (fixed=new)")
+	}
+}

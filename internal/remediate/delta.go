@@ -37,8 +37,10 @@ func ComputeDelta(before, after []models.Finding) Delta {
 
 // Regressed reports whether remediation left more findings than it started
 // with. A regressed session still completes, but is flagged and never
-// auto-merged. The comparison (Remaining+New > Fixed+Remaining) reduces to
-// (New > Fixed), checking whether findings added exceed findings fixed.
+// auto-merged. The redundant form (Remaining+New > Fixed+Remaining vs the
+// reduced New > Fixed) is kept deliberate: it maps directly to the invariants
+// (after = Remaining+New; before = Fixed+Remaining), letting readers verify
+// the semantics by substitution rather than algebra.
 func (d Delta) Regressed() bool {
 	return len(d.Remaining)+len(d.New) > len(d.Fixed)+len(d.Remaining)
 }
