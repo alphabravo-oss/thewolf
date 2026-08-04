@@ -3188,6 +3188,58 @@ git commit -m "feat(remediate): scan delta with regression detection"
 
 ---
 
+### Task 12a: Rescan the branch and key the delta on fingerprints
+
+**Plan gap, found in Task 13's review.** The design spec's architecture is
+`rescan branch → delta`, but no task ever commissioned the rescan. Tasks 12 and
+13 compute and render a delta; nothing re-runs the scanner against the
+remediation branch. So `Fixed` currently records **what the agent claimed to
+fix**, not what a rescan verified; `New` is always empty; and `Regressed()` —
+the check that exists to catch a run making things worse — can never fire. The
+delta table is decorative until this lands.
+
+**This task MUST also re-key `ComputeDelta`, or the rescan produces confident
+garbage.** `ComputeDelta` diffs on `models.Finding.ID`, a per-row UUID scoped to
+one scan (`internal/models/finding.go`). A rescan writes new rows with new
+UUIDs, so a naive `ComputeDelta(baseline, rescan)` classifies 100% of baseline
+as `Fixed` and 100% of the rescan as `New`, and `Regressed()` fires on
+essentially every run — the exact inverse of today's never-fires, and far worse
+because it looks like a working signal.
+
+The cross-scan identity already exists on `models.Finding` and is unused here:
+`StableFingerprint`, `LocationFingerprint`, `SemanticFingerprint`,
+`EvidenceFingerprint`, built by `internal/finding/identity`. Key the diff on one
+of those — `StableFingerprint` unless the identity package's own docs argue
+otherwise — either by changing `ComputeDelta` or by adding a fingerprint-keyed
+variant and leaving the ID-keyed one for same-scan use.
+
+**Where it goes:** inside `runLandingPhase`, between the claim and completion —
+`patch_review → applying` (push) → `rescanning` → compute delta → `completed`.
+The `rescanning` status and its crash-recovery sweep already exist
+(`RecoverOrphanSessions`' stuck list), so this needs no new state, no new API
+surface, and no new session field.
+
+**Ordering:** rescan *before* the push is wrong; rescan after the claim and
+before completion, with the push staying unconditional. `Regressed()`'s contract
+is that a regressed session "still completes, but is flagged and never
+auto-merged" — so the branch is still pushed, the delta is simply real by the
+time it is recorded.
+
+**Entry point:** `scanrunner.Run(ctx, RunConfig)` at
+`internal/scan/runner/runner.go`, pointed at `sess.WorktreePath`, using the
+baseline scan's tool selection so the two scans are comparable.
+
+**Files:**
+- Modify: `internal/remediate/delta.go`, `internal/remediate/land.go`, `internal/remediate/session.go`
+- Test: `internal/remediate/delta_test.go`, `internal/remediate/land_test.go`
+
+**Tests that must exist:**
+- A fingerprint-keyed delta across two scans with *different* row UUIDs but overlapping fingerprints, asserting the same finding is `Remaining` rather than `Fixed`+`New`. This is the test that would have caught the re-keying bug; write it first and confirm it fails against the ID-keyed implementation.
+- `Regressed()` firing when the rescan genuinely returns more findings than the baseline.
+- A rescan failure marking the session failed without leaving it non-terminal.
+
+---
+
 ### Task 13: Push branch and open PR
 
 > **Scope amendment (human-directed):** land the **branch push only** for now.
