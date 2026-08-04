@@ -163,6 +163,19 @@ func (r *Runner) Run(ctx context.Context, sessionID string) error {
 		return errors.New("gates disabled but WOLF_REMEDIATE_ALLOW_YOLO=false")
 	}
 
+	// prepareWorkspace's own defer already fails the session (with a clear
+	// reason) on any error, so Run just propagates it. The returned
+	// workspace is intentionally not torn down here: a gated session pauses
+	// at plan_review/patch_review for a human and resumes in a LATER Runner
+	// (ApprovePlan/ApprovePatches, Task 10b's async dispatch), reusing the
+	// same worktree/branch all the way through to landing (push + PR,
+	// Task 13) — the first point nothing still needs it. Cleaning up here
+	// would delete a live workspace out from under a session that has not
+	// finished with it.
+	if _, err := r.prepareWorkspace(ctx, sess); err != nil {
+		return err
+	}
+
 	if err := r.runPlanPhase(ctx, sess); err != nil {
 		return err
 	}
@@ -635,6 +648,36 @@ func (r *Runner) lastEventSeq(ctx context.Context, sessionID string) int {
 		return 0
 	}
 	return events[len(events)-1].Seq
+}
+
+// recordEvent appends a single audit event outside the driver's own replayed
+// stream — e.g. a worktree hygiene action taken before the driver is ever
+// called. It shares eventSink's session-scoped sequencing (lastEventSeq), so
+// the two interleave into one ordered timeline regardless of call order, and
+// its log-don't-strand handling of a store failure: one best-effort audit
+// write must never abort a phase that has otherwise made real progress.
+func (r *Runner) recordEvent(ctx context.Context, sessionID, eventType, detail string) {
+	seq := r.lastEventSeq(ctx, sessionID) + 1
+	payload, merr := json.Marshal(struct {
+		Path string `json:"path"`
+	}{Path: detail})
+	if merr != nil {
+		wolflog.L().Error().Err(merr).
+			Str("session", sessionID).Int("seq", seq).
+			Msg("marshal remediation event payload")
+	}
+	if err := r.store.AppendRemediationEvent(ctx, &models.RemediationEvent{
+		ID:          fmt.Sprintf("%s-%d", sessionID, seq),
+		SessionID:   sessionID,
+		Seq:         seq,
+		Type:        eventType,
+		PayloadJSON: string(payload),
+		CreatedAt:   time.Now(),
+	}); err != nil {
+		wolflog.L().Error().Err(err).
+			Str("session", sessionID).Int("seq", seq).
+			Msg("persist remediation event")
+	}
 }
 
 // transition moves sess to a new status, guarded by a compare-and-swap on

@@ -4,6 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -29,10 +33,84 @@ func newTestStore(t *testing.T) db.Store {
 	return store
 }
 
+// newLocalRepoFixture creates a real, throwaway git repo with one commit and
+// returns its path. prepareWorkspace shells out to real git (clone,
+// worktree) for a local repo, so tests exercise the real path rather than
+// stubbing it — the same convention internal/fix/workspace's own tests use.
+func newLocalRepoFixture(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	run := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		cmd.Env = append(os.Environ(),
+			"GIT_AUTHOR_NAME=test", "GIT_AUTHOR_EMAIL=test@example.com",
+			"GIT_COMMITTER_NAME=test", "GIT_COMMITTER_EMAIL=test@example.com",
+		)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %s: %s: %v", strings.Join(args, " "), out, err)
+		}
+	}
+	run("init", "-b", "main")
+	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main\n\nfunc main() {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run("add", "-A")
+	run("commit", "-m", "initial")
+	return dir
+}
+
+// seedRepo persists a local repo row for repoID, backed by a real throwaway
+// git fixture, so prepareWorkspace's GetRepoByID + clone has something real
+// to work with. repos.user_id is a foreign key, so this creates the owning
+// user first (also idempotent). Idempotent per store overall: several tests
+// seed more than one session against the same default RepoID ("r-1"), and a
+// second insert would otherwise collide on the primary key. Returns the
+// fixture's path for tests that need to assert something about the SOURCE
+// repo directly.
+func seedRepo(t *testing.T, store db.Store, repoID string) string {
+	t.Helper()
+	if existing, err := store.GetRepoByID(context.Background(), repoID); err == nil {
+		return existing.SourcePath
+	}
+	if _, err := store.GetUserByID(context.Background(), "u-1"); err != nil {
+		if cerr := store.CreateUser(context.Background(), &models.User{
+			ID:    "u-1",
+			Email: "remediate-fixture@example.com",
+		}); cerr != nil {
+			t.Fatalf("CreateUser: %v", cerr)
+		}
+	}
+	path := newLocalRepoFixture(t)
+	if err := store.CreateRepo(context.Background(), &models.Repo{
+		ID:         repoID,
+		UserID:     "u-1",
+		Name:       "fixture-repo",
+		SourceType: models.SourceTypeLocal,
+		SourcePath: path,
+	}); err != nil {
+		t.Fatalf("CreateRepo: %v", err)
+	}
+	return path
+}
+
 // seedSession creates a session with both gates on and a real turn budget,
-// then lets the caller adjust it before it's persisted.
+// backed by a real local repo fixture (see seedRepo), then lets the caller
+// adjust it before it's persisted.
+//
+// TMPDIR is redirected into a directory t.TempDir() owns for the duration of
+// the test: prepareWorkspace's scratch clone and workspace.Prepare's own
+// worktree both land under the OS temp dir (os.MkdirTemp("", ...)) rather
+// than anywhere test-cleaned, and production intentionally never cleans them
+// up mid-session (see Run's comment on why) — without this redirection every
+// test in this file that reaches prepareWorkspace would leak two real
+// directories per run. None of these tests call t.Parallel, so t.Setenv is
+// safe here.
 func seedSession(t *testing.T, store db.Store, mutate func(*models.RemediationSession)) *models.RemediationSession {
 	t.Helper()
+	t.Setenv("TMPDIR", t.TempDir())
+	seedRepo(t, store, "r-1")
 	sess := &models.RemediationSession{
 		ID:               uuid.NewString(),
 		UserID:           "u-1",
