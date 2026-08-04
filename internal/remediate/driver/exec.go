@@ -315,11 +315,16 @@ func (d *execDriver) Plan(ctx context.Context, req PlanRequest) (*plan.Plan, met
 	}
 	defer cleanup()
 
+	prompt := triagePrompt(req.Findings)
+	if req.RepairHint != "" {
+		prompt += "\n\n" + req.RepairHint
+	}
+
 	m := meter.NewTurns(req.MaxTurns)
 	args, env, containerName, err := d.buildInvocation(ExecuteRequest{
 		WorktreePath: req.WorktreePath, AuthContent: req.AuthContent,
 		Provider: req.Provider, Model: req.Model,
-	}, configPath, triagePrompt(req.Findings))
+	}, configPath, prompt)
 	if err != nil {
 		return nil, meter.Usage{}, err
 	}
@@ -330,7 +335,7 @@ func (d *execDriver) Plan(ctx context.Context, req PlanRequest) (*plan.Plan, met
 	}
 	p, err := plan.Parse(lastNonEmptyLine(lastText))
 	if err != nil {
-		return nil, m.Usage(), fmt.Errorf("parse plan: %w", err)
+		return nil, m.Usage(), fmt.Errorf("%w: %w", ErrUnparseablePlan, err)
 	}
 	return p, m.Usage(), nil
 }

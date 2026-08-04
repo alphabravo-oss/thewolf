@@ -15,6 +15,14 @@ import (
 // producing a usable result.
 var ErrBudgetExhausted = errors.New("turn budget exhausted")
 
+// ErrUnparseablePlan is wrapped into Plan's error when the agent's output
+// could not be parsed as a plan.Plan — the agent ran, spent turns, and
+// produced text, but that text was not the JSON object triagePrompt asked
+// for. Session's retry logic checks for this via errors.Is rather than
+// matching on the error string, so it does not silently stop retrying if the
+// wrapped message ever changes wording.
+var ErrUnparseablePlan = errors.New("unparseable plan")
+
 // PlanRequest is the read-only triage run.
 type PlanRequest struct {
 	WorktreePath string
@@ -25,6 +33,11 @@ type PlanRequest struct {
 	// AuthContent is the OPENCODE_AUTH_CONTENT payload. It is passed by
 	// environment only — never as a command-line argument.
 	AuthContent string
+	// RepairHint, when non-empty, is appended to the triage prompt — a
+	// second attempt after the agent's first response failed to parse as a
+	// plan, telling it plainly what went wrong instead of silently repeating
+	// the exact same prompt and risking the exact same malformed output.
+	RepairHint string
 	// OnEvent, when set, receives every decoded event for persistence and SSE.
 	OnEvent func(meter.Event)
 }

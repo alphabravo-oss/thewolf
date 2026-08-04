@@ -3,6 +3,7 @@ package remediate
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -51,6 +52,17 @@ func seedSession(t *testing.T, store db.Store, mutate func(*models.RemediationSe
 		t.Fatalf("CreateRemediationSession: %v", err)
 	}
 	return sess
+}
+
+// seedSessionWithStatus creates a session already sitting in status,
+// bypassing whatever phases would normally reach it — for tests that need a
+// session at a specific state without running a Runner to get there (e.g.
+// simulating what a crashed process left behind).
+func seedSessionWithStatus(t *testing.T, store db.Store, status models.RemediationStatus) *models.RemediationSession {
+	t.Helper()
+	return seedSession(t, store, func(s *models.RemediationSession) {
+		s.Status = status
+	})
 }
 
 func listPatches(t *testing.T, store db.Store, sessionID string) []models.RemediationPatch {
@@ -807,5 +819,110 @@ func TestRejectPatchesRejectsWrongState(t *testing.T) {
 	}
 	if !errors.Is(err, ErrWrongSessionState) {
 		t.Errorf("err = %v, want errors.Is(err, ErrWrongSessionState)", err)
+	}
+}
+
+// A malformed plan is retried once with a repair prompt; a second failure
+// fails the session. PlanErr is wrapped around driver.ErrUnparseablePlan
+// (not a bare string) because the retry in runPlanPhase distinguishes this
+// case via errors.Is, not by matching "parse plan" in the error text — see
+// driver.ErrUnparseablePlan's doc comment.
+func TestMalformedPlanRetriesOnce(t *testing.T) {
+	store := newTestStore(t)
+	sess := seedSession(t, store, func(s *models.RemediationSession) {
+		s.PlanGateEnabled = false
+		s.PatchGateEnabled = false
+	})
+	d := driver.NewFake([]meter.Event{{Type: "assistant"}}, nil)
+	d.PlanErr = fmt.Errorf("%w: unexpected end of JSON input", driver.ErrUnparseablePlan)
+
+	r := NewRunner(store, d, Config{Enabled: true, MaxTurns: 10, AllowYolo: true})
+	if err := r.Run(context.Background(), sess.ID); err == nil {
+		t.Fatal("Run succeeded with an unparseable plan, want error")
+	}
+	if d.PlanCalls != 2 {
+		t.Errorf("Plan called %d times, want 2 (one retry)", d.PlanCalls)
+	}
+	got, _ := store.GetRemediationSession(context.Background(), sess.ID)
+	if got.Status != models.RemediationFailed {
+		t.Errorf("Status = %q, want %q", got.Status, models.RemediationFailed)
+	}
+}
+
+// Sessions mid-run when the process died are failed on startup; sessions
+// holding no process (a review gate — see the package doc's "nothing held
+// open across an approval gate" invariant) are left alone.
+func TestRecoverOrphanSessions(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+	orphaned := seedSessionWithStatus(t, store, models.RemediationExecuting)
+	planning := seedSessionWithStatus(t, store, models.RemediationPlanning)
+	awaiting := seedSessionWithStatus(t, store, models.RemediationPlanReview)
+
+	if err := RecoverOrphanSessions(ctx, store); err != nil {
+		t.Fatalf("RecoverOrphanSessions: %v", err)
+	}
+
+	for _, id := range []string{orphaned.ID, planning.ID} {
+		got, _ := store.GetRemediationSession(ctx, id)
+		if got.Status != models.RemediationFailed {
+			t.Errorf("session %s = %q, want %q", id, got.Status, models.RemediationFailed)
+		}
+	}
+	got, _ := store.GetRemediationSession(ctx, awaiting.ID)
+	if got.Status != models.RemediationPlanReview {
+		t.Errorf("gated session was recovered: %q — it holds no process", got.Status)
+	}
+}
+
+// raceDuringRecoveryStore wraps a real db.Store and, the moment
+// ListRemediationSessionsByStatus hands back its snapshot, moves every
+// listed row to plan_review via a direct CAS transition — simulating a
+// concurrent actor (e.g. the session's own Run finishing, or an approval)
+// advancing the row in the gap between RecoverOrphanSessions's read and its
+// own write. Only the first call acts, so recovery's second stuck status in
+// the loop is unaffected.
+type raceDuringRecoveryStore struct {
+	db.Store
+	moved bool
+}
+
+func (s *raceDuringRecoveryStore) ListRemediationSessionsByStatus(ctx context.Context, status models.RemediationStatus) ([]models.RemediationSession, error) {
+	sessions, err := s.Store.ListRemediationSessionsByStatus(ctx, status)
+	// RecoverOrphanSessions queries several statuses in turn; most of those
+	// calls return nothing in this test, and only the batch actually holding
+	// the seeded session should trigger the simulated race, or it fires (and
+	// latches moved) on an earlier, empty status and never actually races
+	// anything.
+	if err != nil || s.moved || len(sessions) == 0 {
+		return sessions, err
+	}
+	s.moved = true
+	for i := range sessions {
+		next := sessions[i]
+		next.Status = models.RemediationPlanReview
+		if terr := s.Store.TransitionRemediationSession(ctx, &next, status); terr != nil {
+			return nil, terr
+		}
+	}
+	return sessions, nil
+}
+
+// RecoverOrphanSessions must lose a compare-and-swap race the same way
+// transition() does: when a session advances past the status it was listed
+// under before recovery's own write lands, that write must not clobber
+// wherever the row actually ended up.
+func TestRecoverOrphanSessionsLosesRaceToConcurrentTransition(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+	sess := seedSessionWithStatus(t, store, models.RemediationExecuting)
+
+	racing := &raceDuringRecoveryStore{Store: store}
+	if err := RecoverOrphanSessions(ctx, racing); err != nil {
+		t.Fatalf("RecoverOrphanSessions: %v", err)
+	}
+	got, _ := store.GetRemediationSession(ctx, sess.ID)
+	if got.Status != models.RemediationPlanReview {
+		t.Errorf("Status = %q, want %q (recovery must not clobber a session that moved on)", got.Status, models.RemediationPlanReview)
 	}
 }

@@ -75,6 +75,53 @@ func (r *Runner) driverPreflight(ctx context.Context) (context.Context, context.
 	return ctx, func() {}, nil
 }
 
+// RecoverOrphanSessions fails sessions that were mid-run when the process
+// died. ApprovePlan/ApprovePatches dispatch their execute phase to a
+// background goroutine (Task 10b) that dies with the process, so a restart
+// is the only place left to notice — nothing else watches these rows once
+// the goroutine that would have finished them is gone. Sessions sitting in a
+// review state hold no goroutine and are left untouched; that statelessness
+// is the entire point of the gate design (see the package doc), so
+// recovering them here would be wrong, not just unnecessary.
+//
+// Each write goes through the same compare-and-swap TransitionRemediation-
+// Session uses everywhere else, not a blind UpdateRemediationSession: a
+// blind write would let recovery race a session that is concurrently,
+// legitimately advancing (e.g. its own Run reaching a review gate between
+// this function's read and write) and clobber wherever it actually landed.
+// A CAS loss (sql.ErrNoRows) means exactly that happened, so that row is
+// skipped rather than escalated — it is already correct, just not what this
+// function expected to find when it listed it.
+func RecoverOrphanSessions(ctx context.Context, store db.Store) error {
+	stuck := []models.RemediationStatus{
+		models.RemediationPlanning,
+		models.RemediationExecuting,
+		models.RemediationApplying,
+		models.RemediationRescanning,
+	}
+	for _, status := range stuck {
+		sessions, err := store.ListRemediationSessionsByStatus(ctx, status)
+		if err != nil {
+			return err
+		}
+		for i := range sessions {
+			next := sessions[i]
+			next.Status = models.RemediationFailed
+			next.FailureReason = "server restarted while the session was running"
+			now := time.Now()
+			next.UpdatedAt = now
+			next.CompletedAt = &now
+			if err := store.TransitionRemediationSession(ctx, &next, status); err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					continue
+				}
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // Run advances a pending session as far as its gates allow. With both gates
 // off it runs to completion; with a gate on it stops at the corresponding
 // review state and returns nil, to be resumed by an approval. Only a
@@ -138,17 +185,34 @@ func (r *Runner) runPlanPhase(ctx context.Context, sess *models.RemediationSessi
 		return fmt.Errorf("load findings: %w", ferr)
 	}
 
-	p, usage, perr := r.driver.Plan(ctx, driver.PlanRequest{
+	req := driver.PlanRequest{
 		WorktreePath: sess.WorktreePath,
 		Findings:     findings,
 		MaxTurns:     r.cfg.ClampTurns(sess.MaxTurns),
 		Provider:     sess.Provider,
 		Model:        sess.Model,
 		OnEvent:      r.eventSink(ctx, sess.ID),
-	})
+	}
+	p, usage, perr := r.driver.Plan(ctx, req)
 	sess.TurnsUsedPlan = usage.Turns
 	sess.TokensUsed += usage.Tokens
 	sess.CostUsed += usage.Cost
+	// One repair attempt: the agent ran, spent turns, and produced output
+	// that did not parse as a plan. Telling it plainly what went wrong and
+	// asking again is worth one retry; a second failure means the agent
+	// cannot produce valid plan JSON for this finding set, and burning more
+	// turns on a third attempt is not worth it. The failed attempt's own
+	// usage is added above, before the retry, rather than overwritten by
+	// it — it was real, billed driver spend, not a no-op, and must count
+	// toward the session the same way both phases' usage already does.
+	if perr != nil && errors.Is(perr, driver.ErrUnparseablePlan) {
+		req.RepairHint = "Your previous response was not valid plan JSON. " +
+			"Respond with the plan object only, no prose."
+		p, usage, perr = r.driver.Plan(ctx, req)
+		sess.TurnsUsedPlan += usage.Turns
+		sess.TokensUsed += usage.Tokens
+		sess.CostUsed += usage.Cost
+	}
 	if perr != nil {
 		return perr
 	}

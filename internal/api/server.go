@@ -666,6 +666,16 @@ func (s *Server) Start() error {
 		recoverOrphanScans(s.Store)
 	}
 
+	// Remediation sessions never run through the scan queue — ApprovePlan/
+	// ApprovePatches dispatch their execute phase to an in-process
+	// background goroutine (Task 10b) regardless of WOLF_SCAN_EXECUTION_MODE
+	// — so this recovery is unconditional, unlike recoverOrphanScans above.
+	// That goroutine dies with the process, leaving the row exactly where it
+	// was; this is the only thing that ever notices and cleans it up.
+	if err := remediate.RecoverOrphanSessions(context.Background(), s.Store); err != nil {
+		wolflog.Warn().Err(err).Msg("remediation orphan recovery failed")
+	}
+
 	err := s.httpServer.ListenAndServe()
 	if err == http.ErrServerClosed {
 		return nil

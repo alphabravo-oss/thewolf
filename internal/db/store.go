@@ -294,6 +294,11 @@ type Store interface {
 	CreateRemediationSession(ctx context.Context, session *models.RemediationSession) error
 	GetRemediationSession(ctx context.Context, id string) (*models.RemediationSession, error)
 	ListRemediationSessions(ctx context.Context, userID string) ([]models.RemediationSession, error)
+	// ListRemediationSessionsByStatus backs orphan recovery on startup: it
+	// finds every session left mid-run by a process that died, one status at
+	// a time, so the caller can fail each through the same CAS transition
+	// path as any other status change.
+	ListRemediationSessionsByStatus(ctx context.Context, status models.RemediationStatus) ([]models.RemediationSession, error)
 	UpdateRemediationSession(ctx context.Context, session *models.RemediationSession) error
 	// TransitionRemediationSession is UpdateRemediationSession's compare-
 	// and-swap counterpart: the write only lands if the session's current

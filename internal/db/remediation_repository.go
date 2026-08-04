@@ -67,6 +67,16 @@ func (r *remediationRepository) ListRemediationSessions(ctx context.Context, use
 	return sessions, err
 }
 
+// ListRemediationSessionsByStatus returns every session currently in status,
+// oldest first — the read side of orphan recovery, one stuck status at a
+// time (see remediate.RecoverOrphanSessions).
+func (r *remediationRepository) ListRemediationSessionsByStatus(ctx context.Context, status models.RemediationStatus) ([]models.RemediationSession, error) {
+	var sessions []models.RemediationSession
+	err := r.db.SelectContext(ctx, &sessions, r.db.Rebind(
+		`SELECT * FROM remediation_sessions WHERE status = ? ORDER BY created_at ASC, id ASC`), status)
+	return sessions, err
+}
+
 func (r *remediationRepository) UpdateRemediationSession(ctx context.Context, s *models.RemediationSession) error {
 	s.UpdatedAt = time.Now().UTC()
 	_, err := r.db.NamedExecContext(ctx,
@@ -290,6 +300,10 @@ func (s *SQLiteStore) ListRemediationSessions(ctx context.Context, userID string
 	return newRemediationRepository(s.db).ListRemediationSessions(ctx, userID)
 }
 
+func (s *SQLiteStore) ListRemediationSessionsByStatus(ctx context.Context, status models.RemediationStatus) ([]models.RemediationSession, error) {
+	return newRemediationRepository(s.db).ListRemediationSessionsByStatus(ctx, status)
+}
+
 func (s *SQLiteStore) UpdateRemediationSession(ctx context.Context, session *models.RemediationSession) error {
 	return newRemediationRepository(s.db).UpdateRemediationSession(ctx, session)
 }
@@ -344,6 +358,10 @@ func (s *PostgresStore) GetRemediationSession(ctx context.Context, id string) (*
 
 func (s *PostgresStore) ListRemediationSessions(ctx context.Context, userID string) ([]models.RemediationSession, error) {
 	return newRemediationRepository(s.db).ListRemediationSessions(ctx, userID)
+}
+
+func (s *PostgresStore) ListRemediationSessionsByStatus(ctx context.Context, status models.RemediationStatus) ([]models.RemediationSession, error) {
+	return newRemediationRepository(s.db).ListRemediationSessionsByStatus(ctx, status)
 }
 
 func (s *PostgresStore) UpdateRemediationSession(ctx context.Context, session *models.RemediationSession) error {

@@ -19,6 +19,10 @@ type Fake struct {
 	// replayed — used to exercise orchestrator error paths.
 	PlanErr error
 	ExecErr error
+	// PlanCalls counts invocations of Plan, so a test can assert a retry
+	// actually happened (a second call), not just that the caller eventually
+	// gave up.
+	PlanCalls int
 }
 
 // NewFake returns a Fake that replays events and yields p.
@@ -39,6 +43,7 @@ func (f *Fake) replay(m meter.Meter, onEvent func(meter.Event)) bool {
 }
 
 func (f *Fake) Plan(_ context.Context, req PlanRequest) (*plan.Plan, meter.Usage, error) {
+	f.PlanCalls++
 	m := meter.NewTurns(req.MaxTurns)
 	if f.replay(m, req.OnEvent) {
 		return nil, m.Usage(), ErrBudgetExhausted
