@@ -2,6 +2,7 @@ package remediate
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/remediate/driver"
+	"github.com/alphabravocompany/thewolf/internal/remediate/meter"
 )
 
 func TestBranchNameIsStableAndScoped(t *testing.T) {
@@ -172,6 +174,154 @@ func TestPrepareWorkspaceSetsSessionFields(t *testing.T) {
 	}
 	if sess.BranchName != BranchName(sess.ID) {
 		t.Errorf("sess.BranchName = %q, want %q", sess.BranchName, BranchName(sess.ID))
+	}
+	// CloneRoot is the scratch clone's own root — NOT ws.Path() (the
+	// worktree, a different directory worktreed off the clone) — the
+	// handle a later cleanup step needs since it isn't derivable from
+	// WorktreePath alone (independent temp roots).
+	if sess.CloneRoot == "" {
+		t.Error("sess.CloneRoot is empty for a local-source session")
+	}
+	if sess.CloneRoot == sess.WorktreePath {
+		t.Errorf("sess.CloneRoot must not equal WorktreePath: both %q", sess.CloneRoot)
+	}
+	if _, err := os.Stat(filepath.Join(sess.CloneRoot, ".git")); err != nil {
+		t.Errorf("sess.CloneRoot %q does not look like a git clone: %v", sess.CloneRoot, err)
+	}
+}
+
+// The in-memory struct isn't what the resume design actually rests on — a
+// gated session pauses and resumes in a LATER Runner that only has the
+// database row to go on. This asserts the field survives the round trip
+// through a real Run() call, not just prepareWorkspace's return value.
+func TestRunPersistsWorktreePath(t *testing.T) {
+	store := newTestStore(t)
+	sess := seedSession(t, store, func(s *models.RemediationSession) {
+		s.PlanGateEnabled = true
+		s.PatchGateEnabled = false
+	})
+	r := NewRunner(store, driver.NewFake([]meter.Event{{Type: "assistant"}}, fixturePlan()),
+		Config{Enabled: true, MaxTurns: 10, AllowYolo: true})
+
+	if err := r.Run(context.Background(), sess.ID); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	got, err := store.GetRemediationSession(context.Background(), sess.ID)
+	if err != nil {
+		t.Fatalf("GetRemediationSession: %v", err)
+	}
+	if got.WorktreePath == "" {
+		t.Error("persisted WorktreePath is empty after Run")
+	}
+	if got.BranchName != BranchName(sess.ID) {
+		t.Errorf("persisted BranchName = %q, want %q", got.BranchName, BranchName(sess.ID))
+	}
+	if got.CloneRoot == "" {
+		t.Error("persisted CloneRoot is empty after Run for a local-source session")
+	}
+}
+
+// SECURITY: `git clone --local` hardlinks object files by default — the
+// clone's objects are the SAME inode as the source's. The driver mounts
+// this clone's .git directory read-write, and the execute permission
+// document allows make/go test/npm run/pytest (repo-supplied code
+// execution), so a hardlinked object store lets a write through the clone
+// reach — and corrupt — the user's real repository. --no-hardlinks must
+// force a real copy so the clone's objects are genuinely independent.
+func TestPrepareWorkspaceObjectsAreNotHardlinkedToSource(t *testing.T) {
+	store := newTestStore(t)
+	sess := seedSession(t, store, nil)
+	sourceRepo, err := store.GetRepoByID(context.Background(), sess.RepoID)
+	if err != nil {
+		t.Fatalf("GetRepoByID: %v", err)
+	}
+
+	r := NewRunner(store, driver.NewFake(nil, fixturePlan()), Config{Enabled: true})
+	ws, err := r.prepareWorkspace(context.Background(), sess)
+	if err != nil {
+		t.Fatalf("prepareWorkspace: %v", err)
+	}
+	defer ws.Cleanup(context.Background())
+
+	if sess.CloneRoot == "" {
+		t.Fatal("sess.CloneRoot is empty; cannot check object isolation")
+	}
+	if sameInodeAsAnyObject(t, sourceRepo.SourcePath, sess.CloneRoot) {
+		t.Fatal("clone shares an object-file inode with the source repo — a write through the clone (e.g. a driver-run build step) could corrupt the user's real objects")
+	}
+}
+
+// sameInodeAsAnyObject reports whether any object file under clonePath's
+// .git/objects is the SAME file (os.SameFile: same inode on Unix, same
+// volume+file-index on Windows) as the same-named object file under
+// sourcePath's .git/objects — i.e. hardlinked to it, not a real copy.
+// os.SameFile is used rather than poking at syscall.Stat_t directly so this
+// stays portable rather than failing to compile on non-Unix platforms.
+func sameInodeAsAnyObject(t *testing.T, sourcePath, clonePath string) bool {
+	t.Helper()
+	cloneObjDir := filepath.Join(clonePath, ".git", "objects")
+	found := false
+	err := filepath.WalkDir(cloneObjDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		rel, rerr := filepath.Rel(cloneObjDir, path)
+		if rerr != nil {
+			return rerr
+		}
+		srcObj := filepath.Join(sourcePath, ".git", "objects", rel)
+		srcInfo, statErr := os.Stat(srcObj)
+		if statErr != nil {
+			return nil // this object doesn't exist in the source; nothing to compare
+		}
+		cloneInfo, err := os.Stat(path)
+		if err != nil {
+			return err
+		}
+		if os.SameFile(srcInfo, cloneInfo) {
+			found = true
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walk clone objects: %v", err)
+	}
+	return found
+}
+
+// The strip-failure ordering fix: if StripAgentConfig fails AFTER
+// workspace.Prepare succeeded, prepared.Cleanup(ctx) deletes the worktree —
+// so the session must not end up with WorktreePath/BranchName/CloneRoot
+// persisted pointing at directories that no longer exist. Uses the
+// stripAgentConfig package var (a test seam) because a permission-based
+// filesystem trick doesn't survive git's own checkout, which resets
+// directory modes regardless of what the source repo's permissions were.
+func TestPrepareWorkspaceClearsWorktreePathWhenStripFails(t *testing.T) {
+	store := newTestStore(t)
+	sess := seedSession(t, store, nil)
+	r := NewRunner(store, driver.NewFake(nil, fixturePlan()), Config{Enabled: true})
+
+	orig := stripAgentConfig
+	stripAgentConfig = func(string) ([]string, error) { return nil, errors.New("boom") }
+	defer func() { stripAgentConfig = orig }()
+
+	if _, err := r.prepareWorkspace(context.Background(), sess); err == nil {
+		t.Fatal("prepareWorkspace succeeded despite a forced strip failure, want error")
+	}
+
+	got, err := store.GetRemediationSession(context.Background(), sess.ID)
+	if err != nil {
+		t.Fatalf("GetRemediationSession: %v", err)
+	}
+	if got.WorktreePath != "" {
+		t.Errorf("WorktreePath = %q, want empty — prepared.Cleanup already deleted it", got.WorktreePath)
+	}
+	if got.BranchName != "" {
+		t.Errorf("BranchName = %q, want empty", got.BranchName)
+	}
+	if got.CloneRoot != "" {
+		t.Errorf("CloneRoot = %q, want empty", got.CloneRoot)
 	}
 }
 

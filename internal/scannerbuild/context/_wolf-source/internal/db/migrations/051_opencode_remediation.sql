@@ -22,6 +22,10 @@ CREATE TABLE IF NOT EXISTS remediation_sessions (
     model TEXT NOT NULL DEFAULT '',
     branch_name TEXT NOT NULL DEFAULT '',
     worktree_path TEXT NOT NULL DEFAULT '',
+    -- Scratch clone worktree_path was worktreed off of, for a local-source
+    -- session. Not derivable from worktree_path (independent temp roots) —
+    -- this is the handle needed to actually clean the clone up later.
+    clone_root TEXT NOT NULL DEFAULT '',
     pr_url TEXT NOT NULL DEFAULT '',
     failure_reason TEXT NOT NULL DEFAULT '',
     created_at TIMESTAMP NOT NULL,

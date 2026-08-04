@@ -18,11 +18,20 @@ func BranchName(sessionID string) string {
 	return "wolf/remediation-" + sessionID
 }
 
+// stripAgentConfig is a package var so a test can force this specific step
+// of prepareWorkspace to fail deterministically — matching the seam pattern
+// internal/fix/workspace's own runGit already uses. A permission-based
+// filesystem trick doesn't reach this reliably: directory mode bits aren't
+// preserved by `git clone`/`git worktree add`, which is exactly why this
+// step needs its own seam rather than one further down in a real git call.
+var stripAgentConfig = StripAgentConfig
+
 // prepareWorkspace creates the isolated workspace the agent edits, on
 // BranchName's deterministic branch, and strips any repo-supplied agent
-// config before anything can reach the driver. On success sess.WorktreePath
-// and sess.BranchName are set so later phases — including a resumed session
-// reloaded from the store after a gate pause — find the same worktree.
+// config before anything can reach the driver. On success sess.WorktreePath,
+// sess.BranchName, and sess.CloneRoot are set so later phases — including a
+// resumed session reloaded from the store after a gate pause — find the
+// same worktree and (for a local repo) the scratch clone it sits on.
 //
 // Local repositories are cloned, never worktree-added. Passing a local Repo
 // straight through to workspace.Prepare would run workspace.prepareLocal's
@@ -30,10 +39,13 @@ func BranchName(sessionID string) string {
 // object store — the driver would then have to mount that store read-write
 // into the container, handing an agent running under --auto write access to
 // the user's real refs and objects, not just to an ephemeral checkout.
-// `git clone --local` hardlinks objects (cheap, no network) into a fresh,
-// self-contained, disposable .git directory, so the blast radius stops at
-// the scratch clone: workspace.Prepare then worktrees off THAT clone, never
-// the user's own repository.
+// cloneLocalForRemediation instead makes a fresh, self-contained, disposable
+// clone with --no-hardlinks (its own object files, not the source's), so
+// refs AND the object store are both genuinely isolated: a build step the
+// driver runs (make/go test/npm run/pytest are all permission-document
+// allowed) can corrupt the clone's own objects without ever touching an
+// inode the source repo shares. workspace.Prepare then worktrees off THAT
+// clone, never the user's own repository.
 //
 // Cloning also fixes retry: BranchName is deterministic, and
 // `git worktree add -b <branch>` fails outright once a branch of that name
@@ -43,7 +55,8 @@ func BranchName(sessionID string) string {
 // every attempt starts clean.
 //
 // GitHub-sourced repos already clone-for-write inside workspace.Prepare, so
-// they pass through unchanged.
+// they pass through unchanged; sess.CloneRoot stays empty for them, since
+// there is no separate scratch-clone layer to track.
 func (r *Runner) prepareWorkspace(ctx context.Context, sess *models.RemediationSession) (ws *workspace.Workspace, err error) {
 	// Matches runPlanPhase/runExecutePhase's shape: a single defer routing
 	// any error through failSession, so a failure here (repo missing, clone
@@ -62,6 +75,7 @@ func (r *Runner) prepareWorkspace(ctx context.Context, sess *models.RemediationS
 	}
 
 	opts := workspace.Options{Repo: repo, Branch: BranchName(sess.ID)}
+	var cloneRoot string
 	if repo.SourceType == models.SourceTypeLocal {
 		cloned, cleanup, cerr := cloneLocalForRemediation(ctx, repo.SourcePath)
 		if cerr != nil {
@@ -77,6 +91,7 @@ func (r *Runner) prepareWorkspace(ctx context.Context, sess *models.RemediationS
 			}
 		}()
 		opts.Repo = cloned
+		cloneRoot = cloned.SourcePath
 	}
 
 	prepared, perr := workspace.Prepare(ctx, opts)
@@ -92,18 +107,28 @@ func (r *Runner) prepareWorkspace(ctx context.Context, sess *models.RemediationS
 			_ = prepared.Cleanup(ctx)
 		}
 	}()
-	sess.WorktreePath = prepared.Path()
-	sess.BranchName = prepared.Branch()
 
 	// A repo-supplied opencode.json overrides the permission document Wolf
 	// injects (proven empirically by the spike behind Task 4a) — the
 	// scanned repository is untrusted input by definition, so its own agent
 	// config must not be allowed to outrank Wolf's before the driver ever
 	// runs.
-	removed, serr := StripAgentConfig(prepared.Path())
+	removed, serr := stripAgentConfig(prepared.Path())
 	if serr != nil {
 		return nil, fmt.Errorf("strip agent config: %w", serr)
 	}
+
+	// Set the session's workspace fields only once every step above has
+	// actually succeeded. Setting them earlier would let a later failure in
+	// this function (e.g. the strip above) persist paths to directories the
+	// defers just deleted — failSession's transition writes whatever sess
+	// currently holds, and "a failed session retains its worktree for
+	// inspection" must not become a lie about a worktree that no longer
+	// exists.
+	sess.WorktreePath = prepared.Path()
+	sess.BranchName = prepared.Branch()
+	sess.CloneRoot = cloneRoot
+
 	for _, path := range removed {
 		r.recordEvent(ctx, sess.ID, "worktree.config_stripped", path)
 	}
@@ -116,6 +141,18 @@ func (r *Runner) prepareWorkspace(ctx context.Context, sess *models.RemediationS
 // checkout is not safe here. The returned cleanup removes the clone; the
 // caller owns calling it once the clone — and everything built on top of it
 // — is no longer needed.
+//
+// The clone is cloned with --no-hardlinks (see the git invocation below for
+// why: a plain --local clone shares object-file INODES with the source,
+// which a plain "disposable directory" story does not protect against).
+//
+// The clone's `origin` remote points at sourcePath — the user's real
+// repository — because that is what `git clone` always records as the
+// source it cloned from, regardless of --local. That is fine for what this
+// function does (nothing here ever fetches or pushes), but it means a
+// future `git push origin <branch>` run from the clone's worktree (Task 13's
+// landing phase) pushes into the user's real repo. Left as-is deliberately;
+// flagged here so Task 13's author does not discover it by accident.
 //
 // sourcePath is Repo.SourcePath, which traces back to user-supplied API
 // input (createRepoRequest.SourcePath in internal/api/routes/repos.go) that
@@ -156,15 +193,24 @@ func cloneLocalForRemediation(ctx context.Context, sourcePath string) (*models.R
 	cleanup := func() { _ = os.RemoveAll(tmpRoot) }
 
 	clonePath := filepath.Join(tmpRoot, "repo")
-	// --local hardlinks objects instead of copying them or touching the
-	// network, so this costs about as much as a worktree while producing a
-	// real, self-contained .git directory safe to hand to the container.
+	// --local skips the network and the full "Git aware" transport, cloning
+	// via a local filesystem copy — cheap, and what makes this call safe to
+	// run synchronously in the request/session path. --no-hardlinks forces
+	// that copy to be a REAL copy of the object files rather than git's
+	// default local-clone optimization of hardlinking them: a hardlinked
+	// object file is the SAME inode as the source's, so the driver mounting
+	// this clone's .git directory read-write — combined with the execute
+	// permission document allowing make/go test/npm run/pytest, i.e.
+	// repo-supplied code execution — could write through the link and
+	// corrupt the user's real object store. The clone is ephemeral and
+	// scratch-sized, so the real-copy cost is bounded and short-lived; that
+	// cost is the actual price of the isolation this clone exists to buy.
 	// #nosec G204 -- "git" is a fixed binary. sourcePath IS user-supplied
 	// (see the doc comment above) — this is safe because of the explicit
 	// leading-dash/absolute-path checks above plus the "--" separator here,
 	// which together stop sourcePath from ever being parsed as a flag,
 	// not because the input is trusted.
-	cmd := exec.CommandContext(ctx, "git", "clone", "--local", "--", sourcePath, clonePath)
+	cmd := exec.CommandContext(ctx, "git", "clone", "--local", "--no-hardlinks", "--", sourcePath, clonePath)
 	if out, cerr := cmd.CombinedOutput(); cerr != nil {
 		cleanup()
 		return nil, nil, fmt.Errorf("clone local repo: %s: %w", strings.TrimSpace(string(out)), cerr)

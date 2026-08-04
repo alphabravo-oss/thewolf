@@ -163,19 +163,6 @@ func (r *Runner) Run(ctx context.Context, sessionID string) error {
 		return errors.New("gates disabled but WOLF_REMEDIATE_ALLOW_YOLO=false")
 	}
 
-	// prepareWorkspace's own defer already fails the session (with a clear
-	// reason) on any error, so Run just propagates it. The returned
-	// workspace is intentionally not torn down here: a gated session pauses
-	// at plan_review/patch_review for a human and resumes in a LATER Runner
-	// (ApprovePlan/ApprovePatches, Task 10b's async dispatch), reusing the
-	// same worktree/branch all the way through to landing (push + PR,
-	// Task 13) — the first point nothing still needs it. Cleaning up here
-	// would delete a live workspace out from under a session that has not
-	// finished with it.
-	if _, err := r.prepareWorkspace(ctx, sess); err != nil {
-		return err
-	}
-
 	if err := r.runPlanPhase(ctx, sess); err != nil {
 		return err
 	}
@@ -196,6 +183,27 @@ func (r *Runner) runPlanPhase(ctx context.Context, sess *models.RemediationSessi
 	if terr := r.transition(ctx, sess, models.RemediationPlanning, ""); terr != nil {
 		return terr
 	}
+
+	// prepareWorkspace runs AFTER the CAS claim above, not before: two
+	// racing Run calls on the same pending session both pass the pending
+	// check, but only one wins this transition. Preparing first would let
+	// the loser clone+worktree anyway, with nothing left to clean up
+	// afterward. prepareWorkspace's own defer already fails the session on
+	// error (repo missing, clone failed, strip failed), so its failure
+	// returns directly rather than needing the defer below, which is
+	// registered next.
+	//
+	// The returned workspace is intentionally not torn down here: a gated
+	// session pauses at plan_review/patch_review for a human and resumes in
+	// a LATER Runner (ApprovePlan/ApprovePatches, Task 10b's async
+	// dispatch), reusing the same worktree/branch all the way through to
+	// landing (push + PR, Task 13) — the first point nothing still needs
+	// it. Cleaning up here would delete a live workspace out from under a
+	// session that has not finished with it.
+	if _, werr := r.prepareWorkspace(ctx, sess); werr != nil {
+		return werr
+	}
+
 	defer func() {
 		if err != nil {
 			status := models.RemediationFailed
@@ -619,21 +627,7 @@ func (r *Runner) eventSink(ctx context.Context, sessionID string) func(meter.Eve
 				Str("session", sessionID).Int("seq", seq).
 				Msg("marshal remediation event payload")
 		}
-		// Never discard this error. A dropped append is a hole in the audit
-		// trail and a gap SSE replay cannot tell apart from "no activity",
-		// which is exactly how the per-call sequence bug stayed invisible.
-		if err := r.store.AppendRemediationEvent(ctx, &models.RemediationEvent{
-			ID:          fmt.Sprintf("%s-%d", sessionID, seq),
-			SessionID:   sessionID,
-			Seq:         seq,
-			Type:        e.Type,
-			PayloadJSON: string(payload),
-			CreatedAt:   time.Now(),
-		}); err != nil {
-			wolflog.L().Error().Err(err).
-				Str("session", sessionID).Int("seq", seq).
-				Msg("persist remediation event")
-		}
+		r.appendEvent(ctx, sessionID, seq, e.Type, payload)
 	}
 }
 
@@ -653,9 +647,7 @@ func (r *Runner) lastEventSeq(ctx context.Context, sessionID string) int {
 // recordEvent appends a single audit event outside the driver's own replayed
 // stream — e.g. a worktree hygiene action taken before the driver is ever
 // called. It shares eventSink's session-scoped sequencing (lastEventSeq), so
-// the two interleave into one ordered timeline regardless of call order, and
-// its log-don't-strand handling of a store failure: one best-effort audit
-// write must never abort a phase that has otherwise made real progress.
+// the two interleave into one ordered timeline regardless of call order.
 func (r *Runner) recordEvent(ctx context.Context, sessionID, eventType, detail string) {
 	seq := r.lastEventSeq(ctx, sessionID) + 1
 	payload, merr := json.Marshal(struct {
@@ -666,6 +658,17 @@ func (r *Runner) recordEvent(ctx context.Context, sessionID, eventType, detail s
 			Str("session", sessionID).Int("seq", seq).
 			Msg("marshal remediation event payload")
 	}
+	r.appendEvent(ctx, sessionID, seq, eventType, payload)
+}
+
+// appendEvent is eventSink and recordEvent's shared tail: build the row and
+// persist it, logging rather than returning a store failure. One best-effort
+// audit write must never abort a phase that has otherwise made real
+// progress, and a dropped append is a hole in the audit trail SSE replay
+// cannot tell apart from "no activity" — which is exactly how the per-call
+// sequence bug (fixed when eventSink gained lastEventSeq) stayed invisible,
+// so this is logged loudly rather than silently discarded.
+func (r *Runner) appendEvent(ctx context.Context, sessionID string, seq int, eventType string, payload []byte) {
 	if err := r.store.AppendRemediationEvent(ctx, &models.RemediationEvent{
 		ID:          fmt.Sprintf("%s-%d", sessionID, seq),
 		SessionID:   sessionID,

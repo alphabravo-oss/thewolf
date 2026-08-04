@@ -42,11 +42,11 @@ func (r *remediationRepository) CreateRemediationSession(ctx context.Context, s 
 		`INSERT INTO remediation_sessions
 		 (id, user_id, repo_id, scan_id, loop_id, status, plan_gate_enabled, patch_gate_enabled,
 		  max_turns, turns_used_plan, turns_used_execute, tokens_used, cost_used, provider, model,
-		  branch_name, worktree_path, pr_url, failure_reason, created_at, updated_at, started_at, completed_at)
+		  branch_name, worktree_path, clone_root, pr_url, failure_reason, created_at, updated_at, started_at, completed_at)
 		 VALUES
 		 (:id, :user_id, :repo_id, :scan_id, :loop_id, :status, :plan_gate_enabled, :patch_gate_enabled,
 		  :max_turns, :turns_used_plan, :turns_used_execute, :tokens_used, :cost_used, :provider, :model,
-		  :branch_name, :worktree_path, :pr_url, :failure_reason, :created_at, :updated_at, :started_at, :completed_at)`,
+		  :branch_name, :worktree_path, :clone_root, :pr_url, :failure_reason, :created_at, :updated_at, :started_at, :completed_at)`,
 		s)
 	return err
 }
@@ -84,7 +84,7 @@ func (r *remediationRepository) UpdateRemediationSession(ctx context.Context, s 
 		  status = :status, plan_gate_enabled = :plan_gate_enabled, patch_gate_enabled = :patch_gate_enabled,
 		  max_turns = :max_turns, turns_used_plan = :turns_used_plan, turns_used_execute = :turns_used_execute,
 		  tokens_used = :tokens_used, cost_used = :cost_used, provider = :provider, model = :model,
-		  branch_name = :branch_name, worktree_path = :worktree_path, pr_url = :pr_url,
+		  branch_name = :branch_name, worktree_path = :worktree_path, clone_root = :clone_root, pr_url = :pr_url,
 		  failure_reason = :failure_reason, updated_at = :updated_at, started_at = :started_at,
 		  completed_at = :completed_at
 		 WHERE id = :id`, s)
@@ -105,13 +105,13 @@ func (r *remediationRepository) TransitionRemediationSession(ctx context.Context
 		  status = ?, plan_gate_enabled = ?, patch_gate_enabled = ?,
 		  max_turns = ?, turns_used_plan = ?, turns_used_execute = ?,
 		  tokens_used = ?, cost_used = ?, provider = ?, model = ?,
-		  branch_name = ?, worktree_path = ?, pr_url = ?,
+		  branch_name = ?, worktree_path = ?, clone_root = ?, pr_url = ?,
 		  failure_reason = ?, updated_at = ?, started_at = ?, completed_at = ?
 		 WHERE id = ? AND status = ?`),
 		s.Status, s.PlanGateEnabled, s.PatchGateEnabled,
 		s.MaxTurns, s.TurnsUsedPlan, s.TurnsUsedExecute,
 		s.TokensUsed, s.CostUsed, s.Provider, s.Model,
-		s.BranchName, s.WorktreePath, s.PRURL,
+		s.BranchName, s.WorktreePath, s.CloneRoot, s.PRURL,
 		s.FailureReason, s.UpdatedAt, s.StartedAt, s.CompletedAt,
 		s.ID, fromStatus)
 	if err != nil {
