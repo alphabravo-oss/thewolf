@@ -116,9 +116,38 @@ func (r *Runner) prepareWorkspace(ctx context.Context, sess *models.RemediationS
 // checkout is not safe here. The returned cleanup removes the clone; the
 // caller owns calling it once the clone — and everything built on top of it
 // — is no longer needed.
+//
+// sourcePath is Repo.SourcePath, which traces back to user-supplied API
+// input (createRepoRequest.SourcePath in internal/api/routes/repos.go) that
+// is validated only for emptiness — nothing there rejects a leading '-' or
+// requires an absolute path (CWE-88, argument injection). Without the "--"
+// separator below, a value like "--upload-pack=<command>" is parsed by git
+// as a FLAG rather than the path it's supposed to be. Verified empirically
+// against this exact call shape (git 2.39.5): a bare leading-dash payload
+// here does NOT reach a working command-execution primitive, because the
+// flag consumes sourcePath's argv slot and leaves only clonePath (our own
+// fresh, not-yet-existing scratch dir) as the sole remaining positional —
+// git rejects that as "repository does not exist" before invoking anything.
+// The two other classic vectors for this class of bug are also closed on
+// this git version independent of these checks: `ext::` transports are
+// blocked by git's own protocol allowlist, and `ssh://-oProxyCommand=...`
+// hostnames are rejected (the CVE-2017-1000117 fix). None of that is a
+// reason to skip validating here: an older/differently-configured git, or a
+// call shape that gains a second attacker-influenced positional later,
+// could reopen this. The checks below reject the input outright rather than
+// leaning on git's or the transport's own defenses holding forever.
 func cloneLocalForRemediation(ctx context.Context, sourcePath string) (*models.Repo, func(), error) {
 	if strings.TrimSpace(sourcePath) == "" {
 		return nil, nil, fmt.Errorf("clone local repo: source path is empty")
+	}
+	// Belt-and-braces alongside the `--` separator below: fails fast with a
+	// clear reason, and keeps protecting even if the argv order downstream
+	// is ever changed by someone who doesn't realize `--` was load-bearing.
+	if strings.HasPrefix(sourcePath, "-") {
+		return nil, nil, fmt.Errorf("clone local repo: source path %q must not start with '-'", sourcePath)
+	}
+	if !filepath.IsAbs(sourcePath) {
+		return nil, nil, fmt.Errorf("clone local repo: source path %q must be absolute", sourcePath)
 	}
 	tmpRoot, err := os.MkdirTemp("", "wolf-remediate-clone-")
 	if err != nil {
@@ -130,9 +159,12 @@ func cloneLocalForRemediation(ctx context.Context, sourcePath string) (*models.R
 	// --local hardlinks objects instead of copying them or touching the
 	// network, so this costs about as much as a worktree while producing a
 	// real, self-contained .git directory safe to hand to the container.
-	// #nosec G204 -- "git" is a fixed binary; args are an internal repo path
-	// and a scratch dir this function just created, never raw user input.
-	cmd := exec.CommandContext(ctx, "git", "clone", "--local", sourcePath, clonePath)
+	// #nosec G204 -- "git" is a fixed binary. sourcePath IS user-supplied
+	// (see the doc comment above) — this is safe because of the explicit
+	// leading-dash/absolute-path checks above plus the "--" separator here,
+	// which together stop sourcePath from ever being parsed as a flag,
+	// not because the input is trusted.
+	cmd := exec.CommandContext(ctx, "git", "clone", "--local", "--", sourcePath, clonePath)
 	if out, cerr := cmd.CombinedOutput(); cerr != nil {
 		cleanup()
 		return nil, nil, fmt.Errorf("clone local repo: %s: %w", strings.TrimSpace(string(out)), cerr)

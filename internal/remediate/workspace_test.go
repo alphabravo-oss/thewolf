@@ -254,3 +254,42 @@ func TestPrepareWorkspaceMissingRepoFailsSession(t *testing.T) {
 		t.Fatalf("Status = %q, want %q", got.Status, models.RemediationFailed)
 	}
 }
+
+// SECURITY (CWE-88, argument injection): Repo.SourcePath traces back to
+// user-supplied API input (createRepoRequest.SourcePath in
+// internal/api/routes/repos.go) validated only for emptiness — nothing
+// there rejects a leading '-'. Handed straight to `git clone` as a
+// positional argument, a value like "--upload-pack=<cmd>" is parsed by git
+// as a FLAG instead of a path. cloneLocalForRemediation must reject this
+// itself rather than relying solely on the "--" separator downstream: the
+// error text below (not just "an error") pins that OUR check is what fired,
+// not some incidental failure from git.
+func TestCloneLocalForRemediationRejectsLeadingDash(t *testing.T) {
+	_, cleanup, err := cloneLocalForRemediation(context.Background(), "--upload-pack=touch /tmp/wolf-pwned")
+	if cleanup != nil {
+		defer cleanup()
+	}
+	if err == nil {
+		t.Fatal("cloneLocalForRemediation succeeded with a leading-dash source path, want error")
+	}
+	if !strings.Contains(err.Error(), "must not start with '-'") {
+		t.Fatalf("err = %v, want it to name the leading-dash rejection explicitly", err)
+	}
+}
+
+// A relative source path is already a bug at the caller (Repo.SourcePath
+// for a registered local repo should always be absolute); rejecting it
+// closes off resolving against whatever the wolf process's CWD happens to
+// be at clone time.
+func TestCloneLocalForRemediationRejectsRelativePath(t *testing.T) {
+	_, cleanup, err := cloneLocalForRemediation(context.Background(), "relative/path/to/repo")
+	if cleanup != nil {
+		defer cleanup()
+	}
+	if err == nil {
+		t.Fatal("cloneLocalForRemediation succeeded with a relative source path, want error")
+	}
+	if !strings.Contains(err.Error(), "must be absolute") {
+		t.Fatalf("err = %v, want it to name the relative-path rejection explicitly", err)
+	}
+}
