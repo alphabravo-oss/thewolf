@@ -2250,7 +2250,21 @@ git commit -m "feat(remediate): opencode fixer container variant"
 
 Adds the plan and patch gates, the review states, and approval endpoints.
 
-### Task 8: Gate policy
+### Task 8: Gate policy — SHIPPED, THEN DELETED
+
+> **This package no longer exists.** It was implemented, reviewed, approved, and
+> then removed during Task 9 because it was a fail-open trap rather than merely
+> unused code: `gate.IsYolo()` returned true only when **both** gates were off,
+> while `Runner.Run` requires the `WOLF_REMEDIATE_ALLOW_YOLO` opt-in when
+> **either** is off. They disagreed exactly on the dangerous case — patch gate
+> off, patches landing with no human review. Task 10 must return 403 for "gates
+> disabled but AllowYolo false", and `gate.IsYolo()` is precisely the helper a
+> Task 10 implementer would reach for.
+>
+> `Runner` reads `sess.PlanGateEnabled` / `sess.PatchGateEnabled` directly and
+> always did; its stricter OR is the single enforcement point. Do not
+> reintroduce this package. The section below is kept as a record of what was
+> built and why it was withdrawn.
 
 **Files:**
 - Create: `internal/remediate/gate/gate.go`
