@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -445,6 +446,106 @@ func TestSecondApproveStillConflicts(t *testing.T) {
 	srv.Router.ServeHTTP(second, r2)
 	if second.Code != http.StatusConflict {
 		t.Fatalf("second approve = %d, want 409: %s", second.Code, second.Body.String())
+	}
+}
+
+// TestDispatchedPhaseDoesNotShareSessionWithHandler is the regression test
+// for the dispatch/response data race. ApproveRemediationPlan and
+// ApproveRemediationPatches used to hand the background goroutine the very
+// same *models.RemediationSession they then encoded into the 202 body, so
+// the goroutine's first Runner.transition (`*sess = next`) overwrote the
+// struct while response.WriteJSON was still walking its fields.
+//
+// This test is deliberately -race-sensitive: without -race it passes against
+// both the fixed and the unfixed dispatch, which is precisely how the bug
+// shipped — the plain suite was green. Under `go test -race` it trips the
+// detector on the unfixed code. Several approvals run concurrently to widen
+// the window between dispatch and the goroutine's first write.
+//
+// The 202-body assertion is a second, weaker guard that needs no race
+// detector: once the goroutine works on its own copy, the response always
+// reports the claimed pre-phase status, because the background phase can no
+// longer reach the struct the handler serialized.
+func TestDispatchedPhaseDoesNotShareSessionWithHandler(t *testing.T) {
+	const concurrent = 8
+
+	cases := []struct {
+		name     string
+		endpoint string
+		claimed  models.RemediationStatus
+		settled  models.RemediationStatus
+		seed     func(*testing.T, *remediationServer) string
+	}{
+		{
+			name:     "plan approval dispatches the execute phase",
+			endpoint: "/plan/approve",
+			claimed:  models.RemediationPlanReview,
+			settled:  models.RemediationPatchReview, // the patch gate is on by default
+			seed:     seedSessionAwaitingPlanApproval,
+		},
+		{
+			name:     "patch approval dispatches the landing phase",
+			endpoint: "/patches/approve",
+			claimed:  models.RemediationPatchReview,
+			settled:  models.RemediationCompleted,
+			seed: func(t *testing.T, s *remediationServer) string {
+				t.Helper()
+				return seedRemediationSession(t, s, func(sess *models.RemediationSession) {
+					sess.Status = models.RemediationPatchReview
+				})
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := newTestServer(t)
+
+			// Seed and mint every request up front: withScopes writes to the
+			// store and calls t.Fatalf, neither of which belongs on a
+			// non-test goroutine.
+			ids := make([]string, concurrent)
+			reqs := make([]*http.Request, concurrent)
+			recs := make([]*httptest.ResponseRecorder, concurrent)
+			for i := range ids {
+				ids[i] = tc.seed(t, srv)
+				reqs[i] = httptest.NewRequest(http.MethodPost, "/api/v1/remediations/"+ids[i]+tc.endpoint, nil)
+				srv.withScopes(t, reqs[i], "write:fixes")
+				recs[i] = httptest.NewRecorder()
+			}
+
+			var wg sync.WaitGroup
+			for i := range reqs {
+				wg.Add(1)
+				go func(i int) {
+					defer wg.Done()
+					srv.Router.ServeHTTP(recs[i], reqs[i])
+				}(i)
+			}
+			wg.Wait()
+
+			for i, rec := range recs {
+				if rec.Code != http.StatusAccepted {
+					t.Fatalf("approve %d: status = %d, want 202: %s", i, rec.Code, rec.Body.String())
+				}
+				var got struct {
+					Data models.RemediationSession `json:"data"`
+				}
+				decodeJSON(t, rec.Body.Bytes(), &got)
+				if got.Data.Status != tc.claimed {
+					t.Errorf("approve %d: 202 body status = %q, want %q — the dispatched phase mutated the session the handler was serializing",
+						i, got.Data.Status, tc.claimed)
+				}
+			}
+
+			// Wait for every dispatched phase to actually finish. That is what
+			// gives the race detector something to observe (the goroutines'
+			// writes must land while the test is still running), and it keeps
+			// those goroutines from outliving the store closed on cleanup.
+			for _, id := range ids {
+				pollRemediationStatus(t, srv, id, tc.settled, 10*time.Second)
+			}
+		})
 	}
 }
 
