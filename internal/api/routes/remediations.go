@@ -567,21 +567,30 @@ func StreamRemediation(w http.ResponseWriter, r *http.Request) {
 // dispatchRemediationPhase runs an already-claimed phase in the background,
 // on its own copy of sess, and returns immediately.
 //
-// Ownership rule: once a phase is dispatched, the background goroutine owns
-// that copy of the session, and nothing else may read or write it. The
-// caller keeps its own sess pointer — e.g. to serialize it in the HTTP
-// response right after dispatching — and that pointer is never touched by
-// the goroutine, so no synchronization is needed between the two. This is
-// not just style: without the copy, a caller that both dispatches sess and
-// then reads it (as every call site here does, immediately, to write the
-// response) races the goroutine's first status transition against
-// response.WriteJSON's field-by-field JSON encoding of the same struct —
-// caught by `go test -race`, not by the plain suite.
+// Ownership invariant — nothing in the types expresses it, so state it
+// plainly: once a phase is dispatched, the background goroutine owns that
+// session value and the handler must not read it. The copy taken below is
+// what makes that enforceable in one place instead of at each call site:
+// the goroutine gets `owned`, the caller keeps its own *sess, and neither
+// touches the other's.
 //
-// A shallow copy is sufficient: Runner.transition (session.go) replaces the
-// whole struct value (*sess = next) rather than mutating through nested
-// pointers, so the copy and the original never end up aliasing the same
-// memory.
+// Without the copy, a handler that dispatches sess and then serializes that
+// same struct into its response body — which all three call sites do,
+// immediately — races Runner.transition's `*sess = next` (session.go)
+// against response.WriteJSON's field-by-field encoding of it. `go test
+// -race` catches that; the plain suite does not, which is how it shipped.
+// Only the two approve sites actually raced, since CreateRemediation's
+// Run reloads the session from the store rather than writing the struct it
+// was handed — but the boundary is uniform here so no future phase has to
+// re-derive which of those two shapes it is.
+//
+// A shallow copy suffices, and that rests on a property of the remediate
+// package worth recording: nothing ever writes *through* a
+// RemediationSession pointer field (LoopID, StartedAt, CompletedAt).
+// transition replaces the whole struct value, runPlanPhase replaces the
+// StartedAt pointer, and the store only reads them as query arguments — so
+// the pointees the copy still aliases are never written by anyone, and the
+// two structs share no mutable memory.
 //
 // Detached from the request context — which is cancelled the instant the
 // handler returns — via context.Background(), and registered under the
