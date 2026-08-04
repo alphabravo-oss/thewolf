@@ -166,6 +166,7 @@ func NewCommandGroups() []*cobra.Command {
 		newSuppressCmd(),
 		newPolicyCmd(),
 		newFixCmd(),
+		newRemediationCmd(),
 		newUserCmd(),
 		newSettingsCmd(),
 		newPromptCmd(),

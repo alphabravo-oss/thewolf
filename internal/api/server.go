@@ -25,6 +25,8 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/db"
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
+	"github.com/alphabravocompany/thewolf/internal/remediate"
+	"github.com/alphabravocompany/thewolf/internal/remediate/driver"
 	"github.com/alphabravocompany/thewolf/internal/scannerfeature"
 	"github.com/alphabravocompany/thewolf/internal/scannerobservability"
 	"github.com/alphabravocompany/thewolf/internal/wolflog"
@@ -93,6 +95,19 @@ func NewServer(store db.Store, addr string) *Server {
 
 	// Initialize SSE broker so scan events are broadcast to connected clients.
 	routes.SSEBroker = sse.NewBroker()
+
+	// Wire the agentic remediation subsystem. Config gates both the master
+	// kill switch (WOLF_REMEDIATE_ENABLED) and the plan/patch approval
+	// requirement (WOLF_REMEDIATE_ALLOW_YOLO) that CreateRemediation
+	// pre-flights before ever touching the driver; kept alongside the Runner
+	// so the route handlers can read the exact same values.
+	remediationCfg := remediate.LoadConfig()
+	routes.RemediationConfig = remediationCfg
+	routes.RemediationRunner = remediate.NewRunner(store, driver.NewExec(driver.ExecConfig{
+		Image:    remediationImage(),
+		Provider: remediationCfg.DefaultProvider,
+		Model:    remediationCfg.DefaultModel,
+	}), remediationCfg)
 
 	// Initialize artifact store at ~/.wolf/artifacts/ for durable scan output storage.
 	if artifacts.Global == nil {
@@ -405,6 +420,20 @@ func NewServer(store db.Store, addr string) *Server {
 				r.With(wLoops).Delete("/{id}", routes.StopLoop)
 			})
 
+			r.Route("/remediations", func(r chi.Router) {
+				r.With(rFixes).Get("/", routes.ListRemediations)
+				r.With(wFixes).Post("/", routes.CreateRemediation)
+				r.With(rFixes).Get("/{id}", routes.GetRemediation)
+				r.With(rFixes).Get("/{id}/stream", routes.StreamRemediation)
+				r.With(rFixes).Get("/{id}/plan", routes.GetRemediationPlan)
+				r.With(wFixes).Post("/{id}/plan/approve", routes.ApproveRemediationPlan)
+				r.With(wFixes).Post("/{id}/plan/reject", routes.RejectRemediationPlan)
+				r.With(rFixes).Get("/{id}/patches", routes.ListRemediationPatches)
+				r.With(wFixes).Post("/{id}/patches/approve", routes.ApproveRemediationPatches)
+				r.With(wFixes).Post("/{id}/patches/reject", routes.RejectRemediationPatches)
+				r.With(wFixes).Delete("/{id}", routes.CancelRemediation)
+			})
+
 			r.Route("/fleet", func(r chi.Router) {
 				r.With(rScans).Get("/posture", routes.FleetPosture)
 				r.With(rRepos).Get("/inventory", routes.FleetInventory)
@@ -656,6 +685,18 @@ func queueExecutionMode() bool {
 func envBool(name string) bool {
 	value := strings.TrimSpace(os.Getenv(name))
 	return strings.EqualFold(value, "true") || value == "1"
+}
+
+// remediationImage resolves the wolf-fixer-opencode image reference the
+// remediation driver runs. No release-pinned resolution exists for it yet
+// (unlike the scanner supply chain's managed images); an operator can pin an
+// exact digest via the env var, and the literal tag is a reasonable default
+// matching the image built by fixer/Dockerfile.opencode.
+func remediationImage() string {
+	if v := strings.TrimSpace(os.Getenv("WOLF_REMEDIATE_OPENCODE_IMAGE")); v != "" {
+		return v
+	}
+	return "wolf-fixer-opencode:latest"
 }
 
 // Shutdown performs a graceful shutdown with the given context deadline.

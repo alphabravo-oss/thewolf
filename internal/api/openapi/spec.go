@@ -191,6 +191,20 @@ func Endpoints() []Endpoint {
 		{"PUT", "/loops/{id}/resume", "loops", "Resume a loop", "write:loops", "", false},
 		{"DELETE", "/loops/{id}", "loops", "Stop a loop", "write:loops", "", false},
 
+		// Remediation (agentic OpenCode-driven triage + fix sessions, gated by
+		// WOLF_REMEDIATE_ENABLED and the plan/patch approval gates).
+		{"GET", "/remediations", "remediation", "List remediation sessions", "read:fixes", "", true},
+		{"POST", "/remediations", "remediation", "Create a remediation session", "write:fixes", "CreateRemediationRequest", false},
+		{"GET", "/remediations/{id}", "remediation", "Get a remediation session", "read:fixes", "", false},
+		{"GET", "/remediations/{id}/stream", "remediation", "Stream remediation session events (SSE)", "read:fixes", "", false},
+		{"GET", "/remediations/{id}/plan", "remediation", "Get a remediation session's triage plan", "read:fixes", "", false},
+		{"POST", "/remediations/{id}/plan/approve", "remediation", "Approve a remediation session's plan and resume execution", "write:fixes", "", false},
+		{"POST", "/remediations/{id}/plan/reject", "remediation", "Reject a remediation session's plan and terminate it", "write:fixes", "RemediationApprovalRequest", false},
+		{"GET", "/remediations/{id}/patches", "remediation", "List a remediation session's patches", "read:fixes", "", true},
+		{"POST", "/remediations/{id}/patches/approve", "remediation", "Approve a remediation session's patches and resume landing", "write:fixes", "", false},
+		{"POST", "/remediations/{id}/patches/reject", "remediation", "Reject a remediation session's patches and terminate it", "write:fixes", "RemediationApprovalRequest", false},
+		{"DELETE", "/remediations/{id}", "remediation", "Cancel a remediation session", "write:fixes", "", false},
+
 		// Filesystem helpers.
 		{"GET", "/browse", "system", "Browse a local filesystem path", "read:repos", "", false},
 		{"GET", "/git-info", "system", "Inspect a local git repository", "read:repos", "", false},
@@ -351,7 +365,7 @@ func buildTags() []any {
 	order := []string{
 		"system", "auth", "tokens", "audit", "users", "repos", "credentials",
 		"nodes", "collections", "scans", "sources", "fleet", "findings", "sarif",
-		"suppressions", "policies", "fixes", "loops", "config", "scanners",
+		"suppressions", "policies", "fixes", "loops", "remediation", "config", "scanners",
 		"scanner-supply-chain", "ai",
 	}
 	tags := make([]any, 0, len(order))
@@ -1542,6 +1556,14 @@ func buildComponents() map[string]any {
 				"severity_floor": str, "max_attempts": map[string]any{"type": "integer"},
 			}, "repo_id"),
 			"CreateLoopRequest": objSchema(map[string]any{"repo_id": str}),
+			"CreateRemediationRequest": objSchema(map[string]any{
+				"scan_id": str, "repo_id": str,
+				"plan_gate_enabled":  map[string]any{"type": "boolean"},
+				"patch_gate_enabled": map[string]any{"type": "boolean"},
+				"provider":           str, "model": str,
+				"max_turns": map[string]any{"type": "integer"},
+			}, "scan_id", "repo_id"),
+			"RemediationApprovalRequest": objSchema(map[string]any{"reason": str}),
 			"CreateSecretRequest": objSchema(map[string]any{
 				"key_type": str, "key_name": str, "value": str,
 			}, "key_name", "value"),
