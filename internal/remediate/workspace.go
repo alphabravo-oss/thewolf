@@ -79,7 +79,10 @@ func (r *Runner) prepareWorkspace(ctx context.Context, sess *models.RemediationS
 	if repo.SourceType == models.SourceTypeLocal {
 		cloned, cleanup, cerr := cloneLocalForRemediation(ctx, repo.SourcePath)
 		if cerr != nil {
-			return nil, fmt.Errorf("clone local repo: %w", cerr)
+			// cloneLocalForRemediation's own errors are already fully
+			// descriptive ("clone local repo: ..."); wrapping again here
+			// produced "clone local repo: clone local repo: ...".
+			return nil, cerr
 		}
 		// Past this point the scratch clone must outlive prepareWorkspace:
 		// every remaining phase, and eventually landing (push + PR), reuses

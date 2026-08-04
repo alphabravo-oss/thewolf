@@ -204,6 +204,23 @@ func (r *Runner) runPlanPhase(ctx context.Context, sess *models.RemediationSessi
 		return werr
 	}
 
+	// prepareWorkspace only sets WorktreePath/BranchName/CloneRoot in
+	// memory; without a write here they would sit unpersisted for the
+	// entire driver.Plan call below — an agentic LLM run, potentially
+	// minutes. If the process dies in that window, RecoverOrphanSessions
+	// marks this row failed with those fields still empty: exactly the
+	// "leaked clone with no persisted handle for cleanup" IMPORTANT 2 was
+	// raised about, reopened in the one scenario RecoverOrphanSessions
+	// exists to handle. A self-transition (still "planning") reuses the
+	// same CAS write path transition() already provides rather than adding
+	// a second one (e.g. a bare UpdateRemediationSession). Kept before the
+	// defer below, matching the top claim above: a CAS loss here means
+	// something else (a concurrent cancel) legitimately moved the session,
+	// so this returns directly rather than having failSession stomp on it.
+	if terr := r.transition(ctx, sess, models.RemediationPlanning, ""); terr != nil {
+		return terr
+	}
+
 	defer func() {
 		if err != nil {
 			status := models.RemediationFailed

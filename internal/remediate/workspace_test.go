@@ -9,9 +9,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/alphabravocompany/thewolf/internal/db"
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/remediate/driver"
 	"github.com/alphabravocompany/thewolf/internal/remediate/meter"
+	"github.com/alphabravocompany/thewolf/internal/remediate/plan"
 )
 
 func TestBranchNameIsStableAndScoped(t *testing.T) {
@@ -222,6 +224,72 @@ func TestRunPersistsWorktreePath(t *testing.T) {
 	}
 }
 
+// midPlanAssertingDriver reads the session back from the store from INSIDE
+// its own Plan method — i.e. while driver.Plan is "running", before it
+// returns. This is the only shape that can catch a regression where
+// prepareWorkspace's fields are set in memory but not persisted before the
+// long-running driver call starts: a post-Run assertion (like
+// TestRunPersistsWorktreePath above) can't distinguish "written before
+// Plan" from "written by the post-plan transition after Plan returns" —
+// both look identical once Run has already completed.
+type midPlanAssertingDriver struct {
+	t         *testing.T
+	store     db.Store
+	sessionID string
+	plan      *plan.Plan
+	checked   bool
+}
+
+func (d *midPlanAssertingDriver) Plan(ctx context.Context, req driver.PlanRequest) (*plan.Plan, meter.Usage, error) {
+	d.t.Helper()
+	d.checked = true
+	got, err := d.store.GetRemediationSession(ctx, d.sessionID)
+	if err != nil {
+		d.t.Fatalf("GetRemediationSession mid-plan: %v", err)
+	}
+	if got.WorktreePath == "" {
+		d.t.Error("WorktreePath not yet persisted when driver.Plan runs")
+	}
+	if got.CloneRoot == "" {
+		d.t.Error("CloneRoot not yet persisted when driver.Plan runs")
+	}
+	if req.OnEvent != nil {
+		req.OnEvent(meter.Event{Type: "step_finish"})
+	}
+	return d.plan, meter.Usage{Turns: 1}, nil
+}
+
+func (d *midPlanAssertingDriver) Execute(_ context.Context, req driver.ExecuteRequest) (*driver.PatchSeries, meter.Usage, error) {
+	if req.OnEvent != nil {
+		req.OnEvent(meter.Event{Type: "step_finish"})
+	}
+	return &driver.PatchSeries{}, meter.Usage{Turns: 1}, nil
+}
+
+// The regression this pins: moving prepareWorkspace after the CAS claim
+// (to fix the concurrency leak) accidentally left WorktreePath/CloneRoot
+// unpersisted for the whole plan phase, since prepareWorkspace only sets
+// them in memory. If the process died during driver.Plan, RecoverOrphan-
+// Sessions would mark the row failed with both fields still empty —
+// reopening the exact leaked-clone-with-no-handle problem persisting
+// CloneRoot was meant to close.
+func TestRunPersistsWorktreePathBeforeDriverPlanRuns(t *testing.T) {
+	store := newTestStore(t)
+	sess := seedSession(t, store, func(s *models.RemediationSession) {
+		s.PlanGateEnabled = true
+		s.PatchGateEnabled = false
+	})
+	d := &midPlanAssertingDriver{t: t, store: store, sessionID: sess.ID, plan: fixturePlan()}
+	r := NewRunner(store, d, Config{Enabled: true, MaxTurns: 10, AllowYolo: true})
+
+	if err := r.Run(context.Background(), sess.ID); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if !d.checked {
+		t.Fatal("driver.Plan was never called; this test did not exercise the mid-plan window at all")
+	}
+}
+
 // SECURITY: `git clone --local` hardlinks object files by default — the
 // clone's objects are the SAME inode as the source's. The driver mounts
 // this clone's .git directory read-write, and the execute permission
@@ -258,10 +326,17 @@ func TestPrepareWorkspaceObjectsAreNotHardlinkedToSource(t *testing.T) {
 // sourcePath's .git/objects — i.e. hardlinked to it, not a real copy.
 // os.SameFile is used rather than poking at syscall.Stat_t directly so this
 // stays portable rather than failing to compile on non-Unix platforms.
+//
+// Fails loudly if it never found a same-named pair to compare: with zero
+// comparisons this would otherwise report "not hardlinked" having tested
+// nothing (e.g. if a future git version packs objects, or the objects
+// directory structure changes), which is exactly the silent-pass failure
+// mode this whole review round was about closing.
 func sameInodeAsAnyObject(t *testing.T, sourcePath, clonePath string) bool {
 	t.Helper()
 	cloneObjDir := filepath.Join(clonePath, ".git", "objects")
 	found := false
+	compared := 0
 	err := filepath.WalkDir(cloneObjDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
@@ -279,6 +354,7 @@ func sameInodeAsAnyObject(t *testing.T, sourcePath, clonePath string) bool {
 		if err != nil {
 			return err
 		}
+		compared++
 		if os.SameFile(srcInfo, cloneInfo) {
 			found = true
 		}
@@ -286,6 +362,9 @@ func sameInodeAsAnyObject(t *testing.T, sourcePath, clonePath string) bool {
 	})
 	if err != nil {
 		t.Fatalf("walk clone objects: %v", err)
+	}
+	if compared == 0 {
+		t.Fatal("compared zero object-file pairs — this test proved nothing; the fixture or the walk logic needs fixing")
 	}
 	return found
 }
