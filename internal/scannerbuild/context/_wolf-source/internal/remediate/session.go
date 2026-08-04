@@ -92,8 +92,21 @@ func (r *Runner) driverPreflight(ctx context.Context) (context.Context, context.
 // A CAS loss (sql.ErrNoRows) means exactly that happened, so that row is
 // skipped rather than escalated — it is already correct, just not what this
 // function expected to find when it listed it.
+//
+// RemediationPending is included even though it looks like "not started yet"
+// rather than "mid-run": CreateRemediation writes the row as pending and
+// then dispatches Run in a background goroutine in the same breath (see
+// routes.CreateRemediation) — pending has no other way out, no API
+// re-triggers a session sitting there, so a crash between that write and
+// Run's own first transition strands it exactly like any other stuck status.
+// Including it here is only safe because this function runs before
+// s.httpServer.ListenAndServe() in Server.Start(): no request handler can be
+// concurrently creating a genuinely-new pending session while this runs, so
+// every row this function finds in pending is guaranteed to be left over
+// from a previous process, never a live one it would be racing.
 func RecoverOrphanSessions(ctx context.Context, store db.Store) error {
 	stuck := []models.RemediationStatus{
+		models.RemediationPending,
 		models.RemediationPlanning,
 		models.RemediationExecuting,
 		models.RemediationApplying,
@@ -193,6 +206,7 @@ func (r *Runner) runPlanPhase(ctx context.Context, sess *models.RemediationSessi
 		Model:        sess.Model,
 		OnEvent:      r.eventSink(ctx, sess.ID),
 	}
+	budget := req.MaxTurns
 	p, usage, perr := r.driver.Plan(ctx, req)
 	sess.TurnsUsedPlan = usage.Turns
 	sess.TokensUsed += usage.Tokens
@@ -205,13 +219,26 @@ func (r *Runner) runPlanPhase(ctx context.Context, sess *models.RemediationSessi
 	// usage is added above, before the retry, rather than overwritten by
 	// it — it was real, billed driver spend, not a no-op, and must count
 	// toward the session the same way both phases' usage already does.
+	//
+	// The retry gets what's LEFT of the phase's budget (budget minus what
+	// the first attempt already spent), not a fresh MaxTurns — driver.Plan
+	// builds a brand-new meter per call, so reusing MaxTurns verbatim would
+	// let one plan phase spend up to 2x its configured budget, silently
+	// defeating the cost control max_turns exists to enforce. A budget-
+	// exhausted first attempt returns driver.ErrBudgetExhausted, not
+	// ErrUnparseablePlan, so it never reaches this branch — remaining is
+	// always positive on the path that does. The <= 0 guard is defensive
+	// only, for a future change to the meter's own accounting.
 	if perr != nil && errors.Is(perr, driver.ErrUnparseablePlan) {
-		req.RepairHint = "Your previous response was not valid plan JSON. " +
-			"Respond with the plan object only, no prose."
-		p, usage, perr = r.driver.Plan(ctx, req)
-		sess.TurnsUsedPlan += usage.Turns
-		sess.TokensUsed += usage.Tokens
-		sess.CostUsed += usage.Cost
+		if remaining := budget - usage.Turns; remaining > 0 {
+			req.RepairHint = "Your previous response was not valid plan JSON. " +
+				"Respond with the plan object only, no prose."
+			req.MaxTurns = remaining
+			p, usage, perr = r.driver.Plan(ctx, req)
+			sess.TurnsUsedPlan += usage.Turns
+			sess.TokensUsed += usage.Tokens
+			sess.CostUsed += usage.Cost
+		}
 	}
 	if perr != nil {
 		return perr

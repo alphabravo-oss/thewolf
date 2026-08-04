@@ -833,7 +833,16 @@ func TestMalformedPlanRetriesOnce(t *testing.T) {
 		s.PlanGateEnabled = false
 		s.PatchGateEnabled = false
 	})
-	d := driver.NewFake([]meter.Event{{Type: "assistant"}}, nil)
+	// step_finish is the meter's real turn signal (see meter.go); "assistant"
+	// is not a real OpenCode event type and counts zero turns forever, which
+	// would make both attempts return Usage{0,0,0} — unable to distinguish
+	// this test's accumulation assertions below from the overwrite bug they
+	// exist to catch. Tokens/cost mirror TestRunYoloReachesCompleted's
+	// fixture so both attempts contribute something nonzero to accumulate.
+	ev := meter.Event{Type: "step_finish"}
+	ev.Part.Tokens.Total = 42
+	ev.Part.Cost = 0.5
+	d := driver.NewFake([]meter.Event{ev}, nil)
 	d.PlanErr = fmt.Errorf("%w: unexpected end of JSON input", driver.ErrUnparseablePlan)
 
 	r := NewRunner(store, d, Config{Enabled: true, MaxTurns: 10, AllowYolo: true})
@@ -847,6 +856,48 @@ func TestMalformedPlanRetriesOnce(t *testing.T) {
 	if got.Status != models.RemediationFailed {
 		t.Errorf("Status = %q, want %q", got.Status, models.RemediationFailed)
 	}
+	// Pins the accumulation fix: the failed first attempt's usage must add
+	// to, not be overwritten by, the retry's. Fails against an
+	// implementation that reassigns usage on retry instead of accumulating
+	// it — both fields would read 42/0.5 (the last attempt only) rather
+	// than double.
+	if got.TurnsUsedPlan != 2 {
+		t.Errorf("TurnsUsedPlan = %d, want 2 (1 turn from each attempt, accumulated)", got.TurnsUsedPlan)
+	}
+	if got.TokensUsed != 84 {
+		t.Errorf("TokensUsed = %d, want 84 (42 from each attempt, accumulated)", got.TokensUsed)
+	}
+	if got.CostUsed != 1.0 {
+		t.Errorf("CostUsed = %v, want 1.0 (0.5 from each attempt, accumulated)", got.CostUsed)
+	}
+}
+
+// A plan failure that is NOT an unparseable plan must not retry — the retry
+// exists specifically for driver.ErrUnparseablePlan, not for every plan
+// error. Without this test, a future refactor that widens the retry
+// condition (e.g. back to a bare non-nil check) would pass every other test
+// in this file, since TestMalformedPlanRetriesOnce only pins the positive
+// case.
+func TestNonUnparseablePlanErrorDoesNotRetry(t *testing.T) {
+	store := newTestStore(t)
+	sess := seedSession(t, store, func(s *models.RemediationSession) {
+		s.PlanGateEnabled = false
+		s.PatchGateEnabled = false
+	})
+	d := driver.NewFake([]meter.Event{{Type: "step_finish"}}, nil)
+	d.PlanErr = errors.New("boom")
+
+	r := NewRunner(store, d, Config{Enabled: true, MaxTurns: 10, AllowYolo: true})
+	if err := r.Run(context.Background(), sess.ID); err == nil {
+		t.Fatal("Run succeeded despite a plan error, want error")
+	}
+	if d.PlanCalls != 1 {
+		t.Errorf("Plan called %d times, want 1 (no retry for a non-unparseable-plan error)", d.PlanCalls)
+	}
+	got, _ := store.GetRemediationSession(context.Background(), sess.ID)
+	if got.Status != models.RemediationFailed {
+		t.Errorf("Status = %q, want %q", got.Status, models.RemediationFailed)
+	}
 }
 
 // Sessions mid-run when the process died are failed on startup; sessions
@@ -855,6 +906,7 @@ func TestMalformedPlanRetriesOnce(t *testing.T) {
 func TestRecoverOrphanSessions(t *testing.T) {
 	store := newTestStore(t)
 	ctx := context.Background()
+	pending := seedSessionWithStatus(t, store, models.RemediationPending)
 	orphaned := seedSessionWithStatus(t, store, models.RemediationExecuting)
 	planning := seedSessionWithStatus(t, store, models.RemediationPlanning)
 	awaiting := seedSessionWithStatus(t, store, models.RemediationPlanReview)
@@ -863,7 +915,11 @@ func TestRecoverOrphanSessions(t *testing.T) {
 		t.Fatalf("RecoverOrphanSessions: %v", err)
 	}
 
-	for _, id := range []string{orphaned.ID, planning.ID} {
+	// pending is included alongside the other stuck statuses: CreateRemediation
+	// writes pending and dispatches Run in the same breath, so a crash before
+	// Run's own first transition strands the row exactly like any other
+	// mid-run status — see RecoverOrphanSessions's doc comment.
+	for _, id := range []string{pending.ID, orphaned.ID, planning.ID} {
 		got, _ := store.GetRemediationSession(ctx, id)
 		if got.Status != models.RemediationFailed {
 			t.Errorf("session %s = %q, want %q", id, got.Status, models.RemediationFailed)
