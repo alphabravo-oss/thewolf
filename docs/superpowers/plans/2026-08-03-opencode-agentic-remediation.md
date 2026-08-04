@@ -2614,6 +2614,121 @@ git commit -m "feat(remediate): remediation API with gate approval endpoints"
 
 ---
 
+### Task 10b: Async approve — 202 plus a cancellation registry
+
+**Amendment, decided after Task 10 shipped.** The approve handlers called the
+Runner synchronously, so a successful `ApprovePlan` held the HTTP connection for
+the entire execute phase. The server's `WriteTimeout` is 15 minutes
+(`internal/api/server.go:615`) while the default `WOLF_REMEDIATE_SESSION_TIMEOUT`
+is 30 (`internal/remediate/config.go:31`), so the connection died at 15 minutes
+while the agent kept working — the operator saw a failure for a run that was
+still going, and could not distinguish that from a real one.
+
+An agent run is minutes-to-tens-of-minutes work and does not belong on a request
+connection. Approve becomes asynchronous.
+
+**Follow the existing pattern in this repo — do not invent a new one.** Both
+scans and loops already do exactly this:
+
+- `internal/api/routes/scans.go:81-82` — `activeScansMu sync.Mutex` guarding
+  `activeScanCtxs = make(map[string]context.CancelFunc)`
+- `internal/api/routes/scans.go:307` — `go executeScan(context.Background(), …)`
+- `internal/api/routes/loops.go:31` — `activeLoopCtxs`, the same shape for a
+  resource that also has pause/resume
+
+Note the detached `context.Background()`: the request context is cancelled the
+moment the handler returns, so the background phase must not inherit it.
+
+**Files:**
+- Modify: `internal/api/routes/remediations.go`
+- Test: `internal/api/routes/remediations_test.go`
+
+**Interfaces:**
+- Consumes: `remediate.Runner`'s existing approval methods, unchanged.
+- Produces: `activeRemediationCtxs` registry; `ApproveRemediationPlan` and `ApproveRemediationPatches` return `202 Accepted`.
+
+**Required shape:**
+
+1. The handler validates and lets the Runner perform its CAS transition, exactly as now — the compare-and-swap must still happen synchronously so a double-clicked approve is rejected with 409 before anything is dispatched. Only the phase *execution* moves to the background.
+2. `ctx, cancel := context.WithCancel(context.Background())`, register `cancel` under the session ID in the mutex-guarded map, `go` the phase, and `defer` unregistering it.
+3. Return `202 Accepted` with the session body. The client watches `/remediations/{id}/stream` for progress — that SSE endpoint already exists and already replays from `remediation_events`.
+4. Reject paths stay synchronous. They make no driver call and complete in milliseconds.
+5. `CancelRemediation` looks up the registered `CancelFunc` and calls it, so cancellation reaches an in-flight phase instead of only flipping the row. Keep the existing direct CAS transition for the case where no goroutine is registered (the session is held at a gate, or the process restarted).
+
+**A restart still orphans an in-flight phase** — the goroutine dies with the
+process and the row stays `executing`. That is exactly what Task 10a's
+`RecoverOrphanSessions` cleans up, and it is why that task marks `planning` and
+`executing` sessions failed on startup while leaving `plan_review`/`patch_review`
+untouched. The two tasks are complementary; neither is sufficient alone.
+
+- [ ] **Step 1: Write the failing test**
+
+```go
+// Approve must return promptly rather than blocking for the phase duration.
+// The synchronous version held the connection past the server's WriteTimeout.
+func TestApprovePlanReturns202WithoutBlocking(t *testing.T) {
+	srv := newTestServer(t)
+	id := seedSessionAwaitingPlanApproval(t, srv)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/remediations/"+id+"/plan/approve", nil)
+	withScopes(req, "write:fixes")
+	rec := httptest.NewRecorder()
+
+	done := make(chan struct{})
+	go func() { srv.Router.ServeHTTP(rec, req); close(done) }()
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("approve blocked for 5s — it must dispatch and return, not run the phase inline")
+	}
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want 202", rec.Code)
+	}
+}
+
+// A double-clicked approve must still be rejected, so the CAS has to run
+// synchronously even though the phase does not.
+func TestSecondApproveStillConflicts(t *testing.T) {
+	srv := newTestServer(t)
+	id := seedSessionAwaitingPlanApproval(t, srv)
+
+	first := httptest.NewRecorder()
+	r1 := httptest.NewRequest(http.MethodPost, "/api/v1/remediations/"+id+"/plan/approve", nil)
+	withScopes(r1, "write:fixes")
+	srv.Router.ServeHTTP(first, r1)
+	if first.Code != http.StatusAccepted {
+		t.Fatalf("first approve = %d, want 202", first.Code)
+	}
+
+	second := httptest.NewRecorder()
+	r2 := httptest.NewRequest(http.MethodPost, "/api/v1/remediations/"+id+"/plan/approve", nil)
+	withScopes(r2, "write:fixes")
+	srv.Router.ServeHTTP(second, r2)
+	if second.Code != http.StatusConflict {
+		t.Fatalf("second approve = %d, want 409", second.Code)
+	}
+}
+```
+
+- [ ] **Step 2: Run to verify it fails**
+
+Run: `go test ./internal/api/routes/ -run 'Approve' -v`
+Expected: FAIL — the current handler blocks and returns 200.
+
+- [ ] **Step 3: Implement the registry and dispatch**, following `scans.go:81-82` and `:307`.
+
+- [ ] **Step 4: Wire `CancelRemediation` to the registry.**
+
+- [ ] **Step 5: Run tests, regenerate the lock last, commit.**
+
+```bash
+git add internal/api/ scanners/scanner-lock.yaml
+git commit -m "feat(remediate): dispatch approved phases asynchronously"
+```
+
+---
+
 ### Task 10a: Error-path hardening
 
 Covers three spec requirements the happy-path tasks skip: malformed plan retry, orphan recovery, and the opt-in integration test.
