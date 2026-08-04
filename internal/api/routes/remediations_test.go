@@ -3,6 +3,7 @@ package routes_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -136,10 +137,82 @@ func seedSessionPending(t *testing.T, s *remediationServer) string {
 	return seedRemediationSession(t, s, nil)
 }
 
+// seedSessionAwaitingPlanApproval seeds a session sitting in plan_review,
+// along with the plan row a real Run would have saved to get it there —
+// store.ApproveRemediationPlan targets the latest plan row for the session
+// and errors (sql.ErrNoRows) if none exists, so ClaimPlanApproval needs one
+// to succeed.
+func seedSessionAwaitingPlanApproval(t *testing.T, s *remediationServer) string {
+	t.Helper()
+	id := seedRemediationSession(t, s, func(sess *models.RemediationSession) {
+		sess.Status = models.RemediationPlanReview
+	})
+	if err := s.store.SaveRemediationPlan(context.Background(), &models.RemediationPlan{
+		SessionID: id,
+		PlanJSON:  `{"summary":"test plan","items":[{"finding_id":"f-1","action":"fix","rationale":"test"}]}`,
+		CreatedAt: time.Now(),
+	}); err != nil {
+		t.Fatalf("SaveRemediationPlan: %v", err)
+	}
+	return id
+}
+
+// seedRepoAndScan creates a repo and a scan under it, owned by the server's
+// test user. CreateRemediation is the only handler that actually loads and
+// verifies these (loadRepoForCaller / loadScanForCaller) — every other test
+// bypasses that by seeding a remediation session directly via the store.
+func seedRepoAndScan(t *testing.T, s *remediationServer) (repoID, scanID string) {
+	t.Helper()
+	repoID = uuid.NewString()
+	if err := s.store.CreateRepo(context.Background(), &models.Repo{
+		ID:            repoID,
+		UserID:        s.userID,
+		Name:          "remediation-test-repo",
+		SourceType:    models.SourceTypeLocal,
+		SourcePath:    "/tmp/remediation-test-repo",
+		DefaultBranch: "main",
+	}); err != nil {
+		t.Fatalf("CreateRepo: %v", err)
+	}
+	scanID = uuid.NewString()
+	if err := s.store.CreateScan(context.Background(), &models.Scan{
+		ID:     scanID,
+		UserID: s.userID,
+		RepoID: repoID,
+		Branch: "main",
+		Status: models.ScanStatusCompleted,
+	}); err != nil {
+		t.Fatalf("CreateScan: %v", err)
+	}
+	return repoID, scanID
+}
+
 func decodeJSON(t *testing.T, body []byte, v any) {
 	t.Helper()
 	if err := json.Unmarshal(body, v); err != nil {
 		t.Fatalf("json decode: %v (body: %s)", err, string(body))
+	}
+}
+
+// pollRemediationStatus waits (bounded by timeout) until a session reaches
+// the given status, for asserting on an asynchronously-dispatched phase's
+// eventual outcome without a fixed sleep — it returns as soon as the status
+// lands, and only fails if the deadline passes first.
+func pollRemediationStatus(t *testing.T, s *remediationServer, id string, want models.RemediationStatus, timeout time.Duration) models.RemediationSession {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for {
+		sess, err := s.store.GetRemediationSession(context.Background(), id)
+		if err != nil {
+			t.Fatalf("GetRemediationSession: %v", err)
+		}
+		if sess.Status == want {
+			return *sess
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("session %s did not reach %q within %s (last status %q)", id, want, timeout, sess.Status)
+		}
+		time.Sleep(5 * time.Millisecond)
 	}
 }
 
@@ -299,10 +372,10 @@ func TestApprovePatchesRejectsWrongState(t *testing.T) {
 }
 
 // TestApprovePatchesHappyPathCompletes exercises a real, successful call
-// into the Runner. ApprovePatches is the only approve/reject path that never
-// touches the driver (runLandingPhase is still a stub per session.go, ahead
-// of Task 13), so it can be asserted synchronously without a fake plan/patch
-// fixture or a race against a background goroutine.
+// into the Runner. The claim (returned in the 202 response) still shows
+// patch_review — the landing phase that flips it to completed runs in the
+// background per Task 10b, so the test polls the store for the eventual
+// state instead of asserting on the response body's status.
 func TestApprovePatchesHappyPathCompletes(t *testing.T) {
 	srv := newTestServer(t)
 	id := seedRemediationSession(t, srv, func(s *models.RemediationSession) {
@@ -314,15 +387,140 @@ func TestApprovePatchesHappyPathCompletes(t *testing.T) {
 	rec := httptest.NewRecorder()
 	srv.Router.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want 202: %s", rec.Code, rec.Body.String())
 	}
 	var got struct {
 		Data models.RemediationSession `json:"data"`
 	}
 	decodeJSON(t, rec.Body.Bytes(), &got)
-	if got.Data.Status != models.RemediationCompleted {
-		t.Errorf("status after approval = %q, want %q", got.Data.Status, models.RemediationCompleted)
+	if got.Data.Status != models.RemediationPatchReview {
+		t.Errorf("claimed status in the 202 response = %q, want %q (unchanged until the background phase runs)",
+			got.Data.Status, models.RemediationPatchReview)
+	}
+
+	pollRemediationStatus(t, srv, id, models.RemediationCompleted, 2*time.Second)
+}
+
+// Approve must return promptly rather than blocking for the phase duration.
+// The synchronous version held the connection past the server's WriteTimeout.
+func TestApprovePlanReturns202WithoutBlocking(t *testing.T) {
+	srv := newTestServer(t)
+	id := seedSessionAwaitingPlanApproval(t, srv)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/remediations/"+id+"/plan/approve", nil)
+	srv.withScopes(t, req, "write:fixes")
+	rec := httptest.NewRecorder()
+
+	done := make(chan struct{})
+	go func() { srv.Router.ServeHTTP(rec, req); close(done) }()
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("approve blocked for 5s — it must dispatch and return, not run the phase inline")
+	}
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want 202: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// A double-clicked approve must still be rejected, so the CAS has to run
+// synchronously even though the phase does not.
+func TestSecondApproveStillConflicts(t *testing.T) {
+	srv := newTestServer(t)
+	id := seedSessionAwaitingPlanApproval(t, srv)
+
+	first := httptest.NewRecorder()
+	r1 := httptest.NewRequest(http.MethodPost, "/api/v1/remediations/"+id+"/plan/approve", nil)
+	srv.withScopes(t, r1, "write:fixes")
+	srv.Router.ServeHTTP(first, r1)
+	if first.Code != http.StatusAccepted {
+		t.Fatalf("first approve = %d, want 202: %s", first.Code, first.Body.String())
+	}
+
+	second := httptest.NewRecorder()
+	r2 := httptest.NewRequest(http.MethodPost, "/api/v1/remediations/"+id+"/plan/approve", nil)
+	srv.withScopes(t, r2, "write:fixes")
+	srv.Router.ServeHTTP(second, r2)
+	if second.Code != http.StatusConflict {
+		t.Fatalf("second approve = %d, want 409: %s", second.Code, second.Body.String())
+	}
+}
+
+// TestApprovePlanDisabledReturns403 exercises the remediate.ErrRemediationDisabled
+// sentinel end to end: an admin who flips WOLF_REMEDIATE_ENABLED=false while a
+// session sits in plan_review gets an actionable 403, not a generic 500.
+func TestApprovePlanDisabledReturns403(t *testing.T) {
+	srv := newTestServer(t)
+	id := seedSessionAwaitingPlanApproval(t, srv)
+
+	routes.RemediationRunner = remediate.NewRunner(srv.store, driver.NewFake(nil, nil), remediate.Config{Enabled: false})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/remediations/"+id+"/plan/approve", nil)
+	srv.withScopes(t, req, "write:fixes")
+	rec := httptest.NewRecorder()
+	srv.Router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403 (remediation disabled): %s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestCreateRemediationSuccess is the only test exercising the create
+// handler's success path — loadRepoForCaller, loadScanForCaller, and the
+// actual insert — since every other create test fails before reaching them.
+func TestCreateRemediationSuccess(t *testing.T) {
+	srv := newTestServer(t)
+	repoID, scanID := seedRepoAndScan(t, srv)
+
+	body := fmt.Sprintf(`{"scan_id":%q,"repo_id":%q}`, scanID, repoID)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/remediations", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	srv.withScopes(t, req, "write:fixes")
+	rec := httptest.NewRecorder()
+	srv.Router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want 201: %s", rec.Code, rec.Body.String())
+	}
+	var got struct {
+		Data models.RemediationSession `json:"data"`
+	}
+	decodeJSON(t, rec.Body.Bytes(), &got)
+	if got.Data.RepoID != repoID || got.Data.ScanID != scanID {
+		t.Errorf("session repo/scan = %q/%q, want %q/%q", got.Data.RepoID, got.Data.ScanID, repoID, scanID)
+	}
+	if got.Data.Status != models.RemediationPending {
+		t.Errorf("status = %q, want %q", got.Data.Status, models.RemediationPending)
+	}
+
+	persisted, err := srv.store.GetRemediationSession(context.Background(), got.Data.ID)
+	if err != nil {
+		t.Fatalf("session not persisted: %v", err)
+	}
+	if persisted.UserID != srv.userID {
+		t.Errorf("persisted user_id = %q, want %q", persisted.UserID, srv.userID)
+	}
+}
+
+// TestCreateRemediationMismatchedRepoScan covers the 400 branch that fires
+// when scan_id and repo_id don't belong together — untested until now since
+// every other create test fails before reaching it.
+func TestCreateRemediationMismatchedRepoScan(t *testing.T) {
+	srv := newTestServer(t)
+	repoID, _ := seedRepoAndScan(t, srv)
+	_, otherScanID := seedRepoAndScan(t, srv) // belongs to a second, different repo
+
+	body := fmt.Sprintf(`{"scan_id":%q,"repo_id":%q}`, otherScanID, repoID)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/remediations", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	srv.withScopes(t, req, "write:fixes")
+	rec := httptest.NewRecorder()
+	srv.Router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400 (scan_id does not belong to repo_id): %s", rec.Code, rec.Body.String())
 	}
 }
 

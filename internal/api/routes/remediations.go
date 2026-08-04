@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -34,6 +35,16 @@ var RemediationRunner *remediate.Runner
 // settings (AllowYolo, the default provider/model, the master kill switch)
 // the Runner itself consults — without needing an exported getter on Runner.
 var RemediationConfig remediate.Config
+
+// activeRemediationCtxs tracks in-flight background phases (the initial
+// Run, or a resumed execute/landing phase after approval) by session ID, so
+// CancelRemediation can reach a goroutine mid-driver-call instead of only
+// flipping the database row. Mirrors scans.go's activeScanCtxs / loops.go's
+// activeLoopCtxs — the same pattern, not a new one.
+var (
+	activeRemediationsMu  sync.Mutex
+	activeRemediationCtxs = make(map[string]context.CancelFunc)
+)
 
 // createRemediationRequest is the body of POST /remediations. ScanID and
 // RepoID are required; everything else falls back to RemediationConfig's
@@ -162,11 +173,9 @@ func CreateRemediation(w http.ResponseWriter, r *http.Request) {
 	// the request context — like executeScan, since the driver call behind
 	// it is container-backed and can run for minutes.
 	runner := RemediationRunner
-	go func(sessionID string) {
-		if err := runner.Run(context.Background(), sessionID); err != nil {
-			wolflog.L().Error().Err(err).Str("session", sessionID).Msg("remediation run failed")
-		}
-	}(sess.ID)
+	dispatchRemediationPhase(sess.ID, func(ctx context.Context) error {
+		return runner.Run(ctx, sess.ID)
+	})
 
 	response.WriteJSON(w, http.StatusCreated, response.SuccessResponse{Data: sess})
 }
@@ -264,11 +273,15 @@ func GetRemediationPlan(w http.ResponseWriter, r *http.Request) {
 	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: plan})
 }
 
-// ApproveRemediationPlan handles POST /remediations/{id}/plan/approve. The
-// call resumes the session straight into its execute phase (session.go's
-// ApprovePlan), so this can block for as long as that phase's driver call
-// runs — there is no background worker for remediation yet to hand it off
-// to. Bounded by the session's MaxTurns/SessionTimeout either way.
+// ApproveRemediationPlan handles POST /remediations/{id}/plan/approve.
+// Claims the approval synchronously — the CAS-guarded status check and the
+// plan-approval write, via Runner.ClaimPlanApproval — so a double-clicked
+// approve is still rejected with 409 before anything is dispatched. Only
+// the execute phase itself (a container-backed driver call that can run for
+// minutes) moves to the background: holding the HTTP connection for it
+// would risk hitting the server's WriteTimeout before the session's own,
+// longer SessionTimeout. Returns 202; the client watches
+// GET /remediations/{id}/stream for progress.
 func ApproveRemediationPlan(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetUserFromContext(r.Context())
 	if claims == nil {
@@ -289,11 +302,16 @@ func ApproveRemediationPlan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := RemediationRunner.ApprovePlan(r.Context(), id, claims.UserID); err != nil {
+	runner := RemediationRunner
+	sess, err := runner.ClaimPlanApproval(r.Context(), id, claims.UserID)
+	if err != nil {
 		writeRemediationRunnerError(w, err)
 		return
 	}
-	writeReloadedRemediationSession(w, r, h, id)
+	dispatchRemediationPhase(id, func(ctx context.Context) error {
+		return runner.ExecutePlanPhase(ctx, sess)
+	})
+	response.WriteJSON(w, http.StatusAccepted, response.SuccessResponse{Data: sess})
 }
 
 // RejectRemediationPlan handles POST /remediations/{id}/plan/reject.
@@ -356,8 +374,9 @@ func ListRemediationPatches(w http.ResponseWriter, r *http.Request) {
 }
 
 // ApproveRemediationPatches handles POST /remediations/{id}/patches/approve.
-// Resumes into the landing phase (session.go's ApprovePatches); see
-// ApproveRemediationPlan's comment on why this call is synchronous.
+// Claims synchronously (Runner.ClaimPatchesApproval) and dispatches the
+// landing phase to the background; see ApproveRemediationPlan's comment for
+// why. Returns 202.
 func ApproveRemediationPatches(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetUserFromContext(r.Context())
 	if claims == nil {
@@ -378,11 +397,16 @@ func ApproveRemediationPatches(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := RemediationRunner.ApprovePatches(r.Context(), id, claims.UserID); err != nil {
+	runner := RemediationRunner
+	sess, err := runner.ClaimPatchesApproval(r.Context(), id, claims.UserID)
+	if err != nil {
 		writeRemediationRunnerError(w, err)
 		return
 	}
-	writeReloadedRemediationSession(w, r, h, id)
+	dispatchRemediationPhase(id, func(ctx context.Context) error {
+		return runner.ExecuteLandingPhase(ctx, sess)
+	})
+	response.WriteJSON(w, http.StatusAccepted, response.SuccessResponse{Data: sess})
 }
 
 // RejectRemediationPatches handles POST /remediations/{id}/patches/reject.
@@ -419,12 +443,14 @@ func RejectRemediationPatches(w http.ResponseWriter, r *http.Request) {
 
 // CancelRemediation handles DELETE /remediations/{id}. There is no Runner
 // entry point for cancellation (Task 9's interface is Run/ApprovePlan/
-// RejectPlan/ApprovePatches/RejectPatches only), so this transitions the
-// session directly through the same compare-and-swap primitive Runner's own
-// transition uses — it marks the row cancelled but does not reach into a
-// goroutine that may currently be inside a driver call to stop it; there is
-// no such registry for remediation yet (scans.go has activeScanCtxs, nothing
-// equivalent exists here).
+// RejectPlan/ApprovePatches/RejectPatches only), so this looks up the
+// session's registered CancelFunc (if a background phase is in flight —
+// the initial Run, or a resumed execute/landing phase after approval) and
+// fires it, then transitions the row directly through the same
+// compare-and-swap primitive Runner's own transition uses. The CAS runs
+// either way: a session held at a gate (or one whose owning process
+// restarted) has no registered CancelFunc, and the direct CAS is the only
+// way to mark it cancelled.
 func CancelRemediation(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetUserFromContext(r.Context())
 	if claims == nil {
@@ -443,6 +469,13 @@ func CancelRemediation(w http.ResponseWriter, r *http.Request) {
 	if isTerminalRemediationStatus(sess.Status) {
 		response.WriteError(w, http.StatusConflict, "conflict", "remediation session has already finished")
 		return
+	}
+
+	activeRemediationsMu.Lock()
+	cancelFn, hasCancel := activeRemediationCtxs[sess.ID]
+	activeRemediationsMu.Unlock()
+	if hasCancel {
+		cancelFn()
 	}
 
 	from := sess.Status
@@ -531,6 +564,30 @@ func StreamRemediation(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// dispatchRemediationPhase runs an already-claimed phase in the background,
+// detached from the request context — which is cancelled the instant the
+// handler returns — via context.Background(), and registered under
+// sessionID so CancelRemediation can reach it. Mirrors scans.go's
+// executeScan dispatch and loops.go's activeLoopCtxs bookkeeping.
+func dispatchRemediationPhase(sessionID string, phase func(ctx context.Context) error) {
+	ctx, cancel := context.WithCancel(context.Background())
+	activeRemediationsMu.Lock()
+	activeRemediationCtxs[sessionID] = cancel
+	activeRemediationsMu.Unlock()
+
+	go func() {
+		defer func() {
+			activeRemediationsMu.Lock()
+			delete(activeRemediationCtxs, sessionID)
+			activeRemediationsMu.Unlock()
+			cancel()
+		}()
+		if err := phase(ctx); err != nil {
+			wolflog.L().Error().Err(err).Str("session", sessionID).Msg("remediation phase failed")
+		}
+	}()
+}
+
 // loadRemediationForCaller loads a session and reports whether the caller
 // may see it, writing the response and returning false otherwise. Not-owned
 // is reported as 404 rather than 403 — matching fixes.go's ownsFixJob
@@ -569,6 +626,13 @@ func writeReloadedRemediationSession(w http.ResponseWriter, r *http.Request, h *
 func writeRemediationRunnerError(w http.ResponseWriter, err error) {
 	if errors.Is(err, remediate.ErrWrongSessionState) {
 		response.WriteError(w, http.StatusConflict, "conflict", err.Error())
+		return
+	}
+	// An admin flipping WOLF_REMEDIATE_ENABLED=false while sessions sit in
+	// review is a foreseeable, deliberate action, not a server malfunction —
+	// map it to 403 rather than the generic 500 below.
+	if errors.Is(err, remediate.ErrRemediationDisabled) {
+		response.WriteError(w, http.StatusForbidden, "remediation_disabled", err.Error())
 		return
 	}
 	response.WriteError(w, http.StatusInternalServerError, "server_error", "remediation runner call failed")

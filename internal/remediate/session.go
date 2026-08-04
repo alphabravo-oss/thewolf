@@ -28,6 +28,13 @@ import (
 // handled identically; Task 10 maps this to HTTP 409.
 var ErrWrongSessionState = errors.New("remediation session is not in the expected state for this action")
 
+// ErrRemediationDisabled means the operator kill switch
+// (WOLF_REMEDIATE_ENABLED=false) blocked an action that needs the driver.
+// An admin flipping this off is a foreseeable, deliberate action — not a
+// server malfunction — so Task 10 maps it to HTTP 403 rather than a generic
+// 500.
+var ErrRemediationDisabled = errors.New("remediation is disabled (WOLF_REMEDIATE_ENABLED=false)")
+
 // Runner drives one session through its phases.
 type Runner struct {
 	store  db.Store
@@ -59,7 +66,7 @@ func NewRunner(store db.Store, d driver.Driver, cfg Config) *Runner {
 // a hand-built Config (e.g. in tests) can leave this zero.
 func (r *Runner) driverPreflight(ctx context.Context) (context.Context, context.CancelFunc, error) {
 	if !r.cfg.Enabled {
-		return nil, nil, errors.New("remediation is disabled (WOLF_REMEDIATE_ENABLED=false)")
+		return nil, nil, ErrRemediationDisabled
 	}
 	if r.cfg.SessionTimeout > 0 {
 		ctx, cancel := context.WithTimeout(ctx, r.cfg.SessionTimeout)
@@ -255,35 +262,69 @@ func (r *Runner) runExecutePhase(ctx context.Context, sess *models.RemediationSe
 	return r.transition(ctx, sess, models.RemediationCompleted, "")
 }
 
-// ApprovePlan records approval on the plan row and resumes the session into
-// its execute phase. This is the sanctioned way to advance a session sitting
-// in plan_review — Run refuses anything but a pending session, specifically
-// so a held session can only move forward through here. Resumption reloads
-// everything from sess (freshly read above) and the store inside
-// runExecutePhase; no in-memory state survives from the original Run call,
-// so this works identically after a server restart.
+// ClaimPlanApproval performs ApprovePlan's synchronous portion — the
+// operator kill switch check, the session's CAS-guarded status check, and
+// recording who approved the plan — without running the execute phase
+// itself. It returns the claimed session for the caller to hand to
+// ExecutePlanPhase.
 //
-// Gated by driverPreflight since this resumes straight into a driver call:
-// the operator kill switch and wall-clock bound must apply here exactly as
-// they do to Run's own first phase.
-func (r *Runner) ApprovePlan(ctx context.Context, sessionID, approverID string) error {
+// This split exists for Task 10's HTTP layer: the execute phase is a
+// container-backed driver call that can run for minutes, and an HTTP
+// handler must not hold the connection open for it (the server's
+// WriteTimeout is shorter than the default SessionTimeout). The API layer
+// claims synchronously here — so a double-clicked approve is still rejected
+// with 409 before anything is dispatched — then runs ExecutePlanPhase in
+// its own background goroutine. ApprovePlan below is unchanged in every
+// observable way; it is now just this claim immediately followed by that
+// execute call, for callers that want the fully-synchronous behavior (e.g.
+// package tests).
+func (r *Runner) ClaimPlanApproval(ctx context.Context, sessionID, approverID string) (*models.RemediationSession, error) {
 	ctx, cancel, err := r.driverPreflight(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer cancel()
 
 	sess, err := r.store.GetRemediationSession(ctx, sessionID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if sess.Status != models.RemediationPlanReview {
-		return fmt.Errorf("%w: session %s is %s, not awaiting plan approval", ErrWrongSessionState, sessionID, sess.Status)
+		return nil, fmt.Errorf("%w: session %s is %s, not awaiting plan approval", ErrWrongSessionState, sessionID, sess.Status)
 	}
 	if err := r.store.ApproveRemediationPlan(ctx, sessionID, approverID); err != nil {
+		return nil, err
+	}
+	return sess, nil
+}
+
+// ExecutePlanPhase runs the execute phase for a session already claimed via
+// ClaimPlanApproval. Gated by driverPreflight for the same reason ApprovePlan
+// itself was: the kill switch and wall-clock bound must apply to the driver
+// call regardless of which path reaches it. Resumption reloads everything
+// from sess (passed in) and the store inside runExecutePhase; no in-memory
+// state survives from the original Run call, so this works identically
+// after a server restart.
+func (r *Runner) ExecutePlanPhase(ctx context.Context, sess *models.RemediationSession) error {
+	ctx, cancel, err := r.driverPreflight(ctx)
+	if err != nil {
 		return err
 	}
+	defer cancel()
 	return r.runExecutePhase(ctx, sess)
+}
+
+// ApprovePlan records approval on the plan row and resumes the session into
+// its execute phase, blocking until the phase completes. This is the
+// sanctioned way to advance a session sitting in plan_review — Run refuses
+// anything but a pending session, specifically so a held session can only
+// move forward through here.
+func (r *Runner) ApprovePlan(ctx context.Context, sessionID, approverID string) error {
+	sess, err := r.ClaimPlanApproval(ctx, sessionID, approverID)
+	if err != nil {
+		return err
+	}
+	return r.ExecutePlanPhase(ctx, sess)
 }
 
 // RejectPlan terminates the session without ever reaching the execute phase,
@@ -322,28 +363,52 @@ func (r *Runner) RejectPlan(ctx context.Context, sessionID, approverID, reason s
 	return nil
 }
 
-// ApprovePatches records who approved and resumes the session into the
-// landing phase, the patch-review counterpart to ApprovePlan. Gated by
-// driverPreflight for the same reason as ApprovePlan: the landing phase will
-// itself call the driver once Task 13 replaces its stub body.
-func (r *Runner) ApprovePatches(ctx context.Context, sessionID, approverID string) error {
+// ClaimPatchesApproval is ClaimPlanApproval's patch-review counterpart: the
+// synchronous kill-switch check, CAS-guarded status check, and recording who
+// approved the patch set, without running the landing phase. See
+// ClaimPlanApproval's doc comment for why this is split from ApprovePatches.
+func (r *Runner) ClaimPatchesApproval(ctx context.Context, sessionID, approverID string) (*models.RemediationSession, error) {
 	ctx, cancel, err := r.driverPreflight(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer cancel()
 
 	sess, err := r.store.GetRemediationSession(ctx, sessionID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if sess.Status != models.RemediationPatchReview {
-		return fmt.Errorf("%w: session %s is %s, not awaiting patch approval", ErrWrongSessionState, sessionID, sess.Status)
+		return nil, fmt.Errorf("%w: session %s is %s, not awaiting patch approval", ErrWrongSessionState, sessionID, sess.Status)
 	}
 	if err := r.store.ApproveRemediationPatches(ctx, sessionID, approverID); err != nil {
+		return nil, err
+	}
+	return sess, nil
+}
+
+// ExecuteLandingPhase runs the landing phase for a session already claimed
+// via ClaimPatchesApproval. Gated by driverPreflight for the same reason as
+// ExecutePlanPhase: the landing phase will itself call the driver once
+// Task 13 replaces its stub body.
+func (r *Runner) ExecuteLandingPhase(ctx context.Context, sess *models.RemediationSession) error {
+	ctx, cancel, err := r.driverPreflight(ctx)
+	if err != nil {
 		return err
 	}
+	defer cancel()
 	return r.runLandingPhase(ctx, sess)
+}
+
+// ApprovePatches records who approved and resumes the session into the
+// landing phase, blocking until it completes — the patch-review counterpart
+// to ApprovePlan.
+func (r *Runner) ApprovePatches(ctx context.Context, sessionID, approverID string) error {
+	sess, err := r.ClaimPatchesApproval(ctx, sessionID, approverID)
+	if err != nil {
+		return err
+	}
+	return r.ExecuteLandingPhase(ctx, sess)
 }
 
 // RejectPatches terminates the session without landing any patch. The patch
