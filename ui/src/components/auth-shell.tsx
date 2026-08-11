@@ -1,7 +1,6 @@
-// Split-screen auth layout shared by /login and /register. Left: a marketing
-// hero (logo, two-tone headline, feature pills, AlphaBravo footer); right: the
-// form column. Styled to a refined enterprise dark aesthetic via theme tokens,
-// so it still respects light mode. The hero collapses on < lg screens.
+// Split-screen auth layout shared by /login and /register. Left: a concise
+// product positioning hero; right: the form column. Styled through theme
+// tokens, so it still respects light mode. The hero collapses on < lg screens.
 import { useState } from "react";
 import { ArrowRightIcon, EyeIcon, EyeOffIcon } from "lucide-react";
 import { WolfLogo } from "@/components/wolf-logo";
@@ -42,20 +41,21 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
 
         <div className="max-w-md space-y-4">
           <h1 className="text-[2.5rem] font-bold leading-[1.08] tracking-tight">
-            Code security &amp;{" "}
-            <span className="text-muted-foreground">autonomous fixing</span>
+            Deterministic scanning for{" "}
+            <span className="text-muted-foreground">better code</span>
           </h1>
           <p className="text-sm leading-relaxed text-muted-foreground">
-            Scan, triage, and remediate findings across every repository from a single
-            control plane. Built for security teams operating at scale.
+            Improve human-written and AI-assisted software with reproducible tools.
+            Wolf runs version-pinned scanners, quality gates, and targeted rescans so
+            every change can be measured, improved, and trusted.
           </p>
         </div>
 
         <div className="space-y-6">
           <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-muted-foreground">
-            <Feature dot="bg-emerald-500" label="Multi-scanner SAST" />
-            <Feature dot="bg-blue-500" label="SARIF & quality gates" />
-            <Feature dot="bg-violet-400" label="Autonomous fixing" />
+            <Feature dot="bg-emerald-500" label="Version-pinned tools" />
+            <Feature dot="bg-blue-500" label="Repeatable scan evidence" />
+            <Feature dot="bg-violet-400" label="AI assistance under guardrails" />
           </div>
           <div className="text-xs text-muted-foreground">
             Built by{" "}

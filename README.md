@@ -1,9 +1,9 @@
 <p align="center">
-  <img src="docs/wolf-logo.svg" alt="The Wolf" width="120" />
+  <img src="docs/wolf-logo-readme.svg" alt="The Wolf" width="140" />
 </p>
 
 <h1 align="center">The Wolf</h1>
-<p align="center"><strong>The self-hosted application security &amp; code-quality platform that hunts, prioritizes, and <em>fixes</em> — across your entire fleet.</strong></p>
+<p align="center"><strong>Deterministic security and code-quality scanning that helps every repository get better.</strong></p>
 <p align="center">by <a href="https://alphabravo.io">AlphaBravo</a></p>
 
 <p align="center">
@@ -17,24 +17,25 @@
 
 ---
 
-> **One platform. Every scanner. Your infrastructure.**
+> **Measure code. Improve it. Prove it got better.**
 >
-> The Wolf unifies **49 best-in-class security and quality scanners** behind a single console, API, and CLI — then goes further than any point tool: it manages your whole **fleet** of repositories, scores and prioritizes what actually matters, and uses **AI to write and ship the fix**. No per-seat licensing. No code leaving your perimeter. No forty tools to install and babysit. Just Docker, and a platform that runs entirely on your terms.
+> The Wolf unifies **49 best-in-class security and quality scanners** behind a single console, API, and CLI, then runs them as reproducible, version-pinned evidence against every repository in your fleet. Whether code was written by a developer, generated with AI, or changed by an automated fix, Wolf makes it answer to deterministic scanners, quality gates, baselines, and targeted rescans before you trust it. No per-seat licensing. No code leaving your perimeter. No forty tools to install and babysit. Just Docker, and a platform that runs entirely on your terms.
 
 ---
 
 ## Why teams choose The Wolf
 
-Security tooling sprawl is the problem. Every team ends up juggling a dozen scanners, each with its own CLI, output format, container, update cadence, and dashboard — and *none* of them tell you which of the 4,000 findings to fix first, or fix it for you.
+Every team wants code to get safer, cleaner, and easier to ship, but improvement is hard to prove without repeatable checks. Human-written code, AI-assisted code, and automated fixes all need deterministic scanners, reproducible evidence, and policy gates that do not depend on confidence or guesswork. At the same time, security tooling sprawl is still the problem: every team ends up juggling a dozen scanners, each with its own CLI, output format, container, update cadence, and dashboard — and *none* of them tell you which of the 4,000 findings to fix first, or prove that a change actually made the code better.
 
 The Wolf collapses that sprawl into one platform:
 
 | The old way | With The Wolf |
 |---|---|
+| Code improvement judged manually or inconsistently | **Deterministic scanner evidence** for every change |
 | 12 scanners, 12 CLIs, 12 dashboards | **One console, one API, one CLI** |
 | "Install bandit, gosec, eslint, trivy…" on every box | **Zero host install** — every tool runs in an isolated container |
 | A wall of 4,000 undifferentiated findings | **Composite severity scoring** + AI prioritization |
-| Findings you have to fix by hand | **AI fix engine** opens the PR for you |
+| AI fixes you still have to trust manually | **Scan → fix → targeted rescan** before the PR |
 | Per-repo tools that can't see the forest | **Fleet posture** across 100+ repos on any host |
 | SaaS that ingests your source | **Self-hosted** — your data never leaves |
 | Per-developer seat pricing | **No seat tax** |
@@ -49,7 +50,7 @@ The Wolf collapses that sprawl into one platform:
 
 ### 🐺 Unified Scanning
 
-**49 scanners, one engine.** SAST, SCA, secrets, containers, IaC, DAST, SBOM, license, privacy/PII, K8s, and more — running in parallel, version-pinned, and fully reproducible.
+**49 scanners, one deterministic engine.** SAST, SCA, secrets, containers, IaC, DAST, SBOM, license, privacy/PII, K8s, and more — running in parallel, version-pinned, and fully reproducible.
 
 </td>
 <td width="33%" valign="top">
@@ -63,7 +64,7 @@ The Wolf collapses that sprawl into one platform:
 
 ### 🤖 AI Remediation
 
-**Find *and* fix.** AI enriches findings with ready-to-ship guidance, opens fix PRs, and runs autonomous scan→fix→rescan loops with budget and regression guardrails.
+**Find, fix, and prove.** AI enriches findings and opens fix PRs, while deterministic rescans and regression guardrails decide whether the change actually improved the code.
 
 </td>
 </tr>
@@ -98,7 +99,7 @@ The Wolf collapses that sprawl into one platform:
 
 ### 🐺 One platform, every scanner
 
-The Wolf orchestrates **49 industry-standard tools** across every major category — and it doesn't ask you to install a single one. Each tool runs in its own short-lived, locked-down container; the only thing on your host is Docker.
+The Wolf orchestrates **49 industry-standard tools** across every major category — and it doesn't ask you to install a single one. Each tool runs in its own short-lived, locked-down container; the only thing on your host is Docker. That gives teams a deterministic improvement loop: scan code consistently, fix what matters, and rescan the exact evidence before merging. It works for traditional development, AI-assisted development, and autonomous remediation.
 
 - **Comprehensive coverage** — SAST, software composition analysis (SCA), secret detection, container & image hardening, infrastructure-as-code, Kubernetes, policy-as-code, DAST, SBOM generation, license compliance, privacy/PII data-flow, dependency freshness, repository hygiene, and per-language linting for Python, Go, JavaScript/TypeScript, Java, Kotlin, Ruby, PHP, Rust, C/C++, Swift, and more.
 - **Parallel by design** — every applicable tool runs concurrently with configurable concurrency, so a full multi-tool scan finishes in the time of your slowest scanner, not the sum of all of them.
