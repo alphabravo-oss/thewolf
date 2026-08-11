@@ -429,7 +429,7 @@ jobs:
   quality:
     name: Quality (${{ matrix.variant }}, ${{ matrix.platform }})
     needs: [prepare, validate]
-    if: needs.prepare.outputs.run_build == 'true'
+    if: always() && needs.prepare.outputs.run_build == 'true' && needs.validate.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 120
     strategy:
@@ -565,7 +565,7 @@ jobs:
   fixer-quality:
     name: Fixer quality (${{ matrix.variant }}, ${{ matrix.platform }})
     needs: [prepare, validate]
-    if: needs.prepare.outputs.run_build == 'true'
+    if: always() && needs.prepare.outputs.run_build == 'true' && needs.validate.result == 'success'
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 120
     strategy:
@@ -748,7 +748,7 @@ jobs:
   runtime-quality:
     name: Runtime quality (${{ matrix.variant }}, ${{ matrix.platform }})
     needs: [prepare, validate]
-    if: needs.prepare.outputs.run_build == 'true'
+    if: always() && needs.prepare.outputs.run_build == 'true' && needs.validate.result == 'success'
     runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     timeout-minutes: 120
     strategy:
