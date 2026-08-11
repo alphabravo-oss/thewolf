@@ -130,7 +130,8 @@ RUN wolf version \
     && test "$(tsc --version | awk '{print $2}')" = "6.0.3" \
     && node -e "if (require('/usr/lib/node_modules/npm/package.json').version !== '12.0.2') process.exit(1)" \
     && node -e "if (require('/usr/lib/node_modules/npm/node_modules/brace-expansion/package.json').version !== '5.0.9') process.exit(1)" \
-    && node -e "if (require('/usr/lib/node_modules/npm/node_modules/picomatch/package.json').version !== '4.0.5') process.exit(1)"
+    && node -e "if (require('/usr/lib/node_modules/npm/node_modules/picomatch/package.json').version !== '4.0.5') process.exit(1)" \
+    && node -e "if (require('/usr/lib/node_modules/npm/node_modules/ip-address/package.json').version !== '10.3.1') process.exit(1)"
 
 COPY fixer/versions.env /usr/share/wolf/fixer/versions.env
 

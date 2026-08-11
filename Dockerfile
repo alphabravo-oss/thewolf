@@ -51,26 +51,22 @@ RUN CGO_ENABLED=0 go build -trimpath -ldflags '-s -w' \
 # ============================================================
 # Pinned adapter tools
 # ============================================================
-FROM alpine:3.24@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS scanner-release-oras-tool
+FROM golang:1.26.5-alpine@sha256:0178a641fbb4858c5f1b48e34bdaabe0350a330a1b1149aabd498d0699ff5fb2 AS scanner-release-oras-tool
 
 ARG TARGETARCH
-ARG ORAS_VERSION=1.3.2
-ARG ORAS_AMD64_SHA256=9229ccc6d17bb282039ad4a69abb16dcb887a5bce567c075d731d9b3c7ad8eaf
-ARG ORAS_ARM64_SHA256=8db4a223bd6034deff198e791ea7cb3af0840df25b7e9f370e2f1f3fd20d389b
+ARG ORAS_VERSION=1.3.3
 
-RUN apk add --no-cache ca-certificates \
+RUN apk add --no-cache ca-certificates git \
     && case "${TARGETARCH}" in \
-      amd64) oras_arch=amd64; oras_sha="${ORAS_AMD64_SHA256}" ;; \
-      arm64) oras_arch=arm64; oras_sha="${ORAS_ARM64_SHA256}" ;; \
+      amd64|arm64) ;; \
       *) echo "unsupported adapter target architecture: ${TARGETARCH}" >&2; exit 1 ;; \
     esac \
-    && mkdir -p /downloads/oras /out/bin /out/licenses/oras \
-    && wget -q -O /downloads/oras.tar.gz \
-      "https://github.com/oras-project/oras/releases/download/v${ORAS_VERSION}/oras_${ORAS_VERSION}_linux_${oras_arch}.tar.gz" \
-    && echo "${oras_sha}  /downloads/oras.tar.gz" | sha256sum -c - \
-    && tar -xzf /downloads/oras.tar.gz -C /downloads/oras LICENSE oras \
-    && install -m 0555 /downloads/oras/oras /out/bin/oras \
-    && install -m 0444 /downloads/oras/LICENSE /out/licenses/oras/LICENSE
+    && mkdir -p /out/bin /out/licenses/oras \
+    && CGO_ENABLED=0 GOOS=linux GOARCH="${TARGETARCH}" \
+      GOBIN=/out/bin go install -trimpath -ldflags '-s -w' \
+      "oras.land/oras/cmd/oras@v${ORAS_VERSION}" \
+    && install -m 0444 "$(go env GOPATH)/pkg/mod/oras.land/oras@v${ORAS_VERSION}/LICENSE" \
+      /out/licenses/oras/LICENSE
 
 FROM alpine:3.24@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS scanner-release-trivy-tool
 
@@ -122,7 +118,7 @@ FROM alpine:3.24@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec4
 LABEL org.opencontainers.image.title="Wolf quality release adapter" \
       org.opencontainers.image.source="https://github.com/alphabravo-oss/thewolf" \
       org.opencontainers.image.version.trivy="0.70.0" \
-      org.opencontainers.image.version.oras="1.3.2"
+      org.opencontainers.image.version.oras="1.3.3"
 
 RUN apk add --no-cache ca-certificates tzdata docker-cli git \
     && addgroup -S wolf \

@@ -64,6 +64,7 @@ curl --proto '=https' --tlsv1.2 --fail --location --silent --show-error \
 printf '%s  %s\n' "$PMD_DIST_SHA256" "${tmp}/pmd.zip" | sha256sum --check --strict -
 unzip -q -d /opt "${tmp}/pmd.zip"
 mv "/opt/pmd-bin-${PMD_VERSION}" /opt/pmd
+rm -f /opt/pmd/lib/jline-*.jar
 ln -sf /opt/pmd/bin/pmd /usr/local/bin/pmd
 rm -rf "${tmp}"
 

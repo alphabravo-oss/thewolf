@@ -64,11 +64,16 @@ picomatch_version=4.0.5
 picomatch_integrity='sha512-RvwwcruNjI1ncT5xRakeyS9Lf8lcItv34KD+aif+VH9kduAyfYBipGh12274xtenIPZ119/R9BdTBa8gAwSh0A=='
 replace_npm_private_package picomatch "$picomatch_version" "$picomatch_integrity"
 
+ip_address_version=10.3.1
+ip_address_integrity='sha512-1e9d3kb97NHJTIJDZW9rKqW2h6+dFa50Dy0fpPSMQp2ADje5gvKsXmdiK6dwY5t76TaTt5+P5N1Y/LoToIxP6g=='
+replace_npm_private_package ip-address "$ip_address_version" "$ip_address_integrity"
+
 rm -rf "$override_tmp"
 trap - EXIT
 
 test "$(node -p "require('$(npm root -g)/npm/package.json').version")" = "$NPM_VERSION"
 test "$(node -p "require('$(npm root -g)/npm/node_modules/brace-expansion/package.json').version")" = "$brace_version"
 test "$(node -p "require('$(npm root -g)/npm/node_modules/picomatch/package.json').version")" = "$picomatch_version"
+test "$(node -p "require('$(npm root -g)/npm/node_modules/ip-address/package.json').version")" = "$ip_address_version"
 npm cache clean --force >/dev/null 2>&1
 test "$(npm view "npm@${NPM_VERSION}" version)" = "$NPM_VERSION"

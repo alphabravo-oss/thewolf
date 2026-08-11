@@ -36,7 +36,7 @@ printf '%s  %s\n' "$rustup_sha256" "${rustup_tmp}/rustup-init" \
 chmod 0755 "${rustup_tmp}/rustup-init"
 "${rustup_tmp}/rustup-init" -y --no-modify-path \
     --default-toolchain "${RUST_TOOLCHAIN}" --profile minimal --component clippy
-test "$(rustup --version | awk '{print $2}')" = "$RUSTUP_VERSION"
+test "$("${CARGO_HOME}/bin/rustup" --version | awk '{print $2}')" = "$RUSTUP_VERSION"
 rm -rf "$rustup_tmp"
 trap - EXIT
 
