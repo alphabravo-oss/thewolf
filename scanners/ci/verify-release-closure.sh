@@ -65,16 +65,9 @@ verify_subject() {
         --repo "$GITHUB_REPOSITORY" \
         --source-digest "$source_commit" \
         --predicate-type https://spdx.dev/Document/v2.3 >"${prefix}.sbom.json"
-    oras discover --format json "${repository}@${digest}" \
-        | jq -S --arg digest "$digest" '
-            if (.referrers | type) != "array"
-               or ([.referrers[] | select(.artifactType == "application/vnd.dev.cosign.simplesigning.v1+json")] | length) < 1
-               or ([.referrers[] | select(.artifactType == "application/vnd.dev.sigstore.bundle.v0.3+json")] | length) < 2
-               or any(.referrers[]; (.digest | test("^sha256:[a-f0-9]{64}$") | not))
-            then error("signature, provenance, and SPDX referrers are not complete")
-            else {subjectDigest: $digest, referrers: (.referrers | sort_by(.artifactType, .digest))}
-            end
-          ' >"${prefix}.referrers.json"
+    scanners/ci/discover-referrers.sh \
+        "${repository}@${digest}" "$digest" "${prefix}.referrers.json" \
+        "signature, provenance, and SPDX referrers are not complete"
 
     jq -nS \
         --arg signature "$(sha_file "${prefix}.signature.json")" \

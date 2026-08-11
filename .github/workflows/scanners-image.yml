@@ -1367,14 +1367,9 @@ jobs:
             --source-digest "$GITHUB_SHA" \
             --predicate-type https://spdx.dev/Document/v2.3 \
             --format json >build/scanner-publish/primary.sbom-verification.json
-          oras discover --format json "${IMAGE}@${DIGEST}" \
-            | jq -S --arg digest "$DIGEST" '
-                if (.referrers | type) != "array" or (.referrers | length) < 3 or
-                   any(.referrers[]; (.digest | test("^sha256:[a-f0-9]{64}$") | not))
-                then error("image supply-chain referrer set is incomplete")
-                else {subjectDigest: $digest, referrers: (.referrers | sort_by(.digest))}
-                end
-              ' >build/scanner-publish/primary.referrers.json
+          scanners/ci/discover-referrers.sh \
+            "${IMAGE}@${DIGEST}" "$DIGEST" build/scanner-publish/primary.referrers.json \
+            "image supply-chain referrer set is incomplete"
           for evidence in signature-verification provenance-verification sbom-verification referrers; do
             value="sha256:$(sha256sum "build/scanner-publish/primary.${evidence}.json" | awk '{print $1}')"
             echo "${evidence//-/_}_digest=$value" >>"$GITHUB_OUTPUT"
@@ -1466,14 +1461,9 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --source-digest "$GITHUB_SHA" \
             --predicate-type https://spdx.dev/Document/v2.3 >/dev/null
-          oras discover --format json "${IMAGE}@${DIGEST}" \
-            | jq -S --arg digest "$DIGEST" '
-                if (.referrers | type) != "array" or (.referrers | length) < 3 or
-                   any(.referrers[]; (.digest | test("^sha256:[a-f0-9]{64}$") | not))
-                then error("mirror supply-chain referrer set is incomplete")
-                else {subjectDigest: $digest, referrers: (.referrers | sort_by(.digest))}
-                end
-              ' >build/scanner-publish/mirror.referrers.json
+          scanners/ci/discover-referrers.sh \
+            "${IMAGE}@${DIGEST}" "$DIGEST" build/scanner-publish/mirror.referrers.json \
+            "mirror supply-chain referrer set is incomplete"
           echo "referrers_digest=sha256:$(sha256sum build/scanner-publish/mirror.referrers.json | awk '{print $1}')" >>"$GITHUB_OUTPUT"
 
       - name: Write immutable image metadata
@@ -1853,14 +1843,9 @@ jobs:
             --source-digest "$GITHUB_SHA" \
             --predicate-type https://spdx.dev/Document/v2.3 \
             --format json >build/scanner-publish/primary.sbom-verification.json
-          oras discover --format json "${IMAGE}@${DIGEST}" \
-            | jq -S --arg digest "$DIGEST" '
-                if (.referrers | type) != "array" or (.referrers | length) < 3 or
-                   any(.referrers[]; (.digest | test("^sha256:[a-f0-9]{64}$") | not))
-                then error("engine supply-chain referrer set is incomplete")
-                else {subjectDigest: $digest, referrers: (.referrers | sort_by(.digest))}
-                end
-              ' >build/scanner-publish/primary.referrers.json
+          scanners/ci/discover-referrers.sh \
+            "${IMAGE}@${DIGEST}" "$DIGEST" build/scanner-publish/primary.referrers.json \
+            "engine supply-chain referrer set is incomplete"
           for evidence in signature-verification provenance-verification sbom-verification referrers; do
             value="sha256:$(sha256sum "build/scanner-publish/primary.${evidence}.json" | awk '{print $1}')"
             echo "${evidence//-/_}_digest=$value" >>"$GITHUB_OUTPUT"
@@ -1950,14 +1935,9 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --source-digest "$GITHUB_SHA" \
             --predicate-type https://spdx.dev/Document/v2.3 >/dev/null
-          oras discover --format json "${IMAGE}@${DIGEST}" \
-            | jq -S --arg digest "$DIGEST" '
-                if (.referrers | type) != "array" or (.referrers | length) < 3 or
-                   any(.referrers[]; (.digest | test("^sha256:[a-f0-9]{64}$") | not))
-                then error("mirror engine supply-chain referrer set is incomplete")
-                else {subjectDigest: $digest, referrers: (.referrers | sort_by(.digest))}
-                end
-              ' >build/scanner-publish/mirror.referrers.json
+          scanners/ci/discover-referrers.sh \
+            "${IMAGE}@${DIGEST}" "$DIGEST" build/scanner-publish/mirror.referrers.json \
+            "mirror engine supply-chain referrer set is incomplete"
           echo "referrers_digest=sha256:$(sha256sum build/scanner-publish/mirror.referrers.json | awk '{print $1}')" >>"$GITHUB_OUTPUT"
 
       - name: Write immutable engine metadata
@@ -2617,14 +2597,9 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --source-digest "$GITHUB_SHA" \
             --predicate-type https://spdx.dev/Document/v2.3 >/dev/null
-          oras discover --format json "${RELEASE_REPOSITORY}@${DIGEST}" \
-            | jq -S --arg digest "$DIGEST" '
-                if (.referrers | type) != "array" or (.referrers | length) < 3 or
-                   any(.referrers[]; (.digest | test("^sha256:[a-f0-9]{64}$") | not))
-                then error("aggregate supply-chain referrer set is incomplete")
-                else {subjectDigest: $digest, referrers: (.referrers | sort_by(.digest))}
-                end
-              ' >build/scanner-release.referrers.json
+          scanners/ci/discover-referrers.sh \
+            "${RELEASE_REPOSITORY}@${DIGEST}" "$DIGEST" build/scanner-release.referrers.json \
+            "aggregate supply-chain referrer set is incomplete"
           if descriptor="$(oras manifest fetch --descriptor "${RELEASE_REPOSITORY}:${IMMUTABLE_ID}" 2>/dev/null)"; then
             existing="$(jq -r .digest <<<"$descriptor")"
             [[ "$existing" == "$DIGEST" ]] || {
@@ -2951,14 +2926,9 @@ jobs:
             --repo "$GITHUB_REPOSITORY" --source-digest "$GITHUB_SHA" \
             --predicate-type https://spdx.dev/Document/v2.3 \
             >build/release.sbom-verification.json
-          oras discover --format json "${RELEASE_REPOSITORY}@${DIGEST}" \
-            | jq -S --arg digest "$DIGEST" '
-                if (.referrers | type) != "array" or (.referrers | length) < 3
-                   or any(.referrers[]; (.digest | test("^sha256:[a-f0-9]{64}$") | not))
-                then error("protected release referrer set is incomplete")
-                else {subjectDigest: $digest, referrers: (.referrers | sort_by(.artifactType, .digest))}
-                end
-              ' >build/scanner-release.referrers.json
+          scanners/ci/discover-referrers.sh \
+            "${RELEASE_REPOSITORY}@${DIGEST}" "$DIGEST" build/scanner-release.referrers.json \
+            "protected release referrer set is incomplete"
           if descriptor="$(oras manifest fetch --descriptor "${RELEASE_REPOSITORY}:${RELEASE_ID}" 2>/dev/null)"; then
             [[ "$(jq -r .digest <<<"$descriptor")" == "$DIGEST" ]] || {
               echo "immutable release ID already resolves to a different digest" >&2

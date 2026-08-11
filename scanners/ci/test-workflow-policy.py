@@ -344,7 +344,7 @@ def main() -> int:
             f"OCI index {annotation} annotation",
         )
     require(r"verify-image\.sh.*?LOCK_DIGEST.*?DEFINITION_DIGEST", text, "post-push release annotation verification")
-    require(r"oras discover --format json", text, "exact OCI referrer inventory")
+    require(r"discover-referrers\.sh", text, "exact OCI referrer inventory")
     require(r"referrersSha256", text, "content-addressed referrer evidence")
     require(r"no-cache:.*?43 3 \* \* 0.*?security-rebuild", text, "fresh weekly/security build")
     require(r"actions/attest-build-provenance@", text, "GitHub provenance attestation")
