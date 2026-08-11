@@ -111,7 +111,7 @@ env:
   PRIMARY_NAMESPACE: alphabravo-oss
   MIRROR_REGISTRY: docker.io
   MIRROR_NAMESPACE: alphabravo-oss
-  TRIVY_VERSION: v0.70.0
+  TRIVY_VERSION: v0.73.0
   # These licenses permit redistribution subject to their notices/source
   # obligations. Unknown, proprietary, and every unlisted license still fail.
   TRIVY_IGNORED_LICENSES: GPL-1.0-only,GPL-1.0-or-later,GPL-2.0-only,GPL-2.0-or-later,GPL-2.0-with-autoconf-exception+,GPL-2.0-with-bison-exception+,GPL-3.0-only,GPL-3.0-or-later,GPL-3.0-with-autoconf-exception+,LGPL-2.0-only,LGPL-2.0-or-later,LGPL-2.1-only,LGPL-2.1-or-later,LGPL-3.0-only,LGPL-3.0-or-later,Sleepycat
@@ -663,7 +663,8 @@ jobs:
             docker buildx build \
               --platform "$PLATFORM" \
               --load \
-              --build-arg "WOLF_FIXER_BASE_REF=$base" \
+              --build-context "wolf-fixer-base=docker-image://$base" \
+              --build-arg "WOLF_FIXER_BASE_REF=wolf-fixer-base" \
               --tag "$IMAGE" \
               --file "$DOCKERFILE" \
               .
@@ -874,7 +875,7 @@ jobs:
                   test -x /usr/local/bin/scannertools
                   test -x /usr/local/bin/oras
                   test -x /usr/local/bin/trivy
-                  trivy --version | grep -F "Version: 0.70.0"
+                  trivy --version | grep -F "Version: 0.73.0"
                 '
               ;;
             release-integration)

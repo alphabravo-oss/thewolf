@@ -61,7 +61,7 @@ case "$variant" in
               test -x /usr/local/bin/scannertools
               test -x /usr/local/bin/oras
               test -x /usr/local/bin/trivy
-              trivy --version | grep -F "Version: 0.70.0"
+              trivy --version | grep -F "Version: 0.73.0"
             '
         ;;
     release-integration)

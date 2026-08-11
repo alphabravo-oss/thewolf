@@ -68,26 +68,31 @@ RUN apk add --no-cache ca-certificates git \
     && install -m 0444 "$(go env GOPATH)/pkg/mod/oras.land/oras@v${ORAS_VERSION}/LICENSE" \
       /out/licenses/oras/LICENSE
 
-FROM alpine:3.24@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS scanner-release-trivy-tool
+FROM golang:1.26.5-alpine@sha256:0178a641fbb4858c5f1b48e34bdaabe0350a330a1b1149aabd498d0699ff5fb2 AS scanner-release-trivy-tool
 
 ARG TARGETARCH
-ARG TRIVY_VERSION=0.70.0
-ARG TRIVY_AMD64_SHA256=8b4376d5d6befe5c24d503f10ff136d9e0c49f9127a4279fd110b727929a5aa9
-ARG TRIVY_ARM64_SHA256=2f6bb988b553a1bbac6bdd1ce890f5e412439564e17522b88a4541b4f364fc8d
+ARG TRIVY_VERSION=0.73.0
+ARG TRIVY_GO_GIT_VERSION=5.19.2
+ARG TRIVY_ORAS_GO_VERSION=2.6.2
 
-RUN apk add --no-cache ca-certificates \
+RUN apk add --no-cache ca-certificates git \
     && case "${TARGETARCH}" in \
-      amd64) trivy_arch=64bit; trivy_sha="${TRIVY_AMD64_SHA256}" ;; \
-      arm64) trivy_arch=ARM64; trivy_sha="${TRIVY_ARM64_SHA256}" ;; \
+      amd64|arm64) ;; \
       *) echo "unsupported adapter target architecture: ${TARGETARCH}" >&2; exit 1 ;; \
     esac \
-    && mkdir -p /downloads/trivy /out/bin /out/licenses/trivy \
-    && wget -q -O /downloads/trivy.tar.gz \
-      "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-${trivy_arch}.tar.gz" \
-    && echo "${trivy_sha}  /downloads/trivy.tar.gz" | sha256sum -c - \
-    && tar -xzf /downloads/trivy.tar.gz -C /downloads/trivy LICENSE trivy \
-    && install -m 0555 /downloads/trivy/trivy /out/bin/trivy \
-    && install -m 0444 /downloads/trivy/LICENSE /out/licenses/trivy/LICENSE
+    && mkdir -p /src /out/bin /out/licenses/trivy \
+    && git clone --depth 1 --branch "v${TRIVY_VERSION}" https://github.com/aquasecurity/trivy.git /src/trivy \
+    && cd /src/trivy \
+    && go get \
+      "github.com/go-git/go-git/v5@v${TRIVY_GO_GIT_VERSION}" \
+      "oras.land/oras-go/v2@v${TRIVY_ORAS_GO_VERSION}" \
+    && go mod download all \
+    && go mod verify \
+    && CGO_ENABLED=0 GOEXPERIMENT=jsonv2 GOOS=linux GOARCH="${TARGETARCH}" go build -trimpath \
+      -ldflags "-s -w -X=github.com/aquasecurity/trivy/pkg/version/app.ver=${TRIVY_VERSION}" \
+      -o /out/bin/trivy ./cmd/trivy \
+    && install -m 0444 LICENSE /out/licenses/trivy/LICENSE \
+    && rm -rf /src/trivy /root/.cache/go-build
 
 # ============================================================
 # Managed scanner-release adapter images
@@ -117,7 +122,7 @@ FROM alpine:3.24@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec4
 
 LABEL org.opencontainers.image.title="Wolf quality release adapter" \
       org.opencontainers.image.source="https://github.com/alphabravo-oss/thewolf" \
-      org.opencontainers.image.version.trivy="0.70.0" \
+      org.opencontainers.image.version.trivy="0.73.0" \
       org.opencontainers.image.version.oras="1.3.3"
 
 RUN apk add --no-cache ca-certificates tzdata docker-cli git \
