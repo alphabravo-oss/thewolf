@@ -33,9 +33,9 @@ The Wolf collapses that sprawl into one platform:
 |---|---|
 | Code improvement judged manually or inconsistently | **Deterministic scanner evidence** for every change |
 | 12 scanners, 12 CLIs, 12 dashboards | **One console, one API, one CLI** |
-| "Install bandit, gosec, eslint, trivy…" on every box | **Zero host install** — every tool runs in an isolated container |
+| "Install bandit, gosec, eslint, trivy..." on every box | **Zero host install** — every tool runs in an isolated container |
 | A wall of 4,000 undifferentiated findings | **Composite severity scoring** + AI prioritization |
-| AI fixes you still have to trust manually | **Scan → fix → targeted rescan** before the PR |
+| AI fixes you still have to trust manually | **Scan, fix, targeted rescan** before the PR |
 | Per-repo tools that can't see the forest | **Fleet posture** across 100+ repos on any host |
 | SaaS that ingests your source | **Self-hosted** — your data never leaves |
 | Per-developer seat pricing | **No seat tax** |
@@ -48,21 +48,21 @@ The Wolf collapses that sprawl into one platform:
 <tr>
 <td width="33%" valign="top">
 
-### 🐺 Unified Scanning
+### Unified Scanning
 
 **49 scanners, one deterministic engine.** SAST, SCA, secrets, containers, IaC, DAST, SBOM, license, privacy/PII, K8s, and more — running in parallel, version-pinned, and fully reproducible.
 
 </td>
 <td width="33%" valign="top">
 
-### 🛰️ Fleet Management
+### Fleet Management
 
 **See and steer everything.** Manage 100+ repos across local, GitHub, and remote SSH hosts from a single fleet dashboard — posture, trends, top risks, and what needs attention today.
 
 </td>
 <td width="33%" valign="top">
 
-### 🤖 AI Remediation
+### AI Remediation
 
 **Find, fix, and prove.** AI enriches findings and opens fix PRs, while deterministic rescans and regression guardrails decide whether the change actually improved the code.
 
@@ -71,21 +71,21 @@ The Wolf collapses that sprawl into one platform:
 <tr>
 <td width="33%" valign="top">
 
-### 🛡️ Governance & Policy
+### Governance & Policy
 
 **Ship with confidence.** Quality gates that block CI, baselines that surface only what's *new*, audit-logged suppressions, and SARIF in and out of every system you already run.
 
 </td>
 <td width="33%" valign="top">
 
-### 🔌 Built for Platforms
+### Built for Platforms
 
 **Automate all of it.** A complete REST API with live OpenAPI docs, a CLI that mirrors it 1:1, scoped tokens, SSE streaming, SQLite or PostgreSQL — self-hosted and air-gap friendly.
 
 </td>
 <td width="33%" valign="top">
 
-### 🔗 Source Anywhere
+### Source Anywhere
 
 **Scan it wherever it lives.** Local checkouts, public and private GitHub, generic git, or code sitting on remote SSH hosts — no agents to deploy, bulk-imported in seconds.
 
@@ -97,7 +97,7 @@ The Wolf collapses that sprawl into one platform:
 
 ## Capabilities
 
-### 🐺 One platform, every scanner
+### One platform, every scanner
 
 The Wolf orchestrates **49 industry-standard tools** across every major category — and it doesn't ask you to install a single one. Each tool runs in its own short-lived, locked-down container; the only thing on your host is Docker. That gives teams a deterministic improvement loop: scan code consistently, fix what matters, and rescan the exact evidence before merging. It works for traditional development, AI-assisted development, and autonomous remediation.
 
@@ -107,7 +107,7 @@ The Wolf orchestrates **49 industry-standard tools** across every major category
 - **Hardened isolation** — scanned code runs unprivileged, on a read-only mount, with a read-only root filesystem and no inbound network. Your scanners never become your attack surface.
 - **Smart deduplication & scoring** — findings from overlapping tools are merged, fingerprinted, and ranked by a composite severity score (tool severity × code location × AI context), so the critical handful rises to the top of the noise.
 
-### 🛰️ Fleet management & posture
+### Fleet management & posture
 
 Built for the reality of modern engineering orgs: dozens or hundreds of services, spread across laptops, build hosts, and Git providers.
 
@@ -117,17 +117,17 @@ Built for the reality of modern engineering orgs: dozens or hundreds of services
 - **Collections** — group repositories by team, environment, or tier; scan them as a batch and track cross-repo metrics and posture per collection.
 - **Branch-aware trends** — track findings per branch over time and prove your security posture is improving.
 
-### 🤖 AI-assisted remediation
+### AI-assisted remediation
 
 Most tools tell you what's wrong. The Wolf fixes it.
 
 - **Finding enrichment** — every finding can be enriched with an AI-authored, ready-to-hand-off remediation prompt: what's wrong, why it matters, and exactly how to fix it.
 - **Automated fix engine** — point it at a finding or a whole scan and it generates the patch and opens the pull request, driven by your choice of agent (Claude Code, Codex, or a custom engine).
-- **Autonomous remediation loops** — run scan → fix → rescan cycles that iterate until clean, governed by per-finding budgets, wall-clock and cost ceilings, and regression guardrails so a fix never makes things worse.
+- **Autonomous remediation loops** — run scan, fix, rescan cycles that iterate until clean, governed by per-finding budgets, wall-clock and cost ceilings, and regression guardrails so a fix never makes things worse.
 - **AI triage** — automatically separate real issues from false positives before they ever reach a human queue.
 - **Your model, your keys, your call** — pluggable providers (Anthropic, OpenAI), and **AI is off by default** — a single master switch, opt-in when you're ready, with full cost and token accounting.
 
-### 🛡️ Governance, compliance & policy
+### Governance, compliance & policy
 
 The controls that turn scanning into a program.
 
@@ -137,7 +137,7 @@ The controls that turn scanning into a program.
 - **SARIF in and out** — import findings from any external scanner and export any scan as SARIF for your dashboards, code-scanning views, and compliance pipelines.
 - **Complete audit trail** — every mutating action — who, what token, which resource, what result — is recorded for security review of both human and AI-driven activity.
 
-### 🔌 Built for platform & security teams
+### Built for platform & security teams
 
 - **A complete REST API** — every capability is an endpoint, documented with live, interactive OpenAPI/Swagger docs served right from the product (fully offline). If a human can do it in the UI, a pipeline can do it through the API.
 - **A CLI that mirrors the API 1:1** — `wolf <resource> <verb>` for everything, with table output for humans and JSON for machines, kubeconfig-style contexts for multiple environments, and CI-friendly exit codes.
@@ -146,7 +146,7 @@ The controls that turn scanning into a program.
 - **Live everything** — real-time scan, fix, and loop progress streamed over SSE to the console and the CLI.
 - **Self-managed scanner images** — rebuild and publish your own scanner images directly from the console with streamed build logs; no external registry dependency required to run.
 
-### 🔗 Scan code wherever it lives
+### Scan code wherever it lives
 
 - **Local paths** — point at any checkout on the host.
 - **GitHub, public and private** — token-authenticated, with whole-org bulk import.
@@ -191,8 +191,8 @@ Prefer the API or CI? Everything the console does is one call away:
 
 ```bash
 # Authenticate once, then drive the whole platform from the CLI.
-# Mint a scoped key in the console (Account → API Keys) or:  wolf auth token create --name ci --scope read-write
-wolf config set-context prod --server https://wolf.internal --token wolf_…
+# Mint a scoped key in the console (Account > API Keys) or:  wolf auth token create --name ci --scope read-write
+wolf config set-context prod --server https://wolf.internal --token wolf_...
 # (interactive alternative — prompts for a 2FA code when enabled)
 #   wolf auth login --server https://wolf.internal --email you@example.com
 
@@ -217,31 +217,31 @@ rollout, and rollback—see
 
 ## The scanner catalog
 
-**49 scanners. One console.** Every tool is either pulled from its maintainer's official image (🌐), bundled in The Wolf's slim default image (📦), or available in an opt-in heavyweight bucket (🔧) — all orchestrated identically.
+**49 scanners. One console.** Every tool is either pulled from its maintainer's official image, bundled in The Wolf's slim default image, or available in an opt-in heavyweight bucket — all orchestrated identically.
 
 ### Cross-language & security
 
 | Category | Tool | Source | What it does |
 |---|---|---|---|
-| **SAST** | Semgrep | 🌐 | Pattern + semantic static analysis across every language |
-| **SAST** | CodeQL | 🔧 | GitHub's semantic SAST engine |
-| **SCA** | Trivy | 🌐 | Filesystem, container & IaC vulnerability scanning |
-| **SCA** | Grype + Syft | 🌐 | SBOM-driven vulnerability matching |
-| **SCA** | OSV-Scanner | 🌐 | Multi-ecosystem scanning on Google's OSV database |
-| **Dependency freshness** | Renovate | 🌐 | Flags outdated & vulnerable deps across 15+ ecosystems |
-| **IaC** | KICS | 🌐 | ~3k rules across Terraform, K8s, CloudFormation, Ansible, Helm |
-| **IaC** | Checkov | 🌐 | Terraform / Helm / K8s / CloudFormation security |
-| **Policy-as-code** | Conftest | 🌐 | OPA/Rego policy evaluation over any config |
-| **Kubernetes** | Kubescape · Kube-linter · Pluto | 🌐 | Security, compliance & deprecated-API detection |
-| **Secrets** | Gitleaks · TruffleHog · detect-secrets | 🌐 📦 | History + working-tree secret detection, with live verification |
-| **Containers** | Hadolint · Dockle | 🌐 | Dockerfile linting & CIS image hardening |
-| **Infrastructure** | TFLint | 🌐 | Provider-aware Terraform linting |
-| **DAST** | Nuclei | 🌐 | Template-based HTTP/DNS/TCP vulnerability scanning |
-| **Privacy / PII** | Bearer | 🌐 | GDPR/HIPAA/PCI data-flow analysis |
-| **Repo hygiene** | OpenSSF Scorecard | 🌐 | Supply-chain security posture scoring |
-| **SBOM** | Syft | 🌐 | Software bill-of-materials generation |
-| **Docs / API** | Spectral · Vale | 🌐 | OpenAPI/AsyncAPI linting & prose style |
-| **Shell / SQL / Config** | ShellCheck · SQLFluff · yamllint · markdownlint | 📦 | Language-specific linting |
+| **SAST** | Semgrep | Official image | Pattern + semantic static analysis across every language |
+| **SAST** | CodeQL | Heavyweight bucket | GitHub's semantic SAST engine |
+| **SCA** | Trivy | Official image | Filesystem, container & IaC vulnerability scanning |
+| **SCA** | Grype + Syft | Official image | SBOM-driven vulnerability matching |
+| **SCA** | OSV-Scanner | Official image | Multi-ecosystem scanning on Google's OSV database |
+| **Dependency freshness** | Renovate | Official image | Flags outdated & vulnerable deps across 15+ ecosystems |
+| **IaC** | KICS | Official image | ~3k rules across Terraform, K8s, CloudFormation, Ansible, Helm |
+| **IaC** | Checkov | Official image | Terraform / Helm / K8s / CloudFormation security |
+| **Policy-as-code** | Conftest | Official image | OPA/Rego policy evaluation over any config |
+| **Kubernetes** | Kubescape · Kube-linter · Pluto | Official image | Security, compliance & deprecated-API detection |
+| **Secrets** | Gitleaks · TruffleHog · detect-secrets | Official image / bundled | History + working-tree secret detection, with live verification |
+| **Containers** | Hadolint · Dockle | Official image | Dockerfile linting & CIS image hardening |
+| **Infrastructure** | TFLint | Official image | Provider-aware Terraform linting |
+| **DAST** | Nuclei | Official image | Template-based HTTP/DNS/TCP vulnerability scanning |
+| **Privacy / PII** | Bearer | Official image | GDPR/HIPAA/PCI data-flow analysis |
+| **Repo hygiene** | OpenSSF Scorecard | Official image | Supply-chain security posture scoring |
+| **SBOM** | Syft | Official image | Software bill-of-materials generation |
+| **Docs / API** | Spectral · Vale | Official image | OpenAPI/AsyncAPI linting & prose style |
+| **Shell / SQL / Config** | ShellCheck · SQLFluff · yamllint · markdownlint | Bundled | Language-specific linting |
 
 ### Per-language depth
 
@@ -265,7 +265,7 @@ The Wolf also maps source to tests across **13 languages** for coverage-aware sc
 
 The Wolf can go past *finding* a problem to *proposing the fix* — autonomously, but on a short leash. The autonomous fix engine takes a single finding, has an AI coding agent write a patch, **proves the patch is good**, and hands you a review-ready branch and diff. It never trusts the agent's word for it. Architecture and rationale: [`docs/superpowers/specs/2026-06-15-autonomous-fix-engine-design.md`](docs/superpowers/specs/2026-06-15-autonomous-fix-engine-design.md).
 
-**Off by default.** The entire surface is gated behind one master setting, `autofix_enabled` (default **`false`**). With it off, the execute path returns `403 autofix_disabled`, the worker processes nothing, and the UI surface is dark. Flip it on in **Settings → General** or with `wolf settings set autofix_enabled true`.
+**Off by default.** The entire surface is gated behind one master setting, `autofix_enabled` (default **`false`**). With it off, the execute path returns `403 autofix_disabled`, the worker processes nothing, and the UI surface is dark. Flip it on in **Settings > General** or with `wolf settings set autofix_enabled true`.
 
 **v1 is dry-run, per-finding, verified, branch-only.** No push. No PR. Your working tree is never touched — the worker operates in an isolated worktree/clone on a fresh fix branch and leaves the result as an artifact for a human to review and merge.
 
@@ -274,7 +274,7 @@ The Wolf can go past *finding* a problem to *proposing the fix* — autonomously
 The load-bearing principle is **never use an engine's self-report to decide success** — every fix is judged by the diff on disk and a verification gate, not by what the agent claims it did. A proposed fix is **rolled back** unless it clears every step:
 
 1. **Files actually changed** — an empty or no-op diff fails.
-2. **It still builds** — a language-aware build (`go build ./...`, `tsc --noEmit`, …), parse-only at minimum.
+2. **It still builds** — a language-aware build (`go build ./...`, `tsc --noEmit`, ...), parse-only at minimum.
 3. **The finding is gone** — a **targeted rescan** re-runs *only* that finding's scanner/rule against the changed file and confirms it no longer fires.
 4. **No regressions** — the rescan introduces no new findings.
 5. **Optional tests** — a configured test command, if you supply one.
@@ -286,7 +286,7 @@ Anything that fails is rolled back and the orchestrator escalates (more context,
 The server **runs no agents**. It enqueues durable jobs onto a `fix_jobs` queue; a separable **`wolf fixer`** worker atomically claims them, runs the orchestration inside an engine container, streams logs + status back over SSE, and updates the job. Run one or many — the atomic claim guarantees two workers never double-claim a job, and a heartbeat + stale-reclaim recovers jobs from a crashed worker.
 
 ```bash
-wolf fixer            # long-running worker: claim → fix → repeat
+wolf fixer            # long-running worker: claim, fix, repeat
 wolf fixer --once     # claim exactly one job, then exit (k8s Job-per-task)
 ```
 
