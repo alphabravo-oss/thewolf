@@ -139,6 +139,8 @@ if [[ "$VARIANT" == "default" ]]; then
 	run check_locked_nodejs
 	run check "npm $NPM_VERSION" "$NPM_VERSION" npm --version
 	run check "npm bundled brace-expansion 5.0.9" "5.0.9" node -p 'require("/usr/lib/node_modules/npm/node_modules/brace-expansion/package.json").version'
+	run check "npm bundled picomatch 4.0.5" "4.0.5" node -p 'require("/usr/lib/node_modules/npm/node_modules/picomatch/package.json").version'
+	run check "npm bundled ip-address 10.3.1" "10.3.1" node -p 'require("/usr/lib/node_modules/npm/node_modules/ip-address/package.json").version'
     run check "brakeman $BRAKEMAN_VERSION"             "$BRAKEMAN_VERSION"        brakeman --version
     run check "rubocop $RUBOCOP_VERSION"               "$RUBOCOP_VERSION"         rubocop --version
     run check "phpstan $PHPSTAN_VERSION"               "$PHPSTAN_VERSION"         phpstan --version
