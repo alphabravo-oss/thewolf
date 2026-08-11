@@ -89,9 +89,14 @@ def main() -> int:
         "daily and on-demand exact vulnerability database refresh proposal",
     )
     require(
+        r"concurrency:.*github\.event_name == 'workflow_dispatch' && github\.run_id \|\| github\.event\.schedule \|\| github\.ref",
+        text,
+        "manual dispatch factory runs do not inherit stale operation concurrency",
+    )
+    require(
         r"concurrency:.*cancel-in-progress:\s*\$\{\{\s*github\.event_name == 'workflow_dispatch'\s*\}\}",
         text,
-        "manual dispatch cancels stale factory runs only",
+        "manual dispatch cancellation policy",
     )
     require(
         r"immutable_id=.*run_suffix|run_suffix=.*RUN_ATTEMPT",
