@@ -19,7 +19,7 @@
   {"tool":"detect-secrets","family":"secrets","mode":"real-output","minimumFindings":0,"rationale":"The canary is deliberately recognizable as fake and must not be treated as a production credential."},
   {"tool":"bearer","family":"security","mode":"real-output","minimumFindings":0,"rationale":"The safe source fixture may produce no security rule match; exact upstream execution and normalized output remain required."},
   {"tool":"shellcheck","family":"shell","mode":"real-output","minimumFindings":1},
+  {"tool":"swiftlint","family":"swift","mode":"real-output","minimumFindings":0,"rationale":"The Swift fixture is intentionally lint-clean; exact upstream execution and normalized output remain required."},
   {"tool":"sqlfluff","family":"sql","mode":"real-output","minimumFindings":0,"rationale":"The SQL fixture is intentionally valid for the pinned dialect and configuration."},
-  {"tool":"scorecard","family":"supply-chain","mode":"real-output","minimumFindings":0,"rationale":"The deterministic local Git repository has no remote API identity; a parser-clean local result is the reviewed expectation."},
-  {"tool":"swiftlint","family":"swift","mode":"real-output","minimumFindings":0,"rationale":"The minimal Swift fixture is intentionally lint-clean."}
+  {"tool":"scorecard","family":"supply-chain","mode":"real-output","minimumFindings":0,"rationale":"The deterministic local Git repository has no remote API identity; a parser-clean local result is the reviewed expectation."}
 ]

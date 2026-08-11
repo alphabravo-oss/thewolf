@@ -12,6 +12,14 @@
 # image. An exception scoped to one image can therefore never suppress the
 # same vulnerability ID in another image.
 #
-# Empty for now — add entries only when a real CVE blocks publishing
-# AND the fix isn't available upstream. ignore-unfixed is set in the
-# workflow so CVEs without a fix don't fail the build either way.
+# CodeQL 2.26.2 is the latest bundle, but its packaged extractor/runtime
+# helper artifacts still include these fixed transitive dependencies.
+GHSA-r7wm-3cxj-wff9 # owner=scanner-platform; expires=2026-09-10; reason=latest CodeQL bundle still ships vulnerable jackson-core helper artifacts; images=codeql
+CVE-2026-54512 # owner=scanner-platform; expires=2026-09-10; reason=latest CodeQL bundle still ships vulnerable jackson-databind helper artifacts; images=codeql
+CVE-2026-54513 # owner=scanner-platform; expires=2026-09-10; reason=latest CodeQL bundle still ships vulnerable jackson-databind helper artifacts; images=codeql
+CVE-2026-48109 # owner=scanner-platform; expires=2026-09-10; reason=latest CodeQL bundle still ships vulnerable MessagePack helper artifacts; images=codeql
+CVE-2026-48502 # owner=scanner-platform; expires=2026-09-10; reason=latest CodeQL bundle still ships vulnerable MessagePack helper artifacts; images=codeql
+CVE-2026-48506 # owner=scanner-platform; expires=2026-09-10; reason=latest CodeQL bundle still ships vulnerable MessagePack helper artifacts; images=codeql
+CVE-2026-39822 # owner=scanner-platform; expires=2026-09-10; reason=latest CodeQL bundle still ships vulnerable Go helper binaries; images=codeql
+CVE-2026-56852 # owner=scanner-platform; expires=2026-09-10; reason=latest CodeQL bundle still ships vulnerable Go helper binaries; images=codeql
+CVE-2026-71556 # owner=scanner-platform; expires=2026-09-10; reason=latest CodeQL bundle still ships vulnerable go-git helper binary; images=codeql

@@ -86,21 +86,17 @@ func TestValidateDirectArtifactIntegrityRequiresPinnedFailClosedInstallers(t *te
 		t.Fatal(err)
 	}
 	validScript := []byte("ARCHIVE_SHA256=x\nprintf '%s  %s\\n' \"$ARCHIVE_SHA256\" artifact | sha256sum --check --strict -\n")
-	for _, name := range []string{"php.sh", "swift.sh"} {
-		if err := os.WriteFile(filepath.Join(installDir, name), validScript, 0o600); err != nil {
-			t.Fatal(err)
-		}
+	if err := os.WriteFile(filepath.Join(installDir, "php.sh"), validScript, 0o600); err != nil {
+		t.Fatal(err)
 	}
 	m := &manifest.Manifest{Tools: map[string]manifest.Tool{}}
-	for _, name := range []string{"phpstan", "swiftlint"} {
-		m.Tools[name] = manifest.Tool{
-			PinnedVersion: "1.2.3",
-			SourceIntegrity: manifest.SourceIntegrity{
-				URL:            "https://downloads.example/1.2.3/archive",
-				SHA256:         strings.Repeat("a", 64),
-				SHA256Variable: "ARCHIVE_SHA256",
-			},
-		}
+	m.Tools["phpstan"] = manifest.Tool{
+		PinnedVersion: "1.2.3",
+		SourceIntegrity: manifest.SourceIntegrity{
+			URL:            "https://downloads.example/1.2.3/archive",
+			SHA256:         strings.Repeat("a", 64),
+			SHA256Variable: "ARCHIVE_SHA256",
+		},
 	}
 	if got := validateDirectArtifactIntegrity(root, m); len(got) != 0 {
 		t.Fatalf("valid direct-download integrity rejected: %v", got)

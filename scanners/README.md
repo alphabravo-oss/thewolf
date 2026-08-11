@@ -58,7 +58,6 @@ scanners/
 │   ├── go-tools.sh      # gosec, staticcheck, govulncheck
 │   ├── ruby.sh          # brakeman, rubocop
 │   ├── php.sh           # phpstan
-│   ├── swift.sh         # swiftlint
 │   ├── jvm.sh           # detekt + infer + pmd (Dockerfile.jvm only)
 │   ├── rust.sh          # rust toolchain + clippy (Dockerfile.rust only)
 │   ├── codeql.sh        # codeql bundle (Dockerfile.codeql only)

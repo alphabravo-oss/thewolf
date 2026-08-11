@@ -96,8 +96,7 @@ func Run(root string) (Result, error) {
 
 func validateDirectArtifactIntegrity(root string, m *manifest.Manifest) []string {
 	requirements := map[string]string{
-		"phpstan":   "scanners/install/php.sh",
-		"swiftlint": "scanners/install/swift.sh",
+		"phpstan": "scanners/install/php.sh",
 	}
 	var errs []string
 	for toolName, script := range requirements {

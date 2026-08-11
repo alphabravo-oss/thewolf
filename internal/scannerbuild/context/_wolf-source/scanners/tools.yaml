@@ -22,7 +22,6 @@ tools:
     smoke:
       command: ["bandit", "--version"]
       expected_pattern: "1.7.10"
-
   bearer:
     display_name: Bearer
     category: sast
@@ -40,7 +39,6 @@ tools:
       type: docker_registry
       repository: bearer/bearer
       tag_pattern: '^\d+\.\d+\.\d+$'
-
   brakeman:
     display_name: Brakeman
     category: sast
@@ -59,7 +57,6 @@ tools:
     smoke:
       command: ["brakeman", "--version"]
       expected_pattern: "6.2.2"
-
   checkov:
     display_name: Checkov
     category: container
@@ -75,7 +72,6 @@ tools:
       type: docker_registry
       repository: bridgecrew/checkov
       tag_pattern: '^\d+\.\d+\.\d+$'
-
   clippy:
     display_name: Clippy
     category: quality
@@ -93,7 +89,6 @@ tools:
       url: https://static.rust-lang.org/dist/channel-rust-1.82.0.toml
     smoke:
       command: ["cargo-clippy", "--version"]
-
   codeql:
     display_name: CodeQL
     category: sast
@@ -103,7 +98,7 @@ tools:
     plugin_package: plugins/additional
     integration_tier: bucket
     bucket: codeql
-    pinned_version: "2.26.1"
+    pinned_version: "2.26.2"
     version_variable: CODEQL_VERSION
     update_source:
       type: github_releases
@@ -111,13 +106,12 @@ tools:
       repo: codeql-cli-binaries
       tag_pattern: '^v\d+\.\d+\.\d+$'
     source_integrity:
-      url: https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.26.1/codeql-bundle-linux64.tar.gz
-      sha256: 38eca75ea296a6c48c52aff942b0678f06d3367140a5aa18caf80176943422ba
+      url: https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.26.2/codeql-bundle-linux64.tar.gz
+      sha256: cb361567fa1bdb9d322da4240f621b36f245e4d7bb97db3c3a2ad7f743c8e8e7
       sha256_variable: CODEQL_LINUX_AMD64_SHA256
     smoke:
       command: ["codeql", "--version"]
-      expected_pattern: "2.26.1"
-
+      expected_pattern: "2.26.2"
   conftest:
     display_name: Conftest
     category: infra
@@ -133,7 +127,6 @@ tools:
       type: docker_registry
       repository: openpolicyagent/conftest
       tag_pattern: '^v\d+\.\d+\.\d+$'
-
   cppcheck:
     display_name: Cppcheck
     category: sast
@@ -149,7 +142,6 @@ tools:
       package: cppcheck
     smoke:
       command: ["cppcheck", "--version"]
-
   detect-secrets:
     display_name: detect-secrets
     category: secrets
@@ -168,7 +160,6 @@ tools:
     smoke:
       command: ["detect-secrets", "--version"]
       expected_pattern: "1.5.0"
-
   detekt:
     display_name: detekt
     category: sast
@@ -191,7 +182,6 @@ tools:
     smoke:
       command: ["detekt", "--version"]
       expected_pattern: "1.23.7"
-
   dockle:
     display_name: Dockle
     category: container
@@ -207,7 +197,6 @@ tools:
       type: docker_registry
       repository: goodwithtech/dockle
       tag_pattern: '^v\d+\.\d+\.\d+$'
-
   eslint:
     display_name: ESLint
     category: quality
@@ -226,7 +215,6 @@ tools:
     smoke:
       command: ["eslint", "--version"]
       expected_pattern: "10.8.0"
-
   gitleaks:
     display_name: Gitleaks
     category: secrets
@@ -242,7 +230,6 @@ tools:
       type: docker_registry
       repository: zricethezav/gitleaks
       tag_pattern: '^v\d+\.\d+\.\d+$'
-
   gokart:
     display_name: GoKart
     category: sast
@@ -260,7 +247,6 @@ tools:
       module: github.com/praetorian-inc/gokart
     smoke:
       command: ["gokart", "--version"]
-
   gosec:
     display_name: gosec
     category: sast
@@ -278,7 +264,6 @@ tools:
       module: github.com/securego/gosec/v2
     smoke:
       command: ["gosec", "--version"]
-
   govulncheck:
     display_name: govulncheck
     category: sca
@@ -298,7 +283,6 @@ tools:
     smoke:
       command: ["govulncheck", "-version"]
       expected_pattern: "1.3.0"
-
   grype:
     display_name: Grype
     category: sca
@@ -315,7 +299,6 @@ tools:
       type: docker_registry
       repository: anchore/grype
       tag_pattern: '^v\d+\.\d+\.\d+$'
-
   hadolint:
     display_name: Hadolint
     category: container
@@ -331,7 +314,6 @@ tools:
       type: docker_registry
       repository: hadolint/hadolint
       tag_pattern: '^v\d+\.\d+\.\d+(-alpine)?$'
-
   infer:
     display_name: Infer
     category: sast
@@ -355,7 +337,6 @@ tools:
     smoke:
       command: ["infer", "--version"]
       expected_pattern: "1.2.0"
-
   kics:
     display_name: KICS
     category: infra
@@ -371,7 +352,6 @@ tools:
       type: docker_registry
       repository: checkmarx/kics
       tag_pattern: '^v\d+\.\d+\.\d+$'
-
   kube-linter:
     display_name: kube-linter
     category: infra
@@ -388,7 +368,6 @@ tools:
       type: docker_registry
       repository: stackrox/kube-linter
       tag_pattern: '^v\d+\.\d+\.\d+$'
-
   kubescape:
     display_name: Kubescape
     category: infra
@@ -404,7 +383,6 @@ tools:
       type: docker_registry
       repository: quay.io/kubescape/kubescape-cli
       tag_pattern: '^v\d+\.\d+\.\d+$'
-
   markdownlint:
     display_name: markdownlint
     category: docs
@@ -423,7 +401,6 @@ tools:
     smoke:
       command: ["markdownlint", "--version"]
       expected_pattern: "0.49.1"
-
   mypy:
     display_name: mypy
     category: quality
@@ -442,7 +419,6 @@ tools:
     smoke:
       command: ["mypy", "--version"]
       expected_pattern: "1.13.0"
-
   npm-audit:
     display_name: npm audit
     category: sca
@@ -462,7 +438,6 @@ tools:
     smoke:
       command: ["npm", "--version"]
       expected_pattern: "12.0.2"
-
   nuclei:
     display_name: Nuclei
     category: dast
@@ -479,7 +454,6 @@ tools:
       type: docker_registry
       repository: projectdiscovery/nuclei
       tag_pattern: '^v\d+\.\d+\.\d+$'
-
   osv-scanner:
     display_name: OSV-Scanner
     category: sca
@@ -496,7 +470,6 @@ tools:
       type: docker_registry
       repository: ghcr.io/google/osv-scanner
       tag_pattern: '^v\d+\.\d+\.\d+$'
-
   phpstan:
     display_name: PHPStan
     category: sast
@@ -519,7 +492,6 @@ tools:
     smoke:
       command: ["phpstan", "--version"]
       expected_pattern: "1.12.7"
-
   pip-audit:
     display_name: pip-audit
     category: sca
@@ -539,7 +511,6 @@ tools:
     smoke:
       command: ["pip-audit", "--version"]
       expected_pattern: "2.7.3"
-
   pluto:
     display_name: Pluto
     category: infra
@@ -555,7 +526,6 @@ tools:
       type: docker_registry
       repository: us-docker.pkg.dev/fairwinds-ops/oss/pluto
       tag_pattern: '^v\d+\.\d+\.\d+$'
-
   pmd:
     display_name: PMD
     category: quality
@@ -578,7 +548,6 @@ tools:
     smoke:
       command: ["pmd", "--version"]
       expected_pattern: "7.26.0"
-
   radon:
     display_name: Radon
     category: quality
@@ -597,7 +566,6 @@ tools:
     smoke:
       command: ["radon", "--version"]
       expected_pattern: "6.0.1"
-
   renovate:
     display_name: Renovate
     category: sca
@@ -615,7 +583,6 @@ tools:
       type: docker_registry
       repository: ghcr.io/renovatebot/renovate
       tag_pattern: '^\d+\.\d+\.\d+$'
-
   rubocop:
     display_name: RuboCop
     category: quality
@@ -634,7 +601,6 @@ tools:
     smoke:
       command: ["rubocop", "--version"]
       expected_pattern: "1.66.1"
-
   ruff:
     display_name: Ruff
     category: quality
@@ -653,7 +619,6 @@ tools:
     smoke:
       command: ["ruff", "--version"]
       expected_pattern: "0.7.1"
-
   scorecard:
     display_name: Scorecard
     category: sast
@@ -671,7 +636,6 @@ tools:
       type: docker_registry
       repository: gcr.io/openssf/scorecard
       tag_pattern: '^v\d+\.\d+\.\d+$'
-
   semgrep:
     display_name: Semgrep
     category: sast
@@ -688,7 +652,6 @@ tools:
       type: docker_registry
       repository: semgrep/semgrep
       tag_pattern: '^\d+\.\d+\.\d+$'
-
   shellcheck:
     display_name: ShellCheck
     category: quality
@@ -704,7 +667,6 @@ tools:
       package: shellcheck
     smoke:
       command: ["shellcheck", "--version"]
-
   spectral:
     display_name: Spectral
     category: docs
@@ -721,7 +683,26 @@ tools:
       type: docker_registry
       repository: stoplight/spectral
       tag_pattern: '^\d+\.\d+\.\d+$'
-
+  swiftlint:
+    display_name: SwiftLint
+    category: quality
+    resource_class: light
+    default_timeout: 5m
+    plugin_package: plugins/swift
+    integration_tier: upstream
+    pinned_version: "0.57.0"
+    version_variable: SWIFTLINT_VERSION
+    image:
+      pinned_reference: ghcr.io/realm/swiftlint:0.57.0@sha256:012687cd214bab0ea50ab0b0bfbf1a803b7d25c90765a04d1d2b56aae78830d9
+      entrypoint: swiftlint
+      platforms: ["linux/amd64"]
+    update_source:
+      type: docker_registry
+      repository: ghcr.io/realm/swiftlint
+      tag_pattern: '^\d+\.\d+\.\d+$'
+    smoke:
+      command: ["swiftlint", "--version"]
+      expected_pattern: "0.57.0"
   sqlfluff:
     display_name: SQLFluff
     category: quality
@@ -740,7 +721,6 @@ tools:
     smoke:
       command: ["sqlfluff", "--version"]
       expected_pattern: "4.2.2"
-
   staticcheck:
     display_name: Staticcheck
     category: quality
@@ -758,32 +738,6 @@ tools:
       module: honnef.co/go/tools
     smoke:
       command: ["staticcheck", "--version"]
-
-  swiftlint:
-    display_name: SwiftLint
-    category: quality
-    resource_class: light
-    default_timeout: 5m
-    platforms: ["linux/amd64"]
-    plugin_package: plugins/swift
-    integration_tier: default
-    pinned_version: "0.57.0"
-    version_variable: SWIFTLINT_VERSION
-    install:
-      manager: github_release
-      package: realm/SwiftLint
-    update_source:
-      type: github_releases
-      owner: realm
-      repo: SwiftLint
-      tag_pattern: '^\d+\.\d+\.\d+$'
-    source_integrity:
-      url: https://github.com/realm/SwiftLint/releases/download/0.57.0/portable_swiftlint.zip
-      sha256: 9b5fb984fcded35eabcb2a10aecf0209b70b8d663738d327e19821eac45eb810
-      sha256_variable: SWIFTLINT_PORTABLE_SHA256
-    smoke:
-      command: ["swiftlint", "--version"]
-
   syft:
     display_name: Syft
     category: sbom
@@ -799,7 +753,6 @@ tools:
       type: docker_registry
       repository: anchore/syft
       tag_pattern: '^v\d+\.\d+\.\d+$'
-
   tflint:
     display_name: TFLint
     category: infra
@@ -815,7 +768,6 @@ tools:
       type: docker_registry
       repository: ghcr.io/terraform-linters/tflint
       tag_pattern: '^v\d+\.\d+\.\d+$'
-
   trivy:
     display_name: Trivy
     category: sca
@@ -832,7 +784,6 @@ tools:
       type: docker_registry
       repository: aquasec/trivy
       tag_pattern: '^\d+\.\d+\.\d+$'
-
   trufflehog:
     display_name: TruffleHog
     category: secrets
@@ -848,7 +799,6 @@ tools:
       type: docker_registry
       repository: trufflesecurity/trufflehog
       tag_pattern: '^\d+\.\d+\.\d+$'
-
   vale:
     display_name: Vale
     category: docs
@@ -864,7 +814,6 @@ tools:
       type: docker_registry
       repository: jdkato/vale
       tag_pattern: '^v\d+\.\d+\.\d+$'
-
   vulture:
     display_name: Vulture
     category: quality
@@ -883,7 +832,6 @@ tools:
     smoke:
       command: ["vulture", "--version"]
       expected_pattern: "2.13"
-
   yamllint:
     display_name: yamllint
     category: quality

@@ -17,12 +17,12 @@ ARG GO_LINUX_AMD64_SHA256=5c2c3b16caefa1d968a94c1daca04a7ca301a496d9b086e17ad77b
 ARG GO_LINUX_ARM64_SHA256=fe4789e92b1f33358680864bbe8704289e7bb5fc207d80623c308935bd696d49
 ARG TYPESCRIPT_VERSION=6.0.3
 ARG TYPESCRIPT_INTEGRITY=sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw==
-ARG GH_VERSION=2.96.0
-ARG GLAB_VERSION=1.111.0
+ARG GH_VERSION=2.97.0
+ARG GLAB_VERSION=1.113.0
 
 LABEL org.opencontainers.image.title="wolf-fixer" \
       org.opencontainers.image.description="Autonomous remediation worker base for The Wolf" \
-      org.opencontainers.image.source="https://github.com/alphabravocompany/thewolf" \
+      org.opencontainers.image.source="https://github.com/alphabravo-oss/thewolf" \
       org.opencontainers.image.vendor="AlphaBravo" \
       org.opencontainers.image.version="${WOLF_VERSION}" \
       dev.wolf.fixer.variant="base" \
@@ -95,7 +95,7 @@ FROM debian:trixie-slim@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a
 ARG WOLF_VERSION=dev
 LABEL org.opencontainers.image.title="wolf-fixer" \
       org.opencontainers.image.description="Autonomous remediation worker base for The Wolf" \
-      org.opencontainers.image.source="https://github.com/alphabravocompany/thewolf" \
+      org.opencontainers.image.source="https://github.com/alphabravo-oss/thewolf" \
       org.opencontainers.image.vendor="AlphaBravo" \
       org.opencontainers.image.version="${WOLF_VERSION}" \
       dev.wolf.fixer.variant="base" \

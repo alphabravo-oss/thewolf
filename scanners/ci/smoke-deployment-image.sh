@@ -22,7 +22,7 @@ variant="${3:-}"
 
 test "$(docker image inspect "$image" --format '{{.Config.User}}')" = wolf
 test "$(docker image inspect "$image" --format '{{index .Config.Labels "org.opencontainers.image.source"}}')" = \
-    https://github.com/alphabravocompany/thewolf
+    https://github.com/alphabravo-oss/thewolf
 docker run --rm --platform "$platform" --network none \
     --entrypoint /bin/sh "$image" -ec 'test "$(id -u)" -ne 0'
 

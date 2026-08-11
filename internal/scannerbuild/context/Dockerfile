@@ -15,7 +15,6 @@
 #   - ruby lang tools   : brakeman, rubocop
 #   - php lang tools    : phpstan
 #   - native lang tools : cppcheck, shellcheck
-#   - swift lang tools  : swiftlint (only on supported arches)
 #   - pure-python core  : detect-secrets, sqlfluff
 #
 # Build:
@@ -27,7 +26,7 @@ FROM debian:trixie-slim@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a
 ARG WOLF_VERSION=dev
 LABEL org.opencontainers.image.title="wolf-scanners" \
       org.opencontainers.image.description="Slim language-tool image for the Wolf code analysis engine" \
-      org.opencontainers.image.source="https://github.com/alphabravocompany/thewolf" \
+      org.opencontainers.image.source="https://github.com/alphabravo-oss/thewolf" \
       org.opencontainers.image.vendor="AlphaBravo" \
       org.opencontainers.image.version="${WOLF_VERSION}"
 
@@ -77,9 +76,6 @@ RUN  bash /tmp/install/ruby.sh
 
 COPY install/php.sh           /tmp/install/php.sh
 RUN  bash /tmp/install/php.sh
-
-COPY install/swift.sh         /tmp/install/swift.sh
-RUN  bash /tmp/install/swift.sh
 
 COPY install/lang_native.sh   /tmp/install/lang_native.sh
 RUN  bash /tmp/install/lang_native.sh

@@ -34,7 +34,6 @@ unknown, proprietary, and every unlisted license still fail the image gate.
 | brakeman | MIT | — |
 | rubocop | MIT | — |
 | phpstan | MIT | — |
-| swiftlint | MIT | — |
 | cppcheck | GPL-3.0 | Distributing the binary in a closed-source container is OK; redistribution of modified cppcheck source would not be. |
 | shellcheck | GPL-3.0 | Same as cppcheck. |
 | infer | MIT | — |

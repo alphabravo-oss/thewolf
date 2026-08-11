@@ -36,9 +36,9 @@ func TestDefaultManifestLoads(t *testing.T) {
 		t.Fatalf("manifest tool count = %d, want 49", got)
 	}
 	counts := m.TierCounts()
-	assertEqual(t, "default tool count", counts[manifest.TierDefault], 22)
+	assertEqual(t, "default tool count", counts[manifest.TierDefault], 21)
 	assertEqual(t, "bucket tool count", counts[manifest.TierBucket], 5)
-	assertEqual(t, "upstream tool count", counts[manifest.TierUpstream], 22)
+	assertEqual(t, "upstream tool count", counts[manifest.TierUpstream], 23)
 }
 
 func TestDefaultManifestValidation(t *testing.T) {
@@ -47,9 +47,9 @@ func TestDefaultManifestValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertEqual(t, "tool count", result.ToolCount, 49)
-	assertEqual(t, "default count", result.DefaultCount, 22)
+	assertEqual(t, "default count", result.DefaultCount, 21)
 	assertEqual(t, "bucket count", result.BucketCount, 5)
-	assertEqual(t, "upstream count", result.UpstreamCount, 22)
+	assertEqual(t, "upstream count", result.UpstreamCount, 23)
 }
 
 func TestParseVersionsEnv(t *testing.T) {

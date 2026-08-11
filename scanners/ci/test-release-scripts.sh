@@ -56,6 +56,16 @@ original_id="$(awk -F= '$1 == "immutable_id" {print $2}' <<<"$output")"
 [[ "$retry_id" != "$original_id" && "$retry_id" == *-r12345-a3 ]] ||
     fail "candidate retry reused an immutable candidate identity"
 
+output="$(env "${common[@]}" EVENT_NAME=push \
+    scanners/ci/release-meta.sh resolve)"
+assert_output "$output" "operation=candidate"
+assert_output "$output" "run_discovery=true"
+assert_output "$output" "run_validation=true"
+assert_output "$output" "run_build=true"
+assert_output "$output" "publish=false"
+assert_output "$output" "aliases="
+assert_output "$output" "immutable_id=scanner-candidate-main-0123456789ab-r12345-a2"
+
 output="$(env "${common[@]}" EVENT_NAME=workflow_dispatch \
     INPUT_OPERATION=refresh-os-packages \
     INPUT_OS_PACKAGE_SNAPSHOT=20260730T000000Z \

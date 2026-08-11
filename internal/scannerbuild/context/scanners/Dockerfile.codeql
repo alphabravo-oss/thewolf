@@ -22,7 +22,7 @@ FROM debian:trixie-slim@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a
 ARG WOLF_VERSION=dev
 LABEL org.opencontainers.image.title="wolf-scanners-codeql" \
       org.opencontainers.image.description="CodeQL CLI for the Wolf code analysis engine (license-restricted)" \
-      org.opencontainers.image.source="https://github.com/alphabravocompany/thewolf" \
+      org.opencontainers.image.source="https://github.com/alphabravo-oss/thewolf" \
       org.opencontainers.image.vendor="AlphaBravo" \
       org.opencontainers.image.version="${WOLF_VERSION}"
 

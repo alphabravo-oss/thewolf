@@ -8,9 +8,9 @@ Wolf scanner metadata is authored in `scanners/tools.yaml`. This table is genera
 
 | Tier | Count |
 |---|---:|
-| Default Wolf image | 22 |
+| Default Wolf image | 21 |
 | Wolf bucket images | 5 |
-| Upstream/native images | 22 |
+| Upstream/native images | 23 |
 | Total registered scanner tools | 49 |
 
 ## Tools
@@ -34,6 +34,7 @@ Wolf scanner metadata is authored in `scanners/tools.yaml`. This table is genera
 | `scorecard` | sast | upstream | `5.0.0` (`SCORECARD_VERSION`) | `gcr.io/openssf/scorecard:v5.0.0` | `linux/amd64` | `docker:gcr.io/openssf/scorecard` |
 | `semgrep` | sast | upstream | `1.92.0` (`SEMGREP_VERSION`) | `semgrep/semgrep:1.92.0` | `linux/amd64`, `linux/arm64` | `docker:semgrep/semgrep` |
 | `spectral` | docs | upstream | `6.13.1` (`SPECTRAL_VERSION`) | `stoplight/spectral:6.13.1` | `linux/amd64` | `docker:stoplight/spectral` |
+| `swiftlint` | quality | upstream | `0.57.0` (`SWIFTLINT_VERSION`) | `ghcr.io/realm/swiftlint:0.57.0@sha256:012687cd214bab0ea50ab0b0bfbf1a803b7d25c90765a04d1d2b56aae78830d9` | `linux/amd64` | `docker:ghcr.io/realm/swiftlint` |
 | `syft` | sbom | upstream | `1.17.0` (`SYFT_VERSION`) | `anchore/syft:v1.17.0` | `linux/amd64`, `linux/arm64` | `docker:anchore/syft` |
 | `tflint` | infra | upstream | `0.54.0` (`TFLINT_VERSION`) | `ghcr.io/terraform-linters/tflint:v0.54.0` | `linux/amd64`, `linux/arm64` | `docker:ghcr.io/terraform-linters/tflint` |
 | `trivy` | sca | upstream | `0.57.0` (`TRIVY_VERSION`) | `aquasec/trivy:0.57.0` | `linux/amd64`, `linux/arm64` | `docker:aquasec/trivy` |
@@ -58,11 +59,10 @@ Wolf scanner metadata is authored in `scanners/tools.yaml`. This table is genera
 | `shellcheck` | quality | default | - | `apt:shellcheck` | - | `debian:shellcheck` |
 | `sqlfluff` | quality | default | `4.2.2` (`SQLFLUFF_VERSION`) | `pip:sqlfluff` | - | `pypi:sqlfluff` |
 | `staticcheck` | quality | default | `0.7.0` (`STATICCHECK_VERSION`) | `go:honnef.co/go/tools/cmd/staticcheck` | - | `go:honnef.co/go/tools` |
-| `swiftlint` | quality | default | `0.57.0` (`SWIFTLINT_VERSION`) | `github_release:realm/SwiftLint` | - | `github:realm/SwiftLint` |
 | `vulture` | quality | default | `2.13` (`VULTURE_VERSION`) | `pip:vulture` | - | `pypi:vulture` |
 | `yamllint` | quality | default | `1.35.1` (`YAMLLINT_VERSION`) | `pip:yamllint` | - | `pypi:yamllint` |
 | `clippy` | quality | rust bucket | `1.82.0` (`RUST_TOOLCHAIN`) | `wolf-scanners-rust` | - | `rust:stable` |
-| `codeql` | sast | codeql bucket | `2.26.1` (`CODEQL_VERSION`) | `wolf-scanners-codeql` | - | `github:github/codeql-cli-binaries` |
+| `codeql` | sast | codeql bucket | `2.26.2` (`CODEQL_VERSION`) | `wolf-scanners-codeql` | - | `github:github/codeql-cli-binaries` |
 | `detekt` | sast | jvm bucket | `1.23.7` (`DETEKT_VERSION`) | `wolf-scanners-jvm` | - | `github:detekt/detekt` |
 | `infer` | sast | jvm bucket | `1.2.0` (`INFER_VERSION`) | `wolf-scanners-jvm` | - | `github:facebook/infer` |
 | `pmd` | quality | jvm bucket | `7.26.0` (`PMD_VERSION`) | `wolf-scanners-jvm` | - | `github:pmd/pmd` |

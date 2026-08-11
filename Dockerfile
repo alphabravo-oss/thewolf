@@ -99,7 +99,7 @@ RUN apk add --no-cache ca-certificates \
 FROM alpine:3.24@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS scanner-release-fixed-adapter
 
 LABEL org.opencontainers.image.title="Wolf fixed release adapter" \
-      org.opencontainers.image.source="https://github.com/alphabravocompany/thewolf"
+      org.opencontainers.image.source="https://github.com/alphabravo-oss/thewolf"
 
 RUN apk add --no-cache ca-certificates tzdata git \
     && addgroup -S wolf \
@@ -120,7 +120,7 @@ ENTRYPOINT ["/usr/local/bin/wolf-release-adapter"]
 FROM alpine:3.24@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS scanner-release-quality-adapter
 
 LABEL org.opencontainers.image.title="Wolf quality release adapter" \
-      org.opencontainers.image.source="https://github.com/alphabravocompany/thewolf" \
+      org.opencontainers.image.source="https://github.com/alphabravo-oss/thewolf" \
       org.opencontainers.image.version.trivy="0.70.0" \
       org.opencontainers.image.version.oras="1.3.2"
 
@@ -143,7 +143,7 @@ ENTRYPOINT ["/usr/local/bin/wolf-release-adapter"]
 FROM alpine:3.24@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS scanner-release-integration-adapter
 
 LABEL org.opencontainers.image.title="Wolf integration release adapter" \
-      org.opencontainers.image.source="https://github.com/alphabravocompany/thewolf"
+      org.opencontainers.image.source="https://github.com/alphabravo-oss/thewolf"
 
 # The four qualification entrypoints and their fixed Compose fixture helper
 # use trusted precompiled qualification binaries, jq and Python timing helpers
@@ -182,7 +182,7 @@ FROM golang:1.26.5-alpine@sha256:0178a641fbb4858c5f1b48e34bdaabe0350a330a1b1149a
 
 LABEL org.opencontainers.image.title="Wolf scanner proposal runtime" \
       org.opencontainers.image.description="Non-root worker for generating and validating immutable scanner release proposals" \
-      org.opencontainers.image.source="https://github.com/alphabravocompany/thewolf"
+      org.opencontainers.image.source="https://github.com/alphabravo-oss/thewolf"
 
 RUN apk add --no-cache ca-certificates tzdata git \
     && addgroup -S wolf \
@@ -221,7 +221,7 @@ FROM alpine:3.24@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec4
 
 LABEL org.opencontainers.image.title="The Wolf" \
       org.opencontainers.image.description="AI-Powered Code Analysis & Fix Engine" \
-      org.opencontainers.image.source="https://github.com/alphabravocompany/thewolf" \
+      org.opencontainers.image.source="https://github.com/alphabravo-oss/thewolf" \
       org.opencontainers.image.vendor="WolfCorp"
 
 RUN apk add --no-cache ca-certificates tzdata docker-cli docker-cli-buildx git \

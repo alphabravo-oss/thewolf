@@ -111,9 +111,8 @@ resolve() {
             run_discovery=true
             run_validation=true
             run_build=true
-            publish=true
+            publish=false
             immutable_id="scanner-candidate-main-${short_sha}-${run_suffix}"
-            aliases="main,main-${short_sha}"
             ;;
         pull_request)
             operation="validate"

@@ -142,10 +142,6 @@ if [[ "$VARIANT" == "default" ]]; then
     run check "brakeman $BRAKEMAN_VERSION"             "$BRAKEMAN_VERSION"        brakeman --version
     run check "rubocop $RUBOCOP_VERSION"               "$RUBOCOP_VERSION"         rubocop --version
     run check "phpstan $PHPSTAN_VERSION"               "$PHPSTAN_VERSION"         phpstan --version
-    case "$(uname -m)" in
-        x86_64|amd64) run check "swiftlint $SWIFTLINT_VERSION" "$SWIFTLINT_VERSION" swiftlint --version ;;
-        *) echo "  SKIP swiftlint (manifest restricts bundled binary to linux/amd64)" ;;
-    esac
 	run check_locked_deb "cppcheck" cppcheck
 	run check "cppcheck invocation" "Cppcheck" cppcheck --version
 	run check_locked_deb "shellcheck" shellcheck
