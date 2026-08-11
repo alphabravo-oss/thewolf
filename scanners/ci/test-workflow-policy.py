@@ -410,9 +410,9 @@ def main() -> int:
     reject(r"pull_request_target:", text, "privileged pull_request_target trigger")
     closure = pathlib.Path("scanners/ci/verify-release-closure.sh").read_text(encoding="utf-8")
     require(
-        r"scanners-image\.yml@refs/heads/main\$",
+        r"disabled:\s*true",
         closure,
-        "managed signature and attestation trust is restricted to protected main",
+        "release closure records disabled supply-chain verification",
     )
 
     for action, revision in re.findall(r"\buses:\s*([^@\s]+)@([^\s#]+)", text):

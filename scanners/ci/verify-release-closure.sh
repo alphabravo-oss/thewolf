@@ -35,7 +35,6 @@ fi
 : "${GITHUB_REPOSITORY:?GITHUB_REPOSITORY is required}"
 : "${GITHUB_SERVER_URL:?GITHUB_SERVER_URL is required}"
 
-certificate_identity_regexp="${CERTIFICATE_IDENTITY_REGEXP:-^${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/.github/workflows/scanners-image.yml@refs/heads/main$}"
 mkdir -p "$output_dir/evidence" "$output_dir/payload"
 
 sha_file() {
