@@ -1142,30 +1142,35 @@ jobs:
             dockerfile: scanners/Dockerfile
             image: wolf-scanners
             platforms: linux/amd64,linux/arm64
+            annotation_prefix: index
           - variant: jvm
             image_kind: scanner
             context: scanners
             dockerfile: scanners/Dockerfile.jvm
             image: wolf-scanners-jvm
             platforms: linux/amd64,linux/arm64
+            annotation_prefix: index
           - variant: rust
             image_kind: scanner
             context: scanners
             dockerfile: scanners/Dockerfile.rust
             image: wolf-scanners-rust
             platforms: linux/amd64,linux/arm64
+            annotation_prefix: index
           - variant: codeql
             image_kind: scanner
             context: scanners
             dockerfile: scanners/Dockerfile.codeql
             image: wolf-scanners-codeql
             platforms: linux/amd64
+            annotation_prefix: manifest
           - variant: fixer-base
             image_kind: fixer
             context: .
             dockerfile: fixer/Dockerfile.base
             image: wolf-fixer
             platforms: linux/amd64,linux/arm64
+            annotation_prefix: index
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
@@ -1248,15 +1253,15 @@ jobs:
             dev.wolf.release.lock-digest=${{ needs.prepare.outputs.lock_digest }}
             dev.wolf.release.definition-digest=${{ needs.prepare.outputs.definition_digest }}
           annotations: |
-            index:org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            index:org.opencontainers.image.revision=${{ github.sha }}
-            index:org.opencontainers.image.version=${{ needs.prepare.outputs.immutable_id }}
-            index:dev.wolf.release.variant=${{ matrix.variant }}
-            index:dev.wolf.release.image-kind=${{ matrix.image_kind }}
-            index:dev.wolf.release.platforms=${{ matrix.platforms }}
-            index:dev.wolf.release.id=${{ needs.prepare.outputs.immutable_id }}
-            index:dev.wolf.release.lock-digest=${{ needs.prepare.outputs.lock_digest }}
-            index:dev.wolf.release.definition-digest=${{ needs.prepare.outputs.definition_digest }}
+            ${{ matrix.annotation_prefix }}:org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            ${{ matrix.annotation_prefix }}:org.opencontainers.image.revision=${{ github.sha }}
+            ${{ matrix.annotation_prefix }}:org.opencontainers.image.version=${{ needs.prepare.outputs.immutable_id }}
+            ${{ matrix.annotation_prefix }}:dev.wolf.release.variant=${{ matrix.variant }}
+            ${{ matrix.annotation_prefix }}:dev.wolf.release.image-kind=${{ matrix.image_kind }}
+            ${{ matrix.annotation_prefix }}:dev.wolf.release.platforms=${{ matrix.platforms }}
+            ${{ matrix.annotation_prefix }}:dev.wolf.release.id=${{ needs.prepare.outputs.immutable_id }}
+            ${{ matrix.annotation_prefix }}:dev.wolf.release.lock-digest=${{ needs.prepare.outputs.lock_digest }}
+            ${{ matrix.annotation_prefix }}:dev.wolf.release.definition-digest=${{ needs.prepare.outputs.definition_digest }}
           provenance: false
           sbom: false
           no-cache: >-
@@ -1506,14 +1511,17 @@ jobs:
             dockerfile: fixer/Dockerfile.api
             image: wolf-fixer-api
             platforms: linux/amd64,linux/arm64
+            annotation_prefix: index
           - variant: fixer-claude
             dockerfile: fixer/Dockerfile.claude
             image: wolf-fixer-claude
             platforms: linux/amd64,linux/arm64
+            annotation_prefix: index
           - variant: fixer-codex
             dockerfile: fixer/Dockerfile.codex
             image: wolf-fixer-codex
             platforms: linux/amd64,linux/arm64
+            annotation_prefix: index
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
@@ -1633,15 +1641,15 @@ jobs:
             dev.wolf.release.definition-digest=${{ needs.prepare.outputs.definition_digest }}
             dev.wolf.fixer.base=${{ steps.base.outputs.reference }}
           annotations: |
-            index:org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            index:org.opencontainers.image.revision=${{ github.sha }}
-            index:org.opencontainers.image.version=${{ needs.prepare.outputs.immutable_id }}
-            index:dev.wolf.release.variant=${{ matrix.variant }}
-            index:dev.wolf.release.image-kind=fixer
-            index:dev.wolf.release.platforms=${{ matrix.platforms }}
-            index:dev.wolf.release.id=${{ needs.prepare.outputs.immutable_id }}
-            index:dev.wolf.release.lock-digest=${{ needs.prepare.outputs.lock_digest }}
-            index:dev.wolf.release.definition-digest=${{ needs.prepare.outputs.definition_digest }}
+            ${{ matrix.annotation_prefix }}:org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            ${{ matrix.annotation_prefix }}:org.opencontainers.image.revision=${{ github.sha }}
+            ${{ matrix.annotation_prefix }}:org.opencontainers.image.version=${{ needs.prepare.outputs.immutable_id }}
+            ${{ matrix.annotation_prefix }}:dev.wolf.release.variant=${{ matrix.variant }}
+            ${{ matrix.annotation_prefix }}:dev.wolf.release.image-kind=fixer
+            ${{ matrix.annotation_prefix }}:dev.wolf.release.platforms=${{ matrix.platforms }}
+            ${{ matrix.annotation_prefix }}:dev.wolf.release.id=${{ needs.prepare.outputs.immutable_id }}
+            ${{ matrix.annotation_prefix }}:dev.wolf.release.lock-digest=${{ needs.prepare.outputs.lock_digest }}
+            ${{ matrix.annotation_prefix }}:dev.wolf.release.definition-digest=${{ needs.prepare.outputs.definition_digest }}
           provenance: false
           sbom: false
           no-cache: >-

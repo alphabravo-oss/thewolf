@@ -330,7 +330,8 @@ def main() -> int:
     require(r"aggregate-spdx\.py", text, "aggregate release SPDX SBOM")
     require(r"provenance:\s*false", text, "BuildKit provenance disabled for unsigned publishing")
     require(r"sbom:\s*false", text, "BuildKit SBOM attestations disabled for unsigned publishing")
-    require(r"index:dev\.wolf\.release\.lock-digest=", text, "OCI index lock-digest annotation")
+    require(r"annotation_prefix:\s*manifest", text, "single-platform CodeQL manifest annotations")
+    require(r"annotation_prefix:\s*index", text, "multi-platform OCI index annotations")
     for annotation in (
         "org.opencontainers.image.source",
         "org.opencontainers.image.revision",
@@ -340,9 +341,9 @@ def main() -> int:
         "dev.wolf.release.platforms",
     ):
         require(
-            rf"index:{re.escape(annotation)}=",
+            rf"\$\{{\{{ matrix\.annotation_prefix \}}\}}:{re.escape(annotation)}=",
             text,
-            f"OCI index {annotation} annotation",
+            f"OCI {annotation} annotation",
         )
     require(r"verify-image\.sh.*?LOCK_DIGEST.*?DEFINITION_DIGEST", text, "post-push release annotation verification")
     require(r"referrersSha256", text, "content-addressed referrer evidence")
