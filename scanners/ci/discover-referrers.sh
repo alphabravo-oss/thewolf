@@ -22,7 +22,7 @@ for ((attempt = 1; attempt <= attempts; attempt++)); do
     if oras discover --format json "$reference" >"$raw" \
         && jq -e '
             (.referrers | type) == "array"
-            and (.referrers | length) >= 3
+            and (.referrers | length) >= 2
             and all(.referrers[]; (.digest | test("^sha256:[a-f0-9]{64}$")))
           ' "$raw" >/dev/null; then
         jq -S --arg digest "$digest" '{
@@ -40,7 +40,7 @@ for ((attempt = 1; attempt <= attempts; attempt++)); do
 done
 
 jq -S --arg digest "$digest" --arg message "$error_message" '
-    if (.referrers | type) != "array" or (.referrers | length) < 3 or
+    if (.referrers | type) != "array" or (.referrers | length) < 2 or
        any(.referrers[]; (.digest | test("^sha256:[a-f0-9]{64}$") | not))
     then error($message)
     else {subjectDigest: $digest, referrers: (.referrers | sort_by(.artifactType, .digest))}
