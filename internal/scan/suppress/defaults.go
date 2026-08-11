@@ -196,8 +196,8 @@ func DefaultRules() RuleSet {
 		{PathGlob: "**/go.sum", Reason: "default:lockfile"},
 
 		// --- Wolf's own outputs and scanner-config files ---
-		// FINDINGS/ holds committed scan-result JSON exports; trufflehog
-		// flags hex-like CVE IDs as "secrets" otherwise.
+		// FINDINGS/ holds local scan-result JSON exports; trufflehog flags
+		// hex-like CVE IDs as "secrets" otherwise.
 		{PathGlob: "FINDINGS/**", Reason: "default:wolf-self-output"},
 		{PathGlob: "**/FINDINGS/**", Reason: "default:wolf-self-output"},
 		// Scanner config files contain rule UUIDs (KICS), regex patterns,
@@ -214,8 +214,5 @@ func DefaultRules() RuleSet {
 		{PathGlob: ".sqlfluff", Reason: "default:scanner-config"},
 		{PathGlob: ".yamllint", Reason: "default:scanner-config"},
 		{PathGlob: ".markdownlint*", Reason: "default:scanner-config"},
-		// FIXES.md / FIXES2.md etc. — wolf's own triage docs; they cite
-		// CVE IDs, GHSA IDs, and KICS UUIDs.
-		{PathGlob: "FIXES*.md", Reason: "default:wolf-triage-doc"},
 	}}
 }

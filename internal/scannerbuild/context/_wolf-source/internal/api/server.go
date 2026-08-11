@@ -425,7 +425,7 @@ func NewServer(store db.Store, addr string) *Server {
 				r.With(rConfig).Get("/setup", routes.SetupStatus)
 			})
 
-			// Scanner backend (PLAN.md §5).
+			// Scanner backend (docs/PLAN-containerized-scanner-execution.md §5).
 			r.Route("/scanners", func(r chi.Router) {
 				// Scanner-image builds/pulls/updates are admin-only (system
 				// maintenance); reads stay open for the scan flow.

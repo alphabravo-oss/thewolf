@@ -7,7 +7,7 @@ import (
 
 // Plugin defines the interface that all analysis tool plugins must implement.
 //
-// After the containerization migration (PLAN.md), CheckAvailable should
+// After the containerization migration (docs/PLAN-containerized-scanner-execution.md), CheckAvailable should
 // return true iff the wolf-scanners image is locally available. Plugins no
 // longer probe the host PATH.
 type Plugin interface {

@@ -10,7 +10,7 @@ import path from "node:path";
 //   layer; the previous Next.js standalone tree at `.next/standalone` is
 //   replaced by a static SPA).
 // - The Go API runs on :8778 by default; we proxy /api/* to it in dev so
-//   `npm run dev` Just Works without CORS dancing.
+//   `pnpm dev` works without CORS dancing.
 // - TanStackRouterVite generates the type-safe route tree from src/routes/.
 export default defineConfig({
   plugins: [

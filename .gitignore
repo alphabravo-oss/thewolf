@@ -58,6 +58,8 @@ tmp/
 # Wolf runtime artifacts
 .wolf/
 .codex-security/
+/repos/
+/workspaces/
 
 # Scan artifacts output dir (local dev). Anchored to the repo root so it does
 # NOT match the internal/artifacts/ Go source package.

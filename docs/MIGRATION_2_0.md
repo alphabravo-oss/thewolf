@@ -2,7 +2,9 @@
 
 Wolf 2.0 replaces the host-installed scanner model with a Docker-based one.
 Operators no longer need ~40 tools installed on the host; wolf-slim spawns
-short-lived scanner containers on demand. See `PLAN.md` for the full design.
+short-lived scanner containers on demand. See
+[`PLAN-containerized-scanner-execution.md`](PLAN-containerized-scanner-execution.md)
+for the full design.
 
 This guide covers the migration path for existing wolf 1.x installations.
 

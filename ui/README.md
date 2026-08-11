@@ -60,15 +60,15 @@ src/
 ## Dev
 
 ```shell
-npm install
-npm run dev    # localhost:3000, proxies /api → :8778
+corepack pnpm install
+corepack pnpm dev    # localhost:3000, proxies /api → :8778
 ```
 
 ## Build
 
 ```shell
-npm run build           # → dist/
-npm run typecheck       # tsc --noEmit
+corepack pnpm build           # → dist/
+corepack pnpm typecheck       # tsc --noEmit
 ```
 
 ## Theme

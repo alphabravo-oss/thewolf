@@ -2,7 +2,7 @@
 // plugin.CommandContext (host-exec) helper, used by every scanner plugin
 // after the containerization migration.
 //
-// Design notes (also documented in PLAN.md §5.3):
+// Design notes (also documented in docs/PLAN-containerized-scanner-execution.md §5.3):
 //
 //   - Plugins call CommandContext(ctx, cfg, opts, tool, args...). The returned
 //     *exec.Cmd, when Run/Output is called, invokes `docker run --rm ...

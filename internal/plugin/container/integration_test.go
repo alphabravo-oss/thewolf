@@ -60,7 +60,7 @@ func fixtureRepo(t *testing.T) string {
 
 // TestShim_Bandit_E2E runs bandit through the shim against a fixture repo
 // and asserts at least one finding. This is the canonical "scanner backend
-// is actually working" test from PLAN.md §7 (Pass gate P1).
+// is actually working" test from docs/PLAN-containerized-scanner-execution.md §7 (Pass gate P1).
 func TestShim_Bandit_E2E(t *testing.T) {
 	cfg := requireImage(t)
 	repo := fixtureRepo(t)

@@ -9,8 +9,8 @@
 //	wolf version          — print version info
 //
 // Configuration is read from environment variables (12-factor); wolf.yaml
-// is honored only via env-overlay scripts in docker-compose. See PLAN.md
-// §5.6 for the full env-var reference.
+// is honored only via env-overlay scripts in docker-compose. See
+// docs/PLAN-containerized-scanner-execution.md §5.6 for the full env-var reference.
 package main
 
 import (

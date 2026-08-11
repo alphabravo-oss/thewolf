@@ -523,7 +523,7 @@ decides. wolf drives every scan; the AI only fixes and proves validity.
 - [ ] US-12 `wolf loop` CLI + loop REST API
 - [ ] US-13 revive & update the Loops UI
 - **Verification:** `go build ./...`, `go test ./internal/...`,
-  `cd ui-next && npx tsc --noEmit && npm run build`
+  `cd ui && corepack pnpm typecheck && corepack pnpm build`
 
 ### Phase 5 (deferred): Plugin system
 
@@ -539,7 +539,7 @@ This feature is complete (MVP = Phases 1–4) when:
 - [ ] Tests pass: `go test ./...`
 - [ ] Types/lint: `go vet ./internal/...` and
   `cd ui-next && npx tsc --noEmit`
-- [ ] Build: `go build ./...` and `cd ui-next && npm run build`
+- [ ] Build: `go build ./...` and `cd ui && corepack pnpm build`
 - [ ] With no AI configured, all non-AI behavior is unchanged (NFR-1).
 - [ ] No AI code path creates a finding row (FR-0).
 - [ ] A loop run produces a PR-ready `wolf/fix-<scanid>` branch, complete

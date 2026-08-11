@@ -20,11 +20,11 @@ scan:
     - "build/"
     - ".wolf/"
 
-  # Container backend (PLAN.md §5).
+  # Container backend (docs/PLAN-containerized-scanner-execution.md §5).
   #
   # All scanners run in short-lived containers from the wolf-scanners image
   # set. wolf-slim spawns containers via the docker socket mounted into it.
-  # The four-image split (see PLAN.md §5.1) means light users only pull the
+  # The four-image split (see docs/PLAN-containerized-scanner-execution.md §5.1) means light users only pull the
   # default image (~2.5 GB); jvm/rust/codeql images are pulled lazily.
   container:
     # Default (cross-language + small lang tools) image.

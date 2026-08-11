@@ -34,7 +34,7 @@ services:
     volumes:
       - wolf-data:/home/wolf/.wolf
       # Mount the docker socket so wolf-slim can spawn scanner containers
-      # (Docker-out-of-Docker pattern). See PLAN.md §10.1 for security posture.
+      # (Docker-out-of-Docker pattern). See docs/PLAN-containerized-scanner-execution.md §10.1 for security posture.
       - /var/run/docker.sock:/var/run/docker.sock
       # Mount the host repos root read-only. Repos that wolf scans must live
       # under this path. WOLF_REPOS_ROOT defaults to ./repos relative to the
@@ -68,7 +68,7 @@ services:
       - WOLF_SCANNER_LEGACY_BUILD_ENDPOINTS=${WOLF_SCANNER_LEGACY_BUILD_ENDPOINTS:-true}
       - WOLF_ARTIFACTS_ROOT=/home/wolf/.wolf/artifacts
       - WOLF_LOG_LEVEL=${WOLF_LOG_LEVEL:-info}
-      # Scanner image references (per-bucket; Option B from PLAN.md §5.1).
+      # Scanner image references (per-bucket; Option B from docs/PLAN-containerized-scanner-execution.md §5.1).
       # WOLF_SCANNERS_TAG defaults to a release tag instead of :latest so
       # deployments are reproducible unless the operator opts into a float.
       - WOLF_SCANNERS_TAG=${WOLF_SCANNERS_TAG:-2.0.0}

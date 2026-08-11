@@ -91,7 +91,7 @@ fmt:
 ui-build:
 	@echo "==> Building Wolf UI (Vite)..."
 	@if [ -f $(UI_DIR)/package.json ]; then \
-		cd $(UI_DIR) && npm ci && npm run build; \
+		cd $(UI_DIR) && corepack pnpm install --frozen-lockfile && corepack pnpm build; \
 	else \
 		echo "==> No UI package.json found at $(UI_DIR), skipping"; \
 	fi
@@ -102,7 +102,7 @@ helm-validate:
 
 ## ui-dev-install: One-time install for local dev (after a fresh clone)
 ui-dev-install:
-	cd $(UI_DIR) && npm install
+	cd $(UI_DIR) && corepack pnpm install
 
 ## dev: Start backend (Air live-reload) + frontend (Vite HMR) together
 dev:
@@ -113,7 +113,7 @@ dev:
 	@mkdir -p $(BUILD_DIR)/tmp
 	@trap 'kill 0' EXIT; \
 		$(AIR) & \
-		(cd $(UI_DIR) && npm run dev) & \
+		(cd $(UI_DIR) && corepack pnpm dev) & \
 		wait
 
 ## dev-api: Start only the Go backend with Air live-reload
@@ -125,7 +125,7 @@ dev-api:
 ## dev-ui: Start only the Vite UI dev server
 dev-ui:
 	@if [ -f $(UI_DIR)/package.json ]; then \
-		cd $(UI_DIR) && npm run dev; \
+		cd $(UI_DIR) && corepack pnpm dev; \
 	else \
 		echo "==> No UI package.json found at $(UI_DIR)"; \
 	fi

@@ -56,7 +56,7 @@ jobs:
       - name: Enable pinned package manager
         run: |
           corepack enable
-          corepack prepare pnpm@9.15.0 --activate
+          corepack prepare pnpm@9.15.9 --activate
 
       - name: Install locked UI dependencies
         run: pnpm install --frozen-lockfile

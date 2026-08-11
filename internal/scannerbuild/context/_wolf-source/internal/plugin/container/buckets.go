@@ -33,7 +33,7 @@ func IsLocalOnlyImage(ref string) bool {
 }
 
 // DefaultBucketImages returns the canonical per-tool image map for the
-// 4-image split architecture (PLAN.md §5.1). The keys are tool names as
+// 4-image split architecture (docs/PLAN-containerized-scanner-execution.md §5.1). The keys are tool names as
 // returned by Plugin.Name(); values are wolf-built bucket-image references.
 //
 // All images in this map are expected to have wolf-tool-entry as their
