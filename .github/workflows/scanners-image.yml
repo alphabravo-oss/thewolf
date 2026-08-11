@@ -126,7 +126,7 @@ concurrency:
 jobs:
   prepare:
     name: Resolve factory operation
-    runs-on: ${{ matrix.runner }}
+    runs-on: ubuntu-latest
     outputs:
       operation: ${{ steps.meta.outputs.operation }}
       run_discovery: ${{ steps.meta.outputs.run_discovery }}
@@ -430,7 +430,7 @@ jobs:
     name: Quality (${{ matrix.variant }}, ${{ matrix.platform }})
     needs: [prepare, validate]
     if: always() && needs.prepare.outputs.run_build == 'true' && needs.validate.result == 'success'
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 120
     strategy:
       fail-fast: false
