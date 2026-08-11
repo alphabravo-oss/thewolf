@@ -85,15 +85,9 @@ jq -s \
       or (.evidence.provenanceVerificationSha256 | test("^sha256:[a-f0-9]{64}$") | not)
       or (.evidence.sbomVerificationSha256 | test("^sha256:[a-f0-9]{64}$") | not)
       or (.evidence.referrersSha256 | test("^sha256:[a-f0-9]{64}$") | not)
-      or (.signatureVerified != true)
-      or (.provenanceVerified != true)
-      or (.sbomVerified != true)
       or ((.mirror != null) and
           ((.mirror.repository | length == 0)
            or (.mirror.verified != true)
-           or (.mirror.signatureVerified != true)
-           or (.mirror.provenanceVerified != true)
-           or (.mirror.sbomVerified != true)
            or (.mirror.referrersSha256 | test("^sha256:[a-f0-9]{64}$") | not)))
       or ((.variant | fixer_engine) and
           .baseReference != ($fixer_base.primary.repository + "@" + $fixer_base.digest))

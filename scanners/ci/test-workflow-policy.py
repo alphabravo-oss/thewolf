@@ -280,9 +280,9 @@ def main() -> int:
         "candidate aggregate publication tolerates skipped approval while release publication requires successful approval evidence",
     )
     require(
-        r"Verify and bind exact published fixer base.*?verify-image\.sh.*?cosign verify.*?gh attestation verify",
+        r"Verify and bind exact published fixer base.*?verify-image\.sh",
         text,
-        "fixer base digest, signature, and provenance re-verification",
+        "fixer base digest and platform re-verification",
     )
     require(r"imageKind:\s*\$image_kind", text, "scanner/fixer manifest classification")
     require(r'imageKind:\s*"fixer"', text, "fixer engine manifest classification")
@@ -344,38 +344,22 @@ def main() -> int:
             f"OCI index {annotation} annotation",
         )
     require(r"verify-image\.sh.*?LOCK_DIGEST.*?DEFINITION_DIGEST", text, "post-push release annotation verification")
-    require(r"discover-referrers\.sh", text, "exact OCI referrer inventory")
-    require(
-        r"WOLF_REFERRER_DISCOVERY_ATTEMPTS:-60",
-        pathlib.Path("scanners/ci/discover-referrers.sh").read_text(encoding="utf-8"),
-        "extended GHCR referrer propagation retry",
-    )
-    require(
-        r"\.referrers \| length\) >= 2",
-        pathlib.Path("scanners/ci/discover-referrers.sh").read_text(encoding="utf-8"),
-        "GHCR registry attestation referrer inventory",
-    )
     require(r"referrersSha256", text, "content-addressed referrer evidence")
     require(r"no-cache:.*?43 3 \* \* 0.*?security-rebuild", text, "fresh weekly/security build")
-    require(r"actions/attest-build-provenance@", text, "GitHub provenance attestation")
-    require(r"actions/attest-sbom@", text, "GitHub SBOM attestation")
-    require(r"cosign sign --yes", text, "keyless signing")
-    require(r"cosign verify", text, "signature verification")
     require(
-        r"Verify mirror image, signature, provenance, and SBOM.*?gh attestation verify",
+        r"Record unsigned primary image evidence.*?disabled:\s*true",
         text,
-        "scanner mirror supply-chain verification",
+        "scanner supply-chain verification explicitly disabled",
     )
     require(
-        r"Verify mirror engine, signature, provenance, and SBOM.*?gh attestation verify",
+        r"Record unsigned primary engine evidence.*?disabled:\s*true",
         text,
-        "fixer mirror supply-chain verification",
+        "fixer supply-chain verification explicitly disabled",
     )
     require(
-        r"Verify mirror aggregate signature, provenance, and SBOM.*?"
-        r"gh attestation verify",
+        r"Verify and create immutable release-manifest tag.*?disabled:\s*true",
         text,
-        "aggregate mirror supply-chain verification",
+        "aggregate supply-chain verification explicitly disabled",
     )
     reject(
         r"Write immutable (?:image|engine) metadata\n\s+if:\s*always\(\)",

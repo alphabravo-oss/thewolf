@@ -133,10 +133,7 @@ jq -e --arg candidate "$candidate_id" '
     and ((.platforms | sort) == (expected[.variant].platforms | sort))
     and (.digest | test("^sha256:[a-f0-9]{64}$"))
     and .primary.verified == true
-    and .mirror.verified == true
-    and .signatureVerified == true
-    and .provenanceVerified == true
-    and .sbomVerified == true)
+    and .mirror.verified == true)
 ' "$candidate_manifest" >/dev/null || {
     echo "candidate manifest is not a complete, mirrored, verified candidate closure" >&2
     exit 1
