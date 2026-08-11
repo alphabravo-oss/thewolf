@@ -126,7 +126,7 @@ concurrency:
 jobs:
   prepare:
     name: Resolve factory operation
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     outputs:
       operation: ${{ steps.meta.outputs.operation }}
       run_discovery: ${{ steps.meta.outputs.run_discovery }}
@@ -441,44 +441,56 @@ jobs:
             image: wolf-scanners
             platform: linux/amd64
             arch: amd64
+            runner: ubuntu-24.04
           - variant: default
             dockerfile: Dockerfile
             image: wolf-scanners
             platform: linux/arm64
             arch: arm64
+            runner: ubuntu-24.04-arm
           - variant: jvm
             dockerfile: Dockerfile.jvm
             image: wolf-scanners-jvm
             platform: linux/amd64
             arch: amd64
+            runner: ubuntu-24.04
           - variant: jvm
             dockerfile: Dockerfile.jvm
             image: wolf-scanners-jvm
             platform: linux/arm64
             arch: arm64
+            runner: ubuntu-24.04-arm
           - variant: rust
             dockerfile: Dockerfile.rust
             image: wolf-scanners-rust
             platform: linux/amd64
             arch: amd64
+            runner: ubuntu-24.04
           - variant: rust
             dockerfile: Dockerfile.rust
             image: wolf-scanners-rust
             platform: linux/arm64
             arch: arm64
+            runner: ubuntu-24.04-arm
           - variant: codeql
             dockerfile: Dockerfile.codeql
             image: wolf-scanners-codeql
             platform: linux/amd64
             arch: amd64
+            runner: ubuntu-24.04
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-      - uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3
-        with:
-          platforms: all
-
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Verify exact native runner architecture
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          case "$ARCH:$RUNNER_ARCH" in
+            amd64:X64|arm64:ARM64) ;;
+            *) echo "matrix architecture $ARCH does not match native runner $RUNNER_ARCH" >&2; exit 1 ;;
+          esac
 
       - name: Build platform image for strict smoke
         uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5
