@@ -287,9 +287,9 @@ for variant in default jvm rust codeql fixer-base fixer-api fixer-claude fixer-c
             sbomVerificationSha256: $evidence_digest,
             referrersSha256: $evidence_digest
           },
-          signatureVerified: true,
-          provenanceVerified: true,
-          sbomVerified: true
+          signatureVerified: false,
+          provenanceVerified: false,
+          sbomVerified: false
         }' >"$tmp/${variant}.image.json"
     jq -n \
         --arg namespace "https://example.test/spdx/${variant}" \
@@ -362,8 +362,8 @@ if SCANNER_RELEASE_ID=scanner-set-2026.31.1 \
     fail "fixer engine with a mismatched base digest was accepted"
 fi
 
-jq '.signatureVerified = false' \
-    "$tmp/default.image.json" >"$tmp/default-unverified.image.json"
+jq '.digest = "sha256:bad"' \
+    "$tmp/default.image.json" >"$tmp/default-bad-digest.image.json"
 if SCANNER_RELEASE_ID=scanner-set-2026.31.1 \
     DEFINITION_COMMIT=0123456789abcdef0123456789abcdef01234567 \
     SOURCE_DATE=2026-07-30T12:00:00Z \
@@ -374,13 +374,13 @@ if SCANNER_RELEASE_ID=scanner-set-2026.31.1 \
     QUALIFICATION_RECEIPT_SHA256="$qualification_digest" \
     APPROVAL_RECEIPT_SHA256="$approval_digest" \
     scanners/ci/build-release-manifest.sh \
-        "$tmp/release-unverified.json" \
-        "$tmp/default-unverified.image.json" "$tmp/jvm.image.json" \
+        "$tmp/release-bad-digest.json" \
+        "$tmp/default-bad-digest.image.json" "$tmp/jvm.image.json" \
         "$tmp/rust.image.json" "$tmp/codeql.image.json" \
         "$tmp/fixer-base.image.json" "$tmp/fixer-api.image.json" \
         "$tmp/fixer-claude.image.json" "$tmp/fixer-codex.image.json" \
         >/dev/null 2>&1; then
-    fail "image with false signature evidence was accepted"
+    fail "image with invalid digest was accepted"
 fi
 
 for variant in default jvm rust codeql fixer-base fixer-api fixer-claude fixer-codex; do
@@ -391,9 +391,9 @@ for variant in default jvm rust codeql fixer-base fixer-api fixer-claude fixer-c
           repository: ("docker.io/example/" + .image),
           verified: true,
           referrersSha256: .evidence.referrersSha256,
-          signatureVerified: true,
-          provenanceVerified: true,
-          sbomVerified: true
+          signatureVerified: false,
+          provenanceVerified: false,
+          sbomVerified: false
         }
     ' "$tmp/${variant}.image.json" >"$tmp/${variant}.candidate.image.json"
 done
