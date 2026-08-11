@@ -657,6 +657,9 @@ func definitionInputs(root string, policy buildPolicy) (map[string]string, error
 			if err != nil {
 				return err
 			}
+			if skip, skipErr := skipDefinitionInput(entry); skip || skipErr != nil {
+				return skipErr
+			}
 			if entry.IsDir() && path == filepath.Join(root, "internal", "scannerbuild", "context") {
 				// This generated mirror is checked byte-for-byte by
 				// scanners-context-check. Hash canonical inputs once instead of
@@ -738,6 +741,22 @@ func definitionInputs(root string, policy buildPolicy) (map[string]string, error
 		out[rel] = sha256Digest(data)
 	}
 	return out, nil
+}
+
+func skipDefinitionInput(entry os.DirEntry) (bool, error) {
+	name := entry.Name()
+	if entry.IsDir() {
+		switch name {
+		case "__pycache__", ".mypy_cache", ".pytest_cache":
+			return true, filepath.SkipDir
+		}
+		return false, nil
+	}
+	switch filepath.Ext(name) {
+	case ".pyc", ".pyo":
+		return true, nil
+	}
+	return false, nil
 }
 
 // SetDigest calculates the self-authenticating digest over canonical JSON with
