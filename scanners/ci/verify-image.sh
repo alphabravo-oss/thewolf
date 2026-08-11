@@ -88,6 +88,10 @@ done < <(
 )
 
 IFS=, read -ra required_platforms <<<"$required_csv"
+if [[ ${#actual_platforms[@]} -eq 0 && ${#required_platforms[@]} -eq 1 ]]; then
+    actual_platforms=("${required_platforms[0]//[[:space:]]/}")
+fi
+
 for platform in "${required_platforms[@]}"; do
     platform="${platform//[[:space:]]/}"
     [[ "$platform" =~ ^linux/(amd64|arm64)$ ]] || {
@@ -100,10 +104,6 @@ for platform in "${required_platforms[@]}"; do
         exit 1
     fi
 done
-
-if [[ ${#actual_platforms[@]} -eq 0 && ${#required_platforms[@]} -eq 1 ]]; then
-    actual_platforms=("${required_platforms[0]//[[:space:]]/}")
-fi
 
 if [[ ${#actual_platforms[@]} -ne ${#required_platforms[@]} ]]; then
     printf 'unexpected platform set for %s (required: %s; found: %s)\n' \
