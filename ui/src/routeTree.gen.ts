@@ -9,39 +9,38 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as RegisterRouteImport } from './routes/register'
-import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthedRouteImport } from './routes/_authed'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as RegisterRouteImport } from './routes/register'
 import { Route as AuthedIndexRouteImport } from './routes/_authed.index'
-import { Route as AuthedSettingsRouteImport } from './routes/_authed.settings'
-import { Route as AuthedScansRouteImport } from './routes/_authed.scans'
-import { Route as AuthedScannersRouteImport } from './routes/_authed.scanners'
-import { Route as AuthedReposRouteImport } from './routes/_authed.repos'
-import { Route as AuthedLoopsRouteImport } from './routes/_authed.loops'
-import { Route as AuthedFixesRouteImport } from './routes/_authed.fixes'
-import { Route as AuthedFindingsRouteImport } from './routes/_authed.findings'
-import { Route as AuthedCollectionsRouteImport } from './routes/_authed.collections'
-import { Route as AuthedAuditRouteImport } from './routes/_authed.audit'
 import { Route as AuthedAccountRouteImport } from './routes/_authed.account'
-import { Route as AuthedScansIndexRouteImport } from './routes/_authed.scans.index'
-import { Route as AuthedReposIndexRouteImport } from './routes/_authed.repos.index'
-import { Route as AuthedLoopsIndexRouteImport } from './routes/_authed.loops.index'
-import { Route as AuthedFixesIndexRouteImport } from './routes/_authed.fixes.index'
-import { Route as AuthedFindingsIndexRouteImport } from './routes/_authed.findings.index'
-import { Route as AuthedCollectionsIndexRouteImport } from './routes/_authed.collections.index'
+import { Route as AuthedAuditRouteImport } from './routes/_authed.audit'
+import { Route as AuthedCollectionsRouteImport } from './routes/_authed.collections'
+import { Route as AuthedFindingsRouteImport } from './routes/_authed.findings'
+import { Route as AuthedFixesRouteImport } from './routes/_authed.fixes'
+import { Route as AuthedLoopsRouteImport } from './routes/_authed.loops'
+import { Route as AuthedReposRouteImport } from './routes/_authed.repos'
+import { Route as AuthedScannersRouteImport } from './routes/_authed.scanners'
+import { Route as AuthedScansRouteImport } from './routes/_authed.scans'
+import { Route as AuthedSettingsRouteImport } from './routes/_authed.settings'
 import { Route as AuthedAuditIndexRouteImport } from './routes/_authed.audit.index'
-import { Route as AuthedScansScanIdRouteImport } from './routes/_authed.scans.$scanId'
-import { Route as AuthedReposRepoIdRouteImport } from './routes/_authed.repos.$repoId'
-import { Route as AuthedLoopsLoopIdRouteImport } from './routes/_authed.loops.$loopId'
-import { Route as AuthedFixesFixIdRouteImport } from './routes/_authed.fixes.$fixId'
-import { Route as AuthedFindingsFindingIdRouteImport } from './routes/_authed.findings.$findingId'
+import { Route as AuthedCollectionsIndexRouteImport } from './routes/_authed.collections.index'
 import { Route as AuthedCollectionsCollectionIdRouteImport } from './routes/_authed.collections.$collectionId'
+import { Route as AuthedFindingsIndexRouteImport } from './routes/_authed.findings.index'
+import { Route as AuthedFindingsFindingIdRouteImport } from './routes/_authed.findings.$findingId'
+import { Route as AuthedFixesIndexRouteImport } from './routes/_authed.fixes.index'
+import { Route as AuthedFixesFixIdRouteImport } from './routes/_authed.fixes.$fixId'
+import { Route as AuthedLoopsIndexRouteImport } from './routes/_authed.loops.index'
+import { Route as AuthedLoopsLoopIdRouteImport } from './routes/_authed.loops.$loopId'
+import { Route as AuthedReposIndexRouteImport } from './routes/_authed.repos.index'
+import { Route as AuthedReposRepoIdRouteImport } from './routes/_authed.repos.$repoId'
+import { Route as AuthedScansIndexRouteImport } from './routes/_authed.scans.index'
+import { Route as AuthedScansScanIdRouteImport } from './routes/_authed.scans.$scanId'
 import { Route as AuthedScansScanIdIndexRouteImport } from './routes/_authed.scans.$scanId.index'
 import { Route as AuthedScansScanIdLiveRouteImport } from './routes/_authed.scans.$scanId.live'
 
-const RegisterRoute = RegisterRouteImport.update({
-  id: '/register',
-  path: '/register',
+const AuthedRoute = AuthedRouteImport.update({
+  id: '/_authed',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -49,8 +48,9 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthedRoute = AuthedRouteImport.update({
-  id: '/_authed',
+const RegisterRoute = RegisterRouteImport.update({
+  id: '/register',
+  path: '/register',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthedIndexRoute = AuthedIndexRouteImport.update({
@@ -58,44 +58,9 @@ const AuthedIndexRoute = AuthedIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthedRoute,
 } as any)
-const AuthedSettingsRoute = AuthedSettingsRouteImport.update({
-  id: '/settings',
-  path: '/settings',
-  getParentRoute: () => AuthedRoute,
-} as any)
-const AuthedScansRoute = AuthedScansRouteImport.update({
-  id: '/scans',
-  path: '/scans',
-  getParentRoute: () => AuthedRoute,
-} as any)
-const AuthedScannersRoute = AuthedScannersRouteImport.update({
-  id: '/scanners',
-  path: '/scanners',
-  getParentRoute: () => AuthedRoute,
-} as any)
-const AuthedReposRoute = AuthedReposRouteImport.update({
-  id: '/repos',
-  path: '/repos',
-  getParentRoute: () => AuthedRoute,
-} as any)
-const AuthedLoopsRoute = AuthedLoopsRouteImport.update({
-  id: '/loops',
-  path: '/loops',
-  getParentRoute: () => AuthedRoute,
-} as any)
-const AuthedFixesRoute = AuthedFixesRouteImport.update({
-  id: '/fixes',
-  path: '/fixes',
-  getParentRoute: () => AuthedRoute,
-} as any)
-const AuthedFindingsRoute = AuthedFindingsRouteImport.update({
-  id: '/findings',
-  path: '/findings',
-  getParentRoute: () => AuthedRoute,
-} as any)
-const AuthedCollectionsRoute = AuthedCollectionsRouteImport.update({
-  id: '/collections',
-  path: '/collections',
+const AuthedAccountRoute = AuthedAccountRouteImport.update({
+  id: '/account',
+  path: '/account',
   getParentRoute: () => AuthedRoute,
 } as any)
 const AuthedAuditRoute = AuthedAuditRouteImport.update({
@@ -103,70 +68,55 @@ const AuthedAuditRoute = AuthedAuditRouteImport.update({
   path: '/audit',
   getParentRoute: () => AuthedRoute,
 } as any)
-const AuthedAccountRoute = AuthedAccountRouteImport.update({
-  id: '/account',
-  path: '/account',
+const AuthedCollectionsRoute = AuthedCollectionsRouteImport.update({
+  id: '/collections',
+  path: '/collections',
   getParentRoute: () => AuthedRoute,
 } as any)
-const AuthedScansIndexRoute = AuthedScansIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => AuthedScansRoute,
+const AuthedFindingsRoute = AuthedFindingsRouteImport.update({
+  id: '/findings',
+  path: '/findings',
+  getParentRoute: () => AuthedRoute,
 } as any)
-const AuthedReposIndexRoute = AuthedReposIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => AuthedReposRoute,
+const AuthedFixesRoute = AuthedFixesRouteImport.update({
+  id: '/fixes',
+  path: '/fixes',
+  getParentRoute: () => AuthedRoute,
 } as any)
-const AuthedLoopsIndexRoute = AuthedLoopsIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => AuthedLoopsRoute,
+const AuthedLoopsRoute = AuthedLoopsRouteImport.update({
+  id: '/loops',
+  path: '/loops',
+  getParentRoute: () => AuthedRoute,
 } as any)
-const AuthedFixesIndexRoute = AuthedFixesIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => AuthedFixesRoute,
+const AuthedReposRoute = AuthedReposRouteImport.update({
+  id: '/repos',
+  path: '/repos',
+  getParentRoute: () => AuthedRoute,
 } as any)
-const AuthedFindingsIndexRoute = AuthedFindingsIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => AuthedFindingsRoute,
+const AuthedScannersRoute = AuthedScannersRouteImport.update({
+  id: '/scanners',
+  path: '/scanners',
+  getParentRoute: () => AuthedRoute,
 } as any)
-const AuthedCollectionsIndexRoute = AuthedCollectionsIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => AuthedCollectionsRoute,
+const AuthedScansRoute = AuthedScansRouteImport.update({
+  id: '/scans',
+  path: '/scans',
+  getParentRoute: () => AuthedRoute,
+} as any)
+const AuthedSettingsRoute = AuthedSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AuthedRoute,
 } as any)
 const AuthedAuditIndexRoute = AuthedAuditIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AuthedAuditRoute,
 } as any)
-const AuthedScansScanIdRoute = AuthedScansScanIdRouteImport.update({
-  id: '/$scanId',
-  path: '/$scanId',
-  getParentRoute: () => AuthedScansRoute,
-} as any)
-const AuthedReposRepoIdRoute = AuthedReposRepoIdRouteImport.update({
-  id: '/$repoId',
-  path: '/$repoId',
-  getParentRoute: () => AuthedReposRoute,
-} as any)
-const AuthedLoopsLoopIdRoute = AuthedLoopsLoopIdRouteImport.update({
-  id: '/$loopId',
-  path: '/$loopId',
-  getParentRoute: () => AuthedLoopsRoute,
-} as any)
-const AuthedFixesFixIdRoute = AuthedFixesFixIdRouteImport.update({
-  id: '/$fixId',
-  path: '/$fixId',
-  getParentRoute: () => AuthedFixesRoute,
-} as any)
-const AuthedFindingsFindingIdRoute = AuthedFindingsFindingIdRouteImport.update({
-  id: '/$findingId',
-  path: '/$findingId',
-  getParentRoute: () => AuthedFindingsRoute,
+const AuthedCollectionsIndexRoute = AuthedCollectionsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AuthedCollectionsRoute,
 } as any)
 const AuthedCollectionsCollectionIdRoute =
   AuthedCollectionsCollectionIdRouteImport.update({
@@ -174,6 +124,56 @@ const AuthedCollectionsCollectionIdRoute =
     path: '/$collectionId',
     getParentRoute: () => AuthedCollectionsRoute,
   } as any)
+const AuthedFindingsIndexRoute = AuthedFindingsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AuthedFindingsRoute,
+} as any)
+const AuthedFindingsFindingIdRoute = AuthedFindingsFindingIdRouteImport.update({
+  id: '/$findingId',
+  path: '/$findingId',
+  getParentRoute: () => AuthedFindingsRoute,
+} as any)
+const AuthedFixesIndexRoute = AuthedFixesIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AuthedFixesRoute,
+} as any)
+const AuthedFixesFixIdRoute = AuthedFixesFixIdRouteImport.update({
+  id: '/$fixId',
+  path: '/$fixId',
+  getParentRoute: () => AuthedFixesRoute,
+} as any)
+const AuthedLoopsIndexRoute = AuthedLoopsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AuthedLoopsRoute,
+} as any)
+const AuthedLoopsLoopIdRoute = AuthedLoopsLoopIdRouteImport.update({
+  id: '/$loopId',
+  path: '/$loopId',
+  getParentRoute: () => AuthedLoopsRoute,
+} as any)
+const AuthedReposIndexRoute = AuthedReposIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AuthedReposRoute,
+} as any)
+const AuthedReposRepoIdRoute = AuthedReposRepoIdRouteImport.update({
+  id: '/$repoId',
+  path: '/$repoId',
+  getParentRoute: () => AuthedReposRoute,
+} as any)
+const AuthedScansIndexRoute = AuthedScansIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AuthedScansRoute,
+} as any)
+const AuthedScansScanIdRoute = AuthedScansScanIdRouteImport.update({
+  id: '/$scanId',
+  path: '/$scanId',
+  getParentRoute: () => AuthedScansRoute,
+} as any)
 const AuthedScansScanIdIndexRoute = AuthedScansScanIdIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -363,11 +363,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/register': {
-      id: '/register'
-      path: '/register'
-      fullPath: '/register'
-      preLoaderRoute: typeof RegisterRouteImport
+    '/_authed': {
+      id: '/_authed'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthedRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -377,11 +377,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_authed': {
-      id: '/_authed'
-      path: ''
-      fullPath: '/'
-      preLoaderRoute: typeof AuthedRouteImport
+    '/register': {
+      id: '/register'
+      path: '/register'
+      fullPath: '/register'
+      preLoaderRoute: typeof RegisterRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authed/': {
@@ -391,60 +391,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedIndexRouteImport
       parentRoute: typeof AuthedRoute
     }
-    '/_authed/settings': {
-      id: '/_authed/settings'
-      path: '/settings'
-      fullPath: '/settings'
-      preLoaderRoute: typeof AuthedSettingsRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/scans': {
-      id: '/_authed/scans'
-      path: '/scans'
-      fullPath: '/scans'
-      preLoaderRoute: typeof AuthedScansRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/scanners': {
-      id: '/_authed/scanners'
-      path: '/scanners'
-      fullPath: '/scanners'
-      preLoaderRoute: typeof AuthedScannersRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/repos': {
-      id: '/_authed/repos'
-      path: '/repos'
-      fullPath: '/repos'
-      preLoaderRoute: typeof AuthedReposRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/loops': {
-      id: '/_authed/loops'
-      path: '/loops'
-      fullPath: '/loops'
-      preLoaderRoute: typeof AuthedLoopsRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/fixes': {
-      id: '/_authed/fixes'
-      path: '/fixes'
-      fullPath: '/fixes'
-      preLoaderRoute: typeof AuthedFixesRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/findings': {
-      id: '/_authed/findings'
-      path: '/findings'
-      fullPath: '/findings'
-      preLoaderRoute: typeof AuthedFindingsRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/collections': {
-      id: '/_authed/collections'
-      path: '/collections'
-      fullPath: '/collections'
-      preLoaderRoute: typeof AuthedCollectionsRouteImport
+    '/_authed/account': {
+      id: '/_authed/account'
+      path: '/account'
+      fullPath: '/account'
+      preLoaderRoute: typeof AuthedAccountRouteImport
       parentRoute: typeof AuthedRoute
     }
     '/_authed/audit': {
@@ -454,54 +405,61 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedAuditRouteImport
       parentRoute: typeof AuthedRoute
     }
-    '/_authed/account': {
-      id: '/_authed/account'
-      path: '/account'
-      fullPath: '/account'
-      preLoaderRoute: typeof AuthedAccountRouteImport
+    '/_authed/collections': {
+      id: '/_authed/collections'
+      path: '/collections'
+      fullPath: '/collections'
+      preLoaderRoute: typeof AuthedCollectionsRouteImport
       parentRoute: typeof AuthedRoute
     }
-    '/_authed/scans/': {
-      id: '/_authed/scans/'
-      path: '/'
-      fullPath: '/scans/'
-      preLoaderRoute: typeof AuthedScansIndexRouteImport
-      parentRoute: typeof AuthedScansRoute
+    '/_authed/findings': {
+      id: '/_authed/findings'
+      path: '/findings'
+      fullPath: '/findings'
+      preLoaderRoute: typeof AuthedFindingsRouteImport
+      parentRoute: typeof AuthedRoute
     }
-    '/_authed/repos/': {
-      id: '/_authed/repos/'
-      path: '/'
-      fullPath: '/repos/'
-      preLoaderRoute: typeof AuthedReposIndexRouteImport
-      parentRoute: typeof AuthedReposRoute
+    '/_authed/fixes': {
+      id: '/_authed/fixes'
+      path: '/fixes'
+      fullPath: '/fixes'
+      preLoaderRoute: typeof AuthedFixesRouteImport
+      parentRoute: typeof AuthedRoute
     }
-    '/_authed/loops/': {
-      id: '/_authed/loops/'
-      path: '/'
-      fullPath: '/loops/'
-      preLoaderRoute: typeof AuthedLoopsIndexRouteImport
-      parentRoute: typeof AuthedLoopsRoute
+    '/_authed/loops': {
+      id: '/_authed/loops'
+      path: '/loops'
+      fullPath: '/loops'
+      preLoaderRoute: typeof AuthedLoopsRouteImport
+      parentRoute: typeof AuthedRoute
     }
-    '/_authed/fixes/': {
-      id: '/_authed/fixes/'
-      path: '/'
-      fullPath: '/fixes/'
-      preLoaderRoute: typeof AuthedFixesIndexRouteImport
-      parentRoute: typeof AuthedFixesRoute
+    '/_authed/repos': {
+      id: '/_authed/repos'
+      path: '/repos'
+      fullPath: '/repos'
+      preLoaderRoute: typeof AuthedReposRouteImport
+      parentRoute: typeof AuthedRoute
     }
-    '/_authed/findings/': {
-      id: '/_authed/findings/'
-      path: '/'
-      fullPath: '/findings/'
-      preLoaderRoute: typeof AuthedFindingsIndexRouteImport
-      parentRoute: typeof AuthedFindingsRoute
+    '/_authed/scanners': {
+      id: '/_authed/scanners'
+      path: '/scanners'
+      fullPath: '/scanners'
+      preLoaderRoute: typeof AuthedScannersRouteImport
+      parentRoute: typeof AuthedRoute
     }
-    '/_authed/collections/': {
-      id: '/_authed/collections/'
-      path: '/'
-      fullPath: '/collections/'
-      preLoaderRoute: typeof AuthedCollectionsIndexRouteImport
-      parentRoute: typeof AuthedCollectionsRoute
+    '/_authed/scans': {
+      id: '/_authed/scans'
+      path: '/scans'
+      fullPath: '/scans'
+      preLoaderRoute: typeof AuthedScansRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/settings': {
+      id: '/_authed/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof AuthedSettingsRouteImport
+      parentRoute: typeof AuthedRoute
     }
     '/_authed/audit/': {
       id: '/_authed/audit/'
@@ -510,33 +468,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedAuditIndexRouteImport
       parentRoute: typeof AuthedAuditRoute
     }
-    '/_authed/scans/$scanId': {
-      id: '/_authed/scans/$scanId'
-      path: '/$scanId'
-      fullPath: '/scans/$scanId'
-      preLoaderRoute: typeof AuthedScansScanIdRouteImport
-      parentRoute: typeof AuthedScansRoute
+    '/_authed/collections/': {
+      id: '/_authed/collections/'
+      path: '/'
+      fullPath: '/collections/'
+      preLoaderRoute: typeof AuthedCollectionsIndexRouteImport
+      parentRoute: typeof AuthedCollectionsRoute
     }
-    '/_authed/repos/$repoId': {
-      id: '/_authed/repos/$repoId'
-      path: '/$repoId'
-      fullPath: '/repos/$repoId'
-      preLoaderRoute: typeof AuthedReposRepoIdRouteImport
-      parentRoute: typeof AuthedReposRoute
+    '/_authed/collections/$collectionId': {
+      id: '/_authed/collections/$collectionId'
+      path: '/$collectionId'
+      fullPath: '/collections/$collectionId'
+      preLoaderRoute: typeof AuthedCollectionsCollectionIdRouteImport
+      parentRoute: typeof AuthedCollectionsRoute
     }
-    '/_authed/loops/$loopId': {
-      id: '/_authed/loops/$loopId'
-      path: '/$loopId'
-      fullPath: '/loops/$loopId'
-      preLoaderRoute: typeof AuthedLoopsLoopIdRouteImport
-      parentRoute: typeof AuthedLoopsRoute
-    }
-    '/_authed/fixes/$fixId': {
-      id: '/_authed/fixes/$fixId'
-      path: '/$fixId'
-      fullPath: '/fixes/$fixId'
-      preLoaderRoute: typeof AuthedFixesFixIdRouteImport
-      parentRoute: typeof AuthedFixesRoute
+    '/_authed/findings/': {
+      id: '/_authed/findings/'
+      path: '/'
+      fullPath: '/findings/'
+      preLoaderRoute: typeof AuthedFindingsIndexRouteImport
+      parentRoute: typeof AuthedFindingsRoute
     }
     '/_authed/findings/$findingId': {
       id: '/_authed/findings/$findingId'
@@ -545,12 +496,61 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedFindingsFindingIdRouteImport
       parentRoute: typeof AuthedFindingsRoute
     }
-    '/_authed/collections/$collectionId': {
-      id: '/_authed/collections/$collectionId'
-      path: '/$collectionId'
-      fullPath: '/collections/$collectionId'
-      preLoaderRoute: typeof AuthedCollectionsCollectionIdRouteImport
-      parentRoute: typeof AuthedCollectionsRoute
+    '/_authed/fixes/': {
+      id: '/_authed/fixes/'
+      path: '/'
+      fullPath: '/fixes/'
+      preLoaderRoute: typeof AuthedFixesIndexRouteImport
+      parentRoute: typeof AuthedFixesRoute
+    }
+    '/_authed/fixes/$fixId': {
+      id: '/_authed/fixes/$fixId'
+      path: '/$fixId'
+      fullPath: '/fixes/$fixId'
+      preLoaderRoute: typeof AuthedFixesFixIdRouteImport
+      parentRoute: typeof AuthedFixesRoute
+    }
+    '/_authed/loops/': {
+      id: '/_authed/loops/'
+      path: '/'
+      fullPath: '/loops/'
+      preLoaderRoute: typeof AuthedLoopsIndexRouteImport
+      parentRoute: typeof AuthedLoopsRoute
+    }
+    '/_authed/loops/$loopId': {
+      id: '/_authed/loops/$loopId'
+      path: '/$loopId'
+      fullPath: '/loops/$loopId'
+      preLoaderRoute: typeof AuthedLoopsLoopIdRouteImport
+      parentRoute: typeof AuthedLoopsRoute
+    }
+    '/_authed/repos/': {
+      id: '/_authed/repos/'
+      path: '/'
+      fullPath: '/repos/'
+      preLoaderRoute: typeof AuthedReposIndexRouteImport
+      parentRoute: typeof AuthedReposRoute
+    }
+    '/_authed/repos/$repoId': {
+      id: '/_authed/repos/$repoId'
+      path: '/$repoId'
+      fullPath: '/repos/$repoId'
+      preLoaderRoute: typeof AuthedReposRepoIdRouteImport
+      parentRoute: typeof AuthedReposRoute
+    }
+    '/_authed/scans/': {
+      id: '/_authed/scans/'
+      path: '/'
+      fullPath: '/scans/'
+      preLoaderRoute: typeof AuthedScansIndexRouteImport
+      parentRoute: typeof AuthedScansRoute
+    }
+    '/_authed/scans/$scanId': {
+      id: '/_authed/scans/$scanId'
+      path: '/$scanId'
+      fullPath: '/scans/$scanId'
+      preLoaderRoute: typeof AuthedScansScanIdRouteImport
+      parentRoute: typeof AuthedScansRoute
     }
     '/_authed/scans/$scanId/': {
       id: '/_authed/scans/$scanId/'

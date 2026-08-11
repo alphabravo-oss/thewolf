@@ -4,7 +4,7 @@
 import { useMemo, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { GitBranchIcon, GitForkIcon, GithubIcon, HardDriveIcon, PlusIcon, ServerIcon } from "lucide-react";
+import { GitBranchIcon, GitForkIcon, HardDriveIcon, PlusIcon, ServerIcon } from "lucide-react";
 import { api } from "@/lib/api";
 import type { Collection, Repo, Scan } from "@/lib/types";
 import { ListSkeleton } from "@/components/skeleton";
@@ -213,7 +213,7 @@ function ReposPage() {
             onClick={() => setShowImportGitHub(true)}
             className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-background px-3 text-sm font-medium hover:bg-muted/40"
           >
-            <GithubIcon className="size-4" />
+            <GitForkIcon className="size-4" />
             Import from GitHub
           </button>
           <button
