@@ -23,3 +23,10 @@ CVE-2026-48506 # owner=scanner-platform; expires=2026-09-10; reason=latest CodeQ
 CVE-2026-39822 # owner=scanner-platform; expires=2026-09-10; reason=latest CodeQL bundle still ships vulnerable Go helper binaries; images=codeql
 CVE-2026-56852 # owner=scanner-platform; expires=2026-09-10; reason=latest CodeQL bundle still ships vulnerable Go helper binaries; images=codeql
 CVE-2026-71556 # owner=scanner-platform; expires=2026-09-10; reason=latest CodeQL bundle still ships vulnerable go-git helper binary; images=codeql
+CVE-2026-26127 # owner=scanner-platform; expires=2026-09-10; reason=latest CodeQL bundle still ships vulnerable .NET CSharp extractor runtime; images=codeql
+CVE-2026-26131 # owner=scanner-platform; expires=2026-09-10; reason=latest CodeQL bundle still ships vulnerable .NET CSharp extractor runtime; images=codeql
+CVE-2026-47302 # owner=scanner-platform; expires=2026-09-10; reason=latest CodeQL bundle still ships vulnerable .NET CSharp extractor runtime; images=codeql
+CVE-2026-50524 # owner=scanner-platform; expires=2026-09-10; reason=latest CodeQL bundle still ships vulnerable .NET CSharp extractor runtime; images=codeql
+CVE-2026-50528 # owner=scanner-platform; expires=2026-09-10; reason=latest CodeQL bundle still ships vulnerable .NET CSharp extractor runtime; images=codeql
+CVE-2026-50651 # owner=scanner-platform; expires=2026-09-10; reason=latest CodeQL bundle still ships vulnerable .NET CSharp extractor runtime; images=codeql
+CVE-2026-57108 # owner=scanner-platform; expires=2026-09-10; reason=latest CodeQL bundle still ships vulnerable .NET CSharp extractor runtime; images=codeql
