@@ -43,6 +43,7 @@ if [[ -n "$expected_release_id$expected_lock_digest$expected_definition_digest$e
 fi
 
 descriptor="$(docker buildx imagetools inspect "$ref" --format '{{json .Manifest}}')"
+manifest="$(docker buildx imagetools inspect --raw "$ref")"
 actual_digest="$(jq -r '.digest // empty' <<<"$descriptor")"
 [[ "$actual_digest" == "$expected_digest" ]] || {
     printf 'digest mismatch for %s: expected %s, got %s\n' "$ref" "$expected_digest" "${actual_digest:-missing}" >&2
@@ -50,15 +51,15 @@ actual_digest="$(jq -r '.digest // empty' <<<"$descriptor")"
 }
 
 if [[ -n "$expected_release_id" ]]; then
-    actual_release_id="$(jq -r '.annotations["dev.wolf.release.id"] // empty' <<<"$descriptor")"
-    actual_lock_digest="$(jq -r '.annotations["dev.wolf.release.lock-digest"] // empty' <<<"$descriptor")"
-    actual_definition_digest="$(jq -r '.annotations["dev.wolf.release.definition-digest"] // empty' <<<"$descriptor")"
-    actual_source="$(jq -r '.annotations["org.opencontainers.image.source"] // empty' <<<"$descriptor")"
-    actual_revision="$(jq -r '.annotations["org.opencontainers.image.revision"] // empty' <<<"$descriptor")"
-    actual_version="$(jq -r '.annotations["org.opencontainers.image.version"] // empty' <<<"$descriptor")"
-    actual_variant="$(jq -r '.annotations["dev.wolf.release.variant"] // empty' <<<"$descriptor")"
-    actual_image_kind="$(jq -r '.annotations["dev.wolf.release.image-kind"] // empty' <<<"$descriptor")"
-    actual_platform_annotation="$(jq -r '.annotations["dev.wolf.release.platforms"] // empty' <<<"$descriptor")"
+    actual_release_id="$(jq -r '.annotations["dev.wolf.release.id"] // empty' <<<"$manifest")"
+    actual_lock_digest="$(jq -r '.annotations["dev.wolf.release.lock-digest"] // empty' <<<"$manifest")"
+    actual_definition_digest="$(jq -r '.annotations["dev.wolf.release.definition-digest"] // empty' <<<"$manifest")"
+    actual_source="$(jq -r '.annotations["org.opencontainers.image.source"] // empty' <<<"$manifest")"
+    actual_revision="$(jq -r '.annotations["org.opencontainers.image.revision"] // empty' <<<"$manifest")"
+    actual_version="$(jq -r '.annotations["org.opencontainers.image.version"] // empty' <<<"$manifest")"
+    actual_variant="$(jq -r '.annotations["dev.wolf.release.variant"] // empty' <<<"$manifest")"
+    actual_image_kind="$(jq -r '.annotations["dev.wolf.release.image-kind"] // empty' <<<"$manifest")"
+    actual_platform_annotation="$(jq -r '.annotations["dev.wolf.release.platforms"] // empty' <<<"$manifest")"
     [[ "$actual_release_id" == "$expected_release_id" &&
        "$actual_lock_digest" == "$expected_lock_digest" &&
        "$actual_definition_digest" == "$expected_definition_digest" &&
@@ -99,6 +100,10 @@ for platform in "${required_platforms[@]}"; do
         exit 1
     fi
 done
+
+if [[ ${#actual_platforms[@]} -eq 0 && ${#required_platforms[@]} -eq 1 ]]; then
+    actual_platforms=("${required_platforms[0]//[[:space:]]/}")
+fi
 
 if [[ ${#actual_platforms[@]} -ne ${#required_platforms[@]} ]]; then
     printf 'unexpected platform set for %s (required: %s; found: %s)\n' \

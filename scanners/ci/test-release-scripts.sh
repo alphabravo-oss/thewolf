@@ -192,6 +192,10 @@ cat >"$tmp/bin/docker" <<'SH'
 #!/usr/bin/env sh
 set -eu
 [ "$1 $2 $3" = "buildx imagetools inspect" ] || exit 90
+if [ "${4:-}" = "--raw" ]; then
+  printf '%s\n' "${DOCKER_MANIFEST:?}"
+  exit 0
+fi
 printf '%s\n' "${DOCKER_DESCRIPTOR:?}"
 SH
 chmod 700 "$tmp/bin/docker"
@@ -218,7 +222,7 @@ descriptor="$(jq -cn \
         {platform: {os: "linux", architecture: "arm64"}}
       ]
     }')"
-PATH="$tmp/bin:$PATH" DOCKER_DESCRIPTOR="$descriptor" \
+PATH="$tmp/bin:$PATH" DOCKER_DESCRIPTOR="$descriptor" DOCKER_MANIFEST="$descriptor" \
     scanners/ci/verify-image.sh \
     "ghcr.io/example/wolf-scanners@$digest" "$digest" \
     "linux/amd64,linux/arm64" scanner-set-2026.31.1 \
@@ -227,7 +231,7 @@ PATH="$tmp/bin:$PATH" DOCKER_DESCRIPTOR="$descriptor" \
     0123456789abcdef0123456789abcdef01234567 \
     scanner-set-2026.31.1 default scanner >/dev/null
 bad_descriptor="$(jq 'del(.annotations["dev.wolf.release.lock-digest"])' <<<"$descriptor")"
-if PATH="$tmp/bin:$PATH" DOCKER_DESCRIPTOR="$bad_descriptor" \
+if PATH="$tmp/bin:$PATH" DOCKER_DESCRIPTOR="$bad_descriptor" DOCKER_MANIFEST="$bad_descriptor" \
     scanners/ci/verify-image.sh \
     "ghcr.io/example/wolf-scanners@$digest" "$digest" \
     "linux/amd64,linux/arm64" scanner-set-2026.31.1 \
@@ -518,7 +522,11 @@ cat >"$tmp/bin/docker" <<'SH'
 #!/usr/bin/env bash
 set -euo pipefail
 [[ "$1 $2 $3" == "buildx imagetools inspect" ]]
-ref="$4"
+if [[ "${4:-}" == "--raw" ]]; then
+  ref="$5"
+else
+  ref="$4"
+fi
 variant=default
 kind=scanner
 platforms='[{"platform":{"os":"linux","architecture":"amd64"}},{"platform":{"os":"linux","architecture":"arm64"}}]'
@@ -533,7 +541,7 @@ case "$ref" in
 esac
 platform_csv=linux/amd64,linux/arm64
 [[ "$variant" != codeql ]] || platform_csv=linux/amd64
-jq -cn \
+manifest="$(jq -cn \
   --arg digest "${IMAGE_DIGEST:?}" \
   --arg candidate "${CLOSURE_CANDIDATE_ID:?}" \
   --arg lock "${CLOSURE_LOCK_DIGEST:?}" \
@@ -555,7 +563,12 @@ jq -cn \
       "dev.wolf.release.definition-digest": $definition
     },
     manifests: $platforms
-  }'
+  }')"
+if [[ "${4:-}" == "--raw" ]]; then
+  jq -c 'del(.digest)' <<<"$manifest"
+else
+  printf '%s\n' "$manifest"
+fi
 SH
 cat >"$tmp/bin/oras" <<'SH'
 #!/usr/bin/env bash
