@@ -121,7 +121,7 @@ concurrency:
     scanner-factory-${{ github.event_name }}-${{
       github.event.schedule || github.event.inputs.operation || github.ref
     }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event_name == 'workflow_dispatch' }}
 
 jobs:
   prepare:

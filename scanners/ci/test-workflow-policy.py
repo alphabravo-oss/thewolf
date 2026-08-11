@@ -88,7 +88,11 @@ def main() -> int:
         text,
         "daily and on-demand exact vulnerability database refresh proposal",
     )
-    require(r"concurrency:.*cancel-in-progress:\s*false", text, "non-cancelling factory concurrency")
+    require(
+        r"concurrency:.*cancel-in-progress:\s*\$\{\{\s*github\.event_name == 'workflow_dispatch'\s*\}\}",
+        text,
+        "manual dispatch cancels stale factory runs only",
+    )
     require(
         r"immutable_id=.*run_suffix|run_suffix=.*RUN_ATTEMPT",
         pathlib.Path("scanners/ci/release-meta.sh").read_text(encoding="utf-8"),
