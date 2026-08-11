@@ -652,18 +652,29 @@ jobs:
           WOLF_VERSION: ${{ needs.prepare.outputs.immutable_id }}
         run: |
           base="wolf-fixer:quality-${ARCH}"
-          docker buildx build \
-            --platform "$PLATFORM" \
-            --load \
-            --build-arg "WOLF_VERSION=$WOLF_VERSION" \
-            --tag "$base" \
-            --file fixer/Dockerfile.base \
-            .
-          if [[ "$VARIANT" != base ]]; then
+          if [[ "$VARIANT" == base ]]; then
             docker buildx build \
               --platform "$PLATFORM" \
               --load \
-              --build-context "wolf-fixer-base=docker-image://$base" \
+              --build-arg "WOLF_VERSION=$WOLF_VERSION" \
+              --tag "$base" \
+              --file fixer/Dockerfile.base \
+              .
+          else
+            base_oci="$RUNNER_TEMP/wolf-fixer-base-${ARCH}.oci.tar"
+            base_layout="$RUNNER_TEMP/wolf-fixer-base-${ARCH}.oci"
+            docker buildx build \
+              --platform "$PLATFORM" \
+              --output "type=oci,dest=$base_oci" \
+              --build-arg "WOLF_VERSION=$WOLF_VERSION" \
+              --file fixer/Dockerfile.base \
+              .
+            mkdir -p "$base_layout"
+            tar -xf "$base_oci" -C "$base_layout"
+            docker buildx build \
+              --platform "$PLATFORM" \
+              --load \
+              --build-context "wolf-fixer-base=oci-layout://$base_layout" \
               --build-arg "WOLF_FIXER_BASE_REF=wolf-fixer-base" \
               --tag "$IMAGE" \
               --file "$DOCKERFILE" \

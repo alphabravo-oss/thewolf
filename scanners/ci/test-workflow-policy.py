@@ -256,6 +256,13 @@ def main() -> int:
         "fixer engines depend on exact published base output",
     )
     require(
+        r"fixer-quality:.*?type=oci,dest=\$base_oci.*?"
+        r"--build-context \"wolf-fixer-base=oci-layout://\$base_layout\".*?"
+        r"--build-arg \"WOLF_FIXER_BASE_REF=wolf-fixer-base\"",
+        text,
+        "fixer quality variants use local OCI base handoff instead of registry lookup",
+    )
+    require(
         r"publish-fixer-engines:.*?if:\s*>-\s*always\(\)\s*&&.*?"
         r"needs\.publish\.result == 'success'.*?"
         r"needs\.release-approval\.result == 'success'.*?"
