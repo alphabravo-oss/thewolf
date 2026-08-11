@@ -176,7 +176,7 @@ if helm template wolf "$chart_dir" \
   echo "expected mutable scanner release step image to fail" >&2
   exit 1
 fi
-grep -Eq "stepImage.*(digest-pinned|does not match pattern)" "$tmp_dir/mutable-step.err"
+grep -Eiq "stepImage.*(digest-pinned|does not match pattern)" "$tmp_dir/mutable-step.err"
 
 managed_args=(
   --namespace wolf-system
@@ -305,7 +305,7 @@ if helm template wolf "$chart_dir" "${managed_args[@]}" \
   echo "expected mutable managed adapter image to fail" >&2
   exit 1
 fi
-grep -Eq "adapters.fixed.image.*(digest-pinned|does not match pattern)" "$tmp_dir/managed-mutable-adapter.err"
+grep -Eiq "adapters.fixed.image.*(digest-pinned|does not match pattern)" "$tmp_dir/managed-mutable-adapter.err"
 
 if helm template wolf "$chart_dir" "${managed_args[@]}" \
   --set-string scannerRelease.builder.managed.sourceURL=https://git.example/wolf/scanners.git \
@@ -314,7 +314,7 @@ if helm template wolf "$chart_dir" "${managed_args[@]}" \
   echo "expected mutable managed coordinator image to fail" >&2
   exit 1
 fi
-grep -Eq "builder.image.*(digest-pinned|does not match pattern)" "$tmp_dir/managed-mutable-coordinator.err"
+grep -Eiq "builder.image.*(digest-pinned|does not match pattern)" "$tmp_dir/managed-mutable-coordinator.err"
 
 if helm template wolf "$chart_dir" "${managed_args[@]}" \
   --set-string scannerRelease.builder.managed.sourceURL=https://git.example/wolf/scanners.git \

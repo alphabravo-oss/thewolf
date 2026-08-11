@@ -69,13 +69,13 @@ services:
       - WOLF_ARTIFACTS_ROOT=/home/wolf/.wolf/artifacts
       - WOLF_LOG_LEVEL=${WOLF_LOG_LEVEL:-info}
       # Scanner image references (per-bucket; Option B from docs/PLAN-containerized-scanner-execution.md §5.1).
-      # WOLF_SCANNERS_TAG defaults to a release tag instead of :latest so
-      # deployments are reproducible unless the operator opts into a float.
-      - WOLF_SCANNERS_TAG=${WOLF_SCANNERS_TAG:-2.0.0}
-      - WOLF_SCANNERS_IMAGE=${WOLF_SCANNERS_IMAGE:-alphabravodevops/wolf-scanners:${WOLF_SCANNERS_TAG:-2.0.0}}
-      - WOLF_SCANNERS_IMAGE_JVM=${WOLF_SCANNERS_IMAGE_JVM:-alphabravodevops/wolf-scanners-jvm:${WOLF_SCANNERS_TAG:-2.0.0}}
-      - WOLF_SCANNERS_IMAGE_RUST=${WOLF_SCANNERS_IMAGE_RUST:-alphabravodevops/wolf-scanners-rust:${WOLF_SCANNERS_TAG:-2.0.0}}
-      - WOLF_SCANNERS_IMAGE_CODEQL=${WOLF_SCANNERS_IMAGE_CODEQL:-alphabravodevops/wolf-scanners-codeql:${WOLF_SCANNERS_TAG:-2.0.0}}
+      # WOLF_SCANNERS_TAG defaults to the scanner stable channel so scanner
+      # images can be updated independently from Wolf app releases.
+      - WOLF_SCANNERS_TAG=${WOLF_SCANNERS_TAG:-stable}
+      - WOLF_SCANNERS_IMAGE=${WOLF_SCANNERS_IMAGE:-ghcr.io/alphabravo-oss/wolf-scanners:${WOLF_SCANNERS_TAG:-stable}}
+      - WOLF_SCANNERS_IMAGE_JVM=${WOLF_SCANNERS_IMAGE_JVM:-ghcr.io/alphabravo-oss/wolf-scanners-jvm:${WOLF_SCANNERS_TAG:-stable}}
+      - WOLF_SCANNERS_IMAGE_RUST=${WOLF_SCANNERS_IMAGE_RUST:-ghcr.io/alphabravo-oss/wolf-scanners-rust:${WOLF_SCANNERS_TAG:-stable}}
+      - WOLF_SCANNERS_IMAGE_CODEQL=${WOLF_SCANNERS_IMAGE_CODEQL:-ghcr.io/alphabravo-oss/wolf-scanners-codeql:${WOLF_SCANNERS_TAG:-stable}}
       - WOLF_SCANNERS_PULL_POLICY=${WOLF_SCANNERS_PULL_POLICY:-IfNotPresent}
       - WOLF_SCANNERS_NETWORK=${WOLF_SCANNERS_NETWORK:-bridge}
       - WOLF_SCANNERS_MEMORY=${WOLF_SCANNERS_MEMORY:-2g}
@@ -154,11 +154,11 @@ services:
       - WOLF_LOG_LEVEL=${WOLF_LOG_LEVEL:-info}
       - WOLF_SCAN_EXECUTION_MODE=queue
       - WOLF_ARTIFACTS_ROOT=/home/wolf/.wolf/artifacts
-      - WOLF_SCANNERS_TAG=${WOLF_SCANNERS_TAG:-2.0.0}
-      - WOLF_SCANNERS_IMAGE=${WOLF_SCANNERS_IMAGE:-alphabravodevops/wolf-scanners:${WOLF_SCANNERS_TAG:-2.0.0}}
-      - WOLF_SCANNERS_IMAGE_JVM=${WOLF_SCANNERS_IMAGE_JVM:-alphabravodevops/wolf-scanners-jvm:${WOLF_SCANNERS_TAG:-2.0.0}}
-      - WOLF_SCANNERS_IMAGE_RUST=${WOLF_SCANNERS_IMAGE_RUST:-alphabravodevops/wolf-scanners-rust:${WOLF_SCANNERS_TAG:-2.0.0}}
-      - WOLF_SCANNERS_IMAGE_CODEQL=${WOLF_SCANNERS_IMAGE_CODEQL:-alphabravodevops/wolf-scanners-codeql:${WOLF_SCANNERS_TAG:-2.0.0}}
+      - WOLF_SCANNERS_TAG=${WOLF_SCANNERS_TAG:-stable}
+      - WOLF_SCANNERS_IMAGE=${WOLF_SCANNERS_IMAGE:-ghcr.io/alphabravo-oss/wolf-scanners:${WOLF_SCANNERS_TAG:-stable}}
+      - WOLF_SCANNERS_IMAGE_JVM=${WOLF_SCANNERS_IMAGE_JVM:-ghcr.io/alphabravo-oss/wolf-scanners-jvm:${WOLF_SCANNERS_TAG:-stable}}
+      - WOLF_SCANNERS_IMAGE_RUST=${WOLF_SCANNERS_IMAGE_RUST:-ghcr.io/alphabravo-oss/wolf-scanners-rust:${WOLF_SCANNERS_TAG:-stable}}
+      - WOLF_SCANNERS_IMAGE_CODEQL=${WOLF_SCANNERS_IMAGE_CODEQL:-ghcr.io/alphabravo-oss/wolf-scanners-codeql:${WOLF_SCANNERS_TAG:-stable}}
       - WOLF_SCANNERS_PULL_POLICY=${WOLF_SCANNERS_PULL_POLICY:-IfNotPresent}
       - WOLF_SCANNERS_NETWORK=${WOLF_SCANNERS_NETWORK:-bridge}
       - WOLF_SCANNERS_MEMORY=${WOLF_SCANNERS_MEMORY:-2g}

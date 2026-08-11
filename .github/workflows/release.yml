@@ -1,0 +1,201 @@
+name: wolf public release
+
+permissions:
+  contents: read
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAMESPACE: alphabravo-oss
+  TRIVY_VERSION: v0.70.0
+  TRIVY_IGNORED_LICENSES: GPL-1.0-only,GPL-1.0-or-later,GPL-2.0-only,GPL-2.0-or-later,GPL-2.0-with-autoconf-exception+,GPL-2.0-with-bison-exception+,GPL-3.0-only,GPL-3.0-or-later,GPL-3.0-with-autoconf-exception+,LGPL-2.0-only,LGPL-2.0-or-later,LGPL-2.1-only,LGPL-2.1-or-later,LGPL-3.0-only,LGPL-3.0-or-later,Sleepycat
+
+concurrency:
+  group: public-release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Resolve release metadata
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      version: ${{ steps.meta.outputs.version }}
+      minor: ${{ steps.meta.outputs.minor }}
+      source_date: ${{ steps.meta.outputs.source_date }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Validate semver tag
+        id: meta
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          [[ "$REF_NAME" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]] || {
+            echo "release tags must match vMAJOR.MINOR.PATCH" >&2
+            exit 2
+          }
+          version="${REF_NAME#v}"
+          minor="$(cut -d. -f1,2 <<<"$version")"
+          source_date="$(git show -s --format=%cI "$GITHUB_SHA")"
+          {
+            echo "tag=$REF_NAME"
+            echo "version=$version"
+            echo "minor=$minor"
+            echo "source_date=$source_date"
+          } >>"$GITHUB_OUTPUT"
+
+  validate:
+    name: Validate source
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+
+      - name: Enable pnpm
+        run: corepack enable
+
+      - name: Validate Go and scanner metadata
+        run: |
+          go test -short -race -count=1 -timeout 120s ./...
+          make scanners-validate
+
+      - name: Validate UI
+        working-directory: ui
+        run: |
+          corepack pnpm install --frozen-lockfile
+          corepack pnpm typecheck
+          corepack pnpm lint
+          corepack pnpm test
+          corepack pnpm build
+
+  publish-app:
+    name: Publish app image
+    needs: [prepare, validate]
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3
+        with:
+          platforms: all
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push app image
+        id: build
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5
+        with:
+          context: .
+          file: Dockerfile
+          target: runtime
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/thewolf:${{ needs.prepare.outputs.tag }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/thewolf:${{ needs.prepare.outputs.version }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/thewolf:${{ needs.prepare.outputs.minor }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/thewolf:latest
+          build-args: |
+            VERSION=${{ needs.prepare.outputs.tag }}
+            COMMIT=${{ github.sha }}
+            BUILD_DATE=${{ needs.prepare.outputs.source_date }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ needs.prepare.outputs.tag }}
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha,scope=public-release-app
+          cache-to: type=gha,scope=public-release-app,mode=max
+
+      - name: Smoke app image
+        run: docker run --rm "${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/thewolf@${{ steps.build.outputs.digest }}" version
+
+      - name: Render Trivy exceptions
+        run: scanners/ci/validate-trivy-exceptions.py .trivyignore --image runtime --output build/runtime.trivyignore
+
+      - uses: aquasecurity/trivy-action@dc5a429b52fcf669ce959baa2c2dd26090d2a6c4 # 0.32.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/thewolf@${{ steps.build.outputs.digest }}
+          scanners: vuln,secret,license
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true
+          format: table
+          trivyignores: build/runtime.trivyignore
+          ignored-licenses: ${{ env.TRIVY_IGNORED_LICENSES }}
+          version: ${{ env.TRIVY_VERSION }}
+
+      - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/thewolf
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+  github-release:
+    name: Create GitHub Release
+    needs: [prepare, publish-app]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Write public release notes preface
+        run: |
+          mkdir -p build
+          cat >build/release-notes.md <<'NOTES'
+          ## Container images
+
+          This release publishes the Wolf app image to GHCR under `ghcr.io/alphabravo-oss`.
+
+          Tags published: `${{ needs.prepare.outputs.tag }}`, `${{ needs.prepare.outputs.version }}`, `${{ needs.prepare.outputs.minor }}`, and `latest`.
+
+          Image:
+          - `ghcr.io/alphabravo-oss/thewolf`
+
+          Scanner and fixer images are released separately by the scanner release factory and are consumed through the `stable` scanner channel by default.
+          NOTES
+
+      - name: Create or update release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" \
+              --title "Wolf $TAG" \
+              --notes-file build/release-notes.md
+          else
+            gh release create "$TAG" \
+              --title "Wolf $TAG" \
+              --notes-file build/release-notes.md
+          fi

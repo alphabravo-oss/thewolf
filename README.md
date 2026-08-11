@@ -309,7 +309,7 @@ The CLI variants need a **one-time interactive login**; the API variant is the z
 ```bash
 # 1. Start the worker container with a volume for the agent session.
 # Resolve the approved release once and use its immutable digest here.
-export WOLF_FIXER_IMAGE='docker.io/alphabravodevops/wolf-fixer-claude@sha256:<approved-digest>'
+export WOLF_FIXER_IMAGE='ghcr.io/alphabravo-oss/wolf-fixer-claude@sha256:<approved-digest>'
 docker run -d --name wolf-fixer \
   -v wolf-fixer-session:/home/wolf/.config \
   -e WOLF_API_URL=https://wolf.internal \

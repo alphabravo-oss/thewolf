@@ -18,16 +18,14 @@ LDFLAGS     := -s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main
 DOCKER_IMAGE := thewolf
 DOCKER_TAG   ?= $(VERSION)
 # Registry for multi-arch publishing of the app image (docker-buildx).
-DOCKER_REGISTRY ?= alphabravodevops
+DOCKER_REGISTRY ?= ghcr.io/alphabravo-oss
 
 # Docker — wolf-scanners (the bundled scanner image).
-# SCANNERS_REGISTRY must match the registry the runtime pulls from
-# (internal/setup/scanners: alphabravodevops/wolf-scanners on Docker Hub),
-# so `make scanners-push` feeds the default the app resolves. Override for
-# a mirror (e.g. SCANNERS_REGISTRY=ghcr.io/alphabravocompany).
+# SCANNERS_REGISTRY defaults to the public GHCR namespace the runtime pulls
+# from. Override it for a private mirror or local registry.
 SCANNERS_IMAGE := wolf-scanners
-SCANNERS_TAG   ?= $(VERSION)
-SCANNERS_REGISTRY ?= alphabravodevops
+SCANNERS_TAG   ?= stable
+SCANNERS_REGISTRY ?= ghcr.io/alphabravo-oss
 SCANNERS_REF   := $(SCANNERS_IMAGE):$(SCANNERS_TAG)
 
 # Tools

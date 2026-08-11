@@ -136,18 +136,18 @@ All third-party actions are pinned to full commit SHAs.
 
 ## Registries and secrets
 
-GHCR (`ghcr.io/alphabravocompany`) is always the primary registry and uses the
-job-scoped `GITHUB_TOKEN`. Docker Hub (`docker.io/alphabravodevops`) is an
-optional mirror controlled by `mirror_mode`:
+GHCR (`ghcr.io/alphabravo-oss`) is always the primary registry and uses the
+job-scoped `GITHUB_TOKEN`. Docker Hub mirroring is disabled for public releases
+and remains only as a legacy/manual scanner-factory mode controlled by
+`mirror_mode`:
 
 - `auto`: mirror when both secrets exist; a mirror outage is recorded as
   degraded without discarding a valid primary release.
 - `required`: missing credentials or any mirror failure blocks publication.
 - `disabled`: never authenticate to or write Docker Hub.
 
-Configure both `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`, or neither. The
-workflow rejects partial configuration. Use a repository-scoped access token
-with only the required scanner repositories; do not use an account password.
+For legacy mirror testing, configure both `DOCKERHUB_USERNAME` and
+`DOCKERHUB_TOKEN`, or neither. The workflow rejects partial configuration.
 Secrets enter only step environments or the pinned login action and are never
 written to outputs, summaries, labels, build arguments, or artifact files.
 
@@ -155,11 +155,11 @@ written to outputs, summaries, labels, build arguments, or artifact files.
 
 | Artifact | GHCR repository pattern |
 |---|---|
-| Default image | `ghcr.io/alphabravocompany/wolf-scanners` |
-| JVM image | `ghcr.io/alphabravocompany/wolf-scanners-jvm` |
-| Rust image | `ghcr.io/alphabravocompany/wolf-scanners-rust` |
-| CodeQL image | `ghcr.io/alphabravocompany/wolf-scanners-codeql` |
-| Aggregate release | `ghcr.io/alphabravocompany/wolf-scanner-releases` |
+| Default image | `ghcr.io/alphabravo-oss/wolf-scanners` |
+| JVM image | `ghcr.io/alphabravo-oss/wolf-scanners-jvm` |
+| Rust image | `ghcr.io/alphabravo-oss/wolf-scanners-rust` |
+| CodeQL image | `ghcr.io/alphabravo-oss/wolf-scanners-codeql` |
+| Aggregate release | `ghcr.io/alphabravo-oss/wolf-scanner-releases` |
 
 The same repository names are used under the Docker Hub mirror namespace.
 Runtime consumers must resolve an alias to the aggregate manifest and persist

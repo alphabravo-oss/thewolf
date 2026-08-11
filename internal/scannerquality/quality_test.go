@@ -15,11 +15,9 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/scannertools/manifest"
 )
 
-var qualityTestNow = time.Date(2026, 7, 30, 19, 0, 0, 0, time.UTC)
-
 func TestRepositoryCoverageIsComplete(t *testing.T) {
 	t.Parallel()
-	coverage, err := ValidateRepository(context.Background(), repositoryRoot(t), qualityTestNow)
+	coverage, err := ValidateRepository(context.Background(), repositoryRoot(t), qualityTestNow(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,6 +69,7 @@ func TestCoverageFailsClosedOnMissingToolVariantFixtureAndDatabaseIdentity(t *te
 	t.Parallel()
 	root := repositoryRoot(t)
 	toolManifest, policy, corpus, builds, database := loadDefinitions(t, root)
+	now := qualityTestNow(t)
 	tests := []struct {
 		name   string
 		mutate func(*Policy, *Corpus, *buildPolicy, *DBLock)
@@ -123,8 +122,8 @@ func TestCoverageFailsClosedOnMissingToolVariantFixtureAndDatabaseIdentity(t *te
 		{
 			name: "database stale",
 			mutate: func(_ *Policy, _ *Corpus, _ *buildPolicy, database *DBLock) {
-				database.RecordedAt = qualityTestNow.Add(-2 * time.Hour)
-				database.ExpiresAt = qualityTestNow.Add(-time.Minute)
+				database.RecordedAt = now.Add(-2 * time.Hour)
+				database.ExpiresAt = now.Add(-time.Minute)
 			},
 			want: "stale",
 		},
@@ -143,7 +142,7 @@ func TestCoverageFailsClosedOnMissingToolVariantFixtureAndDatabaseIdentity(t *te
 			testCase.mutate(&policyCopy, &corpusCopy, &buildCopy, &databaseCopy)
 			_, err := validate(
 				context.Background(), toolManifest, policyCopy, corpusCopy,
-				buildCopy, databaseCopy, qualityTestNow,
+				buildCopy, databaseCopy, now,
 			)
 			if err == nil || !strings.Contains(err.Error(), testCase.want) {
 				t.Fatalf("validate() error = %v, want substring %q", err, testCase.want)
@@ -156,6 +155,7 @@ func TestEvidenceGoldenComparisonThresholdsAndDBIdentity(t *testing.T) {
 	t.Parallel()
 	root := repositoryRoot(t)
 	_, policy, _, _, database := loadDefinitions(t, root)
+	now := qualityTestNow(t)
 	evidence := completeEvidence(policy, database)
 	finding := Finding{
 		Tool: "semgrep", RuleID: "WOLF-FIXTURE", Severity: "high",
@@ -164,7 +164,7 @@ func TestEvidenceGoldenComparisonThresholdsAndDBIdentity(t *testing.T) {
 	}
 	setFindings(&evidence.Stable, "semgrep", []Finding{finding})
 	setFindings(&evidence.Candidate, "semgrep", []Finding{finding})
-	if err := EvaluateEvidence(context.Background(), policy, database, evidence, qualityTestNow); err != nil {
+	if err := EvaluateEvidence(context.Background(), policy, database, evidence, now); err != nil {
 		t.Fatal(err)
 	}
 
@@ -174,7 +174,7 @@ func TestEvidenceGoldenComparisonThresholdsAndDBIdentity(t *testing.T) {
 	replacement.RuleID = "WOLF-OTHER"
 	replacement.Fingerprint = "other-fingerprint"
 	setFindings(&loss.Candidate, "semgrep", []Finding{replacement})
-	if err := EvaluateEvidence(context.Background(), policy, database, loss, qualityTestNow); err == nil ||
+	if err := EvaluateEvidence(context.Background(), policy, database, loss, now); err == nil ||
 		!strings.Contains(err.Error(), "finding loss") {
 		t.Fatalf("finding loss error = %v", err)
 	}
@@ -184,7 +184,7 @@ func TestEvidenceGoldenComparisonThresholdsAndDBIdentity(t *testing.T) {
 	changed := finding
 	changed.Severity = "low"
 	setFindings(&drift.Candidate, "semgrep", []Finding{changed})
-	if err := EvaluateEvidence(context.Background(), policy, database, drift, qualityTestNow); err == nil ||
+	if err := EvaluateEvidence(context.Background(), policy, database, drift, now); err == nil ||
 		!strings.Contains(err.Error(), "severity drift") {
 		t.Fatalf("severity drift error = %v", err)
 	}
@@ -197,7 +197,7 @@ func TestEvidenceGoldenComparisonThresholdsAndDBIdentity(t *testing.T) {
 				policy.ThresholdProfiles["heavy"].PeakMemoryBytes + 1
 		}
 	}
-	if err := EvaluateEvidence(context.Background(), policy, database, threshold, qualityTestNow); err == nil ||
+	if err := EvaluateEvidence(context.Background(), policy, database, threshold, now); err == nil ||
 		!strings.Contains(err.Error(), "resource threshold") {
 		t.Fatalf("threshold error = %v", err)
 	}
@@ -209,14 +209,14 @@ func TestEvidenceGoldenComparisonThresholdsAndDBIdentity(t *testing.T) {
 			parseError.Candidate[index].ParseErrors = 1
 		}
 	}
-	if err := EvaluateEvidence(context.Background(), policy, database, parseError, qualityTestNow); err == nil ||
+	if err := EvaluateEvidence(context.Background(), policy, database, parseError, now); err == nil ||
 		!strings.Contains(err.Error(), "resource threshold") {
 		t.Fatalf("parse error gate = %v", err)
 	}
 
 	dbMismatch := evidence
 	dbMismatch.VulnerabilityDatabase.Digest = "sha256:" + strings.Repeat("f", 64)
-	if err := EvaluateEvidence(context.Background(), policy, database, dbMismatch, qualityTestNow); err == nil ||
+	if err := EvaluateEvidence(context.Background(), policy, database, dbMismatch, now); err == nil ||
 		!strings.Contains(err.Error(), "database identity") {
 		t.Fatalf("database identity error = %v", err)
 	}
@@ -272,13 +272,14 @@ func TestEvidenceNetworkIdentityIsExact(t *testing.T) {
 	t.Parallel()
 	root := repositoryRoot(t)
 	_, policy, _, _, database := loadDefinitions(t, root)
+	now := qualityTestNow(t)
 	evidence := completeEvidence(policy, database)
 	digest := "sha256:" + strings.Repeat("b", 64)
 	evidence.Network = NetworkEvidence{
 		Mode: "controlled-internal", Name: "wolf-quality-fixtures",
 		ID: strings.Repeat("c", 64), PolicyDigest: digest,
 	}
-	if err := EvaluateEvidence(context.Background(), policy, database, evidence, qualityTestNow); err != nil {
+	if err := EvaluateEvidence(context.Background(), policy, database, evidence, now); err != nil {
 		t.Fatal(err)
 	}
 
@@ -292,7 +293,7 @@ func TestEvidenceNetworkIdentityIsExact(t *testing.T) {
 	for _, invalid := range tests {
 		copy := evidence
 		copy.Network = invalid
-		if err := EvaluateEvidence(context.Background(), policy, database, copy, qualityTestNow); err == nil {
+		if err := EvaluateEvidence(context.Background(), policy, database, copy, now); err == nil {
 			t.Fatalf("invalid network evidence was accepted: %+v", invalid)
 		}
 	}
@@ -323,6 +324,7 @@ func TestEvidenceScopeIsExactAndStillEnforcesMeasuredIdentity(t *testing.T) {
 	t.Parallel()
 	root := repositoryRoot(t)
 	_, policy, _, _, database := loadDefinitions(t, root)
+	now := qualityTestNow(t)
 	evidence := completeEvidence(policy, database)
 	evidence.Scope = []string{"bandit"}
 	for index := range evidence.Stable {
@@ -337,11 +339,11 @@ func TestEvidenceScopeIsExactAndStillEnforcesMeasuredIdentity(t *testing.T) {
 			break
 		}
 	}
-	if err := EvaluateEvidence(context.Background(), policy, database, evidence, qualityTestNow); err != nil {
+	if err := EvaluateEvidence(context.Background(), policy, database, evidence, now); err != nil {
 		t.Fatal(err)
 	}
 	evidence.Scope = []string{"bandit", "unknown"}
-	if err := EvaluateEvidence(context.Background(), policy, database, evidence, qualityTestNow); err == nil {
+	if err := EvaluateEvidence(context.Background(), policy, database, evidence, now); err == nil {
 		t.Fatal("unknown quality evidence scope was accepted")
 	}
 }
@@ -411,7 +413,7 @@ func TestValidationHonorsCancellation(t *testing.T) {
 	t.Parallel()
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := ValidateRepository(ctx, repositoryRoot(t), qualityTestNow); err == nil {
+	if _, err := ValidateRepository(ctx, repositoryRoot(t), qualityTestNow(t)); err == nil {
 		t.Fatal("cancelled validation succeeded")
 	}
 }
@@ -452,6 +454,15 @@ func repositoryRoot(t *testing.T) string {
 		t.Fatal(err)
 	}
 	return root
+}
+
+func qualityTestNow(t *testing.T) time.Time {
+	t.Helper()
+	var database DBLock
+	if err := readJSON(filepath.Join(repositoryRoot(t), DBLockPath), &database); err != nil {
+		t.Fatal(err)
+	}
+	return database.RecordedAt.Add(time.Minute)
 }
 
 func loadDefinitions(

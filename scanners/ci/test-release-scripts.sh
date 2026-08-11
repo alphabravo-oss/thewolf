@@ -87,11 +87,11 @@ assert_output "$output" "immutable_id=scanner-candidate-pr-123-merge-0123456789a
 output="$(env "${common[@]}" EVENT_NAME=workflow_dispatch INPUT_OPERATION=release \
     INPUT_CANDIDATE_ID=scanner-candidate-2026-w31-0123456789ab \
     INPUT_RELEASE_ID=scanner-set-2026.31.1 INPUT_CHANNEL=stable \
-    INPUT_MIRROR_MODE=required scanners/ci/release-meta.sh resolve)"
+    INPUT_MIRROR_MODE=disabled scanners/ci/release-meta.sh resolve)"
 assert_output "$output" "immutable_id=scanner-set-2026.31.1"
 assert_output "$output" "candidate_id=scanner-candidate-2026-w31-0123456789ab"
 assert_output "$output" "aliases=stable"
-assert_output "$output" "mirror_mode=required"
+assert_output "$output" "mirror_mode=disabled"
 assert_output "$output" "run_build=false"
 
 if env "${common[@]}" EVENT_NAME=workflow_dispatch INPUT_OPERATION=release \
@@ -110,17 +110,17 @@ fi
 for unapproved_operation in candidate security-rebuild; do
     if env "${common[@]}" EVENT_NAME=workflow_dispatch \
         INPUT_OPERATION="$unapproved_operation" INPUT_CHANNEL=stable \
-        INPUT_PUBLISH=true INPUT_MIRROR_MODE=required \
+        INPUT_PUBLISH=true INPUT_MIRROR_MODE=disabled \
         scanners/ci/release-meta.sh resolve >/dev/null 2>&1; then
         fail "$unapproved_operation operation was allowed to move stable"
     fi
 done
-if env "${common[@]}" EVENT_NAME=workflow_dispatch INPUT_OPERATION=release \
+output="$(env "${common[@]}" EVENT_NAME=workflow_dispatch INPUT_OPERATION=release \
     INPUT_CANDIDATE_ID=scanner-candidate-2026-w31-0123456789ab \
     INPUT_RELEASE_ID=scanner-set-2026.31.1 INPUT_CHANNEL=stable \
-    INPUT_MIRROR_MODE=auto scanners/ci/release-meta.sh resolve >/dev/null 2>&1; then
-    fail "stable release was allowed without a required mirror"
-fi
+    INPUT_MIRROR_MODE=auto scanners/ci/release-meta.sh resolve)"
+assert_output "$output" "aliases=stable"
+assert_output "$output" "mirror_mode=auto"
 
 if env "${common[@]}" EVENT_NAME=workflow_dispatch INPUT_OPERATION=release \
     INPUT_CANDIDATE_ID=scanner-candidate-2026-w31-0123456789ab \

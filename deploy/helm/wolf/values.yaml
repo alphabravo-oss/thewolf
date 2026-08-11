@@ -302,9 +302,9 @@ scannerRelease:
     serviceAccountAnnotations: {}
 scanner:
   serviceAccountName: ""
-  defaultImage: alphabravodevops/wolf-scanners:2.0.0
-  jvmImage: alphabravodevops/wolf-scanners-jvm:2.0.0
-  rustImage: alphabravodevops/wolf-scanners-rust:2.0.0
+  defaultImage: ghcr.io/alphabravo-oss/wolf-scanners:stable
+  jvmImage: ghcr.io/alphabravo-oss/wolf-scanners-jvm:stable
+  rustImage: ghcr.io/alphabravo-oss/wolf-scanners-rust:stable
   codeqlImage: ""
   imagePullPolicy: IfNotPresent
   memory: 2Gi

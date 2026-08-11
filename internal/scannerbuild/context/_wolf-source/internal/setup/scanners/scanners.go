@@ -72,7 +72,7 @@ type Config struct {
 func EnvDefaults() Config {
 	tag := ResolvedTag()
 	return Config{
-		Image:          envOr("WOLF_SCANNERS_IMAGE", "alphabravodevops/wolf-scanners:"+tag),
+		Image:          envOr("WOLF_SCANNERS_IMAGE", "ghcr.io/alphabravo-oss/wolf-scanners:"+tag),
 		ImageOverrides: envBucketOverrides(),
 		PullPolicy:     envOr("WOLF_SCANNERS_PULL_POLICY", "IfNotPresent"),
 		Network:        envOr("WOLF_SCANNERS_NETWORK", "bridge"),
@@ -95,11 +95,10 @@ func EnvDefaults() Config {
 }
 
 // DefaultScannersTag is the runtime default tag for the wolf-built scanner
-// images. CI historically only published :latest and :dev; a build/push from
-// the scanner-image feature is what cuts this versioned tag. Operators can
-// override with WOLF_SCANNERS_TAG (e.g. WOLF_SCANNERS_TAG=latest) until a
-// release publishes this tag.
-const DefaultScannersTag = "2.0.0"
+// images. The scanner release factory updates this channel independently from
+// Wolf app releases. Operators can pin an immutable scanner release with
+// WOLF_SCANNERS_TAG or the per-image WOLF_SCANNERS_IMAGE* overrides.
+const DefaultScannersTag = "stable"
 
 // ResolvedTag returns the scanner image tag the runtime resolves: the
 // WOLF_SCANNERS_TAG override if set, else DefaultScannersTag.
@@ -138,7 +137,7 @@ var bucketVariantSuffix = map[string]string{
 // "default", "jvm", "rust", "codeql".
 func ActiveImageRefs() map[string]string {
 	tag := ResolvedTag()
-	defaultImage := envOr("WOLF_SCANNERS_IMAGE", "alphabravodevops/wolf-scanners:"+tag)
+	defaultImage := envOr("WOLF_SCANNERS_IMAGE", "ghcr.io/alphabravo-oss/wolf-scanners:"+tag)
 
 	refs := map[string]string{"default": defaultImage}
 

@@ -179,8 +179,6 @@ resolve() {
                     validate_release_id "$immutable_id"
 					[[ "$channel" == "none" || "$channel" == "stable" ]] ||
 						die "release operations may move only the stable channel"
-					[[ "$channel" != "stable" || "$mirror_mode" == "required" ]] ||
-						die "stable publication requires mirror_mode=required"
                     [[ "$channel" == "none" ]] || aliases="$channel"
                     ;;
                 verify)

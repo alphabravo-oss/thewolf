@@ -9,20 +9,6 @@ permissions:
   contents: read
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "Dockerfile"
-      - ".dockerignore"
-      - "cmd/**"
-      - "internal/**"
-      - "plugins/**"
-      - "scanners/**"
-      - "scripts/e2e/**"
-      - "ui/**"
-      - "go.mod"
-      - "go.sum"
-      - ".github/workflows/deployment-images.yml"
   pull_request:
     branches: [main]
     paths:
@@ -37,8 +23,6 @@ on:
       - "go.mod"
       - "go.sum"
       - ".github/workflows/deployment-images.yml"
-  schedule:
-    - cron: "23 4 * * 1"
   workflow_dispatch:
     inputs:
       operation:
@@ -60,9 +44,9 @@ on:
 
 env:
   PRIMARY_REGISTRY: ghcr.io
-  PRIMARY_NAMESPACE: alphabravocompany
+  PRIMARY_NAMESPACE: alphabravo-oss
   MIRROR_REGISTRY: docker.io
-  MIRROR_NAMESPACE: alphabravodevops
+  MIRROR_NAMESPACE: alphabravo-oss
   TRIVY_VERSION: v0.70.0
   TRIVY_IGNORED_LICENSES: GPL-1.0-only,GPL-1.0-or-later,GPL-2.0-only,GPL-2.0-or-later,GPL-2.0-with-autoconf-exception+,GPL-2.0-with-bison-exception+,GPL-3.0-only,GPL-3.0-or-later,GPL-3.0-with-autoconf-exception+,LGPL-2.0-only,LGPL-2.0-or-later,LGPL-2.1-only,LGPL-2.1-or-later,LGPL-3.0-only,LGPL-3.0-or-later,Sleepycat
 

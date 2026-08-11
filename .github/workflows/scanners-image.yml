@@ -51,8 +51,6 @@ on:
       - ".dockerignore"
       - "internal/scannerbuild/context/**"
       - ".github/workflows/scanners-image.yml"
-  release:
-    types: [published]
   schedule:
     - cron: "17 2 * * *"
     - cron: "43 3 * * 0"
@@ -99,10 +97,10 @@ on:
           - candidate
           - stable
       mirror_mode:
-        description: "auto degrades safely; required blocks; disabled never contacts Docker Hub"
+        description: "GHCR is canonical; leave disabled unless manually testing legacy mirror closure"
         required: true
         type: choice
-        default: auto
+        default: disabled
         options:
           - auto
           - required
@@ -110,9 +108,9 @@ on:
 
 env:
   PRIMARY_REGISTRY: ghcr.io
-  PRIMARY_NAMESPACE: alphabravocompany
+  PRIMARY_NAMESPACE: alphabravo-oss
   MIRROR_REGISTRY: docker.io
-  MIRROR_NAMESPACE: alphabravodevops
+  MIRROR_NAMESPACE: alphabravo-oss
   TRIVY_VERSION: v0.70.0
   # These licenses permit redistribution subject to their notices/source
   # obligations. Unknown, proprietary, and every unlisted license still fail.
@@ -838,7 +836,7 @@ jobs:
         run: |
           test "$(docker image inspect "$IMAGE" --format '{{.Config.User}}')" = wolf
           test "$(docker image inspect "$IMAGE" --format '{{index .Config.Labels "org.opencontainers.image.source"}}')" = \
-            https://github.com/alphabravocompany/thewolf
+            https://github.com/alphabravo-oss/thewolf
           docker run --rm --platform "$PLATFORM" --network none \
             --entrypoint /bin/sh "$IMAGE" -ec 'test "$(id -u)" -ne 0'
           case "$VARIANT" in

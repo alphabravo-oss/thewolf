@@ -36,10 +36,10 @@ def main() -> int:
     text = WORKFLOW.read_text(encoding="utf-8")
     scanner = SCANNER_WORKFLOW.read_text(encoding="utf-8")
 
-    require(r'cron:\s*"23 4 \* \* 1"', text, "weekly complete rebuild")
+    reject(r"^\s+schedule:", text, "legacy deployment image factory must not run on a schedule")
     for path in ('"Dockerfile"', '"scanners/**"', '"ui/**"', '"scripts/e2e/**"'):
-        if text.count(f"- {path}") < 2:
-            raise AssertionError(f"missing push/PR path coverage for {path}")
+        if text.count(f"- {path}") < 1:
+            raise AssertionError(f"missing PR path coverage for {path}")
     require(r"concurrency:.*cancel-in-progress:\s*false", text, "non-cancelling release transaction")
     require(
         r"\[\[ \"\$REF_NAME\" == main \]\].*?trusted only from main.*?"
