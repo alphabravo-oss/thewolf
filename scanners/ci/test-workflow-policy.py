@@ -328,7 +328,8 @@ def main() -> int:
     )
     require(r"format:\s*spdx-json", text, "SPDX SBOM creation")
     require(r"aggregate-spdx\.py", text, "aggregate release SPDX SBOM")
-    require(r"provenance:\s*mode=max", text, "BuildKit provenance")
+    require(r"provenance:\s*false", text, "BuildKit provenance disabled for unsigned publishing")
+    require(r"sbom:\s*false", text, "BuildKit SBOM attestations disabled for unsigned publishing")
     require(r"index:dev\.wolf\.release\.lock-digest=", text, "OCI index lock-digest annotation")
     for annotation in (
         "org.opencontainers.image.source",

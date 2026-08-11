@@ -1257,8 +1257,8 @@ jobs:
             index:dev.wolf.release.id=${{ needs.prepare.outputs.immutable_id }}
             index:dev.wolf.release.lock-digest=${{ needs.prepare.outputs.lock_digest }}
             index:dev.wolf.release.definition-digest=${{ needs.prepare.outputs.definition_digest }}
-          provenance: mode=max
-          sbom: true
+          provenance: false
+          sbom: false
           no-cache: >-
             ${{
               (github.event_name == 'schedule' &&
@@ -1642,8 +1642,8 @@ jobs:
             index:dev.wolf.release.id=${{ needs.prepare.outputs.immutable_id }}
             index:dev.wolf.release.lock-digest=${{ needs.prepare.outputs.lock_digest }}
             index:dev.wolf.release.definition-digest=${{ needs.prepare.outputs.definition_digest }}
-          provenance: mode=max
-          sbom: true
+          provenance: false
+          sbom: false
           no-cache: >-
             ${{
               (github.event_name == 'schedule' &&
