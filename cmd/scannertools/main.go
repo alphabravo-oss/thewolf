@@ -460,12 +460,27 @@ func checkUpstreamImages(root string, platforms []string) error {
 }
 
 func inspectImage(ref string, platforms []string) error {
-	out, err := exec.Command("docker", "manifest", "inspect", "--verbose", ref).Output()
-	if err != nil {
-		if ee, ok := err.(*exec.ExitError); ok {
-			return fmt.Errorf("docker manifest inspect failed: %s", strings.TrimSpace(string(ee.Stderr)))
+	var out []byte
+	var lastErr error
+	for attempt := 1; attempt <= 3; attempt++ {
+		cmd := exec.Command("docker", "manifest", "inspect", "--verbose", ref)
+		var err error
+		out, err = cmd.Output()
+		if err == nil {
+			lastErr = nil
+			break
 		}
-		return err
+		if ee, ok := err.(*exec.ExitError); ok {
+			lastErr = fmt.Errorf("docker manifest inspect failed: %s", strings.TrimSpace(string(ee.Stderr)))
+		} else {
+			lastErr = err
+		}
+		if attempt < 3 {
+			time.Sleep(time.Duration(attempt*2) * time.Second)
+		}
+	}
+	if lastErr != nil {
+		return lastErr
 	}
 	available, err := manifestPlatforms(out)
 	if err != nil {
