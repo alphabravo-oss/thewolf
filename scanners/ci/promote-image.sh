@@ -22,7 +22,7 @@ if docker buildx imagetools inspect "$target_ref" >/dev/null 2>&1; then
     "$script_dir/verify-image.sh" "$target_ref" "$expected_digest" "$required_platforms"
     printf 'immutable ref already exists with the expected digest: %s\n' "$target_ref"
 else
-    docker buildx imagetools create --tag "$target_ref" "$source_ref"
+    oras copy "$source_ref" "$target_ref"
     "$script_dir/verify-image.sh" "$target_ref" "$expected_digest" "$required_platforms"
 fi
 
@@ -31,9 +31,7 @@ for alias in "${alias_values[@]}"; do
     [[ -n "$alias" ]] || continue
     [[ "$alias" =~ ^[a-z0-9][a-z0-9._-]{0,126}$ ]] ||
         { printf 'invalid alias: %s\n' "$alias" >&2; exit 2; }
-    docker buildx imagetools create \
-        --tag "${target_repository}:${alias}" \
-        "${target_repository}@${expected_digest}"
+    oras copy "${target_repository}@${expected_digest}" "${target_repository}:${alias}"
     "$script_dir/verify-image.sh" \
         "${target_repository}:${alias}" \
         "$expected_digest" \
