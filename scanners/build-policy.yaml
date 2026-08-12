@@ -18,21 +18,18 @@ variants:
     image: wolf-scanners
     platforms:
       - linux/amd64
-      - linux/arm64
   jvm:
     dockerfile: scanners/Dockerfile.jvm
     context: scanners
     image: wolf-scanners-jvm
     platforms:
       - linux/amd64
-      - linux/arm64
   rust:
     dockerfile: scanners/Dockerfile.rust
     context: scanners
     image: wolf-scanners-rust
     platforms:
       - linux/amd64
-      - linux/arm64
 
 # Fixer images are release artifacts, not runtime scanner assignments. The
 # base is built and published first; every engine build must receive its exact
@@ -42,7 +39,7 @@ fixerVariants:
     dockerfile: fixer/Dockerfile.base
     context: .
     image: wolf-fixer
-    platforms: [linux/amd64, linux/arm64]
+    platforms: [linux/amd64]
     authMode: none
     buildArgs:
       GO_VERSION: 1.26.5
@@ -54,7 +51,7 @@ fixerVariants:
     dockerfile: fixer/Dockerfile.api
     context: .
     image: wolf-fixer-api
-    platforms: [linux/amd64, linux/arm64]
+    platforms: [linux/amd64]
     dependsOn: [base]
     authMode: api-key
     smokeCommand: ["/usr/local/bin/wolf", "version"]
@@ -62,7 +59,7 @@ fixerVariants:
     dockerfile: fixer/Dockerfile.claude
     context: .
     image: wolf-fixer-claude
-    platforms: [linux/amd64, linux/arm64]
+    platforms: [linux/amd64]
     dependsOn: [base]
     authMode: interactive-session
     buildArgs:
@@ -72,7 +69,7 @@ fixerVariants:
     dockerfile: fixer/Dockerfile.codex
     context: .
     image: wolf-fixer-codex
-    platforms: [linux/amd64, linux/arm64]
+    platforms: [linux/amd64]
     dependsOn: [base]
     authMode: interactive-session
     buildArgs:

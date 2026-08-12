@@ -98,37 +98,37 @@ scannerVariants:
     rationale: "License-gated CodeQL is platform-validated but not impersonated by an unlicensed fixture run."
   default:
     dockerfile: scanners/Dockerfile
-    platforms: [linux/amd64, linux/arm64]
+    platforms: [linux/amd64]
     strategy: executable
   jvm:
     dockerfile: scanners/Dockerfile.jvm
-    platforms: [linux/amd64, linux/arm64]
+    platforms: [linux/amd64]
     strategy: executable
   rust:
     dockerfile: scanners/Dockerfile.rust
-    platforms: [linux/amd64, linux/arm64]
+    platforms: [linux/amd64]
     strategy: executable
 
-# Fixer platforms are built and smoke-tested without credentials for both
-# supported architectures. Publication, signature, and provenance verification
-# remain separate gates because local compatibility tests cannot attest a
-# remote registry artifact.
+# Fixer platforms are built and smoke-tested without credentials for the
+# currently published architecture. Publication verification remains a separate
+# gate because local compatibility tests cannot attest a remote registry
+# artifact.
 fixerVariants:
   base:
     dockerfile: fixer/Dockerfile.base
-    platforms: [linux/amd64, linux/arm64]
+    platforms: [linux/amd64]
     strategy: executable
   claude:
     dockerfile: fixer/Dockerfile.claude
-    platforms: [linux/amd64, linux/arm64]
+    platforms: [linux/amd64]
     strategy: executable
   codex:
     dockerfile: fixer/Dockerfile.codex
-    platforms: [linux/amd64, linux/arm64]
+    platforms: [linux/amd64]
     strategy: executable
   api:
     dockerfile: fixer/Dockerfile.api
-    platforms: [linux/amd64, linux/arm64]
+    platforms: [linux/amd64]
     strategy: executable
 
 vulnerabilityDatabase:

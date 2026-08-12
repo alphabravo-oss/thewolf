@@ -175,7 +175,7 @@ jq -nS \
       lockDigest: $lock,
       definitionDigest: $definition,
       candidateImage: "ghcr.io/example/wolf-scanners@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      platformReceiptCount: 15,
+      platformReceiptCount: 8,
       evidence: {
         platformReceiptsSha256: $evidence,
         composeScannerSha256: $evidence,
@@ -212,20 +212,19 @@ descriptor="$(jq -cn \
         "org.opencontainers.image.version": $release,
         "dev.wolf.release.variant": "default",
         "dev.wolf.release.image-kind": "scanner",
-        "dev.wolf.release.platforms": "linux/amd64,linux/arm64",
+        "dev.wolf.release.platforms": "linux/amd64",
         "dev.wolf.release.id": $release,
         "dev.wolf.release.lock-digest": $lock,
         "dev.wolf.release.definition-digest": $definition
       },
       manifests: [
-        {platform: {os: "linux", architecture: "amd64"}},
-        {platform: {os: "linux", architecture: "arm64"}}
+        {platform: {os: "linux", architecture: "amd64"}}
       ]
     }')"
 PATH="$tmp/bin:$PATH" DOCKER_DESCRIPTOR="$descriptor" DOCKER_MANIFEST="$descriptor" \
     scanners/ci/verify-image.sh \
     "ghcr.io/example/wolf-scanners@$digest" "$digest" \
-    "linux/amd64,linux/arm64" scanner-set-2026.31.1 \
+    "linux/amd64" scanner-set-2026.31.1 \
     "$lock_digest" "$definition_digest" \
     "https://github.com/example/wolf" \
     0123456789abcdef0123456789abcdef01234567 \
@@ -234,7 +233,7 @@ bad_descriptor="$(jq 'del(.annotations["dev.wolf.release.lock-digest"])' <<<"$de
 if PATH="$tmp/bin:$PATH" DOCKER_DESCRIPTOR="$bad_descriptor" DOCKER_MANIFEST="$bad_descriptor" \
     scanners/ci/verify-image.sh \
     "ghcr.io/example/wolf-scanners@$digest" "$digest" \
-    "linux/amd64,linux/arm64" scanner-set-2026.31.1 \
+    "linux/amd64" scanner-set-2026.31.1 \
     "$lock_digest" "$definition_digest" \
     "https://github.com/example/wolf" \
     0123456789abcdef0123456789abcdef01234567 \
@@ -243,8 +242,7 @@ if PATH="$tmp/bin:$PATH" DOCKER_DESCRIPTOR="$bad_descriptor" DOCKER_MANIFEST="$b
 fi
 
 for variant in default jvm rust codeql fixer-base fixer-api fixer-claude fixer-codex; do
-    platforms='["linux/amd64","linux/arm64"]'
-    [[ "$variant" != codeql ]] || platforms='["linux/amd64"]'
+    platforms='["linux/amd64"]'
     image_kind=scanner
     case "$variant" in
         default) image=wolf-scanners ;;
@@ -529,9 +527,9 @@ else
 fi
 variant=default
 kind=scanner
-platforms='[{"platform":{"os":"linux","architecture":"amd64"}},{"platform":{"os":"linux","architecture":"arm64"}}]'
+platforms='[{"platform":{"os":"linux","architecture":"amd64"}}]'
 case "$ref" in
-  *wolf-scanners-codeql*) variant=codeql; platforms='[{"platform":{"os":"linux","architecture":"amd64"}}]' ;;
+  *wolf-scanners-codeql*) variant=codeql ;;
   *wolf-scanners-jvm*) variant=jvm ;;
   *wolf-scanners-rust*) variant=rust ;;
   *wolf-fixer-api*) variant=fixer-api; kind=fixer ;;
@@ -539,8 +537,7 @@ case "$ref" in
   *wolf-fixer-codex*) variant=fixer-codex; kind=fixer ;;
   *wolf-fixer*) variant=fixer-base; kind=fixer ;;
 esac
-platform_csv=linux/amd64,linux/arm64
-[[ "$variant" != codeql ]] || platform_csv=linux/amd64
+platform_csv=linux/amd64
 manifest="$(jq -cn \
   --arg digest "${IMAGE_DIGEST:?}" \
   --arg candidate "${CLOSURE_CANDIDATE_ID:?}" \

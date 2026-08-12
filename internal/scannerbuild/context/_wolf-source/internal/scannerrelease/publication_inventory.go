@@ -40,14 +40,14 @@ type requiredReleaseImage struct {
 }
 
 var requiredReleaseImages = map[string]requiredReleaseImage{
-	"default":      {Kind: ReleaseImageScanner, Platforms: []string{"linux/amd64", "linux/arm64"}},
-	"jvm":          {Kind: ReleaseImageScanner, Platforms: []string{"linux/amd64", "linux/arm64"}},
-	"rust":         {Kind: ReleaseImageScanner, Platforms: []string{"linux/amd64", "linux/arm64"}},
+	"default":      {Kind: ReleaseImageScanner, Platforms: []string{"linux/amd64"}},
+	"jvm":          {Kind: ReleaseImageScanner, Platforms: []string{"linux/amd64"}},
+	"rust":         {Kind: ReleaseImageScanner, Platforms: []string{"linux/amd64"}},
 	"codeql":       {Kind: ReleaseImageScanner, Platforms: []string{"linux/amd64"}},
-	"fixer-base":   {Kind: ReleaseImageFixer, Platforms: []string{"linux/amd64", "linux/arm64"}},
-	"fixer-api":    {Kind: ReleaseImageFixer, Platforms: []string{"linux/amd64", "linux/arm64"}},
-	"fixer-claude": {Kind: ReleaseImageFixer, Platforms: []string{"linux/amd64", "linux/arm64"}},
-	"fixer-codex":  {Kind: ReleaseImageFixer, Platforms: []string{"linux/amd64", "linux/arm64"}},
+	"fixer-base":   {Kind: ReleaseImageFixer, Platforms: []string{"linux/amd64"}},
+	"fixer-api":    {Kind: ReleaseImageFixer, Platforms: []string{"linux/amd64"}},
+	"fixer-claude": {Kind: ReleaseImageFixer, Platforms: []string{"linux/amd64"}},
+	"fixer-codex":  {Kind: ReleaseImageFixer, Platforms: []string{"linux/amd64"}},
 }
 
 // ValidatePublicationReceiptInventory rejects a final receipt unless it

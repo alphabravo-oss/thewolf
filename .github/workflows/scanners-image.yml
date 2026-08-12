@@ -442,36 +442,18 @@ jobs:
             platform: linux/amd64
             arch: amd64
             runner: ubuntu-24.04
-          - variant: default
-            dockerfile: Dockerfile
-            image: wolf-scanners
-            platform: linux/arm64
-            arch: arm64
-            runner: ubuntu-24.04-arm
           - variant: jvm
             dockerfile: Dockerfile.jvm
             image: wolf-scanners-jvm
             platform: linux/amd64
             arch: amd64
             runner: ubuntu-24.04
-          - variant: jvm
-            dockerfile: Dockerfile.jvm
-            image: wolf-scanners-jvm
-            platform: linux/arm64
-            arch: arm64
-            runner: ubuntu-24.04-arm
           - variant: rust
             dockerfile: Dockerfile.rust
             image: wolf-scanners-rust
             platform: linux/amd64
             arch: amd64
             runner: ubuntu-24.04
-          - variant: rust
-            dockerfile: Dockerfile.rust
-            image: wolf-scanners-rust
-            platform: linux/arm64
-            arch: arm64
-            runner: ubuntu-24.04-arm
           - variant: codeql
             dockerfile: Dockerfile.codeql
             image: wolf-scanners-codeql
@@ -591,26 +573,12 @@ jobs:
             arch: amd64
             runner: ubuntu-24.04
             auth_mode: none
-          - variant: base
-            dockerfile: fixer/Dockerfile.base
-            image: wolf-fixer
-            platform: linux/arm64
-            arch: arm64
-            runner: ubuntu-24.04-arm
-            auth_mode: none
           - variant: api
             dockerfile: fixer/Dockerfile.api
             image: wolf-fixer-api
             platform: linux/amd64
             arch: amd64
             runner: ubuntu-24.04
-            auth_mode: api-key
-          - variant: api
-            dockerfile: fixer/Dockerfile.api
-            image: wolf-fixer-api
-            platform: linux/arm64
-            arch: arm64
-            runner: ubuntu-24.04-arm
             auth_mode: api-key
           - variant: claude
             dockerfile: fixer/Dockerfile.claude
@@ -619,26 +587,12 @@ jobs:
             arch: amd64
             runner: ubuntu-24.04
             auth_mode: interactive-session
-          - variant: claude
-            dockerfile: fixer/Dockerfile.claude
-            image: wolf-fixer-claude
-            platform: linux/arm64
-            arch: arm64
-            runner: ubuntu-24.04-arm
-            auth_mode: interactive-session
           - variant: codex
             dockerfile: fixer/Dockerfile.codex
             image: wolf-fixer-codex
             platform: linux/amd64
             arch: amd64
             runner: ubuntu-24.04
-            auth_mode: interactive-session
-          - variant: codex
-            dockerfile: fixer/Dockerfile.codex
-            image: wolf-fixer-codex
-            platform: linux/arm64
-            arch: arm64
-            runner: ubuntu-24.04-arm
             auth_mode: interactive-session
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -1141,22 +1095,22 @@ jobs:
             context: scanners
             dockerfile: scanners/Dockerfile
             image: wolf-scanners
-            platforms: linux/amd64,linux/arm64
-            annotation_prefix: index
+            platforms: linux/amd64
+            annotation_prefix: manifest
           - variant: jvm
             image_kind: scanner
             context: scanners
             dockerfile: scanners/Dockerfile.jvm
             image: wolf-scanners-jvm
-            platforms: linux/amd64,linux/arm64
-            annotation_prefix: index
+            platforms: linux/amd64
+            annotation_prefix: manifest
           - variant: rust
             image_kind: scanner
             context: scanners
             dockerfile: scanners/Dockerfile.rust
             image: wolf-scanners-rust
-            platforms: linux/amd64,linux/arm64
-            annotation_prefix: index
+            platforms: linux/amd64
+            annotation_prefix: manifest
           - variant: codeql
             image_kind: scanner
             context: scanners
@@ -1169,8 +1123,8 @@ jobs:
             context: .
             dockerfile: fixer/Dockerfile.base
             image: wolf-fixer
-            platforms: linux/amd64,linux/arm64
-            annotation_prefix: index
+            platforms: linux/amd64
+            annotation_prefix: manifest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
@@ -1510,18 +1464,18 @@ jobs:
           - variant: fixer-api
             dockerfile: fixer/Dockerfile.api
             image: wolf-fixer-api
-            platforms: linux/amd64,linux/arm64
-            annotation_prefix: index
+            platforms: linux/amd64
+            annotation_prefix: manifest
           - variant: fixer-claude
             dockerfile: fixer/Dockerfile.claude
             image: wolf-fixer-claude
-            platforms: linux/amd64,linux/arm64
-            annotation_prefix: index
+            platforms: linux/amd64
+            annotation_prefix: manifest
           - variant: fixer-codex
             dockerfile: fixer/Dockerfile.codex
             image: wolf-fixer-codex
-            platforms: linux/amd64,linux/arm64
-            annotation_prefix: index
+            platforms: linux/amd64
+            annotation_prefix: manifest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
@@ -1594,7 +1548,7 @@ jobs:
             and .imageKind == "fixer"
             and .image == "wolf-fixer"
             and (.digest | test("^sha256:[a-f0-9]{64}$"))
-            and (.platforms | sort) == (["linux/amd64", "linux/arm64"] | sort)
+            and (.platforms | sort) == (["linux/amd64"] | sort)
             and .releaseId == $release
             and .lockDigest == $lock
             and .definitionDigest == $definition
@@ -1602,7 +1556,7 @@ jobs:
           repository="$(jq -r .primary.repository "$METADATA")"
           digest="$(jq -r .digest "$METADATA")"
           reference="${repository}@${digest}"
-          scanners/ci/verify-image.sh "$reference" "$digest" "linux/amd64,linux/arm64" \
+          scanners/ci/verify-image.sh "$reference" "$digest" "linux/amd64" \
             "$RELEASE_ID" "$LOCK_DIGEST" "$DEFINITION_DIGEST" \
             "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" "$GITHUB_SHA" "$RELEASE_ID" "fixer-base" "fixer"
           echo "reference=$reference" >>"$GITHUB_OUTPUT"
@@ -1901,20 +1855,13 @@ jobs:
       matrix:
         include:
           - {variant: default, image_kind: scanner, platform: linux/amd64, arch: amd64, auth_mode: none}
-          - {variant: default, image_kind: scanner, platform: linux/arm64, arch: arm64, auth_mode: none}
           - {variant: jvm, image_kind: scanner, platform: linux/amd64, arch: amd64, auth_mode: none}
-          - {variant: jvm, image_kind: scanner, platform: linux/arm64, arch: arm64, auth_mode: none}
           - {variant: rust, image_kind: scanner, platform: linux/amd64, arch: amd64, auth_mode: none}
-          - {variant: rust, image_kind: scanner, platform: linux/arm64, arch: arm64, auth_mode: none}
           - {variant: codeql, image_kind: scanner, platform: linux/amd64, arch: amd64, auth_mode: none}
           - {variant: fixer-base, image_kind: fixer, platform: linux/amd64, arch: amd64, auth_mode: none}
-          - {variant: fixer-base, image_kind: fixer, platform: linux/arm64, arch: arm64, auth_mode: none}
           - {variant: fixer-api, image_kind: fixer, platform: linux/amd64, arch: amd64, auth_mode: api-key}
-          - {variant: fixer-api, image_kind: fixer, platform: linux/arm64, arch: arm64, auth_mode: api-key}
           - {variant: fixer-claude, image_kind: fixer, platform: linux/amd64, arch: amd64, auth_mode: interactive-session}
-          - {variant: fixer-claude, image_kind: fixer, platform: linux/arm64, arch: arm64, auth_mode: interactive-session}
           - {variant: fixer-codex, image_kind: fixer, platform: linux/amd64, arch: amd64, auth_mode: interactive-session}
-          - {variant: fixer-codex, image_kind: fixer, platform: linux/arm64, arch: arm64, auth_mode: interactive-session}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
@@ -2218,17 +2165,17 @@ jobs:
           DEFINITION_DIGEST: ${{ needs.prepare.outputs.definition_digest }}
         run: |
           mapfile -d '' receipts < <(find build/platform-quality -name receipt.json -print0 | sort -z)
-          [[ "${#receipts[@]}" -eq 15 ]]
+          [[ "${#receipts[@]}" -eq 8 ]]
           jq -sS 'sort_by(.variant, .platform)' "${receipts[@]}" \
             >build/integration-quality/platform-receipts.json
           jq -e \
             --arg release "$RELEASE_ID" \
             --arg lock "$LOCK_DIGEST" \
             --arg definition "$DEFINITION_DIGEST" '
-              length == 15 and
+              length == 8 and
               all(.[]; .releaseId == $release and .lockDigest == $lock and
                 .definitionDigest == $definition and .passed == true) and
-              ([.[] | (.variant + ":" + .platform)] | unique | length) == 15
+              ([.[] | (.variant + ":" + .platform)] | unique | length) == 8
             ' build/integration-quality/platform-receipts.json >/dev/null
           jq -nS \
             --arg releaseId "$RELEASE_ID" \
@@ -2246,7 +2193,7 @@ jobs:
               lockDigest: $lockDigest,
               definitionDigest: $definitionDigest,
               candidateImage: $candidateImage,
-              platformReceiptCount: 15,
+              platformReceiptCount: 8,
               evidence: {
                 platformReceiptsSha256: $platformReceiptsSha256,
                 composeScannerSha256: $composeScannerSha256,
@@ -2368,7 +2315,7 @@ jobs:
               .schemaVersion == "wolf.scanners.candidate-qualification/v1" and
               .releaseId == $release and .lockDigest == $lock and
               .definitionDigest == $definition and
-              .platformReceiptCount == 15 and .passed == true
+              .platformReceiptCount == 8 and .passed == true
             ' build/candidate-qualification/candidate-qualification.json >/dev/null
           cp build/candidate-qualification/candidate-qualification.json \
             build/candidate-qualification.json

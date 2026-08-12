@@ -134,9 +134,9 @@ def main() -> int:
         "all fixer quality variants",
     )
     require(
-        r"fixer-quality:.*?runs-on:\s*\$\{\{ matrix\.runner \}\}.*?runner:\s*ubuntu-24\.04-arm",
+        r"fixer-quality:.*?runs-on:\s*\$\{\{ matrix\.runner \}\}.*?runner:\s*ubuntu-24\.04",
         text,
-        "native arm64 fixer quality runner",
+        "native amd64 fixer quality runner",
     )
     runtime_quality = job_block(text, "runtime-quality")
     for variant, target in (
@@ -185,14 +185,14 @@ def main() -> int:
     )
     published_quality = job_block(text, "published-platform-quality")
     expected_published_tuples = {
-        "default": ("scanner", "linux/amd64", "linux/arm64"),
-        "jvm": ("scanner", "linux/amd64", "linux/arm64"),
-        "rust": ("scanner", "linux/amd64", "linux/arm64"),
+        "default": ("scanner", "linux/amd64"),
+        "jvm": ("scanner", "linux/amd64"),
+        "rust": ("scanner", "linux/amd64"),
         "codeql": ("scanner", "linux/amd64"),
-        "fixer-base": ("fixer", "linux/amd64", "linux/arm64"),
-        "fixer-api": ("fixer", "linux/amd64", "linux/arm64"),
-        "fixer-claude": ("fixer", "linux/amd64", "linux/arm64"),
-        "fixer-codex": ("fixer", "linux/amd64", "linux/arm64"),
+        "fixer-base": ("fixer", "linux/amd64"),
+        "fixer-api": ("fixer", "linux/amd64"),
+        "fixer-claude": ("fixer", "linux/amd64"),
+        "fixer-codex": ("fixer", "linux/amd64"),
     }
     for variant, (kind, *platforms) in expected_published_tuples.items():
         for platform in platforms:
@@ -226,10 +226,10 @@ def main() -> int:
         "exact candidate scanner and rollout gates run in Compose and Kind",
     )
     require(
-        r"wolf\.scanners\.candidate-qualification/v1.*?platformReceiptCount:\s*15.*?"
+        r"wolf\.scanners\.candidate-qualification/v1.*?platformReceiptCount:\s*8.*?"
         r"scanner-candidate-qualification-",
         integration_quality,
-        "candidate qualification receipt binds all 15 published platform tuples",
+        "candidate qualification receipt binds all 8 published platform tuples",
     )
     require(
         r"release-manifest:\n.*?needs:\s*\[prepare, publish, publish-fixer-engines, integration-quality, release-approval\].*?"
@@ -239,15 +239,15 @@ def main() -> int:
         "aggregate candidate publication is blocked on and embeds exact environment qualification",
     )
     require(
-        r"variant:\s*fixer-base.*?image_kind:\s*fixer.*?image:\s*wolf-fixer.*?platforms:\s*linux/amd64,linux/arm64",
+        r"variant:\s*fixer-base.*?image_kind:\s*fixer.*?image:\s*wolf-fixer.*?platforms:\s*linux/amd64",
         text,
-        "multi-platform fixer base publication",
+        "amd64 fixer base publication",
     )
     for variant in ("fixer-api", "fixer-claude", "fixer-codex"):
         require(
-            rf"variant:\s*{variant}.*?platforms:\s*linux/amd64,linux/arm64",
+            rf"variant:\s*{variant}.*?platforms:\s*linux/amd64",
             text,
-            f"multi-platform {variant} publication",
+            f"amd64 {variant} publication",
         )
     require(
         r"publish-fixer-engines:.*?needs:\s*\[prepare, publish, release-approval\].*?"
@@ -330,8 +330,8 @@ def main() -> int:
     require(r"aggregate-spdx\.py", text, "aggregate release SPDX SBOM")
     require(r"provenance:\s*false", text, "BuildKit provenance disabled for unsigned publishing")
     require(r"sbom:\s*false", text, "BuildKit SBOM attestations disabled for unsigned publishing")
-    require(r"annotation_prefix:\s*manifest", text, "single-platform CodeQL manifest annotations")
-    require(r"annotation_prefix:\s*index", text, "multi-platform OCI index annotations")
+    require(r"annotation_prefix:\s*manifest", text, "single-platform manifest annotations")
+    reject(r"annotation_prefix:\s*index", text, "amd64-only scanner publishing avoids OCI index annotations")
     for annotation in (
         "org.opencontainers.image.source",
         "org.opencontainers.image.revision",

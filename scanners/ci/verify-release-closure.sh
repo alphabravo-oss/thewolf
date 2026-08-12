@@ -127,14 +127,14 @@ if [[ "$subject_kind" == candidate ]]; then
   jq -e --arg candidate "$candidate_id" '
   def expected:
     {
-      "default": {kind: "scanner", platforms: ["linux/amd64", "linux/arm64"]},
-      "jvm": {kind: "scanner", platforms: ["linux/amd64", "linux/arm64"]},
-      "rust": {kind: "scanner", platforms: ["linux/amd64", "linux/arm64"]},
+      "default": {kind: "scanner", platforms: ["linux/amd64"]},
+      "jvm": {kind: "scanner", platforms: ["linux/amd64"]},
+      "rust": {kind: "scanner", platforms: ["linux/amd64"]},
       "codeql": {kind: "scanner", platforms: ["linux/amd64"]},
-      "fixer-base": {kind: "fixer", platforms: ["linux/amd64", "linux/arm64"]},
-      "fixer-api": {kind: "fixer", platforms: ["linux/amd64", "linux/arm64"]},
-      "fixer-claude": {kind: "fixer", platforms: ["linux/amd64", "linux/arm64"]},
-      "fixer-codex": {kind: "fixer", platforms: ["linux/amd64", "linux/arm64"]}
+      "fixer-base": {kind: "fixer", platforms: ["linux/amd64"]},
+      "fixer-api": {kind: "fixer", platforms: ["linux/amd64"]},
+      "fixer-claude": {kind: "fixer", platforms: ["linux/amd64"]},
+      "fixer-codex": {kind: "fixer", platforms: ["linux/amd64"]}
     };
   . as $root
   | .schemaVersion == "wolf.scanners.release/v1"
@@ -266,7 +266,7 @@ jq -e \
   and .releaseId == $release
   and .lockDigest == $lock
   and .definitionDigest == $definition
-  and .platformReceiptCount == 15
+  and .platformReceiptCount == 8
   and .passed == true
   and all(.evidence[]; test("^sha256:[a-f0-9]{64}$"))
 ' "$qualification_receipt" >/dev/null || {

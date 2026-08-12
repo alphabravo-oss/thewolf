@@ -67,22 +67,22 @@ type Plan struct {
 // receipt assembly cannot drift through mutation of shared slices.
 func ManagedReleaseImages() []Image {
 	images := []Image{
-		{Key: "default", Kind: ImageKindScanner, Platforms: []string{"linux/amd64", "linux/arm64"}},
-		{Key: "jvm", Kind: ImageKindScanner, Platforms: []string{"linux/amd64", "linux/arm64"}},
-		{Key: "rust", Kind: ImageKindScanner, Platforms: []string{"linux/amd64", "linux/arm64"}},
+		{Key: "default", Kind: ImageKindScanner, Platforms: []string{"linux/amd64"}},
+		{Key: "jvm", Kind: ImageKindScanner, Platforms: []string{"linux/amd64"}},
+		{Key: "rust", Kind: ImageKindScanner, Platforms: []string{"linux/amd64"}},
 		{Key: "codeql", Kind: ImageKindScanner, Platforms: []string{"linux/amd64"}},
-		{Key: "fixer-base", Kind: ImageKindFixer, Platforms: []string{"linux/amd64", "linux/arm64"}},
+		{Key: "fixer-base", Kind: ImageKindFixer, Platforms: []string{"linux/amd64"}},
 		{
 			Key: "fixer-api", Kind: ImageKindFixer,
-			Platforms: []string{"linux/amd64", "linux/arm64"}, DependsOn: []string{"fixer-base"},
+			Platforms: []string{"linux/amd64"}, DependsOn: []string{"fixer-base"},
 		},
 		{
 			Key: "fixer-claude", Kind: ImageKindFixer,
-			Platforms: []string{"linux/amd64", "linux/arm64"}, DependsOn: []string{"fixer-base"},
+			Platforms: []string{"linux/amd64"}, DependsOn: []string{"fixer-base"},
 		},
 		{
 			Key: "fixer-codex", Kind: ImageKindFixer,
-			Platforms: []string{"linux/amd64", "linux/arm64"}, DependsOn: []string{"fixer-base"},
+			Platforms: []string{"linux/amd64"}, DependsOn: []string{"fixer-base"},
 		},
 	}
 	for index := range images {

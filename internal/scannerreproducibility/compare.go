@@ -34,14 +34,14 @@ var (
 )
 
 var expectedImages = map[string]imageExpectation{
-	"default":      {Kind: "scanner", Platforms: []string{"linux/amd64", "linux/arm64"}},
-	"jvm":          {Kind: "scanner", Platforms: []string{"linux/amd64", "linux/arm64"}},
-	"rust":         {Kind: "scanner", Platforms: []string{"linux/amd64", "linux/arm64"}},
+	"default":      {Kind: "scanner", Platforms: []string{"linux/amd64"}},
+	"jvm":          {Kind: "scanner", Platforms: []string{"linux/amd64"}},
+	"rust":         {Kind: "scanner", Platforms: []string{"linux/amd64"}},
 	"codeql":       {Kind: "scanner", Platforms: []string{"linux/amd64"}},
-	"fixer-base":   {Kind: "fixer", Platforms: []string{"linux/amd64", "linux/arm64"}},
-	"fixer-api":    {Kind: "fixer", Platforms: []string{"linux/amd64", "linux/arm64"}},
-	"fixer-claude": {Kind: "fixer", Platforms: []string{"linux/amd64", "linux/arm64"}},
-	"fixer-codex":  {Kind: "fixer", Platforms: []string{"linux/amd64", "linux/arm64"}},
+	"fixer-base":   {Kind: "fixer", Platforms: []string{"linux/amd64"}},
+	"fixer-api":    {Kind: "fixer", Platforms: []string{"linux/amd64"}},
+	"fixer-claude": {Kind: "fixer", Platforms: []string{"linux/amd64"}},
+	"fixer-codex":  {Kind: "fixer", Platforms: []string{"linux/amd64"}},
 }
 
 type imageExpectation struct {
