@@ -1,0 +1,92 @@
+# Publish the combined Debian fixer worker to GHCR.
+# This is not part of the locked eight-image scanner/fixer aggregate.
+name: publish wolf-fixer-engines
+
+# checkov:skip=CKV_GHA_7:dispatch values are validated against an exact digest allowlist.
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_ref:
+        description: Digest-qualified Debian wolf-fixer base
+        required: true
+        default: ghcr.io/alphabravo-oss/wolf-fixer@sha256:7f272c9daf1b55549bb947fbceb95ca2d7c4e4bb27957efe22be5b1ce6e27d37
+
+env:
+  PRIMARY_REGISTRY: ghcr.io
+  PRIMARY_NAMESPACE: alphabravo-oss
+  IMAGE_NAME: wolf-fixer-engines
+  DEFAULT_BASE_REF: ghcr.io/alphabravo-oss/wolf-fixer@sha256:7f272c9daf1b55549bb947fbceb95ca2d7c4e4bb27957efe22be5b1ce6e27d37
+
+jobs:
+  publish:
+    name: Build and push wolf-fixer-engines
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ${{ env.PRIMARY_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Validate base reference
+        id: base
+        env:
+          INPUT_BASE_REF: ${{ github.event.inputs.base_ref }}
+          DEFAULT_BASE_REF: ${{ env.DEFAULT_BASE_REF }}
+        run: |
+          base_ref="${INPUT_BASE_REF:-$DEFAULT_BASE_REF}"
+          [[ "$base_ref" =~ ^ghcr\.io/alphabravo-oss/wolf-fixer@sha256:[a-f0-9]{64}$ ]] || {
+            echo "base_ref must be an exact ghcr.io/alphabravo-oss/wolf-fixer@sha256 digest" >&2
+            exit 2
+          }
+          echo "reference=$base_ref" >>"$GITHUB_OUTPUT"
+          echo "build_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >>"$GITHUB_OUTPUT"
+
+      - name: Build and push combined fixer worker
+        id: build
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5
+        with:
+          context: .
+          file: fixer/Dockerfile.engines
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.PRIMARY_REGISTRY }}/${{ env.PRIMARY_NAMESPACE }}/${{ env.IMAGE_NAME }}:latest
+            ${{ env.PRIMARY_REGISTRY }}/${{ env.PRIMARY_NAMESPACE }}/${{ env.IMAGE_NAME }}:candidate
+            ${{ env.PRIMARY_REGISTRY }}/${{ env.PRIMARY_NAMESPACE }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
+          build-args: |
+            WOLF_FIXER_BASE_REF=${{ steps.base.outputs.reference }}
+            VERSION=dev
+            COMMIT=${{ github.sha }}
+            BUILD_DATE=${{ steps.base.outputs.build_date }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.title=wolf-fixer-engines
+            dev.wolf.fixer.variant=engines
+            dev.wolf.fixer.base=${{ steps.base.outputs.reference }}
+          provenance: false
+          sbom: false
+
+      - name: Smoke published image
+        env:
+          IMAGE: ${{ env.PRIMARY_REGISTRY }}/${{ env.PRIMARY_NAMESPACE }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
+        run: |
+          docker pull --platform linux/amd64 "$IMAGE"
+          docker run --rm --platform linux/amd64 --entrypoint /usr/local/bin/wolf "$IMAGE" version
+          docker run --rm --platform linux/amd64 --entrypoint /usr/local/bin/claude "$IMAGE" --version
+          docker run --rm --platform linux/amd64 --entrypoint /usr/local/bin/codex "$IMAGE" --version
+          docker run --rm --platform linux/amd64 --entrypoint /usr/local/bin/opencode "$IMAGE" --version
+          echo "published $IMAGE"

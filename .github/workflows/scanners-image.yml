@@ -1430,6 +1430,14 @@ jobs:
             image: wolf-fixer-codex
             platforms: linux/amd64
             annotation_prefix: manifest
+          # Combined Debian worker (Claude+Codex+OpenCode). Published to GHCR
+          # so Helm/compose can pull it independently of the locked 8-image
+          # scanner/fixer aggregate.
+          - variant: fixer-engines
+            dockerfile: fixer/Dockerfile.engines
+            image: wolf-fixer-engines
+            platforms: linux/amd64
+            annotation_prefix: manifest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
@@ -2215,9 +2223,18 @@ jobs:
             build/release-evidence/*.spdx.json
           export AGGREGATE_SBOM_SHA256
           AGGREGATE_SBOM_SHA256="sha256:$(sha256sum build/scanner-release.spdx.json | awk '{print $1}')"
+          # Pass the canonical eight images only. wolf-fixer-engines is an
+          # operational GHCR worker and must not enter wolf-scanner-releases.
           scanners/ci/build-release-manifest.sh \
             build/scanner-release.json \
-            build/release-evidence/*.image.json \
+            build/release-evidence/default.image.json \
+            build/release-evidence/jvm.image.json \
+            build/release-evidence/rust.image.json \
+            build/release-evidence/codeql.image.json \
+            build/release-evidence/fixer-base.image.json \
+            build/release-evidence/fixer-api.image.json \
+            build/release-evidence/fixer-claude.image.json \
+            build/release-evidence/fixer-codex.image.json \
             >build/scanner-release.sha256
 
       - name: Push aggregate manifest staging artifact

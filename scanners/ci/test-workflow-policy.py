@@ -194,7 +194,7 @@ def main() -> int:
         text,
         "amd64 fixer base publication",
     )
-    for variant in ("fixer-api", "fixer-claude", "fixer-codex"):
+    for variant in ("fixer-api", "fixer-claude", "fixer-codex", "fixer-engines"):
         require(
             rf"variant:\s*{variant}.*?platforms:\s*linux/amd64",
             text,
@@ -205,6 +205,17 @@ def main() -> int:
         r"WOLF_FIXER_BASE_REF=\$\{\{ steps\.base\.outputs\.reference \}\}",
         text,
         "fixer engines depend on exact published base output",
+    )
+    require(
+        r"release-manifest:.*?build-release-manifest\.sh.*?"
+        r"build/release-evidence/fixer-codex\.image\.json",
+        text,
+        "aggregate release lists the canonical eight images explicitly",
+    )
+    reject(
+        r"build-release-manifest\.sh\s+\\\s+build/scanner-release\.json\s+\\\s+build/release-evidence/\*\.image\.json",
+        text,
+        "aggregate release must not glob extra GHCR worker metadata",
     )
     require(
         r"fixer-quality:.*?type=oci,dest=\$base_oci.*?"

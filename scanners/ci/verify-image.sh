@@ -32,7 +32,7 @@ if [[ -n "$expected_release_id$expected_lock_digest$expected_definition_digest$e
     [[ "$expected_source" =~ ^https://[^[:space:]]+$ ]] || { echo "invalid expected source URL" >&2; exit 2; }
     [[ "$expected_revision" =~ ^[a-f0-9]{40}$ ]] || { echo "invalid expected source revision" >&2; exit 2; }
     [[ "$expected_version" == "$expected_release_id" ]] || { echo "version must match release identity" >&2; exit 2; }
-    [[ "$expected_variant" =~ ^(default|jvm|rust|codeql|fixer-base|fixer-api|fixer-claude|fixer-codex)$ ]] || {
+    [[ "$expected_variant" =~ ^(default|jvm|rust|codeql|fixer-base|fixer-api|fixer-claude|fixer-codex|fixer-engines)$ ]] || {
         echo "invalid expected image variant" >&2
         exit 2
     }

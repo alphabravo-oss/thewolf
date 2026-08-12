@@ -159,6 +159,11 @@ written to outputs, summaries, labels, build arguments, or artifact files.
 | JVM image | `ghcr.io/alphabravo-oss/wolf-scanners-jvm` |
 | Rust image | `ghcr.io/alphabravo-oss/wolf-scanners-rust` |
 | CodeQL image | `ghcr.io/alphabravo-oss/wolf-scanners-codeql` |
+| Fixer base | `ghcr.io/alphabravo-oss/wolf-fixer` |
+| Fixer API | `ghcr.io/alphabravo-oss/wolf-fixer-api` |
+| Fixer Claude | `ghcr.io/alphabravo-oss/wolf-fixer-claude` |
+| Fixer Codex | `ghcr.io/alphabravo-oss/wolf-fixer-codex` |
+| Combined fixer worker | `ghcr.io/alphabravo-oss/wolf-fixer-engines` |
 | Aggregate release | `ghcr.io/alphabravo-oss/wolf-scanner-releases` |
 
 The same repository names are used under the Docker Hub mirror namespace.

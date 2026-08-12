@@ -144,7 +144,7 @@ fi
 
 for image_name in \
     wolf-scanners wolf-scanners-jvm wolf-scanners-rust wolf-scanners-codeql \
-    wolf-fixer wolf-fixer-api wolf-fixer-claude wolf-fixer-codex; do
+    wolf-fixer wolf-fixer-api wolf-fixer-claude wolf-fixer-codex wolf-fixer-engines; do
     output="$(env PRIMARY_REPOSITORY=ghcr.io/example MIRROR_REPOSITORY=docker.io/example \
         IMAGE_NAME="$image_name" IMMUTABLE_ID=scanner-set-2026.31.1 \
         ALIASES=stable RUN_ID=123 RUN_ATTEMPT=1 scanners/ci/release-meta.sh tags)"
