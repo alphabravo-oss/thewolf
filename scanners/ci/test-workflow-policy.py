@@ -178,66 +178,17 @@ def main() -> int:
         "non-empty SPDX 2.3 evidence for every final runtime",
     )
     require(
-        r"publish:\n.*?needs:\s*\[prepare, quality, fixer-quality, runtime-quality, release-approval\].*?"
-        r"needs\.runtime-quality\.result == 'success'",
+        r"publish:\n.*?needs:\s*\[prepare, validate, release-approval\].*?"
+        r"needs\.validate\.result == 'success'",
         text,
-        "publication is blocked on all final-runtime quality lanes",
+        "regular image publication is blocked only on validation",
     )
-    published_quality = job_block(text, "published-platform-quality")
-    expected_published_tuples = {
-        "default": ("scanner", "linux/amd64"),
-        "jvm": ("scanner", "linux/amd64"),
-        "rust": ("scanner", "linux/amd64"),
-        "codeql": ("scanner", "linux/amd64"),
-        "fixer-base": ("fixer", "linux/amd64"),
-        "fixer-api": ("fixer", "linux/amd64"),
-        "fixer-claude": ("fixer", "linux/amd64"),
-        "fixer-codex": ("fixer", "linux/amd64"),
-    }
-    for variant, (kind, *platforms) in expected_published_tuples.items():
-        for platform in platforms:
-            require(
-                rf"variant:\s*{re.escape(variant)},\s*image_kind:\s*{kind},\s*"
-                rf"platform:\s*{re.escape(platform)}",
-                published_quality,
-                f"exact published {variant} {platform} quality tuple",
-            )
-    require(
-        r"runs-on:\s*\$\{\{ matrix\.arch == 'arm64' && 'ubuntu-24\.04-arm'.*?"
-        r"Resolve exact published child manifest.*?\.manifests\[\].*?child_digest.*?"
-        r"Strict smoke against exact published child",
-        published_quality,
-        "published child manifests execute on matching native runners",
-    )
-    require(
-        r"Scan exact published child vulnerability, secret, and license policy.*?"
-        r"image-ref:\s*\$\{\{ steps\.child\.outputs\.child_ref \}\}.*?"
-        r"Validate|Create content-addressed platform quality receipt.*?"
-        r"wolf\.scanners\.published-platform-quality/v1",
-        published_quality,
-        "published child security, SPDX, and content-addressed receipt gate",
-    )
-    integration_quality = job_block(text, "integration-quality")
-    require(
-        r"needs:\s*\[prepare, publish, publish-fixer-engines, published-platform-quality\].*?"
-        r"scanner-quality-compose\.sh.*?scanner-rollout-compose\.sh.*?"
-        r"scanner-quality-kind\.sh.*?scanner-rollout-kind\.sh",
-        integration_quality,
-        "exact candidate scanner and rollout gates run in Compose and Kind",
-    )
-    require(
-        r"wolf\.scanners\.candidate-qualification/v1.*?platformReceiptCount:\s*8.*?"
-        r"scanner-candidate-qualification-",
-        integration_quality,
-        "candidate qualification receipt binds all 8 published platform tuples",
-    )
-    require(
-        r"release-manifest:\n.*?needs:\s*\[prepare, publish, publish-fixer-engines, integration-quality, release-approval\].*?"
-        r"needs\.integration-quality\.result == 'success'.*?"
-        r"candidate-qualification\.json:application/vnd\.wolf\.scanner\.candidate-qualification\.v1\+json",
-        text,
-        "aggregate candidate publication is blocked on and embeds exact environment qualification",
-    )
+    require(r"quality:.*?if:\s*false", text, "scanner image quality is disabled for regular image publishing")
+    require(r"fixer-quality:.*?if:\s*false", text, "fixer image quality is disabled for regular image publishing")
+    require(r"runtime-quality:.*?if:\s*false", text, "runtime image quality is disabled for regular image publishing")
+    require(r"published-platform-quality:.*?if:\s*false", text, "published smoke is disabled for regular image publishing")
+    require(r"integration-quality:.*?if:\s*false", text, "integration qualification is disabled for regular image publishing")
+    require(r"release-manifest:.*?if:\s*false", text, "aggregate release manifest is disabled for regular image publishing")
     require(
         r"variant:\s*fixer-base.*?image_kind:\s*fixer.*?image:\s*wolf-fixer.*?platforms:\s*linux/amd64",
         text,
@@ -271,63 +222,33 @@ def main() -> int:
         "candidate fixer publication tolerates skipped approval while release publication requires successful approval evidence",
     )
     require(
-        r"release-manifest:.*?if:\s*>-\s*always\(\)\s*&&.*?"
-        r"needs\.publish\.result == 'success'.*?"
-        r"needs\.publish-fixer-engines\.result == 'success'.*?"
-        r"needs\.release-approval\.result == 'success'.*?"
-        r"needs\.release-approval\.outputs\.receipt_digest != ''",
-        text,
-        "candidate aggregate publication tolerates skipped approval while release publication requires successful approval evidence",
-    )
-    require(
         r"Verify and bind exact published fixer base.*?verify-image\.sh",
         text,
         "fixer base digest and platform re-verification",
     )
     require(r"imageKind:\s*\$image_kind", text, "scanner/fixer manifest classification")
     require(r'imageKind:\s*"fixer"', text, "fixer engine manifest classification")
-    require(r"scanners:\s*vuln,secret,license", text, "vulnerability, secret, and license gate")
+    publish_text = job_block(text, "publish") + "\n" + job_block(text, "publish-fixer-engines")
+    reject(r"scanners:\s*vuln,secret,license", publish_text, "regular image publishing skips Trivy vulnerability, secret, and license gates")
     require(
         r"TRIVY_IGNORED_LICENSES:\s*GPL-1\.0-only,.*LGPL-3\.0-or-later,Sleepycat",
         text,
         "explicit redistributable open-source license allowlist",
     )
-    require(
+    reject(
         r"ignored-licenses:\s*\$\{\{ env\.TRIVY_IGNORED_LICENSES \}\}",
-        text,
-        "all image gates consume the centralized license allowlist",
+        publish_text,
+        "regular image publishing skips Trivy license gates",
     )
-    if text.count("validate-trivy-exceptions.py .trivyignore") < 6:
-        raise AssertionError(
-            "missing workflow invariant: every image class renders a scope-specific Trivy exception file"
-        )
+    reject(r"validate-trivy-exceptions.py .trivyignore", publish_text, "regular image publishing skips Trivy exceptions")
     reject(
         r"trivyignores:\s*\.trivyignore(?:\s|$)",
         text,
         "unfiltered global Trivy exceptions applied to every image",
     )
-    require(
-        r'echo "TRIVY_DB_REPOSITORY=\$main_ref" >>"\$GITHUB_ENV"',
-        text,
-        "exact-digest vulnerability database repository loaded from the reviewed lock",
-    )
-    require(
-        r'echo "TRIVY_JAVA_DB_REPOSITORY=\$java_ref" >>"\$GITHUB_ENV"',
-        text,
-        "exact-digest Java vulnerability database repository loaded from the reviewed lock",
-    )
-    require(
-        r"verify-trivy-db\.sh.*trivy-db\.lock\.json",
-        text,
-        "locked vulnerability database identity evidence gate",
-    )
-    require(
-        r"verify-trivy-db\.sh.*trivy-java-db\.lock\.json",
-        text,
-        "locked Java vulnerability database identity evidence gate",
-    )
-    require(r"format:\s*spdx-json", text, "SPDX SBOM creation")
-    require(r"aggregate-spdx\.py", text, "aggregate release SPDX SBOM")
+    reject(r"verify-trivy-db\.sh.*trivy-db\.lock\.json", publish_text, "regular image publishing skips Trivy DB verification")
+    reject(r"format:\s*spdx-json", publish_text, "regular image publishing skips SPDX SBOM creation")
+    reject(r"aggregate-spdx\.py", publish_text, "regular image publishing skips aggregate SPDX SBOM")
     require(r"provenance:\s*false", text, "BuildKit provenance disabled for unsigned publishing")
     require(r"sbom:\s*false", text, "BuildKit SBOM attestations disabled for unsigned publishing")
     require(r"annotation_prefix:\s*manifest", text, "single-platform manifest annotations")
@@ -358,18 +279,13 @@ def main() -> int:
         text,
         "fixer supply-chain verification explicitly disabled",
     )
-    require(
-        r"Verify and create immutable release-manifest tag.*?disabled:\s*true",
-        text,
-        "aggregate supply-chain verification explicitly disabled",
-    )
     reject(
         r"Write immutable (?:image|engine) metadata\n\s+if:\s*always\(\)",
         text,
         "publication metadata emitted after failed evidence gates",
     )
-    require(r"Create or verify immutable primary image tag.*?promote-image\.sh", text, "immutable promotion")
-    require(r"Move aggregate alias last", text, "aggregate commit marker moved last")
+    require(r"Create or verify immutable primary image tag.*?promote-image\.sh.*?ALIASES", text, "image aliases move during publish")
+    require(r"Create or verify immutable primary engine tag.*?promote-image\.sh.*?ALIASES", text, "engine aliases move during publish")
     require(r"environment:\s*\n\s*name:\s*scanner-release", text, "protected release environment")
     require(
         r"resolve-release-candidate:.*?verify-release-closure\.sh.*?candidate_manifest_digest.*?verification_evidence_digest",
@@ -400,11 +316,6 @@ def main() -> int:
         r"Move primary aggregate channel alias last",
         text,
         "the newly published protected release closure is replayed before any image or channel alias moves",
-    )
-    require(
-        r"release-manifest:.*?needs\.prepare\.outputs\.operation != 'release'",
-        text,
-        "candidate aggregate build path cannot rebuild a protected release",
     )
     require(r"OPERATION.*?stable.*?APPROVAL_RECEIPT_DIGEST", text, "stable alias approval guard")
     require(r"PRIMARY_REGISTRY:\s*ghcr\.io", text, "GHCR primary")

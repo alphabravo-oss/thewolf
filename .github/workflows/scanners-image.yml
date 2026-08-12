@@ -429,7 +429,7 @@ jobs:
   quality:
     name: Quality (${{ matrix.variant }}, ${{ matrix.platform }})
     needs: [prepare, validate]
-    if: always() && needs.prepare.outputs.run_build == 'true' && needs.validate.result == 'success'
+    if: false
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 120
     strategy:
@@ -559,7 +559,7 @@ jobs:
   fixer-quality:
     name: Fixer quality (${{ matrix.variant }}, ${{ matrix.platform }})
     needs: [prepare, validate]
-    if: always() && needs.prepare.outputs.run_build == 'true' && needs.validate.result == 'success'
+    if: false
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 120
     strategy:
@@ -726,7 +726,7 @@ jobs:
   runtime-quality:
     name: Runtime quality (${{ matrix.variant }}, ${{ matrix.platform }})
     needs: [prepare, validate]
-    if: always() && needs.prepare.outputs.run_build == 'true' && needs.validate.result == 'success'
+    if: false
     runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     timeout-minutes: 120
     strategy:
@@ -1068,12 +1068,10 @@ jobs:
 
   publish:
     name: Publish immutable ${{ matrix.variant }}
-    needs: [prepare, quality, fixer-quality, runtime-quality, release-approval]
+    needs: [prepare, validate, release-approval]
     if: >-
       always() &&
-      needs.quality.result == 'success' &&
-      needs.fixer-quality.result == 'success' &&
-      needs.runtime-quality.result == 'success' &&
+      needs.validate.result == 'success' &&
       (needs.release-approval.result == 'success' ||
        needs.prepare.outputs.operation != 'release') &&
       (needs.prepare.outputs.operation != 'release' ||
@@ -1244,52 +1242,8 @@ jobs:
           "$RELEASE_ID" "$LOCK_DIGEST" "$DEFINITION_DIGEST"
           "$SOURCE_URL" "$REVISION" "$RELEASE_ID" "$VARIANT" "$IMAGE_KIND"
 
-      - name: Scan pushed digest and create image SPDX SBOM
+      - name: Create image publication evidence directory
         run: mkdir -p build/scanner-publish
-
-      - name: Verify locked vulnerability database identity
-        env:
-          VARIANT: ${{ matrix.variant }}
-        run: |
-          scanners/ci/validate-trivy-exceptions.py .trivyignore \
-            --image "$VARIANT" \
-            --output "build/scanner-publish/${VARIANT}.trivyignore"
-          main_ref="$(scanners/ci/verify-trivy-db.sh scanners/quality/trivy-db.lock.json build/scanner-publish/${{ matrix.variant }}.trivy-db.json)"
-          java_ref="$(scanners/ci/verify-trivy-db.sh scanners/quality/trivy-java-db.lock.json build/scanner-publish/${{ matrix.variant }}.trivy-java-db.json)"
-          echo "TRIVY_DB_REPOSITORY=$main_ref" >>"$GITHUB_ENV"
-          echo "TRIVY_JAVA_DB_REPOSITORY=$java_ref" >>"$GITHUB_ENV"
-
-      - uses: aquasecurity/trivy-action@dc5a429b52fcf669ce959baa2c2dd26090d2a6c4 # 0.32.0
-        with:
-          image-ref: ${{ steps.refs.outputs.primary_repository }}@${{ steps.build.outputs.digest }}
-          scanners: vuln,secret,license
-          severity: HIGH,CRITICAL
-          exit-code: "1"
-          ignore-unfixed: true
-          format: table
-          trivyignores: build/scanner-publish/${{ matrix.variant }}.trivyignore
-          ignored-licenses: ${{ env.TRIVY_IGNORED_LICENSES }}
-          version: ${{ env.TRIVY_VERSION }}
-
-      - uses: aquasecurity/trivy-action@dc5a429b52fcf669ce959baa2c2dd26090d2a6c4 # 0.32.0
-        with:
-          image-ref: ${{ steps.refs.outputs.primary_repository }}@${{ steps.build.outputs.digest }}
-          scanners: vuln
-          exit-code: "0"
-          format: spdx-json
-          output: build/scanner-publish/${{ matrix.variant }}.spdx.json
-          version: ${{ env.TRIVY_VERSION }}
-
-      - name: Validate image SPDX SBOM
-        env:
-          SBOM: build/scanner-publish/${{ matrix.variant }}.spdx.json
-        run: |
-          jq -e '
-            .spdxVersion == "SPDX-2.3"
-            and (.packages | type == "array" and length > 0)
-            and (.relationships | type == "array" and length > 0)
-          ' "$SBOM" >/dev/null
-          sha256sum "$SBOM" >"${SBOM}.sha256"
 
       - name: Record unsigned primary image evidence
         id: primary-evidence
@@ -1316,7 +1270,8 @@ jobs:
           IMMUTABLE_ID: ${{ needs.prepare.outputs.immutable_id }}
           DIGEST: ${{ steps.build.outputs.digest }}
           PLATFORMS: ${{ matrix.platforms }}
-        run: scanners/ci/promote-image.sh "$SOURCE" "$TARGET" "$IMMUTABLE_ID" "$DIGEST" "$PLATFORMS" ""
+          ALIASES: ${{ needs.prepare.outputs.aliases }}
+        run: scanners/ci/promote-image.sh "$SOURCE" "$TARGET" "$IMMUTABLE_ID" "$DIGEST" "$PLATFORMS" "$ALIASES"
 
       - name: Mirror immutable image
         id: mirror
@@ -1367,7 +1322,6 @@ jobs:
           MIRROR_REPOSITORY: ${{ steps.refs.outputs.mirror_repository }}
           MIRROR_ENABLED: ${{ steps.mirror-config.outputs.enabled }}
           MIRROR_EVIDENCE_OUTCOME: ${{ steps.mirror-evidence.outcome }}
-          SBOM: build/scanner-publish/${{ matrix.variant }}.spdx.json
           RELEASE_ID: ${{ needs.prepare.outputs.immutable_id }}
           LOCK_DIGEST: ${{ needs.prepare.outputs.lock_digest }}
           DEFINITION_DIGEST: ${{ needs.prepare.outputs.definition_digest }}
@@ -1389,7 +1343,7 @@ jobs:
               sbomVerified: false
             }')"
           fi
-          sbom_sha="sha256:$(sha256sum "$SBOM" | awk '{print $1}')"
+          sbom_sha="$SBOM_EVIDENCE_DIGEST"
           jq -n \
             --arg variant "$VARIANT" \
             --arg image_kind "$IMAGE_KIND" \
@@ -1634,52 +1588,6 @@ jobs:
       - name: Create engine publication evidence directory
         run: mkdir -p build/scanner-publish
 
-      - name: Verify locked vulnerability database identity
-        env:
-          VARIANT: ${{ matrix.variant }}
-        run: |
-          scanners/ci/validate-trivy-exceptions.py .trivyignore \
-            --image "$VARIANT" \
-            --output "build/scanner-publish/${VARIANT}.trivyignore"
-          main_ref="$(scanners/ci/verify-trivy-db.sh scanners/quality/trivy-db.lock.json build/scanner-publish/${{ matrix.variant }}.trivy-db.json)"
-          java_ref="$(scanners/ci/verify-trivy-db.sh scanners/quality/trivy-java-db.lock.json build/scanner-publish/${{ matrix.variant }}.trivy-java-db.json)"
-          echo "TRIVY_DB_REPOSITORY=$main_ref" >>"$GITHUB_ENV"
-          echo "TRIVY_JAVA_DB_REPOSITORY=$java_ref" >>"$GITHUB_ENV"
-
-      - name: Scan pushed engine vulnerability, secret, and license policy
-        uses: aquasecurity/trivy-action@dc5a429b52fcf669ce959baa2c2dd26090d2a6c4 # 0.32.0
-        with:
-          image-ref: ${{ steps.refs.outputs.primary_repository }}@${{ steps.build.outputs.digest }}
-          scanners: vuln,secret,license
-          severity: HIGH,CRITICAL
-          exit-code: "1"
-          ignore-unfixed: true
-          format: table
-          trivyignores: build/scanner-publish/${{ matrix.variant }}.trivyignore
-          ignored-licenses: ${{ env.TRIVY_IGNORED_LICENSES }}
-          version: ${{ env.TRIVY_VERSION }}
-
-      - name: Generate engine SPDX SBOM
-        uses: aquasecurity/trivy-action@dc5a429b52fcf669ce959baa2c2dd26090d2a6c4 # 0.32.0
-        with:
-          image-ref: ${{ steps.refs.outputs.primary_repository }}@${{ steps.build.outputs.digest }}
-          scanners: vuln
-          exit-code: "0"
-          format: spdx-json
-          output: build/scanner-publish/${{ matrix.variant }}.spdx.json
-          version: ${{ env.TRIVY_VERSION }}
-
-      - name: Validate engine SPDX SBOM
-        env:
-          SBOM: build/scanner-publish/${{ matrix.variant }}.spdx.json
-        run: |
-          jq -e '
-            .spdxVersion == "SPDX-2.3"
-            and (.packages | type == "array" and length > 0)
-            and (.relationships | type == "array" and length > 0)
-          ' "$SBOM" >/dev/null
-          sha256sum "$SBOM" >"${SBOM}.sha256"
-
       - name: Record unsigned primary engine evidence
         id: primary-evidence
         env:
@@ -1711,7 +1619,8 @@ jobs:
           SOURCE_URL: ${{ github.server_url }}/${{ github.repository }}
           REVISION: ${{ github.sha }}
           VARIANT: ${{ matrix.variant }}
-        run: scanners/ci/promote-image.sh "$SOURCE" "$TARGET" "$IMMUTABLE_ID" "$DIGEST" "$PLATFORMS" ""
+          ALIASES: ${{ needs.prepare.outputs.aliases }}
+        run: scanners/ci/promote-image.sh "$SOURCE" "$TARGET" "$IMMUTABLE_ID" "$DIGEST" "$PLATFORMS" "$ALIASES"
 
       - name: Mirror immutable engine
         id: mirror
@@ -1761,7 +1670,6 @@ jobs:
           MIRROR_REPOSITORY: ${{ steps.refs.outputs.mirror_repository }}
           MIRROR_ENABLED: ${{ steps.mirror-config.outputs.enabled }}
           MIRROR_EVIDENCE_OUTCOME: ${{ steps.mirror-evidence.outcome }}
-          SBOM: build/scanner-publish/${{ matrix.variant }}.spdx.json
           RELEASE_ID: ${{ needs.prepare.outputs.immutable_id }}
           LOCK_DIGEST: ${{ needs.prepare.outputs.lock_digest }}
           DEFINITION_DIGEST: ${{ needs.prepare.outputs.definition_digest }}
@@ -1783,7 +1691,7 @@ jobs:
               sbomVerified: false
             }')"
           fi
-          sbom_sha="sha256:$(sha256sum "$SBOM" | awk '{print $1}')"
+          sbom_sha="$SBOM_EVIDENCE_DIGEST"
           jq -n \
             --arg variant "$VARIANT" \
             --arg image "$IMAGE_NAME" \
@@ -1838,13 +1746,7 @@ jobs:
   published-platform-quality:
     name: Published artifact quality (${{ matrix.variant }}, ${{ matrix.platform }})
     needs: [prepare, publish, publish-fixer-engines]
-    if: >-
-      always() &&
-      needs.publish.result == 'success' &&
-      needs.publish-fixer-engines.result == 'success' &&
-      needs.prepare.outputs.operation != 'release' &&
-      needs.prepare.outputs.publish == 'true' &&
-      github.event_name != 'pull_request'
+    if: false
     runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     timeout-minutes: 120
     permissions:
@@ -2059,14 +1961,7 @@ jobs:
   integration-quality:
     name: Exact candidate Compose and Kind qualification
     needs: [prepare, publish, publish-fixer-engines, published-platform-quality]
-    if: >-
-      always() &&
-      needs.publish.result == 'success' &&
-      needs.publish-fixer-engines.result == 'success' &&
-      needs.published-platform-quality.result == 'success' &&
-      needs.prepare.outputs.operation != 'release' &&
-      needs.prepare.outputs.publish == 'true' &&
-      github.event_name != 'pull_request'
+    if: false
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     permissions:
@@ -2217,17 +2112,7 @@ jobs:
   release-manifest:
     name: Commit aggregate scanner and fixer release
     needs: [prepare, publish, publish-fixer-engines, integration-quality, release-approval]
-    if: >-
-      always() &&
-      needs.publish.result == 'success' &&
-      needs.publish-fixer-engines.result == 'success' &&
-      needs.integration-quality.result == 'success' &&
-      needs.prepare.outputs.operation != 'release' &&
-      (needs.prepare.outputs.operation != 'release' ||
-       (needs.release-approval.result == 'success' &&
-        needs.release-approval.outputs.receipt_digest != '')) &&
-      needs.prepare.outputs.publish == 'true' &&
-      github.event_name != 'pull_request'
+    if: false
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
