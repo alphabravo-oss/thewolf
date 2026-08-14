@@ -124,12 +124,11 @@ func TestScannerCustomBuildAPIContract(t *testing.T) {
 			"variants":["all"],"push":true,
 			"platforms":["linux/amd64","linux/arm64"],
 			"credential_secret_id":%q,
-			"reason":"must fail closed"
+			"reason":"publish all scanner variants"
 		}`, secretID)),
 		map[string]string{"Idempotency-Key": "custom-api-codeql-push"},
 	)
-	if codeQLPush.Code != http.StatusUnprocessableEntity ||
-		!strings.Contains(codeQLPush.Body.String(), "local-only") {
+	if codeQLPush.Code != http.StatusAccepted {
 		t.Fatalf("CodeQL push code=%d body=%s", codeQLPush.Code, codeQLPush.Body.String())
 	}
 }

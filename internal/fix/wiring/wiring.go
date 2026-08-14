@@ -19,12 +19,15 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 
 	"github.com/alphabravocompany/thewolf/internal/ai"
 	"github.com/alphabravocompany/thewolf/internal/db"
+	fixauth "github.com/alphabravocompany/thewolf/internal/fix/auth"
 	"github.com/alphabravocompany/thewolf/internal/fix/engine"
 	"github.com/alphabravocompany/thewolf/internal/fix/orchestrator"
 	"github.com/alphabravocompany/thewolf/internal/fix/verify"
@@ -49,6 +52,7 @@ func Deps(store db.Store) orchestrator.Deps {
 		Engines:     engineSelector{store: store},
 		Verifier:    verifier{scanner: Scanner{}},
 		GitApply:    gitApplier{},
+		Rescan:      branchRescanner{},
 	}
 }
 
@@ -66,12 +70,23 @@ func (wc writabilityChecker) Check(ctx context.Context, repo *models.Repo) (bool
 type workspacePreparer struct{ store db.Store }
 
 func (wp workspacePreparer) Prepare(ctx context.Context, repo *models.Repo, branch string) (orchestrator.Workspace, error) {
-	opts := workspace.Options{Repo: repo, Branch: branch}
+	opts := workspace.Options{Repo: repo, Branch: branch, BaseDir: workspaceRoot()}
 	if repo != nil && repo.SourceType == models.SourceTypeGitHub {
-		// Clone-for-write needs a push-capable token; resolve the owning user's.
-		opts.Token = githubToken(ctx, wp.store, repo.UserID)
+		opts.Token = githubTokenForRepo(ctx, wp.store, repo)
 	}
 	return workspace.Prepare(ctx, opts)
+}
+
+func workspaceRoot() string {
+	return strings.TrimSpace(os.Getenv("WOLF_WORKSPACE_ROOT"))
+}
+
+func (wp workspacePreparer) Open(_ context.Context, path string, repo *models.Repo) (orchestrator.Workspace, error) {
+	token := ""
+	if repo != nil && repo.SourceType == models.SourceTypeGitHub {
+		token = githubTokenForRepo(context.Background(), wp.store, repo)
+	}
+	return workspace.Open(path, token)
 }
 
 // --- Engine chain selector ---
@@ -82,9 +97,12 @@ func (e engineSelector) Select(ctx context.Context, job *models.FixJob) (orchest
 	// The provider backs only the API tier; CLI tiers (claude/codex) are probed
 	// by SelectEngine independently. A noop provider simply omits the API tier.
 	provider := resolveProvider(ctx, e.store, job.UserID)
+	creds := resolveCreds(ctx, e.store, job.UserID)
 	return engine.SelectEngine(ctx, engine.ChainConfig{
-		Engine:   job.Engine,
-		Provider: provider,
+		Engine:    job.Engine,
+		Provider:  provider,
+		CLIEnv:    creds.Env(),
+		HasAPIKey: creds.HasKeyFor,
 	})
 }
 
@@ -94,6 +112,10 @@ type verifier struct{ scanner verify.Scanner }
 
 func (v verifier) Verify(ctx context.Context, ws verify.Workspace, finding models.Finding) (*verify.VerifyResult, error) {
 	return verify.Gate(ctx, ws, finding, v.scanner, verify.Options{})
+}
+
+func (v verifier) VerifyBatch(ctx context.Context, ws verify.Workspace, findings []models.Finding) (map[string]*verify.VerifyResult, error) {
+	return verify.GateBatch(ctx, ws, findings, v.scanner, verify.Options{})
 }
 
 // Scanner is the production verify.Scanner: a targeted single-tool rescan over
@@ -107,35 +129,93 @@ type Scanner struct{}
 // (no docker/network) while still exercising the config-scoping + filtering.
 var runScan = runner.Run
 
+var missingImages sync.Map // tool -> error
+
 func (Scanner) RescanFile(ctx context.Context, repoPath, file, tool, rule string) ([]models.Finding, error) {
+	if strings.TrimSpace(file) == "" {
+		return nil, nil
+	}
+	return Scanner{}.RescanFiles(ctx, repoPath, []string{file}, tool, rule)
+}
+
+func (Scanner) RescanFiles(ctx context.Context, repoPath string, files []string, tool, rule string) ([]models.Finding, error) {
 	if tool == "" {
-		return nil, nil // nothing to re-run
+		return nil, nil
+	}
+	if err := rememberedMissing(tool); err != nil {
+		return nil, err
+	}
+	var include []string
+	for _, f := range files {
+		if strings.TrimSpace(f) != "" {
+			include = append(include, f)
+		}
+	}
+	if len(include) == 0 {
+		return nil, nil
 	}
 	res, err := runScan(ctx, runner.RunConfig{
 		RepoPath:     repoPath,
 		Registry:     plugin.Global,
-		Tools:        []string{tool}, // the one tool that produced the finding
-		IncludePaths: []string{file}, // scope to the changed file only
+		Tools:        []string{tool},
+		IncludePaths: include,
 		Concurrency:  1,
-		ContainerCfg: nil, // shim falls back to container.Default()
+		ContainerCfg: nil,
 	})
 	if err != nil {
+		if verify.IsMissingImage(err) {
+			wrapped := fmt.Errorf("%w: %s: %v", verify.ErrMissingImage, tool, err)
+			rememberMissing(tool, wrapped)
+			return nil, wrapped
+		}
 		return nil, err
 	}
-	if file == "" {
-		return res.Findings, nil
+	if skippedAsMissing(res, tool) {
+		wrapped := fmt.Errorf("%w: %s", verify.ErrMissingImage, tool)
+		rememberMissing(tool, wrapped)
+		return nil, wrapped
 	}
-	// Defensive re-filter to the file: some tools ignore include-path scoping, so
-	// we return only this file's findings (the gate then matches by rule/line for
-	// "finding cleared" and counts any others as regressions). rule is a hint we
-	// don't restrict on — returning the file's full set is the correct superset.
+	_ = rule
 	out := make([]models.Finding, 0, len(res.Findings))
 	for _, f := range res.Findings {
-		if sameFile(f.FilePath, file) {
-			out = append(out, f)
+		for _, file := range include {
+			if sameFile(f.FilePath, file) {
+				out = append(out, f)
+				break
+			}
 		}
 	}
 	return out, nil
+}
+
+func rememberedMissing(tool string) error {
+	if v, ok := missingImages.Load(tool); ok {
+		if err, _ := v.(error); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func rememberMissing(tool string, err error) {
+	missingImages.Store(tool, err)
+}
+
+func skippedAsMissing(res *runner.RunResult, tool string) bool {
+	if res == nil {
+		return false
+	}
+	for _, s := range res.ToolsSkipped {
+		if s == tool {
+			return true
+		}
+	}
+	if res.ToolsFailed != nil {
+		if err, ok := res.ToolsFailed[tool]; ok && verify.IsMissingImage(err) {
+			return true
+		}
+	}
+	return false
 }
 
 // sameFile compares two repo-relative-ish paths, tolerating a leading-dir
@@ -166,34 +246,61 @@ func (gitApplier) Apply(ctx context.Context, repoPath, diff string) error {
 	return nil
 }
 
+// branchRescanner re-runs the original tools against the whole worktree so a
+// loop can see which findings the last round actually cleared.
+type branchRescanner struct{}
+
+func (branchRescanner) Rescan(ctx context.Context, repoPath string, tools []string) ([]models.Finding, error) {
+	if len(tools) == 0 {
+		return nil, nil
+	}
+	res, err := runScan(ctx, runner.RunConfig{
+		RepoPath:    repoPath,
+		Registry:    plugin.Global,
+		Tools:       tools,
+		Concurrency: 1,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return res.Findings, nil
+}
+
 // --- per-tenant secret resolution ---
 
 // resolveProvider picks the best available API provider for the API engine tier,
 // preferring the user's stored key, then the process env. A noop provider means
 // "no API tier" — the chain then relies on the CLI engines.
 func resolveProvider(ctx context.Context, store db.Store, userID string) ai.Provider {
-	if key := apiKey(ctx, store, userID, models.KeyTypeAnthropicKey, "ANTHROPIC_API_KEY"); key != "" {
-		return ai.NewAnthropicProvider(key)
+	creds := resolveCreds(ctx, store, userID)
+	if creds.AnthropicKey != "" {
+		return ai.NewAnthropicProvider(creds.AnthropicKey)
 	}
-	if key := apiKey(ctx, store, userID, models.KeyTypeOpenAIKey, "OPENAI_API_KEY"); key != "" {
-		return ai.NewOpenAIProvider(key)
+	if creds.XAIKey != "" {
+		return ai.NewXAIProvider(creds.XAIKey)
+	}
+	if creds.OpenAIKey != "" {
+		return ai.NewOpenAIProvider(creds.OpenAIKey)
 	}
 	return ai.NewNoopProvider()
 }
 
-func apiKey(ctx context.Context, store db.Store, userID string, kt models.KeyType, env string) string {
-	if store != nil && userID != "" {
-		if list, err := store.ListSecretsByUser(ctx, userID); err == nil {
-			for _, s := range list {
-				if s.KeyType == kt {
-					if dec, derr := secrets.Decrypt(s.EncryptedValue); derr == nil && dec != "" {
-						return dec
-					}
-				}
+func resolveCreds(ctx context.Context, store db.Store, userID string) fixauth.Credentials {
+	return fixauth.Resolve(ctx, store, userID)
+}
+
+func githubTokenForRepo(ctx context.Context, store db.Store, repo *models.Repo) string {
+	if store == nil || repo == nil {
+		return ""
+	}
+	if id := strings.TrimSpace(repo.CredentialSecretID); id != "" {
+		if sec, err := store.GetSecretByID(ctx, id); err == nil && sec != nil {
+			if dec, derr := secrets.Decrypt(sec.EncryptedValue); derr == nil {
+				return dec
 			}
 		}
 	}
-	return os.Getenv(env)
+	return githubToken(ctx, store, repo.UserID)
 }
 
 func githubToken(ctx context.Context, store db.Store, userID string) string {

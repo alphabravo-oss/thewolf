@@ -139,3 +139,28 @@ func FindingsAggregate(w http.ResponseWriter, r *http.Request) {
 	}
 	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: rows})
 }
+
+// FindingsByRepo handles GET /findings/by-repo — current-open findings
+// rolled up per repository so the fleet inbox is not one blended list.
+func FindingsByRepo(w http.ResponseWriter, r *http.Request) {
+	h := DefaultHandler
+	if h == nil {
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "handler not initialized")
+		return
+	}
+	claims := auth.GetUserFromContext(r.Context())
+	if claims == nil {
+		response.WriteError(w, http.StatusUnauthorized, "unauthorized", "not authenticated")
+		return
+	}
+	collectionID := r.URL.Query().Get("collection_id")
+	rows, err := h.Store.FindingsByRepo(r.Context(), claims.UserID, fleetVisible(r.Context(), h.Store, claims.UserID), collectionID)
+	if err != nil {
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "findings by repo: "+err.Error())
+		return
+	}
+	if rows == nil {
+		rows = []db.FindingsByRepoRow{}
+	}
+	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: rows})
+}

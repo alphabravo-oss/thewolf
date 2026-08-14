@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
@@ -46,8 +47,9 @@ func (p *GosecPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]m
 	cmd := container.CommandContext(ctx,
 		container.ConfigFromOpts(opts.ContainerCfg),
 		container.Options{
-			RepoDir: opts.RepoPath,
-			WorkDir: container.ContainerSubPath(opts.RepoPath, goDir),
+			RepoDir:        opts.RepoPath,
+			WorkDir:        container.ContainerSubPath(opts.RepoPath, goDir),
+			MemoryOverride: "4g",
 			ExtraEnv: map[string]string{
 				"HOME":        "/tmp",
 				"PATH":        "/usr/local/go-toolchain/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
@@ -57,6 +59,10 @@ func (p *GosecPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]m
 		"gosec", "-fmt", "json", "./...")
 	out, err := cmd.Output()
 	if err != nil && len(out) == 0 {
+		if gosecWasKilled(err) {
+			plugin.Skipf(opts.OnOutput, "gosec", "scanner container was killed before producing JSON output, likely due to memory limits. Skipping.")
+			return nil, nil
+		}
 		return nil, plugin.WrapExecError("gosec", err)
 	}
 	plugin.SaveRaw(opts, out, "json")
@@ -69,6 +75,10 @@ func (p *GosecPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]m
 		findings[i].FilePath = container.NormalizePath(findings[i].FilePath)
 	}
 	return findings, nil
+}
+
+func gosecWasKilled(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "exit status 137")
 }
 
 type gosecOutput struct {

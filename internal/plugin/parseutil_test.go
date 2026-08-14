@@ -2,6 +2,8 @@ package plugin
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -25,6 +27,23 @@ func TestExtractJSONSkipsStructuredLookingLogPrefixes(t *testing.T) {
 				t.Fatalf("ExtractJSON() = %q", got)
 			}
 		})
+	}
+}
+
+func TestHasZizmorAndPipelineInputs(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	if HasZizmorInputs(dir) || HasPipelineConfig(dir) {
+		t.Fatal("empty tree should not look like CI")
+	}
+	if err := os.MkdirAll(filepath.Join(dir, ".github", "workflows"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".github", "workflows", "ci.yml"), []byte("on: push\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if !HasZizmorInputs(dir) || !HasPipelineConfig(dir) {
+		t.Fatal("expected GitHub workflows to enable both detectors")
 	}
 }
 

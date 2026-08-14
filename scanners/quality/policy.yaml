@@ -1,7 +1,7 @@
 # Deterministic scanner compatibility policy. Resource limits are evaluated
 # against recorded execution evidence, never as wall-clock unit microbenchmarks.
 schemaVersion: wolf.scanners/quality-policy/v1
-expectedToolCount: 49
+expectedToolCount: 53
 
 parserContract:
   # The final component is the authoritative tools.yaml/plugin registration key.
@@ -43,6 +43,8 @@ tools:
   bandit: {family: python, strategy: executable-fixture, parserOwned: true, parserFormat: json, thresholdProfile: light}
   bearer: {family: security, strategy: gated-executable, parserOwned: true, parserFormat: json, thresholdProfile: medium, rationale: "Runs only in the exact-digest upstream image."}
   brakeman: {family: ruby, strategy: executable-fixture, parserOwned: true, parserFormat: json, thresholdProfile: medium}
+  cargo-audit: {family: rust, strategy: executable-fixture, parserOwned: true, parserFormat: json, thresholdProfile: network, rationale: "Fetches the RustSec advisory database on first run."}
+  cargo-deny: {family: rust, strategy: executable-fixture, parserOwned: true, parserFormat: json, thresholdProfile: network, rationale: "Fetches the RustSec advisory database on first run."}
   checkov: {family: infrastructure, strategy: gated-executable, parserOwned: true, parserFormat: json, thresholdProfile: heavy, rationale: "Runs only in the exact-digest upstream image."}
   clippy: {family: rust, strategy: executable-fixture, parserOwned: true, parserFormat: json-lines, thresholdProfile: medium}
   codeql: {family: codeql, strategy: structural, parserOwned: true, parserFormat: json, thresholdProfile: heavy, rationale: "CodeQL execution is license-gated and amd64-only; CI validates its pinned distribution, parser corpus, and declared platform without representing a licensed scan as locally executable."}
@@ -71,6 +73,7 @@ tools:
   pip-audit: {family: dependency, strategy: gated-executable, parserOwned: true, parserFormat: json, thresholdProfile: network, rationale: "Requires a pinned Python package index fixture or controlled network access."}
   pluto: {family: kubernetes, strategy: gated-executable, parserOwned: true, parserFormat: json, thresholdProfile: medium, rationale: "Runs only in the exact-digest upstream image."}
   pmd: {family: jvm, strategy: executable-fixture, parserOwned: true, parserFormat: json, thresholdProfile: medium}
+  poutine: {family: supply-chain, strategy: gated-executable, parserOwned: true, parserFormat: json, thresholdProfile: medium, rationale: "Runs only in the exact-digest upstream image against local CI files."}
   radon: {family: python, strategy: executable-fixture, parserOwned: true, parserFormat: json, thresholdProfile: light}
   renovate: {family: dependency, strategy: gated-executable, parserOwned: true, parserFormat: json, thresholdProfile: network, rationale: "Requires controlled package-manager endpoints and never receives production credentials in fixtures."}
   rubocop: {family: ruby, strategy: executable-fixture, parserOwned: true, parserFormat: json, thresholdProfile: light}
@@ -89,6 +92,7 @@ tools:
   vale: {family: documentation, strategy: gated-executable, parserOwned: true, parserFormat: json, thresholdProfile: light, rationale: "Runs only in the exact-digest upstream image with checked-in styles."}
   vulture: {family: python, strategy: executable-fixture, parserOwned: true, parserFormat: text, thresholdProfile: light}
   yamllint: {family: documentation, strategy: executable-fixture, parserOwned: true, parserFormat: text, thresholdProfile: light}
+  zizmor: {family: supply-chain, strategy: gated-executable, parserOwned: true, parserFormat: json, thresholdProfile: medium, rationale: "Runs only in the exact-digest upstream image against local GitHub Actions files."}
 
 scannerVariants:
   codeql:

@@ -2,8 +2,10 @@ package wiring
 
 import (
 	"context"
+	"errors"
 	"testing"
 
+	"github.com/alphabravocompany/thewolf/internal/fix/verify"
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/scan/runner"
 )
@@ -73,5 +75,46 @@ func TestScannerNoToolIsNoop(t *testing.T) {
 	out, err := Scanner{}.RescanFile(context.Background(), "/repo", "x.go", "", "")
 	if err != nil || out != nil {
 		t.Errorf("empty tool should be a no-op, got %v / %v", out, err)
+	}
+}
+
+func TestScannerEmptyFileIsNoop(t *testing.T) {
+	orig := runScan
+	defer func() { runScan = orig }()
+	called := false
+	runScan = func(context.Context, runner.RunConfig) (*runner.RunResult, error) {
+		called = true
+		return &runner.RunResult{}, nil
+	}
+	out, err := Scanner{}.RescanFile(context.Background(), "/repo", "", "scorecard", "Branch-Protection")
+	if err != nil || out != nil {
+		t.Errorf("empty file should not rescan, got %v / %v", out, err)
+	}
+	if called {
+		t.Fatal("empty file_path must not invoke the scanner")
+	}
+}
+
+func TestScannerMissingImage(t *testing.T) {
+	orig := runScan
+	defer func() { runScan = orig }()
+	missingImages.Range(func(k, _ any) bool {
+		missingImages.Delete(k)
+		return true
+	})
+	runScan = func(context.Context, runner.RunConfig) (*runner.RunResult, error) {
+		return nil, errors.New("image wolf-scanners:stable is not present locally")
+	}
+	_, err := Scanner{}.RescanFile(context.Background(), "/repo", "main.go", "bearer", "x")
+	if !verify.IsMissingImage(err) {
+		t.Fatalf("want missing image, got %v", err)
+	}
+	runScan = func(context.Context, runner.RunConfig) (*runner.RunResult, error) {
+		t.Fatal("missing image should be remembered")
+		return nil, nil
+	}
+	_, err = Scanner{}.RescanFiles(context.Background(), "/repo", []string{"a.go", "b.go"}, "bearer", "")
+	if !verify.IsMissingImage(err) {
+		t.Fatalf("memoized missing image: %v", err)
 	}
 }

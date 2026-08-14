@@ -1,0 +1,15 @@
+{
+  "diagnostics": [
+    {
+      "type": "diagnostic",
+      "severity": "error",
+      "message": "security vulnerability detected",
+      "code": "vulnerability"
+    },
+    {
+      "type": "summary",
+      "severity": "note",
+      "message": "advisories failed"
+    }
+  ]
+}

@@ -10,6 +10,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/alphabravocompany/thewolf/internal/db"
+	"github.com/alphabravocompany/thewolf/internal/fix/console"
 	"github.com/alphabravocompany/thewolf/internal/fix/fixstore"
 	"github.com/alphabravocompany/thewolf/internal/fix/orchestrator"
 	"github.com/alphabravocompany/thewolf/internal/models"
@@ -183,6 +184,57 @@ func TestWorkerRecordsFailure(t *testing.T) {
 	log, _ := fs.ReadLog(job.ID)
 	if !strings.Contains(log, "job failed") {
 		t.Errorf("log missing failure line:\n%s", log)
+	}
+}
+
+func TestWorkerOnceRunsQueuedConsole(t *testing.T) {
+	store := newStore(t)
+	ctx := context.Background()
+	cons := &models.FixerConsole{
+		ID:     uuid.New().String(),
+		UserID: "u1",
+		Kind:   models.FixerConsoleShell,
+		Status: models.FixerConsoleQueued,
+	}
+	if err := store.EnqueueFixerConsole(ctx, cons); err != nil {
+		t.Fatalf("enqueue console: %v", err)
+	}
+	orig := console.CommandForTest
+	console.CommandForTest = func(*models.FixerConsole) ([]string, error) {
+		return []string{"/bin/echo", "wolf-console-ok"}, nil
+	}
+	t.Cleanup(func() { console.CommandForTest = orig })
+
+	called := false
+	stubRun(t, func(ctx context.Context, j *models.FixJob, deps orchestrator.Deps) (*orchestrator.Result, error) {
+		called = true
+		return nil, nil
+	})
+
+	fs := fixstore.New(t.TempDir())
+	w, err := New(Config{Store: store, Fixstore: fs, Once: true, Heartbeat: time.Second})
+	if err != nil {
+		t.Fatalf("new: %v", err)
+	}
+	if err := w.Run(ctx); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if called {
+		t.Fatal("orchestrator should not run when only a console is queued")
+	}
+	got, err := store.GetFixerConsoleByID(ctx, cons.ID)
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if got.Status != models.FixerConsoleExited {
+		t.Fatalf("console status = %s", got.Status)
+	}
+	log, err := fs.ReadConsole(cons.ID)
+	if err != nil {
+		t.Fatalf("read console: %v", err)
+	}
+	if !strings.Contains(log, "wolf-console-ok") {
+		t.Fatalf("console log missing expected output:\n%s", log)
 	}
 }
 

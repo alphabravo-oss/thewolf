@@ -1,0 +1,60 @@
+{{- if .Values.fixer.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "wolf.fullname" . }}-fixer
+  labels:
+    {{- include "wolf.labels" . | nindent 4 }}
+    app.kubernetes.io/component: fixer
+spec:
+  replicas: {{ .Values.fixer.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: fixer
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: wolf
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: fixer
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: fixer
+          image: {{ if .Values.fixer.image }}{{ .Values.fixer.image }}{{ else }}{{ printf "%s:%s" .Values.fixer.repository .Values.fixer.tag }}{{ end }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["fixer"]
+          env:
+            - {name: HOME, value: /home/wolf}
+            - {name: WOLF_DB_DRIVER, value: postgres}
+            - name: WOLF_DB_DSN
+              valueFrom: {secretKeyRef: {name: {{ include "wolf.fullname" . }}, key: postgres-dsn}}
+            - name: WOLF_MASTER_KEY
+              valueFrom: {secretKeyRef: {name: {{ include "wolf.fullname" . }}, key: master-key}}
+            - {name: WOLF_ARTIFACTS_ROOT, value: /artifacts}
+          resources:
+            {{- toYaml .Values.resources.fixer | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          volumeMounts:
+            - {name: home, mountPath: /home/wolf}
+            - {name: artifacts, mountPath: /artifacts}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: home
+          persistentVolumeClaim: {claimName: {{ include "wolf.fullname" . }}-fixer-home}
+        - name: artifacts
+          persistentVolumeClaim: {claimName: {{ include "wolf.fullname" . }}-artifacts}
+        - name: tmp
+          emptyDir: {}
+{{- end }}

@@ -144,7 +144,7 @@ The controls that turn scanning into a program.
 - **Scoped, revocable credentials** — least-privilege API tokens with `verb:resource` scopes and configurable expiry, alongside session-based UI auth — role-appropriate access for every actor.
 - **Run it your way** — single-binary or Docker, SQLite for a team or **PostgreSQL** for the enterprise, on your servers, in your cloud, or fully **air-gapped**.
 - **Live everything** — real-time scan, fix, and loop progress streamed over SSE to the console and the CLI.
-- **Self-managed scanner images** — rebuild and publish your own scanner images directly from the console with streamed build logs; no external registry dependency required to run.
+- **Managed scanner images** — consume tested scanner images from GHCR by default, detect available updates in the console, and pre-pull the full configured set before scans run.
 
 ### Scan code wherever it lives
 
@@ -207,11 +207,10 @@ Interactive API docs ship with the product at **`/api/v1/docs`** (Swagger UI) an
 For durable remote scans from CI or another service—including one-shot Git/SSH
 sources, credentials, idempotency, SSE replay, workers, and Kubernetes native
 Jobs—see **[`docs/remote-scanning-api.md`](docs/remote-scanning-api.md)**.
-For the independently scheduled scanner image/toolchain supply chain—including
-daily discovery, configurable weekly complete-set rebuilds, a seven-day
-maximum stable-image age, on-demand operations, immutable releases, canary
-rollout, and rollback—see
-**[`docs/scanner-release-management.md`](docs/scanner-release-management.md)**.
+For scanner image operations—including GHCR image channels, pre-pulling,
+registry mirrors, air-gapped installs, and advanced custom builds—see
+**[`scanners/README.md`](scanners/README.md)** and
+**[`docs/scanner-custom-builds.md`](docs/scanner-custom-builds.md)**.
 
 ---
 
@@ -267,7 +266,7 @@ The Wolf can go past *finding* a problem to *proposing the fix* — autonomously
 
 **Off by default.** The entire surface is gated behind one master setting, `autofix_enabled` (default **`false`**). With it off, the execute path returns `403 autofix_disabled`, the worker processes nothing, and the UI surface is dark. Flip it on in **Settings > General** or with `wolf settings set autofix_enabled true`.
 
-**v1 is dry-run, per-finding, verified, branch-only.** No push. No PR. Your working tree is never touched — the worker operates in an isolated worktree/clone on a fresh fix branch and leaves the result as an artifact for a human to review and merge.
+**Verified, branch-only, then optional push.** The worker operates in an isolated worktree/clone on a fresh fix branch, commits each kept fix, rescans the branch, can pause for a human between loops, and can push *that* branch for review. It never pushes `main`/`master` or the repo default branch.
 
 ### The verify gate (why you can trust it)
 
@@ -296,11 +295,15 @@ The worker runs inside one of three independently versioned **engine containers*
 
 | Image | Engine | Auth |
 |---|---|---|
-| `wolf-fixer-claude` | Anthropic **Claude Code** CLI | one-time interactive `claude login` (session persisted) |
-| `wolf-fixer-codex`  | OpenAI **Codex** CLI | one-time interactive `codex login` (session persisted) |
-| `wolf-fixer-api`    | **API** engine via `internal/ai` — CLI-free | none; uses a provider key from the secret store |
+| `wolf-fixer-engines` | Combined Debian worker: Claude + Codex + OpenCode | any of the CLI logins **or** provider keys |
+| `wolf-fixer-claude` | Anthropic **Claude Code** CLI | `claude login` **or** an `anthropic_key` / `ANTHROPIC_API_KEY` |
+| `wolf-fixer-codex`  | OpenAI **Codex** CLI | `codex login` **or** an `openai_key` / `OPENAI_API_KEY` |
+| `wolf-fixer-opencode` | **OpenCode** CLI (`opencode-ai@1.18.16`) | `opencode auth login` **or** Anthropic/OpenAI keys |
+| `wolf-fixer-api`    | **API** engine via `internal/ai` — CLI-free | `anthropic_key` or `openai_key` |
 
-The engine chain prefers an available, **authenticated** CLI and falls back to the API engine otherwise. The API engine returns a unified diff that wolf applies with `git apply` — it never edits files in place.
+Compose and Helm default to `ghcr.io/alphabravo-oss/wolf-fixer-engines`, the combined Debian worker. The single-engine images stay independently versioned in the locked scanner/fixer release; `wolf-fixer-engines` is published alongside them so the worker can scale on its own.
+
+The engine chain prefers an available, **authenticated** CLI (OAuth session *or* API key) and falls back to the API engine. The API engine returns a unified diff that wolf applies with `git apply`. OpenCode is a first-class engine; the dedicated image is optional (build `fixer/Dockerfile.opencode` against the locked fixer base). A repo-shipped `opencode.json` is stripped from the worktree before the run.
 
 ### Auth-then-ready flow
 
@@ -309,23 +312,26 @@ The CLI variants need a **one-time interactive login**; the API variant is the z
 ```bash
 # 1. Start the worker container with a volume for the agent session.
 # Resolve the approved release once and use its immutable digest here.
-export WOLF_FIXER_IMAGE='ghcr.io/alphabravo-oss/wolf-fixer-claude@sha256:<approved-digest>'
+export WOLF_FIXER_IMAGE='ghcr.io/alphabravo-oss/wolf-fixer-engines@sha256:<approved-digest>'
 docker run -d --name wolf-fixer \
-  -v wolf-fixer-session:/home/wolf/.config \
+  -v wolf-fixer-session:/home/wolf \
   -e WOLF_API_URL=https://wolf.internal \
   "$WOLF_FIXER_IMAGE"
 
-# 2. Authenticate once — interactively — into that volume.
-docker exec -it wolf-fixer claude login    # opens an auth URL; paste the token
+# 2. Log in once. The session is written under $HOME and reused.
+wolf fixer login claude      # or: docker exec -it wolf-fixer wolf fixer login claude
+wolf fixer login codex
+wolf fixer login opencode
+wolf fixer status            # confirm OAuth / API-key readiness
 
-# 3. The session now lives on the volume; restarts come up "ready" with no re-auth.
+# 3. Pick model + effort in Settings → Fixer (or per job). Then queue a fix.
 ```
 
 ### Kubernetes shape
 
-Two supported shapes — persist the agent session on a **PVC** mounted at `/home/wolf/.config`:
+Two supported shapes — persist the agent session on a **PVC** mounted at `/home/wolf` (covers Claude, Codex, and OpenCode session files):
 
-- **Deployment + PVC** — a long-running worker (or a few) that loop on the queue. Authenticate once with `kubectl exec -it deploy/wolf-fixer -- claude login`; the PVC keeps the session across rollouts.
+- **Deployment + PVC** — a long-running worker (or a few) that loop on the queue. Authenticate once with `kubectl exec -it deploy/wolf-fixer -- wolf fixer login claude`; the PVC keeps the session across rollouts.
 - **Job-per-task** — `wolf fixer --once` as a Kubernetes `Job` that claims one job and exits, scaled by the queue depth. Pair the CLI variants with the same session PVC, or use `wolf-fixer-api` (no session needed) for fully ephemeral runs.
 
 ---
@@ -342,8 +348,8 @@ The Wolf is designed to live inside your perimeter and your governance model.
 | **Audit** | A **classified, security-aware audit log** — semantic event type, category, severity, actor, source IP, and result — searchable and filterable. See [`docs/audit.md`](docs/audit.md). |
 | **HTTPS** | Run behind the bundled **Caddy** reverse proxy — automatic Let's Encrypt *or* bring-your-own cert — with an optional hardened Docker-socket proxy. See [`docs/deployment.md`](docs/deployment.md). |
 | **Secrets** | Encrypted at rest with a master key; GitHub, SSH, AI-provider, and registry credentials managed in-product. |
-| **Air-gapped** | Pre-load images and run with `pull_policy=Never`, or disable upstream images entirely and run everything from images you build and host yourself. |
-| **Supply chain** | Version-pinned, reproducible scanner images you can build, sign, and publish from the console to your own registry. |
+| **Air-gapped / mirrored** | Pre-load images and run with `pull_policy=Never`, point Docker Hub-hosted upstream scanners at a public cache such as `mirror.gcr.io`, or disable upstream images entirely and run everything from images you build and host yourself. |
+| **Supply chain** | Version-pinned scanner images published through CI to GHCR, with local digest checks and optional advanced custom builds for private registries. |
 | **Data residency** | Self-hosted by design — source code and findings never leave your infrastructure. |
 
 The scanner backend is a **three-tier image strategy** — official upstream images where maintainers publish them, a slim Wolf-built image for the long tail of per-language tools, and opt-in heavyweight buckets (JVM, Rust, CodeQL) pulled only when needed — so a typical Python + JavaScript shop runs on **well under a gigabyte** of images.

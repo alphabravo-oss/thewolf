@@ -23,7 +23,7 @@ func (r Resolver) prepareGitHub(ctx context.Context, repo *models.Repo, branch s
 		branch = repo.DefaultBranch
 	}
 
-	token, err := r.lookupGitHubToken(ctx, repo.UserID)
+	token, err := r.lookupGitHubToken(ctx, repo)
 	if err != nil {
 		return Prepared{}, fmt.Errorf("github token lookup: %w", err)
 	}
@@ -47,8 +47,8 @@ func (r Resolver) prepareGitHub(ctx context.Context, repo *models.Repo, branch s
 		CommitSHA:         sha,
 		DirtyState:        dirty,
 		PreparedWorkspace: path,
-		// The clone lives in the user's cache (~/.wolf/cache/repos/github/...)
-		// and is refreshed in place on the next scan, so cleanup is a no-op.
+		// The clone lives in the configured workspace cache and is refreshed in
+		// place on the next scan, so cleanup is a no-op.
 		Cleanup: func() {},
 	}, nil
 }
@@ -91,14 +91,29 @@ func ParseGitHubSource(raw string) (owner, name string, err error) {
 	return parts[0], parts[1], nil
 }
 
-// lookupGitHubToken returns the first github_token secret owned by the user,
-// decrypted. An empty string with no error means the user has no token and
-// the clone should proceed unauthenticated (public-repo path).
-func (r Resolver) lookupGitHubToken(ctx context.Context, userID string) (string, error) {
-	if r.Store == nil || userID == "" {
+// lookupGitHubToken returns the repo's selected github_token secret when one
+// is configured, otherwise the first github_token secret owned by the user.
+// An empty string with no error means the user has no token and the clone
+// should proceed unauthenticated (public-repo path).
+func (r Resolver) lookupGitHubToken(ctx context.Context, repo *models.Repo) (string, error) {
+	if r.Store == nil || repo == nil || repo.UserID == "" {
 		return "", nil
 	}
-	list, err := r.Store.ListSecretsByUser(ctx, userID)
+	if repo.CredentialSecretID != "" {
+		s, err := r.Store.GetSecretByID(ctx, repo.CredentialSecretID)
+		if err != nil || s.UserID != repo.UserID {
+			return "", fmt.Errorf("selected github token was not found")
+		}
+		if s.KeyType != models.KeyTypeGitHubToken {
+			return "", fmt.Errorf("selected credential is not a github_token")
+		}
+		plaintext, derr := secrets.Decrypt(s.EncryptedValue)
+		if derr != nil {
+			return "", fmt.Errorf("decrypt github token %q: %w", s.KeyName, derr)
+		}
+		return plaintext, nil
+	}
+	list, err := r.Store.ListSecretsByUser(ctx, repo.UserID)
 	if err != nil {
 		return "", err
 	}

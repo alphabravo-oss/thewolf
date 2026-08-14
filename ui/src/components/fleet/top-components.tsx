@@ -40,7 +40,7 @@ export function TopComponents() {
                   <TableCell className="font-mono text-xs">
                     <Link
                       to="/findings"
-                      search={{ rule_id: row.key } as never}
+                      search={{ view: "rule", q: row.key }}
                       className="hover:underline"
                     >
                       {row.key}

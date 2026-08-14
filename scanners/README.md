@@ -118,6 +118,22 @@ go run ./cmd/scannertools lock --check --require-resolved --json
 The offline `--check` path uses the checked-in resolved references as its cache.
 Registry access is only performed by `--refresh-images`. A release factory must
 use `--require-resolved`; unresolved mutable tags are never publication-ready.
+
+## Docker Hub mirrors
+
+Wolf-owned scanner images come from GHCR by default. Some third-party scanner
+tools still use maintainer-published Docker Hub images. To route only those
+Docker Hub references through a public cache, set:
+
+```shell
+WOLF_SCANNERS_DOCKERHUB_MIRROR=mirror.gcr.io
+```
+
+This rewrites refs such as `anchore/grype:v0.84.0` to
+`mirror.gcr.io/anchore/grype:v0.84.0` at runtime. GHCR, Quay, GCR, and other
+explicit registries are left unchanged. Google's mirror is a cache, not a full
+Docker Hub replacement; uncached images still need authenticated Docker Hub
+pulls, a private pull-through cache, or `WOLF_SCANNERS_DISABLE_UPSTREAM=1`.
 Version bumps regenerate the lock automatically.
 
 ## Reproducible operating-system packages

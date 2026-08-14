@@ -2,14 +2,30 @@
 // from the Repos page, and threaded through a collection when called from
 // the collection detail page (sets collectionId so the new repo is
 // auto-linked).
-import { useState } from "react";
-import { XIcon } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Loader2Icon, XIcon } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Link } from "@tanstack/react-router";
 import { api } from "@/lib/api";
+import type { Repo } from "@/lib/types";
 
 type Mode = "local" | "github" | "git" | "ssh";
+
+interface MaskedSecret {
+  id: string;
+  key_type: string;
+  key_name: string;
+  value: string;
+}
+
+interface GitHubRepoOption {
+  name: string;
+  full_name: string;
+  default_branch: string;
+  private: boolean;
+  archived?: boolean;
+}
 
 export type AddRepoFormProps = {
   /** When set, the form attaches the new repo to this collection on success. */
@@ -38,7 +54,35 @@ export function AddRepoForm({ collectionId, onDone }: AddRepoFormProps) {
   const [sourcePath, setSourcePath] = useState("");
   const [branch, setBranch] = useState("main");
   const [remoteNodeId, setRemoteNodeId] = useState("");
+  const [githubSecretId, setGithubSecretId] = useState("");
   const qc = useQueryClient();
+  const secretsQ = useQuery({
+    queryKey: ["config", "secrets", "github-token"],
+    queryFn: async () => {
+      const r = await api.get<MaskedSecret[]>("/config/secrets");
+      return (r.data ?? []).filter((s) => s.key_type === "github_token");
+    },
+    enabled: mode === "github",
+  });
+  const githubTokens = secretsQ.data ?? [];
+  useEffect(() => {
+    if (mode !== "github") return;
+    if (!githubSecretId && githubTokens.length === 1) {
+      setGithubSecretId(githubTokens[0].id);
+    }
+  }, [mode, githubSecretId, githubTokens]);
+
+  const githubReposQ = useQuery({
+    queryKey: ["github-repos", githubSecretId],
+    enabled: mode === "github" && !!githubSecretId,
+    queryFn: async () => {
+      const r = await api.post<GitHubRepoOption[]>(
+        "/sources/github/list-org-repos",
+        { secret_id: githubSecretId },
+      );
+      return (r.data ?? []).filter((repo) => !repo.archived);
+    },
+  });
 
   const create = useMutation({
     mutationFn: async () => {
@@ -49,8 +93,11 @@ export function AddRepoForm({ collectionId, onDone }: AddRepoFormProps) {
         default_branch: branch.trim() || "main",
       };
       if (mode === "ssh") body.remote_node_id = remoteNodeId;
-      const { data } = await api.post<{ data: { id: string } }>("/repos", body);
-      const repoId = data.data.id;
+      if (mode === "github" && githubSecretId) {
+        body.credential_secret_id = githubSecretId;
+      }
+      const { data } = await api.post<Repo>("/repos", body);
+      const repoId = data.id;
       if (collectionId) {
         await api.post(`/collections/${collectionId}/repos`, { repo_id: repoId });
       }
@@ -152,29 +199,99 @@ export function AddRepoForm({ collectionId, onDone }: AddRepoFormProps) {
 
         {mode === "github" && (
           <>
-            <Field
-              label="GitHub repo"
-              hint='Accepts owner/repo, github.com/owner/repo, or a full https://github.com/... URL.'
-            >
-              <input
-                value={sourcePath}
-                onChange={(e) => setSourcePath(e.target.value)}
-                required
-                placeholder="alphabravo-oss/thewolf"
-                className="w-full h-9 px-2 rounded-md bg-background border border-muted/40 text-sm font-mono"
-              />
-            </Field>
-            <div className="text-xs text-muted-foreground">
-              Private repository? Add a{" "}
-              <Link
-                to="/settings"
-                search={{ tab: "secrets" }}
-                className="underline underline-offset-2"
+            <Field label="Use credential">
+              <select
+                value={githubSecretId}
+                onChange={(e) => {
+                  setGithubSecretId(e.target.value);
+                  setSourcePath("");
+                }}
+                className="w-full h-9 px-2 rounded-md bg-background border border-muted/40 text-sm"
+                disabled={secretsQ.isLoading}
               >
-                github_token secret
-              </Link>{" "}
-              and it'll be used automatically.
-            </div>
+                <option value="">
+                  {secretsQ.isLoading
+                    ? "Loading GitHub tokens..."
+                    : "No credential (type a public repo)"}
+                </option>
+                {githubTokens.map((secret) => (
+                  <option key={secret.id} value={secret.id}>
+                    {secret.key_name}
+                    {secret.value ? ` (${secret.value})` : ""}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            {githubTokens.length === 0 && (
+              <div className="text-xs text-muted-foreground">
+                Add a{" "}
+                <Link
+                  to="/settings"
+                  search={{ tab: "secrets" }}
+                  className="underline underline-offset-2"
+                >
+                  github_token
+                </Link>{" "}
+                with repo read access to pick from a dropdown.
+              </div>
+            )}
+            {githubSecretId ? (
+              <Field
+                label="GitHub project"
+                hint="Repos this token can read. Pick one instead of typing owner/repo."
+              >
+                {githubReposQ.isLoading ? (
+                  <div className="inline-flex items-center gap-2 h-9 text-xs text-muted-foreground">
+                    <Loader2Icon className="size-3.5 animate-spin" />
+                    Loading projects…
+                  </div>
+                ) : githubReposQ.isError ? (
+                  <div className="text-xs text-destructive">
+                    {githubReposQ.error instanceof Error
+                      ? githubReposQ.error.message
+                      : "Could not list repos for this token"}
+                  </div>
+                ) : (
+                  <select
+                    value={sourcePath}
+                    onChange={(e) => {
+                      const full = e.target.value;
+                      setSourcePath(full);
+                      const picked = (githubReposQ.data ?? []).find(
+                        (repo) => repo.full_name === full,
+                      );
+                      if (picked) {
+                        if (!name.trim()) setName(picked.name);
+                        if (picked.default_branch) setBranch(picked.default_branch);
+                      }
+                    }}
+                    required
+                    className="w-full h-9 px-2 rounded-md bg-background border border-muted/40 text-sm font-mono"
+                  >
+                    <option value="">Select a project…</option>
+                    {(githubReposQ.data ?? []).map((repo) => (
+                      <option key={repo.full_name} value={repo.full_name}>
+                        {repo.full_name}
+                        {repo.private ? " (private)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </Field>
+            ) : (
+              <Field
+                label="GitHub repo"
+                hint="Accepts owner/repo, github.com/owner/repo, or a full https://github.com/... URL."
+              >
+                <input
+                  value={sourcePath}
+                  onChange={(e) => setSourcePath(e.target.value)}
+                  required
+                  placeholder="alphabravo-oss/thewolf"
+                  className="w-full h-9 px-2 rounded-md bg-background border border-muted/40 text-sm font-mono"
+                />
+              </Field>
+            )}
           </>
         )}
 

@@ -21,9 +21,9 @@ func TestRepositoryCoverageIsComplete(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if coverage.Tools != 49 || coverage.ParserOwnedTools != 49 ||
-		coverage.ParserAdapters != 49 || coverage.HostileTestedAdapters != 49 ||
-		coverage.ValidTestedAdapters != 49 ||
+	if coverage.Tools != 53 || coverage.ParserOwnedTools != 53 ||
+		coverage.ParserAdapters != 53 || coverage.HostileTestedAdapters != 53 ||
+		coverage.ValidTestedAdapters != 53 ||
 		coverage.ScannerVariants != 4 || coverage.ScannerPlatformTuples != 4 ||
 		coverage.FixerVariants != 4 || coverage.FixerPlatformTuples != 4 ||
 		coverage.Families != 23 || coverage.Fixtures != 54 ||

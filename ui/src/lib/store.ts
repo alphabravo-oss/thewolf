@@ -6,7 +6,6 @@ import type {
   Scan,
   Finding,
   Fix,
-  Loop,
   Collection,
   Severity,
   Category,
@@ -96,22 +95,6 @@ export const useFixStore = create<FixState>((set) => ({
   activeFix: null,
   setFixes: (fixes) => set({ fixes }),
   setActiveFix: (fix) => set({ activeFix: fix }),
-}));
-
-// Loop store
-
-interface LoopState {
-  loops: Loop[];
-  activeLoop: Loop | null;
-  setLoops: (loops: Loop[]) => void;
-  setActiveLoop: (loop: Loop | null) => void;
-}
-
-export const useLoopStore = create<LoopState>((set) => ({
-  loops: [],
-  activeLoop: null,
-  setLoops: (loops) => set({ loops }),
-  setActiveLoop: (loop) => set({ activeLoop: loop }),
 }));
 
 // Collection store

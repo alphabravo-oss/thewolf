@@ -2,7 +2,7 @@
 # checkov:skip=CKV_DOCKER_2 — bucket images are one-shot scanner containers, not long-lived services
 # Stage 1: Build the Go binary
 # ============================================================
-FROM golang:1.26.5-alpine@sha256:0178a641fbb4858c5f1b48e34bdaabe0350a330a1b1149aabd498d0699ff5fb2 AS builder
+FROM golang:1.26.6-alpine@sha256:af8d6740070b8906d12eae1c3e3ea0957fb63f492051ea05e354c38ef9fe88df AS builder
 
 RUN apk add --no-cache gcc musl-dev sqlite-dev git
 
@@ -51,7 +51,7 @@ RUN CGO_ENABLED=0 go build -trimpath -ldflags '-s -w' \
 # ============================================================
 # Pinned adapter tools
 # ============================================================
-FROM golang:1.26.5-alpine@sha256:0178a641fbb4858c5f1b48e34bdaabe0350a330a1b1149aabd498d0699ff5fb2 AS scanner-release-oras-tool
+FROM golang:1.26.6-alpine@sha256:af8d6740070b8906d12eae1c3e3ea0957fb63f492051ea05e354c38ef9fe88df AS scanner-release-oras-tool
 
 ARG TARGETARCH
 ARG ORAS_VERSION=1.3.3
@@ -68,7 +68,7 @@ RUN apk add --no-cache ca-certificates git \
     && install -m 0444 "$(go env GOPATH)/pkg/mod/oras.land/oras@v${ORAS_VERSION}/LICENSE" \
       /out/licenses/oras/LICENSE
 
-FROM golang:1.26.5-alpine@sha256:0178a641fbb4858c5f1b48e34bdaabe0350a330a1b1149aabd498d0699ff5fb2 AS scanner-release-trivy-tool
+FROM golang:1.26.6-alpine@sha256:af8d6740070b8906d12eae1c3e3ea0957fb63f492051ea05e354c38ef9fe88df AS scanner-release-trivy-tool
 
 ARG TARGETARCH
 ARG TRIVY_VERSION=0.73.0
@@ -179,7 +179,7 @@ ENTRYPOINT ["/usr/local/bin/wolf-release-adapter"]
 # Proposal generation validates a freshly fetched exact Git commit with the
 # repository's pinned scannertools command. Keep the Go toolchain in this
 # narrowly scoped image; the API/runtime image below remains minimal.
-FROM golang:1.26.5-alpine@sha256:0178a641fbb4858c5f1b48e34bdaabe0350a330a1b1149aabd498d0699ff5fb2 AS proposal-runtime
+FROM golang:1.26.6-alpine@sha256:af8d6740070b8906d12eae1c3e3ea0957fb63f492051ea05e354c38ef9fe88df AS proposal-runtime
 
 LABEL org.opencontainers.image.title="Wolf scanner proposal runtime" \
       org.opencontainers.image.description="Non-root worker for generating and validating immutable scanner release proposals" \

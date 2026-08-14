@@ -18,6 +18,7 @@ func TestEnvDefaults(t *testing.T) {
 	t.Setenv("WOLF_SCANNERS_IMAGE_JVM", "x-jvm:1")
 	t.Setenv("WOLF_SCANNERS_IMAGE_RUST", "x-rust:1")
 	t.Setenv("WOLF_SCANNERS_IMAGE_CODEQL", "x-codeql:1")
+	t.Setenv("WOLF_SCANNERS_DOCKERHUB_MIRROR", "https://mirror.gcr.io/")
 	t.Setenv("WOLF_SCANNERS_PULL_POLICY", "Always")
 	t.Setenv("WOLF_SCANNERS_NETWORK", "none")
 
@@ -34,8 +35,17 @@ func TestEnvDefaults(t *testing.T) {
 	if c.ImageOverrides["clippy"] != "x-rust:1" {
 		t.Errorf("clippy override missing: %v", c.ImageOverrides)
 	}
+	if c.ImageOverrides["cargo-audit"] != "x-rust:1" {
+		t.Errorf("cargo-audit override missing: %v", c.ImageOverrides)
+	}
+	if c.ImageOverrides["cargo-deny"] != "x-rust:1" {
+		t.Errorf("cargo-deny override missing: %v", c.ImageOverrides)
+	}
 	if c.ImageOverrides["codeql"] != "x-codeql:1" {
 		t.Errorf("codeql override missing: %v", c.ImageOverrides)
+	}
+	if c.DockerHubMirror != "mirror.gcr.io" {
+		t.Errorf("DockerHubMirror = %q, want mirror.gcr.io", c.DockerHubMirror)
 	}
 	if c.PullPolicy != "Always" {
 		t.Errorf("PullPolicy = %q", c.PullPolicy)
@@ -259,6 +269,34 @@ func TestLatestTaggedScannerImages(t *testing.T) {
 	}
 	if len(got) != 3 {
 		t.Fatalf("latestTaggedScannerImages = %v, want exactly 3 latest-tagged images", got)
+	}
+}
+
+func TestApplyDockerHubMirror(t *testing.T) {
+	in := map[string]container.ToolImageSpec{
+		"implicit": {Image: "anchore/grype:v0.84.0"},
+		"explicit": {Image: "docker.io/semgrep/semgrep:1.92.0"},
+		"index":    {Image: "index.docker.io/aquasec/trivy:0.57.0"},
+		"official": {Image: "alpine:3.20"},
+		"ghcr":     {Image: "ghcr.io/google/osv-scanner:v1.9.1"},
+		"quay":     {Image: "quay.io/kubescape/kubescape-cli:v3.0.22"},
+		"gcr":      {Image: "gcr.io/openssf/scorecard:v5.0.0"},
+	}
+
+	got := applyDockerHubMirror(in, "https://mirror.gcr.io/")
+	want := map[string]string{
+		"implicit": "mirror.gcr.io/anchore/grype:v0.84.0",
+		"explicit": "mirror.gcr.io/semgrep/semgrep:1.92.0",
+		"index":    "mirror.gcr.io/aquasec/trivy:0.57.0",
+		"official": "mirror.gcr.io/library/alpine:3.20",
+		"ghcr":     "ghcr.io/google/osv-scanner:v1.9.1",
+		"quay":     "quay.io/kubescape/kubescape-cli:v3.0.22",
+		"gcr":      "gcr.io/openssf/scorecard:v5.0.0",
+	}
+	for tool, image := range want {
+		if got[tool].Image != image {
+			t.Errorf("%s image = %q, want %q", tool, got[tool].Image, image)
+		}
 	}
 }
 

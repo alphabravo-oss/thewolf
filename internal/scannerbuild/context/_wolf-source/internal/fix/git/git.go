@@ -6,6 +6,11 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	gogit "github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/config"
+	"github.com/go-git/go-git/v5/plumbing/transport"
+	"github.com/go-git/go-git/v5/plumbing/transport/http"
 )
 
 // BranchName generates the standard fix branch name.
@@ -181,6 +186,45 @@ func ListBranches(repoPath string) ([]string, error) {
 		}
 	}
 
+	return branches, nil
+}
+
+// ListRemoteBranches returns branch names advertised by a git remote without
+// requiring a local checkout.
+func ListRemoteBranches(remoteURL, token string) ([]string, error) {
+	opts := &gogit.ListOptions{}
+	if token != "" {
+		opts.Auth = &http.BasicAuth{
+			Username: "x-access-token",
+			Password: token,
+		}
+	}
+
+	remote := gogit.NewRemote(nil, &config.RemoteConfig{
+		Name: "origin",
+		URLs: []string{remoteURL},
+	})
+	refs, err := remote.List(opts)
+	if err != nil {
+		if err == transport.ErrAuthenticationRequired {
+			return nil, fmt.Errorf("authentication required")
+		}
+		return nil, err
+	}
+
+	seen := make(map[string]bool)
+	var branches []string
+	for _, ref := range refs {
+		name := ref.Name()
+		if !name.IsBranch() {
+			continue
+		}
+		branch := name.Short()
+		if branch != "" && !seen[branch] {
+			seen[branch] = true
+			branches = append(branches, branch)
+		}
+	}
 	return branches, nil
 }
 

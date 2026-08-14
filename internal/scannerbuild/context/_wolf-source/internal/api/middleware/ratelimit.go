@@ -116,7 +116,7 @@ func StrictRateLimiter() *RateLimiter {
 
 // DefaultRateLimiter returns a limiter for general API traffic.
 func DefaultRateLimiter() *RateLimiter {
-	return NewRateLimiter(10, 60, time.Second) // 60 burst, 10/s refill
+	return NewRateLimiter(30, 180, time.Second) // 180 burst, 30/s refill
 }
 
 // TokenRateLimiter returns a limiter sized for automation traffic. API

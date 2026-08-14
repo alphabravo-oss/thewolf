@@ -53,6 +53,21 @@ if grep -q "name: wolf-wolf-scanner-custom-build" "$tmp_dir/rendered.yaml"; then
   echo "custom build worker must be disabled by default" >&2
   exit 1
 fi
+if grep -q "name: wolf-wolf-fixer" "$tmp_dir/rendered.yaml"; then
+  echo "fixer worker must be disabled by default" >&2
+  exit 1
+fi
+
+helm template wolf "$chart_dir" \
+  --set-string masterKey=test-master-key \
+  --set-string postgres.password=test-postgres-password \
+  --set-string image.digest="$wolf_digest" \
+  --set-string postgres.digest="$postgres_digest" \
+  --set fixer.enabled=true \
+  >"$tmp_dir/fixer.yaml"
+grep -q "app.kubernetes.io/component: fixer" "$tmp_dir/fixer.yaml"
+grep -q "name: wolf-wolf-fixer-home" "$tmp_dir/fixer.yaml"
+grep -q 'mountPath: /home/wolf' "$tmp_dir/fixer.yaml"
 if grep -Eq "WOLF_SCANNER_BUNDLE_(TRUST_POLICY_FILE|IMAGE_VERIFIER|IMAGE_TRUST_POLICY_FILE)" "$tmp_dir/rendered.yaml"; then
   echo "offline bundle trust must remain unmounted by default" >&2
   exit 1

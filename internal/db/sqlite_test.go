@@ -903,3 +903,135 @@ func TestDeleteRepoCascadeWithAILogs(t *testing.T) {
 		t.Fatal("expected repo to be gone after cascade delete")
 	}
 }
+
+func TestDeleteKeepHistoryLeavesScanRecords(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+	userID := uuid.New().String()
+	store.CreateUser(ctx, &models.User{ID: userID, Email: "keep@test.com", PasswordHash: "hash"})
+
+	colID := uuid.New().String()
+	if err := store.CreateCollection(ctx, &models.Collection{ID: colID, UserID: userID, Name: "keep-col"}); err != nil {
+		t.Fatalf("create collection: %v", err)
+	}
+	repoID := uuid.New().String()
+	store.CreateRepo(ctx, &models.Repo{
+		ID: repoID, UserID: userID, Name: "keep-repo",
+		SourceType: models.SourceTypeLocal, SourcePath: "/tmp/keep", DefaultBranch: "main",
+	})
+	_ = store.AddRepoToCollection(ctx, colID, repoID)
+	scanID := uuid.New().String()
+	if err := store.CreateScan(ctx, &models.Scan{
+		ID: scanID, UserID: userID, RepoID: repoID, CollectionID: &colID, Branch: "main",
+		Status: models.ScanStatusCompleted, ToolsSelected: "[]", ToolsCompleted: "[]", ToolsFailed: "[]", CoverageSummary: "{}",
+	}); err != nil {
+		t.Fatalf("create scan: %v", err)
+	}
+
+	if err := store.DeleteRepoKeepHistory(ctx, repoID); err != ErrHasScanRecords {
+		t.Fatalf("expected ErrHasScanRecords, got %v", err)
+	}
+
+	if err := store.DeleteCollectionKeepHistory(ctx, colID); err != nil {
+		t.Fatalf("keep collection: %v", err)
+	}
+	if _, err := store.GetCollectionByID(ctx, colID); err == nil {
+		t.Fatal("collection should be gone")
+	}
+	scan, err := store.GetScanByID(ctx, scanID)
+	if err != nil {
+		t.Fatalf("scan should remain: %v", err)
+	}
+	if scan.CollectionID != nil && *scan.CollectionID != "" {
+		t.Fatalf("scan collection_id should be cleared, got %v", scan.CollectionID)
+	}
+
+	if _, err := store.DeleteRepoCascade(ctx, repoID); err != nil {
+		t.Fatalf("purge repo: %v", err)
+	}
+}
+
+func TestPurgeOrphanedRecordsRemovesLeftoverScans(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+	userID := uuid.New().String()
+	store.CreateUser(ctx, &models.User{ID: userID, Email: "orphan@test.com", PasswordHash: "hash"})
+	repoID := uuid.New().String()
+	store.CreateRepo(ctx, &models.Repo{
+		ID: repoID, UserID: userID, Name: "gone",
+		SourceType: models.SourceTypeLocal, SourcePath: "/tmp/gone", DefaultBranch: "main",
+	})
+	scanID := uuid.New().String()
+	if err := store.CreateScan(ctx, &models.Scan{
+		ID: scanID, UserID: userID, RepoID: repoID, Branch: "main",
+		Status: models.ScanStatusCompleted, ToolsSelected: "[]", ToolsCompleted: "[]", ToolsFailed: "[]", CoverageSummary: "{}",
+	}); err != nil {
+		t.Fatalf("create scan: %v", err)
+	}
+	// Simulate a leftover scan after the repo row disappeared.
+	if _, err := store.db.ExecContext(ctx, "PRAGMA foreign_keys = OFF"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.db.ExecContext(ctx, "DELETE FROM repos WHERE id = ?", repoID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.db.ExecContext(ctx, "PRAGMA foreign_keys = ON"); err != nil {
+		t.Fatal(err)
+	}
+
+	ids, err := store.ListOrphanScanIDs(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ids) != 1 || ids[0] != scanID {
+		t.Fatalf("orphans = %v", ids)
+	}
+	purged, err := store.PurgeOrphanedRecords(ctx)
+	if err != nil {
+		t.Fatalf("purge: %v", err)
+	}
+	if len(purged) != 1 {
+		t.Fatalf("purged = %v", purged)
+	}
+	if _, err := store.GetScanByID(ctx, scanID); err == nil {
+		t.Fatal("orphan scan should be gone")
+	}
+}
+
+func TestOrphanSummaryCountsFindingsWithoutRepo(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+	userID := uuid.New().String()
+	store.CreateUser(ctx, &models.User{ID: userID, Email: "orphan-f@test.com", PasswordHash: "hash"})
+	if _, err := store.db.ExecContext(ctx, "PRAGMA foreign_keys = OFF"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.CreateFinding(ctx, &models.Finding{
+		ID: uuid.New().String(), ScanID: "missing-scan", RepoID: "missing-repo",
+		ToolName: "semgrep", RuleID: "x", Severity: models.SeverityHigh,
+		Title: "leftover", FilePath: "a.go", Status: models.StatusOpen,
+		Category: models.CategorySAST, Fingerprint: "orphan-f",
+	}); err != nil {
+		t.Fatalf("create finding: %v", err)
+	}
+	if _, err := store.db.ExecContext(ctx, "PRAGMA foreign_keys = ON"); err != nil {
+		t.Fatal(err)
+	}
+	sum, err := store.OrphanSummary(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sum.FindingCount != 1 {
+		t.Fatalf("finding_count = %d", sum.FindingCount)
+	}
+	if _, err := store.PurgeOrphanedRecords(ctx); err != nil {
+		t.Fatal(err)
+	}
+	sum, err = store.OrphanSummary(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sum.FindingCount != 0 {
+		t.Fatalf("expected leftovers gone, finding_count = %d", sum.FindingCount)
+	}
+}

@@ -130,10 +130,15 @@ func (p *CodeQLPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]
 		dbPath, lang, packName, packName, dbPath, packName, sarifFile, sarifFile)
 
 	cmd := container.CommandContext(ctx, cfg,
-		container.Options{RepoDir: opts.RepoPath},
-		"sh", "-c", script)
+		container.Options{RepoDir: opts.RepoPath, EntrypointOverride: "sh"},
+		"codeql", "-c", script)
 	out, err := cmd.Output()
 	if err != nil {
+		if codeQLMissingBuildTool(out) {
+			plugin.Skipf(opts.OnOutput, "codeql",
+				"required language build tool is not available in the CodeQL scanner image. Skipping.")
+			return nil, nil
+		}
 		return nil, fmt.Errorf("codeql failed: %w\n%s", err, truncateOutput(out))
 	}
 
@@ -151,6 +156,12 @@ func (p *CodeQLPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]
 var _ = os.Open
 var _ = filepath.Join
 var _ = strings.Contains
+
+func codeQLMissingBuildTool(out []byte) bool {
+	text := string(out)
+	return strings.Contains(text, "Unable to run the go command") ||
+		strings.Contains(text, "executable file not found in $PATH")
+}
 
 // truncateOutput limits error output to the last 500 bytes for readability.
 func truncateOutput(out []byte) string {

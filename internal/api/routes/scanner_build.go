@@ -115,8 +115,6 @@ func BuildScannerImage(w http.ResponseWriter, r *http.Request) {
 }
 
 // BuildAllScannerImages is the backward-compatible durable build-all endpoint.
-// A push request fails closed because CodeQL is local-only and cannot be
-// redistributed.
 //
 // Route: POST /api/v1/scanners/images/build-all
 func BuildAllScannerImages(w http.ResponseWriter, r *http.Request) {

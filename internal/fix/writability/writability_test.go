@@ -73,6 +73,23 @@ func (s stubStore) GetRemoteNodeByID(_ context.Context, _ string) (*models.Remot
 	return s.node, nil
 }
 
+func (s stubStore) GetSecretByID(context.Context, string) (*models.Secret, error) {
+	return nil, errors.New("not found")
+}
+
+type credStore struct {
+	stubStore
+	byID map[string]models.Secret
+}
+
+func (s credStore) GetSecretByID(_ context.Context, id string) (*models.Secret, error) {
+	sec, ok := s.byID[id]
+	if !ok {
+		return nil, errors.New("not found")
+	}
+	return &sec, nil
+}
+
 func ghSecret(t *testing.T, value string) models.Secret {
 	t.Helper()
 	enc, err := secrets.Encrypt(value)
@@ -137,8 +154,60 @@ func TestCheck_GitHub(t *testing.T) {
 		gh := &stubGitHub{info: GitHubPushInfo{CanPush: false}}
 		store := stubStore{secrets: []models.Secret{ghSecret(t, "ghp_token")}}
 		res := Check(context.Background(), repo, store, Probes{GitHub: gh, ParseGitHubSource: okParse})
-		if res.Writable {
-			t.Fatal("no push permission must be not-writable")
+		if !res.Writable {
+			t.Fatal("clone-capable token should still be writable")
+		}
+		if res.CanPush {
+			t.Fatal("read-only token must not report can_push")
+		}
+	})
+
+	t.Run("prefers repo credential", func(t *testing.T) {
+		selected := ghSecret(t, "ghp_selected")
+		selected.ID = "sec-selected"
+		selected.UserID = "u1"
+		other := ghSecret(t, "ghp_other")
+		other.ID = "sec-other"
+		other.UserID = "u1"
+		gh := &stubGitHub{info: GitHubPushInfo{CanPush: true}}
+		store := credStore{
+			stubStore: stubStore{secrets: []models.Secret{other, selected}},
+			byID:      map[string]models.Secret{"sec-selected": selected},
+		}
+		r := *repo
+		r.CredentialSecretID = "sec-selected"
+		res := Check(context.Background(), &r, store, Probes{GitHub: gh, ParseGitHubSource: okParse})
+		if !res.Writable {
+			t.Fatalf("expected writable, got %q", res.Reason)
+		}
+		if gh.gotToken != "ghp_selected" {
+			t.Fatalf("used token %q, want selected", gh.gotToken)
+		}
+	})
+
+	t.Run("falls back when selected secret cannot decrypt", func(t *testing.T) {
+		broken := models.Secret{
+			ID:             "sec-broken",
+			UserID:         "u1",
+			KeyType:        models.KeyTypeGitHubToken,
+			EncryptedValue: "not-valid-ciphertext",
+		}
+		other := ghSecret(t, "ghp_other")
+		other.ID = "sec-other"
+		other.UserID = "u1"
+		gh := &stubGitHub{info: GitHubPushInfo{CanPush: true}}
+		store := credStore{
+			stubStore: stubStore{secrets: []models.Secret{other, broken}},
+			byID:      map[string]models.Secret{"sec-broken": broken},
+		}
+		r := *repo
+		r.CredentialSecretID = "sec-broken"
+		res := Check(context.Background(), &r, store, Probes{GitHub: gh, ParseGitHubSource: okParse})
+		if !res.Writable {
+			t.Fatalf("expected fallback token to make repo writable, got %q", res.Reason)
+		}
+		if gh.gotToken != "ghp_other" {
+			t.Fatalf("used token %q, want fallback", gh.gotToken)
 		}
 	})
 

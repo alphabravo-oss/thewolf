@@ -43,6 +43,25 @@ spec:
         - {protocol: TCP, port: 53}
         - {protocol: TCP, port: 5432}
 ---
+{{- if .Values.fixer.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "wolf.fullname" . }}-fixer
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: fixer
+  policyTypes: [Egress]
+  egress:
+    - ports:
+        - {protocol: TCP, port: 443}
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+        - {protocol: TCP, port: 5432}
+---
+{{- end }}
 {{- if .Values.scannerRelease.customBuild.enabled }}
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

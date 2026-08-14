@@ -134,20 +134,20 @@ func runRender(cmd *cobra.Command, method, path string, body any) error {
 }
 
 // NewCommandGroups returns every API-client command group except scan and
-// loop, whose API subcommands are attached to the existing local commands
-// via AddScanSubcommands and AddLoopSubcommands. The caller (cmd/wolf) adds
+// agent, whose API subcommands are attached to the existing local commands
+// via AddScanSubcommands and AddAgentSubcommands. The caller (cmd/wolf) adds
 // these to the root.
 // APICommandTree returns every command that drives the HTTP API. The local
-// `scan`/`loop` parents (whose one-shot behavior lives in package main) are
-// synthesized here with their API subcommands attached, so the full
+// `scan`/`agent` parents are synthesized here with their API subcommands
+// attached, so the full
 // API-command surface is assembled in one place — used by
 // TestCLICoversEveryEndpoint to check coverage against the real CLI.
 func APICommandTree() []*cobra.Command {
 	scan := &cobra.Command{Use: "scan", Short: "Scans"}
 	AddScanSubcommands(scan)
-	loop := &cobra.Command{Use: "loop", Short: "Loops"}
-	AddLoopSubcommands(loop)
-	return append([]*cobra.Command{scan, loop}, NewCommandGroups()...)
+	agent := &cobra.Command{Use: "agent", Short: "Agents"}
+	AddAgentSubcommands(agent)
+	return append([]*cobra.Command{scan, agent}, NewCommandGroups()...)
 }
 
 func NewCommandGroups() []*cobra.Command {

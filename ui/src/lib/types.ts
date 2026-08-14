@@ -37,7 +37,7 @@ export type FixItemStatus =
   | "failed"
   | "skipped";
 
-export type LoopStatus =
+export type AgentStatus =
   | "running"
   | "paused"
   | "completed"
@@ -55,6 +55,7 @@ export type SecretKeyType =
   | "ssh_password"
   | "anthropic_key"
   | "openai_key"
+  | "xai_key"
   | "custom";
 
 export type ArtifactType = "sarif" | "json" | "markdown" | "log" | "coverage";
@@ -209,6 +210,10 @@ export interface Scan {
   release_manifest_digest?: string;
   rescan_of_scan_id?: string;
   release_selection_reason?: string;
+  origin_scan_id?: string;
+  previous_scan_id?: string;
+  remediation_id?: string;
+  fix_job_id?: string;
   status: ScanStatus;
   // The API stores these as JSON-encoded strings, NOT arrays. Use
   // parseToolList() to get a real string[] for length / iteration.
@@ -297,12 +302,12 @@ export interface FixItem {
   updated_at: string;
 }
 
-export interface Loop {
+export interface Agent {
   id: string;
   user_id: string;
   repo_id: string;
   collection_id?: string;
-  status: LoopStatus;
+  status: AgentStatus;
   max_iterations: number;
   current_iteration: number;
   severity_filter: Severity[];
@@ -312,7 +317,7 @@ export interface Loop {
   total_findings_new: number;
   total_findings_remaining: number;
   guardrail_warnings: string[];
-  iterations?: LoopIteration[];
+  iterations?: AgentRound[];
   started_at?: string;
   completed_at?: string;
   created_at: string;
@@ -320,7 +325,7 @@ export interface Loop {
   repo?: Repo;
 }
 
-export interface LoopIteration {
+export interface AgentRound {
   iteration: number;
   scan_id: string;
   fix_id?: string;

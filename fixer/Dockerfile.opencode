@@ -1,0 +1,51 @@
+# check=skip=InvalidDefaultArgInFrom
+# WOLF_FIXER_BASE_REF intentionally has no mutable default; the release
+# pipeline must provide the verified base image by digest.
+# ============================================================
+# checkov:skip=CKV_DOCKER_2 — worker container, not a service.
+#
+# wolf-fixer-opencode — OPENCODE engine variant
+# ============================================================
+# Extends the wolf-fixer base with the OpenCode CLI (opencode-ai). Auth is
+# either an interactive OAuth session:
+#
+#   docker exec -it <container> opencode auth login
+#
+# or API keys (ANTHROPIC_API_KEY / OPENAI_API_KEY) from Wolf's secret
+# store, injected by the worker at run time. Persist /home/wolf so a
+# session survives restarts.
+#
+# This image is an optional engine; it is not yet in the locked four-variant
+# release table. Build locally:
+#   docker build -f fixer/Dockerfile.opencode --build-arg WOLF_FIXER_BASE_REF=...
+# ============================================================
+
+ARG WOLF_FIXER_BASE_REF
+FROM ${WOLF_FIXER_BASE_REF} AS base
+
+ARG OPENCODE_VERSION=1.18.16
+ARG OPENCODE_INTEGRITY=sha512-l4nUfoucuw8u5WYU9my9Yz7lYpBI649i/ppgL0BGTjp/HC3p2jN50i331YpcGbKfGTEv9VG6mxU1+QZyaR5hxA==
+
+ENV WOLF_FIXER_VARIANT=opencode \
+    WOLF_FIXER_ENGINE=opencode
+
+LABEL dev.wolf.fixer.variant="opencode" \
+      dev.wolf.fixer.auth-mode="oauth-or-api-key" \
+      dev.wolf.fixer.cli.version="${OPENCODE_VERSION}"
+
+USER root
+
+RUN set -eux; \
+    actual_integrity="$(npm --cache /tmp/npm-cache view "opencode-ai@${OPENCODE_VERSION}" dist.integrity)"; \
+    test "$actual_integrity" = "$OPENCODE_INTEGRITY"; \
+    npm --cache /tmp/npm-cache install --global --omit=dev "opencode-ai@${OPENCODE_VERSION}"; \
+    command -v opencode; \
+    installed_version="$(opencode --version | head -n1 | awk '{print $NF}')"; \
+    test "$installed_version" = "$OPENCODE_VERSION"; \
+    rm -rf /tmp/npm-cache
+
+USER wolf
+WORKDIR /workspace
+ENV HOME=/home/wolf
+
+ENTRYPOINT ["/usr/local/bin/wolf", "fixer"]

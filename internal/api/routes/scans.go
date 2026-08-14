@@ -28,6 +28,7 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/auth"
 	findingdiff "github.com/alphabravocompany/thewolf/internal/finding/diff"
 	findingsuppression "github.com/alphabravocompany/thewolf/internal/finding/suppression"
+	"github.com/alphabravocompany/thewolf/internal/fix/lineage"
 	"github.com/alphabravocompany/thewolf/internal/models"
 	scannercontainer "github.com/alphabravocompany/thewolf/internal/plugin/container"
 	promptpkg "github.com/alphabravocompany/thewolf/internal/prompt"
@@ -530,9 +531,18 @@ func executeScan(parent context.Context, h *Handler, scanID, userID, repoID, bra
 		failPreparedScan(h, scan, executionLeaseToken, fmt.Errorf("load repo: %w", err))
 		return
 	}
-	prepared, err := (scantarget.Resolver{Store: h.Store}).Prepare(ctx, repo, branch)
-	if err != nil {
-		failPreparedScan(h, scan, executionLeaseToken, err)
+	var prepared scantarget.Prepared
+	var errPrep error
+	if existing := strings.TrimSpace(scan.PreparedWorkspace); existing != "" {
+		if st, serr := os.Stat(existing); serr == nil && st.IsDir() {
+			prepared, errPrep = scantarget.PrepareExisting(existing, scan.SourceType)
+		}
+	}
+	if prepared.Path == "" {
+		prepared, errPrep = (scantarget.Resolver{Store: h.Store}).Prepare(ctx, repo, branch)
+	}
+	if errPrep != nil {
+		failPreparedScan(h, scan, executionLeaseToken, errPrep)
 		return
 	}
 	repoPath := prepared.Path
@@ -556,7 +566,7 @@ func executeScan(parent context.Context, h *Handler, scanID, userID, repoID, bra
 	scan.DirtyState = prepared.DirtyState
 	scan.PreparedWorkspace = prepared.PreparedWorkspace
 	_ = h.Store.UpdateScan(ctx, scan)
-	if repo.SourceType == models.SourceTypeSSH {
+	if prepared.CommitSHA != "" || prepared.DirtyState != "" {
 		repo.LastCommitSHA = prepared.CommitSHA
 		repo.LastDirtyState = prepared.DirtyState
 		_ = h.Store.UpdateRepo(ctx, repo)
@@ -1188,6 +1198,15 @@ func executeScan(parent context.Context, h *Handler, scanID, userID, repoID, bra
 	publishScanEvent(h, scanID, "scan_complete",
 		fmt.Sprintf(`{"type":"scan_complete","scan_id":"%s","status":"%s","finding_count":%d}`, scanID, scan.Status, scan.FindingCount))
 
+	if scan.Status == models.ScanStatusCompleted && scan.FixJobID != "" {
+		if next, nerr := lineage.MaybeEnqueueNextRun(context.Background(), h.Store, scan); nerr != nil {
+			log.Warn().Str("scan_id", scanID).Err(nerr).Msg("next agent run enqueue failed")
+		} else if next != nil {
+			log.Info().Str("scan_id", scanID).Str("job", next.ID).Int("run_index", next.RunIndex).
+				Msg("queued next sequential agent run")
+		}
+	}
+
 	log.Info().
 		Str("scan_id", scanID).
 		Str("status", string(scan.Status)).
@@ -1325,6 +1344,8 @@ func ListScans(w http.ResponseWriter, r *http.Request) {
 	// Apply optional filters.
 	repoID := r.URL.Query().Get("repo_id")
 	status := r.URL.Query().Get("status")
+	rootsOnly := strings.EqualFold(r.URL.Query().Get("roots"), "1") ||
+		strings.EqualFold(r.URL.Query().Get("roots"), "true")
 
 	filtered := make([]models.Scan, 0, len(scans))
 	for _, s := range scans {
@@ -1332,6 +1353,9 @@ func ListScans(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		if status != "" && string(s.Status) != status {
+			continue
+		}
+		if rootsOnly && strings.TrimSpace(s.OriginScanID) != "" {
 			continue
 		}
 		filtered = append(filtered, s)
@@ -1385,7 +1409,6 @@ func GetScan(w http.ResponseWriter, r *http.Request) {
 			"user_id":            scan.UserID,
 			"repo_id":            scan.RepoID,
 			"collection_id":      scan.CollectionID,
-			"loop_id":            scan.LoopID,
 			"iteration":          scan.Iteration,
 			"branch":             scan.Branch,
 			"source_type":        scan.SourceType,
@@ -1420,6 +1443,91 @@ func GetScan(w http.ResponseWriter, r *http.Request) {
 			"updated_at":         scan.UpdatedAt,
 			"repo":               scan.Repo,
 			"artifacts":          artifacts,
+			"origin_scan_id":     scan.OriginScanID,
+			"previous_scan_id":   scan.PreviousScanID,
+			"remediation_id":     scan.RemediationID,
+			"fix_job_id":         scan.FixJobID,
+		},
+	})
+}
+
+// GetScanLineage handles GET /api/scans/{id}/lineage — origin, children, agents.
+func GetScanLineage(w http.ResponseWriter, r *http.Request) {
+	claims := auth.GetUserFromContext(r.Context())
+	if claims == nil {
+		response.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing user context")
+		return
+	}
+	h := DefaultHandler
+	if h == nil {
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "handler not initialized")
+		return
+	}
+	id := chi.URLParam(r, "id")
+	scan, ok := loadScanForCaller(w, r, h.Store, id, claims)
+	if !ok {
+		return
+	}
+	originID := scan.ID
+	if strings.TrimSpace(scan.OriginScanID) != "" {
+		originID = scan.OriginScanID
+	}
+	origin, err := h.Store.GetScanByID(r.Context(), originID)
+	if err != nil || origin == nil {
+		origin = scan
+		originID = scan.ID
+	}
+	kids, _ := h.Store.ListScansByOrigin(r.Context(), originID)
+	var children []models.Scan
+	for _, s := range kids {
+		if s.ID == originID {
+			continue
+		}
+		children = append(children, s)
+	}
+	if children == nil {
+		children = []models.Scan{}
+	}
+	latest, _ := h.Store.GetLatestRemediationByOrigin(r.Context(), originID)
+	scanIDs := map[string]bool{originID: true}
+	for _, s := range children {
+		scanIDs[s.ID] = true
+	}
+	var agents []models.FixJob
+	seen := map[string]bool{}
+	if latest != nil {
+		if remJobs, err := h.Store.ListFixJobsByRemediation(r.Context(), latest.ID); err == nil {
+			for _, j := range remJobs {
+				if !seen[j.ID] {
+					seen[j.ID] = true
+					agents = append(agents, j)
+				}
+			}
+		}
+	}
+	if origin.RepoID != "" {
+		if repoJobs, err := h.Store.ListFixJobsByUser(r.Context(), claims.UserID, origin.RepoID); err == nil {
+			for _, j := range repoJobs {
+				if seen[j.ID] {
+					continue
+				}
+				if scanIDs[j.ScanID] || (latest != nil && j.RemediationID == latest.ID) {
+					seen[j.ID] = true
+					agents = append(agents, j)
+				}
+			}
+		}
+	}
+	if agents == nil {
+		agents = []models.FixJob{}
+	}
+	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{
+		Data: map[string]any{
+			"origin":      origin,
+			"children":    children,
+			"remediation": latest,
+			"agents":      agents,
+			"runs":        lineage.BuildRuns(origin, children, agents),
 		},
 	})
 }

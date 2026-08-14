@@ -26,6 +26,7 @@ package verify
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"path/filepath"
@@ -33,6 +34,31 @@ import (
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 )
+
+// ErrMissingImage means the targeted scanner container is not present.
+// The finding is NOT cleared — the gate could not judge it.
+var ErrMissingImage = errors.New("scanner image missing")
+
+// IsMissingImage reports whether err is a missing-scanner-image failure.
+func IsMissingImage(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, ErrMissingImage) {
+		return true
+	}
+	s := strings.ToLower(err.Error())
+	return strings.Contains(s, "scanner image missing") ||
+		strings.Contains(s, "is not present locally") ||
+		strings.Contains(s, "no such image") ||
+		strings.Contains(s, "unable to find image") ||
+		strings.Contains(s, "image not present")
+}
+
+// BatchScanner optionally rescans many files in one tool invocation.
+type BatchScanner interface {
+	RescanFiles(ctx context.Context, repoPath string, files []string, tool, rule string) ([]models.Finding, error)
+}
 
 // Workspace is the slice of *workspace.Workspace the gate needs. Defining it as
 // an interface (rather than importing the concrete type) keeps verify
@@ -110,8 +136,27 @@ type VerifyResult struct {
 	NewFindings    bool `json:"new_findings"`
 	TestsPassed    bool `json:"tests_passed"`
 
+	// UnableToVerify means the targeted rescan could not run (missing
+	// image, no scanner, transport error). The gate did not judge the
+	// finding. The orchestrator should keep a build-clean edit.
+	UnableToVerify bool `json:"unable_to_verify,omitempty"`
+
 	// ChangedFiles is the set of repo-relative paths the engine touched.
 	ChangedFiles []string `json:"changed_files,omitempty"`
+}
+
+// BuildFailed reports a hard compile/parse failure. Missing toolchains are
+// skipped and do not count.
+func (r *VerifyResult) BuildFailed() bool {
+	if r == nil {
+		return false
+	}
+	for _, s := range r.Stages {
+		if s.Stage == StageBuild && !s.Skipped && !s.Passed {
+			return true
+		}
+	}
+	return false
 }
 
 // runCommand runs name+args in dir and returns combined output. Package var so
@@ -131,80 +176,246 @@ var runCommand = func(ctx context.Context, dir, name string, args ...string) (st
 // the gate itself couldn't run a stage (e.g. the scanner backend errored), in
 // which case the fix is treated as unverified (Passed=false) by the caller.
 func Gate(ctx context.Context, ws Workspace, finding models.Finding, scanner Scanner, opts Options) (*VerifyResult, error) {
-	res := &VerifyResult{}
-
-	// --- Stage 1: files changed? ---
-	changed, err := ws.ChangedFiles(ctx)
-	if err != nil {
-		return res, fmt.Errorf("verify: list changed files: %w", err)
-	}
-	res.ChangedFiles = changed
-	if len(changed) == 0 {
-		res.Stages = append(res.Stages, StageResult{Stage: StageFilesChanged, Passed: false, Detail: "engine made no changes"})
-		return finalize(res), nil
-	}
-	res.FilesChanged = true
-	res.Stages = append(res.Stages, StageResult{Stage: StageFilesChanged, Passed: true})
-
-	// --- Stage 2: still builds? (language-aware, parse-min) ---
-	if opts.SkipBuild {
-		res.Built = true
-		res.Stages = append(res.Stages, StageResult{Stage: StageBuild, Passed: true, Skipped: true, Detail: "build stage skipped"})
-	} else {
-		bld := buildStage(ctx, ws.Path(), finding, changed)
-		res.Stages = append(res.Stages, bld)
-		if !bld.Passed {
-			return finalize(res), nil
-		}
-		res.Built = true
-	}
-
-	// --- Stage 3: finding actually gone? (targeted rescan) ---
-	if scanner == nil {
-		res.Stages = append(res.Stages, StageResult{Stage: StageFindingCleared, Passed: false, Detail: "no scanner backend configured for targeted rescan"})
-		return finalize(res), nil
-	}
-	post, err := scanner.RescanFile(ctx, ws.Path(), finding.FilePath, finding.ToolName, finding.RuleID)
-	if err != nil {
-		return res, fmt.Errorf("verify: targeted rescan: %w", err)
-	}
-	if findingStillPresent(finding, post) {
-		res.Stages = append(res.Stages, StageResult{Stage: StageFindingCleared, Passed: false, Detail: "finding still present after fix"})
-		return finalize(res), nil
-	}
-	res.FindingCleared = true
-	res.Stages = append(res.Stages, StageResult{Stage: StageFindingCleared, Passed: true})
-
-	// --- Stage 4: no new findings? (regression guard over the rescan) ---
-	if newOnes := newFindings(finding, post); len(newOnes) > 0 {
-		res.NewFindings = true
+	if strings.TrimSpace(finding.FilePath) == "" {
+		res := &VerifyResult{}
 		res.Stages = append(res.Stages, StageResult{
-			Stage:  StageNoRegressions,
-			Passed: false,
-			Detail: fmt.Sprintf("fix introduced %d new finding(s) in %s", len(newOnes), finding.FilePath),
+			Stage: StageFindingCleared, Passed: false, Skipped: false,
+			Detail: "empty file_path — skipped verify",
 		})
 		return finalize(res), nil
 	}
-	res.Stages = append(res.Stages, StageResult{Stage: StageNoRegressions, Passed: true})
+	batch, err := GateBatch(ctx, ws, []models.Finding{finding}, scanner, opts)
+	if err != nil {
+		return &VerifyResult{}, err
+	}
+	if r, ok := batch[finding.ID]; ok && r != nil {
+		return r, nil
+	}
+	// Findings without an ID still need a result — take the sole entry.
+	for _, r := range batch {
+		return r, nil
+	}
+	return &VerifyResult{}, nil
+}
 
-	// --- Stage 5: optional tests ---
-	if opts.Test.Name == "" {
-		res.TestsPassed = true
-		res.Stages = append(res.Stages, StageResult{Stage: StageTests, Passed: true, Skipped: true, Detail: "no test command configured"})
-	} else {
-		out, terr := runCommand(ctx, ws.Path(), opts.Test.Name, opts.Test.Args...)
-		if terr != nil {
-			res.Stages = append(res.Stages, StageResult{Stage: StageTests, Passed: false, Detail: truncate(out, 2000)})
-			return finalize(res), nil
+// GateBatch verifies many findings from one scanner turn with one build and
+// one targeted rescan of the unique files. Missing scanner images leave
+// findings uncleared (Passed=false). Empty file_path findings are skipped.
+func GateBatch(ctx context.Context, ws Workspace, findings []models.Finding, scanner Scanner, opts Options) (map[string]*VerifyResult, error) {
+	out := make(map[string]*VerifyResult, len(findings))
+	var toCheck []models.Finding
+	for _, f := range findings {
+		key := f.ID
+		if key == "" {
+			key = f.FilePath + ":" + f.RuleID
 		}
-		res.TestsPassed = true
-		res.Stages = append(res.Stages, StageResult{Stage: StageTests, Passed: true})
+		if strings.TrimSpace(f.FilePath) == "" {
+			res := &VerifyResult{}
+			res.Stages = append(res.Stages, StageResult{
+				Stage: StageFindingCleared, Passed: false, Skipped: false,
+				Detail: "empty file_path — skipped verify",
+			})
+			out[key] = finalize(res)
+			continue
+		}
+		toCheck = append(toCheck, f)
+	}
+	if len(toCheck) == 0 {
+		return out, nil
 	}
 
-	return finalize(res), nil
+	changed, err := ws.ChangedFiles(ctx)
+	if err != nil {
+		return out, fmt.Errorf("verify: list changed files: %w", err)
+	}
+
+	base := func() *VerifyResult {
+		res := &VerifyResult{ChangedFiles: changed}
+		if len(changed) == 0 {
+			res.Stages = append(res.Stages, StageResult{Stage: StageFilesChanged, Passed: false, Detail: "engine made no changes"})
+			return finalize(res)
+		}
+		res.FilesChanged = true
+		res.Stages = append(res.Stages, StageResult{Stage: StageFilesChanged, Passed: true})
+		return res
+	}
+
+	if len(changed) == 0 {
+		for _, f := range toCheck {
+			out[findingKey(f)] = base()
+		}
+		return out, nil
+	}
+
+	builds := map[string]StageResult{}
+	if opts.SkipBuild {
+		builds[""] = StageResult{Stage: StageBuild, Passed: true, Skipped: true, Detail: "build stage skipped"}
+	} else {
+		for _, f := range toCheck {
+			lang := langForFile(f.FilePath)
+			if lang == "" {
+				lang = inferLanguage(f, changed)
+			}
+			if _, ok := builds[lang]; ok {
+				continue
+			}
+			builds[lang] = buildStage(ctx, ws.Path(), f, changed)
+		}
+	}
+	buildFor := func(f models.Finding) StageResult {
+		if opts.SkipBuild {
+			return builds[""]
+		}
+		lang := langForFile(f.FilePath)
+		if lang == "" {
+			lang = inferLanguage(f, changed)
+		}
+		if b, ok := builds[lang]; ok {
+			return b
+		}
+		return StageResult{Stage: StageBuild, Passed: true, Skipped: true, Detail: "no build check"}
+	}
+
+	var rescanable []models.Finding
+	for _, f := range toCheck {
+		bld := buildFor(f)
+		if !bld.Passed {
+			res := base()
+			res.Stages = append(res.Stages, bld)
+			out[findingKey(f)] = finalize(res)
+			continue
+		}
+		rescanable = append(rescanable, f)
+	}
+	if len(rescanable) == 0 {
+		return out, nil
+	}
+
+	files := uniqueNonEmptyPaths(rescanable)
+	tool := strings.TrimSpace(rescanable[0].ToolName)
+	if scanner == nil {
+		for _, f := range rescanable {
+			res := base()
+			res.Built = true
+			res.UnableToVerify = true
+			res.Stages = append(res.Stages, buildFor(f))
+			res.Stages = append(res.Stages, StageResult{
+				Stage: StageFindingCleared, Passed: false, Skipped: true,
+				Detail: "no scanner backend configured for targeted rescan",
+			})
+			out[findingKey(f)] = finalize(res)
+		}
+		return out, nil
+	}
+	post, err := rescanFiles(ctx, scanner, ws.Path(), files, tool)
+	if err != nil {
+		detail := "targeted rescan failed — keep edits, leave findings open"
+		if IsMissingImage(err) {
+			detail = "scanner image missing — keep edits, leave findings open"
+		}
+		for _, f := range rescanable {
+			res := base()
+			res.Built = true
+			res.UnableToVerify = true
+			res.Stages = append(res.Stages, buildFor(f))
+			res.Stages = append(res.Stages, StageResult{
+				Stage: StageFindingCleared, Passed: false, Skipped: true,
+				Detail: detail,
+			})
+			out[findingKey(f)] = finalize(res)
+		}
+		return out, nil
+	}
+
+	for _, f := range rescanable {
+		res := base()
+		res.Built = true
+		res.Stages = append(res.Stages, buildFor(f))
+		filePost := findingsForFile(post, f.FilePath)
+		if findingStillPresent(f, filePost) {
+			res.Stages = append(res.Stages, StageResult{Stage: StageFindingCleared, Passed: false, Detail: "finding still present after fix"})
+			out[findingKey(f)] = finalize(res)
+			continue
+		}
+		res.FindingCleared = true
+		res.Stages = append(res.Stages, StageResult{Stage: StageFindingCleared, Passed: true})
+		if newOnes := newFindings(f, filePost); len(newOnes) > 0 {
+			res.NewFindings = true
+			res.Stages = append(res.Stages, StageResult{
+				Stage:  StageNoRegressions,
+				Passed: false,
+				Detail: fmt.Sprintf("fix introduced %d new finding(s) in %s", len(newOnes), f.FilePath),
+			})
+			out[findingKey(f)] = finalize(res)
+			continue
+		}
+		res.Stages = append(res.Stages, StageResult{Stage: StageNoRegressions, Passed: true})
+		if opts.Test.Name == "" {
+			res.TestsPassed = true
+			res.Stages = append(res.Stages, StageResult{Stage: StageTests, Passed: true, Skipped: true, Detail: "no test command configured"})
+		} else {
+			tout, terr := runCommand(ctx, ws.Path(), opts.Test.Name, opts.Test.Args...)
+			if terr != nil {
+				res.Stages = append(res.Stages, StageResult{Stage: StageTests, Passed: false, Detail: truncate(tout, 2000)})
+				out[findingKey(f)] = finalize(res)
+				continue
+			}
+			res.TestsPassed = true
+			res.Stages = append(res.Stages, StageResult{Stage: StageTests, Passed: true})
+		}
+		out[findingKey(f)] = finalize(res)
+	}
+	return out, nil
+}
+
+func findingKey(f models.Finding) string {
+	if f.ID != "" {
+		return f.ID
+	}
+	return f.FilePath + ":" + f.RuleID
+}
+
+func uniqueNonEmptyPaths(findings []models.Finding) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, f := range findings {
+		p := strings.TrimSpace(f.FilePath)
+		if p == "" || seen[p] {
+			continue
+		}
+		seen[p] = true
+		out = append(out, p)
+	}
+	return out
+}
+
+func findingsForFile(all []models.Finding, file string) []models.Finding {
+	var out []models.Finding
+	for _, f := range all {
+		if f.FilePath == file || strings.HasSuffix(f.FilePath, "/"+file) || strings.HasSuffix(file, "/"+f.FilePath) {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+func rescanFiles(ctx context.Context, scanner Scanner, repoPath string, files []string, tool string) ([]models.Finding, error) {
+	if bs, ok := scanner.(BatchScanner); ok {
+		return bs.RescanFiles(ctx, repoPath, files, tool, "")
+	}
+	var all []models.Finding
+	for _, file := range files {
+		got, err := scanner.RescanFile(ctx, repoPath, file, tool, "")
+		if err != nil {
+			return all, err
+		}
+		all = append(all, got...)
+	}
+	return all, nil
 }
 
 // finalize sets Passed to the conjunction of every non-skipped stage.
+// UnableToVerify is never a pass — the gate did not judge the finding.
 func finalize(res *VerifyResult) *VerifyResult {
 	res.Passed = true
 	for _, s := range res.Stages {
@@ -215,6 +426,9 @@ func finalize(res *VerifyResult) *VerifyResult {
 			res.Passed = false
 			break
 		}
+	}
+	if res.UnableToVerify {
+		res.Passed = false
 	}
 	return res
 }
@@ -237,17 +451,15 @@ func buildStage(ctx context.Context, repoPath string, finding models.Finding, ch
 		return StageResult{Stage: StageBuild, Passed: true, Detail: "go build ./... ok"}
 
 	case "ts":
-		if commandAvailable("tsc") {
-			if out, err := runCommand(ctx, repoPath, "tsc", "--noEmit"); err != nil {
-				return StageResult{Stage: StageBuild, Passed: false, Detail: truncate(out, 2000)}
-			}
-			return StageResult{Stage: StageBuild, Passed: true, Detail: "tsc --noEmit ok"}
-		}
+		// Do not run `node --check` on .ts/.tsx — Node rejects the
+		// extension (ERR_UNKNOWN_FILE_EXTENSION) and we used to roll
+		// back valid TSX edits. `tsc --noEmit` at the repo root is also
+		// unsafe on mixed Go+TS trees. Parse-check only real JS files
+		// in the same batch; a TS-only turn skips this stage.
 		if commandAvailable("node") {
-			// Parse-min fallback: node --check on each changed JS/TS file.
 			return nodeParseCheck(ctx, repoPath, changed)
 		}
-		return StageResult{Stage: StageBuild, Passed: true, Skipped: true, Detail: "no ts/js toolchain available; build skipped"}
+		return StageResult{Stage: StageBuild, Passed: true, Skipped: true, Detail: "no js parse-check for TypeScript; build skipped"}
 
 	case "js":
 		if commandAvailable("node") {
@@ -271,12 +483,12 @@ func buildStage(ctx context.Context, repoPath string, finding models.Finding, ch
 	}
 }
 
-// nodeParseCheck runs `node --check` on each changed JS/TS file as a parse-only
-// build minimum.
+// nodeParseCheck runs `node --check` on changed JS files only. TypeScript
+// and JSX are skipped: Node cannot parse those extensions.
 func nodeParseCheck(ctx context.Context, repoPath string, changed []string) StageResult {
 	checked := 0
 	for _, f := range changed {
-		if !isJSLike(f) {
+		if !isNodeCheckable(f) {
 			continue
 		}
 		if out, err := runCommand(ctx, repoPath, "node", "--check", f); err != nil {
@@ -285,7 +497,7 @@ func nodeParseCheck(ctx context.Context, repoPath string, changed []string) Stag
 		checked++
 	}
 	if checked == 0 {
-		return StageResult{Stage: StageBuild, Passed: true, Skipped: true, Detail: "no js/ts files to parse-check"}
+		return StageResult{Stage: StageBuild, Passed: true, Skipped: true, Detail: "no .js/.mjs/.cjs files to parse-check"}
 	}
 	return StageResult{Stage: StageBuild, Passed: true, Detail: fmt.Sprintf("node --check passed on %d file(s)", checked)}
 }
@@ -337,9 +549,13 @@ func langForFile(f string) string {
 	}
 }
 
-func isJSLike(f string) bool {
-	l := langForFile(f)
-	return l == "js" || l == "ts"
+func isNodeCheckable(f string) bool {
+	switch strings.ToLower(filepath.Ext(f)) {
+	case ".js", ".mjs", ".cjs":
+		return true
+	default:
+		return false
+	}
 }
 
 // findingStillPresent reports whether the original finding is still reported in

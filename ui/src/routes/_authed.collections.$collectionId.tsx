@@ -1,6 +1,6 @@
 // Collection detail. Lets the user:
 //   - Rename or clear description (inline edit)
-//   - Delete the collection (cascade — confirmation prompt)
+//   - Delete the collection (modal; optional purge of scan records)
 //   - Add a repo: pick an existing one or create a new one
 //       (local path or remote git URL)
 //   - Remove a repo from this collection (doesn't delete the repo)
@@ -22,6 +22,8 @@ import type { Collection, Repo, Scan } from "@/lib/types";
 import { CardSkeleton } from "@/components/skeleton";
 import { AddRepoForm } from "@/components/add-repo-form";
 import { PostureCards } from "@/components/fleet/posture-cards";
+import { ConfirmDialog } from "@/components/confirm-dialog";
+import { DeleteWithRecordsDialog } from "@/components/delete-with-records-dialog";
 
 // GetCollection returns a wrapped shape: { data: { collection, repos, scans } }
 type CollectionDetail = {
@@ -41,6 +43,8 @@ function CollectionDetailPage() {
   const me = useMe();
   const [editing, setEditing] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [removeTarget, setRemoveTarget] = useState<Repo | null>(null);
 
   const q = useQuery({
     queryKey: ["collection", collectionId],
@@ -67,8 +71,10 @@ function CollectionDetailPage() {
   });
 
   const del = useMutation({
-    mutationFn: async () => {
-      await api.delete(`/collections/${collectionId}`);
+    mutationFn: async (purge: boolean) => {
+      await api.delete(
+        `/collections/${collectionId}${purge ? "?purge=true" : ""}`,
+      );
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["collections", "all"] });
@@ -104,6 +110,30 @@ function CollectionDetailPage() {
 
   return (
     <div className="page stack page--mid">
+      <DeleteWithRecordsDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        kind="collection"
+        name={c.name}
+        recordCount={scans?.length}
+        pending={del.isPending}
+        onConfirm={(purge) => del.mutate(purge)}
+      />
+      <ConfirmDialog
+        open={!!removeTarget}
+        onOpenChange={(o) => !o && setRemoveTarget(null)}
+        title={`Remove “${removeTarget?.name ?? ""}” from this collection?`}
+        description="The repo itself is not deleted — only the membership in this collection."
+        confirmLabel="Remove"
+        pending={removeRepo.isPending}
+        onConfirm={() => {
+          if (removeTarget) {
+            removeRepo.mutate(removeTarget.id, {
+              onSuccess: () => setRemoveTarget(null),
+            });
+          }
+        }}
+      />
       <div className="flex items-start gap-3">
         <Link
           to="/collections"
@@ -144,15 +174,7 @@ function CollectionDetailPage() {
             </button>
             <button
               type="button"
-              onClick={() => {
-                if (
-                  window.confirm(
-                    `Delete collection "${c.name}"? This will also delete its scans (repos stay). This can't be undone.`,
-                  )
-                ) {
-                  del.mutate();
-                }
-              }}
+              onClick={() => setDeleteOpen(true)}
               className="size-9 grid place-items-center rounded-md hover:bg-destructive/10 text-destructive"
               aria-label="Delete"
             >
@@ -206,11 +228,7 @@ function CollectionDetailPage() {
                 </Link>
                 <button
                   type="button"
-                  onClick={() => {
-                    if (window.confirm(`Remove "${r.name}" from this collection? (The repo itself is not deleted.)`)) {
-                      removeRepo.mutate(r.id);
-                    }
-                  }}
+                  onClick={() => setRemoveTarget(r)}
                   className="size-7 grid place-items-center rounded hover:bg-muted/50"
                   aria-label="Remove from collection"
                   title="Remove from collection"

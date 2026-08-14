@@ -1,6 +1,6 @@
 module github.com/alphabravocompany/thewolf/fixer-tools
 
-go 1.26.5
+go 1.26.6
 
 require (
 	github.com/cli/cli/v2 v2.97.0

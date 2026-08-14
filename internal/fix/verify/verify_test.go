@@ -171,11 +171,11 @@ func TestGate_ScannerError_PropagatesUnverified(t *testing.T) {
 	scanner := &fakeScanner{err: errors.New("docker down")}
 
 	res, err := Gate(context.Background(), ws, goFinding(), scanner, Options{})
-	if err == nil {
-		t.Fatal("expected an error when the scanner backend fails")
+	if err != nil {
+		t.Fatalf("scanner backend errors are unverified, not gate errors: %v", err)
 	}
-	if res.Passed {
-		t.Error("a backend error must not be reported as a pass")
+	if res.Passed || !res.UnableToVerify {
+		t.Fatalf("backend error must be unable-to-verify, got %+v", res)
 	}
 }
 
@@ -284,6 +284,199 @@ func TestInferLanguage(t *testing.T) {
 	// Falls back to changed-file extensions when the finding path is unknown.
 	if got := inferLanguage(models.Finding{FilePath: "Makefile"}, []string{"x.py"}); got != "py" {
 		t.Errorf("fallback inferLanguage = %q, want py", got)
+	}
+}
+
+func TestIsNodeCheckable(t *testing.T) {
+	if !isNodeCheckable("app.js") || !isNodeCheckable("mod.mjs") || !isNodeCheckable("c.cjs") {
+		t.Fatal("js/mjs/cjs must be checkable")
+	}
+	for _, f := range []string{"a.ts", "a.tsx", "a.jsx", "a.go"} {
+		if isNodeCheckable(f) {
+			t.Fatalf("%s must not be node --check'd", f)
+		}
+	}
+}
+
+func TestGate_TsxDoesNotFailNodeCheck(t *testing.T) {
+	var ran []string
+	origCmd := runCommand
+	origLook := lookPath
+	lookPath = func(string) (string, error) { return "/usr/bin/node", nil }
+	runCommand = func(_ context.Context, _, name string, args ...string) (string, error) {
+		ran = append(ran, name+" "+args[0])
+		return "ERR_UNKNOWN_FILE_EXTENSION", errors.New("exit 1")
+	}
+	t.Cleanup(func() { runCommand = origCmd; lookPath = origLook })
+
+	ws := &fakeWorkspace{path: "/ws", changed: []string{"frontend/modal.tsx"}}
+	f := models.Finding{ID: "t1", ToolName: "renovate", FilePath: "frontend/modal.tsx", LineStart: 12}
+	res, err := Gate(context.Background(), ws, f, &fakeScanner{findings: nil}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range ran {
+		if c == "node --check" || c == "node frontend/modal.tsx" {
+			t.Fatalf("must not node --check tsx, ran %v", ran)
+		}
+	}
+	// node --check is never invoked; args[0] would be --check
+	for _, c := range ran {
+		if len(c) >= 4 && c[:4] == "node" {
+			t.Fatalf("node must not run for tsx-only changes: %v", ran)
+		}
+	}
+	if !res.Passed {
+		t.Fatalf("tsx-only edit must not fail build: %+v", res)
+	}
+}
+
+type batchScanner struct {
+	calls    int
+	files    [][]string
+	findings []models.Finding
+	err      error
+}
+
+func (s *batchScanner) RescanFile(context.Context, string, string, string, string) ([]models.Finding, error) {
+	t := "RescanFile should not be used when RescanFiles is implemented"
+	panic(t)
+}
+
+func (s *batchScanner) RescanFiles(_ context.Context, _ string, files []string, _, _ string) ([]models.Finding, error) {
+	s.calls++
+	cp := append([]string(nil), files...)
+	s.files = append(s.files, cp)
+	return s.findings, s.err
+}
+
+func TestGateBatch_OneRescanForManyFindings(t *testing.T) {
+	stubBuild(t, false)
+	ws := &fakeWorkspace{path: "/ws", changed: []string{"a.go", "b.go"}}
+	sc := &batchScanner{}
+	var findings []models.Finding
+	for i := 0; i < 10; i++ {
+		file := "a.go"
+		if i >= 5 {
+			file = "b.go"
+		}
+		findings = append(findings, models.Finding{
+			ID: "id-" + string(rune('a'+i)), ToolName: "gosec", RuleID: "G101", FilePath: file, LineStart: i + 1,
+		})
+	}
+	out, err := GateBatch(context.Background(), ws, findings, sc, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sc.calls != 1 {
+		t.Fatalf("rescan calls = %d, want 1", sc.calls)
+	}
+	if len(out) != 10 {
+		t.Fatalf("results = %d, want 10", len(out))
+	}
+	for _, r := range out {
+		if !r.Passed || !r.FindingCleared {
+			t.Fatalf("expected cleared, got %+v", r)
+		}
+	}
+}
+
+func TestGate_EmptyFilePathSkipped(t *testing.T) {
+	ws := &fakeWorkspace{path: "/ws", changed: []string{"main.go"}}
+	sc := &fakeScanner{}
+	f := models.Finding{ID: "empty-1", ToolName: "scorecard", RuleID: "Branch-Protection"}
+	res, err := Gate(context.Background(), ws, f, sc, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Passed || res.FindingCleared {
+		t.Fatalf("empty path must not look cleared: %+v", res)
+	}
+	if sc.calls != 0 {
+		t.Fatalf("empty path must not rescan, calls=%d", sc.calls)
+	}
+}
+
+func TestGateBatch_TSSkipDoesNotFailGo(t *testing.T) {
+	origCmd := runCommand
+	origLook := lookPath
+	lookPath = func(name string) (string, error) { return "/usr/bin/" + name, nil }
+	runCommand = func(_ context.Context, _, name string, args ...string) (string, error) {
+		if name == "node" && len(args) > 0 && args[0] == "--check" {
+			return "ERR_UNKNOWN_FILE_EXTENSION", errors.New("exit 1")
+		}
+		if name == "go" {
+			return "ok", nil
+		}
+		return "ok", nil
+	}
+	t.Cleanup(func() { runCommand = origCmd; lookPath = origLook })
+
+	ws := &fakeWorkspace{path: "/ws", changed: []string{"a.ts", "main.go"}}
+	sc := &batchScanner{}
+	ts := models.Finding{ID: "ts-1", ToolName: "bearer", RuleID: "secret", FilePath: "a.ts", LineStart: 1}
+	goF := goFinding()
+	goF.ID = "go-1"
+	out, err := GateBatch(context.Background(), ws, []models.Finding{ts, goF}, sc, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := out[ts.ID]; got == nil || got.BuildFailed() {
+		t.Fatalf("ts must skip node --check, got %+v", got)
+	}
+	if got := out[goF.ID]; got == nil || !got.Built || !got.FindingCleared {
+		t.Fatalf("go must still build, got %+v", got)
+	}
+}
+
+func TestGateBatch_JSBuildFailDoesNotFailGo(t *testing.T) {
+	origCmd := runCommand
+	origLook := lookPath
+	lookPath = func(name string) (string, error) { return "/usr/bin/" + name, nil }
+	runCommand = func(_ context.Context, _, name string, args ...string) (string, error) {
+		if name == "node" && len(args) > 0 && args[0] == "--check" {
+			return "SyntaxError", errors.New("exit 1")
+		}
+		if name == "go" {
+			return "ok", nil
+		}
+		return "ok", nil
+	}
+	t.Cleanup(func() { runCommand = origCmd; lookPath = origLook })
+
+	ws := &fakeWorkspace{path: "/ws", changed: []string{"a.js", "main.go"}}
+	sc := &batchScanner{}
+	js := models.Finding{ID: "js-1", ToolName: "eslint", RuleID: "x", FilePath: "a.js", LineStart: 1}
+	goF := goFinding()
+	goF.ID = "go-1"
+	out, err := GateBatch(context.Background(), ws, []models.Finding{js, goF}, sc, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := out[js.ID]; got == nil || got.Passed || !got.BuildFailed() {
+		t.Fatalf("js should fail node --check, got %+v", got)
+	}
+	if got := out[goF.ID]; got == nil || !got.Built || !got.FindingCleared {
+		t.Fatalf("go must not inherit the js build failure, got %+v", got)
+	}
+}
+
+func TestGateBatch_MissingImageLeavesUncleared(t *testing.T) {
+	stubBuild(t, false)
+	ws := &fakeWorkspace{path: "/ws", changed: []string{"main.go"}}
+	sc := &batchScanner{err: errors.New("scanner image missing: bearer/bearer:1.49.0")}
+	f := goFinding()
+	f.ID = "f-missing"
+	out, err := GateBatch(context.Background(), ws, []models.Finding{f}, sc, Options{})
+	if err != nil {
+		t.Fatalf("missing image is a soft fail, not a gate error: %v", err)
+	}
+	got := out[f.ID]
+	if got == nil || got.Passed || got.FindingCleared || !got.UnableToVerify {
+		t.Fatalf("missing image must leave uncleared/unverified, got %+v", got)
+	}
+	if got.BuildFailed() {
+		t.Fatalf("missing image is not a build failure: %+v", got)
 	}
 }
 

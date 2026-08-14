@@ -22,16 +22,20 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/remote"
 	"github.com/alphabravocompany/thewolf/internal/scan/detector"
 	"github.com/alphabravocompany/thewolf/internal/scantarget"
+	"github.com/alphabravocompany/thewolf/internal/secrets"
 	"github.com/alphabravocompany/thewolf/internal/wolflog"
 )
 
+var listRemoteBranches = gitpkg.ListRemoteBranches
+
 type createRepoRequest struct {
-	Name          string            `json:"name"`
-	SourceType    models.SourceType `json:"source_type"`
-	SourcePath    string            `json:"source_path"`
-	RemoteNodeID  *string           `json:"remote_node_id,omitempty"`
-	RemotePath    string            `json:"remote_path,omitempty"`
-	DefaultBranch string            `json:"default_branch"`
+	Name               string            `json:"name"`
+	SourceType         models.SourceType `json:"source_type"`
+	SourcePath         string            `json:"source_path"`
+	RemoteNodeID       *string           `json:"remote_node_id,omitempty"`
+	RemotePath         string            `json:"remote_path,omitempty"`
+	CredentialSecretID string            `json:"credential_secret_id,omitempty"`
+	DefaultBranch      string            `json:"default_branch"`
 }
 
 // createRepoResult is the CreateRepo response body. It embeds the repo so
@@ -144,6 +148,11 @@ func CreateRepo(w http.ResponseWriter, r *http.Request) {
 			response.WriteError(w, http.StatusBadRequest, "validation_error", err.Error())
 			return
 		}
+		if req.CredentialSecretID != "" && !repoCredentialSecretAllowed(
+			w, r, h, claims.UserID, req.CredentialSecretID, models.KeyTypeGitHubToken,
+		) {
+			return
+		}
 	}
 	if req.DefaultBranch == "" {
 		req.DefaultBranch = "main"
@@ -160,6 +169,10 @@ func CreateRepo(w http.ResponseWriter, r *http.Request) {
 				sameNode = existing[i].RemoteNodeID != nil && req.RemoteNodeID != nil && *existing[i].RemoteNodeID == *req.RemoteNodeID
 			}
 			if existing[i].SourceType == req.SourceType && sameNode && normalizeSourcePath(existing[i].SourcePath) == want {
+				if req.CredentialSecretID != "" && existing[i].CredentialSecretID != req.CredentialSecretID {
+					existing[i].CredentialSecretID = req.CredentialSecretID
+					_ = h.Store.UpdateRepo(r.Context(), &existing[i])
+				}
 				response.WriteJSON(w, http.StatusOK, response.SuccessResponse{
 					Data: createRepoResult{Repo: &existing[i], Deduplicated: true},
 				})
@@ -170,16 +183,17 @@ func CreateRepo(w http.ResponseWriter, r *http.Request) {
 
 	now := time.Now()
 	repo := &models.Repo{
-		ID:            uuid.New().String(),
-		UserID:        claims.UserID,
-		Name:          req.Name,
-		SourceType:    req.SourceType,
-		SourcePath:    req.SourcePath,
-		RemoteNodeID:  req.RemoteNodeID,
-		RemotePath:    req.RemotePath,
-		DefaultBranch: req.DefaultBranch,
-		CreatedAt:     now,
-		UpdatedAt:     now,
+		ID:                 uuid.New().String(),
+		UserID:             claims.UserID,
+		Name:               req.Name,
+		SourceType:         req.SourceType,
+		SourcePath:         req.SourcePath,
+		RemoteNodeID:       req.RemoteNodeID,
+		RemotePath:         req.RemotePath,
+		CredentialSecretID: req.CredentialSecretID,
+		DefaultBranch:      req.DefaultBranch,
+		CreatedAt:          now,
+		UpdatedAt:          now,
 	}
 
 	if err := h.Store.CreateRepo(r.Context(), repo); err != nil {
@@ -203,6 +217,35 @@ func CreateRepo(w http.ResponseWriter, r *http.Request) {
 	response.WriteJSON(w, http.StatusCreated, response.SuccessResponse{
 		Data: createRepoResult{Repo: repo},
 	})
+}
+
+func repoCredentialSecretAllowed(
+	w http.ResponseWriter,
+	r *http.Request,
+	h *Handler,
+	userID string,
+	secretID string,
+	keyType models.KeyType,
+) bool {
+	secretID = strings.TrimSpace(secretID)
+	if secretID == "" {
+		response.WriteError(w, http.StatusBadRequest, "validation_error", "credential_secret_id cannot be empty")
+		return false
+	}
+	secret, err := h.Store.GetSecretByID(r.Context(), secretID)
+	if err != nil {
+		response.WriteError(w, http.StatusBadRequest, "validation_error", "credential_secret_id does not reference a configured secret")
+		return false
+	}
+	if secret.UserID != userID {
+		response.WriteError(w, http.StatusForbidden, "forbidden", "credential secret does not belong to current user")
+		return false
+	}
+	if secret.KeyType != keyType {
+		response.WriteError(w, http.StatusBadRequest, "validation_error", "credential_secret_id must reference a github_token secret")
+		return false
+	}
+	return true
 }
 
 func GetRepo(w http.ResponseWriter, r *http.Request) {
@@ -356,6 +399,23 @@ func ListRepoBranches(w http.ResponseWriter, r *http.Request) {
 		}
 		branches = info.Branches
 		current = info.CurrentBranch
+	} else if repo.SourceType == models.SourceTypeGitHub {
+		owner, name, err := scantarget.ParseGitHubSource(repo.SourcePath)
+		if err != nil {
+			response.WriteError(w, http.StatusBadRequest, "validation_error", err.Error())
+			return
+		}
+		token, err := githubTokenForRepo(r.Context(), h, repo)
+		if err != nil {
+			response.WriteError(w, http.StatusBadRequest, "validation_error", err.Error())
+			return
+		}
+		branches, err = listRemoteBranches("https://github.com/"+owner+"/"+name+".git", token)
+		if err != nil {
+			response.WriteError(w, http.StatusBadGateway, "github_branches_failed", "failed to list GitHub branches")
+			return
+		}
+		current = repo.DefaultBranch
 	} else {
 		var err error
 		branches, err = gitpkg.ListBranches(repo.SourcePath)
@@ -374,6 +434,53 @@ func ListRepoBranches(w http.ResponseWriter, r *http.Request) {
 			"current_branch": current,
 		},
 	})
+}
+
+func githubTokenForRepo(ctx context.Context, h *Handler, repo *models.Repo) (string, error) {
+	if h == nil || h.Store == nil || repo == nil || repo.UserID == "" {
+		return "", nil
+	}
+	if strings.TrimSpace(repo.CredentialSecretID) != "" {
+		secret, err := h.Store.GetSecretByID(ctx, repo.CredentialSecretID)
+		if err != nil || secret.UserID != repo.UserID {
+			return "", errSelectedGitHubTokenNotFound()
+		}
+		if secret.KeyType != models.KeyTypeGitHubToken {
+			return "", errSelectedGitHubTokenNotFound()
+		}
+		token, err := secrets.Decrypt(secret.EncryptedValue)
+		if err != nil {
+			return "", errSelectedGitHubTokenNotFound()
+		}
+		return token, nil
+	}
+	list, err := h.Store.ListSecretsByUser(ctx, repo.UserID)
+	if err != nil {
+		return "", err
+	}
+	for _, secret := range list {
+		if secret.KeyType != models.KeyTypeGitHubToken {
+			continue
+		}
+		token, err := secrets.Decrypt(secret.EncryptedValue)
+		if err != nil {
+			return "", err
+		}
+		return token, nil
+	}
+	return "", nil
+}
+
+func errSelectedGitHubTokenNotFound() error {
+	return &repoValidationError{message: "selected GitHub token was not found"}
+}
+
+type repoValidationError struct {
+	message string
+}
+
+func (e *repoValidationError) Error() string {
+	return e.message
 }
 
 // GetRepoFixable handles GET /api/repos/{id}/fixable — the writability

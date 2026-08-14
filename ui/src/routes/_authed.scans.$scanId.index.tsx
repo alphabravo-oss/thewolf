@@ -24,8 +24,7 @@ import { EmptyState } from "@/components/empty-state";
 import { ScanStatusPill } from "@/components/scan-status-pill";
 import { SeverityBadge } from "@/components/severity-badge";
 import { CheckboxFilterRow } from "@/components/checkbox-filter-row";
-import { ScanReleaseControls } from "@/components/scan-release-controls";
-import { canModify, useMe } from "@/lib/me";
+import { ScanAgentsPanel } from "@/components/fixes/scan-agents-panel";
 
 export const Route = createFileRoute("/_authed/scans/$scanId/")({
   component: ScanDetailPage,
@@ -65,7 +64,6 @@ const PAGE_SIZE = 100;
 
 function ScanDetailPage() {
   const { scanId } = Route.useParams();
-  const me = useMe();
 
   const scanQ = useQuery({
     queryKey: ["scan", scanId],
@@ -315,6 +313,18 @@ function ScanDetailPage() {
             <span className="text-muted-foreground font-normal">
               · {scan.branch}
             </span>
+            {scan.origin_scan_id ? (
+              <span className="ml-2 text-xs font-normal text-muted-foreground">
+                child of{" "}
+                <Link
+                  to="/scans/$scanId"
+                  params={{ scanId: scan.origin_scan_id }}
+                  className="font-mono hover:underline"
+                >
+                  {scan.origin_scan_id.slice(0, 8)}
+                </Link>
+              </span>
+            ) : null}
           </h1>
           <p className="text-xs text-muted-foreground">
             {completed.length}/{selected.length} tools completed
@@ -347,6 +357,22 @@ function ScanDetailPage() {
         {scan.status === "running" && <CancelScanButton scanId={scanId} />}
       </div>
 
+      {(scan.status === "completed" ||
+        scan.status === "cancelled" ||
+        scan.origin_scan_id) &&
+        scan.repo_id && (
+          <ScanAgentsPanel
+            scanId={scan.origin_scan_id || scanId}
+            repoId={scan.repo_id}
+            originFindings={scan.origin_scan_id ? undefined : scan.finding_count}
+            github={
+              scan.source_type === "github" ||
+              scan.repo?.source_type === "github"
+            }
+            sourcePath={scan.source_path || scan.repo?.source_path}
+          />
+        )}
+
       {scan.status === "cancelled" && (
         <div
           className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200"
@@ -367,17 +393,10 @@ function ScanDetailPage() {
             This scan completed without running any tools. The container scanner
             backend may not be configured — try{" "}
             <code className="font-mono text-xs">wolf doctor</code> from the CLI, or
-            open the Scanners tab to install missing tools.
+            open Settings → Scanners to pull missing images.
           </div>
         </div>
       )}
-
-      <ScanReleaseControls
-        scan={scan}
-        authorized={
-          me.data?.role === "admin" && canModify(me.data, scan.user_id)
-        }
-      />
 
       <ToolsPanel
         tools={toolsQ.data}
@@ -739,10 +758,9 @@ function CancelScanButton({ scanId }: { scanId: string }) {
   );
 }
 
-// ToolsPanel — collapsible per-tool status with finding counts and
-// expandable error details for failures. The "Tools" section is the
-// answer to "which tools actually ran, which succeeded, which failed,
-// and why" without leaving the scan page.
+// ToolsPanel — compact card grid of per-tool status. Names are short;
+// keep status/count next to the name instead of stretching a one-column
+// row across the page.
 function ToolsPanel({
   tools,
   loading,
@@ -761,15 +779,9 @@ function ToolsPanel({
   const scanActive = scanStatus === "running" || scanStatus === "pending";
   const [open, setOpen] = useState(scanActive);
   const contentId = useId();
-  // If the user lands on the page while running, then the scan
-  // finishes — leave the panel however the user has it. If they
-  // never touched it (open===true and scanActive flips), we keep
-  // it open so partial-results don't disappear from view. The
-  // collapsed-when-done default only applies to fresh loads of
-  // completed scans.
   if (loading || !tools) {
     return (
-      <section className="glass-card p-5">
+      <section className="glass-card p-4">
         <h2 className="text-base font-semibold mb-2">Tools</h2>
         <div className="text-sm text-muted-foreground">Loading per-tool status…</div>
       </section>
@@ -781,105 +793,69 @@ function ToolsPanel({
   const active = tools.filter(
     (t) => t.status === "running" || t.status === "queued" || t.status === "pending",
   );
+  const rank = (s: ToolStatusEntry["status"]) =>
+    s === "running" || s === "pending" ? 0 : s === "queued" ? 1 : s === "failed" ? 2 : s === "cancelled" ? 3 : 4;
+  const ordered = [...tools].sort((a, b) => {
+    const d = rank(a.status) - rank(b.status);
+    if (d !== 0) return d;
+    return b.finding_count - a.finding_count || a.name.localeCompare(b.name);
+  });
 
   return (
-    <section className="glass-card p-5">
+    <section className="glass-card p-4">
       <button
         type="button"
         onClick={() => setOpen(!open)}
         aria-expanded={open}
         aria-controls={contentId}
-        className="flex items-center justify-between w-full"
+        className="flex flex-wrap items-center gap-x-3 gap-y-1 w-full text-left"
       >
-        <div className="flex items-center gap-2">
-          {open ? (
-            <ChevronDownIcon className="size-4 text-muted-foreground" />
-          ) : (
-            <ChevronRightIcon className="size-4 text-muted-foreground" />
-          )}
-          <h2 className="text-base font-semibold">Tools ({tools.length})</h2>
-        </div>
-        <div className="text-xs text-muted-foreground tabular-nums">
+        {open ? (
+          <ChevronDownIcon className="size-4 text-muted-foreground" />
+        ) : (
+          <ChevronRightIcon className="size-4 text-muted-foreground" />
+        )}
+        <h2 className="text-base font-semibold">Tools ({tools.length})</h2>
+        <div className="text-xs text-muted-foreground tabular-nums flex flex-wrap gap-x-2">
           <span className="text-green-400">{completed.length} done</span>
           {failed.length > 0 && (
-            <span className="text-red-400 ml-2">{failed.length} failed</span>
+            <span className="text-red-400">{failed.length} failed</span>
           )}
           {cancelled.length > 0 && (
-            <span className="text-amber-300 ml-2">{cancelled.length} cancelled</span>
+            <span className="text-amber-300">{cancelled.length} cancelled</span>
           )}
           {active.length > 0 && (
-            <span className="text-blue-300 ml-2">{active.length} active</span>
+            <span className="text-blue-300">{active.length} active</span>
           )}
         </div>
       </button>
 
       {open && (
-        <div id={contentId}>
-          {active.length > 0 && (
-            <div className="mt-4">
-              <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-2">
-                Running / queued ({active.length})
-              </div>
-              <div className="space-y-1">
-                {active.map((t) => (
-                  <ToolRow key={t.name} tool={t} scanId={scanId} cancellable={scanActive} />
-                ))}
-              </div>
-            </div>
-          )}
-          {failed.length > 0 && (
-            <div className="mt-4">
-              <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-2">
-                Failed ({failed.length})
-              </div>
-              <div className="space-y-1">
-                {failed.map((t) => (
-                  <ToolRow key={t.name} tool={t} scanId={scanId} />
-                ))}
-              </div>
-            </div>
-          )}
-          {cancelled.length > 0 && (
-            <div className="mt-4">
-              <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-2">
-                Cancelled ({cancelled.length})
-              </div>
-              <div className="space-y-1">
-                {cancelled.map((t) => (
-                  <ToolRow key={t.name} tool={t} scanId={scanId} />
-                ))}
-              </div>
-            </div>
-          )}
-          {completed.length > 0 && (
-            <div className="mt-4">
-              <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-2">
-                Completed ({completed.length})
-              </div>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-1">
-                {completed
-                  .sort((a, b) => b.finding_count - a.finding_count)
-                  .map((t) => (
-                    <ToolRow key={t.name} tool={t} scanId={scanId} compact />
-                  ))}
-              </div>
-            </div>
-          )}
+        <div
+          id={contentId}
+          className="mt-3 grid grid-cols-[repeat(auto-fill,minmax(10.5rem,1fr))] gap-1.5"
+        >
+          {ordered.map((t) => (
+            <ToolCard
+              key={t.name}
+              tool={t}
+              scanId={scanId}
+              cancellable={scanActive}
+            />
+          ))}
         </div>
       )}
     </section>
   );
 }
 
-function ToolRow({
+function ToolCard({
   tool,
   scanId,
-  compact,
   cancellable,
 }: {
   tool: ToolStatusEntry;
   scanId: string;
-  compact?: boolean;
   cancellable?: boolean;
 }) {
   const [showErr, setShowErr] = useState(false);
@@ -888,77 +864,80 @@ function ToolRow({
     mutationFn: () =>
       api.delete(`/scans/${scanId}/tools/${encodeURIComponent(tool.name)}`),
     onSuccess: () => {
-      // Refresh both the per-tool list and the scan summary so the
-      // cancelled tool flips immediately + findings totals update.
       qc.invalidateQueries({ queryKey: ["scan-tools", scanId] });
       qc.invalidateQueries({ queryKey: ["scan", scanId] });
     },
   });
   const icon =
     tool.status === "completed" ? (
-      <CheckCircle2Icon className="size-3.5 text-green-400" />
+      <CheckCircle2Icon className="size-3.5 text-green-400 shrink-0" />
     ) : tool.status === "failed" ? (
-      <XCircleIcon className="size-3.5 text-red-400" />
+      <XCircleIcon className="size-3.5 text-red-400 shrink-0" />
     ) : tool.status === "cancelled" ? (
-      <StopCircleIcon className="size-3.5 text-amber-300" />
+      <StopCircleIcon className="size-3.5 text-amber-300 shrink-0" />
     ) : tool.status === "queued" ? (
-      <LoaderIcon className="size-3.5 text-muted-foreground" />
+      <LoaderIcon className="size-3.5 text-muted-foreground shrink-0" />
     ) : (
-      <LoaderIcon className="size-3.5 text-blue-300 animate-spin" />
+      <LoaderIcon className="size-3.5 text-blue-300 animate-spin shrink-0" />
     );
-
-  if (compact) {
-    return (
-      <div className="flex items-center gap-1.5 text-xs py-0.5">
-        {icon}
-        <span className="font-mono truncate flex-1 min-w-0">{tool.name}</span>
-        <span className="text-muted-foreground tabular-nums">
-          {tool.finding_count > 0 ? tool.finding_count : "—"}
-        </span>
-      </div>
-    );
-  }
+  const tone =
+    tool.status === "failed"
+      ? "border-red-500/30 bg-red-500/5"
+      : tool.status === "cancelled"
+        ? "border-amber-500/25 bg-amber-500/5"
+        : tool.status === "running" || tool.status === "pending"
+          ? "border-blue-400/30 bg-blue-500/5"
+          : "border-border/40 bg-muted/10";
+  const meta =
+    tool.status === "completed"
+      ? tool.finding_count > 0
+        ? String(tool.finding_count)
+        : "0"
+      : tool.status === "queued"
+        ? "queued"
+        : tool.status === "cancelled"
+          ? "cancelled"
+          : tool.status === "failed"
+            ? "failed"
+            : "running";
+  const canCancel =
+    cancellable && (tool.status === "running" || tool.status === "queued");
+  const canShowErr =
+    (tool.status === "failed" || tool.status === "cancelled") && !!tool.error;
 
   return (
-    <div className="text-sm">
-      <div className="flex items-center gap-2 py-1">
+    <div className={`rounded-md border px-2 py-1.5 min-w-0 ${tone}`}>
+      <div className="flex items-center gap-1.5 min-w-0">
         {icon}
-        <span className="font-mono flex-1 min-w-0 truncate">{tool.name}</span>
-        {tool.status === "queued" && (
-          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-            queued
-          </span>
-        )}
-        {tool.finding_count > 0 && (
-          <span className="text-xs text-muted-foreground tabular-nums">
-            {tool.finding_count} findings
-          </span>
-        )}
-        {(tool.status === "failed" || tool.status === "cancelled") && tool.error && (
+        <span className="font-mono text-xs truncate">{tool.name}</span>
+        <span className="text-[10px] tabular-nums text-muted-foreground shrink-0">
+          {meta}
+        </span>
+        {canShowErr && (
           <button
             type="button"
             onClick={() => setShowErr(!showErr)}
             aria-expanded={showErr}
-            className="text-[11px] underline text-muted-foreground hover:text-foreground"
+            className="text-[10px] underline text-muted-foreground hover:text-foreground shrink-0"
           >
-            {showErr ? "Hide error" : "Show error"}
+            {showErr ? "hide" : "err"}
           </button>
         )}
-        {cancellable && (tool.status === "running" || tool.status === "queued") && (
+        {canCancel && (
           <button
             type="button"
             onClick={() => cancel.mutate()}
             disabled={cancel.isPending}
             aria-label={`Cancel ${tool.name}; the rest of the scan keeps going`}
             title={`Cancel ${tool.name}; the rest of the scan keeps going`}
-            className="inline-flex items-center justify-center size-5 rounded hover:bg-red-500/15 text-muted-foreground hover:text-red-300 disabled:opacity-50"
+            className="inline-flex items-center justify-center size-4 rounded hover:bg-red-500/15 text-muted-foreground hover:text-red-300 disabled:opacity-50 shrink-0"
           >
-            <XIcon className="size-3.5" />
+            <XIcon className="size-3" />
           </button>
         )}
       </div>
       {showErr && tool.error && (
-        <pre className="text-[11px] font-mono text-red-300/80 bg-red-500/5 border border-red-500/10 rounded p-2 ml-5 mb-1 whitespace-pre-wrap break-all max-h-48 overflow-y-auto">
+        <pre className="mt-1.5 text-[10px] font-mono text-red-300/80 whitespace-pre-wrap break-all max-h-32 overflow-y-auto">
           {tool.error}
         </pre>
       )}

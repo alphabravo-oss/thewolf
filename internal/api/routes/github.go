@@ -20,8 +20,8 @@ type listOrgReposRequest struct {
 // ListOrgGitHubRepos handles POST /sources/github/list-org-repos.
 //
 // It resolves a github_token secret (either by explicit secret_id or the first
-// one owned by the caller), decrypts it, and asks GitHub for every repo in the
-// given org (falling back to a user account if the org 404s).
+// one owned by the caller), decrypts it, and lists GitHub repos. With org set
+// it lists that org/user; with org empty it lists every repo the PAT can read.
 func ListOrgGitHubRepos(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetUserFromContext(r.Context())
 	if claims == nil {
@@ -40,10 +40,6 @@ func ListOrgGitHubRepos(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.Org = strings.TrimSpace(req.Org)
-	if req.Org == "" {
-		response.WriteError(w, http.StatusBadRequest, "validation_error", "org is required")
-		return
-	}
 
 	secs, err := h.Store.ListSecretsByUser(r.Context(), claims.UserID)
 	if err != nil {
@@ -78,7 +74,13 @@ func ListOrgGitHubRepos(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	repos, err := github.New(token).ListOrgRepos(r.Context(), req.Org)
+	client := github.New(token)
+	var repos []github.Repo
+	if req.Org == "" {
+		repos, err = client.ListAccessibleRepos(r.Context())
+	} else {
+		repos, err = client.ListOrgRepos(r.Context(), req.Org)
+	}
 	if err != nil {
 		response.WriteError(w, http.StatusBadGateway, "upstream_error", err.Error())
 		return

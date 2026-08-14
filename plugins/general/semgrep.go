@@ -36,15 +36,20 @@ func (p *SemgrepPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([
 	args := []string{"scan", "--json", "--jobs", "1"}
 	args = append(args, plugin.ExcludeArgs("--exclude")...)
 	args = append(args, "/scan")
-	// semgrep writes its first-run settings to ~/.semgrep. The image's
-	// HOME is /home/semgrep which is read-only under our --read-only
-	// mount, so the binary crashes on import. Redirect HOME to the
-	// per-container tmpfs.
+	// semgrep writes first-run settings and registry rule caches to
+	// ~/.semgrep. The image HOME is read-only under our mount. Persist
+	// on the shared wolf-db volume so later scans do not re-fetch
+	// p/ci (and similar) from the registry.
+	cfg := container.ConfigFromOpts(opts.ContainerCfg)
+	home := "/tmp"
+	if cfg.DBVolume != "" {
+		home = "/var/lib/wolf-db/semgrep"
+	}
 	cmd := container.CommandContext(ctx,
-		container.ConfigFromOpts(opts.ContainerCfg),
+		cfg,
 		container.Options{
 			RepoDir:  opts.RepoPath,
-			ExtraEnv: map[string]string{"HOME": "/tmp"},
+			ExtraEnv: map[string]string{"HOME": home},
 		},
 		"semgrep", args...)
 

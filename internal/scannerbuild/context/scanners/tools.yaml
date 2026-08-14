@@ -25,8 +25,8 @@ tools:
   bearer:
     display_name: Bearer
     category: sast
-    resource_class: medium
-    default_timeout: 10m
+    resource_class: heavy
+    default_timeout: 20m
     plugin_package: plugins/security
     integration_tier: upstream
     pinned_version: "1.49.0"
@@ -250,8 +250,8 @@ tools:
   gosec:
     display_name: gosec
     category: sast
-    resource_class: medium
-    default_timeout: 10m
+    resource_class: heavy
+    default_timeout: 20m
     plugin_package: plugins/go
     integration_tier: default
     pinned_version: "2.28.0"
@@ -630,7 +630,7 @@ tools:
     version_variable: SCORECARD_VERSION
     image:
       pinned_reference: gcr.io/openssf/scorecard:v5.0.0
-      entrypoint: scorecard
+      entrypoint: /scorecard
       platforms: ["linux/amd64"]
     update_source:
       type: docker_registry
@@ -724,8 +724,8 @@ tools:
   staticcheck:
     display_name: Staticcheck
     category: quality
-    resource_class: light
-    default_timeout: 5m
+    resource_class: medium
+    default_timeout: 10m
     plugin_package: plugins/go
     integration_tier: default
     pinned_version: "0.7.0"

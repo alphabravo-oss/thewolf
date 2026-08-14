@@ -206,9 +206,30 @@ func AddScanSubcommands(scan *cobra.Command) {
 		},
 	}
 
+	orphans := &cobra.Command{
+		Use:         "orphans",
+		Short:       "List leftover scans whose repo was deleted",
+		Annotations: apiAnno("GET", "/scans/orphans"),
+		Args:        cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return runRender(cmd, "GET", "/scans/orphans", nil)
+		},
+	}
+	purgeOrphans := &cobra.Command{
+		Use:         "purge-orphans",
+		Short:       "Delete leftover scans and findings for missing repos",
+		Annotations: apiAnno("DELETE", "/scans/orphans"),
+		Args:        cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return runRender(cmd, "DELETE", "/scans/orphans", nil)
+		},
+	}
+
 	scan.AddCommand(
 		listCmd("/scans", "List scans"),
 		getCmd("/scans", "Get a scan"),
+		orphans,
+		purgeOrphans,
 		create,
 		releaseRescan,
 		preflight,
@@ -230,6 +251,7 @@ func AddScanSubcommands(scan *cobra.Command) {
 		subGetCmd("ai-logs <id>", "List a scan's AI logs", "/scans/%s/ai-logs"),
 		subGetCmd("tool-summaries <id>", "List a scan's tool summaries", "/scans/%s/tool-summaries"),
 		subGetCmd("recommendations <id>", "List a scan's recommendations", "/scans/%s/recommendations"),
+		subGetCmd("lineage <id>", "Show origin-scan lineage (children and agents)", "/scans/%s/lineage"),
 		compare,
 		toolOutput,
 		trends,

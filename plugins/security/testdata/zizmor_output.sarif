@@ -1,0 +1,34 @@
+{
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "zizmor",
+          "rules": [
+            {
+              "id": "template-injection",
+              "shortDescription": { "text": "code injection via template expansion" },
+              "defaultConfiguration": { "level": "error" }
+            }
+          ]
+        }
+      },
+      "results": [
+        {
+          "ruleId": "template-injection",
+          "level": "error",
+          "message": { "text": "may expand into attacker-controllable code" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": ".github/workflows/ci.yml" },
+                "region": { "startLine": 18, "endLine": 18 }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

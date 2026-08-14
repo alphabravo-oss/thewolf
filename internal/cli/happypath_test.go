@@ -177,9 +177,9 @@ func TestHappyPathScanAndFindings(t *testing.T) {
 	softRun(t, cli("finding", "trends-export")...)
 }
 
-// TestHappyPathFixAndLoop exercises fix creation (no execution backend
-// needed) and loop commands against a seeded loop record.
-func TestHappyPathFixAndLoop(t *testing.T) {
+// TestHappyPathFixAndAgent exercises fixer enqueue/list/get/cancel and
+// the agent CLI aliases onto the same /fixes API.
+func TestHappyPathFixAndAgent(t *testing.T) {
 	url, jwt, userID, store := startServerFull(t)
 	cli := func(a ...string) []string {
 		return append(a, "--server", url, "--token", jwt, "-o", "json")
@@ -206,18 +206,10 @@ func TestHappyPathFixAndLoop(t *testing.T) {
 	mustRun(t, cli("fix", "get", fixID)...)
 	mustRun(t, cli("fix", "cancel", fixID)...)
 
-	// Loops normally run a controller goroutine; seed one directly.
-	loop := &models.Loop{ID: uuid.New().String(), UserID: userID, RepoID: repoID, Status: models.LoopStatusRunning, MaxIterations: 3, CreatedAt: now, UpdatedAt: now}
-	if err := store.CreateLoop(ctx, loop); err != nil {
-		t.Fatalf("seed loop: %v", err)
-	}
-	mustRun(t, cli("loop", "list")...)
-	mustRun(t, cli("loop", "get", loop.ID)...)
-	// pause/resume/stop act on a live controller that the seeded loop lacks;
-	// a graceful API error is an acceptable, proper response.
-	softRun(t, cli("loop", "pause", loop.ID)...)
-	softRun(t, cli("loop", "resume", loop.ID)...)
-	softRun(t, cli("loop", "stop", loop.ID)...)
+	agentID := dataID(t, mustRun(t, cli("agent", "create", "--repo", repoID, "--scan", scan.ID)...))
+	mustRun(t, cli("agent", "list")...)
+	mustRun(t, cli("agent", "get", agentID)...)
+	mustRun(t, cli("agent", "stop", agentID)...)
 }
 
 // TestHappyPathSystemAndAuth exercises system probes, audit log, and the

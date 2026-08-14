@@ -1,9 +1,8 @@
-// Empty-state card. Every list view in wolf renders one of these when
-// the underlying collection/scan/finding list is empty — astronomer-style
-// "no data yet, here's what to do next".
+// Full-width workspace empty state. List pages render one of these when
+// there is nothing to show — a surface that spans the page, not a narrow
+// centered card.
 import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -23,20 +22,16 @@ export function EmptyState({
   className?: string;
 }) {
   return (
-    <Card className={cn("p-12 text-center max-w-xl mx-auto", className)}>
-      <CardHeader className="p-0">
-        {Icon && (
-          <div className="size-12 mx-auto mb-4 rounded-full bg-muted/30 grid place-items-center">
-            <Icon className="size-6 text-muted-foreground" />
-          </div>
-        )}
-        <div className="text-base font-semibold">{title}</div>
-        {description && (
-          <div className="text-sm text-muted-foreground">{description}</div>
-        )}
-      </CardHeader>
-      {cta && (
-        <CardContent className="p-0 pt-5">
+    <section className={cn("glass-card empty-state", className)}>
+      {Icon ? (
+        <div className="empty-icon" aria-hidden="true">
+          <Icon />
+        </div>
+      ) : null}
+      <h3>{title}</h3>
+      {description ? <p>{description}</p> : null}
+      {cta ? (
+        <div className="empty-actions">
           {"to" in cta ? (
             <Button asChild>
               <Link to={cta.to}>{cta.label}</Link>
@@ -46,8 +41,8 @@ export function EmptyState({
               {cta.label}
             </Button>
           )}
-        </CardContent>
-      )}
-    </Card>
+        </div>
+      ) : null}
+    </section>
   );
 }

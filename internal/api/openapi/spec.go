@@ -80,7 +80,8 @@ func Endpoints() []Endpoint {
 		{"POST", "/repos", "repos", "Add a repository", "write:repos", "CreateRepoRequest", false},
 		{"GET", "/repos/{id}", "repos", "Get a repository", "read:repos", "", false},
 		{"PUT", "/repos/{id}", "repos", "Update a repository", "write:repos", "UpdateRepoRequest", false},
-		{"DELETE", "/repos/{id}", "repos", "Delete a repository", "write:repos", "", false},
+		{"POST", "/repos/{id}/sync", "repos", "Clone or pull the latest commits without starting a scan", "write:repos", "", false},
+		{"DELETE", "/repos/{id}", "repos", "Delete a repository (pass purge=true to also remove scan records)", "write:repos", "", false},
 		{"GET", "/repos/{id}/branches", "repos", "List a repository's branches", "read:repos", "", true},
 		{"GET", "/repos/{id}/fixable", "repos", "Writability preflight: can wolf write a fix branch to this repo?", "read:repos", "", false},
 		{"GET", "/repos/{id}/baselines", "repos", "List repository scan baselines", "read:scans", "", true},
@@ -108,7 +109,7 @@ func Endpoints() []Endpoint {
 		{"POST", "/collections", "collections", "Create a collection", "write:repos", "CreateCollectionRequest", false},
 		{"GET", "/collections/{id}", "collections", "Get a collection", "read:repos", "", false},
 		{"PUT", "/collections/{id}", "collections", "Update a collection", "write:repos", "CreateCollectionRequest", false},
-		{"DELETE", "/collections/{id}", "collections", "Delete a collection", "write:repos", "", false},
+		{"DELETE", "/collections/{id}", "collections", "Delete a collection (pass purge=true to also remove scan records)", "write:repos", "", false},
 		{"POST", "/collections/{id}/repos", "collections", "Add a repo to a collection", "write:repos", "CollectionRepoRequest", false},
 		{"DELETE", "/collections/{id}/repos/{repoId}", "collections", "Remove a repo from a collection", "write:repos", "", false},
 		{"GET", "/collections/{id}/tools", "collections", "List a collection's tools", "read:repos", "", true},
@@ -117,10 +118,13 @@ func Endpoints() []Endpoint {
 		// Scans.
 		{"GET", "/scans", "scans", "List scans", "read:scans", "", true},
 		{"GET", "/scans/trends", "scans", "Scan trends over time", "read:scans", "", false},
+		{"GET", "/scans/orphans", "scans", "List leftover scans whose repo was deleted", "read:scans", "", false},
+		{"DELETE", "/scans/orphans", "scans", "Delete leftover scans/findings for missing repos", "write:scans", "", false},
 		{"POST", "/scans", "scans", "Start a scan", "write:scans", "CreateScanRequest", false},
 		{"POST", "/scans/{id}/release-rescans", "scans", "Create a distinct scan pinned to an explicitly selected scanner release", "write:scans + operate:scanner-supply-chain", "ReleaseRescanRequest", false},
 		{"POST", "/scans/preflight", "scans", "Check which selected scanners are missing their image before scanning", "read:scans", "PreflightScanRequest", false},
 		{"GET", "/scans/{id}", "scans", "Get a scan", "read:scans", "", false},
+		{"GET", "/scans/{id}/lineage", "scans", "Get origin-scan lineage (children and agents)", "read:scans", "", false},
 		{"GET", "/scans/{id}/result", "scans", "Get a compact automation-oriented scan result", "read:scans", "", false},
 		{"GET", "/scans/{id}/findings", "scans", "List a scan's findings", "read:scans", "", true},
 		{"GET", "/scans/{id}/findings/stats", "scans", "Finding statistics for a scan", "read:scans", "", false},
@@ -144,7 +148,7 @@ func Endpoints() []Endpoint {
 		{"DELETE", "/scans/{id}/tools/{toolName}", "scans", "Cancel one tool of a scan", "write:scans", "", false},
 
 		// Source discovery.
-		{"POST", "/sources/github/list-org-repos", "sources", "List repos in a GitHub org / user via the caller's github_token secret", "write:repos", "ListOrgReposRequest", true},
+		{"POST", "/sources/github/list-org-repos", "sources", "List GitHub repos the PAT can read (all accessible, or one org/user)", "write:repos", "ListOrgReposRequest", true},
 
 		// Fleet aggregates.
 		{"GET", "/fleet/posture", "fleet", "Fleet-wide posture summary", "read:scans", "", false},
@@ -157,6 +161,7 @@ func Endpoints() []Endpoint {
 		{"GET", "/findings/trends", "findings", "Finding trends over time", "read:findings", "", false},
 		{"GET", "/findings/trends/export", "findings", "Export finding trends", "read:findings", "", false},
 		{"GET", "/findings/aggregate", "findings", "Aggregate findings (e.g. top vulnerable rules)", "read:findings", "", true},
+		{"GET", "/findings/by-repo", "findings", "Current-open findings grouped by repository", "read:findings", "", true},
 		{"GET", "/findings/{id}", "findings", "Get a finding", "read:findings", "", false},
 		{"PUT", "/findings/{id}/status", "findings", "Change a finding's status", "write:findings", "FindingStatusRequest", false},
 
@@ -175,21 +180,20 @@ func Endpoints() []Endpoint {
 		{"PUT", "/policies/{id}", "policies", "Update a quality policy", "write:config", "PolicyRequest", false},
 
 		// Fixes (autonomous fix engine — gated by the autofix_enabled setting).
+		{"POST", "/remediations/{id}/accept", "fixes", "Accept a local remediation and freeze the origin scan", "write:fixes", "", false},
 		{"GET", "/fixes", "fixes", "List fix jobs", "read:fixes", "", true},
-		{"POST", "/fixes", "fixes", "Enqueue an autonomous fix job (dry-run, branch-only)", "write:fixes", "CreateFixRequest", false},
+		{"POST", "/fixes", "fixes", "Enqueue an autonomous fix job (multi-turn on a branch, optional push)", "write:fixes", "CreateFixRequest", false},
+		{"GET", "/fixes/engines", "fixes", "List fixer engine auth status (OAuth session + API keys)", "read:fixes", "", false},
+		{"POST", "/fixes/consoles", "fixes", "Start a fixer-worker login or operator console", "write:fixes", "CreateFixerConsoleRequest", false},
+		{"GET", "/fixes/consoles/{id}", "fixes", "Get a fixer console session", "read:fixes", "", false},
+		{"GET", "/fixes/consoles/{id}/stream", "fixes", "Stream fixer console output (SSE)", "read:fixes", "", false},
+		{"POST", "/fixes/consoles/{id}/input", "fixes", "Send keystrokes to a fixer console", "write:fixes", "FixerConsoleInputRequest", false},
+		{"DELETE", "/fixes/consoles/{id}", "fixes", "Cancel a fixer console session", "write:fixes", "", false},
 		{"GET", "/fixes/{id}", "fixes", "Get a fix job and its attempts", "read:fixes", "", false},
 		{"GET", "/fixes/{id}/diff", "fixes", "Get the proposed diff for a fix job", "read:fixes", "", false},
 		{"GET", "/fixes/{id}/stream", "fixes", "Stream fix worker logs (SSE)", "read:fixes", "", false},
+		{"POST", "/fixes/{id}/resume", "fixes", "Continue a paused fix job or push its branch", "write:fixes", "ResumeFixRequest", false},
 		{"DELETE", "/fixes/{id}", "fixes", "Cancel a fix job", "write:fixes", "", false},
-
-		// Loops.
-		{"GET", "/loops", "loops", "List loops", "read:loops", "", true},
-		{"POST", "/loops", "loops", "Start a loop", "write:loops", "CreateLoopRequest", false},
-		{"GET", "/loops/{id}", "loops", "Get a loop", "read:loops", "", false},
-		{"GET", "/loops/{id}/stream", "loops", "Stream loop progress (SSE)", "read:loops", "", false},
-		{"PUT", "/loops/{id}/pause", "loops", "Pause a loop", "write:loops", "", false},
-		{"PUT", "/loops/{id}/resume", "loops", "Resume a loop", "write:loops", "", false},
-		{"DELETE", "/loops/{id}", "loops", "Stop a loop", "write:loops", "", false},
 
 		// Filesystem helpers.
 		{"GET", "/browse", "system", "Browse a local filesystem path", "read:repos", "", false},
@@ -1539,15 +1543,25 @@ func buildComponents() map[string]any {
 			"CreateFixRequest": objSchema(map[string]any{
 				"repo_id": str, "scan_id": str, "finding_ids": strArr,
 				"target_branch": str, "engine": str, "mode": str,
-				"severity_floor": str, "max_attempts": map[string]any{"type": "integer"},
+				"severity_floor":    str,
+				"max_attempts":      map[string]any{"type": "integer"},
+				"max_loops":         map[string]any{"type": "integer"},
+				"human_in_the_loop": map[string]any{"type": "boolean"},
+				"model":             str,
+				"effort":            str,
+				"variant":           str,
 			}, "repo_id"),
-			"CreateLoopRequest": objSchema(map[string]any{"repo_id": str}),
+			"ResumeFixRequest": objSchema(map[string]any{"action": str}),
+			"CreateFixerConsoleRequest": objSchema(map[string]any{
+				"kind": str, "engine": str,
+			}),
+			"FixerConsoleInputRequest": objSchema(map[string]any{"data": str}, "data"),
 			"CreateSecretRequest": objSchema(map[string]any{
 				"key_type": str, "key_name": str, "value": str,
 			}, "key_name", "value"),
 			"ListOrgReposRequest": objSchema(map[string]any{
 				"org": str, "secret_id": str,
-			}, "org"),
+			}),
 			"DiscoverReposRequest": objSchema(map[string]any{
 				"base_path": str,
 			}),
@@ -1565,11 +1579,11 @@ func buildComponents() map[string]any {
 					"items": map[string]any{
 						"type": "string", "enum": []string{"default", "jvm", "rust", "codeql", "all"},
 					},
-					"description": "Fixed embedded scanner contexts only. `all` must be the sole value. CodeQL is local-only.",
+					"description": "Fixed embedded scanner contexts only. `all` must be the sole value.",
 				},
 				"push": map[string]any{
 					"type":        "boolean",
-					"description": "Publish to the configured registry. Rejected when CodeQL is selected.",
+					"description": "Publish to the configured registry.",
 				},
 				"platforms": map[string]any{
 					"type":     "array",

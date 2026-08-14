@@ -1,0 +1,33 @@
+{
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "poutine",
+          "rules": [
+            {
+              "id": "unpinnable_action",
+              "shortDescription": { "text": "action cannot be pinned to a SHA" },
+              "defaultConfiguration": { "level": "warning" }
+            }
+          ]
+        }
+      },
+      "results": [
+        {
+          "ruleId": "unpinnable_action",
+          "message": { "text": "uses a mutable tag" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": ".github/workflows/release.yml" },
+                "region": { "startLine": 12, "endLine": 14 }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

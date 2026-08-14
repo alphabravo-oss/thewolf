@@ -43,6 +43,38 @@ type Resolver struct {
 	GitHubCloner GitHubCloner
 }
 
+// PrepareExisting uses an already-materialised working tree (a fixer
+// workspace) so a child scan does not clone a remote wolf-fix ref that
+// has not been pushed yet. Cleanup is a no-op — the remediation owns the tree.
+func PrepareExisting(path string, sourceType models.SourceType) (Prepared, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return Prepared{}, fmt.Errorf("existing workspace path is required")
+	}
+	st, err := os.Stat(path)
+	if err != nil {
+		return Prepared{}, fmt.Errorf("existing workspace: %w", err)
+	}
+	if !st.IsDir() {
+		return Prepared{}, fmt.Errorf("existing workspace is not a directory: %s", path)
+	}
+	sha, dirty := localGitState(path)
+	treeDigest, _ := workspaceTreeDigest(path)
+	if sourceType == "" {
+		sourceType = models.SourceTypeLocal
+	}
+	return Prepared{
+		Path:              path,
+		SourceType:        sourceType,
+		SourcePath:        path,
+		CommitSHA:         sha,
+		TreeDigest:        treeDigest,
+		DirtyState:        dirty,
+		PreparedWorkspace: path,
+		Cleanup:           func() {},
+	}, nil
+}
+
 func (r Resolver) Prepare(ctx context.Context, repo *models.Repo, branch string) (Prepared, error) {
 	if repo == nil {
 		return Prepared{}, fmt.Errorf("repo is required")
@@ -69,6 +101,43 @@ func (r Resolver) Prepare(ctx context.Context, repo *models.Repo, branch string)
 	default:
 		return Prepared{}, fmt.Errorf("unsupported repo source_type %q", repo.SourceType)
 	}
+}
+
+// Sync refreshes a repo's local cache (or recorded remote HEAD) without
+// starting a scan. GitHub clones or pulls the workspace cache. Generic Git
+// sources do a shallow fetch. Local paths re-read HEAD. SSH only probes
+// remote git info — it does not archive the tree.
+func (r Resolver) Sync(ctx context.Context, repo *models.Repo, branch string) (Prepared, error) {
+	if repo == nil {
+		return Prepared{}, fmt.Errorf("repo is required")
+	}
+	if repo.SourceType == models.SourceTypeSSH {
+		return r.syncSSH(ctx, repo)
+	}
+	return r.Prepare(ctx, repo, branch)
+}
+
+func (r Resolver) syncSSH(ctx context.Context, repo *models.Repo) (Prepared, error) {
+	if repo.RemoteNodeID == nil || *repo.RemoteNodeID == "" {
+		return Prepared{}, fmt.Errorf("ssh repo has no remote_node_id")
+	}
+	node, err := r.Store.GetRemoteNodeByID(ctx, *repo.RemoteNodeID)
+	if err != nil {
+		return Prepared{}, fmt.Errorf("load remote node: %w", err)
+	}
+	info, err := (remote.Service{Store: r.Store, Runner: r.Runner}).GitInfo(ctx, node, repo.SourcePath)
+	if err != nil {
+		return Prepared{}, err
+	}
+	return Prepared{
+		SourceType:        models.SourceTypeSSH,
+		RemoteNodeID:      repo.RemoteNodeID,
+		SourcePath:        repo.SourcePath,
+		CommitSHA:         info.CommitSHA,
+		DirtyState:        info.DirtyState,
+		PreparedWorkspace: info.Path,
+		Cleanup:           func() {},
+	}, nil
 }
 
 func (r Resolver) prepareSSH(ctx context.Context, repo *models.Repo, branch string) (Prepared, error) {

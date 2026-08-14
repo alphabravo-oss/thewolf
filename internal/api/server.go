@@ -126,7 +126,6 @@ func NewServer(store db.Store, addr string) *Server {
 		}
 		return 0
 	})) // 1 MB by default; the streaming bundle import has its own 8 GiB bound.
-	r.Use(generalLimiter.Handler)
 	r.Use(cors.Handler(cors.Options{
 		AllowOriginFunc: allowedCORSOrigin,
 		AllowedMethods:  []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
@@ -173,6 +172,7 @@ func NewServer(store db.Store, addr string) *Server {
 	// Mount the versioned API. All routes live under /api/v1; /api/* is a
 	// deprecating redirect alias kept for one release.
 	r.Route("/api/v1", func(r chi.Router) {
+		r.Use(generalLimiter.Handler)
 		r.Use(jsonContentType)
 
 		// Public endpoints — no authentication.
@@ -215,8 +215,6 @@ func NewServer(store db.Store, addr string) *Server {
 			wFind := auth.RequireScope(apikey.ScopeWriteFindings)
 			rFixes := auth.RequireScope(apikey.ScopeReadFixes)
 			wFixes := auth.RequireScope(apikey.ScopeWriteFixes)
-			rLoops := auth.RequireScope(apikey.ScopeReadLoops)
-			wLoops := auth.RequireScope(apikey.ScopeWriteLoops)
 			rConfig := auth.RequireScope(apikey.ScopeReadConfig)
 			wConfig := auth.RequireScope(apikey.ScopeWriteConfig)
 			rCredentials := auth.RequireScope(apikey.ScopeReadCredentials)
@@ -281,6 +279,7 @@ func NewServer(store db.Store, addr string) *Server {
 				r.With(wRepos).Post("/", routes.CreateRepo)
 				r.With(rRepos).Get("/{id}", routes.GetRepo)
 				r.With(wRepos).Put("/{id}", routes.UpdateRepo)
+				r.With(wRepos).Post("/{id}/sync", routes.SyncRepo)
 				r.With(wRepos).Delete("/{id}", routes.DeleteRepo)
 				r.With(rRepos).Get("/{id}/branches", routes.ListRepoBranches)
 				r.With(rRepos).Get("/{id}/fixable", routes.GetRepoFixable)
@@ -329,6 +328,8 @@ func NewServer(store db.Store, addr string) *Server {
 			r.Route("/scans", func(r chi.Router) {
 				r.With(rScans).Get("/", routes.ListScans)
 				r.With(rScans).Get("/trends", routes.ScansTrends)
+				r.With(rScans).Get("/orphans", routes.ListOrphanScans)
+				r.With(wScans).Delete("/orphans", routes.PurgeOrphanScans)
 				r.With(wScans).Post("/", routes.CreateScan)
 				r.With(wScans, operateScannerSupplyChain, readScannerReleaseMode).Post("/{id}/release-rescans", routes.CreateReleaseRescan)
 				// Preflight: which selected scanners are missing their image, so
@@ -336,6 +337,7 @@ func NewServer(store db.Store, addr string) *Server {
 				// is created).
 				r.With(rScans).Post("/preflight", routes.ScanPreflight)
 				r.With(rScans).Get("/{id}", routes.GetScan)
+				r.With(rScans).Get("/{id}/lineage", routes.GetScanLineage)
 				r.With(rScans).Get("/{id}/result", routes.GetScanResult)
 				r.With(rScans).Get("/{id}/findings", routes.GetScanFindings)
 				r.With(rScans).Get("/{id}/findings/stats", routes.GetScanFindingStats)
@@ -365,6 +367,7 @@ func NewServer(store db.Store, addr string) *Server {
 				r.With(rFind).Get("/trends", routes.FindingTrends)
 				r.With(rFind).Get("/trends/export", routes.ExportFindingTrends)
 				r.With(rFind).Get("/aggregate", routes.FindingsAggregate)
+				r.With(rFind).Get("/by-repo", routes.FindingsByRepo)
 				r.With(rFind).Get("/{id}", routes.GetFinding)
 				r.With(wFind).Put("/{id}/status", routes.UpdateFindingStatus)
 			})
@@ -386,23 +389,25 @@ func NewServer(store db.Store, addr string) *Server {
 				r.With(wConfig).Put("/{id}", routes.UpdatePolicy)
 			})
 
+			r.Route("/remediations", func(r chi.Router) {
+				r.With(wFixes).Post("/{id}/accept", routes.AcceptRemediation)
+			})
+
 			r.Route("/fixes", func(r chi.Router) {
 				r.With(rFixes).Get("/", routes.ListFixes)
 				r.With(wFixes).Post("/", routes.CreateFix)
+				r.With(rFixes).Get("/engines", routes.ListFixEngines)
+				r.With(wFixes).Post("/consoles", routes.CreateFixerConsole)
+				r.With(rFixes).Get("/consoles/{id}", routes.GetFixerConsole)
+				r.With(rFixes).Get("/consoles/{id}/stream", routes.StreamFixerConsole)
+				r.With(wFixes).Post("/consoles/{id}/input", routes.InputFixerConsole)
+				r.With(wFixes).Delete("/consoles/{id}", routes.CancelFixerConsole)
 				r.With(rFixes).Get("/{id}", routes.GetFix)
 				r.With(rFixes).Get("/{id}/diff", routes.GetFixDiff)
+				r.With(rFixes).Get("/{id}/commits", routes.GetFixCommits)
 				r.With(rFixes).Get("/{id}/stream", routes.StreamFix)
+				r.With(wFixes).Post("/{id}/resume", routes.ResumeFix)
 				r.With(wFixes).Delete("/{id}", routes.CancelFix)
-			})
-
-			r.Route("/loops", func(r chi.Router) {
-				r.With(rLoops).Get("/", routes.ListLoops)
-				r.With(wLoops).Post("/", routes.CreateLoop)
-				r.With(rLoops).Get("/{id}", routes.GetLoop)
-				r.With(rLoops).Get("/{id}/stream", routes.StreamLoop)
-				r.With(wLoops).Put("/{id}/pause", routes.PauseLoop)
-				r.With(wLoops).Put("/{id}/resume", routes.ResumeLoop)
-				r.With(wLoops).Delete("/{id}", routes.StopLoop)
 			})
 
 			r.Route("/fleet", func(r chi.Router) {

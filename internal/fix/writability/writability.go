@@ -20,9 +20,11 @@ package writability
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/alphabravocompany/thewolf/internal/db"
 	"github.com/alphabravocompany/thewolf/internal/models"
+	repocache "github.com/alphabravocompany/thewolf/internal/repo"
 	"github.com/alphabravocompany/thewolf/internal/secrets"
 )
 
@@ -31,6 +33,7 @@ import (
 // indicator (yes | no — reason) in the UI.
 type Result struct {
 	Writable bool   `json:"writable"`
+	CanPush  bool   `json:"can_push"`
 	Reason   string `json:"reason"`
 }
 
@@ -113,9 +116,9 @@ func checkLocal(repo *models.Repo, probes Probes) Result {
 		if reason == "" {
 			reason = "local path is not writable"
 		}
-		return Result{Writable: false, Reason: reason}
+		return Result{Writable: false, CanPush: false, Reason: reason}
 	}
-	return Result{Writable: true, Reason: "local git work tree is writable"}
+	return Result{Writable: true, CanPush: true, Reason: "local git work tree is writable"}
 }
 
 func checkGitHub(ctx context.Context, repo *models.Repo, store db.Store, probes Probes) Result {
@@ -126,21 +129,32 @@ func checkGitHub(ctx context.Context, repo *models.Repo, store db.Store, probes 
 	if err != nil {
 		return Result{Writable: false, Reason: "invalid github source: " + err.Error()}
 	}
-	token, reason := githubToken(ctx, store, repo.UserID)
+	token, reason := githubToken(ctx, store, repo)
 	if token == "" {
+		if local := localGitHubClone(repo, probes); local != "" {
+			return Result{
+				Writable: true,
+				CanPush:  false,
+				Reason:   "using the local scan clone; add a working GitHub token to push the fix branch (" + reason + ")",
+			}
+		}
 		return Result{Writable: false, Reason: reason}
 	}
 	info, err := probes.GitHub.PushInfo(ctx, token, owner, name)
 	if err != nil {
-		return Result{Writable: false, Reason: "github push-permission probe failed: " + err.Error()}
+		return Result{Writable: false, Reason: "github permission probe failed: " + err.Error()}
 	}
 	if info.Archived {
 		return Result{Writable: false, Reason: "github repository is archived"}
 	}
 	if !info.CanPush {
-		return Result{Writable: false, Reason: "github token lacks push permission for this repository"}
+		return Result{
+			Writable: true,
+			CanPush:  false,
+			Reason:   "token can clone this repository but lacks push permission (add a write PAT to push the fix branch)",
+		}
 	}
-	return Result{Writable: true, Reason: "github token can push to this repository"}
+	return Result{Writable: true, CanPush: true, Reason: "github token can push to this repository"}
 }
 
 func checkSSH(ctx context.Context, repo *models.Repo, store db.Store, probes Probes) Result {
@@ -168,17 +182,37 @@ func checkSSH(ctx context.Context, repo *models.Repo, store db.Store, probes Pro
 		}
 		return Result{Writable: false, Reason: reason}
 	}
-	return Result{Writable: true, Reason: "remote work tree accepts a git push"}
+	return Result{Writable: true, CanPush: true, Reason: "remote work tree accepts a git push"}
 }
 
-// githubToken resolves the user's first github_token secret, decrypted. The
-// returned reason is set only when the token is empty, so callers can surface a
-// clear "no token" verdict.
-func githubToken(ctx context.Context, store db.Store, userID string) (token, reason string) {
-	if store == nil || userID == "" {
+// githubToken prefers the repo's selected credential, then the user's first
+// github_token secret.
+func githubToken(ctx context.Context, store db.Store, repo *models.Repo) (token, reason string) {
+	if store == nil || repo == nil {
 		return "", "no github_token secret available"
 	}
-	list, err := store.ListSecretsByUser(ctx, userID)
+	if id := strings.TrimSpace(repo.CredentialSecretID); id != "" {
+		sec, err := store.GetSecretByID(ctx, id)
+		if err != nil || sec == nil {
+			return "", "selected GitHub token was not found"
+		}
+		if sec.UserID != "" && repo.UserID != "" && sec.UserID != repo.UserID {
+			return "", "selected GitHub token does not belong to this repo's owner"
+		}
+		if sec.KeyType != models.KeyTypeGitHubToken {
+			return "", "selected credential is not a github_token"
+		}
+		plaintext, derr := secrets.Decrypt(sec.EncryptedValue)
+		if derr == nil && plaintext != "" {
+			return plaintext, ""
+		}
+		// Selected secret is unreadable (wrong master key, corrupt value).
+		// Fall through to any other github_token the user owns.
+	}
+	if repo.UserID == "" {
+		return "", "no github_token secret available"
+	}
+	list, err := store.ListSecretsByUser(ctx, repo.UserID)
 	if err != nil {
 		return "", "failed to load secrets"
 	}
@@ -195,4 +229,25 @@ func githubToken(ctx context.Context, store db.Store, userID string) (token, rea
 		}
 	}
 	return "", "no github_token secret available"
+}
+
+func localGitHubClone(repo *models.Repo, probes Probes) string {
+	if repo == nil || probes.ParseGitHubSource == nil {
+		return ""
+	}
+	owner, name, err := probes.ParseGitHubSource(repo.SourcePath)
+	if err != nil {
+		return ""
+	}
+	path := repocache.CachedGitHubPath(owner, name)
+	if path == "" {
+		return ""
+	}
+	if probes.Local != nil {
+		ok, _, err := probes.Local.Check(path)
+		if err != nil || !ok {
+			return ""
+		}
+	}
+	return path
 }

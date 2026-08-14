@@ -486,7 +486,6 @@ func ScannersPull(w http.ResponseWriter, r *http.Request) {
 
 	imgs := cfg.AllImages()
 	var pulled []string
-	var skipped []string
 	type pullErr struct {
 		Image string `json:"image"`
 		Error string `json:"error"`
@@ -494,12 +493,6 @@ func ScannersPull(w http.ResponseWriter, r *http.Request) {
 	var errs []pullErr
 
 	for _, img := range imgs {
-		// Local-build-only buckets (CodeQL) are never published, so don't try
-		// to pull them — report them as skipped instead of as a failure.
-		if container.IsLocalOnlyImage(img) {
-			skipped = append(skipped, img)
-			continue
-		}
 		sub := *cfg
 		sub.Image = img
 		sub.ImageOverrides = nil
@@ -519,9 +512,6 @@ func ScannersPull(w http.ResponseWriter, r *http.Request) {
 
 	resp := map[string]interface{}{
 		"pulled": pulled,
-	}
-	if len(skipped) > 0 {
-		resp["skipped"] = skipped
 	}
 	if len(errs) > 0 {
 		resp["errors"] = errs
@@ -583,10 +573,6 @@ type imageStatus struct {
 	UpdatesAvailable bool   `json:"updates_available"`
 	LocalError       string `json:"local_error,omitempty"`
 	RemoteError      string `json:"remote_error,omitempty"`
-	// LocalOnly marks a bucket that is never pulled/pushed (CodeQL — license).
-	// For these we skip the remote-registry probe entirely, so no spurious
-	// "remote error" appears for an image that was never meant to be published.
-	LocalOnly bool `json:"local_only,omitempty"`
 }
 
 // ScannersImages enumerates every configured scanner image and probes
@@ -622,20 +608,13 @@ func ScannersImages(w http.ResponseWriter, r *http.Request) {
 			if d, err := dockerImageDigest(img); err == nil {
 				s.LocalDigest = d
 			}
-			if container.IsLocalOnlyImage(img) {
-				// CodeQL is local-build-only by license — it isn't published,
-				// so probing a registry would only ever yield a misleading
-				// "remote error". Skip the remote side entirely.
-				s.LocalOnly = true
+			if d, err := dockerManifestDigest(img); err != nil {
+				s.RemoteError = err.Error()
 			} else {
-				if d, err := dockerManifestDigest(img); err != nil {
-					s.RemoteError = err.Error()
-				} else {
-					s.RemoteDigest = d
-				}
-				if s.LocalDigest != "" && s.RemoteDigest != "" && s.LocalDigest != s.RemoteDigest {
-					s.UpdatesAvailable = true
-				}
+				s.RemoteDigest = d
+			}
+			if s.LocalDigest != "" && s.RemoteDigest != "" && s.LocalDigest != s.RemoteDigest {
+				s.UpdatesAvailable = true
 			}
 			results[i] = s
 		}()
@@ -680,13 +659,6 @@ func ScannersPullOne(w http.ResponseWriter, r *http.Request) {
 	if !known {
 		response.WriteError(w, http.StatusBadRequest, "validation_error",
 			"image is not in the configured scanner set")
-		return
-	}
-	// CodeQL (and any other local-only bucket) is never published — refuse to
-	// pull it and point the operator at a local build instead.
-	if container.IsLocalOnlyImage(body.Image) {
-		response.WriteError(w, http.StatusBadRequest, "local_only_image",
-			"this scanner is local-build-only by license and is not published; build it locally instead of pulling")
 		return
 	}
 	sub := *cfg

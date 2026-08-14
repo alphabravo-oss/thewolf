@@ -2,10 +2,22 @@ package db
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 )
+
+// ErrHasScanRecords is returned when a repo cannot be deleted without
+// also purging its scan/finding history.
+var ErrHasScanRecords = errors.New("scan records exist")
+
+// OrphanSummary is leftover scan/finding rows after their repo was deleted.
+type OrphanSummary struct {
+	ScanIDs      []string `json:"scan_ids"`
+	ScanCount    int      `json:"scan_count"`
+	FindingCount int      `json:"finding_count"`
+}
 
 // FleetPostureResult is the aggregate posture summary returned by
 // Store.FleetPosture.
@@ -37,9 +49,26 @@ type NeedsAttentionRow struct {
 // FindingsAggregateRow is a single (rule_id, repos, findings) tuple returned
 // by Store.FindingsAggregateByRule.
 type FindingsAggregateRow struct {
-	Key      string `json:"key"`
-	Repos    int    `json:"repos"`
-	Findings int    `json:"findings"`
+	Key       string   `json:"key"`
+	Repos     int      `json:"repos"`
+	Findings  int      `json:"findings"`
+	Tool      string   `json:"tool,omitempty"`
+	Title     string   `json:"title,omitempty"`
+	Severity  string   `json:"severity,omitempty"`
+	RepoIDs   []string `json:"repo_ids,omitempty"`
+	RepoNames []string `json:"repo_names,omitempty"`
+}
+
+// FindingsByRepoRow is current-open findings rolled up to one product.
+type FindingsByRepoRow struct {
+	RepoID   string `json:"repo_id"`
+	Name     string `json:"name"`
+	Total    int    `json:"total"`
+	Critical int    `json:"critical"`
+	High     int    `json:"high"`
+	Medium   int    `json:"medium"`
+	Low      int    `json:"low"`
+	Info     int    `json:"info"`
 }
 
 // AuditQuery filters, sorts, and paginates the audit log.
@@ -188,12 +217,6 @@ type Store interface {
 	ListFixItemsByFix(ctx context.Context, fixID string) ([]models.FixItem, error)
 	UpdateFixItem(ctx context.Context, item *models.FixItem) error
 
-	// Loops
-	CreateLoop(ctx context.Context, loop *models.Loop) error
-	GetLoopByID(ctx context.Context, id string) (*models.Loop, error)
-	ListLoopsByUser(ctx context.Context, userID string) ([]models.Loop, error)
-	UpdateLoop(ctx context.Context, loop *models.Loop) error
-
 	// ScanArtifacts
 	CreateScanArtifact(ctx context.Context, artifact *models.ScanArtifact) error
 	ListScanArtifacts(ctx context.Context, scanID string) ([]models.ScanArtifact, error)
@@ -232,8 +255,21 @@ type Store interface {
 	DeleteScanCascade(ctx context.Context, scanID string) error
 	// DeleteCollectionCascade deletes a collection, its scans, and all related data.
 	DeleteCollectionCascade(ctx context.Context, collectionID string) ([]string, error)
+	// DeleteCollectionKeepHistory deletes a collection and memberships but
+	// leaves scan/finding/loop rows (collection_id is cleared).
+	DeleteCollectionKeepHistory(ctx context.Context, collectionID string) error
 	// DeleteRepoCascade deletes a repo, its scans, and all related data. Returns scan IDs for artifact cleanup.
 	DeleteRepoCascade(ctx context.Context, repoID string) ([]string, error)
+	// DeleteRepoKeepHistory deletes a repo only when it has no scan records.
+	// Returns ErrHasScanRecords otherwise.
+	DeleteRepoKeepHistory(ctx context.Context, repoID string) error
+	// ListOrphanScanIDs returns scans whose repo row is gone.
+	ListOrphanScanIDs(ctx context.Context) ([]string, error)
+	// OrphanSummary counts leftover scans and findings after a repo delete.
+	OrphanSummary(ctx context.Context) (*OrphanSummary, error)
+	// PurgeOrphanedRecords deletes scans/findings/fix jobs whose repo
+	// no longer exists. Returns the orphan scan IDs that were removed.
+	PurgeOrphanedRecords(ctx context.Context) ([]string, error)
 
 	// Fix jobs (autonomous fix engine — gated by autofix_enabled)
 	EnqueueFixJob(ctx context.Context, job *models.FixJob) error
@@ -251,6 +287,23 @@ type Store interface {
 	ReclaimStaleJobs(ctx context.Context, cutoff time.Time) (int, error)
 	CreateFixAttempt(ctx context.Context, attempt *models.FixAttempt) error
 	ListFixAttempts(ctx context.Context, jobID string) ([]models.FixAttempt, error)
+
+	CreateRemediation(ctx context.Context, rem *models.Remediation) error
+	GetRemediationByID(ctx context.Context, id string) (*models.Remediation, error)
+	GetOpenRemediationByOrigin(ctx context.Context, originScanID string) (*models.Remediation, error)
+	GetLatestRemediationByOrigin(ctx context.Context, originScanID string) (*models.Remediation, error)
+	UpdateRemediation(ctx context.Context, rem *models.Remediation) error
+	ListScansByOrigin(ctx context.Context, originScanID string) ([]models.Scan, error)
+	ListFixJobsByRemediation(ctx context.Context, remediationID string) ([]models.FixJob, error)
+
+	EnqueueFixerConsole(ctx context.Context, cons *models.FixerConsole) error
+	GetFixerConsoleByID(ctx context.Context, id string) (*models.FixerConsole, error)
+	ClaimNextFixerConsole(ctx context.Context, workerID string) (*models.FixerConsole, error)
+	UpdateFixerConsole(ctx context.Context, cons *models.FixerConsole) error
+	ReclaimStaleConsoles(ctx context.Context, cutoff time.Time) (int, error)
+	AppendFixerConsoleStdin(ctx context.Context, consoleID, data string) error
+	DrainFixerConsoleStdin(ctx context.Context, consoleID string) ([]string, error)
+	ListActiveFixerConsoles(ctx context.Context) ([]models.FixerConsole, error)
 
 	// API Tokens
 	CreateAPIToken(ctx context.Context, token *models.APIToken) error
@@ -277,10 +330,12 @@ type Store interface {
 	QueryAuditLog(ctx context.Context, q AuditQuery) ([]models.AuditLogEntry, int, error)
 
 	// Fleet aggregates
+	ListCurrentOpenFindings(ctx context.Context, userID string, fleetMode bool, collectionID string) ([]models.Finding, error)
 	FleetPosture(ctx context.Context, userID string, fleetMode bool, collectionID string) (*FleetPostureResult, error)
 	FleetInventory(ctx context.Context, userID string, fleetMode bool) (*FleetInventoryResult, error)
 	FleetNeedsAttention(ctx context.Context, userID string, fleetMode bool, limit int) ([]NeedsAttentionRow, error)
 	FindingsAggregateByRule(ctx context.Context, userID string, fleetMode bool, limit int) ([]FindingsAggregateRow, error)
+	FindingsByRepo(ctx context.Context, userID string, fleetMode bool, collectionID string) ([]FindingsByRepoRow, error)
 
 	// AI Prompt Templates
 	CreatePromptTemplate(ctx context.Context, tmpl *models.AIPromptTemplate) error

@@ -69,29 +69,62 @@ func newRepoCmd() *cobra.Command {
 	var orgName, orgSecret string
 	listOrg := &cobra.Command{
 		Use:         "list-org",
-		Short:       "List a GitHub org's repositories",
+		Short:       "List GitHub repos the PAT can read",
 		Annotations: apiAnno("POST", "/sources/github/list-org-repos"),
 		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if orgName == "" {
-				return fmt.Errorf("--org is required")
+			body := map[string]any{}
+			if orgName != "" {
+				body["org"] = orgName
 			}
-			body := map[string]any{"org": orgName}
 			if orgSecret != "" {
 				body["secret_id"] = orgSecret
 			}
 			return runRender(cmd, "POST", "/sources/github/list-org-repos", body)
 		},
 	}
-	listOrg.Flags().StringVar(&orgName, "org", "", "GitHub organization (or user) login")
-	listOrg.Flags().StringVar(&orgSecret, "secret", "", "github_token secret ID for private orgs")
+	listOrg.Flags().StringVar(&orgName, "org", "", "optional GitHub organization or user login; omit to list every repo the token can read")
+	listOrg.Flags().StringVar(&orgSecret, "secret", "", "github_token secret ID")
+
+	var purgeRepo bool
+	repoDelete := &cobra.Command{
+		Use:         "delete <id>",
+		Short:       "Delete a repository (scan history is kept unless --purge)",
+		Annotations: apiAnno("DELETE", "/repos/{}"),
+		Args:        cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			path := "/repos/" + args[0]
+			if purgeRepo {
+				path += "?purge=true"
+			}
+			return runRender(cmd, "DELETE", path, nil)
+		},
+	}
+	repoDelete.Flags().BoolVar(&purgeRepo, "purge", false, "also delete scans, findings, and artifacts")
+
+	var syncBranch string
+	syncRepo := &cobra.Command{
+		Use:         "sync <id>",
+		Short:       "Clone or pull the latest commits without starting a scan",
+		Annotations: apiAnno("POST", "/repos/{}/sync"),
+		Args:        cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			path := "/repos/" + args[0] + "/sync"
+			if syncBranch != "" {
+				path += "?branch=" + url.QueryEscape(syncBranch)
+			}
+			return runRender(cmd, "POST", path, nil)
+		},
+	}
+	syncRepo.Flags().StringVar(&syncBranch, "branch", "", "branch to pull (default: the repo's default branch)")
 
 	cmd.AddCommand(
 		listCmd("/repos", "List repositories"),
 		getCmd("/repos", "Get a repository"),
 		create,
 		update,
-		deleteCmd("delete <id>", "Delete a repository", "/repos/%s"),
+		syncRepo,
+		repoDelete,
 		subGetCmd("branches <id>", "List a repository's branches", "/repos/%s/branches"),
 		subGetCmd("fixable <id>", "List a repository's fixable findings", "/repos/%s/fixable"),
 		listOrg,
@@ -316,12 +349,28 @@ func newCollectionCmd() *cobra.Command {
 	}
 	removeRepo.Flags().StringVar(&rmRepoID, "repo", "", "repository ID to remove")
 
+	var purgeCollection bool
+	colDelete := &cobra.Command{
+		Use:         "delete <id>",
+		Short:       "Delete a collection (scan history is kept unless --purge)",
+		Annotations: apiAnno("DELETE", "/collections/{}"),
+		Args:        cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			path := "/collections/" + args[0]
+			if purgeCollection {
+				path += "?purge=true"
+			}
+			return runRender(cmd, "DELETE", path, nil)
+		},
+	}
+	colDelete.Flags().BoolVar(&purgeCollection, "purge", false, "also delete this collection's scans and findings")
+
 	cmd.AddCommand(
 		listCmd("/collections", "List collections"),
 		getCmd("/collections", "Get a collection"),
 		create,
 		update,
-		deleteCmd("delete <id>", "Delete a collection", "/collections/%s"),
+		colDelete,
 		addRepo,
 		removeRepo,
 		subGetCmd("tools <id>", "List a collection's tools", "/collections/%s/tools"),
@@ -735,12 +784,13 @@ func newPolicyCmd() *cobra.Command {
 func newFixCmd() *cobra.Command {
 	cmd := group("fix", "Manage AI fix runs")
 
-	var repoID, scanID, engine, mode, severityFloor, targetBranch string
+	var repoID, scanID, engine, mode, severityFloor, targetBranch, model, effort, variant string
 	var findingIDs []string
-	var maxAttempts int
+	var maxAttempts, maxLoops int
+	var humanInTheLoop bool
 	create := &cobra.Command{
 		Use:         "create",
-		Short:       "Enqueue an autonomous fix job (dry-run, branch-only)",
+		Short:       "Enqueue an autonomous fix job (branch + optional push)",
 		Annotations: apiAnno("POST", "/fixes"),
 		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -772,17 +822,63 @@ func newFixCmd() *cobra.Command {
 			if maxAttempts > 0 {
 				body["max_attempts"] = maxAttempts
 			}
+			if maxLoops > 0 {
+				body["max_loops"] = maxLoops
+			}
+			if humanInTheLoop {
+				body["human_in_the_loop"] = true
+			}
+			if model != "" {
+				body["model"] = model
+			}
+			if effort != "" {
+				body["effort"] = effort
+			}
+			if variant != "" {
+				body["variant"] = variant
+			}
 			return runRender(cmd, "POST", "/fixes", body)
 		},
 	}
 	create.Flags().StringVar(&repoID, "repo", "", "repository ID to fix (required)")
 	create.Flags().StringVar(&scanID, "scan", "", "scan ID to fix findings from")
 	create.Flags().StringArrayVar(&findingIDs, "finding", nil, "specific finding ID (repeatable)")
-	create.Flags().StringVar(&engine, "engine", "", "fix engine (auto, claude-code, codex, api, custom)")
-	create.Flags().StringVar(&mode, "mode", "", "fix mode (dry_run)")
+	create.Flags().StringVar(&engine, "engine", "", "fix engine (auto, claude-code, codex, opencode, api)")
+	create.Flags().StringVar(&mode, "mode", "", "fix mode (dry_run or push)")
 	create.Flags().StringVar(&severityFloor, "severity-floor", "", "only fix findings at or above this severity")
 	create.Flags().StringVar(&targetBranch, "branch", "", "target fix branch name")
 	create.Flags().IntVar(&maxAttempts, "max-attempts", 0, "max engine attempts per finding")
+	create.Flags().IntVar(&maxLoops, "max-loops", 0, "fix→rescan rounds (default 2)")
+	create.Flags().BoolVar(&humanInTheLoop, "pause", false, "pause between loops for review")
+	create.Flags().StringVar(&model, "model", "", "harness model (sonnet, opus, gpt-5.4-codex, ...)")
+	create.Flags().StringVar(&effort, "effort", "", "reasoning effort (low, medium, high, xhigh)")
+	create.Flags().StringVar(&variant, "variant", "", "OpenCode variant override")
+
+	engines := &cobra.Command{
+		Use:         "engines",
+		Short:       "Show fixer engine auth (OAuth session + API keys)",
+		Annotations: apiAnno("GET", "/fixes/engines"),
+		Args:        cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return runRender(cmd, "GET", "/fixes/engines", nil)
+		},
+	}
+
+	var resumeAction string
+	resume := &cobra.Command{
+		Use:         "resume <id>",
+		Short:       "Continue a paused fix job or push its branch",
+		Annotations: apiAnno("POST", "/fixes/{}/resume"),
+		Args:        cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			action := resumeAction
+			if action == "" {
+				action = "continue"
+			}
+			return runRender(cmd, "POST", "/fixes/"+args[0]+"/resume", map[string]any{"action": action})
+		},
+	}
+	resume.Flags().StringVar(&resumeAction, "action", "continue", "continue or push")
 
 	diff := &cobra.Command{
 		Use:         "diff <id>",
@@ -803,65 +899,119 @@ func newFixCmd() *cobra.Command {
 		},
 	}
 
+	var consoleKind, consoleEngine, consoleInput string
+	consoleStart := &cobra.Command{
+		Use:         "console-start",
+		Short:       "Start a fixer-worker login (or shell) console",
+		Annotations: apiAnno("POST", "/fixes/consoles"),
+		Args:        cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			body := map[string]any{"kind": consoleKind}
+			if consoleEngine != "" {
+				body["engine"] = consoleEngine
+			}
+			return runRender(cmd, "POST", "/fixes/consoles", body)
+		},
+	}
+	consoleStart.Flags().StringVar(&consoleKind, "kind", "login", "login or shell")
+	consoleStart.Flags().StringVar(&consoleEngine, "engine", "", "claude, codex, or opencode (login)")
+
+	consoleGet := &cobra.Command{
+		Use:         "console-get <id>",
+		Short:       "Get a fixer console session",
+		Annotations: apiAnno("GET", "/fixes/consoles/{}"),
+		Args:        cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runRender(cmd, "GET", "/fixes/consoles/"+args[0], nil)
+		},
+	}
+	consoleInputCmd := &cobra.Command{
+		Use:         "console-input <id>",
+		Short:       "Send keystrokes to a fixer console",
+		Annotations: apiAnno("POST", "/fixes/consoles/{}/input"),
+		Args:        cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if consoleInput == "" {
+				return fmt.Errorf("--data is required")
+			}
+			return runRender(cmd, "POST", "/fixes/consoles/"+args[0]+"/input", map[string]any{"data": consoleInput})
+		},
+	}
+	consoleInputCmd.Flags().StringVar(&consoleInput, "data", "", "bytes to write to the worker stdin")
+
 	cmd.AddCommand(
 		listCmd("/fixes", "List fix jobs"),
 		getCmd("/fixes", "Get a fix job and its attempts"),
 		create,
+		engines,
+		resume,
 		diff,
 		watchCmd("Stream a fix job's worker logs", "/fixes/%s/stream"),
 		deleteCmd("cancel <id>", "Cancel a fix job", "/fixes/%s"),
+		consoleStart,
+		consoleGet,
+		consoleInputCmd,
+		deleteCmd("console-cancel <id>", "Cancel a fixer console", "/fixes/consoles/%s"),
 	)
 	return cmd
 }
 
-// --- loops ------------------------------------------------------------------
+// --- agents -----------------------------------------------------------------
 
-// AddLoopSubcommands attaches the API-client loop subcommands to the
-// existing local `loop` command. After this, `wolf loop` (with --repo)
-// runs the local AI auto-remediation loop, while `wolf loop list`,
-// `wolf loop create`, etc. drive the server's loop API.
-func AddLoopSubcommands(loop *cobra.Command) {
-	var repoID, severity, strategy, engine string
-	var maxIter int
+// AddAgentSubcommands attaches API-client agent subcommands. Agents are
+// fixer jobs (`/fixes`); there is no separate loop product.
+func AddAgentSubcommands(agent *cobra.Command) {
+	var repoID, scanID, engine, mode string
+	var maxLoops int
 	create := &cobra.Command{
 		Use:         "create",
-		Short:       "Start a server-managed loop",
-		Annotations: apiAnno("POST", "/loops"),
+		Short:       "Enqueue a fixer agent for a scan",
+		Annotations: apiAnno("POST", "/fixes"),
 		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if repoID == "" {
 				return fmt.Errorf("--repo is required")
 			}
-			body := map[string]any{"repo_id": repoID}
-			if cmd.Flags().Changed("max-iterations") {
-				body["max_iterations"] = maxIter
+			if scanID == "" {
+				return fmt.Errorf("--scan is required")
 			}
-			if severity != "" {
-				body["severity_filter"] = severity
-			}
-			if strategy != "" {
-				body["rescan_strategy"] = strategy
-			}
+			body := map[string]any{"repo_id": repoID, "scan_id": scanID, "mode": "dry_run"}
 			if engine != "" {
 				body["engine"] = engine
 			}
-			return runRender(cmd, "POST", "/loops", body)
+			if mode != "" {
+				body["mode"] = mode
+			}
+			if maxLoops > 0 {
+				body["max_loops"] = maxLoops
+			}
+			return runRender(cmd, "POST", "/fixes", body)
 		},
 	}
 	create.Flags().StringVar(&repoID, "repo", "", "repository ID")
-	create.Flags().IntVar(&maxIter, "max-iterations", 0, "maximum loop iterations")
-	create.Flags().StringVar(&severity, "severity", "", "severity filter")
-	create.Flags().StringVar(&strategy, "strategy", "", "rescan strategy")
-	create.Flags().StringVar(&engine, "engine", "", "AI engine")
+	create.Flags().StringVar(&scanID, "scan", "", "origin scan ID to remediate")
+	create.Flags().StringVar(&engine, "engine", "", "fix engine")
+	create.Flags().StringVar(&mode, "mode", "", "dry_run or push")
+	create.Flags().IntVar(&maxLoops, "max-loops", 0, "fix→rescan rounds")
 
-	loop.AddCommand(
-		listCmd("/loops", "List loops"),
-		getCmd("/loops", "Get a loop"),
+	accept := &cobra.Command{
+		Use:         "accept <id>",
+		Short:       "Hand off a local fix branch and freeze the origin scan",
+		Args:        cobra.ExactArgs(1),
+		Annotations: apiAnno("POST", "/remediations/{}/accept"),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runRender(cmd, "POST", "/remediations/"+args[0]+"/accept", map[string]any{})
+		},
+	}
+
+	agent.AddCommand(
+		listCmd("/fixes", "List agents"),
+		getCmd("/fixes", "Get an agent"),
 		create,
-		watchCmd("Stream a loop's progress", "/loops/%s/stream"),
-		actionCmd("pause <id>", "Pause a loop", "PUT", "/loops/%s/pause"),
-		actionCmd("resume <id>", "Resume a loop", "PUT", "/loops/%s/resume"),
-		deleteCmd("stop <id>", "Stop a loop", "/loops/%s"),
+		watchCmd("Stream an agent's log", "/fixes/%s/stream"),
+		actionCmd("resume <id>", "Resume or push an agent", "POST", "/fixes/%s/resume"),
+		accept,
+		deleteCmd("stop <id>", "Cancel an agent", "/fixes/%s"),
 	)
 }
 

@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeftIcon,
   PlayIcon,
+  RefreshCwIcon,
   Trash2Icon,
   GitBranchIcon,
   HardDriveIcon,
@@ -24,12 +25,14 @@ import {
 import { useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
-import type { Repo, Scan } from "@/lib/types";
+import type { Finding, Repo, Scan } from "@/lib/types";
+import { SeverityBadge } from "@/components/severity-badge";
 import { CardSkeleton } from "@/components/skeleton";
 import { BranchSelect } from "@/components/branch-select";
 import { FrameworksChips } from "@/components/frameworks-chips";
 import { FixableBadge } from "@/components/fixes/fixable-badge";
 import { useScanWithPreflight } from "@/components/scan-preflight";
+import { DeleteWithRecordsDialog } from "@/components/delete-with-records-dialog";
 import { useMe, canModify } from "@/lib/me";
 
 // One row per past scan from GET /api/scans/trends?repo_id=&branch=
@@ -84,6 +87,7 @@ function RepoDetailPage() {
   });
 
   const [scanBranch, setScanBranch] = useState("");
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const me = useMe();
 
@@ -97,9 +101,34 @@ function RepoDetailPage() {
     });
   }
 
-  const del = useMutation({
+  const sync = useMutation({
     mutationFn: async () => {
-      await api.delete(`/repos/${repoId}`);
+      const branch =
+        scanBranch.trim() || repoQ.data?.default_branch || "main";
+      const r = await api.post<SyncRepoResult>(
+        `/repos/${repoId}/sync?branch=${encodeURIComponent(branch)}`,
+      );
+      return r.data;
+    },
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["repo", repoId] });
+      const sha = data.last_commit_sha
+        ? data.last_commit_sha.slice(0, 12)
+        : "unknown";
+      toast.success(
+        data.changed
+          ? `Synced ${data.branch} to ${sha}`
+          : `${data.branch} already at ${sha}`,
+      );
+    },
+    onError: (e) => {
+      toast.error(e instanceof Error ? e.message : "Sync failed");
+    },
+  });
+
+  const del = useMutation({
+    mutationFn: async (purge: boolean) => {
+      await api.delete(`/repos/${repoId}${purge ? "?purge=true" : ""}`);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["repos"] });
@@ -124,6 +153,15 @@ function RepoDetailPage() {
   return (
     <div className="page stack page--mid">
       {scan.dialog}
+      <DeleteWithRecordsDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        kind="repo"
+        name={r.name}
+        recordCount={scansQ.data?.length}
+        pending={del.isPending}
+        onConfirm={(purge) => del.mutate(purge)}
+      />
       <div className="flex items-start gap-3">
         <Link
           to="/repos"
@@ -155,6 +193,20 @@ function RepoDetailPage() {
             onChange={setScanBranch}
             defaultBranch={r.default_branch}
           />
+          {canModify(me.data, r.user_id) && (
+            <button
+              type="button"
+              onClick={() => sync.mutate()}
+              disabled={sync.isPending || scan.busy}
+              title="Pull latest commits without starting a scan"
+              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border/60 text-sm font-medium hover:bg-muted/50 disabled:opacity-50"
+            >
+              <RefreshCwIcon
+                className={`size-4 ${sync.isPending ? "animate-spin" : ""}`}
+              />
+              {sync.isPending ? "Syncing…" : "Sync"}
+            </button>
+          )}
           <button
             type="button"
             onClick={startScanNow}
@@ -167,15 +219,7 @@ function RepoDetailPage() {
           {canModify(me.data, r.user_id) && (
             <button
               type="button"
-              onClick={() => {
-                if (
-                  window.confirm(
-                    `Delete repo "${r.name}"? This removes it from all collections and deletes its scans. Cannot be undone.`,
-                  )
-                ) {
-                  del.mutate();
-                }
-              }}
+              onClick={() => setDeleteOpen(true)}
               className="size-9 grid place-items-center rounded-md hover:bg-destructive/10 text-destructive"
               aria-label="Delete"
             >
@@ -192,10 +236,13 @@ function RepoDetailPage() {
           <>
             <Field label="Remote node" value={r.remote_node_id || "—"} mono />
             <Field label="Remote path" value={r.remote_path || r.source_path} mono />
-            <Field label="Last commit" value={r.last_commit_sha || "—"} mono />
-            <Field label="Dirty state" value={r.last_dirty_state || "unknown"} />
           </>
         )}
+        <Field label="Last commit" value={r.last_commit_sha || "—"} mono />
+        <Field
+          label="Dirty state"
+          value={r.last_dirty_state || (r.last_commit_sha ? "unknown" : "—")}
+        />
         <Field
           label="Languages"
           value={
@@ -223,6 +270,13 @@ function RepoDetailPage() {
           }
         />
       </section>
+
+      <CurrentFindings
+        repoId={repoId}
+        latestScanId={scansQ.data?.find((s) => s.status === "completed")?.id}
+      />
+
+      <RepoSuppressions repoId={repoId} />
 
       <TrendsSection
         trends={trendsQ.data ?? []}
@@ -267,6 +321,161 @@ function RepoDetailPage() {
   );
 }
 
+function CurrentFindings({
+  repoId,
+  latestScanId,
+}: {
+  repoId: string;
+  latestScanId?: string;
+}) {
+  const q = useQuery({
+    queryKey: ["findings", "repo", repoId],
+    queryFn: async () => {
+      const r = await api.get<Finding[]>(
+        `/findings?repo_id=${repoId}&per_page=50&sort=severity&order=desc`,
+      );
+      return { rows: r.data ?? [], total: r.meta?.total ?? r.data?.length ?? 0 };
+    },
+  });
+  const rows = q.data?.rows ?? [];
+  const total = q.data?.total ?? 0;
+  return (
+    <section className="glass-card overflow-hidden">
+      <div className="px-5 py-3 border-b border-border/30 flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-medium">Current findings</h2>
+          <p className="text-[11px] text-muted-foreground">
+            Open on the latest scan of each branch. Full detail lives on the
+            scan page.
+          </p>
+        </div>
+        {latestScanId ? (
+          <Link
+            to="/scans/$scanId"
+            params={{ scanId: latestScanId }}
+            className="text-xs hover:underline shrink-0"
+          >
+            Open latest scan
+          </Link>
+        ) : null}
+      </div>
+      {q.isLoading ? (
+        <p className="px-5 py-3 text-sm text-muted-foreground">Loading…</p>
+      ) : rows.length === 0 ? (
+        <p className="px-5 py-3 text-sm text-muted-foreground">
+          No open findings on the current scans.
+        </p>
+      ) : (
+        <>
+          <ul className="divide-y divide-border/20 text-sm">
+            {rows.map((f) => (
+              <li key={f.id}>
+                <Link
+                  to="/findings/$findingId"
+                  params={{ findingId: f.id }}
+                  className="px-5 py-2 flex items-start gap-3 hover:bg-muted/20"
+                >
+                  <SeverityBadge severity={f.severity} />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate">{f.title}</div>
+                    <div className="text-[11px] text-muted-foreground font-mono truncate">
+                      {f.tool_name}
+                      {f.file_path ? ` · ${f.file_path}` : ""}
+                    </div>
+                  </div>
+                </Link>
+              </li>
+            ))}
+          </ul>
+          {total > rows.length ? (
+            <p className="px-5 py-2 text-[11px] text-muted-foreground border-t border-border/20">
+              Showing {rows.length} of {total.toLocaleString()}.{" "}
+              {latestScanId ? "Open the latest scan for the full list." : null}
+            </p>
+          ) : null}
+        </>
+      )}
+    </section>
+  );
+}
+
+interface RepoSuppression {
+  id: string;
+  scope_type: string;
+  scope_value: string;
+  reason: string;
+  status: string;
+  created_at: string;
+}
+
+function RepoSuppressions({ repoId }: { repoId: string }) {
+  const qc = useQueryClient();
+  const q = useQuery({
+    queryKey: ["suppressions", repoId],
+    queryFn: async () => {
+      const r = await api.get<RepoSuppression[]>(
+        `/suppressions?repo_id=${repoId}`,
+      );
+      return r.data ?? [];
+    },
+  });
+  const revoke = useMutation({
+    mutationFn: (id: string) => api.delete(`/suppressions/${id}`),
+    onSuccess: () => {
+      toast.success("Suppression revoked — next scan can show it again");
+      qc.invalidateQueries({ queryKey: ["suppressions", repoId] });
+    },
+    onError: (e) =>
+      toast.error(e instanceof Error ? e.message : "Revoke failed"),
+  });
+  const rows = q.data ?? [];
+  return (
+    <section className="glass-card overflow-hidden">
+      <div className="px-5 py-3 border-b border-border/30">
+        <h2 className="text-sm font-medium">Repo suppressions</h2>
+        <p className="text-[11px] text-muted-foreground">
+          These hide matching findings on every future scan of this repo. Agent
+          “muted this run” rows are not listed here unless a durable
+          suppression was written. Revoke anything you still want to see.
+        </p>
+      </div>
+      {q.isLoading ? (
+        <p className="px-5 py-3 text-sm text-muted-foreground">Loading…</p>
+      ) : rows.length === 0 ? (
+        <p className="px-5 py-3 text-sm text-muted-foreground">
+          No durable suppressions.
+        </p>
+      ) : (
+        <ul className="divide-y divide-border/20 text-sm">
+          {rows.map((s) => (
+            <li
+              key={s.id}
+              className="px-5 py-2 flex items-start justify-between gap-3"
+            >
+              <div className="min-w-0">
+                <div className="font-mono text-xs truncate">
+                  {s.scope_type}: {s.scope_value}
+                </div>
+                <p className="mt-0.5 text-[11px] text-muted-foreground truncate">
+                  {s.reason}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => revoke.mutate(s.id)}
+                disabled={revoke.isPending}
+                className="shrink-0 text-xs text-destructive hover:underline disabled:opacity-50"
+              >
+                Revoke
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 function Field({
   label,
   value,
@@ -282,6 +491,12 @@ function Field({
       <div className={`text-sm ${mono ? "font-mono" : ""}`}>{value}</div>
     </div>
   );
+}
+
+interface SyncRepoResult extends Repo {
+  branch: string;
+  previous_commit_sha?: string;
+  changed: boolean;
 }
 
 // detected_languages is JSON-encoded: {"go": 219, "python": 2, ...}

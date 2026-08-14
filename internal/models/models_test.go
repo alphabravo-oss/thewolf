@@ -143,24 +143,6 @@ func TestFixItemStatusConstants(t *testing.T) {
 	}
 }
 
-func TestLoopStatusConstants(t *testing.T) {
-	tests := []struct {
-		s    LoopStatus
-		want string
-	}{
-		{LoopStatusRunning, "running"},
-		{LoopStatusPaused, "paused"},
-		{LoopStatusCompleted, "completed"},
-		{LoopStatusStopped, "stopped"},
-		{LoopStatusFailed, "failed"},
-	}
-	for _, tt := range tests {
-		if string(tt.s) != tt.want {
-			t.Errorf("LoopStatus %v = %q, want %q", tt.s, string(tt.s), tt.want)
-		}
-	}
-}
-
 func TestSourceTypeConstants(t *testing.T) {
 	tests := []struct {
 		s    SourceType
@@ -186,22 +168,6 @@ func TestLanguageConstants(t *testing.T) {
 	for _, l := range languages {
 		if string(l) == "" {
 			t.Error("language constant should not be empty")
-		}
-	}
-}
-
-func TestRescanStrategyConstants(t *testing.T) {
-	tests := []struct {
-		s    RescanStrategy
-		want string
-	}{
-		{RescanFull, "full"},
-		{RescanTargeted, "targeted"},
-		{RescanSmart, "smart"},
-	}
-	for _, tt := range tests {
-		if string(tt.s) != tt.want {
-			t.Errorf("RescanStrategy %v = %q, want %q", tt.s, string(tt.s), tt.want)
 		}
 	}
 }
@@ -243,6 +209,7 @@ func TestKeyTypeConstants(t *testing.T) {
 		{KeyTypeGitLabToken, "gitlab_token"},
 		{KeyTypeAnthropicKey, "anthropic_key"},
 		{KeyTypeOpenAIKey, "openai_key"},
+		{KeyTypeXAIKey, "xai_key"},
 		{KeyTypeCustom, "custom"},
 	}
 	for _, tt := range tests {
@@ -415,36 +382,6 @@ func TestFixJSONSerialization(t *testing.T) {
 	}
 	if decoded.Status != FixStatusCompleted {
 		t.Errorf("Status = %q, want %q", decoded.Status, FixStatusCompleted)
-	}
-}
-
-func TestLoopJSONSerialization(t *testing.T) {
-	now := time.Now().Truncate(time.Second)
-	l := Loop{
-		ID:             "loop-1",
-		UserID:         "u-1",
-		RepoID:         "r-1",
-		Status:         LoopStatusRunning,
-		MaxIterations:  5,
-		RescanStrategy: RescanSmart,
-		SeverityFilter: "critical,high",
-		CreatedAt:      now,
-		UpdatedAt:      now,
-	}
-
-	data, err := json.Marshal(l)
-	if err != nil {
-		t.Fatalf("marshal: %v", err)
-	}
-
-	var decoded Loop
-	json.Unmarshal(data, &decoded)
-
-	if decoded.MaxIterations != 5 {
-		t.Errorf("MaxIterations = %d, want 5", decoded.MaxIterations)
-	}
-	if decoded.RescanStrategy != RescanSmart {
-		t.Errorf("RescanStrategy = %q, want %q", decoded.RescanStrategy, RescanSmart)
 	}
 }
 

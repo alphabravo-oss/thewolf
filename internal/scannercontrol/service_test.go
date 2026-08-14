@@ -346,7 +346,7 @@ func TestServicePublishesOnlyExactApprovedCandidateInventory(t *testing.T) {
 		t.Fatalf("candidate state = %s", store.candidates[candidate.ID].State)
 	}
 	if len(store.releaseInventories) != 1 ||
-		len(store.releaseInventories[0].Tools) != 49 ||
+		len(store.releaseInventories[0].Tools) != len(requiredReleaseToolKeys) ||
 		len(store.releaseInventories[0].Images) != 8 {
 		t.Fatalf("inventories = %#v", store.releaseInventories)
 	}

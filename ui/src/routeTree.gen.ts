@@ -14,15 +14,16 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as AuthedIndexRouteImport } from './routes/_authed.index'
 import { Route as AuthedAccountRouteImport } from './routes/_authed.account'
+import { Route as AuthedAgentsRouteImport } from './routes/_authed.agents'
 import { Route as AuthedAuditRouteImport } from './routes/_authed.audit'
 import { Route as AuthedCollectionsRouteImport } from './routes/_authed.collections'
 import { Route as AuthedFindingsRouteImport } from './routes/_authed.findings'
 import { Route as AuthedFixesRouteImport } from './routes/_authed.fixes'
-import { Route as AuthedLoopsRouteImport } from './routes/_authed.loops'
 import { Route as AuthedReposRouteImport } from './routes/_authed.repos'
-import { Route as AuthedScannersRouteImport } from './routes/_authed.scanners'
 import { Route as AuthedScansRouteImport } from './routes/_authed.scans'
 import { Route as AuthedSettingsRouteImport } from './routes/_authed.settings'
+import { Route as AuthedAgentsIndexRouteImport } from './routes/_authed.agents.index'
+import { Route as AuthedAgentsAgentIdRouteImport } from './routes/_authed.agents.$agentId'
 import { Route as AuthedAuditIndexRouteImport } from './routes/_authed.audit.index'
 import { Route as AuthedCollectionsIndexRouteImport } from './routes/_authed.collections.index'
 import { Route as AuthedCollectionsCollectionIdRouteImport } from './routes/_authed.collections.$collectionId'
@@ -30,8 +31,6 @@ import { Route as AuthedFindingsIndexRouteImport } from './routes/_authed.findin
 import { Route as AuthedFindingsFindingIdRouteImport } from './routes/_authed.findings.$findingId'
 import { Route as AuthedFixesIndexRouteImport } from './routes/_authed.fixes.index'
 import { Route as AuthedFixesFixIdRouteImport } from './routes/_authed.fixes.$fixId'
-import { Route as AuthedLoopsIndexRouteImport } from './routes/_authed.loops.index'
-import { Route as AuthedLoopsLoopIdRouteImport } from './routes/_authed.loops.$loopId'
 import { Route as AuthedReposIndexRouteImport } from './routes/_authed.repos.index'
 import { Route as AuthedReposRepoIdRouteImport } from './routes/_authed.repos.$repoId'
 import { Route as AuthedScansIndexRouteImport } from './routes/_authed.scans.index'
@@ -63,6 +62,11 @@ const AuthedAccountRoute = AuthedAccountRouteImport.update({
   path: '/account',
   getParentRoute: () => AuthedRoute,
 } as any)
+const AuthedAgentsRoute = AuthedAgentsRouteImport.update({
+  id: '/agents',
+  path: '/agents',
+  getParentRoute: () => AuthedRoute,
+} as any)
 const AuthedAuditRoute = AuthedAuditRouteImport.update({
   id: '/audit',
   path: '/audit',
@@ -83,19 +87,9 @@ const AuthedFixesRoute = AuthedFixesRouteImport.update({
   path: '/fixes',
   getParentRoute: () => AuthedRoute,
 } as any)
-const AuthedLoopsRoute = AuthedLoopsRouteImport.update({
-  id: '/loops',
-  path: '/loops',
-  getParentRoute: () => AuthedRoute,
-} as any)
 const AuthedReposRoute = AuthedReposRouteImport.update({
   id: '/repos',
   path: '/repos',
-  getParentRoute: () => AuthedRoute,
-} as any)
-const AuthedScannersRoute = AuthedScannersRouteImport.update({
-  id: '/scanners',
-  path: '/scanners',
   getParentRoute: () => AuthedRoute,
 } as any)
 const AuthedScansRoute = AuthedScansRouteImport.update({
@@ -107,6 +101,16 @@ const AuthedSettingsRoute = AuthedSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
   getParentRoute: () => AuthedRoute,
+} as any)
+const AuthedAgentsIndexRoute = AuthedAgentsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AuthedAgentsRoute,
+} as any)
+const AuthedAgentsAgentIdRoute = AuthedAgentsAgentIdRouteImport.update({
+  id: '/$agentId',
+  path: '/$agentId',
+  getParentRoute: () => AuthedAgentsRoute,
 } as any)
 const AuthedAuditIndexRoute = AuthedAuditIndexRouteImport.update({
   id: '/',
@@ -144,16 +148,6 @@ const AuthedFixesFixIdRoute = AuthedFixesFixIdRouteImport.update({
   path: '/$fixId',
   getParentRoute: () => AuthedFixesRoute,
 } as any)
-const AuthedLoopsIndexRoute = AuthedLoopsIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => AuthedLoopsRoute,
-} as any)
-const AuthedLoopsLoopIdRoute = AuthedLoopsLoopIdRouteImport.update({
-  id: '/$loopId',
-  path: '/$loopId',
-  getParentRoute: () => AuthedLoopsRoute,
-} as any)
 const AuthedReposIndexRoute = AuthedReposIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -190,26 +184,25 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/account': typeof AuthedAccountRoute
+  '/agents': typeof AuthedAgentsRouteWithChildren
   '/audit': typeof AuthedAuditRouteWithChildren
   '/collections': typeof AuthedCollectionsRouteWithChildren
   '/findings': typeof AuthedFindingsRouteWithChildren
   '/fixes': typeof AuthedFixesRouteWithChildren
-  '/loops': typeof AuthedLoopsRouteWithChildren
   '/repos': typeof AuthedReposRouteWithChildren
-  '/scanners': typeof AuthedScannersRoute
   '/scans': typeof AuthedScansRouteWithChildren
   '/settings': typeof AuthedSettingsRoute
+  '/agents/$agentId': typeof AuthedAgentsAgentIdRoute
   '/collections/$collectionId': typeof AuthedCollectionsCollectionIdRoute
   '/findings/$findingId': typeof AuthedFindingsFindingIdRoute
   '/fixes/$fixId': typeof AuthedFixesFixIdRoute
-  '/loops/$loopId': typeof AuthedLoopsLoopIdRoute
   '/repos/$repoId': typeof AuthedReposRepoIdRoute
   '/scans/$scanId': typeof AuthedScansScanIdRouteWithChildren
+  '/agents/': typeof AuthedAgentsIndexRoute
   '/audit/': typeof AuthedAuditIndexRoute
   '/collections/': typeof AuthedCollectionsIndexRoute
   '/findings/': typeof AuthedFindingsIndexRoute
   '/fixes/': typeof AuthedFixesIndexRoute
-  '/loops/': typeof AuthedLoopsIndexRoute
   '/repos/': typeof AuthedReposIndexRoute
   '/scans/': typeof AuthedScansIndexRoute
   '/scans/$scanId/live': typeof AuthedScansScanIdLiveRoute
@@ -219,19 +212,18 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/account': typeof AuthedAccountRoute
-  '/scanners': typeof AuthedScannersRoute
   '/settings': typeof AuthedSettingsRoute
   '/': typeof AuthedIndexRoute
+  '/agents/$agentId': typeof AuthedAgentsAgentIdRoute
   '/collections/$collectionId': typeof AuthedCollectionsCollectionIdRoute
   '/findings/$findingId': typeof AuthedFindingsFindingIdRoute
   '/fixes/$fixId': typeof AuthedFixesFixIdRoute
-  '/loops/$loopId': typeof AuthedLoopsLoopIdRoute
   '/repos/$repoId': typeof AuthedReposRepoIdRoute
+  '/agents': typeof AuthedAgentsIndexRoute
   '/audit': typeof AuthedAuditIndexRoute
   '/collections': typeof AuthedCollectionsIndexRoute
   '/findings': typeof AuthedFindingsIndexRoute
   '/fixes': typeof AuthedFixesIndexRoute
-  '/loops': typeof AuthedLoopsIndexRoute
   '/repos': typeof AuthedReposIndexRoute
   '/scans': typeof AuthedScansIndexRoute
   '/scans/$scanId/live': typeof AuthedScansScanIdLiveRoute
@@ -243,27 +235,26 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/_authed/account': typeof AuthedAccountRoute
+  '/_authed/agents': typeof AuthedAgentsRouteWithChildren
   '/_authed/audit': typeof AuthedAuditRouteWithChildren
   '/_authed/collections': typeof AuthedCollectionsRouteWithChildren
   '/_authed/findings': typeof AuthedFindingsRouteWithChildren
   '/_authed/fixes': typeof AuthedFixesRouteWithChildren
-  '/_authed/loops': typeof AuthedLoopsRouteWithChildren
   '/_authed/repos': typeof AuthedReposRouteWithChildren
-  '/_authed/scanners': typeof AuthedScannersRoute
   '/_authed/scans': typeof AuthedScansRouteWithChildren
   '/_authed/settings': typeof AuthedSettingsRoute
   '/_authed/': typeof AuthedIndexRoute
+  '/_authed/agents/$agentId': typeof AuthedAgentsAgentIdRoute
   '/_authed/collections/$collectionId': typeof AuthedCollectionsCollectionIdRoute
   '/_authed/findings/$findingId': typeof AuthedFindingsFindingIdRoute
   '/_authed/fixes/$fixId': typeof AuthedFixesFixIdRoute
-  '/_authed/loops/$loopId': typeof AuthedLoopsLoopIdRoute
   '/_authed/repos/$repoId': typeof AuthedReposRepoIdRoute
   '/_authed/scans/$scanId': typeof AuthedScansScanIdRouteWithChildren
+  '/_authed/agents/': typeof AuthedAgentsIndexRoute
   '/_authed/audit/': typeof AuthedAuditIndexRoute
   '/_authed/collections/': typeof AuthedCollectionsIndexRoute
   '/_authed/findings/': typeof AuthedFindingsIndexRoute
   '/_authed/fixes/': typeof AuthedFixesIndexRoute
-  '/_authed/loops/': typeof AuthedLoopsIndexRoute
   '/_authed/repos/': typeof AuthedReposIndexRoute
   '/_authed/scans/': typeof AuthedScansIndexRoute
   '/_authed/scans/$scanId/live': typeof AuthedScansScanIdLiveRoute
@@ -276,26 +267,25 @@ export interface FileRouteTypes {
     | '/login'
     | '/register'
     | '/account'
+    | '/agents'
     | '/audit'
     | '/collections'
     | '/findings'
     | '/fixes'
-    | '/loops'
     | '/repos'
-    | '/scanners'
     | '/scans'
     | '/settings'
+    | '/agents/$agentId'
     | '/collections/$collectionId'
     | '/findings/$findingId'
     | '/fixes/$fixId'
-    | '/loops/$loopId'
     | '/repos/$repoId'
     | '/scans/$scanId'
+    | '/agents/'
     | '/audit/'
     | '/collections/'
     | '/findings/'
     | '/fixes/'
-    | '/loops/'
     | '/repos/'
     | '/scans/'
     | '/scans/$scanId/live'
@@ -305,19 +295,18 @@ export interface FileRouteTypes {
     | '/login'
     | '/register'
     | '/account'
-    | '/scanners'
     | '/settings'
     | '/'
+    | '/agents/$agentId'
     | '/collections/$collectionId'
     | '/findings/$findingId'
     | '/fixes/$fixId'
-    | '/loops/$loopId'
     | '/repos/$repoId'
+    | '/agents'
     | '/audit'
     | '/collections'
     | '/findings'
     | '/fixes'
-    | '/loops'
     | '/repos'
     | '/scans'
     | '/scans/$scanId/live'
@@ -328,27 +317,26 @@ export interface FileRouteTypes {
     | '/login'
     | '/register'
     | '/_authed/account'
+    | '/_authed/agents'
     | '/_authed/audit'
     | '/_authed/collections'
     | '/_authed/findings'
     | '/_authed/fixes'
-    | '/_authed/loops'
     | '/_authed/repos'
-    | '/_authed/scanners'
     | '/_authed/scans'
     | '/_authed/settings'
     | '/_authed/'
+    | '/_authed/agents/$agentId'
     | '/_authed/collections/$collectionId'
     | '/_authed/findings/$findingId'
     | '/_authed/fixes/$fixId'
-    | '/_authed/loops/$loopId'
     | '/_authed/repos/$repoId'
     | '/_authed/scans/$scanId'
+    | '/_authed/agents/'
     | '/_authed/audit/'
     | '/_authed/collections/'
     | '/_authed/findings/'
     | '/_authed/fixes/'
-    | '/_authed/loops/'
     | '/_authed/repos/'
     | '/_authed/scans/'
     | '/_authed/scans/$scanId/live'
@@ -398,6 +386,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedAccountRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/_authed/agents': {
+      id: '/_authed/agents'
+      path: '/agents'
+      fullPath: '/agents'
+      preLoaderRoute: typeof AuthedAgentsRouteImport
+      parentRoute: typeof AuthedRoute
+    }
     '/_authed/audit': {
       id: '/_authed/audit'
       path: '/audit'
@@ -426,25 +421,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedFixesRouteImport
       parentRoute: typeof AuthedRoute
     }
-    '/_authed/loops': {
-      id: '/_authed/loops'
-      path: '/loops'
-      fullPath: '/loops'
-      preLoaderRoute: typeof AuthedLoopsRouteImport
-      parentRoute: typeof AuthedRoute
-    }
     '/_authed/repos': {
       id: '/_authed/repos'
       path: '/repos'
       fullPath: '/repos'
       preLoaderRoute: typeof AuthedReposRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/scanners': {
-      id: '/_authed/scanners'
-      path: '/scanners'
-      fullPath: '/scanners'
-      preLoaderRoute: typeof AuthedScannersRouteImport
       parentRoute: typeof AuthedRoute
     }
     '/_authed/scans': {
@@ -460,6 +441,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/settings'
       preLoaderRoute: typeof AuthedSettingsRouteImport
       parentRoute: typeof AuthedRoute
+    }
+    '/_authed/agents/': {
+      id: '/_authed/agents/'
+      path: '/'
+      fullPath: '/agents/'
+      preLoaderRoute: typeof AuthedAgentsIndexRouteImport
+      parentRoute: typeof AuthedAgentsRoute
+    }
+    '/_authed/agents/$agentId': {
+      id: '/_authed/agents/$agentId'
+      path: '/$agentId'
+      fullPath: '/agents/$agentId'
+      preLoaderRoute: typeof AuthedAgentsAgentIdRouteImport
+      parentRoute: typeof AuthedAgentsRoute
     }
     '/_authed/audit/': {
       id: '/_authed/audit/'
@@ -510,20 +505,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedFixesFixIdRouteImport
       parentRoute: typeof AuthedFixesRoute
     }
-    '/_authed/loops/': {
-      id: '/_authed/loops/'
-      path: '/'
-      fullPath: '/loops/'
-      preLoaderRoute: typeof AuthedLoopsIndexRouteImport
-      parentRoute: typeof AuthedLoopsRoute
-    }
-    '/_authed/loops/$loopId': {
-      id: '/_authed/loops/$loopId'
-      path: '/$loopId'
-      fullPath: '/loops/$loopId'
-      preLoaderRoute: typeof AuthedLoopsLoopIdRouteImport
-      parentRoute: typeof AuthedLoopsRoute
-    }
     '/_authed/repos/': {
       id: '/_authed/repos/'
       path: '/'
@@ -568,6 +549,20 @@ declare module '@tanstack/react-router' {
     }
   }
 }
+
+interface AuthedAgentsRouteChildren {
+  AuthedAgentsAgentIdRoute: typeof AuthedAgentsAgentIdRoute
+  AuthedAgentsIndexRoute: typeof AuthedAgentsIndexRoute
+}
+
+const AuthedAgentsRouteChildren: AuthedAgentsRouteChildren = {
+  AuthedAgentsAgentIdRoute: AuthedAgentsAgentIdRoute,
+  AuthedAgentsIndexRoute: AuthedAgentsIndexRoute,
+}
+
+const AuthedAgentsRouteWithChildren = AuthedAgentsRoute._addFileChildren(
+  AuthedAgentsRouteChildren,
+)
 
 interface AuthedAuditRouteChildren {
   AuthedAuditIndexRoute: typeof AuthedAuditIndexRoute
@@ -622,20 +617,6 @@ const AuthedFixesRouteWithChildren = AuthedFixesRoute._addFileChildren(
   AuthedFixesRouteChildren,
 )
 
-interface AuthedLoopsRouteChildren {
-  AuthedLoopsLoopIdRoute: typeof AuthedLoopsLoopIdRoute
-  AuthedLoopsIndexRoute: typeof AuthedLoopsIndexRoute
-}
-
-const AuthedLoopsRouteChildren: AuthedLoopsRouteChildren = {
-  AuthedLoopsLoopIdRoute: AuthedLoopsLoopIdRoute,
-  AuthedLoopsIndexRoute: AuthedLoopsIndexRoute,
-}
-
-const AuthedLoopsRouteWithChildren = AuthedLoopsRoute._addFileChildren(
-  AuthedLoopsRouteChildren,
-)
-
 interface AuthedReposRouteChildren {
   AuthedReposRepoIdRoute: typeof AuthedReposRepoIdRoute
   AuthedReposIndexRoute: typeof AuthedReposIndexRoute
@@ -679,13 +660,12 @@ const AuthedScansRouteWithChildren = AuthedScansRoute._addFileChildren(
 
 interface AuthedRouteChildren {
   AuthedAccountRoute: typeof AuthedAccountRoute
+  AuthedAgentsRoute: typeof AuthedAgentsRouteWithChildren
   AuthedAuditRoute: typeof AuthedAuditRouteWithChildren
   AuthedCollectionsRoute: typeof AuthedCollectionsRouteWithChildren
   AuthedFindingsRoute: typeof AuthedFindingsRouteWithChildren
   AuthedFixesRoute: typeof AuthedFixesRouteWithChildren
-  AuthedLoopsRoute: typeof AuthedLoopsRouteWithChildren
   AuthedReposRoute: typeof AuthedReposRouteWithChildren
-  AuthedScannersRoute: typeof AuthedScannersRoute
   AuthedScansRoute: typeof AuthedScansRouteWithChildren
   AuthedSettingsRoute: typeof AuthedSettingsRoute
   AuthedIndexRoute: typeof AuthedIndexRoute
@@ -693,13 +673,12 @@ interface AuthedRouteChildren {
 
 const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedAccountRoute: AuthedAccountRoute,
+  AuthedAgentsRoute: AuthedAgentsRouteWithChildren,
   AuthedAuditRoute: AuthedAuditRouteWithChildren,
   AuthedCollectionsRoute: AuthedCollectionsRouteWithChildren,
   AuthedFindingsRoute: AuthedFindingsRouteWithChildren,
   AuthedFixesRoute: AuthedFixesRouteWithChildren,
-  AuthedLoopsRoute: AuthedLoopsRouteWithChildren,
   AuthedReposRoute: AuthedReposRouteWithChildren,
-  AuthedScannersRoute: AuthedScannersRoute,
   AuthedScansRoute: AuthedScansRouteWithChildren,
   AuthedSettingsRoute: AuthedSettingsRoute,
   AuthedIndexRoute: AuthedIndexRoute,

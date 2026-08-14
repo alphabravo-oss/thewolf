@@ -11,6 +11,25 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/github"
 )
 
+func TestGitHubListAccessibleRepos(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/user/repos" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `[{"name":"wolf","full_name":"acme/wolf","default_branch":"main","private":true}]`)
+	}))
+	defer srv.Close()
+	c := &github.Client{BaseURL: srv.URL, Token: "ghp_x"}
+	repos, err := c.ListAccessibleRepos(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(repos) != 1 || repos[0].FullName != "acme/wolf" {
+		t.Fatalf("got %+v", repos)
+	}
+}
+
 func TestGitHubListOrgRepos(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.HasPrefix(r.URL.Path, "/orgs/acme/repos") {
@@ -50,6 +69,29 @@ func TestGitHubListOrgRepos_FallbackToUser(t *testing.T) {
 	}
 	if len(repos) != 1 || repos[0].FullName != "alice/dotfiles" {
 		t.Errorf("got %+v", repos)
+	}
+}
+
+func TestValidateToken(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/user" {
+			t.Fatalf("path %q", r.URL.Path)
+		}
+		if r.Header.Get("Authorization") != "Bearer ghp_x" {
+			w.WriteHeader(401)
+			return
+		}
+		w.Header().Set("X-OAuth-Scopes", "repo, workflow")
+		fmt.Fprint(w, `{"login":"octo"}`)
+	}))
+	defer srv.Close()
+	ok, err := (&github.Client{BaseURL: srv.URL, Token: "ghp_x"}).ValidateToken(context.Background())
+	if err != nil || !ok.Valid || ok.Login != "octo" || len(ok.Scopes) != 2 {
+		t.Fatalf("got %+v err=%v", ok, err)
+	}
+	bad, err := (&github.Client{BaseURL: srv.URL, Token: "nope"}).ValidateToken(context.Background())
+	if err == nil || bad.Valid {
+		t.Fatal("rejected token should error")
 	}
 }
 

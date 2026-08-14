@@ -57,6 +57,30 @@ func TestFixJobEnqueueGetList(t *testing.T) {
 	}
 }
 
+func TestUpdateFixJobDoesNotResurrectCancelled(t *testing.T) {
+	ctx := context.Background()
+	store := newTestStore(t)
+	job := &models.FixJob{ID: "job-cancel", UserID: "u1", RepoID: "r1", Engine: "auto"}
+	if err := store.EnqueueFixJob(ctx, job); err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+	got, _ := store.GetFixJobByID(ctx, "job-cancel")
+	got.Status = models.FixJobCancelled
+	if err := store.UpdateFixJob(ctx, got); err != nil {
+		t.Fatalf("cancel: %v", err)
+	}
+	got.Status = models.FixJobAwaitingPush
+	got.PauseReason = "ready to push"
+	got.ResultBranch = "wolf-fix/job-cancel"
+	if err := store.UpdateFixJob(ctx, got); err != nil {
+		t.Fatalf("stale write: %v", err)
+	}
+	back, _ := store.GetFixJobByID(ctx, "job-cancel")
+	if back.Status != models.FixJobCancelled {
+		t.Fatalf("cancelled job was overwritten to %s", back.Status)
+	}
+}
+
 func TestClaimNextFixJobIsAtomicAndOrdered(t *testing.T) {
 	ctx := context.Background()
 	store := newTestStore(t)

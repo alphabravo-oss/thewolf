@@ -844,12 +844,13 @@ func validatePublication(
 }
 
 var requiredReleaseToolKeys = []string{
-	"bandit", "bearer", "brakeman", "checkov", "clippy", "codeql", "conftest", "cppcheck",
-	"detect-secrets", "detekt", "dockle", "eslint", "gitleaks", "gokart", "gosec", "govulncheck",
-	"grype", "hadolint", "infer", "kics", "kube-linter", "kubescape", "markdownlint", "mypy",
-	"npm-audit", "nuclei", "osv-scanner", "phpstan", "pip-audit", "pluto", "pmd", "radon",
-	"renovate", "rubocop", "ruff", "scorecard", "semgrep", "shellcheck", "spectral", "sqlfluff",
-	"staticcheck", "swiftlint", "syft", "tflint", "trivy", "trufflehog", "vale", "vulture", "yamllint",
+	"bandit", "bearer", "brakeman", "cargo-audit", "cargo-deny", "checkov", "clippy", "codeql",
+	"conftest", "cppcheck", "detect-secrets", "detekt", "dockle", "eslint", "gitleaks", "gokart",
+	"gosec", "govulncheck", "grype", "hadolint", "infer", "kics", "kube-linter", "kubescape",
+	"markdownlint", "mypy", "npm-audit", "nuclei", "osv-scanner", "phpstan", "pip-audit", "pluto",
+	"pmd", "poutine", "radon", "renovate", "rubocop", "ruff", "scorecard", "semgrep", "shellcheck",
+	"spectral", "sqlfluff", "staticcheck", "swiftlint", "syft", "tflint", "trivy", "trufflehog",
+	"vale", "vulture", "yamllint", "zizmor",
 }
 
 func (s Service) publicationVerifier() PublicationVerifier {

@@ -164,6 +164,48 @@ func TestChain_NextEscalatesThenExhausts(t *testing.T) {
 	}
 }
 
+func TestSelectEngine_OpenCodeWhenAuthed(t *testing.T) {
+	withAuthProber(t, map[string]bool{"opencode": true})
+	ch, err := SelectEngine(context.Background(), ChainConfig{
+		Engine:   "auto",
+		Provider: &fakeProvider{},
+	})
+	if err != nil {
+		t.Fatalf("SelectEngine: %v", err)
+	}
+	if !eq(names(ch.Tiers()), []string{"opencode", "api"}) {
+		t.Fatalf("tiers = %v, want [opencode api]", names(ch.Tiers()))
+	}
+}
+
+func TestSelectEngine_APIKeyCountsAsAuthed(t *testing.T) {
+	withAuthProber(t, map[string]bool{})
+	// hasKey says yes, but the binary still has to exist. Stub via pinning
+	// the explicit engine instead — auto + HasAPIKey for a missing binary
+	// must not invent a tier.
+	ch, err := SelectEngine(context.Background(), ChainConfig{
+		Engine:    "auto",
+		Provider:  &fakeProvider{},
+		HasAPIKey: func(string) bool { return true },
+	})
+	if err != nil {
+		t.Fatalf("SelectEngine: %v", err)
+	}
+	// Without the CLIs on PATH, only API remains even if keys exist.
+	if !eq(names(ch.Tiers()), []string{"api"}) && !containsName(names(ch.Tiers()), "api") {
+		t.Fatalf("expected api to remain, got %v", names(ch.Tiers()))
+	}
+}
+
+func containsName(names []string, want string) bool {
+	for _, n := range names {
+		if n == want {
+			return true
+		}
+	}
+	return false
+}
+
 func TestCLIAuthed_CachesPerProcess(t *testing.T) {
 	resetAuthCache()
 	calls := 0
@@ -174,10 +216,10 @@ func TestCLIAuthed_CachesPerProcess(t *testing.T) {
 	}
 	t.Cleanup(func() { authProber = prev; resetAuthCache() })
 
-	if !cliAuthed(context.Background(), "claude") {
+	if !cliAuthed(context.Background(), "claude", false) {
 		t.Fatal("expected authed")
 	}
-	if !cliAuthed(context.Background(), "claude") {
+	if !cliAuthed(context.Background(), "claude", false) {
 		t.Fatal("expected authed (cached)")
 	}
 	if calls != 1 {

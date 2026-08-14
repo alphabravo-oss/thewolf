@@ -44,7 +44,7 @@ func seedScanWithFindings(t *testing.T, env *testEnv, repoID string, findings []
 			Category:    models.CategorySAST,
 			Severity:    f.Severity,
 			Title:       "t",
-			FilePath:    "x.go",
+			FilePath:    fmt.Sprintf("%s-%d.go", f.RuleID, i),
 			RuleID:      f.RuleID,
 			Status:      models.StatusOpen,
 		}
@@ -316,9 +316,14 @@ func TestFindingsAggregateByRule(t *testing.T) {
 	}
 	var got struct {
 		Data []struct {
-			Key      string `json:"key"`
-			Repos    int    `json:"repos"`
-			Findings int    `json:"findings"`
+			Key       string   `json:"key"`
+			Repos     int      `json:"repos"`
+			Findings  int      `json:"findings"`
+			Tool      string   `json:"tool"`
+			Title     string   `json:"title"`
+			Severity  string   `json:"severity"`
+			RepoIDs   []string `json:"repo_ids"`
+			RepoNames []string `json:"repo_names"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
@@ -330,8 +335,80 @@ func TestFindingsAggregateByRule(t *testing.T) {
 	if got.Data[0].Key != "log4j-1.2" || got.Data[0].Repos != 4 {
 		t.Errorf("expected log4j-1.2 first with repos=4, got %+v", got.Data[0])
 	}
+	if got.Data[0].Tool != "test" || got.Data[0].Severity != string(models.SeverityHigh) {
+		t.Errorf("log4j metadata = %+v", got.Data[0])
+	}
+	if len(got.Data[0].RepoIDs) != 4 || len(got.Data[0].RepoNames) != 4 {
+		t.Errorf("log4j repos not paired: ids=%v names=%v", got.Data[0].RepoIDs, got.Data[0].RepoNames)
+	}
+	wantNames := []string{"log4j-0", "log4j-1", "log4j-2", "log4j-3"}
+	if fmt.Sprint(got.Data[0].RepoNames) != fmt.Sprint(wantNames) {
+		t.Errorf("log4j names=%v want %v", got.Data[0].RepoNames, wantNames)
+	}
 	if got.Data[1].Key != "openssl-1.0.2k" || got.Data[1].Repos != 2 {
 		t.Errorf("expected openssl-1.0.2k second with repos=2, got %+v", got.Data[1])
+	}
+}
+
+func TestFindingsByRepo(t *testing.T) {
+	env := setupTestEnv(t)
+	defer env.Store.Close()
+	ctx := context.Background()
+
+	repoA := createRepoWithSource(t, env, "alpha", models.SourceTypeLocal)
+	repoB := createRepoWithSource(t, env, "beta", models.SourceTypeLocal)
+	scanA := uuid.New().String()
+	scanB := uuid.New().String()
+	for _, s := range []struct {
+		id, repo string
+	}{{scanA, repoA}, {scanB, repoB}} {
+		if err := env.Store.CreateScan(ctx, &models.Scan{
+			ID: s.id, UserID: env.UserID, RepoID: s.repo, Branch: "main",
+			Status: models.ScanStatusCompleted, ToolsSelected: "[]", ToolsCompleted: "[]",
+			ToolsFailed: "[]", CoverageSummary: "{}",
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mustFinding := func(scan, repo, path, rule string, sev models.Severity) {
+		if err := env.Store.CreateFinding(ctx, &models.Finding{
+			ID: uuid.New().String(), ScanID: scan, RepoID: repo,
+			Fingerprint: uuid.New().String(), ToolName: "gosec",
+			Category: models.CategorySAST, Severity: sev, Title: rule,
+			FilePath: path, RuleID: rule, Status: models.StatusOpen,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Distinct file+rule so current-open location dedup does not collapse
+	// two different issues in the same repo into one count.
+	mustFinding(scanA, repoA, "a.go", "G101", models.SeverityCritical)
+	mustFinding(scanA, repoA, "b.go", "G102", models.SeverityHigh)
+	mustFinding(scanB, repoB, "c.go", "G103", models.SeverityLow)
+
+	w := env.doRequest(http.MethodGet, "/api/findings/by-repo", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var got struct {
+		Data []struct {
+			Name     string `json:"name"`
+			Total    int    `json:"total"`
+			Critical int    `json:"critical"`
+			High     int    `json:"high"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Data) != 2 {
+		t.Fatalf("repos=%d want 2: %+v", len(got.Data), got.Data)
+	}
+	if got.Data[0].Name != "alpha" || got.Data[0].Total != 2 || got.Data[0].Critical != 1 || got.Data[0].High != 1 {
+		t.Fatalf("alpha first = %+v", got.Data[0])
+	}
+	if got.Data[1].Name != "beta" || got.Data[1].Total != 1 {
+		t.Fatalf("beta = %+v", got.Data[1])
 	}
 }
 
@@ -365,4 +442,83 @@ func TestFleetPostureCountsOpenFindings(t *testing.T) {
 	if data["repo_count"].(float64) != 1 {
 		t.Errorf("expected repo_count=1, got %v", data["repo_count"])
 	}
+}
+
+func TestFleetPostureDedupsRescansAndBranches(t *testing.T) {
+	env := setupTestEnv(t)
+	defer env.Store.Close()
+	repoID := env.createRepo(t)
+	fp := "loc-same-issue"
+	seedScanWithFindingsOn(t, env, repoID, "main", []seedFinding{
+		{models.SeverityHigh, "r1", fp, "a.go"},
+		{models.SeverityMedium, "r2", "only-main", "main.go"},
+	})
+	seedScanWithFindingsOn(t, env, repoID, "main", []seedFinding{
+		{models.SeverityHigh, "r1", fp, "a.go"},
+		{models.SeverityMedium, "r2", "only-main", "main.go"},
+	})
+	seedScanWithFindingsOn(t, env, repoID, "dev", []seedFinding{
+		{models.SeverityHigh, "r1", fp, "a.go"},
+		{models.SeverityLow, "r3", "only-dev", "dev.go"},
+	})
+
+	w := env.doRequest(http.MethodGet, "/api/fleet/posture", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var got map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	sev := got["data"].(map[string]any)["open_findings_by_severity"].(map[string]any)
+	// shared issue once + main-only + dev-only = 3, not 6
+	if sev["high"].(float64) != 1 || sev["medium"].(float64) != 1 || sev["low"].(float64) != 1 {
+		t.Fatalf("expected 1 high / 1 medium / 1 low after dedup, got %v", sev)
+	}
+}
+
+type seedFinding struct {
+	Severity models.Severity
+	RuleID   string
+	Ident    string
+	File     string
+}
+
+func seedScanWithFindingsOn(t *testing.T, env *testEnv, repoID, branch string, findings []seedFinding) string {
+	t.Helper()
+	ctx := context.Background()
+	scanID := uuid.New().String()
+	if err := env.Store.CreateScan(ctx, &models.Scan{
+		ID:              scanID,
+		UserID:          env.UserID,
+		RepoID:          repoID,
+		Branch:          branch,
+		Status:          models.ScanStatusCompleted,
+		ToolsSelected:   "[]",
+		ToolsCompleted:  "[]",
+		ToolsFailed:     "[]",
+		CoverageSummary: "{}",
+	}); err != nil {
+		t.Fatalf("CreateScan: %v", err)
+	}
+	for i, f := range findings {
+		ff := models.Finding{
+			ID:                  uuid.New().String(),
+			ScanID:              scanID,
+			RepoID:              repoID,
+			Fingerprint:         f.Ident,
+			LocationFingerprint: f.Ident,
+			ToolName:            "test",
+			Category:            models.CategorySAST,
+			Severity:            f.Severity,
+			Title:               "t",
+			FilePath:            f.File,
+			RuleID:              f.RuleID,
+			Status:              models.StatusOpen,
+		}
+		if err := env.Store.CreateFinding(ctx, &ff); err != nil {
+			t.Fatalf("CreateFinding[%d]: %v", i, err)
+		}
+	}
+	return scanID
 }

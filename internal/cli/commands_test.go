@@ -78,7 +78,7 @@ func TestEveryReadCommandLive(t *testing.T) {
 		{"finding", "list"},
 		{"finding", "trends"},
 		{"fix", "list"},
-		{"loop", "list"},
+		{"agent", "list"},
 		{"user", "list"},
 		{"settings", "get"},
 		{"prompt", "list"},

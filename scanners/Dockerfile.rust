@@ -9,7 +9,7 @@ FROM debian:trixie-slim@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a
 
 ARG WOLF_VERSION=dev
 LABEL org.opencontainers.image.title="wolf-scanners-rust" \
-      org.opencontainers.image.description="Rust toolchain + clippy for the Wolf code analysis engine" \
+      org.opencontainers.image.description="Rust toolchain, clippy, cargo-audit, and cargo-deny for the Wolf code analysis engine" \
       org.opencontainers.image.source="https://github.com/alphabravo-oss/thewolf" \
       org.opencontainers.image.vendor="AlphaBravo" \
       org.opencontainers.image.version="${WOLF_VERSION}"

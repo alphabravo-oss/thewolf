@@ -103,3 +103,17 @@ func TestCollectionManager(t *testing.T) {
 		}
 	})
 }
+
+func TestGitHubCacheUsesWorkspaceRoot(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("WOLF_WORKSPACE_ROOT", root)
+
+	got, err := getCacheDir()
+	if err != nil {
+		t.Fatalf("getCacheDir: %v", err)
+	}
+	want := filepath.Join(root, ".wolf-cache", "repos")
+	if got != want {
+		t.Fatalf("cache dir = %q, want %q", got, want)
+	}
+}

@@ -9,7 +9,7 @@
 //   - Browser auth is carried by the server-set HttpOnly wolf_token cookie.
 import type { ApiResponse } from "./types";
 
-const BASE_URL = import.meta.env.VITE_API_URL ?? "/api";
+const BASE_URL = import.meta.env.VITE_API_URL ?? "/api/v1";
 
 export function getToken(): string | null {
   return null;
@@ -22,7 +22,10 @@ export function setToken(_token: string) {
 
 export function clearToken() {
   if (typeof document === "undefined") return;
-  document.cookie = "wolf_token=; path=/; max-age=0; SameSite=Strict";
+  // Match the server cookie (HttpOnly + Secure on HTTPS) so a client
+  // logout actually drops it. Restart 401s must not call this.
+  const secure = typeof location !== "undefined" && location.protocol === "https:" ? "; Secure" : "";
+  document.cookie = `wolf_token=; path=/; max-age=0; SameSite=Strict${secure}`;
 }
 
 export class ApiError extends Error {
@@ -57,13 +60,10 @@ async function requestWithMetadata<T>(
     credentials: "include",
   });
 
-  // Hard 401 = stale/missing cookie, rotated JWT signing secret, or logout.
-  // Bounce authenticated areas to /login so the user gets a clean re-auth.
+  // Only bounce to login when the session is actually gone. A 401 during
+  // a wolf restart (or a 502 from Caddy) must not wipe a still-valid cookie.
   if (res.status === 401) {
-    clearToken();
-    if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
-      window.location.replace("/login");
-    }
+    await bounceIfSessionGone();
   }
 
   if (res.status === 204) {
@@ -123,10 +123,7 @@ async function download(path: string): Promise<{
     headers: { Accept: "application/vnd.wolf.scanner-release-bundle.v1+zstd" },
   });
   if (res.status === 401) {
-    clearToken();
-    if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
-      window.location.replace("/login");
-    }
+    await bounceIfSessionGone();
   }
   if (!res.ok) {
     let code = "DOWNLOAD_FAILED";
@@ -182,17 +179,61 @@ export const api = {
   download,
 };
 
-export async function hasSession(): Promise<boolean> {
+export type SessionStatus = "ok" | "none" | "offline";
+
+export async function sessionStatus(): Promise<SessionStatus> {
   try {
     const res = await fetch(`${BASE_URL}/auth/me`, {
       method: "GET",
       credentials: "include",
       headers: { Accept: "application/json" },
     });
-    return res.ok;
+    if (res.ok) return "ok";
+    if (res.status === 401) return "none";
+    return "offline";
   } catch {
-    return false;
+    return "offline";
   }
+}
+
+export async function hasSession(): Promise<boolean> {
+  return (await waitForSession()) === "ok";
+}
+
+/** Retry through brief API downtime so a compose recreate does not look like logout. */
+export async function waitForSession(
+  attempts = 12,
+  delayMs = 500,
+): Promise<SessionStatus> {
+  let last: SessionStatus = "offline";
+  for (let i = 0; i < attempts; i++) {
+    last = await sessionStatus();
+    if (last !== "offline") return last;
+    if (i < attempts - 1) {
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
+  }
+  return last;
+}
+
+let bounceInFlight: Promise<void> | null = null;
+
+async function bounceIfSessionGone() {
+  if (typeof window === "undefined") return;
+  if (window.location.pathname.startsWith("/login")) return;
+  if (!bounceInFlight) {
+    bounceInFlight = (async () => {
+      const status = await waitForSession(6, 400);
+      if (status === "none") {
+        window.location.replace(
+          `/login?from=${encodeURIComponent(window.location.pathname)}`,
+        );
+      }
+    })().finally(() => {
+      bounceInFlight = null;
+    });
+  }
+  await bounceInFlight;
 }
 
 export default api;

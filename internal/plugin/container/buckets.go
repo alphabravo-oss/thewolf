@@ -1,36 +1,6 @@
 package container
 
-import (
-	"strings"
-
-	"github.com/alphabravocompany/thewolf/internal/scannertools/manifest"
-)
-
-// localOnlyImageSuffixes are repo-name suffixes for scanner buckets that must
-// NEVER be pulled from (or pushed to) a registry. CodeQL is the only one: its
-// license forbids redistribution and only permits local builds for analyzing
-// open-source code, so wolf builds it locally on demand rather than shipping a
-// published image. See scanners/LICENSES.md.
-var localOnlyImageSuffixes = []string{"-codeql"}
-
-// IsLocalOnlyImage reports whether an image reference belongs to a
-// local-build-only bucket. Such images are never auto-pulled, offered for
-// registry pull/push, or probed for a remote digest — the operator builds them
-// locally if their license permits.
-func IsLocalOnlyImage(ref string) bool {
-	repo := ref
-	// Strip a trailing :tag (but not a registry host:port, which is followed
-	// by a path segment).
-	if i := strings.LastIndex(ref, ":"); i >= 0 && !strings.Contains(ref[i+1:], "/") {
-		repo = ref[:i]
-	}
-	for _, suf := range localOnlyImageSuffixes {
-		if strings.HasSuffix(repo, suf) {
-			return true
-		}
-	}
-	return false
-}
+import "github.com/alphabravocompany/thewolf/internal/scannertools/manifest"
 
 // DefaultBucketImages returns the canonical per-tool image map for the
 // 4-image split architecture (docs/PLAN-containerized-scanner-execution.md §5.1). The keys are tool names as

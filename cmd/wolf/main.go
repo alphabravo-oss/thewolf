@@ -36,9 +36,6 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/cli"
 	"github.com/alphabravocompany/thewolf/internal/db"
 	"github.com/alphabravocompany/thewolf/internal/enrich"
-	"github.com/alphabravocompany/thewolf/internal/fix/engine"
-	"github.com/alphabravocompany/thewolf/internal/loop/controller"
-	"github.com/alphabravocompany/thewolf/internal/loop/tracker"
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
 	"github.com/alphabravocompany/thewolf/internal/scan/detector"
@@ -75,14 +72,12 @@ func main() {
 	// Global flags for the API-client commands (--server/--token/--context/-o).
 	cli.AddGlobalFlags(rootCmd)
 
-	// The local one-shot `scan` and AI auto-remediation `loop` commands
-	// gain the API-client subcommands so `wolf scan list`, `wolf loop list`,
-	// etc. drive the server. Bare `wolf scan` / `wolf loop` keep their
-	// local one-shot behavior.
+	// The local one-shot `scan` command gains API-client subcommands so
+	// `wolf scan list` etc. drive the server. Agents are fixer jobs.
 	scanCmd := newScanCmd()
 	cli.AddScanSubcommands(scanCmd)
-	loopCmd := newLoopCmd()
-	cli.AddLoopSubcommands(loopCmd)
+	agentCmd := &cobra.Command{Use: "agent", Short: "Fixer agents (scan → fix → rescan on a shared branch)"}
+	cli.AddAgentSubcommands(agentCmd)
 
 	rootCmd.AddCommand(
 		newServeCmd(),
@@ -91,7 +86,7 @@ func main() {
 		newVersionCmd(),
 		scanCmd,
 		newEnrichCmd(),
-		loopCmd,
+		agentCmd,
 		newFixerCmd(),
 		newScanWorkerCmd(),
 		newScannerReleaseWorkerCmd(),
@@ -103,8 +98,8 @@ func main() {
 		newScannerJobExecCmd(),
 		newScannerToolWrapperCmd(),
 	)
-	// Every API endpoint as a `wolf <resource> <verb>` command (loop's API
-	// subcommands attach to loopCmd above instead of registering separately).
+	// Every API endpoint as a `wolf <resource> <verb>` command (agent's API
+	// subcommands attach to agentCmd above instead of registering separately).
 	rootCmd.AddCommand(cli.NewCommandGroups()...)
 
 	if err := rootCmd.Execute(); err != nil {
@@ -819,98 +814,6 @@ func resolveFindingsPath(findingsPath, scanID string) (string, error) {
 		return "", fmt.Errorf("findings.json for scan %s not found at %s — pass --findings <path> instead", scanID, candidate)
 	}
 	return candidate, nil
-}
-
-// --- loop -------------------------------------------------------------------
-
-// newLoopCmd builds `wolf loop` — runs the scan -> AI fix -> rescan
-// auto-remediation loop against a git repository.
-func newLoopCmd() *cobra.Command {
-	var (
-		repoPath      string
-		branch        string
-		maxIterations int
-		aiTool        string
-		severities    []string
-		fixTimeout    time.Duration
-	)
-	cmd := &cobra.Command{
-		Use:   "loop",
-		Short: "Run the AI auto-remediation loop (scan -> fix -> rescan)",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if repoPath == "" {
-				return fmt.Errorf("--repo is required")
-			}
-			absRepo, err := filepath.Abs(repoPath)
-			if err != nil {
-				return fmt.Errorf("resolve --repo: %w", err)
-			}
-			// The loop requires git — fail fast with an actionable error.
-			if _, err := os.Stat(filepath.Join(absRepo, ".git")); err != nil {
-				return fmt.Errorf("%s is not a git repository — run `git init` or add it as a git source; scan and enrich still work on non-git paths", absRepo)
-			}
-
-			eng, err := engine.NewEngine(aiTool)
-			if err != nil {
-				return err
-			}
-			if !eng.Available() {
-				return fmt.Errorf("AI tool %q is not available on PATH", eng.Name())
-			}
-
-			ctx := cmd.Context()
-			if err := installScannerBackend(ctx); err != nil {
-				return fmt.Errorf("scanner backend: %w", err)
-			}
-
-			sevs := make([]models.Severity, 0, len(severities))
-			for _, s := range severities {
-				sevs = append(sevs, models.Severity(strings.ToLower(strings.TrimSpace(s))))
-			}
-
-			cfg := controller.Config{
-				RepoPath:      absRepo,
-				MaxIterations: maxIterations,
-				Severities:    sevs,
-				FixEngine:     eng,
-				FixTimeout:    fixTimeout,
-				ScanConfig: runner.RunConfig{
-					RepoPath: absRepo,
-					Branch:   branch,
-					Registry: plugin.Global,
-				},
-				OnIterationStart: func(it int) {
-					fmt.Printf("\n=== iteration %d ===\n", it)
-				},
-				OnIterationDone: func(it int, diff *tracker.IterationDiff, warnings []string) {
-					if diff != nil {
-						fmt.Printf("iteration %d: %d fixed, %d new, %d remaining\n",
-							it, diff.FixedCount, diff.NewCount, diff.RemainingCount)
-					}
-					for _, w := range warnings {
-						fmt.Printf("  ! %s\n", w)
-					}
-				},
-			}
-
-			fmt.Printf("Starting loop: repo=%s tool=%s max-iterations=%d\n",
-				absRepo, eng.Name(), cfg.MaxIterations)
-			loop, err := controller.New(cfg).Run(ctx)
-			if err != nil {
-				return err
-			}
-			fmt.Printf("\nLoop %s: status=%s  fixed=%d  remaining=%d\n",
-				loop.ID, loop.Status, loop.TotalFindingsFixed, loop.TotalFindingsRemaining)
-			return nil
-		},
-	}
-	cmd.Flags().StringVar(&repoPath, "repo", "", "path to the git repository (required)")
-	cmd.Flags().StringVar(&branch, "branch", "", "branch to scan (defaults to the checked-out branch)")
-	cmd.Flags().IntVar(&maxIterations, "max-iterations", 5, "maximum loop iterations")
-	cmd.Flags().StringVar(&aiTool, "ai-tool", "auto", "AI fix engine (auto, claude-code, codex, custom:<cmd>)")
-	cmd.Flags().StringSliceVar(&severities, "severity", nil, "only target these severities")
-	cmd.Flags().DurationVar(&fixTimeout, "fix-timeout", 5*time.Minute, "per-finding fix timeout")
-	return cmd
 }
 
 // localSourceProvenance describes a scan of an on-disk working tree —

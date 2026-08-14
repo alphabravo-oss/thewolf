@@ -1565,11 +1565,11 @@ func buildComponents() map[string]any {
 					"items": map[string]any{
 						"type": "string", "enum": []string{"default", "jvm", "rust", "codeql", "all"},
 					},
-					"description": "Fixed embedded scanner contexts only. `all` must be the sole value. CodeQL is local-only.",
+					"description": "Fixed embedded scanner contexts only. `all` must be the sole value.",
 				},
 				"push": map[string]any{
 					"type":        "boolean",
-					"description": "Publish to the configured registry. Rejected when CodeQL is selected.",
+					"description": "Publish to the configured registry.",
 				},
 				"platforms": map[string]any{
 					"type":     "array",

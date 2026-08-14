@@ -6,6 +6,7 @@ import { Sidebar } from "./sidebar";
 import { Topbar } from "./topbar";
 import { CommandPalette } from "./command-palette";
 import { ShortcutsOverlay } from "./shortcuts-overlay";
+import { OrphanRecordsBanner } from "./orphan-records-banner";
 import { useRouteShortcuts } from "@/lib/route-shortcuts";
 
 export function AppShell() {
@@ -27,6 +28,7 @@ export function AppShell() {
           tabIndex={-1}
           className="flex-1 overflow-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
         >
+          <OrphanRecordsBanner />
           <Outlet />
         </main>
       </div>

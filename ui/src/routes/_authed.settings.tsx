@@ -13,7 +13,6 @@ import {
   ChevronRightIcon,
   ChevronUpIcon,
   DownloadIcon,
-  HammerIcon,
   KeyIcon,
   KeyRoundIcon,
   Loader2Icon,
@@ -26,12 +25,13 @@ import {
   SettingsIcon,
   ShieldIcon,
   Trash2Icon,
-  UploadCloudIcon,
+  WrenchIcon,
   UsersIcon,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import { GitHubTokenHelp } from "@/components/github-token-help";
 import { useMe } from "@/lib/me";
 import type {
   AdminSecret,
@@ -39,26 +39,10 @@ import type {
   ApiTokenCreated,
   RemoteNode,
 } from "@/lib/types";
-import {
-  CustomBuildCreateDialog,
-  type CustomBuildCreateDefaults,
-} from "@/components/scanner-custom-builds/custom-build-create-dialog";
-import { DockerHubCredentialCard } from "@/components/scanners/dockerhub-credential";
-import type {
-  CustomBuildOperationReceipt,
-  CustomBuildVariantName,
-} from "@/lib/scanner-custom-build";
-import { useScannerImages, type ScannerImageStatus } from "@/lib/scanner-build";
+import { FixerSettings } from "@/components/fixes/fixer-settings";
 import { useRuntimeCapabilities } from "@/lib/runtime-capabilities";
 import { safeErrorMessage } from "@/lib/safe-display";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 
 // Legacy personal ?tab= values that have NO admin tab of the same name now
 // redirect to /account. (apikeys/secrets/nodes are kept here as ADMIN tabs —
@@ -93,6 +77,7 @@ export const Route = createFileRoute("/_authed/settings")({
 
 type TabKey =
   | "general"
+  | "fixer"
   | "users"
   | "apikeys"
   | "secrets"
@@ -105,6 +90,7 @@ type TabKey =
 // (per-user) management lives under /account.
 const TABS: { key: TabKey; label: string; Icon: typeof SettingsIcon }[] = [
   { key: "general", label: "General", Icon: SettingsIcon },
+  { key: "fixer", label: "Fixer", Icon: WrenchIcon },
   { key: "users", label: "Users", Icon: UsersIcon },
   { key: "apikeys", label: "API Keys", Icon: KeyRoundIcon },
   { key: "secrets", label: "Secrets", Icon: KeyIcon },
@@ -180,6 +166,7 @@ function SettingsPage() {
           {TABS.find((item) => item.key === activeTab)?.label} settings
         </h2>
         {activeTab === "general" && <GeneralTab />}
+        {activeTab === "fixer" && <FixerSettings />}
         {activeTab === "users" && <UsersTab />}
         {activeTab === "apikeys" && <AdminApiKeysTab />}
         {activeTab === "secrets" && <AdminSecretsTab />}
@@ -220,11 +207,15 @@ function AdminApiKeysTab() {
     queryFn: async () =>
       (await api.get<ApiToken[]>("/admin/tokens")).data ?? [],
   });
+  const [pending, setPending] = useState<{ id: string; label: string } | null>(
+    null,
+  );
   const revoke = useMutation({
     mutationFn: (id: string) => api.delete(`/auth/tokens/${id}`),
     onSuccess: () => {
       toast.success("Key revoked");
       qc.invalidateQueries({ queryKey: ["admin", "tokens"] });
+      setPending(null);
     },
     onError: (e) =>
       toast.error(e instanceof Error ? e.message : "Revoke failed"),
@@ -288,7 +279,12 @@ function AdminApiKeysTab() {
                     {!t.revoked_at && (
                       <button
                         type="button"
-                        onClick={() => revoke.mutate(t.id)}
+                        onClick={() =>
+                          setPending({
+                            id: t.id,
+                            label: `${ownerOf(t.user_id)}'s key "${t.name}"`,
+                          })
+                        }
                         className="inline-flex items-center gap-1 h-7 px-2 rounded-md border border-red-500/40 text-red-300 hover:bg-red-500/10 text-xs"
                       >
                         <Trash2Icon className="size-3.5" /> Revoke
@@ -301,6 +297,15 @@ function AdminApiKeysTab() {
           </table>
         )}
       </AdminCard>
+      <ConfirmDialog
+        open={!!pending}
+        onOpenChange={(o) => !o && setPending(null)}
+        title={`Revoke ${pending?.label ?? "API key"}?`}
+        description="The key stops working immediately. This cannot be undone."
+        confirmLabel="Revoke"
+        pending={revoke.isPending}
+        onConfirm={() => pending && revoke.mutate(pending.id)}
+      />
     </div>
   );
 }
@@ -313,11 +318,15 @@ function AdminSecretsTab() {
     queryFn: async () =>
       (await api.get<AdminSecret[]>("/admin/secrets")).data ?? [],
   });
+  const [pending, setPending] = useState<{ id: string; label: string } | null>(
+    null,
+  );
   const del = useMutation({
     mutationFn: (id: string) => api.delete(`/config/secrets/${id}`),
     onSuccess: () => {
       toast.success("Secret deleted");
       qc.invalidateQueries({ queryKey: ["admin", "secrets"] });
+      setPending(null);
     },
     onError: (e) =>
       toast.error(e instanceof Error ? e.message : "Delete failed"),
@@ -356,14 +365,12 @@ function AdminSecretsTab() {
                   <td className="px-4 py-2 text-right">
                     <button
                       type="button"
-                      onClick={() => {
-                        if (
-                          window.confirm(
-                            `Delete ${ownerOf(s.user_id)}'s secret "${s.key_name}"?`,
-                          )
-                        )
-                          del.mutate(s.id);
-                      }}
+                      onClick={() =>
+                        setPending({
+                          id: s.id,
+                          label: `${ownerOf(s.user_id)}'s secret "${s.key_name}"`,
+                        })
+                      }
                       className="inline-flex items-center gap-1 h-7 px-2 rounded-md border border-red-500/40 text-red-300 hover:bg-red-500/10 text-xs"
                     >
                       <Trash2Icon className="size-3.5" /> Delete
@@ -375,6 +382,15 @@ function AdminSecretsTab() {
           </table>
         )}
       </AdminCard>
+      <ConfirmDialog
+        open={!!pending}
+        onOpenChange={(o) => !o && setPending(null)}
+        title={`Delete ${pending?.label ?? "secret"}?`}
+        description="This cannot be undone."
+        confirmLabel="Delete"
+        pending={del.isPending}
+        onConfirm={() => pending && del.mutate(pending.id)}
+      />
     </div>
   );
 }
@@ -386,11 +402,15 @@ function AdminNodesTab() {
     queryKey: ["admin", "nodes"],
     queryFn: async () => (await api.get<RemoteNode[]>("/nodes")).data ?? [],
   });
+  const [pending, setPending] = useState<{ id: string; label: string } | null>(
+    null,
+  );
   const del = useMutation({
     mutationFn: (id: string) => api.delete(`/nodes/${id}`),
     onSuccess: () => {
       toast.success("Node deleted");
       qc.invalidateQueries({ queryKey: ["admin", "nodes"] });
+      setPending(null);
     },
     onError: (e) =>
       toast.error(e instanceof Error ? e.message : "Delete failed"),
@@ -428,14 +448,12 @@ function AdminNodesTab() {
                   <td className="px-4 py-2 text-right">
                     <button
                       type="button"
-                      onClick={() => {
-                        if (
-                          window.confirm(
-                            `Delete ${ownerOf(n.user_id)}'s node "${n.name}"?`,
-                          )
-                        )
-                          del.mutate(n.id);
-                      }}
+                      onClick={() =>
+                        setPending({
+                          id: n.id,
+                          label: `${ownerOf(n.user_id)}'s node "${n.name}"`,
+                        })
+                      }
                       className="inline-flex items-center gap-1 h-7 px-2 rounded-md border border-red-500/40 text-red-300 hover:bg-red-500/10 text-xs"
                     >
                       <Trash2Icon className="size-3.5" /> Delete
@@ -447,6 +465,15 @@ function AdminNodesTab() {
           </table>
         )}
       </AdminCard>
+      <ConfirmDialog
+        open={!!pending}
+        onOpenChange={(o) => !o && setPending(null)}
+        title={`Delete ${pending?.label ?? "node"}?`}
+        description="This cannot be undone."
+        confirmLabel="Delete"
+        pending={del.isPending}
+        onConfirm={() => pending && del.mutate(pending.id)}
+      />
     </div>
   );
 }
@@ -942,7 +969,7 @@ const GENERAL_KNOBS = [
     key: "autofix_enabled",
     label: "Autonomous fixing",
     alpha: true,
-    help: "Master switch for the autonomous fix engine. v1 is dry-run, per-finding, verified, and branch-only — it produces a fix branch + diff for review and never pushes or opens a PR. When off, the Fixes surface, the worker, and the execute API are all dark. Default off.",
+    help: "Turns on Fixes and Agents. Queue work from a scan or finding. Login lives in Settings → Fixer (OAuth on the fixer worker) or store Anthropic/OpenAI keys in Account → Secrets. Default off.",
     type: "bool" as const,
   },
   {
@@ -1387,8 +1414,7 @@ const API_SCOPES = [
   "write:findings",
   "read:fixes",
   "write:fixes",
-  "read:loops",
-  "write:loops",
+
   "read:config",
   "write:config",
   "admin",
@@ -1454,11 +1480,15 @@ export function ApiKeysTab() {
     onError: (e) =>
       toast.error(e instanceof Error ? e.message : "Could not create key"),
   });
+  const [pending, setPending] = useState<{ id: string; label: string } | null>(
+    null,
+  );
   const revoke = useMutation({
     mutationFn: (id: string) => api.delete(`/auth/tokens/${id}`),
     onSuccess: () => {
       toast.success("Key revoked");
       qc.invalidateQueries({ queryKey: ["api-tokens"] });
+      setPending(null);
     },
     onError: (e) =>
       toast.error(e instanceof Error ? e.message : "Revoke failed"),
@@ -1684,7 +1714,9 @@ export function ApiKeysTab() {
                       {!revoked && (
                         <button
                           type="button"
-                          onClick={() => revoke.mutate(t.id)}
+                          onClick={() =>
+                            setPending({ id: t.id, label: t.name })
+                          }
                           className="inline-flex items-center gap-1 h-7 px-2 rounded-md border border-red-500/40 text-red-300 hover:bg-red-500/10 text-xs"
                         >
                           <Trash2Icon className="size-3.5" /> Revoke
@@ -1698,6 +1730,15 @@ export function ApiKeysTab() {
           </table>
         )}
       </div>
+      <ConfirmDialog
+        open={!!pending}
+        onOpenChange={(o) => !o && setPending(null)}
+        title={`Revoke API key “${pending?.label ?? ""}”?`}
+        description="The key stops working immediately. This cannot be undone."
+        confirmLabel="Revoke"
+        pending={revoke.isPending}
+        onConfirm={() => pending && revoke.mutate(pending.id)}
+      />
     </section>
   );
 }
@@ -1712,6 +1753,7 @@ interface MaskedSecret {
   key_type: string;
   key_name: string;
   value: string; // masked
+  metadata?: { login?: string; scopes?: string[]; validated?: boolean };
   created_at: string;
 }
 
@@ -1722,6 +1764,7 @@ const KEY_TYPES = [
   { value: "ssh_password", label: "SSH password" },
   { value: "anthropic_key", label: "Anthropic API key" },
   { value: "openai_key", label: "OpenAI API key" },
+  { value: "xai_key", label: "xAI / Grok API key" },
   { value: "custom", label: "Custom" },
 ];
 
@@ -1734,11 +1777,15 @@ export function SecretsTab() {
       return r.data ?? [];
     },
   });
+  const [pending, setPending] = useState<{ id: string; label: string } | null>(
+    null,
+  );
   const del = useMutation({
     mutationFn: (id: string) => api.delete(`/config/secrets/${id}`),
     onSuccess: () => {
       toast.success("Secret deleted");
       qc.invalidateQueries({ queryKey: ["secrets"] });
+      setPending(null);
     },
     onError: (e) =>
       toast.error(e instanceof Error ? e.message : "Delete failed"),
@@ -1756,6 +1803,10 @@ export function SecretsTab() {
 
   return (
     <section className="space-y-4">
+      <p className="text-sm text-muted-foreground">
+        Git tokens, SSH material, and model keys (Anthropic / OpenAI) for the
+        fixer. Values are encrypted; only a mask is shown after save.
+      </p>
       <NewSecretForm
         onSubmit={(b) => create.mutate(b)}
         disabled={create.isPending}
@@ -1781,22 +1832,26 @@ export function SecretsTab() {
               {q.data.map((s) => (
                 <tr key={s.id} className="border-t border-border/20">
                   <td className="px-4 py-2 font-mono text-xs">{s.key_type}</td>
-                  <td className="px-4 py-2">{s.key_name}</td>
+                  <td className="px-4 py-2">
+                    {s.key_name}
+                    {s.metadata?.login ? (
+                      <div className="text-[11px] text-muted-foreground">
+                        {s.metadata.login}
+                        {s.metadata.scopes?.length
+                          ? ` · ${s.metadata.scopes.join(", ")}`
+                          : ""}
+                      </div>
+                    ) : null}
+                  </td>
                   <td className="px-4 py-2 font-mono text-xs text-muted-foreground">
                     {s.value}
                   </td>
                   <td className="px-4 py-2 text-right">
                     <button
                       type="button"
-                      onClick={() => {
-                        if (
-                          window.confirm(
-                            `Delete secret "${s.key_name}"? This cannot be undone.`,
-                          )
-                        ) {
-                          del.mutate(s.id);
-                        }
-                      }}
+                      onClick={() =>
+                        setPending({ id: s.id, label: s.key_name })
+                      }
                       disabled={del.isPending}
                       className="text-muted-foreground hover:text-destructive disabled:opacity-50"
                       aria-label="Delete"
@@ -1810,6 +1865,15 @@ export function SecretsTab() {
           </table>
         )}
       </div>
+      <ConfirmDialog
+        open={!!pending}
+        onOpenChange={(o) => !o && setPending(null)}
+        title={`Delete secret “${pending?.label ?? ""}”?`}
+        description="This cannot be undone."
+        confirmLabel="Delete"
+        pending={del.isPending}
+        onConfirm={() => pending && del.mutate(pending.id)}
+      />
     </section>
   );
 }
@@ -1874,6 +1938,11 @@ function NewSecretForm({
       >
         <PlusIcon className="size-4" /> Add
       </button>
+      {keyType === "github_token" && (
+        <div className="md:col-span-4 mt-1">
+          <GitHubTokenHelp />
+        </div>
+      )}
     </form>
   );
 }
@@ -1943,11 +2012,15 @@ export function NodesTab() {
       qc.invalidateQueries({ queryKey: ["remote-nodes"] });
     },
   });
+  const [pending, setPending] = useState<{ id: string; label: string } | null>(
+    null,
+  );
   const del = useMutation({
     mutationFn: (id: string) => api.delete(`/nodes/${id}`),
     onSuccess: () => {
       toast.success("Node deleted");
       qc.invalidateQueries({ queryKey: ["remote-nodes"] });
+      setPending(null);
     },
     onError: (e) =>
       toast.error(e instanceof Error ? e.message : "Delete failed"),
@@ -2047,14 +2120,7 @@ export function NodesTab() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => {
-                          if (
-                            window.confirm(
-                              `Delete node "${n.name}"? Repos using it must be removed first.`,
-                            )
-                          )
-                            del.mutate(n.id);
-                        }}
+                        onClick={() => setPending({ id: n.id, label: n.name })}
                         disabled={del.isPending}
                         className="size-8 grid place-items-center rounded-md hover:bg-destructive/10 text-destructive disabled:opacity-50"
                         aria-label="Delete node"
@@ -2069,6 +2135,15 @@ export function NodesTab() {
           </table>
         )}
       </div>
+      <ConfirmDialog
+        open={!!pending}
+        onOpenChange={(o) => !o && setPending(null)}
+        title={`Delete node “${pending?.label ?? ""}”?`}
+        description="Repos using this node must be removed first."
+        confirmLabel="Delete"
+        pending={del.isPending}
+        onConfirm={() => pending && del.mutate(pending.id)}
+      />
     </section>
   );
 }
@@ -2235,54 +2310,7 @@ interface UserSummary {
   role: string;
   created_at: string;
   updated_at: string;
-  scanner_supply_chain_personas: ScannerPersonaID[];
-  scanner_supply_chain_scopes: string[];
 }
-
-type ScannerPersonaID =
-  | "viewer"
-  | "scanner_operator"
-  | "release_approver"
-  | "registry_administrator"
-  | "supply_chain_administrator"
-  | "auditor";
-
-const SCANNER_PERSONA_PRESETS: Array<{
-  id: ScannerPersonaID;
-  label: string;
-  help: string;
-}> = [
-  {
-    id: "viewer",
-    label: "Viewer",
-    help: "Read scanner inventory, operations, evidence, and audit history.",
-  },
-  {
-    id: "scanner_operator",
-    label: "Scanner operator",
-    help: "Run discovery, build candidates, promote releases, and control rollouts.",
-  },
-  {
-    id: "release_approver",
-    label: "Release approver",
-    help: "Approve, reject, except, and publish verified candidates.",
-  },
-  {
-    id: "registry_administrator",
-    label: "Registry administrator",
-    help: "Manage registry targets, reconciliation, repair, and quarantine cleanup.",
-  },
-  {
-    id: "supply_chain_administrator",
-    label: "Supply-chain administrator",
-    help: "Full scanner administration, including policy, signing, and revocation.",
-  },
-  {
-    id: "auditor",
-    label: "Auditor",
-    help: "Read-only evidence and immutable scanner audit access.",
-  },
-];
 
 function UsersTab() {
   const qc = useQueryClient();
@@ -2295,12 +2323,8 @@ function UsersTab() {
     queryFn: async () => (await api.get<UserSummary[]>("/users")).data ?? [],
   });
   const create = useMutation({
-    mutationFn: (body: {
-      email: string;
-      password: string;
-      role: string;
-      scanner_supply_chain_personas?: ScannerPersonaID[];
-    }) => api.post("/users", body),
+    mutationFn: (body: { email: string; password: string; role: string }) =>
+      api.post("/users", body),
     onSuccess: () => {
       toast.success("User created");
       qc.invalidateQueries({ queryKey: ["users"] });
@@ -2318,26 +2342,15 @@ function UsersTab() {
     onError: (e) =>
       toast.error(e instanceof Error ? e.message : "Role change failed"),
   });
-  const setScannerAccess = useMutation({
-    mutationFn: ({
-      id,
-      personas,
-    }: {
-      id: string;
-      personas: ScannerPersonaID[];
-    }) => api.put(`/users/${id}/scanner-supply-chain-access`, { personas }),
-    onSuccess: () => {
-      toast.success("Scanner access updated");
-      qc.invalidateQueries({ queryKey: ["users"] });
-    },
-    onError: (error) =>
-      toast.error(safeErrorMessage(error, "Scanner access update failed")),
-  });
+  const [pending, setPending] = useState<{ id: string; label: string } | null>(
+    null,
+  );
   const del = useMutation({
     mutationFn: (id: string) => api.delete(`/users/${id}`),
     onSuccess: () => {
       toast.success("User deleted");
       qc.invalidateQueries({ queryKey: ["users"] });
+      setPending(null);
     },
     onError: (e) =>
       toast.error(e instanceof Error ? e.message : "Delete failed"),
@@ -2359,7 +2372,6 @@ function UsersTab() {
               <tr>
                 <th className="text-left px-4 py-2">Email</th>
                 <th className="text-left px-4 py-2">Role</th>
-                <th className="text-left px-4 py-2">Scanner access</th>
                 <th className="text-left px-4 py-2">Created</th>
                 <th className="text-right px-4 py-2 w-12"></th>
               </tr>
@@ -2403,26 +2415,6 @@ function UsersTab() {
                         </select>
                       )}
                     </td>
-                    <td className="px-4 py-2">
-                      {isAdmin ? (
-                        <div>
-                          <span className="text-xs font-medium">
-                            Full access
-                          </span>
-                          <p className="text-[11px] text-muted-foreground">
-                            Inherited from system administrator
-                          </p>
-                        </div>
-                      ) : (
-                        <ScannerAccessDialog
-                          user={u}
-                          disabled={setScannerAccess.isPending}
-                          onSave={(personas) =>
-                            setScannerAccess.mutateAsync({ id: u.id, personas })
-                          }
-                        />
-                      )}
-                    </td>
                     <td className="px-4 py-2 text-xs text-muted-foreground">
                       {new Date(u.created_at).toLocaleDateString()}
                     </td>
@@ -2430,15 +2422,9 @@ function UsersTab() {
                       {!isMe && (
                         <button
                           type="button"
-                          onClick={() => {
-                            if (
-                              window.confirm(
-                                `Delete user "${u.email}"? This cannot be undone.`,
-                              )
-                            ) {
-                              del.mutate(u.id);
-                            }
-                          }}
+                          onClick={() =>
+                            setPending({ id: u.id, label: u.email })
+                          }
                           disabled={del.isPending}
                           className="text-muted-foreground hover:text-destructive disabled:opacity-50"
                           aria-label="Delete"
@@ -2454,6 +2440,15 @@ function UsersTab() {
           </table>
         )}
       </div>
+      <ConfirmDialog
+        open={!!pending}
+        onOpenChange={(o) => !o && setPending(null)}
+        title={`Delete user “${pending?.label ?? ""}”?`}
+        description="This cannot be undone."
+        confirmLabel="Delete"
+        pending={del.isPending}
+        onConfirm={() => pending && del.mutate(pending.id)}
+      />
     </section>
   );
 }
@@ -2474,191 +2469,22 @@ function RoleBadge({ role }: { role: string }) {
   );
 }
 
-function ScannerAccessDialog({
-  user,
-  disabled,
-  onSave,
-}: {
-  user: UserSummary;
-  disabled?: boolean;
-  onSave: (personas: ScannerPersonaID[]) => Promise<unknown>;
-}) {
-  const [open, setOpen] = useState(false);
-  const [personas, setPersonas] = useState<ScannerPersonaID[]>(["viewer"]);
-  const [saving, setSaving] = useState(false);
-  const assigned = normalizeDisplayedPersonas(
-    user.scanner_supply_chain_personas,
-  );
-
-  function openEditor() {
-    setPersonas(assigned);
-    setOpen(true);
-  }
-
-  async function save() {
-    setSaving(true);
-    try {
-      await onSave(personas.length ? personas : ["viewer"]);
-      setOpen(false);
-    } catch {
-      // The mutation owns the safe operator-facing error toast. Keep the
-      // dialog open so the administrator can correct and retry.
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <>
-      <div className="flex max-w-sm flex-wrap items-center gap-1.5">
-        {assigned.map((persona) => (
-          <span
-            key={persona}
-            className="rounded border border-border/50 bg-muted/40 px-1.5 py-0.5 text-[11px]"
-          >
-            {scannerPersonaLabel(persona)}
-          </span>
-        ))}
-        <button
-          type="button"
-          onClick={openEditor}
-          disabled={disabled}
-          className="rounded-md border border-border/60 px-2 py-1 text-xs hover:bg-muted/40 disabled:opacity-50"
-          aria-label={`Manage scanner access for ${user.email}`}
-        >
-          Manage
-        </button>
-      </div>
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Scanner access for {user.email}</DialogTitle>
-            <DialogDescription>
-              Assign server-owned personas. Operational personas can be
-              combined; Viewer, Auditor, and Supply-chain administrator are
-              exclusive presets.
-            </DialogDescription>
-          </DialogHeader>
-          <ScannerPersonaChecklist value={personas} onChange={setPersonas} />
-          <DialogFooter>
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              disabled={saving}
-              className="h-9 rounded-md border border-border/60 px-3 text-sm"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={() => void save()}
-              disabled={saving}
-              className="h-9 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground disabled:opacity-50"
-            >
-              {saving ? "Saving…" : "Save scanner access"}
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
-  );
-}
-
-function ScannerPersonaChecklist({
-  value,
-  onChange,
-}: {
-  value: ScannerPersonaID[];
-  onChange: (personas: ScannerPersonaID[]) => void;
-}) {
-  function toggle(persona: ScannerPersonaID, checked: boolean) {
-    if (!checked) {
-      const next = value.filter((current) => current !== persona);
-      onChange(next.length ? next : ["viewer"]);
-      return;
-    }
-    if (
-      persona === "viewer" ||
-      persona === "auditor" ||
-      persona === "supply_chain_administrator"
-    ) {
-      onChange([persona]);
-      return;
-    }
-    onChange([
-      ...value.filter(
-        (current) =>
-          current !== "viewer" &&
-          current !== "auditor" &&
-          current !== "supply_chain_administrator" &&
-          current !== persona,
-      ),
-      persona,
-    ]);
-  }
-
-  return (
-    <fieldset className="grid gap-2 sm:grid-cols-2">
-      <legend className="sr-only">Scanner supply-chain personas</legend>
-      {SCANNER_PERSONA_PRESETS.map((preset) => (
-        <label
-          key={preset.id}
-          className="flex cursor-pointer items-start gap-3 rounded-md border border-border/60 p-3 hover:bg-muted/30"
-        >
-          <input
-            type="checkbox"
-            checked={value.includes(preset.id)}
-            onChange={(event) => toggle(preset.id, event.target.checked)}
-            className="mt-1 size-4 accent-primary"
-          />
-          <span>
-            <span className="block text-sm font-medium">{preset.label}</span>
-            <span className="block text-xs text-muted-foreground">
-              {preset.help}
-            </span>
-          </span>
-        </label>
-      ))}
-    </fieldset>
-  );
-}
-
-function normalizeDisplayedPersonas(
-  personas: ScannerPersonaID[] | undefined,
-): ScannerPersonaID[] {
-  return personas?.length ? personas : ["viewer"];
-}
-
-function scannerPersonaLabel(persona: ScannerPersonaID): string {
-  return (
-    SCANNER_PERSONA_PRESETS.find((preset) => preset.id === persona)?.label ??
-    persona
-  );
-}
-
 function NewUserForm({
   onSubmit,
   disabled,
 }: {
-  onSubmit: (b: {
-    email: string;
-    password: string;
-    role: string;
-    scanner_supply_chain_personas?: ScannerPersonaID[];
-  }) => void;
+  onSubmit: (b: { email: string; password: string; role: string }) => void;
   disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("user");
-  const [personas, setPersonas] = useState<ScannerPersonaID[]>(["viewer"]);
 
   function reset() {
     setEmail("");
     setPassword("");
     setRole("user");
-    setPersonas(["viewer"]);
     setOpen(false);
   }
 
@@ -2687,9 +2513,6 @@ function NewUserForm({
           email: email.trim().toLowerCase(),
           password,
           role,
-          ...(role === "user"
-            ? { scanner_supply_chain_personas: personas }
-            : {}),
         });
         reset();
       }}
@@ -2727,21 +2550,6 @@ function NewUserForm({
           </select>
         </Field>
       </div>
-      {role === "user" ? (
-        <div className="space-y-2 border-t border-border/40 pt-3">
-          <div>
-            <h3 className="text-sm font-medium">Scanner supply-chain access</h3>
-            <p className="text-xs text-muted-foreground">
-              Start least-privileged. Operational personas can be combined.
-            </p>
-          </div>
-          <ScannerPersonaChecklist value={personas} onChange={setPersonas} />
-        </div>
-      ) : (
-        <p className="rounded-md border border-border/50 bg-muted/30 p-3 text-xs text-muted-foreground">
-          System administrators receive implicit full scanner access.
-        </p>
-      )}
       <div className="flex items-center gap-2">
         <button
           type="submit"
@@ -2807,40 +2615,8 @@ interface ImageStatus {
   remote_error?: string;
 }
 
-interface ScannerToolStatus {
-  name: string;
-  display_name: string;
-  category: string;
-  integration_tier: "default" | "bucket" | "upstream" | string;
-  bucket?: string;
-  pinned_version?: string;
-  latest_version?: string;
-  latest_reference?: string;
-  freshness_status?: string;
-  version_check_error?: string;
-  version_checked_at?: string;
-  canonical_image?: string;
-  configured_image?: string;
-  image_present?: boolean;
-  overridden: boolean;
-  uses_latest_tag: boolean;
-}
-
-interface ScannerVersionCheck {
-  tool_name: string;
-  pinned_version: string;
-  latest_version?: string;
-  latest_reference?: string;
-  status: string;
-  checked_at: string;
-  error?: string;
-  source_type: string;
-  source_url?: string;
-}
-
 function ScannersTab() {
   const qc = useQueryClient();
-  const navigate = useNavigate();
   const runtimeQ = useRuntimeCapabilities();
   const dockerImageManagement = runtimeQ.data?.docker_image_management ?? true;
   const cfgQ = useQuery({
@@ -2876,6 +2652,8 @@ function ScannersTab() {
         );
       }
       qc.invalidateQueries({ queryKey: ["scanners-config"] });
+      qc.invalidateQueries({ queryKey: ["scanner-images"] });
+      qc.invalidateQueries({ queryKey: ["scanners", "images"] });
     },
     onError: (e) =>
       toast.error(safeErrorMessage(e, "Scanner images could not be pulled.")),
@@ -2891,9 +2669,6 @@ function ScannersTab() {
   if (runtimeQ.data && !runtimeQ.data.docker_image_management) {
     return (
       <section className="space-y-4">
-        <ScannerReleaseManagementLink
-          onOpen={() => navigate({ to: "/scanners" })}
-        />
         <div className="glass-card p-5">
           <h3 className="text-sm font-medium">
             Scanner runtime is managed by Kubernetes
@@ -2939,9 +2714,6 @@ function ScannersTab() {
 
   return (
     <section className="space-y-4">
-      <ScannerReleaseManagementLink
-        onOpen={() => navigate({ to: "/scanners" })}
-      />
       {/* Operator actions row. Doctor + Set up are the two day-1 buttons. */}
       <div className="glass-card p-5">
         <div className="flex flex-wrap items-center gap-2">
@@ -2976,8 +2748,8 @@ function ScannersTab() {
         </div>
 
         {/* First-run hint: pull is the only setup step. The default
-            wolf-scanners* images are published to Docker Hub
-            (alphabravodevops/*); first scan triggers an auto-pull
+            wolf-scanners* images are published to GHCR
+            (alphabravo-oss/*); first scan triggers an auto-pull
             per the IfNotPresent policy, but pre-pulling saves the
             wait on the first real scan. If pull errors out for the
             default image, surface the registry hint as a banner. */}
@@ -2985,7 +2757,7 @@ function ScannersTab() {
           <div className="mt-3 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
             <strong>Couldn't pull {cfg.image}.</strong> Check your network /
             registry credentials. The default registry is{" "}
-            <code>docker.io/alphabravodevops</code>; override via{" "}
+            <code>ghcr.io/alphabravo-oss</code>; override via{" "}
             <code>WOLF_SCANNERS_IMAGE</code> to point at a mirror or a
             locally-built image.
           </div>
@@ -3064,9 +2836,7 @@ function ScannersTab() {
         )}
       </div>
 
-      <ScannerImagesPanel />
       <ImagesPanel />
-      <ScannerToolsPanel />
 
       <div className="glass-card p-5">
         <p className="text-xs text-muted-foreground mb-3">
@@ -3102,545 +2872,6 @@ function ScannersTab() {
   );
 }
 
-function ScannerReleaseManagementLink({ onOpen }: { onOpen: () => void }) {
-  return (
-    <div className="glass-card flex flex-col gap-3 border-primary/20 p-5 sm:flex-row sm:items-center sm:justify-between">
-      <div>
-        <h3 className="text-sm font-medium">Scanner release management</h3>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Scheduled update discovery, signed candidates, approvals, registry
-          health, canary rollouts, and rollback now live in the dedicated
-          supply-chain console. Inventory, image troubleshooting, and custom
-          builds remain here.
-        </p>
-      </div>
-      <button
-        type="button"
-        onClick={onOpen}
-        className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        Open supply-chain console
-      </button>
-    </div>
-  );
-}
-
-function ScannerToolsPanel() {
-  const qc = useQueryClient();
-  const q = useQuery({
-    queryKey: ["scanner-tools"],
-    queryFn: async () =>
-      (await api.get<ScannerToolStatus[]>("/scanners/tools")).data ?? [],
-    refetchOnWindowFocus: false,
-  });
-  const checkAll = useMutation({
-    mutationFn: async () =>
-      (
-        await api.post<ScannerVersionCheck[]>("/scanners/tools/check-updates", {
-          force: true,
-        })
-      ).data ?? [],
-    onSuccess: (rows) => {
-      toast.success(`Checked ${rows.length} scanner tool(s)`);
-      qc.invalidateQueries({ queryKey: ["scanner-tools"] });
-    },
-    onError: (e) =>
-      toast.error(safeErrorMessage(e, "Scanner version checks could not run.")),
-  });
-  const checkOne = useMutation({
-    mutationFn: async (name: string) =>
-      (
-        await api.post<ScannerVersionCheck>(
-          `/scanners/tools/${encodeURIComponent(name)}/check-update`,
-        )
-      ).data,
-    onSuccess: (_, name) => {
-      toast.success(`Checked ${name}`);
-      qc.invalidateQueries({ queryKey: ["scanner-tools"] });
-    },
-    onError: (e) =>
-      toast.error(
-        safeErrorMessage(e, "The scanner version check could not run."),
-      ),
-  });
-
-  const tools = q.data ?? [];
-  const updateCount = tools.filter(
-    (t) => t.freshness_status === "update_available",
-  ).length;
-
-  return (
-    <div className="glass-card p-5">
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-        <div>
-          <h3 className="text-sm font-medium">Scanner tools</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {tools.length} tools
-            {updateCount > 0 && (
-              <span className="text-amber-300">
-                {" "}
-                · {updateCount} update available
-              </span>
-            )}
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => checkAll.mutate()}
-          disabled={checkAll.isPending}
-          className="inline-flex items-center gap-1 h-8 px-2.5 rounded-md border border-border/60 text-xs hover:bg-muted/30 disabled:opacity-50"
-        >
-          {checkAll.isPending ? (
-            <Loader2Icon className="size-3.5 animate-spin" />
-          ) : (
-            <RefreshCwIcon className="size-3.5" />
-          )}
-          Check tool versions
-        </button>
-      </div>
-
-      {q.isLoading ? (
-        <p className="text-xs text-muted-foreground" role="status">
-          Loading scanner tools…
-        </p>
-      ) : q.isError ? (
-        <p className="text-xs text-destructive" role="alert">
-          Failed to load scanner tools.
-        </p>
-      ) : tools.length > 0 ? (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="text-xs text-muted-foreground border-b border-border/30">
-              <tr>
-                <th className="text-left font-medium py-2 pr-3">Tool</th>
-                <th className="text-left font-medium py-2 pr-3">Tier</th>
-                <th className="text-left font-medium py-2 pr-3">Pinned</th>
-                <th className="text-left font-medium py-2 pr-3">Latest</th>
-                <th className="text-left font-medium py-2 pr-3">Status</th>
-                <th className="text-left font-medium py-2 pr-3">Image</th>
-                <th className="text-right font-medium py-2 pl-3">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {tools.map((tool) => (
-                <tr
-                  key={tool.name}
-                  className="border-b border-border/15 last:border-0"
-                >
-                  <td className="py-2 pr-3">
-                    <div className="font-medium">
-                      {tool.display_name || tool.name}
-                    </div>
-                    <div className="text-[11px] text-muted-foreground">
-                      {tool.name} · {tool.category}
-                    </div>
-                  </td>
-                  <td className="py-2 pr-3">
-                    <TierPill tool={tool} />
-                  </td>
-                  <td className="py-2 pr-3 font-mono text-xs">
-                    {tool.pinned_version || "—"}
-                  </td>
-                  <td className="py-2 pr-3 font-mono text-xs">
-                    {tool.latest_version || "—"}
-                  </td>
-                  <td className="py-2 pr-3">
-                    <FreshnessPill tool={tool} />
-                  </td>
-                  <td className="py-2 pr-3 max-w-[260px]">
-                    <div
-                      className="font-mono text-xs truncate"
-                      title={
-                        tool.configured_image || tool.canonical_image || ""
-                      }
-                    >
-                      {tool.configured_image || tool.canonical_image || "—"}
-                    </div>
-                    {(tool.image_present !== undefined ||
-                      tool.overridden ||
-                      tool.uses_latest_tag) && (
-                      <div className="mt-1 flex gap-1">
-                        {tool.image_present !== undefined && (
-                          <span
-                            className={
-                              "text-[10px] uppercase tracking-wide border rounded px-1.5 py-0.5 " +
-                              (tool.image_present
-                                ? "text-emerald-300 bg-emerald-500/10 border-emerald-500/30"
-                                : "text-rose-300 bg-rose-500/10 border-rose-500/30")
-                            }
-                          >
-                            {tool.image_present ? "pulled" : "missing"}
-                          </span>
-                        )}
-                        {tool.overridden && (
-                          <span className="text-[10px] uppercase tracking-wide text-sky-300 bg-sky-500/10 border border-sky-500/30 rounded px-1.5 py-0.5">
-                            override
-                          </span>
-                        )}
-                        {tool.uses_latest_tag && (
-                          <span className="text-[10px] uppercase tracking-wide text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded px-1.5 py-0.5">
-                            latest
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </td>
-                  <td className="py-2 pl-3 text-right">
-                    <button
-                      type="button"
-                      onClick={() => checkOne.mutate(tool.name)}
-                      disabled={checkOne.isPending}
-                      className="inline-flex items-center justify-center h-7 w-7 rounded-md border border-border/60 hover:bg-muted/30 disabled:opacity-50"
-                      title={`Check ${tool.name}`}
-                    >
-                      {checkOne.isPending &&
-                      checkOne.variables === tool.name ? (
-                        <Loader2Icon className="size-3.5 animate-spin" />
-                      ) : (
-                        <RefreshCwIcon className="size-3.5" />
-                      )}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <p className="text-xs text-muted-foreground">No scanner tools found.</p>
-      )}
-    </div>
-  );
-}
-
-function TierPill({ tool }: { tool: ScannerToolStatus }) {
-  const label =
-    tool.integration_tier === "bucket" && tool.bucket
-      ? `${tool.bucket} bucket`
-      : tool.integration_tier;
-  return (
-    <span className="text-[10px] uppercase tracking-wide text-muted-foreground bg-muted/30 border border-border/30 rounded px-1.5 py-0.5">
-      {label}
-    </span>
-  );
-}
-
-function FreshnessPill({ tool }: { tool: ScannerToolStatus }) {
-  const status = tool.freshness_status || "not checked";
-  const className =
-    status === "update_available"
-      ? "text-amber-300 bg-amber-500/10 border-amber-500/30"
-      : status === "current"
-        ? "text-emerald-300 bg-emerald-500/10 border-emerald-500/30"
-        : status === "check_failed"
-          ? "text-red-300 bg-red-500/10 border-red-500/30"
-          : "text-muted-foreground bg-muted/20 border-border/30";
-  return (
-    <span
-      className={`text-[10px] uppercase tracking-wide border rounded px-1.5 py-0.5 ${className}`}
-      title={
-        tool.version_check_error
-          ? "Version check failed. Review server logs."
-          : tool.version_checked_at || status
-      }
-    >
-      {status.replaceAll("_", " ")}
-    </span>
-  );
-}
-
-// The four wolf-built scanner image variants, in build order. Each maps onto a
-// row in ScannerImagesPanel with a Rebuild button. `suffix` is appended to the
-// default repo (wolf-scanners) to find the variant's image in GET
-// /scanners/images so we can show its local vs. remote digest.
-const SCANNER_VARIANTS: {
-  name: CustomBuildVariantName;
-  label: string;
-  suffix: string;
-  // licenseNote surfaces a usage restriction the operator must clear before
-  // enabling the tool (only CodeQL today — it is not open source).
-  licenseNote?: string;
-  // localOnly buckets are never pulled from / pushed to a registry (CodeQL —
-  // its license forbids redistribution). The UI offers only a local rebuild.
-  localOnly?: boolean;
-}[] = [
-  { name: "default", label: "Default", suffix: "" },
-  { name: "jvm", label: "JVM", suffix: "-jvm" },
-  { name: "rust", label: "Rust", suffix: "-rust" },
-  {
-    name: "codeql",
-    label: "CodeQL",
-    suffix: "-codeql",
-    localOnly: true,
-    licenseNote:
-      "CodeQL is not open source. It is free only for analyzing open-source code; scanning private or commercial code requires a GitHub Advanced Security license. Confirm your entitlement before enabling it. It is built locally only — never pulled or pushed.",
-  },
-];
-
-// Match a variant to its image-status row. The status list is keyed by full
-// image ref (e.g. alphabravodevops/wolf-scanners-jvm:2.0.0). We strip the tag,
-// then match the repo's trailing suffix — being careful that "" (default) only
-// matches a ref whose repo has none of the other variant suffixes.
-function statusForVariant(
-  images: ScannerImageStatus[],
-  suffix: string,
-): ScannerImageStatus | undefined {
-  const repoOf = (ref: string) => ref.split(":")[0];
-  if (suffix === "") {
-    return images.find((img) => {
-      const repo = repoOf(img.image);
-      return (
-        /wolf-scanners$/.test(repo) ||
-        (!/-jvm$|-rust$|-codeql$/.test(repo) && /wolf-scanners/.test(repo))
-      );
-    });
-  }
-  return images.find((img) => repoOf(img.image).endsWith(suffix));
-}
-
-// ScannerImagesPanel — per-variant inventory + durable custom-build adapter.
-//
-// Every variant always shows a "Rebuild (local)" button (a `--load` build into
-// the local Docker daemon) regardless of whether DockerHub credentials exist —
-// local builds never need credentials. When a `dockerhub_token` secret is
-// configured, a small "push to DockerHub" toggle appears beside each button,
-// turning the action into "Rebuild & push". With no secret, the toggle is
-// replaced by a one-line hint linking to the DockerHub credential card below;
-// the build button stays active either way. The legacy entry points now queue
-// the same durable worker-owned operation used by the Custom builds workspace;
-// inventory and button labels remain stable for existing operators.
-function ScannerImagesPanel() {
-  const imagesQ = useScannerImages();
-  const images = imagesQ.data ?? [];
-
-  // Whether a DockerHub token secret exists — gates the push toggle only.
-  const secretsQ = useQuery({
-    queryKey: ["config", "secrets", "all"],
-    queryFn: async () =>
-      (await api.get<{ key_type: string }[]>("/config/secrets")).data ?? [],
-  });
-  const hasDockerHubToken = useMemo(
-    () => (secretsQ.data ?? []).some((s) => s.key_type === "dockerhub_token"),
-    [secretsQ.data],
-  );
-
-  // Per-variant push-toggle state. Only consulted when hasDockerHubToken.
-  const [pushVariants, setPushVariants] = useState<Record<string, boolean>>({});
-  const togglePush = (name: string) =>
-    setPushVariants((prev) => ({ ...prev, [name]: !prev[name] }));
-
-  // Multi-arch (linux/amd64+arm64) toggle. Implies push (a manifest list can't
-  // be loaded locally), so it's only useful with a DockerHub token + a buildx
-  // builder on the host running Wolf.
-  const [multiArch, setMultiArch] = useState(false);
-
-  const [buildDefaults, setBuildDefaults] =
-    useState<CustomBuildCreateDefaults>();
-  const [buildDialogOpen, setBuildDialogOpen] = useState(false);
-  const [acceptedBuild, setAcceptedBuild] =
-    useState<CustomBuildOperationReceipt>();
-  const startBuild = (
-    variant: NonNullable<CustomBuildCreateDefaults["variant"]>,
-    requestedPush: boolean,
-  ) => {
-    const localOnly = variant === "codeql";
-    const effectivePush = localOnly ? false : requestedPush || multiArch;
-    setBuildDefaults({
-      variant,
-      push: effectivePush,
-      platforms:
-        effectivePush && multiArch
-          ? ["linux/amd64", "linux/arm64"]
-          : ["linux/amd64"],
-    });
-    setBuildDialogOpen(true);
-  };
-
-  return (
-    <div className="space-y-4">
-      <div className="glass-card p-5 space-y-4">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <HammerIcon className="size-4 text-muted-foreground" />
-            <h3 className="text-sm font-medium">Scanner images</h3>
-            <span className="chip">wolf-built</span>
-          </div>
-          <div className="flex items-center gap-2">
-            {hasDockerHubToken && (
-              <label
-                className="inline-flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none"
-                title="Build linux/amd64 + linux/arm64 with buildx and push a multi-arch manifest. Requires a QEMU buildx builder on the host running Wolf."
-              >
-                <input
-                  type="checkbox"
-                  checked={multiArch}
-                  onChange={() => setMultiArch((v) => !v)}
-                  className="size-3.5 accent-primary"
-                />
-                multi-arch
-              </label>
-            )}
-            <button
-              type="button"
-              onClick={() => startBuild("all", false)}
-              className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md border border-border/60 text-xs hover:bg-muted/30"
-              title={
-                multiArch
-                  ? "Rebuild all four variants multi-arch and push to DockerHub"
-                  : "Rebuild all four variants in sequence (local --load; never needs credentials)"
-              }
-            >
-              <HammerIcon className="size-3.5" />{" "}
-              {multiArch ? "Rebuild all & push" : "Rebuild all"}
-            </button>
-          </div>
-        </div>
-
-        <p className="text-xs text-muted-foreground max-w-prose">
-          Rebuild the wolf-built scanner images from the embedded build context.
-          Local rebuilds load straight into the Docker daemon and{" "}
-          <strong>never require credentials</strong>. Publishing to DockerHub is
-          opt-in.
-        </p>
-
-        <ul className="space-y-2 text-sm">
-          {SCANNER_VARIANTS.map((v) => {
-            const status = statusForVariant(images, v.suffix);
-            const push =
-              hasDockerHubToken && !v.localOnly && !!pushVariants[v.name];
-            return (
-              <li
-                key={v.name}
-                className="flex flex-wrap items-center gap-3 border-b border-border/20 pb-2 last:border-0 last:pb-0"
-              >
-                <div className="min-w-24 font-medium">{v.label}</div>
-                <div className="path flex-1 min-w-0 break-all">
-                  {status?.image ?? `wolf-scanners${v.suffix}`}
-                </div>
-                <DigestPill
-                  label="local"
-                  value={status?.local_digest}
-                  err={status?.local_error}
-                />
-                {v.localOnly ? (
-                  <span className="text-[10px] uppercase tracking-wide font-medium text-muted-foreground bg-muted/40 border border-border/40 rounded px-1.5 py-0.5">
-                    local only
-                  </span>
-                ) : (
-                  <DigestPill
-                    label="remote"
-                    value={status?.remote_digest}
-                    err={status?.remote_error}
-                  />
-                )}
-                {v.localOnly ? null : status?.updates_available ? (
-                  <span className="text-[10px] uppercase tracking-wide font-medium text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded px-1.5 py-0.5">
-                    update available
-                  </span>
-                ) : status?.local_digest ? (
-                  <span className="text-[10px] uppercase tracking-wide font-medium text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 rounded px-1.5 py-0.5">
-                    up to date
-                  </span>
-                ) : null}
-
-                {hasDockerHubToken && !v.localOnly && (
-                  <label className="inline-flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={!!pushVariants[v.name]}
-                      onChange={() => togglePush(v.name)}
-                      className="size-3.5 accent-primary"
-                    />
-                    push to DockerHub
-                  </label>
-                )}
-
-                <button
-                  type="button"
-                  onClick={() => startBuild(v.name, push)}
-                  className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md bg-primary text-primary-foreground text-xs font-medium"
-                  title={
-                    push
-                      ? "Rebuild from the embedded context and push to DockerHub"
-                      : "Rebuild from the embedded context and load into the local Docker daemon (no credentials needed)"
-                  }
-                >
-                  {push ? (
-                    <UploadCloudIcon className="size-3.5" />
-                  ) : (
-                    <HammerIcon className="size-3.5" />
-                  )}
-                  {push ? "Rebuild & push" : "Rebuild (local)"}
-                </button>
-
-                {v.licenseNote && (
-                  <p className="basis-full text-xs text-amber-300/90 bg-amber-500/5 border border-amber-500/20 rounded px-2 py-1.5">
-                    ⚠ <span className="font-medium">License:</span>{" "}
-                    {v.licenseNote}
-                  </p>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-
-        {!hasDockerHubToken && (
-          <p className="text-xs text-muted-foreground">
-            <a
-              href="#dockerhub-credential"
-              className="text-primary hover:underline"
-            >
-              Add a DockerHub token
-            </a>{" "}
-            to publish images. Local rebuilds work without it.
-          </p>
-        )}
-      </div>
-
-      {acceptedBuild ? (
-        <div
-          className="glass-card border-emerald-500/30 p-4"
-          role="status"
-          aria-live="polite"
-        >
-          <p className="text-sm font-medium">Durable custom build queued</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Operation <code>{acceptedBuild.id}</code> is {acceptedBuild.state}.
-            It continues after navigation or reload.
-          </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <a
-              href={`/scanners?tab=custom_builds&custom_build=${encodeURIComponent(acceptedBuild.id)}${acceptedBuild.operation_id ? `&custom_build_operation_id=${encodeURIComponent(acceptedBuild.operation_id)}` : ""}${acceptedBuild.trace_id ? `&custom_build_trace_id=${encodeURIComponent(acceptedBuild.trace_id)}` : ""}`}
-              className="inline-flex h-8 items-center rounded-md border border-border/60 px-3 text-xs font-medium hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              Open Custom Build
-            </a>
-            {acceptedBuild.operation_id ? (
-              <a
-                href={`/scanners?tab=audit&operation_id=${encodeURIComponent(acceptedBuild.operation_id)}${acceptedBuild.trace_id ? `&trace_id=${encodeURIComponent(acceptedBuild.trace_id)}` : ""}`}
-                className="inline-flex h-8 items-center rounded-md border border-border/60 px-3 text-xs font-medium hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                Open operation audit
-              </a>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
-
-      <CustomBuildCreateDialog
-        open={buildDialogOpen}
-        onOpenChange={setBuildDialogOpen}
-        defaults={buildDefaults}
-        onAccepted={setAcceptedBuild}
-      />
-
-      <div id="dockerhub-credential">
-        <DockerHubCredentialCard />
-      </div>
-    </div>
-  );
-}
-
 // ImagesPanel — per-image digests + update detection + per-image pull.
 //
 // The list of images is whatever wolf is currently configured to use
@@ -3650,13 +2881,33 @@ function ScannerImagesPanel() {
 // just that image. "Check for updates" re-runs the probe.
 function ImagesPanel() {
   const qc = useQueryClient();
+  const notifiedUpdateDigest = useRef("");
   const q = useQuery({
     queryKey: ["scanner-images"],
     queryFn: async () =>
       (await api.get<ImageStatus[]>("/scanners/images")).data ?? [],
-    // Don't auto-refetch — registry probes shell out per image and we
-    // don't want to hammer Docker Hub. User-driven only.
+    // Registry probes shell out per image; keep the cadence slow enough to be
+    // cheap while still surfacing scanner channel changes without a restart.
+    refetchInterval: 6 * 60 * 60 * 1000,
     refetchOnWindowFocus: false,
+  });
+  const pullAll = useMutation({
+    mutationFn: async () => (await api.post<PullResult>("/scanners/pull")).data,
+    onSuccess: (result) => {
+      const failed = result.errors?.length ?? 0;
+      if (failed > 0) {
+        toast.error(`${failed} scanner image update${failed === 1 ? "" : "s"} failed`);
+      } else {
+        toast.success(
+          `Pulled ${result.pulled.length} scanner image${result.pulled.length === 1 ? "" : "s"}`,
+        );
+      }
+      qc.invalidateQueries({ queryKey: ["scanner-images"] });
+      qc.invalidateQueries({ queryKey: ["scanners", "images"] });
+      qc.invalidateQueries({ queryKey: ["scanners-config"] });
+    },
+    onError: (e) =>
+      toast.error(safeErrorMessage(e, "Scanner images could not be pulled.")),
   });
   const pullOne = useMutation({
     mutationFn: (image: string) =>
@@ -3667,32 +2918,74 @@ function ImagesPanel() {
     onSuccess: (_, image) => {
       toast.success(`Pulled ${image}`);
       qc.invalidateQueries({ queryKey: ["scanner-images"] });
+      qc.invalidateQueries({ queryKey: ["scanners", "images"] });
     },
     onError: (e) =>
       toast.error(
         safeErrorMessage(e, "The scanner image could not be pulled."),
       ),
   });
+  const images = q.data ?? [];
+  const updateItems = images.filter((img) => img.updates_available);
+  const updateDigest = updateItems
+    .map((img) => `${img.image}:${img.remote_digest ?? ""}`)
+    .join("|");
+
+  useEffect(() => {
+    if (!updateDigest || notifiedUpdateDigest.current === updateDigest) return;
+    notifiedUpdateDigest.current = updateDigest;
+    toast.info(
+      `${updateItems.length} scanner image update${updateItems.length === 1 ? "" : "s"} available`,
+    );
+  }, [updateDigest, updateItems.length]);
 
   return (
     <div className="glass-card p-5">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-medium">Scanner images</h3>
-        <button
-          type="button"
-          onClick={() => qc.invalidateQueries({ queryKey: ["scanner-images"] })}
-          disabled={q.isFetching}
-          className="inline-flex items-center gap-1 h-8 px-2.5 rounded-md border border-border/60 text-xs hover:bg-muted/30 disabled:opacity-50"
-          title="Re-probe registries for the latest manifest digests"
-        >
-          {q.isFetching ? (
-            <Loader2Icon className="size-3.5 animate-spin" />
-          ) : (
-            <DownloadIcon className="size-3.5" />
+        <h3 className="text-sm font-medium">Configured scanner images</h3>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {updateItems.length > 0 && (
+            <button
+              type="button"
+              onClick={() => pullAll.mutate()}
+              disabled={pullAll.isPending}
+              className="inline-flex items-center gap-1 h-8 px-2.5 rounded-md bg-primary text-primary-foreground text-xs font-medium disabled:opacity-50"
+              title="Pull every configured scanner image from the current registry channel"
+            >
+              {pullAll.isPending ? (
+                <Loader2Icon className="size-3.5 animate-spin" />
+              ) : (
+                <DownloadIcon className="size-3.5" />
+              )}
+              Update all
+            </button>
           )}
-          Check for updates
-        </button>
+          <button
+            type="button"
+            onClick={() => qc.invalidateQueries({ queryKey: ["scanner-images"] })}
+            disabled={q.isFetching}
+            className="inline-flex items-center gap-1 h-8 px-2.5 rounded-md border border-border/60 text-xs hover:bg-muted/30 disabled:opacity-50"
+            title="Re-probe registries for the latest manifest digests"
+          >
+            {q.isFetching ? (
+              <Loader2Icon className="size-3.5 animate-spin" />
+            ) : (
+              <RefreshCwIcon className="size-3.5" />
+            )}
+            Check for updates
+          </button>
+        </div>
       </div>
+
+      {updateItems.length > 0 && (
+        <div className="mb-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+          <span className="font-medium">
+            {updateItems.length} scanner image update
+            {updateItems.length === 1 ? "" : "s"} available.
+          </span>{" "}
+          Pull the configured registry channel to use the latest scanner images.
+        </div>
+      )}
 
       {q.isLoading ? (
         <p className="text-xs text-muted-foreground" role="status">
@@ -3702,9 +2995,9 @@ function ImagesPanel() {
         <p className="text-xs text-destructive" role="alert">
           Failed to probe scanner image digests.
         </p>
-      ) : q.data && q.data.length > 0 ? (
+      ) : images.length > 0 ? (
         <ul className="space-y-2 text-sm">
-          {q.data.map((img) => (
+          {images.map((img) => (
             <li
               key={img.image}
               className="flex flex-wrap items-center gap-3 border-b border-border/20 pb-2 last:border-0 last:pb-0"

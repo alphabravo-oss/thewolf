@@ -14,6 +14,34 @@ func testdataPath(name string) string {
 	return filepath.Join(filepath.Dir(filename), "..", "testdata", name)
 }
 
+func TestParseCargoAuditOutput(t *testing.T) {
+	data, err := os.ReadFile(testdataPath("cargo_audit_output.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	findings, err := parseCargoAuditOutput(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(findings) != 1 || findings[0].ToolName != "cargo-audit" || findings[0].RuleID != "RUSTSEC-2020-0071" || findings[0].Severity != models.SeverityHigh {
+		t.Fatalf("cargo-audit finding = %#v", findings)
+	}
+}
+
+func TestParseCargoDenyOutput(t *testing.T) {
+	data, err := os.ReadFile(testdataPath("cargo_deny_output.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	findings, err := parseCargoDenyOutput(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(findings) != 1 || findings[0].ToolName != "cargo-deny" || findings[0].RuleID != "vulnerability" || findings[0].Severity != models.SeverityHigh {
+		t.Fatalf("cargo-deny finding = %#v", findings)
+	}
+}
+
 func TestParseClippyOutput(t *testing.T) {
 	data, err := os.ReadFile(testdataPath("clippy_output.jsonl"))
 	if err != nil {

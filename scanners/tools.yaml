@@ -25,8 +25,8 @@ tools:
   bearer:
     display_name: Bearer
     category: sast
-    resource_class: medium
-    default_timeout: 10m
+    resource_class: heavy
+    default_timeout: 20m
     plugin_package: plugins/security
     integration_tier: upstream
     pinned_version: "1.49.0"
@@ -57,6 +57,52 @@ tools:
     smoke:
       command: ["brakeman", "--version"]
       expected_pattern: "6.2.2"
+  cargo-audit:
+    display_name: cargo-audit
+    category: sca
+    resource_class: medium
+    default_timeout: 10m
+    network_required: true
+    plugin_package: plugins/rust
+    integration_tier: bucket
+    bucket: rust
+    pinned_version: "0.22.2"
+    version_variable: CARGO_AUDIT_VERSION
+    update_source:
+      type: github_releases
+      owner: rustsec
+      repo: rustsec
+      tag_pattern: '^cargo-audit/v\d+\.\d+\.\d+$'
+    source_integrity:
+      url: https://github.com/rustsec/rustsec/releases/download/cargo-audit%2Fv0.22.2/cargo-audit-x86_64-unknown-linux-musl-v0.22.2.tgz
+      sha256: 7fb9497f8594b389e5fce5ef9b92db08432996895b2e0c5a0167a69ed445c428
+      sha256_variable: CARGO_AUDIT_LINUX_AMD64_SHA256
+    smoke:
+      command: ["cargo-audit", "--version"]
+      expected_pattern: "0.22.2"
+  cargo-deny:
+    display_name: cargo-deny
+    category: sca
+    resource_class: medium
+    default_timeout: 10m
+    network_required: true
+    plugin_package: plugins/rust
+    integration_tier: bucket
+    bucket: rust
+    pinned_version: "0.20.2"
+    version_variable: CARGO_DENY_VERSION
+    update_source:
+      type: github_releases
+      owner: EmbarkStudios
+      repo: cargo-deny
+      tag_pattern: '^\d+\.\d+\.\d+$'
+    source_integrity:
+      url: https://github.com/EmbarkStudios/cargo-deny/releases/download/0.20.2/cargo-deny-0.20.2-x86_64-unknown-linux-musl.tar.gz
+      sha256: 9f12ed4c49936e09b48bf862b595cde2fe64fcbd9d74dfacac6131ca824c8d5f
+      sha256_variable: CARGO_DENY_LINUX_AMD64_SHA256
+    smoke:
+      command: ["cargo-deny", "--version"]
+      expected_pattern: "0.20.2"
   checkov:
     display_name: Checkov
     category: container
@@ -250,8 +296,8 @@ tools:
   gosec:
     display_name: gosec
     category: sast
-    resource_class: medium
-    default_timeout: 10m
+    resource_class: heavy
+    default_timeout: 20m
     plugin_package: plugins/go
     integration_tier: default
     pinned_version: "2.28.0"
@@ -526,6 +572,22 @@ tools:
       type: docker_registry
       repository: us-docker.pkg.dev/fairwinds-ops/oss/pluto
       tag_pattern: '^v\d+\.\d+\.\d+$'
+  poutine:
+    display_name: poutine
+    category: sast
+    resource_class: medium
+    default_timeout: 10m
+    plugin_package: plugins/security
+    integration_tier: upstream
+    pinned_version: "1.1.6"
+    version_variable: POUTINE_VERSION
+    image:
+      pinned_reference: ghcr.io/boostsecurityio/poutine:1.1.6@sha256:722a8e0999b583c1540fe2974e691032b2d9d21b9256a17965132b6bfd0081b0
+      platforms: ["linux/amd64", "linux/arm64"]
+    update_source:
+      type: docker_registry
+      repository: ghcr.io/boostsecurityio/poutine
+      tag_pattern: '^\d+\.\d+\.\d+$'
   pmd:
     display_name: PMD
     category: quality
@@ -630,7 +692,7 @@ tools:
     version_variable: SCORECARD_VERSION
     image:
       pinned_reference: gcr.io/openssf/scorecard:v5.0.0
-      entrypoint: scorecard
+      entrypoint: /scorecard
       platforms: ["linux/amd64"]
     update_source:
       type: docker_registry
@@ -724,8 +786,8 @@ tools:
   staticcheck:
     display_name: Staticcheck
     category: quality
-    resource_class: light
-    default_timeout: 5m
+    resource_class: medium
+    default_timeout: 10m
     plugin_package: plugins/go
     integration_tier: default
     pinned_version: "0.7.0"
@@ -850,3 +912,19 @@ tools:
     smoke:
       command: ["yamllint", "--version"]
       expected_pattern: "1.35.1"
+  zizmor:
+    display_name: zizmor
+    category: sast
+    resource_class: medium
+    default_timeout: 10m
+    plugin_package: plugins/security
+    integration_tier: upstream
+    pinned_version: "1.29.0"
+    version_variable: ZIZMOR_VERSION
+    image:
+      pinned_reference: ghcr.io/zizmorcore/zizmor:1.29.0@sha256:863026d54f91271b10b60b67ad8054cb37120167e162482597db102b3026a284
+      platforms: ["linux/amd64", "linux/arm64"]
+    update_source:
+      type: docker_registry
+      repository: ghcr.io/zizmorcore/zizmor
+      tag_pattern: '^\d+\.\d+\.\d+$'

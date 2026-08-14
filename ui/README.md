@@ -35,8 +35,7 @@ src/
                              /findings/:findingId — detail
     _authed.collections.tsx, .$collectionId.tsx
     _authed.fixes.tsx, .$fixId.tsx
-    _authed.loops.tsx, .$loopId.tsx
-    _authed.scanners.tsx     /scanners — container backend admin
+    _authed.agents.tsx, .$agentId.tsx
     _authed.settings.tsx     /settings
     login.tsx, register.tsx
   components/

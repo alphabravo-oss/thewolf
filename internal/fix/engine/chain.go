@@ -41,6 +41,10 @@ func defaultAuthProbe(ctx context.Context, command string) error {
 	case "codex":
 		// #nosec G204 -- command is a fixed tool name, prompt is a constant
 		cmd = exec.CommandContext(probeCtx, command, "--approval-mode", "full-auto", "--quiet", "ok")
+	case "opencode":
+		// #nosec G204 -- command is a fixed tool name
+		cmd = exec.CommandContext(probeCtx, command, "auth", "list")
+		cmd.Stdin = nil
 	default:
 		// #nosec G204 -- command is a configured tool name
 		cmd = exec.CommandContext(probeCtx, command, "--version")
@@ -73,20 +77,35 @@ func resetAuthCache() {
 }
 
 // cliAuthed reports whether the named CLI command is present and authenticated,
-// caching the verdict per-process. command is the binary name ("claude"/"codex").
-func cliAuthed(ctx context.Context, command string) bool {
+// caching the verdict per-process. command is the binary name
+// ("claude"/"codex"/"opencode"). An API key for that CLI counts as authed
+// without a live session probe.
+func cliAuthed(ctx context.Context, command string, hasKey bool) bool {
+	cacheKey := command
+	if hasKey {
+		cacheKey = command + "+key"
+	}
 	authCacheMu.Lock()
-	if e, ok := authCache[command]; ok {
+	if e, ok := authCache[cacheKey]; ok {
 		authCacheMu.Unlock()
 		return e.authed
 	}
 	authCacheMu.Unlock()
 
+	if hasKey {
+		_, err := exec.LookPath(command)
+		authed := err == nil
+		authCacheMu.Lock()
+		authCache[cacheKey] = authCacheEntry{authed: authed, err: err}
+		authCacheMu.Unlock()
+		return authed
+	}
+
 	err := authProber(ctx, command)
 	authed := err == nil
 
 	authCacheMu.Lock()
-	authCache[command] = authCacheEntry{authed: authed, err: err}
+	authCache[cacheKey] = authCacheEntry{authed: authed, err: err}
 	authCacheMu.Unlock()
 
 	if !authed {
@@ -102,6 +121,8 @@ func cliCommandFor(name string) string {
 		return "claude"
 	case "codex":
 		return "codex"
+	case "opencode":
+		return "opencode"
 	default:
 		return ""
 	}
@@ -114,6 +135,11 @@ type ChainConfig struct {
 	Engine string
 	// Provider backs the API tier. When nil/noop, the API tier is omitted.
 	Provider ai.Provider
+	// CLIEnv is merged onto CLI probes and Fix invocations (API keys).
+	CLIEnv []string
+	// HasAPIKey is true when a stored/env provider key can satisfy a CLI
+	// even without an interactive OAuth session.
+	HasAPIKey func(command string) bool
 }
 
 // Chain is an ordered list of engine tiers. The orchestrator runs the first
@@ -149,7 +175,7 @@ func (c *Chain) Next() SubprocessEngine {
 
 // SelectEngine builds the engine chain for a job, ordered:
 //
-//	auto  → [claude-code if present+authed] → [codex if present+authed] → [API]
+//	auto  → [claude-code] → [codex] → [opencode] → [API]
 //
 // An explicit cfg.Engine pins a single tier (no fallback chain): the named CLI,
 // or "api" for the diff-returning API engine. "auto"/"" yields the full
@@ -157,19 +183,24 @@ func (c *Chain) Next() SubprocessEngine {
 // provider is configured. Returns an error if no tier is available.
 func SelectEngine(ctx context.Context, cfg ChainConfig) (*Chain, error) {
 	apiAvailable := cfg.Provider != nil && cfg.Provider.Name() != "noop"
+	hasKey := cfg.HasAPIKey
+	if hasKey == nil {
+		hasKey = func(string) bool { return false }
+	}
 
 	switch cfg.Engine {
 	case "", "auto":
 		var tiers []SubprocessEngine
-		// CLI tiers first, gated on present-AND-authed.
+		// CLI tiers first, gated on present-AND-(oauth session OR api key).
 		for _, c := range []struct {
 			name string
 			eng  SubprocessEngine
 		}{
 			{"claude-code", &ClaudeCode{}},
 			{"codex", &Codex{}},
+			{"opencode", &OpenCode{}},
 		} {
-			if cmd := cliCommandFor(c.name); cmd != "" && cliAuthed(ctx, cmd) {
+			if cmd := cliCommandFor(c.name); cmd != "" && cliAuthed(ctx, cmd, hasKey(cmd)) {
 				tiers = append(tiers, c.eng)
 			}
 		}
@@ -178,7 +209,7 @@ func SelectEngine(ctx context.Context, cfg ChainConfig) (*Chain, error) {
 			tiers = append(tiers, NewAPIEngine(cfg.Provider))
 		}
 		if len(tiers) == 0 {
-			return nil, fmt.Errorf("no fix engine available: no authed CLI (claude/codex) and no API provider configured")
+			return nil, fmt.Errorf("no fix engine available: no authed CLI (claude/codex/opencode) and no API provider configured")
 		}
 		return &Chain{tiers: tiers}, nil
 
@@ -192,6 +223,13 @@ func SelectEngine(ctx context.Context, cfg ChainConfig) (*Chain, error) {
 		return &Chain{tiers: []SubprocessEngine{&ClaudeCode{}}}, nil
 	case "codex":
 		return &Chain{tiers: []SubprocessEngine{&Codex{}}}, nil
+	case "opencode":
+		return &Chain{tiers: []SubprocessEngine{&OpenCode{}}}, nil
+	case "grok", "xai":
+		if !apiAvailable {
+			return nil, fmt.Errorf("engine %q requested but no xAI API key is configured", cfg.Engine)
+		}
+		return &Chain{tiers: []SubprocessEngine{NewAPIEngine(cfg.Provider)}}, nil
 
 	default:
 		// Defer to the registry/custom syntax for anything else.

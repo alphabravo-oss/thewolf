@@ -54,7 +54,55 @@ if [[ "${WOLF_INSTALL_SMOKE_STRICT:-1}" == "1" ]]; then
     /usr/local/bin/cargo-clippy --version | grep -F clippy
 fi
 
+install_release_bin() {
+    local url="$1" sha256="$2" bin_name="$3"
+    local tmp extract
+    tmp="$(mktemp -d)"
+    extract="$(mktemp -d)"
+    curl --proto '=https' --tlsv1.2 --fail --location --silent --show-error \
+        --proto-redir '=https' --retry 3 --retry-all-errors \
+        -o "${tmp}/archive" "$url"
+    printf '%s  %s\n' "$sha256" "${tmp}/archive" | sha256sum --check --strict -
+    tar -xzf "${tmp}/archive" -C "$extract"
+    local found
+    found="$(find "$extract" -type f -name "$bin_name" -print -quit)"
+    if [[ -z "$found" ]]; then
+        echo "rust.sh: $bin_name not found in $url" >&2
+        exit 65
+    fi
+    install -m 0755 "$found" "/usr/local/bin/${bin_name}"
+    rm -rf "$tmp" "$extract"
+}
+
+case "$arch" in
+    x86_64|amd64)
+        install_release_bin \
+            "https://github.com/rustsec/rustsec/releases/download/cargo-audit%2Fv${CARGO_AUDIT_VERSION}/cargo-audit-x86_64-unknown-linux-musl-v${CARGO_AUDIT_VERSION}.tgz" \
+            "$CARGO_AUDIT_LINUX_AMD64_SHA256" \
+            cargo-audit
+        install_release_bin \
+            "https://github.com/EmbarkStudios/cargo-deny/releases/download/${CARGO_DENY_VERSION}/cargo-deny-${CARGO_DENY_VERSION}-x86_64-unknown-linux-musl.tar.gz" \
+            "$CARGO_DENY_LINUX_AMD64_SHA256" \
+            cargo-deny
+        ;;
+    aarch64|arm64)
+        install_release_bin \
+            "https://github.com/rustsec/rustsec/releases/download/cargo-audit%2Fv${CARGO_AUDIT_VERSION}/cargo-audit-aarch64-unknown-linux-gnu-v${CARGO_AUDIT_VERSION}.tgz" \
+            "c6603814ddaa45e51263dafd31c0ac98808f688d26f7395804f9670b0fd599dd" \
+            cargo-audit
+        install_release_bin \
+            "https://github.com/EmbarkStudios/cargo-deny/releases/download/${CARGO_DENY_VERSION}/cargo-deny-${CARGO_DENY_VERSION}-aarch64-unknown-linux-musl.tar.gz" \
+            "995c82be0defc7a025cae49a2aa2644ce8245c9a3318fc4103907c6a285e8c7d" \
+            cargo-deny
+        ;;
+esac
+
+if [[ "${WOLF_INSTALL_SMOKE_STRICT:-1}" == "1" ]]; then
+    /usr/local/bin/cargo-audit --version | grep -F "${CARGO_AUDIT_VERSION}"
+    /usr/local/bin/cargo-deny --version | grep -F "${CARGO_DENY_VERSION}"
+fi
+
 # Drop docs & sources we never need at scan time.
 rm -rf "${RUSTUP_HOME}/toolchains/${RUST_TOOLCHAIN}"*/share/doc 2>/dev/null || true
 
-echo "Rust toolchain + clippy installed."
+echo "Rust toolchain + clippy + cargo-audit + cargo-deny installed."

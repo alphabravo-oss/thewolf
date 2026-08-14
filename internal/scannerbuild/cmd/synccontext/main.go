@@ -107,6 +107,7 @@ func main() {
 		"fixer/Dockerfile.codex",
 		"fixer/go-tools",
 		"fixer/install-node-tools.sh",
+		"fixer/install-fix-tools.sh",
 		"fixer/versions.env",
 	} {
 		mustCopy(root, destination, relative)

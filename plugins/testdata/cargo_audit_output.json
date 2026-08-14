@@ -1,0 +1,19 @@
+{
+  "vulnerabilities": {
+    "found": true,
+    "count": 1,
+    "list": [
+      {
+        "advisory": {
+          "id": "RUSTSEC-2020-0071",
+          "package": "time",
+          "title": "Potential segfault in localtime_r invocations",
+          "description": "unix-specific",
+          "url": "https://rustsec.org/advisories/RUSTSEC-2020-0071",
+          "aliases": ["CVE-2020-26235"]
+        },
+        "package": { "name": "time", "version": "0.1.44" }
+      }
+    ]
+  }
+}

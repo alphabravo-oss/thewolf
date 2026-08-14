@@ -287,10 +287,10 @@ func TestDefaultRateLimiter(t *testing.T) {
 	if rl == nil {
 		t.Fatal("DefaultRateLimiter returned nil")
 	}
-	if rl.burst != 60 {
-		t.Errorf("expected burst=60, got %d", rl.burst)
+	if rl.burst != 180 {
+		t.Errorf("expected burst=180, got %d", rl.burst)
 	}
-	if rl.rate != 10 {
-		t.Errorf("expected rate=10, got %d", rl.rate)
+	if rl.rate != 30 {
+		t.Errorf("expected rate=30, got %d", rl.rate)
 	}
 }

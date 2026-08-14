@@ -62,6 +62,10 @@ unknown, proprietary, and every unlisted license still fail the image gate.
 | yamllint | GPL-3.0 | Adrien Vergé. Same shape as cppcheck/shellcheck — bundling the binary in a container is fine. |
 | gokart | Apache-2.0 | Praetorian Inc. |
 | rust toolchain + clippy | Apache-2.0 / MIT | — |
+| cargo-audit | Apache-2.0 / MIT | RustSec. Fetches the advisory database at scan time. |
+| cargo-deny | MIT / Apache-2.0 | Embark Studios. Advisory check by default; full policy when deny.toml is present. |
+| zizmor | MIT | GitHub Actions / Dependabot / pre-commit static analysis. |
+| poutine | Apache-2.0 | BoostSecurity. CI pipeline supply-chain scanner. |
 | **CodeQL** | **GitHub CodeQL Terms** | **Free for analysis of open-source code only.** Commercial / private-repo analysis requires a GitHub Enterprise Advanced Security license. Operators of wolf in commercial settings must confirm their CodeQL license; if you don't have one, set `disabled_tools: [codeql]` in `wolf.yaml`. |
 
 If you spot an error here, open an issue or PR.

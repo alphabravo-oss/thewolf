@@ -7,6 +7,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -114,6 +116,33 @@ func TestScannerReleaseMetricsArePublicAndPrometheusCompatible(t *testing.T) {
 	}
 	if body := w.Body.String(); !strings.Contains(body, "wolf_scanner_release_database_ready 1") {
 		t.Fatalf("metrics do not include database readiness:\n%s", body)
+	}
+}
+
+func TestStaticUIRequestsDoNotConsumeAPIRateLimit(t *testing.T) {
+	uiDir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(uiDir, "assets"), 0o755); err != nil {
+		t.Fatalf("mkdir assets: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(uiDir, "index.html"), []byte("<!doctype html><main>wolf</main>"), 0o644); err != nil {
+		t.Fatalf("write index: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(uiDir, "assets", "app.js"), []byte("console.log('wolf')"), 0o644); err != nil {
+		t.Fatalf("write asset: %v", err)
+	}
+	t.Setenv("WOLF_UI_DIR", uiDir)
+
+	srv, _, _ := newTestServer(t)
+	for i := 0; i < 200; i++ {
+		w := request(srv, http.MethodGet, "/assets/app.js", "", nil)
+		if w.Code != http.StatusOK {
+			t.Fatalf("static asset request %d: expected 200, got %d", i+1, w.Code)
+		}
+	}
+
+	w := request(srv, http.MethodGet, "/api/v1/health", "", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("health after static requests: expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 }
 

@@ -9,9 +9,9 @@ Wolf scanner metadata is authored in `scanners/tools.yaml`. This table is genera
 | Tier | Count |
 |---|---:|
 | Default Wolf image | 21 |
-| Wolf bucket images | 5 |
-| Upstream/native images | 23 |
-| Total registered scanner tools | 49 |
+| Wolf bucket images | 7 |
+| Upstream/native images | 25 |
+| Total registered scanner tools | 53 |
 
 ## Tools
 
@@ -30,6 +30,7 @@ Wolf scanner metadata is authored in `scanners/tools.yaml`. This table is genera
 | `nuclei` | dast | upstream | `3.3.5` (`NUCLEI_VERSION`) | `projectdiscovery/nuclei:v3.3.5` | `linux/amd64`, `linux/arm64` | `docker:projectdiscovery/nuclei` |
 | `osv-scanner` | sca | upstream | `1.9.1` (`OSV_SCANNER_VERSION`) | `ghcr.io/google/osv-scanner:v1.9.1` | `linux/amd64`, `linux/arm64` | `docker:ghcr.io/google/osv-scanner` |
 | `pluto` | infra | upstream | `5.9.0` (`PLUTO_VERSION`) | `us-docker.pkg.dev/fairwinds-ops/oss/pluto:v5.9.0` | `linux/amd64`, `linux/arm64` | `docker:us-docker.pkg.dev/fairwinds-ops/oss/pluto` |
+| `poutine` | sast | upstream | `1.1.6` (`POUTINE_VERSION`) | `ghcr.io/boostsecurityio/poutine:1.1.6@sha256:722a8e0999b583c1540fe2974e691032b2d9d21b9256a17965132b6bfd0081b0` | `linux/amd64`, `linux/arm64` | `docker:ghcr.io/boostsecurityio/poutine` |
 | `renovate` | sca | upstream | `39.55.0` (`RENOVATE_VERSION`) | `ghcr.io/renovatebot/renovate:39.55.0` | `linux/amd64`, `linux/arm64` | `docker:ghcr.io/renovatebot/renovate` |
 | `scorecard` | sast | upstream | `5.0.0` (`SCORECARD_VERSION`) | `gcr.io/openssf/scorecard:v5.0.0` | `linux/amd64` | `docker:gcr.io/openssf/scorecard` |
 | `semgrep` | sast | upstream | `1.92.0` (`SEMGREP_VERSION`) | `semgrep/semgrep:1.92.0` | `linux/amd64`, `linux/arm64` | `docker:semgrep/semgrep` |
@@ -40,6 +41,7 @@ Wolf scanner metadata is authored in `scanners/tools.yaml`. This table is genera
 | `trivy` | sca | upstream | `0.57.0` (`TRIVY_VERSION`) | `aquasec/trivy:0.57.0` | `linux/amd64`, `linux/arm64` | `docker:aquasec/trivy` |
 | `trufflehog` | secrets | upstream | `3.83.5` (`TRUFFLEHOG_VERSION`) | `trufflesecurity/trufflehog:3.83.5` | `linux/amd64`, `linux/arm64` | `docker:trufflesecurity/trufflehog` |
 | `vale` | docs | upstream | `3.9.1` (`VALE_VERSION`) | `jdkato/vale:v3.9.1` | `linux/amd64`, `linux/arm64` | `docker:jdkato/vale` |
+| `zizmor` | sast | upstream | `1.29.0` (`ZIZMOR_VERSION`) | `ghcr.io/zizmorcore/zizmor:1.29.0@sha256:863026d54f91271b10b60b67ad8054cb37120167e162482597db102b3026a284` | `linux/amd64`, `linux/arm64` | `docker:ghcr.io/zizmorcore/zizmor` |
 | `bandit` | sast | default | `1.7.10` (`BANDIT_VERSION`) | `pip:bandit` | - | `pypi:bandit` |
 | `brakeman` | sast | default | `6.2.2` (`BRAKEMAN_VERSION`) | `gem:brakeman` | - | `rubygems:brakeman` |
 | `cppcheck` | sast | default | - | `apt:cppcheck` | - | `debian:cppcheck` |
@@ -61,6 +63,8 @@ Wolf scanner metadata is authored in `scanners/tools.yaml`. This table is genera
 | `staticcheck` | quality | default | `0.7.0` (`STATICCHECK_VERSION`) | `go:honnef.co/go/tools/cmd/staticcheck` | - | `go:honnef.co/go/tools` |
 | `vulture` | quality | default | `2.13` (`VULTURE_VERSION`) | `pip:vulture` | - | `pypi:vulture` |
 | `yamllint` | quality | default | `1.35.1` (`YAMLLINT_VERSION`) | `pip:yamllint` | - | `pypi:yamllint` |
+| `cargo-audit` | sca | rust bucket | `0.22.2` (`CARGO_AUDIT_VERSION`) | `wolf-scanners-rust` | - | `github:rustsec/rustsec` |
+| `cargo-deny` | sca | rust bucket | `0.20.2` (`CARGO_DENY_VERSION`) | `wolf-scanners-rust` | - | `github:EmbarkStudios/cargo-deny` |
 | `clippy` | quality | rust bucket | `1.82.0` (`RUST_TOOLCHAIN`) | `wolf-scanners-rust` | - | `rust:stable` |
 | `codeql` | sast | codeql bucket | `2.26.2` (`CODEQL_VERSION`) | `wolf-scanners-codeql` | - | `github:github/codeql-cli-binaries` |
 | `detekt` | sast | jvm bucket | `1.23.7` (`DETEKT_VERSION`) | `wolf-scanners-jvm` | - | `github:detekt/detekt` |

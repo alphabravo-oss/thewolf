@@ -78,9 +78,6 @@ func normalizeCustomBuildCreate(
 			return request, "", fmt.Errorf("duplicate custom build variant %q", variant)
 		}
 		seen[variant] = struct{}{}
-		if request.Push && variant == "codeql" {
-			return request, "", errors.New("CodeQL custom images are local-only and cannot be pushed or redistributed")
-		}
 	}
 	for i := 1; i < len(request.Variants); i++ {
 		if customBuildVariantOrder[request.Variants[i-1]] >

@@ -54,6 +54,9 @@ spec:
             {{- if .Values.scanner.codeqlImage }}
             - {name: WOLF_SCANNERS_IMAGE_CODEQL, value: {{ .Values.scanner.codeqlImage | quote }}}
             {{- end }}
+            {{- if .Values.scanner.dockerHubMirror }}
+            - {name: WOLF_SCANNERS_DOCKERHUB_MIRROR, value: {{ .Values.scanner.dockerHubMirror | quote }}}
+            {{- end }}
             - {name: WOLF_SCANNERS_MEMORY, value: {{ .Values.scanner.memory | quote }}}
             - {name: WOLF_SCANNERS_CPUS, value: {{ .Values.scanner.cpu | quote }}}
             - {name: WOLF_GIT_ALLOWED_CIDRS, value: {{ .Values.gitAllowedCIDRs | quote }}}

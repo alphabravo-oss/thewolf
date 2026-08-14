@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -129,6 +130,99 @@ func (c *Client) RepoPushInfo(ctx context.Context, owner, repo string) (PushInfo
 		CanPush:  payload.Permissions.Push || payload.Permissions.Admin,
 		Archived: payload.Archived,
 	}, nil
+}
+
+// TokenInfo is the save-time validation of a GitHub PAT or fine-grained token.
+type TokenInfo struct {
+	Login  string   `json:"login"`
+	Scopes []string `json:"scopes,omitempty"`
+	Valid  bool     `json:"valid"`
+}
+
+// ValidateToken calls GET /user and reports whether the token authenticates.
+// A 401/403 is a hard invalid token. Network failures are returned as errors
+// so the caller can decide whether to store the secret anyway (air-gapped).
+func (c *Client) ValidateToken(ctx context.Context) (TokenInfo, error) {
+	url := fmt.Sprintf("%s/user", c.BaseURL)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return TokenInfo{}, err
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+	if c.Token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.Token)
+	}
+	resp, err := c.httpClient().Do(req)
+	if err != nil {
+		return TokenInfo{}, err
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+		return TokenInfo{Valid: false}, fmt.Errorf("github %d: token was rejected", resp.StatusCode)
+	}
+	if resp.StatusCode >= 400 {
+		return TokenInfo{}, fmt.Errorf("github %d: %s", resp.StatusCode, string(body))
+	}
+	var payload struct {
+		Login string `json:"login"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return TokenInfo{}, err
+	}
+	scopes := splitScopes(resp.Header.Get("X-OAuth-Scopes"))
+	return TokenInfo{Login: payload.Login, Scopes: scopes, Valid: payload.Login != ""}, nil
+}
+
+func splitScopes(raw string) []string {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if s := strings.TrimSpace(p); s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// ListAccessibleRepos lists every repository the token can see (owned,
+// collaborator, and org membership), paging through results.
+func (c *Client) ListAccessibleRepos(ctx context.Context) ([]Repo, error) {
+	var all []Repo
+	page := 1
+	for {
+		url := fmt.Sprintf("%s/user/repos?per_page=100&page=%d&affiliation=owner,collaborator,organization_member&sort=full_name", c.BaseURL, page)
+		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Accept", "application/vnd.github+json")
+		if c.Token != "" {
+			req.Header.Set("Authorization", "Bearer "+c.Token)
+		}
+		resp, err := c.httpClient().Do(req)
+		if err != nil {
+			return nil, err
+		}
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if resp.StatusCode >= 400 {
+			return nil, fmt.Errorf("github %d: %s", resp.StatusCode, string(body))
+		}
+		var batch []Repo
+		if err := json.Unmarshal(body, &batch); err != nil {
+			return nil, err
+		}
+		all = append(all, batch...)
+		if len(batch) < 100 {
+			break
+		}
+		page++
+	}
+	return all, nil
 }
 
 // ListUserRepos lists every repository for the given user, paging through

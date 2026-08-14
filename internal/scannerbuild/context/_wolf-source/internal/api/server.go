@@ -126,7 +126,6 @@ func NewServer(store db.Store, addr string) *Server {
 		}
 		return 0
 	})) // 1 MB by default; the streaming bundle import has its own 8 GiB bound.
-	r.Use(generalLimiter.Handler)
 	r.Use(cors.Handler(cors.Options{
 		AllowOriginFunc: allowedCORSOrigin,
 		AllowedMethods:  []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
@@ -173,6 +172,7 @@ func NewServer(store db.Store, addr string) *Server {
 	// Mount the versioned API. All routes live under /api/v1; /api/* is a
 	// deprecating redirect alias kept for one release.
 	r.Route("/api/v1", func(r chi.Router) {
+		r.Use(generalLimiter.Handler)
 		r.Use(jsonContentType)
 
 		// Public endpoints — no authentication.

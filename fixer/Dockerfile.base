@@ -11,9 +11,9 @@
 FROM debian:trixie-slim@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a0c3ccd26f436a0e AS build
 
 ARG WOLF_VERSION=dev
-ARG GO_VERSION=1.26.5
-ARG GO_LINUX_AMD64_SHA256=5c2c3b16caefa1d968a94c1daca04a7ca301a496d9b086e17ad77bb81393f053
-ARG GO_LINUX_ARM64_SHA256=fe4789e92b1f33358680864bbe8704289e7bb5fc207d80623c308935bd696d49
+ARG GO_VERSION=1.26.6
+ARG GO_LINUX_AMD64_SHA256=708effb774be8237570d0add163225abbdfaf4fca28b2611df167beba4feef89
+ARG GO_LINUX_ARM64_SHA256=d0507e9e9d7fe012aae570108cbd76c15de879e17130ab8cb90d4d7445cb1f2e
 ARG TYPESCRIPT_VERSION=6.0.3
 ARG TYPESCRIPT_INTEGRITY=sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw==
 ARG GH_VERSION=2.97.0
@@ -55,8 +55,10 @@ RUN set -eux; \
 
 COPY fixer/versions.env /tmp/fixer-versions.env
 COPY fixer/install-node-tools.sh /tmp/install-node-tools.sh
-RUN chmod 0755 /tmp/install-node-tools.sh \
-    && /tmp/install-node-tools.sh /tmp/fixer-versions.env
+COPY fixer/install-fix-tools.sh /tmp/install-fix-tools.sh
+RUN chmod 0755 /tmp/install-node-tools.sh /tmp/install-fix-tools.sh \
+    && /tmp/install-node-tools.sh /tmp/fixer-versions.env \
+    && /tmp/install-fix-tools.sh /tmp/fixer-versions.env
 
 COPY fixer/go-tools /tmp/fixer-go-tools
 RUN cd /tmp/fixer-go-tools \
@@ -66,8 +68,11 @@ RUN cd /tmp/fixer-go-tools \
     && go mod verify \
     && go build -mod=readonly -trimpath -o /usr/local/bin/gh github.com/cli/cli/v2/cmd/gh \
     && go build -mod=readonly -trimpath -ldflags "-X main.version=${GLAB_VERSION}" -o /usr/local/bin/glab gitlab.com/gitlab-org/cli/cmd/glab \
+    && go build -mod=readonly -trimpath -o /opt/wolf/fix-tools/bin/goimports golang.org/x/tools/cmd/goimports \
+    && ln -sfn /opt/wolf/fix-tools/bin/goimports /usr/local/bin/goimports \
     && gh --version \
     && glab --version \
+    && goimports -h >/dev/null \
     && rm -rf /tmp/fixer-go-tools
 
 WORKDIR /src
@@ -118,10 +123,12 @@ COPY --from=build /usr/local/bin/wolf /usr/local/bin/wolf
 COPY --from=build /usr/local/bin/gh /usr/local/bin/gh
 COPY --from=build /usr/local/bin/glab /usr/local/bin/glab
 COPY --from=build /usr/lib/node_modules /usr/lib/node_modules
+COPY --from=build /opt/wolf/fix-tools /opt/wolf/fix-tools
 RUN ln -sfn ../lib/node_modules/npm/bin/npm-cli.js /usr/bin/npm \
     && ln -sfn ../lib/node_modules/npm/bin/npx-cli.js /usr/bin/npx \
     && ln -sfn ../lib/node_modules/typescript/bin/tsc /usr/bin/tsc \
-    && ln -sfn ../lib/node_modules/typescript/bin/tsserver /usr/bin/tsserver
+    && ln -sfn ../lib/node_modules/typescript/bin/tsserver /usr/bin/tsserver \
+    && for b in /opt/wolf/fix-tools/bin/*; do ln -sfn "$b" "/usr/local/bin/$(basename "$b")"; done
 
 RUN wolf version \
     && gh --version \
@@ -130,7 +137,19 @@ RUN wolf version \
     && node -e "if (require('/usr/lib/node_modules/npm/package.json').version !== '12.0.2') process.exit(1)" \
     && node -e "if (require('/usr/lib/node_modules/npm/node_modules/brace-expansion/package.json').version !== '5.0.9') process.exit(1)" \
     && node -e "if (require('/usr/lib/node_modules/npm/node_modules/picomatch/package.json').version !== '4.0.5') process.exit(1)" \
-    && node -e "if (require('/usr/lib/node_modules/npm/node_modules/ip-address/package.json').version !== '10.3.1') process.exit(1)"
+    && node -e "if (require('/usr/lib/node_modules/npm/node_modules/ip-address/package.json').version !== '10.3.1') process.exit(1)" \
+    && command -v prettier \
+    && command -v markdownlint \
+    && command -v eslint \
+    && command -v ruff \
+    && command -v yamlfmt \
+    && command -v shfmt \
+    && command -v uv \
+    && command -v hadolint \
+    && command -v shellcheck \
+    && command -v golangci-lint \
+    && command -v taplo \
+    && command -v goimports
 
 COPY fixer/versions.env /usr/share/wolf/fixer/versions.env
 

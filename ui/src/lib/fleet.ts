@@ -66,7 +66,38 @@ export function useNeedsAttention() {
   });
 }
 
-export type AggregateRow = { key: string; repos: number; findings: number };
+export type AggregateRow = {
+  key: string;
+  repos: number;
+  findings: number;
+  tool?: string;
+  title?: string;
+  severity?: string;
+  repo_ids?: string[];
+  repo_names?: string[];
+};
+
+export type FindingsByRepoRow = {
+  repo_id: string;
+  name: string;
+  total: number;
+  critical: number;
+  high: number;
+  medium: number;
+  low: number;
+  info: number;
+};
+
+export function useFindingsByRepo() {
+  return useQuery({
+    queryKey: ["findings", "by-repo"],
+    queryFn: async () => {
+      const r = await api.get<FindingsByRepoRow[]>("/findings/by-repo");
+      return r.data ?? [];
+    },
+    staleTime: 30_000,
+  });
+}
 
 export function useTopVulnerableRules(limit = 10) {
   return useQuery({
@@ -75,7 +106,7 @@ export function useTopVulnerableRules(limit = 10) {
       const r = await api.get<AggregateRow[]>(
         `/findings/aggregate?group_by=rule_id&limit=${limit}`,
       );
-      return r.data;
+      return r.data ?? [];
     },
     staleTime: 60_000,
   });

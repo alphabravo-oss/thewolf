@@ -207,6 +207,65 @@ func TestCleanup_RemovesWorktreeKeepsBranch(t *testing.T) {
 	}
 }
 
+func TestDiscard_RemovesWorktreeAndBranch(t *testing.T) {
+	repo := initRepo(t)
+	ctx := context.Background()
+	ws, err := Prepare(ctx, Options{Repo: localRepo(repo), Branch: "wolf-fix/test/discard"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wtPath := ws.Path()
+	if err := ws.Discard(ctx); err != nil {
+		t.Fatalf("Discard: %v", err)
+	}
+	if _, err := os.Stat(wtPath); !os.IsNotExist(err) {
+		t.Errorf("worktree dir should be gone after discard, stat err = %v", err)
+	}
+	out, err := runGit(ctx, repo, "branch", "--list", "wolf-fix/test/discard")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out, "wolf-fix/test/discard") {
+		t.Errorf("fix branch should be deleted on discard, branch list:\n%s", out)
+	}
+}
+
+func TestCommit_PersistsOnBranchAfterCleanup(t *testing.T) {
+	repo := initRepo(t)
+	ctx := context.Background()
+	ws, err := Prepare(ctx, Options{Repo: localRepo(repo), Branch: "wolf-fix/test/commit"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(ws.Path(), "main.go"), []byte("package main\n\nfunc main() { println(1) }\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := ws.Commit(ctx, "fix: demo"); err != nil {
+		t.Fatalf("Commit: %v", err)
+	}
+	if err := ws.Cleanup(ctx); err != nil {
+		t.Fatal(err)
+	}
+	out, err := runGit(ctx, repo, "log", "-1", "--format=%s", "wolf-fix/test/commit")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "fix: demo") {
+		t.Fatalf("branch log = %q, want commit message to survive cleanup", out)
+	}
+}
+
+func TestPush_RefusesDefaultBranch(t *testing.T) {
+	ws := &Workspace{path: "/tmp", branch: "main", defaultBranch: "main"}
+	if _, err := ws.Push(context.Background()); err == nil {
+		t.Fatal("expected refuse to push main")
+	}
+	ws.branch = "master"
+	if _, err := ws.Push(context.Background()); err == nil {
+		t.Fatal("expected refuse to push master")
+	}
+}
+
 func TestPrepare_SSHUnsupported(t *testing.T) {
 	node := "node-1"
 	repo := &models.Repo{SourceType: models.SourceTypeSSH, SourcePath: "/srv/app", RemoteNodeID: &node}

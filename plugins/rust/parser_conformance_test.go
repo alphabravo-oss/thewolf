@@ -8,4 +8,6 @@ import (
 
 func TestAllRustParsersHostileCorpus(t *testing.T) {
 	parsercontract.AssertHostileCases(t, "clippy", parseClippyOutput)
+	parsercontract.AssertHostileCases(t, "cargo-audit", parseCargoAuditOutput)
+	parsercontract.AssertHostileCases(t, "cargo-deny", parseCargoDenyOutput)
 }

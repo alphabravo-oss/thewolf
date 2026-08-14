@@ -1,6 +1,7 @@
 package security
 
 import (
+	"os"
 	"testing"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
@@ -123,6 +124,34 @@ func TestParseBearerOutput(t *testing.T) {
 	}
 	if len(findings) != 1 || findings[0].ToolName != "bearer" || findings[0].RuleID != "ruby_rails_sql_injection" || findings[0].CWEID != "CWE-89" || findings[0].Severity != models.SeverityHigh {
 		t.Fatalf("bearer finding = %#v", findings)
+	}
+}
+
+func TestParseZizmorOutput(t *testing.T) {
+	data, err := os.ReadFile("testdata/zizmor_output.sarif")
+	if err != nil {
+		t.Fatal(err)
+	}
+	findings, err := parseZizmorOutput(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(findings) != 1 || findings[0].ToolName != "zizmor" || findings[0].RuleID != "template-injection" || findings[0].Severity != models.SeverityHigh || findings[0].LineStart != 18 {
+		t.Fatalf("zizmor finding = %#v", findings)
+	}
+}
+
+func TestParsePoutineOutput(t *testing.T) {
+	data, err := os.ReadFile("testdata/poutine_output.sarif")
+	if err != nil {
+		t.Fatal(err)
+	}
+	findings, err := parsePoutineOutput(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(findings) != 1 || findings[0].ToolName != "poutine" || findings[0].RuleID != "unpinnable_action" || findings[0].Severity != models.SeverityMedium || findings[0].LineStart != 12 {
+		t.Fatalf("poutine finding = %#v", findings)
 	}
 }
 

@@ -57,8 +57,8 @@ func TestRepositoryLockIsDeterministicGolden(t *testing.T) {
 	if string(firstBytes) != string(golden) {
 		t.Fatal("checked-in scanner-lock.yaml is stale")
 	}
-	if len(first.Tools) != 49 {
-		t.Fatalf("lock tools = %d, want 49", len(first.Tools))
+	if len(first.Tools) != 53 {
+		t.Fatalf("lock tools = %d, want 53", len(first.Tools))
 	}
 }
 

@@ -21,11 +21,11 @@ The only accepted variants and build inputs are:
 | `default` | `Dockerfile` | yes | yes |
 | `jvm` | `Dockerfile.jvm` | yes | yes |
 | `rust` | `Dockerfile.rust` | yes | yes |
-| `codeql` | `Dockerfile.codeql` | yes | **no** |
+| `codeql` | `Dockerfile.codeql` | yes | yes |
 
-CodeQL is hard local-only. A request containing CodeQL and `push:true`,
-including `variants:["all"]`, fails before version reservation or worker
-execution. This restriction is not configurable.
+CodeQL is not open source. It is free only for analyzing open-source code;
+scanning private or commercial code requires a GitHub Advanced Security
+license. Confirm entitlement before publishing or enabling the CodeQL bucket.
 
 Platforms are limited to `linux/amd64` and `linux/arm64`. A local load accepts
 zero or one platform because buildx cannot load a multi-platform manifest into

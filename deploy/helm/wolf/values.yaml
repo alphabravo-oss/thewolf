@@ -12,6 +12,19 @@ worker:
   replicaCount: 1
   capacity: 1
   serviceAccountName: ""
+fixer:
+  # Separate Deployment from the API. Scale replicaCount independently.
+  # Combined Debian worker (Claude/Codex/OpenCode). Never the Alpine API image.
+  enabled: false
+  replicaCount: 1
+  repository: ghcr.io/alphabravo-oss/wolf-fixer-engines
+  tag: latest
+  # Optional full override, including an immutable @sha256 digest.
+  image: ""
+  home:
+    size: 2Gi
+    accessModes: [ReadWriteOnce]
+    storageClassName: ""
 scannerRelease:
   # Fail-closed default. Advance through candidate, canary, and stable_control
   # only after qualifying each stage; existing scan execution remains intact.
@@ -306,6 +319,7 @@ scanner:
   jvmImage: ghcr.io/alphabravo-oss/wolf-scanners-jvm:stable
   rustImage: ghcr.io/alphabravo-oss/wolf-scanners-rust:stable
   codeqlImage: ""
+  dockerHubMirror: ""
   imagePullPolicy: IfNotPresent
   memory: 2Gi
   cpu: 1500m
@@ -356,6 +370,9 @@ resources:
     limits: {cpu: "1", memory: 1Gi}
   worker:
     requests: {cpu: 500m, memory: 512Mi}
+    limits: {cpu: "2", memory: 2Gi}
+  fixer:
+    requests: {cpu: 250m, memory: 256Mi}
     limits: {cpu: "2", memory: 2Gi}
   scannerRelease:
     requests: {cpu: 200m, memory: 256Mi}

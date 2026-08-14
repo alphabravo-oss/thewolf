@@ -53,6 +53,7 @@ func defaultDBVolume() string {
 type Config struct {
 	Image                    string            `yaml:"image"`
 	ImageOverrides           map[string]string `yaml:"image_overrides"`
+	DockerHubMirror          string            `yaml:"dockerhub_mirror"`
 	PullPolicy               string            `yaml:"pull_policy"`
 	Network                  string            `yaml:"network"`
 	Memory                   string            `yaml:"memory"`
@@ -74,10 +75,13 @@ func EnvDefaults() Config {
 	return Config{
 		Image:          envOr("WOLF_SCANNERS_IMAGE", "ghcr.io/alphabravo-oss/wolf-scanners:"+tag),
 		ImageOverrides: envBucketOverrides(),
-		PullPolicy:     envOr("WOLF_SCANNERS_PULL_POLICY", "IfNotPresent"),
-		Network:        envOr("WOLF_SCANNERS_NETWORK", "bridge"),
-		Memory:         envOr("WOLF_SCANNERS_MEMORY", "2g"),
-		CPUs:           envOr("WOLF_SCANNERS_CPUS", "1.5"),
+		DockerHubMirror: normalizeDockerHubMirror(envOr(
+			"WOLF_SCANNERS_DOCKERHUB_MIRROR", "",
+		)),
+		PullPolicy: envOr("WOLF_SCANNERS_PULL_POLICY", "IfNotPresent"),
+		Network:    envOr("WOLF_SCANNERS_NETWORK", "bridge"),
+		Memory:     envOr("WOLF_SCANNERS_MEMORY", "2g"),
+		CPUs:       envOr("WOLF_SCANNERS_CPUS", "1.5"),
 		// Default to a host bind-mount under ~/.wolf/scanner-cache so
 		// vulnerability DBs (grype, trivy, etc.) persist across scan
 		// runs without permission issues (the path inherits the host
@@ -169,6 +173,8 @@ func envBucketOverrides() map[string]string {
 	}
 	if v := os.Getenv("WOLF_SCANNERS_IMAGE_RUST"); v != "" {
 		out["clippy"] = v
+		out["cargo-audit"] = v
+		out["cargo-deny"] = v
 	}
 	if v := os.Getenv("WOLF_SCANNERS_IMAGE_CODEQL"); v != "" {
 		out["codeql"] = v
@@ -194,6 +200,9 @@ func (c Config) ToContainerConfig() (*container.Config, error) {
 	if os.Getenv("WOLF_SCANNERS_DISABLE_UPSTREAM") != "1" {
 		upstream = container.DefaultUpstreamTools()
 	}
+	if c.DockerHubMirror != "" {
+		upstream = applyDockerHubMirror(upstream, c.DockerHubMirror)
+	}
 	cfg := &container.Config{
 		Image:                    c.Image,
 		ImageOverrides:           c.ImageOverrides,
@@ -216,6 +225,59 @@ func (c Config) ToContainerConfig() (*container.Config, error) {
 	}
 	warnFloatingLatestImages(cfg)
 	return cfg, nil
+}
+
+func applyDockerHubMirror(in map[string]container.ToolImageSpec, mirror string) map[string]container.ToolImageSpec {
+	mirror = normalizeDockerHubMirror(mirror)
+	if len(in) == 0 || mirror == "" {
+		return in
+	}
+	out := make(map[string]container.ToolImageSpec, len(in))
+	for tool, spec := range in {
+		spec.Image = mirrorDockerHubReference(spec.Image, mirror)
+		out[tool] = spec
+	}
+	return out
+}
+
+func normalizeDockerHubMirror(mirror string) string {
+	mirror = strings.TrimSpace(mirror)
+	mirror = strings.TrimPrefix(mirror, "https://")
+	mirror = strings.TrimPrefix(mirror, "http://")
+	return strings.TrimSuffix(mirror, "/")
+}
+
+func mirrorDockerHubReference(ref, mirror string) string {
+	ref = strings.TrimSpace(ref)
+	if ref == "" || mirror == "" {
+		return ref
+	}
+	path := ref
+	first, rest, hasSlash := strings.Cut(path, "/")
+	if hasSlash && isDockerHubRegistry(first) {
+		path = rest
+	} else if hasSlash && isExplicitRegistry(first) {
+		return ref
+	}
+	if !hasSlash {
+		path = "library/" + path
+	}
+	return mirror + "/" + path
+}
+
+func isExplicitRegistry(component string) bool {
+	return strings.Contains(component, ".") ||
+		strings.Contains(component, ":") ||
+		component == "localhost"
+}
+
+func isDockerHubRegistry(component string) bool {
+	switch component {
+	case "docker.io", "index.docker.io", "registry-1.docker.io":
+		return true
+	default:
+		return false
+	}
 }
 
 // LoadAndInstall builds a *container.Config from envs (caller may overlay
@@ -252,7 +314,7 @@ func LoadAndInstall(ctx context.Context) (*container.Config, error) {
 // Makefile targets (scanners-build-jvm, etc.).
 var bucketImageTools = map[string][]string{
 	"jvm":    {"detekt", "infer", "pmd"},
-	"rust":   {"clippy"},
+	"rust":   {"clippy", "cargo-audit", "cargo-deny"},
 	"codeql": {"codeql"},
 }
 

@@ -18,8 +18,8 @@ const (
 	ScopeWriteFindings    = "write:findings"
 	ScopeReadFixes        = "read:fixes"
 	ScopeWriteFixes       = "write:fixes"
-	ScopeReadLoops        = "read:loops"
-	ScopeWriteLoops       = "write:loops"
+	ScopeReadAgents       = "read:agents"
+	ScopeWriteAgents      = "write:agents"
 	ScopeReadConfig       = "read:config"
 	ScopeWriteConfig      = "write:config"
 	ScopeReadCredentials  = "read:credentials"
@@ -75,7 +75,7 @@ var AllScopes = []string{
 	ScopeReadScans, ScopeWriteScans,
 	ScopeReadFindings, ScopeWriteFindings,
 	ScopeReadFixes, ScopeWriteFixes,
-	ScopeReadLoops, ScopeWriteLoops,
+	ScopeReadAgents, ScopeWriteAgents,
 	ScopeReadConfig, ScopeWriteConfig,
 	ScopeReadCredentials, ScopeWriteCredentials,
 	ScopeReadScannerSupplyChain,
@@ -191,7 +191,7 @@ func UserSessionForScannerPersonas(personas []string) ScopeSet {
 		ScopeReadScans, ScopeWriteScans,
 		ScopeReadFindings, ScopeWriteFindings,
 		ScopeReadFixes, ScopeWriteFixes,
-		ScopeReadLoops, ScopeWriteLoops,
+		ScopeReadAgents, ScopeWriteAgents,
 		ScopeReadConfig, ScopeWriteConfig,
 		ScopeReadCredentials, ScopeWriteCredentials,
 	}

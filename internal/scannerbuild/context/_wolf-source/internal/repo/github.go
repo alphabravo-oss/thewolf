@@ -82,6 +82,9 @@ func pullRepo(dir, token string) error {
 }
 
 func getCacheDir() (string, error) {
+	if root := os.Getenv("WOLF_WORKSPACE_ROOT"); root != "" {
+		return filepath.Join(root, ".wolf-cache", "repos"), nil
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("get home dir: %w", err)

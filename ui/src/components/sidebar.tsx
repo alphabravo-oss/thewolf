@@ -11,9 +11,7 @@ import {
   GaugeIcon,
   MenuIcon,
   XIcon,
-  WrenchIcon,
-  RepeatIcon,
-  ContainerIcon,
+  BotIcon,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { WolfLogo } from "./wolf-logo";
@@ -31,8 +29,7 @@ type NavItem = {
 // Navigation follows the folder model: you browse Collections -> a collection
 // -> a repo -> a scan -> its findings, so there is no top-level Repos item.
 // The cross-repo global lists (Scans, Findings) only make sense in a fleet
-// view, and the agentic surface (Fixes, Loops) only when autonomous fixing is
-// on, so both groups are gated by their feature flag.
+// view, and Agents only when autonomous fixing is on.
 function usePrimaryNav(): NavItem[] {
   const autofix = useFlag("autofix_enabled");
   const isAdmin = useIsAdmin();
@@ -48,14 +45,8 @@ function usePrimaryNav(): NavItem[] {
         ]
       : []),
     ...(autofix.enabled
-      ? [
-          { label: "Fixes", to: "/fixes", icon: WrenchIcon },
-          { label: "Loops", to: "/loops", icon: RepeatIcon },
-        ]
+      ? [{ label: "Agents", to: "/agents", icon: BotIcon }]
       : []),
-    // The scanner fleet is visible to every authenticated persona. Server
-    // scopes and the page capability boundary independently gate mutations.
-    { label: "Scanners", to: "/scanners", icon: ContainerIcon },
   ];
 }
 

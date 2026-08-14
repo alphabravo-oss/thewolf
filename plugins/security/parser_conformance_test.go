@@ -15,6 +15,8 @@ func TestAllSecurityParsersHostileCorpus(t *testing.T) {
 			return parseRenovateOutput(data, func(string) {})
 		},
 		"scorecard": parseScorecardOutput,
+		"zizmor":    parseZizmorOutput,
+		"poutine":   parsePoutineOutput,
 	} {
 		t.Run(tool, func(t *testing.T) { parsercontract.AssertHostileCases(t, tool, parser) })
 	}

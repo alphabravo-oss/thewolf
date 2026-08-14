@@ -99,6 +99,17 @@ func TestPrepareGitHubPublic(t *testing.T) {
 	if prep.Cleanup == nil {
 		t.Error("Cleanup must be non-nil even when cache is reused")
 	}
+
+	syncPrep, err := r.Sync(context.Background(), repo, "release")
+	if err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+	if got.branch != "release" {
+		t.Errorf("Sync branch = %q, want release", got.branch)
+	}
+	if syncPrep.SourceType != models.SourceTypeGitHub {
+		t.Errorf("Sync SourceType = %v", syncPrep.SourceType)
+	}
 }
 
 // TestPrepareGitHubPrivate — a github_token secret for the repo's user is
@@ -152,6 +163,64 @@ func TestPrepareGitHubPrivate(t *testing.T) {
 	}
 	if seenToken != plaintext {
 		t.Errorf("cloner saw token %q, want %q", seenToken, plaintext)
+	}
+}
+
+func TestPrepareGitHubUsesSelectedCredential(t *testing.T) {
+	store, err := db.NewSQLite(":memory:")
+	if err != nil {
+		t.Fatalf("NewSQLite: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	t.Setenv("WOLF_MASTER_KEY", strings.Repeat("cd", 32))
+	if err := secrets.LoadMasterKey(); err != nil {
+		t.Fatalf("LoadMasterKey: %v", err)
+	}
+
+	user := &models.User{ID: "u1", Email: "u@e.test", PasswordHash: "x"}
+	if err := store.CreateUser(context.Background(), user); err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+
+	for id, token := range map[string]string{
+		"first":    "ghp_first_token",
+		"selected": "ghp_selected_token",
+	} {
+		enc, err := secrets.Encrypt(token)
+		if err != nil {
+			t.Fatalf("Encrypt(%s): %v", id, err)
+		}
+		if err := store.CreateSecret(context.Background(), &models.Secret{
+			ID:             id,
+			UserID:         user.ID,
+			KeyType:        models.KeyTypeGitHubToken,
+			KeyName:        id,
+			EncryptedValue: enc,
+		}); err != nil {
+			t.Fatalf("CreateSecret(%s): %v", id, err)
+		}
+	}
+
+	var seenToken string
+	cloner := func(_, _, _, token string) (string, error) {
+		seenToken = token
+		return t.TempDir(), nil
+	}
+
+	r := Resolver{Store: store, GitHubCloner: cloner}
+	repo := &models.Repo{
+		ID: "r1", UserID: user.ID,
+		SourceType:         models.SourceTypeGitHub,
+		SourcePath:         "private-org/private-repo",
+		CredentialSecretID: "selected",
+	}
+
+	if _, err := r.Prepare(context.Background(), repo, "main"); err != nil {
+		t.Fatalf("Prepare: %v", err)
+	}
+	if seenToken != "ghp_selected_token" {
+		t.Errorf("cloner saw token %q, want selected token", seenToken)
 	}
 }
 

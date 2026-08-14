@@ -37,6 +37,10 @@ type Scan struct {
 	ReleaseManifestDigest  string     `json:"release_manifest_digest,omitempty" db:"release_manifest_digest"`
 	RescanOfScanID         string     `json:"rescan_of_scan_id,omitempty" db:"rescan_of_scan_id"`
 	ReleaseSelectionReason string     `json:"release_selection_reason,omitempty" db:"release_selection_reason"`
+	OriginScanID           string     `json:"origin_scan_id,omitempty" db:"origin_scan_id"`
+	PreviousScanID         string     `json:"previous_scan_id,omitempty" db:"previous_scan_id"`
+	RemediationID          string     `json:"remediation_id,omitempty" db:"remediation_id"`
+	FixJobID               string     `json:"fix_job_id,omitempty" db:"fix_job_id"`
 	SourceFingerprint      string     `json:"source_fingerprint,omitempty" db:"source_fingerprint"`
 	Profile                string     `json:"profile,omitempty" db:"profile"`
 	Categories             string     `json:"categories,omitempty" db:"categories"`

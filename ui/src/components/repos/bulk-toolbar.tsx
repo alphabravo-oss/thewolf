@@ -324,10 +324,12 @@ function DeleteDialog({
   onDone: () => void;
 }) {
   const qc = useQueryClient();
+  const [purge, setPurge] = useState(false);
   const run = useMutation({
     mutationFn: async () => {
+      const q = purge ? "?purge=true" : "";
       const results = await Promise.allSettled(
-        repos.map((r) => api.delete(`/repos/${r.id}`)),
+        repos.map((r) => api.delete(`/repos/${r.id}${q}`)),
       );
       const ok = results.filter((r) => r.status === "fulfilled").length;
       const failed = results.length - ok;
@@ -355,10 +357,26 @@ function DeleteDialog({
             Delete {repos.length} repo{repos.length === 1 ? "" : "s"}?
           </DialogTitle>
           <DialogDescription>
-            This removes the repo records and their scan history from wolf.
-            Source code on disk or in remote git hosts is not touched.
+            Repos that still have scans cannot be removed unless you also
+            delete their findings. Source code on disk or in git is not
+            touched.
           </DialogDescription>
         </DialogHeader>
+        <label className="flex items-start gap-3 rounded-md border border-border/50 bg-muted/20 p-3 text-sm">
+          <input
+            type="checkbox"
+            checked={purge}
+            onChange={(e) => setPurge(e.target.checked)}
+            className="mt-0.5"
+          />
+          <span>
+            <span className="font-medium">Also remove records</span>
+            <span className="mt-0.5 block text-xs text-muted-foreground">
+              Permanently delete scan history, findings, and artifacts for the
+              selected repos. Required if any selected repo still has scans.
+            </span>
+          </span>
+        </label>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose} disabled={run.isPending}>
             Cancel
@@ -366,9 +384,13 @@ function DeleteDialog({
           <Button
             variant="destructive"
             onClick={() => run.mutate()}
-            disabled={run.isPending}
+            disabled={run.isPending || !purge}
           >
-            {run.isPending ? "Deleting…" : "Delete"}
+            {run.isPending
+              ? "Deleting…"
+              : purge
+                ? "Delete and remove records"
+                : "Delete"}
           </Button>
         </DialogFooter>
       </DialogContent>

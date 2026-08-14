@@ -44,3 +44,21 @@ spec:
   resources:
     requests:
       storage: {{ .Values.postgres.storage }}
+{{- if .Values.fixer.enabled }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "wolf.fullname" . }}-fixer-home
+  labels:
+    {{- include "wolf.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    {{- toYaml .Values.fixer.home.accessModes | nindent 4 }}
+  {{- if .Values.fixer.home.storageClassName }}
+  storageClassName: {{ .Values.fixer.home.storageClassName | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.fixer.home.size }}
+{{- end }}

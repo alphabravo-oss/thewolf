@@ -158,9 +158,13 @@ helm upgrade --install wolf deploy/helm/wolf \
 
 For a headless deployment, add `--set apiOnly=true`. Set
 `image.repository`/`image.digest` for Wolf and
-`scanner.defaultImage`/`scanner.jvmImage`/`scanner.rustImage` for scanner
-images in your registry mirror. `scanner.codeqlImage` is empty by default
-because CodeQL licensing requires an operator-controlled local build.
+`scanner.defaultImage`/`scanner.jvmImage`/`scanner.rustImage`/
+`scanner.codeqlImage` for scanner images in your registry mirror.
+Set `scanner.dockerHubMirror=mirror.gcr.io` to route Docker Hub-hosted
+third-party scanner images through Google's public Docker Hub cache. That cache
+does not contain every image/tag, so authenticated Docker Hub pulls or a
+private pull-through cache are still the reliable options for strict
+production environments.
 The chart refuses a tag-only Wolf or PostgreSQL image by default.
 `image.allowMutableTag` and `postgres.allowMutableImage` are development-only
 escape hatches and should not be enabled in a qualified environment.

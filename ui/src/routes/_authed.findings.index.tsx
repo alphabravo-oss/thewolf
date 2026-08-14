@@ -1,312 +1,330 @@
-// Findings power-UX page:
-//   - Severity + status + search filters with saved views
-//   - Row multi-select with x to toggle, Shift+M to bulk-mark, Esc to clear
-//   - j/k vim-style navigation between rows
-//   - Enter opens the side-panel preview
-//   - / focuses the search box
-//
-// All keyboard handlers are registered on `document` so the user doesn't
-// need to focus the table first.
-import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { BugIcon } from "lucide-react";
-import { api } from "@/lib/api";
-import type { Finding } from "@/lib/types";
-import { TableSkeleton } from "@/components/skeleton";
+// Fleet findings inbox. Two views:
+//   - By repo: current-open counts per product (the working default)
+//   - By rule: the same CVE/rule across many products
+// Deep work stays on the scan page / repo current-findings list.
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useMemo, useState } from "react";
+import { BugIcon, ChevronDownIcon } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
+import { TableSkeleton } from "@/components/skeleton";
 import { SeverityBadge } from "@/components/severity-badge";
-import { FindingsToolbar } from "@/components/findings-toolbar";
-import { FindingPreview } from "@/components/finding-preview";
-import { useFindingsView } from "@/lib/store-views";
-import { severityRank } from "@/lib/severity";
-import { cn } from "@/lib/utils";
+import {
+  useFindingsByRepo,
+  useTopVulnerableRules,
+  type AggregateRow,
+} from "@/lib/fleet";
+import type { Severity } from "@/lib/types";
+
+type View = "repo" | "rule";
+
+// view is omitted for the default "by repo" inbox so /findings links
+// elsewhere do not have to pass search params.
+type Search = { view?: View; q?: string };
 
 export const Route = createFileRoute("/_authed/findings/")({
+  validateSearch: (s: Record<string, unknown>): Search => {
+    const view: View =
+      s.view === "rule" || typeof s.rule_id === "string" ? "rule" : "repo";
+    const q =
+      typeof s.q === "string"
+        ? s.q
+        : typeof s.rule_id === "string"
+          ? s.rule_id
+          : undefined;
+    return {
+      ...(view === "rule" ? { view } : {}),
+      ...(q ? { q } : {}),
+    };
+  },
   component: FindingsPage,
 });
 
 function FindingsPage() {
-  const q = useQuery({
-    queryKey: ["findings", "all"],
-    queryFn: async () => {
-      const r = await api.get<Finding[]>("/findings?limit=2000");
-      return r.data ?? [];
-    },
-  });
-
-  const view = useFindingsView();
-
-  // Category filter is ephemeral (resets each visit) and tracks what's
-  // *excluded* — empty set = show all. Kept out of the persisted
-  // useFindingsView store on purpose.
-  const [excludedCategories, setExcludedCategories] = useState<Set<string>>(
-    new Set(),
-  );
-  const toggleCategory = (c: string) => {
-    setExcludedCategories((prev) => {
-      const next = new Set(prev);
-      if (next.has(c)) next.delete(c);
-      else next.add(c);
-      return next;
-    });
-  };
-
-  // Distinct categories present across all findings, with counts.
-  const categoryCounts = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const f of q.data ?? []) m.set(f.category, (m.get(f.category) ?? 0) + 1);
-    return m;
-  }, [q.data]);
-
-  // Apply filters + sort by severity desc.
-  const filtered = useMemo(() => {
-    const src = q.data ?? [];
-    const needle = view.search.trim().toLowerCase();
-    return src
-      .filter((f) => view.severities.has(f.severity))
-      .filter((f) => !excludedCategories.has(f.category))
-      .filter((f) => (view.status ? f.status === view.status : true))
-      .filter((f) => {
-        if (!needle) return true;
-        return (
-          f.title.toLowerCase().includes(needle) ||
-          f.file_path.toLowerCase().includes(needle) ||
-          (f.rule_id?.toLowerCase().includes(needle) ?? false)
-        );
-      })
-      .sort((a, b) => severityRank[b.severity] - severityRank[a.severity]);
-  }, [q.data, view.search, view.severities, view.status, excludedCategories]);
-
-  // ---- selection state ---------------------------------------------------
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  function toggleSelect(id: string) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-  function clearSelection() {
-    setSelected(new Set());
-  }
-
-  // ---- cursor + preview --------------------------------------------------
-  const [cursor, setCursor] = useState(0);
-  const [preview, setPreview] = useState<Finding | null>(null);
-  const tableRef = useRef<HTMLTableElement>(null);
-
-  useEffect(() => {
-    // Clamp cursor when the filtered set changes.
-    if (cursor >= filtered.length) setCursor(Math.max(0, filtered.length - 1));
-  }, [filtered.length, cursor]);
-
-  // ---- keyboard handlers -------------------------------------------------
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      const tgt = e.target as HTMLElement | null;
-      const inField =
-        tgt &&
-        (tgt.tagName === "INPUT" ||
-          tgt.tagName === "TEXTAREA" ||
-          tgt.tagName === "SELECT" ||
-          tgt.isContentEditable);
-
-      // `/` focuses search (only outside an input).
-      if (!inField && e.key === "/") {
-        e.preventDefault();
-        const inp = document.querySelector<HTMLInputElement>(
-          "input[placeholder='Search title or file…']",
-        );
-        inp?.focus();
-        return;
-      }
-
-      // Esc → close preview / clear selection.
-      if (e.key === "Escape") {
-        if (preview) {
-          setPreview(null);
-          return;
-        }
-        if (selected.size > 0) {
-          clearSelection();
-          return;
-        }
-      }
-
-      if (inField) return; // remaining shortcuts only outside fields
-
-      // j / ArrowDown — next row.
-      if (e.key === "j" || e.key === "ArrowDown") {
-        e.preventDefault();
-        setCursor((c) => Math.min(filtered.length - 1, c + 1));
-        return;
-      }
-      // k / ArrowUp — previous.
-      if (e.key === "k" || e.key === "ArrowUp") {
-        e.preventDefault();
-        setCursor((c) => Math.max(0, c - 1));
-        return;
-      }
-      // Enter — open preview for the cursor.
-      if (e.key === "Enter") {
-        const f = filtered[cursor];
-        if (f) {
-          e.preventDefault();
-          setPreview(f);
-        }
-        return;
-      }
-      // x — toggle selection on cursor.
-      if (e.key === "x" || e.key === "X") {
-        const f = filtered[cursor];
-        if (f) {
-          e.preventDefault();
-          toggleSelect(f.id);
-        }
-        return;
-      }
-      // Shift+M — surface the bulk-action bar (already visible if selection
-      // is non-empty; this key is a hint for users who don't see it).
-      if (e.key === "M" && e.shiftKey && selected.size > 0) {
-        e.preventDefault();
-        // No-op beyond scrolling the toolbar into view.
-        window.scrollTo({ top: 0, behavior: "smooth" });
-      }
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [filtered, cursor, preview, selected.size]);
-
-  // Scroll the cursor row into view.
-  useEffect(() => {
-    const row = tableRef.current?.querySelector<HTMLTableRowElement>(
-      `tr[data-row='${cursor}']`,
-    );
-    row?.scrollIntoView({ block: "nearest" });
-  }, [cursor]);
+  const params = Route.useSearch();
+  const view: View = params.view === "rule" ? "rule" : "repo";
+  const q = params.q;
+  const navigate = Route.useNavigate();
+  const [search, setSearch] = useState(q ?? "");
+  const needle = search.trim().toLowerCase();
 
   return (
     <div className="page stack">
-      <header>
-        <h1 className="text-2xl font-semibold tracking-tight">Findings</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          {filtered.length} of {q.data?.length ?? 0} · use{" "}
-          <kbd className="text-2xs px-1 rounded bg-muted/60">j</kbd>/
-          <kbd className="text-2xs px-1 rounded bg-muted/60">k</kbd> to
-          navigate,{" "}
-          <kbd className="text-2xs px-1 rounded bg-muted/60">Enter</kbd> to
-          preview,{" "}
-          <kbd className="text-2xs px-1 rounded bg-muted/60">x</kbd> to select.
-        </p>
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Findings</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Current open issues across the fleet. Work a product from its repo
+            or scan page — this list is the inbox, not a merge of every scan.
+          </p>
+        </div>
+        <div className="flex items-center gap-1.5">
+          {(
+            [
+              ["repo", "By repo"],
+              ["rule", "By rule"],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() =>
+                navigate({
+                  search: id === "rule" ? { view: "rule", q } : { q },
+                })
+              }
+              className={
+                "h-8 px-3 rounded-md text-xs border " +
+                (view === id
+                  ? "bg-primary/15 border-primary/40 text-foreground"
+                  : "border-border/40 text-muted-foreground hover:bg-muted/30")
+              }
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </header>
 
-      <FindingsToolbar
-        selectedIds={Array.from(selected)}
-        onClearSelection={clearSelection}
-        categoryCounts={categoryCounts}
-        excludedCategories={excludedCategories}
-        onToggleCategory={toggleCategory}
+      <input
+        type="search"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder={
+          view === "repo" ? "Filter repos…" : "Filter rules, CVEs, titles…"
+        }
+        className="h-9 max-w-md px-3 rounded-md bg-muted/40 border border-border/40 text-sm"
       />
 
-      {q.isLoading ? (
-        <TableSkeleton rows={12} />
-      ) : filtered.length === 0 ? (
-        <EmptyState
-          icon={BugIcon}
-          title={q.data && q.data.length > 0 ? "No findings match filters" : "No findings yet"}
-          description={
-            q.data && q.data.length > 0
-              ? "Clear or adjust your filters above."
-              : "Run a scan and findings will land here."
-          }
-          cta={
-            q.data && q.data.length > 0
-              ? { label: "Clear filters", onClick: () => view.reset() }
-              : { label: "Go to scans", to: "/scans" }
-          }
-        />
+      {view === "repo" ? (
+        <ByRepo needle={needle} />
       ) : (
-        <div className="glass-card overflow-hidden">
-          <table ref={tableRef} className="w-full text-sm">
-            <thead className="text-xs uppercase tracking-wide text-muted-foreground bg-muted/20">
-              <tr>
-                <th className="w-8 px-3 py-2">
-                  <input
-                    type="checkbox"
-                    aria-label="Select all"
-                    checked={
-                      selected.size > 0 && selected.size === filtered.length
-                    }
-                    onChange={(e) =>
-                      setSelected(
-                        e.target.checked
-                          ? new Set(filtered.map((f) => f.id))
-                          : new Set(),
-                      )
-                    }
-                    className="size-3.5 accent-blue-500"
-                  />
-                </th>
-                <th className="text-left px-4 py-2 font-medium">Severity</th>
-                <th className="text-left px-4 py-2 font-medium">Tool</th>
-                <th className="text-left px-4 py-2 font-medium">Title</th>
-                <th className="text-left px-4 py-2 font-medium">File</th>
-                <th className="text-left px-4 py-2 font-medium">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((f, i) => (
-                <tr
-                  key={f.id}
-                  data-row={i}
-                  onClick={() => {
-                    setCursor(i);
-                    setPreview(f);
-                  }}
-                  className={cn(
-                    "border-t border-l-2 border-border/30 table-row-hover cursor-pointer",
-                    selected.has(f.id) && "bg-blue-500/5",
-                    cursor === i && "ring-1 ring-inset ring-blue-500/40",
-                  )}
-                >
-                  <td
-                    className="px-3 py-2"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleSelect(f.id);
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      aria-label={`Select ${f.title}`}
-                      checked={selected.has(f.id)}
-                      onChange={() => toggleSelect(f.id)}
-                      className="size-3.5 accent-blue-500"
-                    />
-                  </td>
-                  <td className="px-4 py-2">
-                    <SeverityBadge severity={f.severity} />
-                  </td>
-                  <td className="px-4 py-2 font-mono text-xs text-muted-foreground">
-                    {f.tool_name}
-                  </td>
-                  <td className="px-4 py-2">{f.title}</td>
-                  <td className="px-4 py-2 font-mono text-xs text-muted-foreground truncate max-w-xs">
-                    {f.file_path}
-                  </td>
-                  <td className="px-4 py-2 text-muted-foreground">
-                    {f.status}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <ByRule needle={needle} />
       )}
-
-      <FindingPreview finding={preview} onClose={() => setPreview(null)} />
     </div>
+  );
+}
+
+function ByRepo({ needle }: { needle: string }) {
+  const q = useFindingsByRepo();
+  const rows = useMemo(() => {
+    const src = q.data ?? [];
+    if (!needle) return src;
+    return src.filter((r) => r.name.toLowerCase().includes(needle));
+  }, [q.data, needle]);
+  const totals = useMemo(() => {
+    return rows.reduce(
+      (a, r) => ({
+        repos: a.repos + 1,
+        total: a.total + r.total,
+        critical: a.critical + r.critical,
+        high: a.high + r.high,
+      }),
+      { repos: 0, total: 0, critical: 0, high: 0 },
+    );
+  }, [rows]);
+
+  if (q.isLoading) return <TableSkeleton rows={8} />;
+  if (rows.length === 0) {
+    return (
+      <EmptyState
+        icon={BugIcon}
+        title={q.data && q.data.length > 0 ? "No repos match" : "No open findings"}
+        description={
+          q.data && q.data.length > 0
+            ? "Clear the filter."
+            : "Run a scan and current-open findings land here, grouped by product."
+        }
+        cta={
+          q.data && q.data.length > 0
+            ? undefined
+            : { label: "Go to repos", to: "/repos" }
+        }
+      />
+    );
+  }
+
+  return (
+    <div className="glass-card overflow-hidden">
+      <div className="px-4 py-2 text-xs text-muted-foreground border-b border-border/20">
+        {totals.repos} repo{totals.repos === 1 ? "" : "s"} ·{" "}
+        {totals.total.toLocaleString()} open · {totals.critical} critical ·{" "}
+        {totals.high} high
+      </div>
+      <table className="w-full text-sm">
+        <thead className="text-xs uppercase tracking-wide text-muted-foreground bg-muted/20">
+          <tr>
+            <th className="text-left px-4 py-2">Repo</th>
+            <th className="text-right px-4 py-2">Crit</th>
+            <th className="text-right px-4 py-2">High</th>
+            <th className="text-right px-4 py-2">Med</th>
+            <th className="text-right px-4 py-2">Low</th>
+            <th className="text-right px-4 py-2">Info</th>
+            <th className="text-right px-4 py-2">Open</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.repo_id} className="border-t border-border/20 hover:bg-muted/20">
+              <td className="px-4 py-2">
+                <Link
+                  to="/repos/$repoId"
+                  params={{ repoId: r.repo_id }}
+                  className="hover:underline font-medium"
+                >
+                  {r.name}
+                </Link>
+              </td>
+              <SevCell n={r.critical} tone="crit" />
+              <SevCell n={r.high} tone="high" />
+              <SevCell n={r.medium} />
+              <SevCell n={r.low} />
+              <SevCell n={r.info} />
+              <td className="px-4 py-2 text-right tabular-nums font-medium">
+                {r.total.toLocaleString()}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ByRule({ needle }: { needle: string }) {
+  const q = useTopVulnerableRules(100);
+  const [open, setOpen] = useState<string | null>(null);
+  const rows = useMemo(() => {
+    const src = q.data ?? [];
+    if (!needle) return src;
+    return src.filter((r) => {
+      const blob = `${r.key} ${r.title ?? ""} ${r.tool ?? ""} ${(r.repo_names ?? []).join(" ")}`.toLowerCase();
+      return blob.includes(needle);
+    });
+  }, [q.data, needle]);
+
+  if (q.isLoading) return <TableSkeleton rows={8} />;
+  if (rows.length === 0) {
+    return (
+      <EmptyState
+        icon={BugIcon}
+        title={q.data && q.data.length > 0 ? "No rules match" : "No shared rules yet"}
+        description="Rules that show up in more than one product appear here first."
+      />
+    );
+  }
+
+  return (
+    <div className="glass-card overflow-hidden">
+      <div className="px-4 py-2 text-xs text-muted-foreground border-b border-border/20">
+        Same rule or CVE across products. Sorted by how many repos have it.
+      </div>
+      <table className="w-full text-sm">
+        <thead className="text-xs uppercase tracking-wide text-muted-foreground bg-muted/20">
+          <tr>
+            <th className="text-left px-4 py-2">Rule</th>
+            <th className="text-left px-4 py-2">Tool</th>
+            <th className="text-left px-4 py-2">Severity</th>
+            <th className="text-right px-4 py-2">Repos</th>
+            <th className="text-right px-4 py-2">Open</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <RuleRows
+              key={r.key}
+              row={r}
+              expanded={open === r.key}
+              onToggle={() => setOpen((cur) => (cur === r.key ? null : r.key))}
+            />
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function RuleRows({
+  row,
+  expanded,
+  onToggle,
+}: {
+  row: AggregateRow;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <>
+      <tr
+        className="border-t border-border/20 hover:bg-muted/20 cursor-pointer"
+        onClick={onToggle}
+      >
+        <td className="px-4 py-2">
+          <div className="flex items-start gap-2">
+            <ChevronDownIcon
+              className={`size-3.5 mt-0.5 text-muted-foreground shrink-0 transition-transform ${
+                expanded ? "" : "-rotate-90"
+              }`}
+            />
+            <div className="min-w-0">
+              <div className="font-mono text-xs truncate">{row.key}</div>
+              {row.title && row.title !== row.key ? (
+                <div className="text-[11px] text-muted-foreground truncate">
+                  {row.title}
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </td>
+        <td className="px-4 py-2 font-mono text-xs text-muted-foreground">
+          {row.tool || "—"}
+        </td>
+        <td className="px-4 py-2">
+          {row.severity ? (
+            <SeverityBadge severity={row.severity as Severity} />
+          ) : (
+            "—"
+          )}
+        </td>
+        <td className="px-4 py-2 text-right tabular-nums">{row.repos}</td>
+        <td className="px-4 py-2 text-right tabular-nums">
+          {row.findings.toLocaleString()}
+        </td>
+      </tr>
+      {expanded && (
+        <tr className="border-t border-border/10 bg-muted/10">
+          <td colSpan={5} className="px-10 py-2 text-xs">
+            <div className="flex flex-wrap gap-2">
+              {(row.repo_ids ?? []).map((id, i) => (
+                <Link
+                  key={id}
+                  to="/repos/$repoId"
+                  params={{ repoId: id }}
+                  className="hover:underline font-medium"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {row.repo_names?.[i] || id.slice(0, 8)}
+                </Link>
+              ))}
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
+function SevCell({ n, tone }: { n: number; tone?: "crit" | "high" }) {
+  const cls =
+    n === 0
+      ? "text-muted-foreground/40"
+      : tone === "crit"
+        ? "text-rose-300"
+        : tone === "high"
+          ? "text-amber-300"
+          : "";
+  return (
+    <td className={`px-4 py-2 text-right tabular-nums ${cls}`}>
+      {n || "—"}
+    </td>
   );
 }

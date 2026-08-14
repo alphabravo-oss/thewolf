@@ -60,6 +60,14 @@
         }
       }
     },
+    "scanner": {
+      "type": "object",
+      "properties": {
+        "dockerHubMirror": {
+          "type": "string"
+        }
+      }
+    },
     "scannerRelease": {
       "type": "object",
       "properties": {

@@ -2,32 +2,17 @@ package container
 
 import "testing"
 
-func TestIsLocalOnlyImage(t *testing.T) {
-	cases := map[string]bool{
-		"alphabravodevops/wolf-scanners-codeql:2.0.0": true,
-		"alphabravodevops/wolf-scanners-codeql":       true, // no tag
-		"localhost:5000/wolf-scanners-codeql:dev":     true, // registry host:port
-		"alphabravodevops/wolf-scanners:2.0.0":        false,
-		"alphabravodevops/wolf-scanners-jvm:2.0.0":    false,
-		"alphabravodevops/wolf-scanners-rust:2.0.0":   false,
-		"": false,
-	}
-	for ref, want := range cases {
-		if got := IsLocalOnlyImage(ref); got != want {
-			t.Errorf("IsLocalOnlyImage(%q) = %v, want %v", ref, got, want)
-		}
-	}
-}
-
 func TestDefaultBucketImages(t *testing.T) {
 	m := DefaultBucketImages("ghcr.io/x/wolf-scanners", "2.0")
 
 	cases := map[string]string{
-		"detekt": "ghcr.io/x/wolf-scanners-jvm:2.0",
-		"infer":  "ghcr.io/x/wolf-scanners-jvm:2.0",
-		"pmd":    "ghcr.io/x/wolf-scanners-jvm:2.0",
-		"clippy": "ghcr.io/x/wolf-scanners-rust:2.0",
-		"codeql": "ghcr.io/x/wolf-scanners-codeql:2.0",
+		"detekt":      "ghcr.io/x/wolf-scanners-jvm:2.0",
+		"infer":       "ghcr.io/x/wolf-scanners-jvm:2.0",
+		"pmd":         "ghcr.io/x/wolf-scanners-jvm:2.0",
+		"clippy":      "ghcr.io/x/wolf-scanners-rust:2.0",
+		"cargo-audit": "ghcr.io/x/wolf-scanners-rust:2.0",
+		"cargo-deny":  "ghcr.io/x/wolf-scanners-rust:2.0",
+		"codeql":      "ghcr.io/x/wolf-scanners-codeql:2.0",
 	}
 	for tool, want := range cases {
 		got, ok := m[tool]

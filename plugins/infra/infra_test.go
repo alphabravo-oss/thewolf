@@ -73,6 +73,48 @@ func TestParseKubeLinterOutput(t *testing.T) {
 	}
 }
 
+func TestParseKubescapeOutputObjectStatus(t *testing.T) {
+	// Current kubescape-cli emits status as an object, not a string.
+	data := []byte(`{
+		"results": [
+			{
+				"resourceID": "default/Deployment/nginx",
+				"controls": [
+					{
+						"controlID": "C-0034",
+						"name": "Automatic mapping of service account",
+						"status": {"status": "failed", "subStatus": "", "info": ""},
+						"severity": {"scoreFactor": 7.0}
+					},
+					{
+						"controlID": "C-0001",
+						"name": "Passed control",
+						"status": {"status": "passed"},
+						"severity": {"scoreFactor": 3.0}
+					},
+					{
+						"controlID": "C-0002",
+						"name": "Skipped control",
+						"status": {"status": "skipped", "info": "not relevant"},
+						"severity": {"scoreFactor": 5.0}
+					}
+				]
+			}
+		]
+	}`)
+
+	findings, err := parseKubescapeOutput(data)
+	if err != nil {
+		t.Fatalf("parseKubescapeOutput returned error: %v", err)
+	}
+	if len(findings) != 1 {
+		t.Fatalf("expected 1 finding, got %d", len(findings))
+	}
+	if findings[0].RuleID != "C-0034" {
+		t.Errorf("rule = %s", findings[0].RuleID)
+	}
+}
+
 func TestParseKubescapeOutput(t *testing.T) {
 	data := []byte(`{
 		"results": [

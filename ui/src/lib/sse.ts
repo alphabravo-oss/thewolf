@@ -3,7 +3,7 @@
 // event to callers via state + a callback.
 import { useEffect, useRef, useCallback, useState } from "react";
 
-const BASE_URL = import.meta.env.VITE_API_URL ?? "/api";
+const BASE_URL = import.meta.env.VITE_API_URL ?? "/api/v1";
 
 interface UseSSEOptions<T> {
   path: string;

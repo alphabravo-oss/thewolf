@@ -160,14 +160,15 @@ func runScannerCustomBuildRepositoryContract(
 		t.Fatalf("conflicting replay error = %v", err)
 	}
 
-	if _, _, err := repository.CreateCustomBuild(ctx, scannerrelease.CustomBuildCreateRequest{
+	codeQLInventory, created, err := repository.CreateCustomBuild(ctx, scannerrelease.CustomBuildCreateRequest{
 		UserID: "user", Variants: []string{"codeql"}, Push: true,
 		Platforms: []string{"linux/amd64", "linux/arm64"},
 		Namespace: "registry", SecretReference: "opaque-secret",
-		Actor: "operator", Reason: "forbidden distribution",
+		Actor: "operator", Reason: "registry publication",
 		IdempotencyKey: "codeql-push-" + uuid.NewString(),
-	}); err == nil || !strings.Contains(err.Error(), "local-only") {
-		t.Fatalf("CodeQL push error = %v", err)
+	})
+	if err != nil || !created || codeQLInventory.Build.ID == "" {
+		t.Fatalf("CodeQL push inventory = %#v created=%t err=%v", codeQLInventory, created, err)
 	}
 	if _, _, err := repository.CreateCustomBuild(ctx, scannerrelease.CustomBuildCreateRequest{
 		UserID: "user", Variants: []string{"default"}, Push: false,

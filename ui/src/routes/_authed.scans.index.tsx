@@ -11,6 +11,14 @@ import { TableSkeleton } from "@/components/skeleton";
 import { EmptyState } from "@/components/empty-state";
 import { BranchSelect } from "@/components/branch-select";
 import { ScanStatusPill } from "@/components/scan-status-pill";
+import { StatusBadge } from "@/components/fixes/status-badge";
+import {
+  isFixPaused,
+  useFixJobs,
+  type FixJob,
+  type FixJobStatus,
+} from "@/lib/fixes";
+
 
 export const Route = createFileRoute("/_authed/scans/")({
   component: ScansPage,
@@ -30,16 +38,114 @@ function formatDuration(
   return `${m}m ${s}s`;
 }
 
+const ORIGIN_FROM_BRANCH =
+  /wolf-fix\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i;
+
+function jobScanKeys(job: FixJob): string[] {
+  const keys = new Set<string>();
+  if (job.scan_id) keys.add(job.scan_id);
+  const branch = job.result_branch || job.target_branch || "";
+  const m = ORIGIN_FROM_BRANCH.exec(branch);
+  if (m) keys.add(m[1]);
+  return [...keys];
+}
+
+function jobsByScan(
+  jobs: FixJob[] | undefined,
+  scans: Scan[] | undefined,
+): Map<string, FixJob[]> {
+  const originOf = new Map<string, string>();
+  for (const s of scans ?? []) {
+    originOf.set(s.id, s.origin_scan_id || s.id);
+  }
+  const m = new Map<string, FixJob[]>();
+  const add = (key: string, job: FixJob) => {
+    const list = m.get(key) ?? [];
+    if (list.some((j) => j.id === job.id)) return;
+    list.push(job);
+    m.set(key, list);
+  };
+  for (const j of jobs ?? []) {
+    for (const key of jobScanKeys(j)) {
+      add(key, j);
+      const origin = originOf.get(key);
+      if (origin) add(origin, j);
+    }
+  }
+  for (const list of m.values()) {
+    list.sort(
+      (a, b) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+    );
+  }
+  return m;
+}
+
+function primaryJob(jobs: FixJob[]): FixJob | undefined {
+  return (
+    jobs.find((j) =>
+      ["running", "claimed", "queued"].includes(j.status),
+    ) ??
+    jobs.find((j) => isFixPaused(j.status)) ??
+    jobs.find((j) => j.status !== "superseded") ??
+    jobs[0]
+  );
+}
+
+function ScanAgentsCell({ jobs }: { jobs: FixJob[] }) {
+  const job = primaryJob(jobs);
+  if (!job) {
+    return <span className="text-muted-foreground">—</span>;
+  }
+  const runs = jobs.length;
+  const planned = job.planned_runs || 1;
+  const extra =
+    runs > 1
+      ? `${runs} runs`
+      : planned > 1
+        ? `run ${job.run_index || 1}/${planned}`
+        : "1 run";
+  return (
+    <Link
+      to="/agents/$agentId"
+      params={{ agentId: job.id }}
+      className="inline-flex flex-col gap-0.5 min-w-0 hover:opacity-90"
+      title={`${runs} agent run${runs === 1 ? "" : "s"}`}
+    >
+      <span className="inline-flex items-center gap-1.5 min-w-0">
+        <StatusBadge status={job.status as FixJobStatus} />
+      </span>
+      <span className="text-[10px] text-muted-foreground tabular-nums">
+        {extra}
+        {job.pushed ? " · pushed" : ""}
+      </span>
+    </Link>
+  );
+}
+
 function ScansPage() {
   const [showForm, setShowForm] = useState(false);
   const q = useQuery({
     queryKey: ["scans", "list"],
+    queryFn: async () => {
+      const r = await api.get<Scan[]>("/scans?limit=200&roots=1");
+      return r.data ?? [];
+    },
+    refetchInterval: 10_000,
+  });
+  const jobsQ = useFixJobs();
+  const childScansQ = useQuery({
+    queryKey: ["scans", "for-agent-lineage"],
     queryFn: async () => {
       const r = await api.get<Scan[]>("/scans?limit=200");
       return r.data ?? [];
     },
     refetchInterval: 10_000,
   });
+  const byScan = jobsByScan(jobsQ.data, [
+    ...(q.data ?? []),
+    ...(childScansQ.data ?? []),
+  ]);
 
   return (
     <div className="page stack">
@@ -82,6 +188,7 @@ function ScansPage() {
                 </th>
                 <th className="text-left font-medium px-4 py-2">Tools</th>
                 <th className="text-right font-medium px-4 py-2">Findings</th>
+                <th className="text-left font-medium px-4 py-2">Agents</th>
                 <th className="text-left font-medium px-4 py-2">Started</th>
                 <th className="text-right font-medium px-4 py-2">Duration</th>
               </tr>
@@ -134,6 +241,9 @@ function ScansPage() {
                     </td>
                     <td className="px-4 py-2 text-right font-mono tabular-nums">
                       {s.finding_count.toLocaleString()}
+                    </td>
+                    <td className="px-4 py-2">
+                      <ScanAgentsCell jobs={byScan.get(s.id) ?? []} />
                     </td>
                     <td className="px-4 py-2 text-xs text-muted-foreground">
                       {s.started_at

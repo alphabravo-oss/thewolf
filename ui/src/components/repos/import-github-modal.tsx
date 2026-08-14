@@ -1,14 +1,13 @@
-// Multi-step GitHub import wizard. Picks a github_token secret, asks GitHub
-// for every repo in an org (or user account), lets the operator multi-select
-// from the result, then fans out POST /repos calls — optionally tagging the
-// new repos into a chosen collection. The modal stays on the screen until
-// every import finishes so the user can see partial-failure counts.
+// Multi-step GitHub import wizard. Picks a github_token secret, lists every
+// project that token can read, lets the operator multi-select, then fans out
+// POST /repos calls — optionally tagging the new repos into a collection.
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Loader2Icon } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import { GitHubTokenHelp } from "@/components/github-token-help";
 import type { Collection, Repo } from "@/lib/types";
 
 // Server returns the masked-secret shape (see internal/api/routes/config.go).
@@ -32,7 +31,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Table,
@@ -43,7 +41,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-type Step = "credential" | "org" | "select" | "target";
+type Step = "credential" | "select" | "target";
 
 interface GitHubRepo {
   name: string;
@@ -58,7 +56,6 @@ export function ImportGitHubModal({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient();
   const [step, setStep] = useState<Step>("credential");
   const [secretId, setSecretId] = useState<string>("");
-  const [org, setOrg] = useState<string>("");
   const [repos, setRepos] = useState<GitHubRepo[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [collectionId, setCollectionId] = useState<string>("");
@@ -83,7 +80,6 @@ export function ImportGitHubModal({ onClose }: { onClose: () => void }) {
   const listMut = useMutation({
     mutationFn: async () => {
       const r = await api.post<GitHubRepo[]>("/sources/github/list-org-repos", {
-        org: org.trim(),
         secret_id: secretId || undefined,
       });
       return r.data ?? [];
@@ -118,6 +114,7 @@ export function ImportGitHubModal({ onClose }: { onClose: () => void }) {
             name: r.name,
             source_type: "github",
             source_path: r.full_name,
+            credential_secret_id: secretId || undefined,
             default_branch: r.default_branch || "main",
           });
           if (collectionId && created.data?.id) {
@@ -171,7 +168,7 @@ export function ImportGitHubModal({ onClose }: { onClose: () => void }) {
         <DialogHeader>
           <DialogTitle>Import from GitHub</DialogTitle>
           <DialogDescription>
-            Pick a credential, list an org's repos, then bulk-import the ones you want to track.
+            Pick a GitHub token. Wolf lists every project that token can read.
           </DialogDescription>
         </DialogHeader>
 
@@ -223,31 +220,7 @@ export function ImportGitHubModal({ onClose }: { onClose: () => void }) {
                 </div>
               </div>
             )}
-          </div>
-        )}
-
-        {step === "org" && (
-          <div className="space-y-3 py-2">
-            <div className="space-y-1">
-              <Label htmlFor="gh-org" className="text-xs">
-                GitHub org or user
-              </Label>
-              <Input
-                id="gh-org"
-                value={org}
-                onChange={(e) => setOrg(e.target.value)}
-                placeholder="acme"
-                autoFocus
-              />
-              <p className="text-xs text-muted-foreground">
-                We try the org endpoint first; if that 404s we fall back to /users.
-              </p>
-            </div>
-            {listMut.isError && (
-              <div className="text-xs text-destructive">
-                {listMut.error instanceof Error ? listMut.error.message : "Failed"}
-              </div>
-            )}
+            <GitHubTokenHelp compact />
           </div>
         )}
 
@@ -403,35 +376,22 @@ export function ImportGitHubModal({ onClose }: { onClose: () => void }) {
                 Cancel
               </Button>
               <Button
-                onClick={() => setStep("org")}
-                disabled={!secretId}
-              >
-                Next
-              </Button>
-            </>
-          )}
-          {step === "org" && (
-            <>
-              <Button variant="ghost" onClick={() => setStep("credential")}>
-                Back
-              </Button>
-              <Button
                 onClick={() => listMut.mutate()}
-                disabled={!org.trim() || listMut.isPending}
+                disabled={!secretId || listMut.isPending}
               >
                 {listMut.isPending ? (
                   <>
                     <Loader2Icon className="size-3.5 animate-spin" /> Loading…
                   </>
                 ) : (
-                  "List repos"
+                  "List projects"
                 )}
               </Button>
             </>
           )}
           {step === "select" && (
             <>
-              <Button variant="ghost" onClick={() => setStep("org")}>
+              <Button variant="ghost" onClick={() => setStep("credential")}>
                 Back
               </Button>
               <Button

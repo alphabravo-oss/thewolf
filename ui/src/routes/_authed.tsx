@@ -3,11 +3,13 @@
 // no token is present.
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { AppShell } from "@/components/app-shell";
-import { hasSession } from "@/lib/api";
+import { waitForSession } from "@/lib/api";
 
 export const Route = createFileRoute("/_authed")({
   beforeLoad: async ({ location }) => {
-    if (!(await hasSession())) {
+    const status = await waitForSession();
+    // API down during a deploy is not a logout. Stay put; queries will retry.
+    if (status === "none") {
       throw redirect({
         to: "/login",
         search: { from: location.pathname },

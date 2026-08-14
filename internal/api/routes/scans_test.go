@@ -53,12 +53,17 @@ func setupTestEnv(t *testing.T) *testEnv {
 		r.Use(auth.Middleware)
 		// Repos
 		r.Post("/api/repos", routes.CreateRepo)
+		r.Delete("/api/repos/{id}", routes.DeleteRepo)
+		r.Post("/api/collections", routes.CreateCollection)
+		r.Delete("/api/collections/{id}", routes.DeleteCollection)
 		r.Get("/api/repos/{id}/baselines", routes.ListRepoBaselines)
 		r.Post("/api/repos/{id}/baselines", routes.CreateRepoBaseline)
 		// Scans
 		r.Post("/api/scans", routes.CreateScan)
 		r.Post("/api/scans/preflight", routes.ScanPreflight)
 		r.Get("/api/scans", routes.ListScans)
+		r.Get("/api/scans/orphans", routes.ListOrphanScans)
+		r.Delete("/api/scans/orphans", routes.PurgeOrphanScans)
 		r.Get("/api/scans/{id}", routes.GetScan)
 		r.Get("/api/scans/{id}/findings", routes.GetScanFindings)
 		r.Get("/api/scans/{id}/manifest", routes.GetScanManifest)
@@ -98,17 +103,26 @@ func setupTestEnv(t *testing.T) *testEnv {
 		// Fixes
 		r.Post("/api/fixes", routes.CreateFix)
 		r.Get("/api/fixes", routes.ListFixes)
+		r.Get("/api/fixes/engines", routes.ListFixEngines)
+		r.Post("/api/fixes/consoles", routes.CreateFixerConsole)
+		r.Get("/api/fixes/consoles/{id}", routes.GetFixerConsole)
+		r.Get("/api/fixes/consoles/{id}/stream", routes.StreamFixerConsole)
+		r.Post("/api/fixes/consoles/{id}/input", routes.InputFixerConsole)
+		r.Delete("/api/fixes/consoles/{id}", routes.CancelFixerConsole)
+		r.Get("/api/scans/{id}/lineage", routes.GetScanLineage)
+		r.Post("/api/remediations/{id}/accept", routes.AcceptRemediation)
 		r.Get("/api/fixes/{id}", routes.GetFix)
 		r.Get("/api/fixes/{id}/diff", routes.GetFixDiff)
+		r.Post("/api/fixes/{id}/resume", routes.ResumeFix)
 		r.Delete("/api/fixes/{id}", routes.CancelFix)
-		// Loops
-		r.Get("/api/loops", routes.ListLoops)
-		r.Get("/api/loops/{id}", routes.GetLoop)
+		// Agents
+
 		// Fleet aggregates
 		r.Get("/api/fleet/posture", routes.FleetPosture)
 		r.Get("/api/fleet/inventory", routes.FleetInventory)
 		r.Get("/api/fleet/needs-attention", routes.FleetNeedsAttention)
 		r.Get("/api/findings/aggregate", routes.FindingsAggregate)
+		r.Get("/api/findings/by-repo", routes.FindingsByRepo)
 	})
 
 	// Register user
@@ -1850,6 +1864,92 @@ func TestListFixes(t *testing.T) {
 	}
 }
 
+func TestQueuedBehindOnListAndGet(t *testing.T) {
+	env := setupTestEnv(t)
+	defer env.Store.Close()
+
+	repoID := env.createRepo(t)
+	now := time.Now().UTC()
+	runningID := uuid.New().String()
+	queuedID := uuid.New().String()
+	if err := env.Store.EnqueueFixJob(context.Background(), &models.FixJob{
+		ID: runningID, UserID: env.UserID, Type: "fix", RepoID: repoID,
+		Status: models.FixJobQueued, Mode: models.FixModeDryRun,
+		CreatedAt: now.Add(-time.Minute), UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("enqueue running: %v", err)
+	}
+	runJob, err := env.Store.GetFixJobByID(context.Background(), runningID)
+	if err != nil || runJob == nil {
+		t.Fatalf("load: %v", err)
+	}
+	runJob.Status = models.FixJobRunning
+	started := now.Add(-30 * time.Second)
+	runJob.StartedAt = &started
+	if err := env.Store.UpdateFixJob(context.Background(), runJob); err != nil {
+		t.Fatalf("mark running: %v", err)
+	}
+	if err := env.Store.EnqueueFixJob(context.Background(), &models.FixJob{
+		ID: queuedID, UserID: env.UserID, Type: "fix", RepoID: repoID,
+		Status: models.FixJobQueued, Mode: models.FixModeDryRun,
+		CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("enqueue queued: %v", err)
+	}
+
+	w := env.doRequest(http.MethodGet, "/api/fixes", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("list %d: %s", w.Code, w.Body.String())
+	}
+	var list struct {
+		Data []struct {
+			ID           string `json:"id"`
+			Status       string `json:"status"`
+			QueuedBehind *struct {
+				ID   string `json:"id"`
+				Kind string `json:"kind"`
+			} `json:"queued_behind"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &list); err != nil {
+		t.Fatal(err)
+	}
+	var found bool
+	for _, j := range list.Data {
+		if j.ID == queuedID {
+			found = true
+			if j.QueuedBehind == nil || j.QueuedBehind.ID != runningID || j.QueuedBehind.Kind != "job" {
+				t.Fatalf("queued_behind = %+v, want job %s", j.QueuedBehind, runningID)
+			}
+		}
+		if j.ID == runningID && j.QueuedBehind != nil {
+			t.Fatal("running job should not have queued_behind")
+		}
+	}
+	if !found {
+		t.Fatal("queued job missing from list")
+	}
+
+	w = env.doRequest(http.MethodGet, "/api/fixes/"+queuedID, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("get %d: %s", w.Code, w.Body.String())
+	}
+	var detail struct {
+		Data struct {
+			QueuedBehind *struct {
+				ID   string `json:"id"`
+				Kind string `json:"kind"`
+			} `json:"queued_behind"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &detail); err != nil {
+		t.Fatal(err)
+	}
+	if detail.Data.QueuedBehind == nil || detail.Data.QueuedBehind.ID != runningID {
+		t.Fatalf("get queued_behind = %+v", detail.Data.QueuedBehind)
+	}
+}
+
 func TestGetFixWithAttempts(t *testing.T) {
 	env := setupTestEnv(t)
 	defer env.Store.Close()
@@ -1991,6 +2091,45 @@ func TestCancelFix(t *testing.T) {
 	}
 }
 
+func TestCancelFixAwaitingPushDiscardsBranch(t *testing.T) {
+	env := setupTestEnv(t)
+	defer env.Store.Close()
+
+	repoID := env.createRepo(t)
+	now := time.Now().UTC()
+	jobID := uuid.New().String()
+	if err := env.Store.EnqueueFixJob(context.Background(), &models.FixJob{
+		ID: jobID, UserID: env.UserID, Type: "fix", RepoID: repoID,
+		Status: models.FixJobAwaitingPush, Mode: models.FixModeDryRun,
+		ResultBranch: "wolf-fix/" + jobID, PauseReason: "verified branch is ready to push for review",
+		CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+
+	w := env.doRequest(http.MethodDelete, "/api/fixes/"+jobID, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Data struct {
+			Status       string `json:"status"`
+			ResultBranch string `json:"result_branch"`
+			PauseReason  string `json:"pause_reason"`
+		} `json:"data"`
+	}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp.Data.Status != models.FixJobCancelled {
+		t.Errorf("expected cancelled, got %s", resp.Data.Status)
+	}
+	if resp.Data.ResultBranch != "" {
+		t.Errorf("expected result_branch cleared, got %q", resp.Data.ResultBranch)
+	}
+	if resp.Data.PauseReason != "" {
+		t.Errorf("expected pause_reason cleared, got %q", resp.Data.PauseReason)
+	}
+}
+
 func TestCancelFixAlreadyFinished(t *testing.T) {
 	env := setupTestEnv(t)
 	defer env.Store.Close()
@@ -2009,64 +2148,6 @@ func TestCancelFixAlreadyFinished(t *testing.T) {
 	w := env.doRequest(http.MethodDelete, "/api/fixes/"+jobID, nil)
 	if w.Code != http.StatusConflict {
 		t.Fatalf("expected 409, got %d", w.Code)
-	}
-}
-
-// --- Loop tests ---
-
-func TestListLoops(t *testing.T) {
-	env := setupTestEnv(t)
-	defer env.Store.Close()
-
-	repoID := env.createRepo(t)
-
-	now := time.Now()
-	env.Store.CreateLoop(context.Background(), &models.Loop{
-		ID: uuid.New().String(), UserID: env.UserID, RepoID: repoID,
-		Status: models.LoopStatusRunning, CreatedAt: now, UpdatedAt: now,
-	})
-
-	w := env.doRequest(http.MethodGet, "/api/loops", nil)
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", w.Code)
-	}
-
-	var resp struct {
-		Meta struct{ Total int } `json:"meta"`
-	}
-	json.Unmarshal(w.Body.Bytes(), &resp)
-	if resp.Meta.Total != 1 {
-		t.Errorf("expected 1 loop, got %d", resp.Meta.Total)
-	}
-}
-
-func TestGetLoop(t *testing.T) {
-	env := setupTestEnv(t)
-	defer env.Store.Close()
-
-	repoID := env.createRepo(t)
-
-	now := time.Now()
-	loopID := uuid.New().String()
-	env.Store.CreateLoop(context.Background(), &models.Loop{
-		ID: loopID, UserID: env.UserID, RepoID: repoID,
-		Status: models.LoopStatusRunning, MaxIterations: 5,
-		CreatedAt: now, UpdatedAt: now,
-	})
-
-	w := env.doRequest(http.MethodGet, "/api/loops/"+loopID, nil)
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
-	}
-}
-
-func TestGetLoopNotFound(t *testing.T) {
-	env := setupTestEnv(t)
-	defer env.Store.Close()
-
-	w := env.doRequest(http.MethodGet, "/api/loops/nonexistent", nil)
-	if w.Code != http.StatusNotFound {
-		t.Fatalf("expected 404, got %d", w.Code)
 	}
 }
 

@@ -82,6 +82,8 @@ func TestBuildPrompt(t *testing.T) {
 				"main.go:42",
 				"high",
 				"User input not sanitized",
+				"SKIP:",
+				"Open each file",
 			},
 		},
 		{
@@ -194,6 +196,16 @@ func TestParseClaudeOutput(t *testing.T) {
 				t.Errorf("FilesChanged count = %d, want %d", len(result.FilesChanged), tt.wantFiles)
 			}
 		})
+	}
+}
+
+func TestParseClaudeUsage(t *testing.T) {
+	res, err := parseClaudeOutput([]byte(`{"result":"ok","model":"sonnet","total_cost_usd":0.02,"usage":{"input_tokens":100,"output_tokens":20}}`))
+	if err != nil || res == nil {
+		t.Fatalf("parse: %v %v", res, err)
+	}
+	if res.Usage.Model != "sonnet" || res.Usage.InputTokens != 100 || res.Usage.OutputTokens != 20 || res.Usage.CostUSD != 0.02 {
+		t.Fatalf("usage = %+v", res.Usage)
 	}
 }
 

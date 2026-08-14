@@ -15,12 +15,13 @@ var publicationDigestPattern = regexp.MustCompile(`^sha256:[a-f0-9]{64}$`)
 // publication receipt must bind. Keep this contract in the release domain so
 // workers and control-plane publication validate the same immutable set.
 var RequiredReleaseToolKeys = []string{
-	"bandit", "bearer", "brakeman", "checkov", "clippy", "codeql", "conftest", "cppcheck",
-	"detect-secrets", "detekt", "dockle", "eslint", "gitleaks", "gokart", "gosec", "govulncheck",
-	"grype", "hadolint", "infer", "kics", "kube-linter", "kubescape", "markdownlint", "mypy",
-	"npm-audit", "nuclei", "osv-scanner", "phpstan", "pip-audit", "pluto", "pmd", "radon",
-	"renovate", "rubocop", "ruff", "scorecard", "semgrep", "shellcheck", "spectral", "sqlfluff",
-	"staticcheck", "swiftlint", "syft", "tflint", "trivy", "trufflehog", "vale", "vulture", "yamllint",
+	"bandit", "bearer", "brakeman", "cargo-audit", "cargo-deny", "checkov", "clippy", "codeql",
+	"conftest", "cppcheck", "detect-secrets", "detekt", "dockle", "eslint", "gitleaks", "gokart",
+	"gosec", "govulncheck", "grype", "hadolint", "infer", "kics", "kube-linter", "kubescape",
+	"markdownlint", "mypy", "npm-audit", "nuclei", "osv-scanner", "phpstan", "pip-audit", "pluto",
+	"pmd", "poutine", "radon", "renovate", "rubocop", "ruff", "scorecard", "semgrep", "shellcheck",
+	"spectral", "sqlfluff", "staticcheck", "swiftlint", "syft", "tflint", "trivy", "trufflehog",
+	"vale", "vulture", "yamllint", "zizmor",
 }
 
 // RequiredPublicationArtifactTypes is the transitive evidence inventory that
@@ -40,14 +41,14 @@ type requiredReleaseImage struct {
 }
 
 var requiredReleaseImages = map[string]requiredReleaseImage{
-	"default":      {Kind: ReleaseImageScanner, Platforms: []string{"linux/amd64"}},
-	"jvm":          {Kind: ReleaseImageScanner, Platforms: []string{"linux/amd64"}},
-	"rust":         {Kind: ReleaseImageScanner, Platforms: []string{"linux/amd64"}},
+	"default":      {Kind: ReleaseImageScanner, Platforms: []string{"linux/amd64", "linux/arm64"}},
+	"jvm":          {Kind: ReleaseImageScanner, Platforms: []string{"linux/amd64", "linux/arm64"}},
+	"rust":         {Kind: ReleaseImageScanner, Platforms: []string{"linux/amd64", "linux/arm64"}},
 	"codeql":       {Kind: ReleaseImageScanner, Platforms: []string{"linux/amd64"}},
-	"fixer-base":   {Kind: ReleaseImageFixer, Platforms: []string{"linux/amd64"}},
-	"fixer-api":    {Kind: ReleaseImageFixer, Platforms: []string{"linux/amd64"}},
-	"fixer-claude": {Kind: ReleaseImageFixer, Platforms: []string{"linux/amd64"}},
-	"fixer-codex":  {Kind: ReleaseImageFixer, Platforms: []string{"linux/amd64"}},
+	"fixer-base":   {Kind: ReleaseImageFixer, Platforms: []string{"linux/amd64", "linux/arm64"}},
+	"fixer-api":    {Kind: ReleaseImageFixer, Platforms: []string{"linux/amd64", "linux/arm64"}},
+	"fixer-claude": {Kind: ReleaseImageFixer, Platforms: []string{"linux/amd64", "linux/arm64"}},
+	"fixer-codex":  {Kind: ReleaseImageFixer, Platforms: []string{"linux/amd64", "linux/arm64"}},
 }
 
 // ValidatePublicationReceiptInventory rejects a final receipt unless it

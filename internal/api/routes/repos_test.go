@@ -2,6 +2,7 @@ package routes_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +15,9 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/api/routes"
 	"github.com/alphabravocompany/thewolf/internal/auth"
 	"github.com/alphabravocompany/thewolf/internal/db"
+	"github.com/alphabravocompany/thewolf/internal/models"
+	"github.com/alphabravocompany/thewolf/internal/scantarget"
+	"github.com/alphabravocompany/thewolf/internal/secrets"
 )
 
 func setupRepoRouter(t *testing.T) (*chi.Mux, db.Store, string) {
@@ -39,6 +43,7 @@ func setupRepoRouter(t *testing.T) (*chi.Mux, db.Store, string) {
 		r.Get("/api/repos/{id}", routes.GetRepo)
 		r.Get("/api/repos/{id}/fixable", routes.GetRepoFixable)
 		r.Put("/api/repos/{id}", routes.UpdateRepo)
+		r.Post("/api/repos/{id}/sync", routes.SyncRepo)
 		r.Delete("/api/repos/{id}", routes.DeleteRepo)
 	})
 
@@ -146,6 +151,66 @@ func TestRepoCRUD(t *testing.T) {
 
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("get deleted repo: expected 404, got %d", w.Code)
+	}
+}
+
+func TestCreateGitHubRepoStoresSelectedCredential(t *testing.T) {
+	r, store, token := setupRepoRouter(t)
+	defer store.Close()
+
+	secrets.SetMasterKey([]byte("0123456789abcdef0123456789abcdef"))
+	user, err := store.GetUserByEmail(context.Background(), "repouser@test.com")
+	if err != nil {
+		t.Fatalf("GetUserByEmail: %v", err)
+	}
+	encrypted, err := secrets.Encrypt("ghp_selected")
+	if err != nil {
+		t.Fatalf("Encrypt: %v", err)
+	}
+	const secretID = "github-secret-1"
+	if err := store.CreateSecret(context.Background(), &models.Secret{
+		ID:             secretID,
+		UserID:         user.ID,
+		KeyType:        models.KeyTypeGitHubToken,
+		KeyName:        "private-github",
+		EncryptedValue: encrypted,
+	}); err != nil {
+		t.Fatalf("CreateSecret: %v", err)
+	}
+
+	body, _ := json.Marshal(map[string]string{
+		"name":                 "private-repo",
+		"source_type":          "github",
+		"source_path":          "acme/private-repo",
+		"credential_secret_id": secretID,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/repos", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create github repo: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var createResp struct {
+		Data struct {
+			ID                 string `json:"id"`
+			CredentialSecretID string `json:"credential_secret_id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &createResp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if createResp.Data.CredentialSecretID != secretID {
+		t.Fatalf("response credential_secret_id = %q, want %q", createResp.Data.CredentialSecretID, secretID)
+	}
+	stored, err := store.GetRepoByID(context.Background(), createResp.Data.ID)
+	if err != nil {
+		t.Fatalf("GetRepoByID: %v", err)
+	}
+	if stored.CredentialSecretID != secretID {
+		t.Fatalf("stored credential_secret_id = %q, want %q", stored.CredentialSecretID, secretID)
 	}
 }
 
@@ -301,5 +366,112 @@ func TestRepoUnauthorized(t *testing.T) {
 
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("unauthorized: expected 401, got %d", w.Code)
+	}
+}
+
+func TestSyncRepoPullsAndRecordsCommit(t *testing.T) {
+	r, store, token := setupRepoRouter(t)
+	defer store.Close()
+
+	restore := routes.SetPrepareRepoForSyncForTest(func(_ context.Context, _ db.Store, repo *models.Repo, branch string) (scantarget.Prepared, error) {
+		if repo.SourcePath != "acme/astronomer" {
+			t.Errorf("source_path = %q", repo.SourcePath)
+		}
+		if branch != "main" {
+			t.Errorf("branch = %q, want main", branch)
+		}
+		return scantarget.Prepared{
+			Path:       t.TempDir(),
+			SourceType: models.SourceTypeGitHub,
+			SourcePath: repo.SourcePath,
+			CommitSHA:  "abc123def456",
+			DirtyState: "clean",
+			Cleanup:    func() {},
+		}, nil
+	})
+	t.Cleanup(restore)
+
+	body, _ := json.Marshal(map[string]string{
+		"name":        "astronomer",
+		"source_type": "github",
+		"source_path": "acme/astronomer",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/repos", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create: %d %s", w.Code, w.Body.String())
+	}
+	var created struct {
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/api/repos/"+created.Data.ID+"/sync", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("sync: %d %s", w.Code, w.Body.String())
+	}
+	var synced struct {
+		Data struct {
+			LastCommitSHA     string `json:"last_commit_sha"`
+			LastDirtyState    string `json:"last_dirty_state"`
+			Branch            string `json:"branch"`
+			PreviousCommitSHA string `json:"previous_commit_sha"`
+			Changed           bool   `json:"changed"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &synced); err != nil {
+		t.Fatal(err)
+	}
+	if synced.Data.LastCommitSHA != "abc123def456" || !synced.Data.Changed || synced.Data.Branch != "main" {
+		t.Fatalf("sync payload = %+v", synced.Data)
+	}
+	stored, err := store.GetRepoByID(context.Background(), created.Data.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.LastCommitSHA != "abc123def456" {
+		t.Fatalf("stored last_commit_sha = %q", stored.LastCommitSHA)
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/api/repos/"+created.Data.ID+"/sync?branch=develop", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	restore2 := routes.SetPrepareRepoForSyncForTest(func(_ context.Context, _ db.Store, _ *models.Repo, branch string) (scantarget.Prepared, error) {
+		if branch != "develop" {
+			t.Errorf("branch = %q, want develop", branch)
+		}
+		return scantarget.Prepared{CommitSHA: "abc123def456", DirtyState: "clean", Cleanup: func() {}}, nil
+	})
+	t.Cleanup(restore2)
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("second sync: %d %s", w.Code, w.Body.String())
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &synced); err != nil {
+		t.Fatal(err)
+	}
+	if synced.Data.Changed || synced.Data.PreviousCommitSHA != "abc123def456" {
+		t.Fatalf("unchanged sync payload = %+v", synced.Data)
+	}
+}
+
+func TestSyncRepoRejectsUnknownRepo(t *testing.T) {
+	r, store, token := setupRepoRouter(t)
+	defer store.Close()
+	req := httptest.NewRequest(http.MethodPost, "/api/repos/missing/sync", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", w.Code)
 	}
 }

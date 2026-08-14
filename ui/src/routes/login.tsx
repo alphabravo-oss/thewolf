@@ -2,7 +2,7 @@
 // to the original target (or /) on success. Two-step when the account has 2FA.
 import { createFileRoute, useNavigate, redirect } from "@tanstack/react-router";
 import { useForm } from "@tanstack/react-form";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
   AuthShell,
@@ -11,7 +11,7 @@ import {
   PasswordInput,
   authInputCls,
 } from "@/components/auth-shell";
-import { api, hasSession } from "@/lib/api";
+import { api, sessionStatus, waitForSession } from "@/lib/api";
 import type { AuthResponse } from "@/lib/types";
 
 type LoginSearch = { from?: string };
@@ -21,7 +21,7 @@ export const Route = createFileRoute("/login")({
     from: typeof search.from === "string" ? search.from : undefined,
   }),
   beforeLoad: async () => {
-    if (await hasSession()) throw redirect({ to: "/" });
+    if ((await waitForSession()) === "ok") throw redirect({ to: "/" });
   },
   component: LoginPage,
 });
@@ -30,6 +30,24 @@ function LoginPage() {
   const navigate = useNavigate();
   const search = Route.useSearch();
   const [submitting, setSubmitting] = useState(false);
+
+  // Cookie is still valid after a restart; pull the user back when the API
+  // comes up instead of making them type the password again.
+  useEffect(() => {
+    let stop = false;
+    const tick = async () => {
+      if (stop) return;
+      if ((await sessionStatus()) === "ok") {
+        navigate({ to: (search.from as "/" | undefined) ?? "/" });
+      }
+    };
+    const id = window.setInterval(tick, 2000);
+    void tick();
+    return () => {
+      stop = true;
+      window.clearInterval(id);
+    };
+  }, [navigate, search.from]);
   // When the account has 2FA, the password step returns a challenge token and
   // we switch to the code step instead of completing the login.
   const [mfaToken, setMfaToken] = useState<string | null>(null);
