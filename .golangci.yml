@@ -1,84 +1,11 @@
-run:
-  timeout: 5m
-  modules-download-mode: readonly
+# golangci-lint v2 (required by golangci-lint-action v7).
+version: "2"
 
 linters:
-  enable:
-    - errcheck
-    - gosec
-    - govet
-    - staticcheck
-    - unused
-    - ineffassign
-    - gocritic
-    - revive
-    - misspell
-    - prealloc
-    - exportloopref
-    - bodyclose
-    - noctx
-    - unconvert
-    - unparam
-    - gofmt
-    - goimports
-
-linters-settings:
-  errcheck:
-    check-type-assertions: true
-    check-blank: false
-
-  gosec:
-    severity: medium
-    confidence: medium
-    excludes:
-      - G104  # Unhandled errors (too noisy with deferred Close calls)
-      - G304  # File path from variable (expected in CLI tools)
-
-  govet:
-    enable-all: true
-    disable:
-      - fieldalignment  # Too pedantic for most projects
-
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - performance
-    disabled-checks:
-      - hugeParam
-
-  revive:
-    severity: warning
-    rules:
-      - name: exported
-        disabled: true  # Too strict for internal packages
-      - name: unused-parameter
-        disabled: true
-
-  misspell:
-    locale: US
-
-  goimports:
-    local-prefixes: github.com/alphabravocompany/thewolf
-
-issues:
-  exclude-rules:
-    # Relax checks in test files
-    - path: _test\.go
-      linters:
-        - errcheck
-        - gosec
-        - gocritic
-        - unparam
-        - bodyclose
-
-    # Allow dot imports in test files (for testify, etc.)
-    - path: _test\.go
-      text: "dot-imports"
-
-    # Allow fmt.Print in cmd/ (CLI output)
-    - path: cmd/
-      linters:
-        - forbidigo
-
-  max-issues-per-linter: 50
-  max-same-issues: 5
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+      - internal/scannerbuild/context/
