@@ -699,7 +699,7 @@ func executeScan(parent context.Context, h *Handler, scanID, userID, repoID, bra
 				s.ToolsSelected = string(selectedJSON)
 				s.LeaseToken = executionLeaseToken
 				s.UpdatedAt = time.Now()
-				h.Store.UpdateScan(context.Background(), s) // #nosec G104 -- intentional: HTTP write / log errors aren't actionable in this branch
+				_ = h.Store.UpdateScan(context.Background(), s) // #nosec G104 -- intentional: HTTP write / log errors aren't actionable in this branch
 			}
 			existingRuns, _ := h.Store.ListScannerRunRecords(context.Background(), scanID)
 			existingByTool := make(map[string]models.ScannerRunRecord, len(existingRuns))
@@ -838,7 +838,7 @@ func executeScan(parent context.Context, h *Handler, scanID, userID, repoID, bra
 				s.FindingCount = currentTotal
 				s.LeaseToken = executionLeaseToken
 				s.UpdatedAt = time.Now()
-				h.Store.UpdateScan(context.Background(), s)
+				_ = h.Store.UpdateScan(context.Background(), s)
 			}
 
 			// Compute real elapsed_ms so the live page can render a non-
@@ -1917,7 +1917,7 @@ func GetScanReport(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="scan-%s-report.md"`, scanID))
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(md)) // nosemgrep: go.lang.security.audit.xss.no-direct-write-to-responsewriter.no-direct-write-to-responsewriter // #nosec G104 -- intentional: HTTP write / log errors aren't actionable in this branch
+	_, _ = w.Write([]byte(md)) // nosemgrep: go.lang.security.audit.xss.no-direct-write-to-responsewriter.no-direct-write-to-responsewriter // #nosec G104 -- intentional: HTTP write / log errors aren't actionable in this branch
 }
 
 // GetScanManifest handles GET /api/scans/:id/manifest.
@@ -1950,7 +1950,7 @@ func GetScanManifest(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="scan-%s-manifest.json"`, scanID))
 			w.WriteHeader(http.StatusOK)
-			w.Write(content) // nosemgrep: go.lang.security.audit.xss.no-direct-write-to-responsewriter.no-direct-write-to-responsewriter // #nosec G104 -- intentional: HTTP write / log errors aren't actionable in this branch
+			_, _ = w.Write(content) // nosemgrep: go.lang.security.audit.xss.no-direct-write-to-responsewriter.no-direct-write-to-responsewriter // #nosec G104 -- intentional: HTTP write / log errors aren't actionable in this branch
 			return
 		}
 	}
@@ -1968,7 +1968,7 @@ func GetScanManifest(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="scan-%s-manifest.json"`, scanID))
 	w.WriteHeader(http.StatusOK)
-	w.Write(data) // nosemgrep: go.lang.security.audit.xss.no-direct-write-to-responsewriter.no-direct-write-to-responsewriter // #nosec G104 -- intentional: HTTP write / log errors aren't actionable in this branch
+	_, _ = w.Write(data) // nosemgrep: go.lang.security.audit.xss.no-direct-write-to-responsewriter.no-direct-write-to-responsewriter // #nosec G104 -- intentional: HTTP write / log errors aren't actionable in this branch
 }
 
 // GetScanSARIF handles GET /api/scans/:id/sarif — generate and return SARIF report.
@@ -2010,7 +2010,7 @@ func GetScanSARIF(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="scan-%s.sarif.json"`, scanID))
 	w.WriteHeader(http.StatusOK)
-	w.Write(sarif) // nosemgrep: go.lang.security.audit.xss.no-direct-write-to-responsewriter.no-direct-write-to-responsewriter // #nosec G104 -- intentional: HTTP write / log errors aren't actionable in this branch
+	_, _ = w.Write(sarif) // nosemgrep: go.lang.security.audit.xss.no-direct-write-to-responsewriter.no-direct-write-to-responsewriter // #nosec G104 -- intentional: HTTP write / log errors aren't actionable in this branch
 }
 
 // CancelScan handles DELETE /api/scans/:id — cancel a running or pending scan.
@@ -2892,7 +2892,7 @@ func DownloadArtifact(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", ct)
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filepath.Base(target.FilePath)))
 	w.WriteHeader(http.StatusOK)
-	w.Write(content) // nosemgrep: go.lang.security.audit.xss.no-direct-write-to-responsewriter.no-direct-write-to-responsewriter // #nosec G104 -- intentional: HTTP write / log errors aren't actionable in this branch
+	_, _ = w.Write(content) // nosemgrep: go.lang.security.audit.xss.no-direct-write-to-responsewriter.no-direct-write-to-responsewriter // #nosec G104 -- intentional: HTTP write / log errors aren't actionable in this branch
 }
 
 // --- helpers ---
@@ -3704,7 +3704,7 @@ func GetToolOutput(w http.ResponseWriter, r *http.Request) {
 			}
 			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 			w.WriteHeader(http.StatusOK)
-			w.Write(content) // nosemgrep: go.lang.security.audit.xss.no-direct-write-to-responsewriter.no-direct-write-to-responsewriter // #nosec G104 -- intentional: HTTP write / log errors aren't actionable in this branch
+			_, _ = w.Write(content) // nosemgrep: go.lang.security.audit.xss.no-direct-write-to-responsewriter.no-direct-write-to-responsewriter // #nosec G104 -- intentional: HTTP write / log errors aren't actionable in this branch
 			return
 		}
 	}
@@ -3717,7 +3717,7 @@ func GetToolOutput(w http.ResponseWriter, r *http.Request) {
 			}
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			w.Write(content) // nosemgrep: go.lang.security.audit.xss.no-direct-write-to-responsewriter.no-direct-write-to-responsewriter // #nosec G104 -- intentional: HTTP write / log errors aren't actionable in this branch
+			_, _ = w.Write(content) // nosemgrep: go.lang.security.audit.xss.no-direct-write-to-responsewriter.no-direct-write-to-responsewriter // #nosec G104 -- intentional: HTTP write / log errors aren't actionable in this branch
 			return
 		}
 	}
@@ -3885,9 +3885,9 @@ func GetScanTools(w http.ResponseWriter, r *http.Request) {
 
 	// Parse tool arrays.
 	var selected, completed, failed []string
-	json.Unmarshal([]byte(scan.ToolsSelected), &selected)   // #nosec G104 -- intentional: HTTP write / log errors aren't actionable in this branch
-	json.Unmarshal([]byte(scan.ToolsCompleted), &completed) // #nosec G104 -- intentional: HTTP write / log errors aren't actionable in this branch
-	json.Unmarshal([]byte(scan.ToolsFailed), &failed)       // #nosec G104 -- intentional: HTTP write / log errors aren't actionable in this branch
+	_ = json.Unmarshal([]byte(scan.ToolsSelected), &selected)   // #nosec G104 -- intentional: HTTP write / log errors aren't actionable in this branch
+	_ = json.Unmarshal([]byte(scan.ToolsCompleted), &completed) // #nosec G104 -- intentional: HTTP write / log errors aren't actionable in this branch
+	_ = json.Unmarshal([]byte(scan.ToolsFailed), &failed)       // #nosec G104 -- intentional: HTTP write / log errors aren't actionable in this branch
 
 	// Parse the per-tool error map (added in migration 009).
 	errs := make(map[string]string)

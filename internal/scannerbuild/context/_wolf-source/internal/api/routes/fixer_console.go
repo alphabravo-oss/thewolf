@@ -151,7 +151,7 @@ func StreamFixerConsole(w http.ResponseWriter, r *http.Request) {
 			}
 			sendSSE(w, flusher, "console_status", consoleStatusJSON(latest))
 			if !models.FixerConsoleActive(latest.Status) {
-				offset = relayConsoleData(w, flusher, logPath, offset)
+				_ = relayConsoleData(w, flusher, logPath, offset)
 				sendSSE(w, flusher, "console_completed", consoleStatusJSON(latest))
 				return
 			}

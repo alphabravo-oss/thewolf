@@ -278,12 +278,12 @@ func computeNeedsAttention(ctx context.Context, database *sqlx.DB, userID string
 	for rows.Next() {
 		var r repoRef
 		if err := rows.Scan(&r.ID, &r.Name); err != nil {
-			rows.Close()
+			_ = rows.Close()
 			return nil, err
 		}
 		repos = append(repos, r)
 	}
-	rows.Close()
+	_ = rows.Close()
 
 	findings, err := listCurrentOpenFindings(ctx, database, userID, fleetMode, "")
 	if err != nil {
@@ -344,8 +344,7 @@ func computeNeedsAttention(ctx context.Context, database *sqlx.DB, userID string
 			continue
 		}
 
-		reason := "stale"
-		detail := ""
+		var reason, detail string
 		switch {
 		case newCrit > 0:
 			reason = "new_high"

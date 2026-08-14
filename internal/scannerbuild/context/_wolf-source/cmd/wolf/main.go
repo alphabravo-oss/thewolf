@@ -228,7 +228,7 @@ func newServeCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("open store: %w", err)
 			}
-			defer store.Close()
+			defer func() { _ = store.Close() }()
 
 			// Only override the declared version (routes.AppVersion) when the
 			// build actually stamped one via ldflags; a plain `go build` leaves

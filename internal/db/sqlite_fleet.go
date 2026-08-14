@@ -31,12 +31,12 @@ func (s *SQLiteStore) FleetInventory(ctx context.Context, userID string, fleetMo
 		var st string
 		var n int
 		if err := rows.Scan(&st, &n); err != nil {
-			rows.Close()
+			_ = rows.Close()
 			return nil, err
 		}
 		out.BySourceType[st] = n
 	}
-	rows.Close()
+	_ = rows.Close()
 
 	// By collection (name).
 	colQ := `SELECT c.name, COUNT(cr.repo_id)
@@ -53,12 +53,12 @@ func (s *SQLiteStore) FleetInventory(ctx context.Context, userID string, fleetMo
 			var name string
 			var n int
 			if err := rows.Scan(&name, &n); err != nil {
-				rows.Close()
+				_ = rows.Close()
 				return nil, err
 			}
 			out.ByCollection[name] = n
 		}
-		rows.Close()
+		_ = rows.Close()
 	}
 
 	// By language: detected_languages is a JSON array of strings. Decode in
@@ -73,14 +73,14 @@ func (s *SQLiteStore) FleetInventory(ctx context.Context, userID string, fleetMo
 		for rows.Next() {
 			var raw string
 			if err := rows.Scan(&raw); err != nil {
-				rows.Close()
+				_ = rows.Close()
 				return nil, err
 			}
 			for _, lang := range parseLanguageList(raw) {
 				out.ByLanguage[lang]++
 			}
 		}
-		rows.Close()
+		_ = rows.Close()
 	}
 
 	return out, nil

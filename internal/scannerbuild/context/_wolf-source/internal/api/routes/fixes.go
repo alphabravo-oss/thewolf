@@ -419,7 +419,7 @@ func StreamFix(w http.ResponseWriter, r *http.Request) {
 			}
 			sendSSE(w, flusher, "fix_status", fixStatusJSON(job))
 			if isTerminal(job.Status) || models.FixJobPaused(job.Status) {
-				offset = relayLogLines(w, flusher, logPath, offset)
+				_ = relayLogLines(w, flusher, logPath, offset)
 				sendSSE(w, flusher, "fix_completed", fixStatusJSON(job))
 				return
 			}

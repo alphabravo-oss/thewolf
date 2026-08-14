@@ -262,7 +262,7 @@ func writeSource(ctx context.Context, tw *tar.Writer, source Source, epoch time.
 	if err != nil {
 		return fmt.Errorf("open bundle source %q: %w", source.Path, err)
 	}
-	defer reader.Close()
+	defer func() { _ = reader.Close() }()
 	header := deterministicHeader(source.Path, source.Size, epoch)
 	if err := tw.WriteHeader(&header); err != nil {
 		return fmt.Errorf("write %s header: %w", source.Path, err)
@@ -345,7 +345,7 @@ func Read(ctx context.Context, input io.Reader, destination string, opts ReadOpt
 		if nextErr != nil {
 			return nil, fmt.Errorf("read bundle archive: %w", nextErr)
 		}
-		if header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeRegA {
+		if header.Typeflag != tar.TypeReg {
 			return nil, fmt.Errorf("bundle entry %q has forbidden type %d", header.Name, header.Typeflag)
 		}
 		clean, cleanErr := cleanBundlePath(header.Name)

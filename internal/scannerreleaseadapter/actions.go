@@ -722,7 +722,7 @@ func runBoundedReport(
 	if err != nil {
 		return nil, err
 	}
-	defer root.Close()
+	defer func() { _ = root.Close() }()
 	report, err := root.Open(filepath.Base(reportPath))
 	if err != nil {
 		return nil, err
@@ -924,7 +924,7 @@ func readCredentialFile(directory, name string, maximum int64) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer root.Close()
+	defer func() { _ = root.Close() }()
 	file, err := root.Open(name)
 	if err != nil {
 		return nil, err
@@ -1110,7 +1110,7 @@ func extractTrivyDatabaseArchive(archivePath, target, databaseName string) error
 	if err != nil {
 		return err
 	}
-	defer compressed.Close()
+	defer func() { _ = compressed.Close() }()
 	if err := os.MkdirAll(target, 0o700); err != nil {
 		return err
 	}
@@ -1126,7 +1126,7 @@ func extractTrivyDatabaseArchive(archivePath, target, databaseName string) error
 		if err != nil {
 			return err
 		}
-		if header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeRegA {
+		if header.Typeflag != tar.TypeReg {
 			return errors.New("Trivy database archive contains a non-regular entry")
 		}
 		name := filepath.Base(filepath.Clean(header.Name))

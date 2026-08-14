@@ -11,11 +11,11 @@ const (
 	FixJobAwaitingPush   = "awaiting_push"
 	// PushFailed means the agent kept fixes on the branch, but GitHub
 	// rejected the publish. Distinct from Failed (the agent itself blew up).
-	FixJobPushFailed     = "push_failed"
-	FixJobSucceeded      = "succeeded"
-	FixJobFailed         = "failed"
-	FixJobCancelled      = "cancelled"
-	FixJobSuperseded     = "superseded"
+	FixJobPushFailed = "push_failed"
+	FixJobSucceeded  = "succeeded"
+	FixJobFailed     = "failed"
+	FixJobCancelled  = "cancelled"
+	FixJobSuperseded = "superseded"
 )
 
 // FixJob mode values.

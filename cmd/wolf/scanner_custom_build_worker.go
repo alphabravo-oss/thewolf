@@ -56,7 +56,7 @@ func newScannerCustomBuildWorkerCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("open custom-build store: %w", err)
 			}
-			defer store.Close()
+			defer func() { _ = store.Close() }()
 
 			observer := scannerobservability.NewRegistry()
 			observer.SetDatabaseCheck(store.Ping)

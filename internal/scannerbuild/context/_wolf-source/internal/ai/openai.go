@@ -178,7 +178,7 @@ func (p *OpenAIProvider) send(ctx context.Context, prompt string, maxTokens int)
 	if err != nil {
 		return "", fmt.Errorf("http request: %w", err)
 	}
-	defer httpResp.Body.Close()
+	defer func() { _ = httpResp.Body.Close() }()
 
 	respBytes, err := io.ReadAll(httpResp.Body)
 	if err != nil {

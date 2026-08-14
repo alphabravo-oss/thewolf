@@ -332,7 +332,7 @@ func decompressIndexBounded(compressed []byte, indexPath string, limit int64) ([
 		if err != nil {
 			return nil, err
 		}
-		defer gzipReader.Close()
+		defer func() { _ = gzipReader.Close() }()
 		reader = gzipReader
 	case strings.HasSuffix(indexPath, ".xz"):
 		xzReader, err := xz.NewReader(bytes.NewReader(compressed))

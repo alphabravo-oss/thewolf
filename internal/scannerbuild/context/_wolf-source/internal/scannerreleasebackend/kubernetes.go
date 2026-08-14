@@ -646,12 +646,12 @@ func openKubernetesOperationJournal(workspace, operationID string) (*os.File, er
 	if err != nil {
 		return nil, fmt.Errorf("open Kubernetes workspace without following links: %w", err)
 	}
-	defer unix.Close(workspaceFD)
+	defer func() { _ = unix.Close(workspaceFD) }()
 	journalFD, err := openOrCreateJournalDirectory(workspaceFD, ".wolf-release-backend-journal")
 	if err != nil {
 		return nil, err
 	}
-	defer unix.Close(journalFD)
+	defer func() { _ = unix.Close(journalFD) }()
 	operationFD, err := openOrCreateJournalDirectory(journalFD, component)
 	if err != nil {
 		return nil, err

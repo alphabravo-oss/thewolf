@@ -80,7 +80,7 @@ func (Client) Run(ctx context.Context, cfg Config, command string) (Result, erro
 	if err != nil {
 		return Result{}, fmt.Errorf("dial SSH: %w", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	done := make(chan struct{})
 	var sshConn ssh.Conn
@@ -101,12 +101,12 @@ func (Client) Run(ctx context.Context, cfg Config, command string) (Result, erro
 	}
 
 	client := ssh.NewClient(sshConn, chans, reqs)
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 	session, err := client.NewSession()
 	if err != nil {
 		return Result{}, fmt.Errorf("new SSH session: %w", err)
 	}
-	defer session.Close()
+	defer func() { _ = session.Close() }()
 
 	var stdout, stderr bytes.Buffer
 	session.Stdout = &stdout

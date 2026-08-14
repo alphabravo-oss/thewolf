@@ -456,7 +456,7 @@ func dockerImageID(ref string) string {
 func Doctor(ctx context.Context, w io.Writer) error {
 	cfg := container.Default()
 	if cfg == nil {
-		fmt.Fprintln(w, "FAIL  Container config not loaded (was scanners.LoadAndInstall called at startup?)")
+		_, _ = fmt.Fprintln(w, "FAIL  Container config not loaded (was scanners.LoadAndInstall called at startup?)")
 		return errors.New("container config not loaded")
 	}
 
@@ -464,12 +464,12 @@ func Doctor(ctx context.Context, w io.Writer) error {
 	step := func(label string, fn func() error) {
 		err := fn()
 		if err != nil {
-			fmt.Fprintf(w, "FAIL  %-30s %s\n", label, err)
+			_, _ = fmt.Fprintf(w, "FAIL  %-30s %s\n", label, err)
 			if firstErr == nil {
 				firstErr = err
 			}
 		} else {
-			fmt.Fprintf(w, "OK    %-30s\n", label)
+			_, _ = fmt.Fprintf(w, "OK    %-30s\n", label)
 		}
 	}
 
@@ -501,12 +501,12 @@ func Doctor(ctx context.Context, w io.Writer) error {
 		return nil
 	})
 
-	fmt.Fprintln(w)
+	_, _ = fmt.Fprintln(w)
 	if firstErr != nil {
-		fmt.Fprintln(w, "doctor: one or more checks failed. See above.")
+		_, _ = fmt.Fprintln(w, "doctor: one or more checks failed. See above.")
 		return firstErr
 	}
-	fmt.Fprintln(w, "doctor: all checks passed.")
+	_, _ = fmt.Fprintln(w, "doctor: all checks passed.")
 	return nil
 }
 

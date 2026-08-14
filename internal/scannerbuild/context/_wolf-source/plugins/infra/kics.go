@@ -185,7 +185,7 @@ func kicsLoadExcludeQueries(repoPath string) string {
 	if err != nil {
 		return ""
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var uuids []string
 	inSection := false

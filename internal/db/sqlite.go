@@ -969,7 +969,7 @@ func (s *SQLiteStore) CreateFindings(ctx context.Context, findings []models.Find
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	if err := insertFindingsTx(ctx, tx, findings); err != nil {
 		return err
 	}
@@ -1301,7 +1301,7 @@ func (s *SQLiteStore) DeleteScanCascade(ctx context.Context, scanID string) erro
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	if _, err := tx.ExecContext(ctx, "DELETE FROM fix_items WHERE finding_id IN (SELECT id FROM findings WHERE scan_id = ?)", scanID); err != nil {
 		return fmt.Errorf("delete fix_items: %w", err)

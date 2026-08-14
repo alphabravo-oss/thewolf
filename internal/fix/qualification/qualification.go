@@ -184,7 +184,7 @@ func exerciseCLIProtocols(ctx context.Context, scratch string) error {
 	if err := os.Setenv("PATH", scratch+string(os.PathListSeparator)+originalPath); err != nil {
 		return err
 	}
-	defer os.Setenv("PATH", originalPath) //nolint:errcheck -- best-effort process-local restoration at command exit.
+	defer func() { _ = os.Setenv("PATH", originalPath) }()
 
 	claudeCapture := filepath.Join(scratch, "claude.args")
 	codexCapture := filepath.Join(scratch, "codex.args")

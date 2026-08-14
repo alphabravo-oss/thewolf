@@ -37,7 +37,7 @@ func EnsureLocalBinOnPATH() {
 	RemoveBrokenLocalCLIs()
 	path := os.Getenv("PATH")
 	if path == "" {
-		os.Setenv("PATH", bin)
+		_ = os.Setenv("PATH", bin)
 		return
 	}
 	for _, part := range strings.Split(path, string(os.PathListSeparator)) {
@@ -45,7 +45,7 @@ func EnsureLocalBinOnPATH() {
 			return
 		}
 	}
-	os.Setenv("PATH", path+string(os.PathListSeparator)+bin)
+	_ = os.Setenv("PATH", path+string(os.PathListSeparator)+bin)
 }
 
 // RemoveBrokenLocalCLIs deletes HOME-installed binaries that fail to exec
@@ -134,7 +134,7 @@ func Install(ctx context.Context, name string, logf func(string)) error {
 	if err != nil {
 		return err
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	binPath, err := extractNamed(body, spec.Command, tmpDir)
 	if err != nil {
@@ -185,7 +185,7 @@ func download(ctx context.Context, url string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("download: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("download %s: HTTP %d", url, resp.StatusCode)
 	}
@@ -219,7 +219,7 @@ func extractNamed(archive []byte, name, destDir string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("not a gzip archive: %w", err)
 	}
-	defer gr.Close()
+	defer func() { _ = gr.Close() }()
 	tr := tar.NewReader(gr)
 	var found string
 	for {
@@ -230,7 +230,7 @@ func extractNamed(archive []byte, name, destDir string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		if hdr.Typeflag != tar.TypeReg && hdr.Typeflag != tar.TypeRegA {
+		if hdr.Typeflag != tar.TypeReg {
 			continue
 		}
 		base := filepath.Base(hdr.Name)

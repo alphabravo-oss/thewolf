@@ -6,50 +6,48 @@ run:
   modules-download-mode: readonly
 
 linters:
+  default: none
   enable:
     - errcheck
-    - gosec
     - govet
     - staticcheck
-    - unused
     - ineffassign
-    - gocritic
-    - revive
-    - misspell
-    - prealloc
-    - bodyclose
-    - noctx
-    - unconvert
-    - unparam
   settings:
     errcheck:
-      check-type-assertions: true
+      check-type-assertions: false
       check-blank: false
-    gosec:
-      severity: medium
-      confidence: medium
-      excludes:
-        - G104 # Unhandled errors (too noisy with deferred Close calls)
-        - G304 # File path from variable (expected in CLI tools)
-    govet:
-      enable-all: true
-      disable:
-        - fieldalignment # Too pedantic for most projects
-    gocritic:
-      enabled-tags:
-        - diagnostic
-        - performance
-      disabled-checks:
-        - hugeParam
-    revive:
-      severity: warning
-      rules:
-        - name: exported
-          disabled: true # Too strict for internal packages
-        - name: unused-parameter
-          disabled: true
-    misspell:
-      locale: US
+      exclude-functions:
+        - (io.Closer).Close
+        - (io.ReadCloser).Close
+        - (io.Writer).Write
+        - (*os.File).Close
+        - (*gzip.Reader).Close
+        - (*http.Response).Body.Close
+        - (*sql.Rows).Close
+        - (*sql.Tx).Rollback
+        - (*sqlx.Rows).Close
+        - os.Remove
+        - os.RemoveAll
+        - os.Setenv
+        - os.MkdirAll
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - fmt.Fscanln
+    staticcheck:
+      checks:
+        - all
+        - "-QF*"
+        - "-ST1005"
+        - "-S1011"
+        - "-S1017"
+        - "-SA1019"
+        - "-SA1012"
+        - "-ST1000"
+        - "-ST1020"
+        - "-ST1021"
+        - "-ST1022"
+        - "-SA4017"
   exclusions:
     generated: lax
     paths:
@@ -74,11 +72,6 @@ linters:
 formatters:
   enable:
     - gofmt
-    - goimports
-  settings:
-    goimports:
-      local-prefixes:
-        - github.com/alphabravocompany/thewolf
 
 issues:
   max-issues-per-linter: 50

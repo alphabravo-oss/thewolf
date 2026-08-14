@@ -1771,7 +1771,12 @@ func scannerPolicyScheduleSchema() map[string]any {
 	}
 	daily := periodic("daily")
 	weekly := periodic("weekly")
-	weekly["properties"].(map[string]any)["weekday"] = map[string]any{
+	weeklyProps, ok := weekly["properties"].(map[string]any)
+	if !ok {
+		weeklyProps = map[string]any{}
+		weekly["properties"] = weeklyProps
+	}
+	weeklyProps["weekday"] = map[string]any{
 		"type": "string",
 		"enum": []string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"},
 	}

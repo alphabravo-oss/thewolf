@@ -97,7 +97,7 @@ func NewServer(store db.Store, addr string) *Server {
 	// Initialize artifact store at ~/.wolf/artifacts/ for durable scan output storage.
 	if artifacts.Global == nil {
 		home, _ := os.UserHomeDir()
-		artifacts.Init(filepath.Join(home, ".wolf", "artifacts")) // #nosec G104 -- intentional: response/log write errors are not actionable here
+		_ = artifacts.Init(filepath.Join(home, ".wolf", "artifacts")) // #nosec G104 -- intentional: response/log write errors are not actionable here
 	}
 	runArtifactRetentionCleanup(store)
 

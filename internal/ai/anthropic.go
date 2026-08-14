@@ -173,7 +173,7 @@ func (p *AnthropicProvider) sendWithSystem(ctx context.Context, prompt string, m
 		p.emitLog(prompt, "", err.Error(), start, 0, 0, 0)
 		return "", fmt.Errorf("http request: %w", err)
 	}
-	defer httpResp.Body.Close()
+	defer func() { _ = httpResp.Body.Close() }()
 
 	respBytes, err := io.ReadAll(httpResp.Body)
 	if err != nil {

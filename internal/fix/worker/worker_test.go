@@ -242,9 +242,9 @@ func TestWorkerOnceRunsQueuedConsole(t *testing.T) {
 // runs it is not handed to the orchestrator.
 func TestWorkerSkipsPreCancelledJob(t *testing.T) {
 	store := newStore(t)
-	job := enqueue(t, store)
+	_ = enqueue(t, store)
 	// Cancel it before the worker claims it.
-	job, _ = store.ClaimNextFixJob(context.Background(), "pre")
+	job, _ := store.ClaimNextFixJob(context.Background(), "pre")
 	job.Status = models.FixJobCancelled
 	if err := store.UpdateFixJob(context.Background(), job); err != nil {
 		t.Fatalf("cancel: %v", err)

@@ -657,7 +657,7 @@ func (r *scannerReleaseRepository) RotateSignerProfile(
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var current scannerrelease.SignerProfile
 	if err := tx.GetContext(
 		ctx, &current, r.db.Rebind(

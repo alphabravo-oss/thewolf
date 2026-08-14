@@ -202,7 +202,7 @@ func readBackupTable(
 	if err != nil {
 		return scannerrelease.BackupTable{}, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	columns, err := rows.Columns()
 	if err != nil {
 		return scannerrelease.BackupTable{}, err
@@ -857,7 +857,7 @@ func backupBooleanColumns(
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	types, err := rows.ColumnTypes()
 	if err != nil {
 		return nil, err
@@ -950,7 +950,7 @@ func (r *scannerReleaseRepository) verifyRestoreIntegrity(
 		if err != nil {
 			return err
 		}
-		defer rows.Close()
+		defer func() { _ = rows.Close() }()
 		if rows.Next() {
 			return errors.New("restored scanner release backup violates foreign-key integrity")
 		}

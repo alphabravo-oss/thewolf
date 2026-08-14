@@ -506,7 +506,7 @@ func init() {
 		}
 	}
 	if len(missing) > 0 {
-		os.Setenv("PATH", current+":"+strings.Join(missing, ":")) // #nosec G104 -- intentional: response/log write errors are not actionable here
+		_ = os.Setenv("PATH", current+":"+strings.Join(missing, ":")) // #nosec G104 -- intentional: response/log write errors are not actionable here
 	}
 }
 
@@ -613,7 +613,7 @@ func InstallTool(name string, output io.Writer) (string, error) {
 
 	// Check if already installed
 	if ver, ok := GetVersion(t); ok {
-		fmt.Fprintf(output, "%s is already installed (version: %s)\n", name, ver)
+		_, _ = fmt.Fprintf(output, "%s is already installed (version: %s)\n", name, ver)
 		return ver, nil
 	}
 
@@ -627,8 +627,8 @@ func InstallTool(name string, output io.Writer) (string, error) {
 	if via == "" {
 		via = "script"
 	}
-	fmt.Fprintf(output, "Installing %s via %s...\n", name, via)
-	fmt.Fprintf(output, "$ %s\n", method.Cmd)
+	_, _ = fmt.Fprintf(output, "Installing %s via %s...\n", name, via)
+	_, _ = fmt.Fprintf(output, "$ %s\n", method.Cmd)
 
 	// Run the install command, streaming output
 	// #nosec G204 -- command is a configured tool name (docker / claude / codex / scanner binary); args sourced from internal config, not user input
@@ -648,8 +648,8 @@ func InstallTool(name string, output io.Writer) (string, error) {
 		if fallbackVia == "" {
 			fallbackVia = "script"
 		}
-		fmt.Fprintf(output, "\nPrimary method failed. Retrying via %s...\n", fallbackVia)
-		fmt.Fprintf(output, "$ %s\n", fallback.Cmd)
+		_, _ = fmt.Fprintf(output, "\nPrimary method failed. Retrying via %s...\n", fallbackVia)
+		_, _ = fmt.Fprintf(output, "$ %s\n", fallback.Cmd)
 
 		// #nosec G204 -- command is a configured tool name (docker / claude / codex / scanner binary); args sourced from internal config, not user input
 		// nosemgrep: go.lang.security.audit.dangerous-exec-command.dangerous-exec-command

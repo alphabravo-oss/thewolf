@@ -44,7 +44,7 @@ func newScannerReleaseBackupExportCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer store.Close()
+			defer func() { _ = store.Close() }()
 			backup, err := store.ScannerReleases().ExportReleaseBackup(
 				command.Context(),
 				scannerrelease.BackupCommand{
@@ -87,7 +87,7 @@ func newScannerReleaseBackupPreflightCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer store.Close()
+			defer func() { _ = store.Close() }()
 			preflight, err := store.ScannerReleases().PreflightReleaseRestore(
 				command.Context(), backup,
 			)
@@ -121,7 +121,7 @@ func newScannerReleaseBackupRestoreCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer store.Close()
+			defer func() { _ = store.Close() }()
 			result, err := store.ScannerReleases().RestoreReleaseBackup(
 				command.Context(), backup,
 				scannerrelease.BackupCommand{
@@ -162,7 +162,7 @@ func newScannerReleaseBackupStatusCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer store.Close()
+			defer func() { _ = store.Close() }()
 			maintenance, err := store.ScannerReleases().GetReleaseMaintenanceStatus(command.Context())
 			if err != nil {
 				return err

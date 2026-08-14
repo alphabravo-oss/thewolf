@@ -84,7 +84,7 @@ func (o *OpenCode) Fix(ctx context.Context, req FixRequest) (*FixResult, error) 
 	if err != nil {
 		return &FixResult{Error: "create opencode config dir: " + err.Error()}, nil
 	}
-	defer os.RemoveAll(cfgDir)
+	defer func() { _ = os.RemoveAll(cfgDir) }()
 	cfgPath := filepath.Join(cfgDir, "opencode.json")
 	if err := os.WriteFile(cfgPath, []byte(wolfOpenCodeConfig), 0o600); err != nil {
 		return &FixResult{Error: "write opencode config: " + err.Error()}, nil

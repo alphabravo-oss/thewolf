@@ -341,7 +341,7 @@ func ExportFindingTrends(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Content-Disposition", `attachment; filename="findings-trends.json"`)
 		w.WriteHeader(http.StatusOK) // #nosec G104 -- intentional: response/log write errors are not actionable here
-		w.Write(data)                // nosemgrep: go.lang.security.audit.xss.no-direct-write-to-responsewriter.no-direct-write-to-responsewriter // #nosec G104 -- intentional: response/log write errors are not actionable here
+		_, _ = w.Write(data)         // nosemgrep: go.lang.security.audit.xss.no-direct-write-to-responsewriter.no-direct-write-to-responsewriter // #nosec G104 -- intentional: response/log write errors are not actionable here
 
 	default: // csv
 		w.Header().Set("Content-Type", "text/csv")
@@ -349,9 +349,9 @@ func ExportFindingTrends(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK) // #nosec G104 -- intentional: response/log write errors are not actionable here
 
 		cw := csv.NewWriter(w)
-		cw.Write([]string{"date", "critical", "high", "medium", "low", "info", "total"}) // #nosec G104 -- intentional: response/log write errors are not actionable here
+		_ = cw.Write([]string{"date", "critical", "high", "medium", "low", "info", "total"}) // #nosec G104 -- intentional: response/log write errors are not actionable here
 		for _, t := range trends {
-			cw.Write([]string{
+			_ = cw.Write([]string{
 				t.Date,
 				strconv.Itoa(t.Counts.Critical),
 				strconv.Itoa(t.Counts.High),
@@ -444,7 +444,7 @@ func ExportFindings(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Content-Disposition", `attachment; filename="findings.json"`)
 		w.WriteHeader(http.StatusOK) // #nosec G104 -- intentional: response/log write errors are not actionable here
-		w.Write(data)                // nosemgrep: go.lang.security.audit.xss.no-direct-write-to-responsewriter.no-direct-write-to-responsewriter // #nosec G104 -- intentional: response/log write errors are not actionable here
+		_, _ = w.Write(data)         // nosemgrep: go.lang.security.audit.xss.no-direct-write-to-responsewriter.no-direct-write-to-responsewriter // #nosec G104 -- intentional: response/log write errors are not actionable here
 
 	default: // csv
 		w.Header().Set("Content-Type", "text/csv")
@@ -452,12 +452,12 @@ func ExportFindings(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK) // #nosec G104 -- intentional: response/log write errors are not actionable here
 
 		cw := csv.NewWriter(w)
-		cw.Write([]string{
+		_ = cw.Write([]string{
 			"id", "severity", "category", "tool_name", "title", "file_path",
 			"line_start", "line_end", "status", "composite_score", "rule_id", "cwe_id", "created_at",
 		})
 		for _, f := range filtered {
-			cw.Write([]string{
+			_ = cw.Write([]string{
 				f.ID,
 				string(f.Severity),
 				string(f.Category),

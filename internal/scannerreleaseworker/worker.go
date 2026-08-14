@@ -404,7 +404,7 @@ func (w *Worker) executePlan(
 		if err != nil {
 			return fmt.Errorf("list scanner release build steps: %w", err)
 		}
-		plan, logical, err := restorePlan(records)
+		_, logical, err := restorePlan(records)
 		if err != nil {
 			return err
 		}
@@ -416,6 +416,7 @@ func (w *Worker) executePlan(
 		if err != nil {
 			return fmt.Errorf("refresh scanner release build steps: %w", err)
 		}
+		var plan scannerpipeline.Plan
 		plan, logical, err = restorePlan(records)
 		if err != nil {
 			return err

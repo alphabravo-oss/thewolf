@@ -49,7 +49,7 @@ func newScanWorkerCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("open store: %w", err)
 			}
-			defer store.Close()
+			defer func() { _ = store.Close() }()
 			if strings.EqualFold(envOr("WOLF_DB_DRIVER", "sqlite"), "sqlite") && capacity > 1 {
 				return fmt.Errorf("SQLite supports one effective scan-worker slot; use PostgreSQL for capacity > 1")
 			}

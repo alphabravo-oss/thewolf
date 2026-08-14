@@ -83,7 +83,7 @@ func (s *Store) AppendLog(jobID, line string) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	_, err = fmt.Fprintln(f, line)
 	return err
 }
@@ -136,7 +136,7 @@ func (s *Store) AppendConsoleRaw(consoleID string, data []byte) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	_, err = f.Write(data)
 	return err
 }

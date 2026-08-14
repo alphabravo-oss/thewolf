@@ -29,12 +29,12 @@ func (s *PostgresStore) FleetInventory(ctx context.Context, userID string, fleet
 		var st string
 		var n int
 		if err := rows.Scan(&st, &n); err != nil {
-			rows.Close()
+			_ = rows.Close()
 			return nil, err
 		}
 		out.BySourceType[st] = n
 	}
-	rows.Close()
+	_ = rows.Close()
 
 	colQ := `SELECT c.name, COUNT(cr.repo_id)
 	         FROM collections c
@@ -50,12 +50,12 @@ func (s *PostgresStore) FleetInventory(ctx context.Context, userID string, fleet
 			var name string
 			var n int
 			if err := rows.Scan(&name, &n); err != nil {
-				rows.Close()
+				_ = rows.Close()
 				return nil, err
 			}
 			out.ByCollection[name] = n
 		}
-		rows.Close()
+		_ = rows.Close()
 	}
 
 	langQ := `SELECT detected_languages FROM repos`
@@ -68,14 +68,14 @@ func (s *PostgresStore) FleetInventory(ctx context.Context, userID string, fleet
 		for rows.Next() {
 			var raw string
 			if err := rows.Scan(&raw); err != nil {
-				rows.Close()
+				_ = rows.Close()
 				return nil, err
 			}
 			for _, lang := range parseLanguageList(raw) {
 				out.ByLanguage[lang]++
 			}
 		}
-		rows.Close()
+		_ = rows.Close()
 	}
 
 	return out, nil

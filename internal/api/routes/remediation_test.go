@@ -379,5 +379,3 @@ func TestAcceptRemediationFreezes(t *testing.T) {
 		t.Fatalf("fix after accept %d: %s", w2.Code, w2.Body.String())
 	}
 }
-
-

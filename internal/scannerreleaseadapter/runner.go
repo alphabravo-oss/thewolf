@@ -435,7 +435,7 @@ func readActionJournalFile(directory, name string, maximum int) ([]byte, error) 
 	if err != nil {
 		return nil, err
 	}
-	defer root.Close()
+	defer func() { _ = root.Close() }()
 	file, err := root.Open(name)
 	if err != nil {
 		return nil, err

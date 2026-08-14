@@ -270,7 +270,7 @@ func Build(ctx context.Context, req BuildRequest, onLine func(string)) (BuildRes
 	if err != nil {
 		return BuildResult{}, fmt.Errorf("create temp context dir: %w", err)
 	}
-	defer os.RemoveAll(operationDir)
+	defer func() { _ = os.RemoveAll(operationDir) }()
 	contextRoot := filepath.Join(operationDir, "context")
 	if err := os.Mkdir(contextRoot, 0o700); err != nil {
 		return BuildResult{}, fmt.Errorf("create build context dir: %w", err)
@@ -365,7 +365,7 @@ func runStreaming(ctx context.Context, name string, argv []string, onLine func(s
 	cmd.Stderr = pw
 
 	if err := cmd.Start(); err != nil {
-		pw.Close()
+		_ = pw.Close()
 		return fmt.Errorf("start %s: %w", name, err)
 	}
 
@@ -380,7 +380,7 @@ func runStreaming(ctx context.Context, name string, argv []string, onLine func(s
 	}()
 
 	waitErr := cmd.Wait()
-	pw.Close()
+	_ = pw.Close()
 	<-done
 	if waitErr != nil {
 		return fmt.Errorf("%s build failed: %w", name, waitErr)

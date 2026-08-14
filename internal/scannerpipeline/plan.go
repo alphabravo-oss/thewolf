@@ -176,7 +176,7 @@ func Default(inputs Inputs) (Plan, error) {
 		steps = append(steps, requiredAfter(versionKey, StepTest, 10*time.Minute, manifestKey))
 		invocationKey := "invocation-smoke/" + image.Key
 		steps = append(steps, requiredAfter(invocationKey, StepTest, 20*time.Minute, manifestKey))
-		testGateKey := invocationKey
+		var testGateKey string
 		if image.Kind == ImageKindScanner {
 			parserKey := "parser-fixtures/" + image.Key
 			steps = append(steps, requiredAfter(parserKey, StepTest, 20*time.Minute, invocationKey))

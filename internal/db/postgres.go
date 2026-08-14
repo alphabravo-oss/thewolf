@@ -773,7 +773,7 @@ func (s *PostgresStore) CreateFindings(ctx context.Context, findings []models.Fi
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	if err := insertFindingsTx(ctx, tx, findings); err != nil {
 		return err
 	}
@@ -1105,7 +1105,7 @@ func (s *PostgresStore) DeleteScanCascade(ctx context.Context, scanID string) er
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	if _, err := tx.ExecContext(ctx, "DELETE FROM fix_items WHERE finding_id IN (SELECT id FROM findings WHERE scan_id = $1)", scanID); err != nil {
 		return fmt.Errorf("delete fix_items: %w", err)

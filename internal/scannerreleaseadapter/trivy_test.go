@@ -182,7 +182,7 @@ func writeTrivyArchiveIn(
 			typeflag = tar.TypeReg
 		}
 		size := int64(len(entry.value))
-		if typeflag != tar.TypeReg && typeflag != tar.TypeRegA {
+		if typeflag != tar.TypeReg {
 			size = 0
 		}
 		if err := writer.WriteHeader(&tar.Header{

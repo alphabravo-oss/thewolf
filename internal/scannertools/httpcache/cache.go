@@ -135,7 +135,7 @@ func Do(ctx context.Context, client *http.Client, req *http.Request, opts Option
 	if err != nil {
 		return Response{}, err
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode == http.StatusNotModified {
 		if !usable {
 			return Response{}, ErrNotModifiedWithoutUsableCache

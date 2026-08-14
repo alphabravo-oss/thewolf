@@ -164,7 +164,7 @@ func newScannerReleaseWorkerCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("open scanner release store: %w", err)
 			}
-			defer store.Close()
+			defer func() { _ = store.Close() }()
 			persistence := store.ScannerReleases()
 			observer := scannerobservability.NewRegistry()
 			observer.SetDatabaseCheck(store.Ping)

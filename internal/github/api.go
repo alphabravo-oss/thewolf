@@ -67,7 +67,7 @@ func (c *Client) ListOrgRepos(ctx context.Context, org string) ([]Repo, error) {
 			return nil, err
 		}
 		body, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		if resp.StatusCode == 404 {
 			// Try as user instead of org.
 			return c.ListUserRepos(ctx, org)
@@ -112,7 +112,7 @@ func (c *Client) RepoPushInfo(ctx context.Context, owner, repo string) (PushInfo
 		return PushInfo{}, err
 	}
 	body, _ := io.ReadAll(resp.Body)
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if resp.StatusCode >= 400 {
 		return PushInfo{}, fmt.Errorf("github %d: %s", resp.StatusCode, string(body))
 	}
@@ -157,7 +157,7 @@ func (c *Client) ValidateToken(ctx context.Context) (TokenInfo, error) {
 		return TokenInfo{}, err
 	}
 	body, _ := io.ReadAll(resp.Body)
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
 		return TokenInfo{Valid: false}, fmt.Errorf("github %d: token was rejected", resp.StatusCode)
 	}
@@ -208,7 +208,7 @@ func (c *Client) ListAccessibleRepos(ctx context.Context) ([]Repo, error) {
 			return nil, err
 		}
 		body, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		if resp.StatusCode >= 400 {
 			return nil, fmt.Errorf("github %d: %s", resp.StatusCode, string(body))
 		}
@@ -242,7 +242,7 @@ func (c *Client) ListUserRepos(ctx context.Context, user string) ([]Repo, error)
 			return nil, err
 		}
 		body, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		if resp.StatusCode >= 400 {
 			return nil, fmt.Errorf("github %d: %s", resp.StatusCode, string(body))
 		}

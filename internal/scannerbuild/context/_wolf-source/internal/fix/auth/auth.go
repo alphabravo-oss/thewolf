@@ -107,16 +107,16 @@ func Resolve(ctx context.Context, store db.Store, userID string) Credentials {
 
 // EngineStatus is the worker-local view of one fix engine's readiness.
 type EngineStatus struct {
-	Name         string   `json:"name"`
-	Command      string   `json:"command,omitempty"`
-	Available    bool     `json:"available"`
-	Installed    bool     `json:"installed"`
-	Installable  bool     `json:"installable,omitempty"`
-	Auth         string   `json:"auth"` // oauth | api_key | none
-	Detail       string   `json:"detail,omitempty"`
-	Account      string   `json:"account,omitempty"`
-	Login        []string `json:"login,omitempty"`
-	SessionPaths []string `json:"session_paths,omitempty"`
+	Name         string          `json:"name"`
+	Command      string          `json:"command,omitempty"`
+	Available    bool            `json:"available"`
+	Installed    bool            `json:"installed"`
+	Installable  bool            `json:"installable,omitempty"`
+	Auth         string          `json:"auth"` // oauth | api_key | none
+	Detail       string          `json:"detail,omitempty"`
+	Account      string          `json:"account,omitempty"`
+	Login        []string        `json:"login,omitempty"`
+	SessionPaths []string        `json:"session_paths,omitempty"`
 	Persisted    bool            `json:"persisted"`
 	Usage        string          `json:"usage,omitempty"`
 	Models       []profile.Model `json:"models,omitempty"`
@@ -330,7 +330,7 @@ func bytesTrim(b []byte) []byte {
 // Login runs the harness OAuth flow on this host (same HOME the worker uses).
 // The session files persist until logout. stdin/stdout must be a TTY.
 func Login(ctx context.Context, engine string) error {
-	command := engine
+	var command string
 	switch engine {
 	case "claude-code", "claude":
 		command = "claude"

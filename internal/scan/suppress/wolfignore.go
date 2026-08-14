@@ -59,7 +59,7 @@ func ParseWolfIgnoreFile(path string) (RuleSet, error) {
 		}
 		return RuleSet{}, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	return ParseWolfIgnore(f, filepath.Base(path))
 }
 

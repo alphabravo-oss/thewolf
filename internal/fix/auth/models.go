@@ -95,8 +95,8 @@ func parseOpenCodeModelsVerbose(out []byte) []profile.Model {
 
 func decodeOpenCodeModelMeta(raw string) (name string, contextK int, variants []string) {
 	var meta struct {
-		Name    string `json:"name"`
-		Limit   struct {
+		Name  string `json:"name"`
+		Limit struct {
 			Context int `json:"context"`
 		} `json:"limit"`
 		Variants map[string]json.RawMessage `json:"variants"`

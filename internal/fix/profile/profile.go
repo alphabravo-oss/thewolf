@@ -19,11 +19,11 @@ type Engine struct {
 
 // Model is a subscription-oriented model the harness accepts.
 type Model struct {
-	ID       string `json:"id"`
-	Label    string `json:"label"`
-	ContextK int    `json:"context_k,omitempty"`
-	Plan     string `json:"plan,omitempty"` // pro | team | api
-	Default  bool   `json:"default,omitempty"`
+	ID       string   `json:"id"`
+	Label    string   `json:"label"`
+	ContextK int      `json:"context_k,omitempty"`
+	Plan     string   `json:"plan,omitempty"` // pro | team | api
+	Default  bool     `json:"default,omitempty"`
 	Speed    string   `json:"speed,omitempty"` // fast | balanced | deep
 	Provider string   `json:"provider,omitempty"`
 	Efforts  []Effort `json:"efforts,omitempty"`

@@ -58,7 +58,7 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
-		defer os.RemoveAll(temporary)
+		defer func() { _ = os.RemoveAll(temporary) }()
 		destination = filepath.Join(temporary, "context")
 	}
 	if err := os.RemoveAll(destination); err != nil {
@@ -276,7 +276,7 @@ func copyFile(source, destination string) error {
 	if err != nil {
 		return err
 	}
-	defer input.Close()
+	defer func() { _ = input.Close() }()
 	info, err := input.Stat()
 	if err != nil {
 		return err

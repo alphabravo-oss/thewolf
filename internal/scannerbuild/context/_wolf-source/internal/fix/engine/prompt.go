@@ -387,7 +387,9 @@ func scanDecisionTokens(s string) []Decision {
 	for i := 0; i < len(s); {
 		skipAt := indexFrom(s, skipPrefix, i)
 		fixAt := indexFrom(s, fixPrefix, i)
-		next, kind, tokLen := -1, "", 0
+		var next int
+		var kind string
+		var tokLen int
 		switch {
 		case skipAt >= 0 && (fixAt < 0 || skipAt < fixAt):
 			next, kind, tokLen = skipAt, "skip", len(skipPrefix)

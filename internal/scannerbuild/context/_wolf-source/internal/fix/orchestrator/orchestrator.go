@@ -956,14 +956,12 @@ func fixOneTool(
 			}
 			logf("  %s: engine produced no decisions and no file changes — leaving the %d findings open", group.Tool, len(work))
 			if stalled {
-				remaining = nil
 				break
 			}
 			eng = chain.Next()
 			attemptNo++
 			if eng == nil || attemptNo > maxAttempts {
 				logf("  %s: leaving %d findings open after a silent engine turn", group.Tool, len(work))
-				remaining = nil
 			}
 			continue
 		}
@@ -1082,7 +1080,6 @@ func fixOneTool(
 		}
 
 		if stalled {
-			remaining = nil
 			break
 		}
 		remaining = append(append([]models.Finding(nil), next...), untouched...)

@@ -105,7 +105,7 @@ func (c Client) Check(ctx context.Context, registry string) error {
 	if err != nil {
 		return fmt.Errorf("check OCI registry %q: %w", registry, err)
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4<<10))
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		return fmt.Errorf("check OCI registry %q: %s", registry, response.Status)
@@ -136,7 +136,7 @@ func (c Client) FetchManifest(ctx context.Context, reference Reference) (*Manife
 	if err != nil {
 		return nil, fmt.Errorf("fetch OCI manifest %s: %w", reference.String(), err)
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4<<10))
 		return nil, fmt.Errorf("fetch OCI manifest %s: %s", reference.String(), response.Status)
@@ -215,7 +215,7 @@ func (c Client) FetchReferrers(ctx context.Context, reference Reference) ([]Desc
 	if err != nil {
 		return nil, fmt.Errorf("fetch OCI referrers %s: %w", reference.String(), err)
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4<<10))
 		return nil, fmt.Errorf("fetch OCI referrers %s: %s", reference.String(), response.Status)
@@ -493,7 +493,7 @@ func (c Client) ManifestPresent(ctx context.Context, reference Reference) (bool,
 	if err != nil {
 		return false, err
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode == http.StatusNotFound {
 		return false, nil
 	}
@@ -527,7 +527,7 @@ func (c Client) BlobPresent(ctx context.Context, reference Reference, digest str
 	if err != nil {
 		return false, err
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode == http.StatusNotFound {
 		return false, nil
 	}
@@ -557,7 +557,7 @@ func (c Client) FetchBlob(ctx context.Context, reference Reference, digest strin
 	if err != nil {
 		return nil, fmt.Errorf("fetch OCI blob %s: %w", digest, err)
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4<<10))
 		return nil, fmt.Errorf("fetch OCI blob %s: %s", digest, response.Status)
@@ -628,7 +628,7 @@ func (c Client) PutBlob(
 	if err != nil {
 		return fmt.Errorf("complete OCI blob upload %s: %w", digest, err)
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4<<10))
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		return fmt.Errorf("complete OCI blob upload %s: %s", digest, response.Status)
@@ -668,7 +668,7 @@ func (c Client) PutManifest(
 	if err != nil {
 		return fmt.Errorf("put OCI manifest %s: %w", reference.String(), err)
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4<<10))
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		return fmt.Errorf("put OCI manifest %s: %s", reference.String(), response.Status)
@@ -729,7 +729,7 @@ func (c Client) EnsureManifestAlias(
 	if err != nil {
 		return fmt.Errorf("put OCI operation alias %q: %w", alias, err)
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4<<10))
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		return fmt.Errorf("put OCI operation alias %q: %s", alias, response.Status)
@@ -771,7 +771,7 @@ func (c Client) resolveManifestAlias(
 	if err != nil {
 		return "", false, err
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode == http.StatusNotFound {
 		return "", false, nil
 	}
@@ -830,7 +830,7 @@ func (c Client) DeleteManifest(ctx context.Context, reference Reference) (bool, 
 	if err != nil {
 		return false, err
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4<<10))
 	if response.StatusCode == http.StatusNotFound {
 		return true, nil
@@ -1065,7 +1065,7 @@ func (c Client) exchangeBearerChallenge(
 	if err != nil {
 		return "", fmt.Errorf("exchange OCI registry Bearer challenge: %w", err)
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4<<10))
 		return "", fmt.Errorf("exchange OCI registry Bearer challenge: %s", response.Status)

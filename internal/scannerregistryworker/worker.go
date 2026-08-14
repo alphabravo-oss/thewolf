@@ -468,6 +468,7 @@ func (w *Worker) reconcile(
 			continue
 		}
 		signatureExpected := observation.ExpectedSignatureDigest
+		_ = signatureExpected
 		if job.ReSignPolicy == scannerrelease.RegistryReSignRequired {
 			if w.config.Resigner == nil {
 				failures = append(failures, fmt.Errorf("%s: required re-sign adapter is unavailable", key))

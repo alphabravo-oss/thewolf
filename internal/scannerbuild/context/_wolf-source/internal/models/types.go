@@ -102,8 +102,6 @@ const (
 	LangObjC       Language = "objectivec"
 )
 
-
-
 // ValidationResult represents fix validation outcome.
 type ValidationResult string
 
