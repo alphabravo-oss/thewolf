@@ -1,8 +1,6 @@
-// Package budget enforces the optional cost and time ceilings on an
-// auto-remediation loop. max-iterations is the only mandatory bound;
-// a per-invocation timeout, a total dollar budget, and an overall
-// wall-clock cap are each optional and individually configurable. The
-// loop stops at whichever ceiling triggers first.
+// Package budget enforces cost and time ceilings on a fixer agent run.
+// max-iterations is the only mandatory bound; a per-invocation timeout,
+// a total dollar budget, and an overall wall-clock cap are each optional.
 package budget
 
 import (
@@ -10,7 +8,7 @@ import (
 	"time"
 )
 
-// Ceilings is the configured set of loop bounds. Zero-valued optional
+// Ceilings is the configured set of run bounds. Zero-valued optional
 // fields mean "no limit".
 type Ceilings struct {
 	// MaxIterations is mandatory and must be > 0.
@@ -18,7 +16,7 @@ type Ceilings struct {
 	// PerInvocation caps a single AI invocation's wall-clock time.
 	// Zero means no per-invocation timeout.
 	PerInvocation time.Duration
-	// WallClock caps the whole loop's elapsed time. Zero means no cap.
+	// WallClock caps the whole run's elapsed time. Zero means no cap.
 	WallClock time.Duration
 	// MaxCostUSD caps cumulative AI spend. Zero means no cap.
 	MaxCostUSD float64
@@ -32,8 +30,8 @@ func (c Ceilings) Validate() error {
 	return nil
 }
 
-// Tracker accumulates loop progress against the configured ceilings.
-// It is not safe for concurrent use; the loop is single-threaded.
+// Tracker accumulates progress against the configured ceilings.
+// It is not safe for concurrent use; a fixer run is single-threaded.
 type Tracker struct {
 	ceilings   Ceilings
 	started    time.Time
@@ -66,7 +64,7 @@ func (t *Tracker) Iterations() int { return t.iterations }
 func (t *Tracker) InvocationTimeout() time.Duration { return t.ceilings.PerInvocation }
 
 // StopReason returns a non-empty reason when a ceiling has been crossed
-// and the loop must stop, or "" when it may continue. Checked before
+// and the run must stop, or "" when it may continue. Checked before
 // each iteration. The first-crossed ceiling wins; the order below is
 // the tie-break.
 func (t *Tracker) StopReason() string {

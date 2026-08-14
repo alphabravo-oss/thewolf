@@ -12,6 +12,7 @@ import (
 
 	"github.com/alphabravocompany/thewolf/internal/api/response"
 	"github.com/alphabravocompany/thewolf/internal/auth"
+	"github.com/alphabravocompany/thewolf/internal/github"
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
 	"github.com/alphabravocompany/thewolf/internal/secrets"
@@ -25,11 +26,12 @@ type createSecretRequest struct {
 }
 
 type maskedSecret struct {
-	ID        string         `json:"id"`
-	KeyType   models.KeyType `json:"key_type"`
-	KeyName   string         `json:"key_name"`
-	Value     string         `json:"value"`
-	CreatedAt time.Time      `json:"created_at"`
+	ID        string          `json:"id"`
+	KeyType   models.KeyType  `json:"key_type"`
+	KeyName   string          `json:"key_name"`
+	Value     string          `json:"value"`
+	Metadata  json.RawMessage `json:"metadata,omitempty"`
+	CreatedAt time.Time       `json:"created_at"`
 }
 
 func maskValue(_ string) string {
@@ -63,13 +65,17 @@ func ListSecrets(w http.ResponseWriter, r *http.Request) {
 
 	masked := make([]maskedSecret, len(secs))
 	for i, s := range secs {
-		masked[i] = maskedSecret{
+		item := maskedSecret{
 			ID:        s.ID,
 			KeyType:   s.KeyType,
 			KeyName:   s.KeyName,
 			Value:     maskedStoredSecret(s),
 			CreatedAt: s.CreatedAt,
 		}
+		if raw := strings.TrimSpace(s.MetadataJSON); raw != "" && json.Valid([]byte(raw)) {
+			item.Metadata = json.RawMessage(raw)
+		}
+		masked[i] = item
 	}
 
 	response.WriteJSON(w, http.StatusOK, response.ListResponse{
@@ -104,6 +110,23 @@ func CreateSecret(w http.ResponseWriter, r *http.Request) {
 		req.KeyType = models.KeyTypeCustom
 	}
 
+	meta := "{}"
+	if req.KeyType == models.KeyTypeGitHubToken {
+		info, verr := github.New(req.Value).ValidateToken(r.Context())
+		if verr != nil && info.Login == "" && strings.Contains(strings.ToLower(verr.Error()), "token was rejected") {
+			response.WriteError(w, http.StatusBadRequest, "validation_error", "GitHub rejected this token (check that it is a valid PAT)")
+			return
+		}
+		payload := map[string]any{"validated": info.Valid, "login": info.Login, "scopes": info.Scopes}
+		if verr != nil {
+			payload["validated"] = false
+			payload["error"] = "could not reach GitHub to validate token"
+		}
+		if raw, merr := json.Marshal(payload); merr == nil {
+			meta = string(raw)
+		}
+	}
+
 	encrypted, err := secrets.Encrypt(req.Value)
 	if err != nil {
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to encrypt secret")
@@ -117,6 +140,7 @@ func CreateSecret(w http.ResponseWriter, r *http.Request) {
 		KeyType:        req.KeyType,
 		KeyName:        req.KeyName,
 		EncryptedValue: encrypted,
+		MetadataJSON:   meta,
 		CreatedAt:      now,
 		UpdatedAt:      now,
 	}

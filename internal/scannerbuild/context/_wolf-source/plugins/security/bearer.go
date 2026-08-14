@@ -47,12 +47,20 @@ func (p *BearerPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]
 	// bearer holds the whole repo AST in memory during data-flow tracking,
 	// which OOMs at the 2g default on non-trivial repos (visible as a Go
 	// runtime trace from the bearer binary's gc workers). 4g leaves room.
-	// HOME=/tmp because bearer caches rule packs under ~/.bearer.
+	// Rule packs are fetched from GitHub Releases on first use of each
+	// language and stored under ~/.bearer. HOME=/tmp would throw that
+	// cache away with the container, so every scan re-downloaded
+	// javascript.tar.gz (and timed out on a slow GitHub). Persist on
+	// the shared wolf-db volume the same way trivy/grype persist DBs.
 	cfg := container.ConfigFromOpts(opts.ContainerCfg)
+	home := "/tmp"
+	if cfg.DBVolume != "" {
+		home = "/var/lib/wolf-db/bearer"
+	}
 	cmd := container.CommandContext(ctx, cfg,
 		container.Options{
 			RepoDir:        opts.RepoPath,
-			ExtraEnv:       map[string]string{"HOME": "/tmp"},
+			ExtraEnv:       map[string]string{"HOME": home},
 			MemoryOverride: "4g",
 		},
 		"bearer", "scan", "/scan", "--format", "json", "--quiet", "--exit-code", "0")

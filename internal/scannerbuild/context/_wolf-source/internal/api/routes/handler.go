@@ -1,6 +1,8 @@
 package routes
 
 import (
+	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/alphabravocompany/thewolf/internal/db"
@@ -82,5 +84,16 @@ func SetHandler(store db.Store, registry *plugin.Registry) {
 		Store:         store,
 		Registry:      registry,
 		streamLimiter: newScanStreamLimiter(),
+	}
+}
+
+// wantPurgeRecords reports whether DELETE ?purge=true was set. Default is
+// false: keep scan/finding history unless the caller opts in.
+func wantPurgeRecords(r *http.Request) bool {
+	switch strings.ToLower(strings.TrimSpace(r.URL.Query().Get("purge"))) {
+	case "1", "true", "yes":
+		return true
+	default:
+		return false
 	}
 }

@@ -11,7 +11,7 @@
 #
 #   default  → small pure-Python core + per-language tools
 #   jvm      → infer + pmd
-#   rust     → clippy + cargo
+#   rust     → clippy + cargo + cargo-audit + cargo-deny
 #   codeql   → codeql
 # ============================================================
 set -euo pipefail
@@ -169,6 +169,8 @@ if [[ "$VARIANT" == "rust" ]]; then
     echo "[Rust tools]"
     run check "rust toolchain $RUST_TOOLCHAIN (owns cargo-clippy)" "$RUST_TOOLCHAIN" rustc --version
     run check "cargo-clippy from rust $RUST_TOOLCHAIN" "clippy" cargo-clippy --version
+    run check "cargo-audit $CARGO_AUDIT_VERSION" "$CARGO_AUDIT_VERSION" cargo-audit --version
+    run check "cargo-deny $CARGO_DENY_VERSION" "$CARGO_DENY_VERSION" cargo-deny --version
 fi
 
 if [[ "$VARIANT" == "codeql" ]]; then

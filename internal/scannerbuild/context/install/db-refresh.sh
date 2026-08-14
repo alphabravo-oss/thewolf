@@ -18,5 +18,7 @@ GRYPE_DB_CACHE_DIR=/var/lib/wolf-db/grype grype db update
 
 # osv-scanner uses the OSV.dev API on each scan; no local DB to refresh.
 # govulncheck uses vuln.go.dev on each scan; no local DB.
+# Bearer rule packs live in the separate bearer/bearer image (HOME on this
+# volume at /var/lib/wolf-db/bearer) and hydrate on first language scan.
 
 echo "Vuln DBs refreshed."

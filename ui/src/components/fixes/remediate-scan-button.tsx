@@ -1,7 +1,7 @@
 // Run-agent dialog: how many sequential agent runs to queue.
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Loader2Icon, RepeatIcon } from "lucide-react";
+import { RepeatIcon } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { enqueueFix, useAutofixEnabled, useRepoFixable } from "@/lib/fixes";

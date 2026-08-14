@@ -22,6 +22,7 @@ package workspace
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -30,6 +31,8 @@ import (
 	"strings"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
+	repocache "github.com/alphabravocompany/thewolf/internal/repo"
+	"github.com/alphabravocompany/thewolf/internal/scantarget"
 )
 
 // ErrSSHUnsupported is returned by Prepare for SSH-sourced repos: write-clone
@@ -84,6 +87,10 @@ type Workspace struct {
 	// Cleanup. For a worktree it is the worktree dir's parent; for a clone it is
 	// the clone dir itself's parent.
 	tmpRoot string
+	// token is the GitHub token used for clone/push. Empty for local.
+	token string
+	// defaultBranch is the repo's default branch; Push refuses to push it.
+	defaultBranch string
 }
 
 // runGit runs `git` with args in dir and returns combined output. It is a
@@ -115,6 +122,17 @@ func runGitWithEnv(ctx context.Context, dir string, env []string, args ...string
 		return string(out), fmt.Errorf("git %s: %s: %w", strings.Join(args, " "), strings.TrimSpace(string(out)), err)
 	}
 	return string(out), nil
+}
+
+func cachedGitHubWorktree(repo *models.Repo) string {
+	if repo == nil {
+		return ""
+	}
+	owner, name, err := scantarget.ParseGitHubSource(repo.SourcePath)
+	if err != nil {
+		return ""
+	}
+	return repocache.CachedGitHubPath(owner, name)
 }
 
 // Prepare materialises a writable working tree on a new fix branch for the
@@ -152,22 +170,38 @@ func prepareLocal(ctx context.Context, opts Options) (*Workspace, error) {
 
 	// `git worktree add <path> -b <branch>` creates the new branch AND its
 	// dedicated working tree in one atomic step off the current HEAD.
+	// If the branch already exists, attach a worktree to it instead.
 	if out, err := runGit(ctx, repoRoot, "worktree", "add", wtPath, "-b", opts.Branch); err != nil {
-		_ = os.RemoveAll(tmpRoot)
-		return nil, fmt.Errorf("workspace: create worktree: %s: %w", strings.TrimSpace(out), err)
+		if out2, err2 := runGit(ctx, repoRoot, "worktree", "add", wtPath, opts.Branch); err2 != nil {
+			_ = os.RemoveAll(tmpRoot)
+			return nil, fmt.Errorf("workspace: create worktree: %s: %w", strings.TrimSpace(out+" "+out2), err)
+		}
 	}
 
-	return &Workspace{
-		path:     wtPath,
-		branch:   opts.Branch,
-		kind:     KindWorktree,
-		repoRoot: repoRoot,
-		tmpRoot:  tmpRoot,
-	}, nil
+	ws := &Workspace{
+		path:          wtPath,
+		branch:        opts.Branch,
+		kind:          KindWorktree,
+		repoRoot:      repoRoot,
+		tmpRoot:       tmpRoot,
+		defaultBranch: defaultBranchOf(opts.Repo),
+	}
+	if err := writeMeta(ws); err != nil {
+		_ = ws.Cleanup(ctx)
+		return nil, err
+	}
+	return ws, nil
 }
 
 func prepareGitHub(ctx context.Context, opts Options) (*Workspace, error) {
 	if opts.Token == "" {
+		if cache := cachedGitHubWorktree(opts.Repo); cache != "" {
+			local := *opts.Repo
+			local.SourceType = models.SourceTypeLocal
+			local.SourcePath = cache
+			opts.Repo = &local
+			return prepareLocal(ctx, opts)
+		}
 		return nil, errors.New("workspace: github write-clone requires a token")
 	}
 	cloneURL := opts.CloneURL
@@ -195,18 +229,168 @@ func prepareGitHub(ctx context.Context, opts Options) (*Workspace, error) {
 		_ = os.RemoveAll(tmpRoot)
 		return nil, fmt.Errorf("workspace: clone-for-write: %s: %w", redact(strings.TrimSpace(out), opts.Token), err)
 	}
-	// New fix branch on the fresh clone.
+	// New fix branch on the fresh clone. If it already exists, check it out.
 	if out, err := runGit(ctx, clonePath, "checkout", "-b", opts.Branch); err != nil {
-		_ = os.RemoveAll(tmpRoot)
-		return nil, fmt.Errorf("workspace: create branch: %s: %w", strings.TrimSpace(out), err)
+		if out2, err2 := runGit(ctx, clonePath, "checkout", opts.Branch); err2 != nil {
+			_ = os.RemoveAll(tmpRoot)
+			return nil, fmt.Errorf("workspace: create branch: %s: %w", strings.TrimSpace(out+" "+out2), err)
+		}
 	}
 
+	ws := &Workspace{
+		path:          clonePath,
+		branch:        opts.Branch,
+		kind:          KindClone,
+		tmpRoot:       tmpRoot,
+		token:         opts.Token,
+		defaultBranch: defaultBranchOf(opts.Repo),
+	}
+	if err := writeMeta(ws); err != nil {
+		_ = ws.Cleanup(ctx)
+		return nil, err
+	}
+	return ws, nil
+}
+
+const workspaceMetaName = "wolf-workspace.json"
+
+type workspaceMeta struct {
+	Path          string `json:"path"`
+	Branch        string `json:"branch"`
+	Kind          Kind   `json:"kind"`
+	RepoRoot      string `json:"repo_root,omitempty"`
+	TmpRoot       string `json:"tmp_root"`
+	DefaultBranch string `json:"default_branch,omitempty"`
+}
+
+func defaultBranchOf(repo *models.Repo) string {
+	if repo == nil {
+		return "main"
+	}
+	if b := strings.TrimSpace(repo.DefaultBranch); b != "" {
+		return b
+	}
+	return "main"
+}
+
+func writeMeta(w *Workspace) error {
+	if w == nil || w.tmpRoot == "" {
+		return nil
+	}
+	data, err := json.Marshal(workspaceMeta{
+		Path: w.path, Branch: w.branch, Kind: w.kind,
+		RepoRoot: w.repoRoot, TmpRoot: w.tmpRoot, DefaultBranch: w.defaultBranch,
+	})
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(w.tmpRoot, workspaceMetaName), data, 0o600)
+}
+
+// Open rehydrates a workspace previously written by Prepare. token is required
+// to push a GitHub clone; it is not persisted on disk.
+func Open(path, token string) (*Workspace, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return nil, errors.New("workspace: open requires a path")
+	}
+	tmpRoot := path
+	metaPath := filepath.Join(path, workspaceMetaName)
+	if _, err := os.Stat(metaPath); err != nil {
+		// Caller may pass the worktree/clone path; try the parent.
+		parent := filepath.Dir(path)
+		if _, perr := os.Stat(filepath.Join(parent, workspaceMetaName)); perr == nil {
+			tmpRoot = parent
+			metaPath = filepath.Join(parent, workspaceMetaName)
+		} else {
+			return nil, fmt.Errorf("workspace: no metadata at %s", path)
+		}
+	}
+	data, err := os.ReadFile(metaPath) // #nosec G304
+	if err != nil {
+		return nil, err
+	}
+	var meta workspaceMeta
+	if err := json.Unmarshal(data, &meta); err != nil {
+		return nil, fmt.Errorf("workspace: parse metadata: %w", err)
+	}
 	return &Workspace{
-		path:    clonePath,
-		branch:  opts.Branch,
-		kind:    KindClone,
-		tmpRoot: tmpRoot,
+		path:          meta.Path,
+		branch:        meta.Branch,
+		kind:          meta.Kind,
+		repoRoot:      meta.RepoRoot,
+		tmpRoot:       tmpRoot,
+		token:         token,
+		defaultBranch: meta.DefaultBranch,
 	}, nil
+}
+
+// Commit stages and commits every change on the fix branch. Identity is forced
+// so a worker container without git config still produces a real commit.
+func (w *Workspace) Commit(ctx context.Context, message string) error {
+	if w == nil || w.path == "" {
+		return errors.New("workspace: commit requires a prepared workspace")
+	}
+	if strings.TrimSpace(message) == "" {
+		message = "wolf: apply verified fix"
+	}
+	if _, err := runGit(ctx, w.path, "add", "-A"); err != nil {
+		return fmt.Errorf("workspace: git add: %w", err)
+	}
+	// Empty commit is a no-op success — the caller already verified a keep.
+	if out, err := runGit(ctx, w.path, "status", "--porcelain"); err == nil && strings.TrimSpace(out) == "" {
+		return nil
+	}
+	if _, err := runGit(ctx, w.path,
+		"-c", "user.email=wolf@localhost",
+		"-c", "user.name=Wolf Autofix",
+		"commit", "-m", message,
+	); err != nil {
+		return fmt.Errorf("workspace: git commit: %w", err)
+	}
+	return nil
+}
+
+// Push publishes the fix branch to origin. It refuses to push the repo's
+// default branch (or main/master) so a misconfigured job cannot land on the
+// protected line.
+func (w *Workspace) Push(ctx context.Context) (sha string, err error) {
+	if w == nil || w.path == "" {
+		return "", errors.New("workspace: push requires a prepared workspace")
+	}
+	if protectedBranch(w.branch, w.defaultBranch) {
+		return "", fmt.Errorf("workspace: refusing to push protected branch %q", w.branch)
+	}
+	var env []string
+	var cleanup func()
+	if w.token != "" {
+		var cerr error
+		env, cleanup, cerr = githubAuthEnv(w.tmpRoot, w.token)
+		if cerr != nil {
+			return "", cerr
+		}
+		defer cleanup()
+	}
+	if len(env) > 0 {
+		if _, err := runGitWithEnv(ctx, w.path, env, "push", "-u", "origin", w.branch); err != nil {
+			return "", fmt.Errorf("workspace: git push: %w", err)
+		}
+	} else if _, err := runGit(ctx, w.path, "push", "-u", "origin", w.branch); err != nil {
+		return "", fmt.Errorf("workspace: git push: %w", err)
+	}
+	out, err := runGit(ctx, w.path, "rev-parse", "HEAD")
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(out), nil
+}
+
+func protectedBranch(branch, defaultBranch string) bool {
+	b := strings.TrimSpace(strings.ToLower(branch))
+	if b == "" || b == "main" || b == "master" {
+		return true
+	}
+	return defaultBranch != "" && strings.EqualFold(branch, defaultBranch)
 }
 
 // Path is the working-tree directory engines edit and the verify gate runs in.
@@ -294,6 +478,63 @@ func (w *Workspace) Rollback(ctx context.Context, file string) error {
 	// Tracked file restored; also drop a same-named untracked copy if one
 	// lingers (e.g. the file was deleted then recreated).
 	return nil
+}
+
+// Discard removes the workspace and the fix branch. Use this when a job is
+// cancelled so leftover wolf-fix/* branches do not sit around waiting to push.
+func (w *Workspace) Discard(ctx context.Context) error {
+	if w == nil {
+		return nil
+	}
+	branch := w.branch
+	root := w.repoRoot
+	kind := w.kind
+	err := w.Cleanup(ctx)
+	if kind == KindWorktree && root != "" && isDiscardableBranch(branch) {
+		if _, berr := runGit(ctx, root, "branch", "-D", branch); berr != nil && err == nil {
+			err = berr
+		}
+	}
+	return err
+}
+
+// DiscardPath rehydrates a workspace at path (worktree or clone) and discards
+// it plus its fix branch. Safe if the path is already gone.
+func DiscardPath(ctx context.Context, workspacePath, branch string) error {
+	workspacePath = strings.TrimSpace(workspacePath)
+	if workspacePath != "" {
+		if ws, err := Open(workspacePath, ""); err == nil {
+			return ws.Discard(ctx)
+		}
+		// Clone/worktree metadata missing: still drop the temp dir if it looks
+		// like one of ours.
+		parent := filepath.Dir(workspacePath)
+		base := filepath.Base(parent)
+		if strings.HasPrefix(base, "wolf-ws-") {
+			_ = os.RemoveAll(parent)
+		}
+	}
+	return nil
+}
+
+// DiscardLocalBranch deletes a wolf-fix/* branch from a local origin repo
+// (the worktree may already be gone). Refuses anything that is not a Wolf
+// fix branch.
+func DiscardLocalBranch(ctx context.Context, repoPath, branch string) error {
+	repoPath = strings.TrimSpace(repoPath)
+	if repoPath == "" || !isDiscardableBranch(branch) {
+		return nil
+	}
+	if _, err := os.Stat(filepath.Join(repoPath, ".git")); err != nil {
+		return nil
+	}
+	_, err := runGit(ctx, repoPath, "branch", "-D", branch)
+	return err
+}
+
+func isDiscardableBranch(branch string) bool {
+	b := strings.TrimSpace(branch)
+	return strings.HasPrefix(b, "wolf-fix/") && !strings.Contains(b, "..")
 }
 
 // Cleanup removes the workspace's working tree and temp directory. For a

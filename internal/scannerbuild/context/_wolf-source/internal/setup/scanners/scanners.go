@@ -173,6 +173,8 @@ func envBucketOverrides() map[string]string {
 	}
 	if v := os.Getenv("WOLF_SCANNERS_IMAGE_RUST"); v != "" {
 		out["clippy"] = v
+		out["cargo-audit"] = v
+		out["cargo-deny"] = v
 	}
 	if v := os.Getenv("WOLF_SCANNERS_IMAGE_CODEQL"); v != "" {
 		out["codeql"] = v
@@ -312,7 +314,7 @@ func LoadAndInstall(ctx context.Context) (*container.Config, error) {
 // Makefile targets (scanners-build-jvm, etc.).
 var bucketImageTools = map[string][]string{
 	"jvm":    {"detekt", "infer", "pmd"},
-	"rust":   {"clippy"},
+	"rust":   {"clippy", "cargo-audit", "cargo-deny"},
 	"codeql": {"codeql"},
 }
 

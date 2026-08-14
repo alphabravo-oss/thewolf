@@ -13,12 +13,17 @@ import (
 const (
 	openaiAPIURL = "https://api.openai.com/v1/chat/completions"
 	openaiModel  = "gpt-4o"
+	xaiAPIURL    = "https://api.x.ai/v1/chat/completions"
+	xaiModel     = "grok-4"
 )
 
 // OpenAIProvider implements Provider using the OpenAI Chat Completions API.
 type OpenAIProvider struct {
 	apiKey     string
 	httpClient *http.Client
+	name       string
+	apiURL     string
+	model      string
 }
 
 // NewOpenAIProvider creates a provider backed by the OpenAI API.
@@ -26,10 +31,27 @@ func NewOpenAIProvider(apiKey string) *OpenAIProvider {
 	return &OpenAIProvider{
 		apiKey:     apiKey,
 		httpClient: &http.Client{},
+		name:       "openai",
+		apiURL:     openaiAPIURL,
+		model:      openaiModel,
+	}
+}
+
+// NewXAIProvider creates a Grok provider via the xAI OpenAI-compatible API.
+func NewXAIProvider(apiKey string) *OpenAIProvider {
+	return &OpenAIProvider{
+		apiKey:     apiKey,
+		httpClient: &http.Client{},
+		name:       "xai",
+		apiURL:     xaiAPIURL,
+		model:      xaiModel,
 	}
 }
 
 func (p *OpenAIProvider) Name() string {
+	if p.name != "" {
+		return p.name
+	}
 	return "openai"
 }
 
@@ -117,8 +139,16 @@ type openaiResponse struct {
 }
 
 func (p *OpenAIProvider) send(ctx context.Context, prompt string, maxTokens int) (string, error) {
+	model := p.model
+	if model == "" {
+		model = openaiModel
+	}
+	apiURL := p.apiURL
+	if apiURL == "" {
+		apiURL = openaiAPIURL
+	}
 	reqBody := openaiRequest{
-		Model:     openaiModel,
+		Model:     model,
 		MaxTokens: maxTokens,
 		Messages: []openaiMessage{
 			{
@@ -137,7 +167,7 @@ func (p *OpenAIProvider) send(ctx context.Context, prompt string, maxTokens int)
 		return "", fmt.Errorf("marshal request: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, openaiAPIURL, bytes.NewReader(payload))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, bytes.NewReader(payload))
 	if err != nil {
 		return "", fmt.Errorf("create request: %w", err)
 	}

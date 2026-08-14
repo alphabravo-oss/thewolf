@@ -497,28 +497,7 @@ type findingFilter struct {
 // gatherUserFindings loads all findings across the user's scans. When
 // fleet_mode is on, scope widens to every scan in the org.
 func gatherUserFindings(ctx context.Context, h *Handler, userID string) ([]models.Finding, error) {
-	var (
-		scans []models.Scan
-		err   error
-	)
-	if fleetVisible(ctx, h.Store, userID) {
-		scans, err = h.Store.ListAllScans(ctx)
-	} else {
-		scans, err = h.Store.ListScansByUser(ctx, userID)
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	var all []models.Finding
-	for _, s := range scans {
-		findings, err := h.Store.ListFindingsByScan(ctx, s.ID)
-		if err != nil {
-			continue
-		}
-		all = append(all, findings...)
-	}
-	return all, nil
+	return h.Store.ListCurrentOpenFindings(ctx, userID, fleetVisible(ctx, h.Store, userID), "")
 }
 
 // filterFindings returns findings matching all specified filter criteria.

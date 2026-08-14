@@ -70,17 +70,6 @@ const (
 	FixItemStatusSkipped    FixItemStatus = "skipped"
 )
 
-// LoopStatus represents the status of a loop.
-type LoopStatus string
-
-const (
-	LoopStatusRunning   LoopStatus = "running"
-	LoopStatusPaused    LoopStatus = "paused"
-	LoopStatusCompleted LoopStatus = "completed"
-	LoopStatusStopped   LoopStatus = "stopped"
-	LoopStatusFailed    LoopStatus = "failed"
-)
-
 // SourceType represents how a repo was added.
 type SourceType string
 
@@ -113,14 +102,7 @@ const (
 	LangObjC       Language = "objectivec"
 )
 
-// RescanStrategy defines the re-scan approach in a loop.
-type RescanStrategy string
 
-const (
-	RescanFull     RescanStrategy = "full"
-	RescanTargeted RescanStrategy = "targeted"
-	RescanSmart    RescanStrategy = "smart"
-)
 
 // ValidationResult represents fix validation outcome.
 type ValidationResult string
@@ -163,6 +145,7 @@ const (
 	KeyTypeSSHPassword  KeyType = "ssh_password"
 	KeyTypeAnthropicKey KeyType = "anthropic_key"
 	KeyTypeOpenAIKey    KeyType = "openai_key"
+	KeyTypeXAIKey       KeyType = "xai_key"
 	// KeyTypeDockerHubToken stores a DockerHub credential: the encrypted
 	// value is the PAT, and KeyName holds the DockerHub username.
 	KeyTypeDockerHubToken KeyType = "dockerhub_token" // #nosec G101 -- this is a key-type identifier name, not a credential value

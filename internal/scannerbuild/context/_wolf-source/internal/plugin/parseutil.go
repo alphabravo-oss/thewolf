@@ -85,6 +85,33 @@ func HasFile(dir string, name string) bool {
 	return err == nil
 }
 
+// HasDir reports whether name is a directory under dir.
+func HasDir(dir, name string) bool {
+	info, err := os.Stat(filepath.Join(dir, name))
+	return err == nil && info.IsDir()
+}
+
+// HasZizmorInputs is true when the tree has GitHub Actions, Dependabot,
+// composite actions, or pre-commit config that zizmor knows how to audit.
+func HasZizmorInputs(dir string) bool {
+	return HasDir(dir, filepath.Join(".github", "workflows")) ||
+		HasFile(dir, filepath.Join(".github", "dependabot.yml")) ||
+		HasFile(dir, filepath.Join(".github", "dependabot.yaml")) ||
+		HasFile(dir, "action.yml") ||
+		HasFile(dir, "action.yaml") ||
+		HasFile(dir, ".pre-commit-config.yaml")
+}
+
+// HasPipelineConfig is true when the tree has CI workflow files that
+// poutine can analyze (GitHub Actions, GitLab CI, Azure DevOps, Tekton).
+func HasPipelineConfig(dir string) bool {
+	return HasDir(dir, filepath.Join(".github", "workflows")) ||
+		HasFile(dir, ".gitlab-ci.yml") ||
+		HasFile(dir, "azure-pipelines.yml") ||
+		HasDir(dir, ".azure-pipelines") ||
+		HasDir(dir, ".tekton")
+}
+
 // FindFile searches for a file by name in dir and its immediate subdirectories
 // (one level deep). Returns the directory containing the file, or "" if not found.
 // This handles monorepos where e.g. go.mod is in a subdirectory.

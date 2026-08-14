@@ -164,6 +164,21 @@ var migration049SQL string
 //go:embed migrations/050_scanner_release_signature_identity.sql
 var migration050SQL string
 
+//go:embed migrations/051_autofix_loop_push.sql
+var migration051SQL string
+
+//go:embed migrations/052_fixer_model_effort.sql
+var migration052SQL string
+
+//go:embed migrations/053_fixer_console.sql
+var migration053SQL string
+
+//go:embed migrations/054_scan_remediation.sql
+var migration054SQL string
+
+//go:embed migrations/055_fix_job_planned_runs.sql
+var migration055SQL string
+
 // SQLiteStore implements Store using SQLite.
 type SQLiteStore struct {
 	db *sqlx.DB
@@ -175,6 +190,8 @@ func NewSQLite(dsn string) (*SQLiteStore, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite: %w", err)
 	}
+	// Ignore columns added by a newer API while an older fixer is still up.
+	db = db.Unsafe()
 	// For in-memory databases, restrict to a single connection so all
 	// operations share the same database instance.
 	if dsn == ":memory:" {
@@ -406,6 +423,21 @@ func (s *SQLiteStore) Migrate() error {
 		return err
 	}
 	if err := execAdditiveMigration(s.db, migration050SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration051SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration052SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration053SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration054SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration055SQL); err != nil {
 		return err
 	}
 	return sanitizePersistedSecretMasks(s.db)
@@ -821,6 +853,7 @@ func (s *SQLiteStore) CreateScan(ctx context.Context, scan *models.Scan) error {
 		 failure_code, failure_message, execution_backend, source_fingerprint, profile,
 		 scanner_release_id, release_manifest_digest,
 		 rescan_of_scan_id, release_selection_reason,
+		 origin_scan_id, previous_scan_id, remediation_id, fix_job_id,
 		 categories, include_paths, exclude_paths,
 		 tools_selected, tools_completed, tools_failed, tools_errors, finding_count, coverage_summary, ai_enabled, ai_summary,
 		 started_at, completed_at, created_at, updated_at)
@@ -831,6 +864,7 @@ func (s *SQLiteStore) CreateScan(ctx context.Context, scan *models.Scan) error {
 		 :failure_code, :failure_message, :execution_backend, :source_fingerprint, :profile,
 		 :scanner_release_id, :release_manifest_digest,
 		 :rescan_of_scan_id, :release_selection_reason,
+		 :origin_scan_id, :previous_scan_id, :remediation_id, :fix_job_id,
 		 :categories, :include_paths, :exclude_paths,
 		 :tools_selected, :tools_completed, :tools_failed, :tools_errors, :finding_count, :coverage_summary, :ai_enabled, :ai_summary,
 		 :started_at, :completed_at, :created_at, :updated_at)`, scan)
@@ -1064,50 +1098,6 @@ func (s *SQLiteStore) UpdateFixItem(ctx context.Context, item *models.FixItem) e
 		`UPDATE fix_items SET status=:status, files_changed=:files_changed, diff=:diff,
 		 validation_result=:validation_result, validation_output=:validation_output,
 		 error_message=:error_message, updated_at=:updated_at WHERE id=:id`, item)
-	return err
-}
-
-// --- Loops ---
-
-func (s *SQLiteStore) CreateLoop(ctx context.Context, loop *models.Loop) error {
-	now := time.Now().UTC()
-	loop.CreatedAt = now
-	loop.UpdatedAt = now
-	_, err := s.db.NamedExecContext(ctx,
-		`INSERT INTO loops (id, user_id, repo_id, collection_id, status, max_iterations,
-		 current_iteration, severity_filter, rescan_strategy, total_findings_initial,
-		 total_findings_fixed, total_findings_new, total_findings_remaining, guardrail_warnings,
-		 started_at, completed_at, created_at, updated_at)
-		 VALUES (:id, :user_id, :repo_id, :collection_id, :status, :max_iterations,
-		 :current_iteration, :severity_filter, :rescan_strategy, :total_findings_initial,
-		 :total_findings_fixed, :total_findings_new, :total_findings_remaining, :guardrail_warnings,
-		 :started_at, :completed_at, :created_at, :updated_at)`, loop)
-	return err
-}
-
-func (s *SQLiteStore) GetLoopByID(ctx context.Context, id string) (*models.Loop, error) {
-	var l models.Loop
-	err := s.db.GetContext(ctx, &l, "SELECT * FROM loops WHERE id = ?", id)
-	if err != nil {
-		return nil, err
-	}
-	return &l, nil
-}
-
-func (s *SQLiteStore) ListLoopsByUser(ctx context.Context, userID string) ([]models.Loop, error) {
-	var loops []models.Loop
-	// No RBAC yet — all authenticated users see all loops.
-	err := s.db.SelectContext(ctx, &loops, "SELECT * FROM loops ORDER BY created_at DESC")
-	return loops, err
-}
-
-func (s *SQLiteStore) UpdateLoop(ctx context.Context, loop *models.Loop) error {
-	loop.UpdatedAt = time.Now().UTC()
-	_, err := s.db.NamedExecContext(ctx,
-		`UPDATE loops SET status=:status, current_iteration=:current_iteration,
-		 total_findings_fixed=:total_findings_fixed, total_findings_new=:total_findings_new,
-		 total_findings_remaining=:total_findings_remaining, guardrail_warnings=:guardrail_warnings,
-		 completed_at=:completed_at, updated_at=:updated_at WHERE id=:id`, loop)
 	return err
 }
 
@@ -1373,6 +1363,12 @@ func (s *SQLiteStore) DeleteRepoCascade(ctx context.Context, repoID string) ([]s
 		}
 	}
 
+	if _, err := s.db.ExecContext(ctx, "DELETE FROM fix_attempts WHERE job_id IN (SELECT id FROM fix_jobs WHERE repo_id = ?)", repoID); err != nil {
+		return nil, fmt.Errorf("delete fix_attempts: %w", err)
+	}
+	if _, err := s.db.ExecContext(ctx, "DELETE FROM fix_jobs WHERE repo_id = ?", repoID); err != nil {
+		return nil, fmt.Errorf("delete fix_jobs: %w", err)
+	}
 	if _, err := s.db.ExecContext(ctx, "DELETE FROM loops WHERE repo_id = ?", repoID); err != nil {
 		return nil, fmt.Errorf("delete loops: %w", err)
 	}
@@ -1387,6 +1383,104 @@ func (s *SQLiteStore) DeleteRepoCascade(ctx context.Context, repoID string) ([]s
 	}
 
 	return scanIDs, nil
+}
+
+func (s *SQLiteStore) DeleteCollectionKeepHistory(ctx context.Context, collectionID string) error {
+	if _, err := s.db.ExecContext(ctx, "UPDATE scans SET collection_id = NULL WHERE collection_id = ?", collectionID); err != nil {
+		return fmt.Errorf("detach scans: %w", err)
+	}
+	if _, err := s.db.ExecContext(ctx, "UPDATE loops SET collection_id = NULL WHERE collection_id = ?", collectionID); err != nil {
+		return fmt.Errorf("detach loops: %w", err)
+	}
+	if _, err := s.db.ExecContext(ctx, "DELETE FROM collection_repos WHERE collection_id = ?", collectionID); err != nil {
+		return fmt.Errorf("delete collection_repos: %w", err)
+	}
+	if _, err := s.db.ExecContext(ctx, "DELETE FROM collections WHERE id = ?", collectionID); err != nil {
+		return fmt.Errorf("delete collection: %w", err)
+	}
+	return nil
+}
+
+func (s *SQLiteStore) DeleteRepoKeepHistory(ctx context.Context, repoID string) error {
+	ids, err := s.ListScanIDsByRepo(ctx, repoID)
+	if err != nil {
+		return fmt.Errorf("list scans: %w", err)
+	}
+	if len(ids) > 0 {
+		return ErrHasScanRecords
+	}
+	if _, err := s.db.ExecContext(ctx, "DELETE FROM loops WHERE repo_id = ?", repoID); err != nil {
+		return fmt.Errorf("delete loops: %w", err)
+	}
+	if _, err := s.db.ExecContext(ctx, "DELETE FROM repo_maps WHERE repo_id = ?", repoID); err != nil {
+		return fmt.Errorf("delete repo_maps: %w", err)
+	}
+	if _, err := s.db.ExecContext(ctx, "DELETE FROM collection_repos WHERE repo_id = ?", repoID); err != nil {
+		return fmt.Errorf("delete collection_repos: %w", err)
+	}
+	if _, err := s.db.ExecContext(ctx, "DELETE FROM repos WHERE id = ?", repoID); err != nil {
+		return fmt.Errorf("delete repo: %w", err)
+	}
+	return nil
+}
+
+func (s *SQLiteStore) ListOrphanScanIDs(ctx context.Context) ([]string, error) {
+	var ids []string
+	err := s.db.SelectContext(ctx, &ids,
+		`SELECT id FROM scans WHERE repo_id NOT IN (SELECT id FROM repos) OR TRIM(COALESCE(repo_id, '')) = ''`)
+	return ids, err
+}
+
+func (s *SQLiteStore) OrphanSummary(ctx context.Context) (*OrphanSummary, error) {
+	ids, err := s.ListOrphanScanIDs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if ids == nil {
+		ids = []string{}
+	}
+	var findingCount int
+	if err := s.db.GetContext(ctx, &findingCount, `
+		SELECT COUNT(*) FROM findings
+		 WHERE repo_id NOT IN (SELECT id FROM repos)
+		    OR TRIM(COALESCE(repo_id, '')) = ''
+		    OR scan_id NOT IN (SELECT id FROM scans)`); err != nil {
+		return nil, err
+	}
+	return &OrphanSummary{
+		ScanIDs:      ids,
+		ScanCount:    len(ids),
+		FindingCount: findingCount,
+	}, nil
+}
+
+func (s *SQLiteStore) PurgeOrphanedRecords(ctx context.Context) ([]string, error) {
+	ids, err := s.ListOrphanScanIDs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, sid := range ids {
+		if err := s.DeleteScanCascade(ctx, sid); err != nil {
+			return nil, fmt.Errorf("delete orphan scan %s: %w", sid, err)
+		}
+	}
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM fix_attempts WHERE job_id IN (
+		SELECT id FROM fix_jobs WHERE repo_id NOT IN (SELECT id FROM repos))`); err != nil {
+		return nil, fmt.Errorf("delete orphan fix_attempts: %w", err)
+	}
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM fix_jobs WHERE repo_id NOT IN (SELECT id FROM repos)`); err != nil {
+		return nil, fmt.Errorf("delete orphan fix_jobs: %w", err)
+	}
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM loops WHERE repo_id NOT IN (SELECT id FROM repos)`); err != nil {
+		return nil, fmt.Errorf("delete orphan loops: %w", err)
+	}
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM findings
+		WHERE repo_id NOT IN (SELECT id FROM repos)
+		   OR TRIM(COALESCE(repo_id, '')) = ''
+		   OR scan_id NOT IN (SELECT id FROM scans)`); err != nil {
+		return nil, fmt.Errorf("delete orphan findings: %w", err)
+	}
+	return ids, nil
 }
 
 // --- AI Prompt Templates ---

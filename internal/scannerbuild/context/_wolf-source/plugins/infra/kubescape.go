@@ -1,6 +1,7 @@
 package infra
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -70,12 +71,56 @@ type kubescapeResult struct {
 }
 
 type kubescapeControlResult struct {
-	ControlID string `json:"controlID"`
-	Name      string `json:"name"`
-	Status    string `json:"status"`
+	ControlID string          `json:"controlID"`
+	Name      string          `json:"name"`
+	Status    kubescapeStatus `json:"status"`
 	Severity  struct {
 		ScoreFactor float64 `json:"scoreFactor"`
 	} `json:"severity"`
+}
+
+// kubescapeStatus accepts both the legacy string ("failed") and current
+// object form ({"status":"failed","subStatus":"...","info":"..."}).
+type kubescapeStatus string
+
+func (s *kubescapeStatus) UnmarshalJSON(data []byte) error {
+	data = bytes.TrimSpace(data)
+	if len(data) == 0 || string(data) == "null" {
+		*s = ""
+		return nil
+	}
+	if data[0] == '"' {
+		var str string
+		if err := json.Unmarshal(data, &str); err != nil {
+			return err
+		}
+		*s = kubescapeStatus(str)
+		return nil
+	}
+	var obj struct {
+		Status string `json:"status"`
+		Code   string `json:"code"`
+	}
+	if err := json.Unmarshal(data, &obj); err != nil {
+		return err
+	}
+	val := obj.Status
+	if val == "" {
+		val = obj.Code
+	}
+	*s = kubescapeStatus(val)
+	return nil
+}
+
+func (s kubescapeStatus) String() string { return string(s) }
+
+func (s kubescapeStatus) passed() bool {
+	switch strings.ToLower(strings.TrimSpace(string(s))) {
+	case "passed", "pass", "success", "ok", "skipped", "skip", "irrelevant":
+		return true
+	default:
+		return false
+	}
 }
 
 func parseKubescapeOutput(data []byte) ([]models.Finding, error) {
@@ -87,7 +132,7 @@ func parseKubescapeOutput(data []byte) ([]models.Finding, error) {
 	var findings []models.Finding
 	for _, r := range output.Results {
 		for _, c := range r.Controls {
-			if c.Status == "passed" {
+			if c.Status.passed() {
 				continue
 			}
 			findings = append(findings, models.Finding{

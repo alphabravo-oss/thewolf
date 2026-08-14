@@ -274,22 +274,28 @@ func DeleteCollection(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	scanIDs, err := h.Store.DeleteCollectionCascade(r.Context(), id)
-	if err != nil {
+	purge := wantPurgeRecords(r)
+	var scanIDs []string
+	if purge {
+		scanIDs, err = h.Store.DeleteCollectionCascade(r.Context(), id)
+		if err != nil {
+			response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to delete collection")
+			return
+		}
+		if len(scanIDs) > 0 && artifacts.Global != nil {
+			go artifacts.Global.DeleteScans(scanIDs)
+		}
+	} else if err := h.Store.DeleteCollectionKeepHistory(r.Context(), id); err != nil {
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to delete collection")
 		return
 	}
 
-	// Clean up artifact files on disk.
-	if len(scanIDs) > 0 {
-		go artifacts.Global.DeleteScans(scanIDs)
-	}
-
-	wolflog.Info().Str("collection_id", id).Str("collection_name", col.Name).Int("scans_deleted", len(scanIDs)).Msg("collection deleted with cascade")
+	wolflog.Info().Str("collection_id", id).Str("collection_name", col.Name).Int("scans_deleted", len(scanIDs)).Bool("purge", purge).Msg("collection deleted")
 
 	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: map[string]interface{}{
 		"message":       "collection deleted",
 		"scans_deleted": len(scanIDs),
+		"purged":        purge,
 	}})
 }
 

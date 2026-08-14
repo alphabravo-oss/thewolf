@@ -28,7 +28,7 @@ import {
   WrenchIcon,
   UsersIcon,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { GitHubTokenHelp } from "@/components/github-token-help";

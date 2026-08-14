@@ -35,6 +35,7 @@ type Repo struct {
 // carry it without a models→fix/writability import cycle.
 type RepoFixable struct {
 	Writable bool   `json:"writable"`
+	CanPush  bool   `json:"can_push"`
 	Reason   string `json:"reason"`
 }
 

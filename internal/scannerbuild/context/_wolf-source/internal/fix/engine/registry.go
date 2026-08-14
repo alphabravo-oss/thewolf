@@ -88,7 +88,7 @@ func (e *ConfigEngine) Fix(ctx context.Context, req FixRequest) (*FixResult, err
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	prompt := buildPrompt(req.Finding)
+	prompt := RenderPrompt(req.Instructions, req)
 	args := e.renderArgs(prompt, req.RepoPath)
 
 	workdir := e.def.Workdir
@@ -183,6 +183,7 @@ func NewRegistry() *Registry {
 	r := &Registry{engines: map[string]SubprocessEngine{}}
 	r.Register(&ClaudeCode{})
 	r.Register(&Codex{})
+	r.Register(&OpenCode{})
 	r.Register(NewAutoEngine())
 	return r
 }

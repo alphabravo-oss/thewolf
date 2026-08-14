@@ -37,14 +37,26 @@ func (s *SQLiteStore) EnqueueFixJob(ctx context.Context, j *models.FixJob) error
 		j.Status = models.FixJobQueued
 	}
 	j.FindingIDs = encodeStrings(j.FindingIDList)
+	if j.PlannedRuns <= 0 {
+		j.PlannedRuns = 1
+	}
+	if j.RunIndex <= 0 {
+		j.RunIndex = 1
+	}
 	_, err := s.db.NamedExecContext(ctx,
 		`INSERT INTO fix_jobs
 		 (id, user_id, type, repo_id, scan_id, finding_ids, target_branch, engine, mode,
-		  severity_floor, max_attempts, status, claimed_by, result_branch, diff_artifact_id,
+		  severity_floor, max_attempts, max_loops, current_loop, human_in_the_loop,
+		  workspace_path, base_branch, pushed, push_sha, pause_reason, resume_action,
+		  model, effort, variant, remediation_id, planned_runs, run_index,
+		  status, claimed_by, result_branch, diff_artifact_id,
 		  summary, error, claimed_at, started_at, finished_at, heartbeat_at, created_at, updated_at)
 		 VALUES
 		 (:id, :user_id, :type, :repo_id, :scan_id, :finding_ids, :target_branch, :engine, :mode,
-		  :severity_floor, :max_attempts, :status, :claimed_by, :result_branch, :diff_artifact_id,
+		  :severity_floor, :max_attempts, :max_loops, :current_loop, :human_in_the_loop,
+		  :workspace_path, :base_branch, :pushed, :push_sha, :pause_reason, :resume_action,
+		  :model, :effort, :variant, :remediation_id, :planned_runs, :run_index,
+		  :status, :claimed_by, :result_branch, :diff_artifact_id,
 		  :summary, :error, :claimed_at, :started_at, :finished_at, :heartbeat_at, :created_at, :updated_at)`, j)
 	return err
 }
@@ -123,13 +135,25 @@ func (s *SQLiteStore) ClaimNextFixJob(ctx context.Context, workerID string) (*mo
 }
 
 func (s *SQLiteStore) UpdateFixJob(ctx context.Context, j *models.FixJob) error {
+	if j != nil && j.Status != models.FixJobCancelled {
+		var current string
+		if err := s.db.GetContext(ctx, &current, "SELECT status FROM fix_jobs WHERE id = ?", j.ID); err == nil && current == models.FixJobCancelled {
+			return nil
+		}
+	}
 	j.UpdatedAt = time.Now().UTC()
 	j.FindingIDs = encodeStrings(j.FindingIDList)
 	_, err := s.db.NamedExecContext(ctx,
 		`UPDATE fix_jobs SET
 		   type=:type, repo_id=:repo_id, scan_id=:scan_id, finding_ids=:finding_ids,
 		   target_branch=:target_branch, engine=:engine, mode=:mode, severity_floor=:severity_floor,
-		   max_attempts=:max_attempts, status=:status, claimed_by=:claimed_by, result_branch=:result_branch,
+		   max_attempts=:max_attempts, max_loops=:max_loops, current_loop=:current_loop,
+		   human_in_the_loop=:human_in_the_loop, workspace_path=:workspace_path,
+		   base_branch=:base_branch, pushed=:pushed, push_sha=:push_sha,
+		   pause_reason=:pause_reason, resume_action=:resume_action,
+		   model=:model, effort=:effort, variant=:variant, remediation_id=:remediation_id,
+		   planned_runs=:planned_runs, run_index=:run_index,
+		   status=:status, claimed_by=:claimed_by, result_branch=:result_branch,
 		   diff_artifact_id=:diff_artifact_id, summary=:summary, error=:error,
 		   claimed_at=:claimed_at, started_at=:started_at, finished_at=:finished_at,
 		   heartbeat_at=:heartbeat_at, updated_at=:updated_at
@@ -156,10 +180,12 @@ func (s *SQLiteStore) CreateFixAttempt(ctx context.Context, a *models.FixAttempt
 	_, err := s.db.NamedExecContext(ctx,
 		`INSERT INTO fix_attempts
 		 (id, job_id, finding_id, attempt_no, engine_used, model, built, finding_cleared,
-		  new_findings, outcome, files_changed, diff_excerpt, duration_ms, cost_usd, created_at)
+		  new_findings, outcome, files_changed, diff_excerpt, duration_ms, cost_usd,
+		  input_tokens, output_tokens, created_at)
 		 VALUES
 		 (:id, :job_id, :finding_id, :attempt_no, :engine_used, :model, :built, :finding_cleared,
-		  :new_findings, :outcome, :files_changed, :diff_excerpt, :duration_ms, :cost_usd, :created_at)`, a)
+		  :new_findings, :outcome, :files_changed, :diff_excerpt, :duration_ms, :cost_usd,
+		  :input_tokens, :output_tokens, :created_at)`, a)
 	return err
 }
 

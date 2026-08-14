@@ -12,11 +12,64 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/wolflog"
 )
 
-// FixRequest holds the information needed to fix a single finding.
+// FixRequest holds the information needed to fix one scanner's findings.
 type FixRequest struct {
 	Finding  models.Finding
-	RepoPath string // working directory (worktree path)
-	Timeout  time.Duration
+	Findings []models.Finding
+	// FindingsFile is an absolute path to the review document listing every
+	// finding from this tool. The agent reads that file; it is not in the repo.
+	FindingsFile string
+	Tool         string
+	RepoPath     string // working directory (worktree path)
+	Timeout      time.Duration
+	// Env is extra KEY=value pairs merged onto the CLI process (API keys).
+	Env []string
+	// Model / Effort / Variant are the t3code-style dials forwarded to the CLI.
+	Model   string
+	Effort  string
+	Variant string
+	// Instructions is the operator-editable template for this loop
+	// (first pass vs follow-up). Empty uses the shipped default.
+	Instructions string
+	// Progress, if set, is called with a short human line as the engine
+	// works (tool calls, steps). Used to stream the agent log live.
+	Progress func(string)
+	// Phase is "classify" (tokens only, no edits) or "fix" (default).
+	Phase string
+}
+
+// Batch returns the findings this request covers (multi-finding tool run, or
+// the single Finding for older callers).
+func (r FixRequest) Batch() []models.Finding {
+	if len(r.Findings) > 0 {
+		return r.Findings
+	}
+	if r.Finding.ID != "" || r.Finding.FilePath != "" || r.Finding.Title != "" {
+		return []models.Finding{r.Finding}
+	}
+	return nil
+}
+
+func requestIDs(req FixRequest) []string {
+	batch := req.Batch()
+	ids := make([]string, 0, len(batch))
+	for _, f := range batch {
+		if f.ID != "" {
+			ids = append(ids, f.ID)
+		}
+	}
+	return ids
+}
+
+// Usage is token/cost telemetry parsed from a harness (subscription usage
+// still has no dollar cost; CostUSD is 0 in that case).
+type Usage struct {
+	Model        string
+	InputTokens  int64
+	OutputTokens int64
+	TotalTokens  int64
+	CostUSD      float64
+	Turns        int
 }
 
 // FixResult holds the outcome of a fix attempt.
@@ -40,6 +93,11 @@ type FixResult struct {
 	// It is false for diff-returning engines (the API engine) whose Diff the
 	// caller must apply itself.
 	EditsInPlace bool
+	Usage        Usage
+	// Skipped means the engine judged the finding not worth fixing
+	// (false positive, out of scope). Do not escalate to another engine.
+	Skipped    bool
+	SkipReason string
 }
 
 // SubprocessEngine defines the interface for AI-powered fix engines.
@@ -72,32 +130,40 @@ func (c *ClaudeCode) Fix(ctx context.Context, req FixRequest) (*FixResult, error
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	prompt := buildPrompt(req.Finding)
+	prompt := RenderPrompt(req.Instructions, req)
 
-	model := c.Model
-	if model == "" {
-		model = "claude-sonnet-4-20250514"
-	}
-
-	cmd := exec.CommandContext(ctx, "claude", // #nosec G204 -- command is a configured tool name; args from internal config, not user input
+	model := firstNonEmpty(req.Model, c.Model, "sonnet")
+	args := []string{
 		"--dangerously-skip-permissions",
 		"--output-format", "json",
 		"--max-turns", "20",
 		"--model", model,
-		"-p", prompt,
-	)
+	}
+	if effort := strings.TrimSpace(req.Effort); effort != "" && effort != "medium" {
+		args = append(args, "--effort", effort)
+	}
+	args = append(args, "-p", prompt)
+
+	cmd := exec.CommandContext(ctx, "claude", args...) // #nosec G204 -- command is a configured tool name; args from internal config, not user input
 	cmd.Dir = req.RepoPath
+	applyEngineEnv(cmd, req.Env)
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return &FixResult{
+		res := &FixResult{
 			Success: false,
 			Output:  string(output),
 			Error:   err.Error(),
-		}, nil
+		}
+		applySkipVerdict(res, requestIDs(req))
+		return res, nil
 	}
 
-	return parseClaudeOutput(output)
+	res, err := parseClaudeOutput(output)
+	if res != nil {
+		applySkipVerdict(res, requestIDs(req))
+	}
+	return res, err
 }
 
 // Codex implements SubprocessEngine using the Codex CLI.
@@ -125,13 +191,20 @@ func (c *Codex) Fix(ctx context.Context, req FixRequest) (*FixResult, error) {
 		req.Finding.Description,
 	)
 
-	cmd := exec.CommandContext(ctx, "codex", // #nosec G204 -- command is a configured tool name; args from internal config, not user input
-		"--approval-mode", "full-auto",
-		"--quiet",
-		prompt,
-	)
-	cmd.Dir = req.RepoPath
+	args := []string{"--approval-mode", "full-auto", "--quiet"}
+	if model := firstNonEmpty(req.Model); model != "" {
+		args = append(args, "-m", model)
+	}
+	if effort := strings.TrimSpace(req.Effort); effort != "" {
+		args = append(args, "-c", "model_reasoning_effort="+effort)
+	}
+	args = append(args, prompt)
 
+	cmd := exec.CommandContext(ctx, "codex", args...) // #nosec G204 -- command is a configured tool name; args from internal config, not user input
+	cmd.Dir = req.RepoPath
+	applyEngineEnv(cmd, req.Env)
+	// Judge by the worktree, not Codex's exit: an empty successful run is
+	// rolled back by the verify gate.
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return &FixResult{
@@ -141,11 +214,20 @@ func (c *Codex) Fix(ctx context.Context, req FixRequest) (*FixResult, error) {
 		}, nil
 	}
 
+	changed := changedFiles(req.RepoPath)
 	return &FixResult{
 		Success:      true,
+		FilesChanged: changed,
 		Output:       string(output),
 		EditsInPlace: true,
 	}, nil
+}
+
+func applyEngineEnv(cmd *exec.Cmd, extra []string) {
+	if len(extra) == 0 {
+		return
+	}
+	cmd.Env = append(cmd.Environ(), extra...)
 }
 
 // Custom implements SubprocessEngine using a user-provided CLI command.
@@ -179,7 +261,7 @@ func (c *Custom) Fix(ctx context.Context, req FixRequest) (*FixResult, error) {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	prompt := buildPrompt(req.Finding)
+	prompt := RenderPrompt(req.Instructions, req)
 
 	var args []string
 	mode := c.Mode
@@ -212,6 +294,7 @@ func (c *Custom) Fix(ctx context.Context, req FixRequest) (*FixResult, error) {
 	// nosemgrep: go.lang.security.audit.dangerous-exec-command.dangerous-exec-command
 	cmd := exec.CommandContext(ctx, c.Command, args...) // #nosec G204 -- command is a configured tool name; args sourced from internal config
 	cmd.Dir = req.RepoPath
+	applyEngineEnv(cmd, req.Env)
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -231,25 +314,6 @@ func (c *Custom) Fix(ctx context.Context, req FixRequest) (*FixResult, error) {
 		Output:       string(output),
 		EditsInPlace: true,
 	}, nil
-}
-
-func buildPrompt(f models.Finding) string {
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "Fix the following issue in this repository:\n\n")
-	fmt.Fprintf(&sb, "Title: %s\n", f.Title)
-	fmt.Fprintf(&sb, "File: %s:%d\n", f.FilePath, f.LineStart)
-	fmt.Fprintf(&sb, "Severity: %s\n", f.Severity)
-	fmt.Fprintf(&sb, "Description: %s\n", f.Description)
-	if f.CodeSnippet != "" {
-		fmt.Fprintf(&sb, "Code:\n%s\n", f.CodeSnippet)
-	}
-	if f.AIFixSuggestion != "" {
-		fmt.Fprintf(&sb, "Suggestion: %s\n", f.AIFixSuggestion)
-	}
-	fmt.Fprintf(&sb, "\nApply the fix, then run the relevant linter/test to verify.\n")
-	fmt.Fprintf(&sb, "Only modify files necessary to fix this specific issue.\n")
-	fmt.Fprintf(&sb, "Do not make unrelated changes.")
-	return sb.String()
 }
 
 func parseClaudeOutput(output []byte) (*FixResult, error) {
@@ -279,8 +343,40 @@ func parseClaudeOutput(output []byte) (*FixResult, error) {
 			result.FilesChanged = files
 		}
 	}
+	result.Usage = parseClaudeUsage(raw)
 
 	return result, nil
+}
+
+func parseClaudeUsage(raw map[string]json.RawMessage) Usage {
+	var u Usage
+	if m, ok := raw["model"]; ok {
+		_ = json.Unmarshal(m, &u.Model)
+	}
+	if c, ok := raw["total_cost_usd"]; ok {
+		_ = json.Unmarshal(c, &u.CostUSD)
+	}
+	if usageRaw, ok := raw["usage"]; ok {
+		var usage struct {
+			InputTokens  int64 `json:"input_tokens"`
+			OutputTokens int64 `json:"output_tokens"`
+		}
+		if err := json.Unmarshal(usageRaw, &usage); err == nil {
+			u.InputTokens = usage.InputTokens
+			u.OutputTokens = usage.OutputTokens
+			u.TotalTokens = usage.InputTokens + usage.OutputTokens
+		}
+	}
+	return u
+}
+
+func firstNonEmpty(vals ...string) string {
+	for _, v := range vals {
+		if strings.TrimSpace(v) != "" {
+			return strings.TrimSpace(v)
+		}
+	}
+	return ""
 }
 
 // AutoEngine tries Claude Code first, then falls back to Codex.
@@ -291,7 +387,7 @@ type AutoEngine struct {
 // NewAutoEngine creates an engine that tries Claude Code first, then Codex.
 func NewAutoEngine() *AutoEngine {
 	return &AutoEngine{
-		engines: []SubprocessEngine{&ClaudeCode{}, &Codex{}},
+		engines: []SubprocessEngine{&ClaudeCode{}, &Codex{}, &OpenCode{}},
 	}
 }
 
@@ -314,7 +410,7 @@ func (a *AutoEngine) Fix(ctx context.Context, req FixRequest) (*FixResult, error
 		}
 		return e.Fix(ctx, req)
 	}
-	return nil, fmt.Errorf("no fix engine available (tried claude-code, codex)")
+	return nil, fmt.Errorf("no fix engine available (tried claude-code, codex, opencode)")
 }
 
 // NewEngine returns a SubprocessEngine by name.
@@ -333,6 +429,8 @@ func NewEngine(name string) (SubprocessEngine, error) {
 		return &ClaudeCode{}, nil
 	case name == "codex":
 		return &Codex{}, nil
+	case name == "opencode":
+		return &OpenCode{}, nil
 	case name == "auto" || name == "":
 		return NewAutoEngine(), nil
 	case strings.HasPrefix(name, "custom:"):

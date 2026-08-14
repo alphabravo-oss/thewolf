@@ -133,17 +133,18 @@ export function FixJobView({
   const scanFindings = scanQ.data?.finding_count;
   const terminal = isFixTerminal(f.status);
   const paused = isFixPaused(f.status);
-  let summary: {
+  const summary: {
     rounds?: { round: number; kept: number; remaining: number }[];
     tools?: ToolRow[];
     open?: OpenNote[];
     report_markdown?: string;
-  } = {};
-  try {
-    summary = f.summary ? JSON.parse(f.summary) : {};
-  } catch {
-    summary = {};
-  }
+  } = (() => {
+    try {
+      return f.summary ? JSON.parse(f.summary) : {};
+    } catch {
+      return {};
+    }
+  })();
 
   return (
     <div className="page stack page--mid">

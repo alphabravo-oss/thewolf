@@ -28,7 +28,12 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/alphabravocompany/thewolf/internal/db"
+	fixauth "github.com/alphabravocompany/thewolf/internal/fix/auth"
+	"github.com/alphabravocompany/thewolf/internal/fix/console"
+	"github.com/alphabravocompany/thewolf/internal/fix/engine"
 	"github.com/alphabravocompany/thewolf/internal/fix/fixstore"
+	"github.com/alphabravocompany/thewolf/internal/fix/install"
+	"github.com/alphabravocompany/thewolf/internal/fix/lineage"
 	"github.com/alphabravocompany/thewolf/internal/fix/orchestrator"
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/wolflog"
@@ -112,8 +117,15 @@ func New(cfg Config) (*Worker, error) {
 // for a per-job failure — those are recorded on the job — only for a fatal
 // loop-level condition.
 func (w *Worker) Run(ctx context.Context) error {
+	install.EnsureLocalBinOnPATH()
 	log := wolflog.L().With().Str("component", "fixer").Str("worker", w.cfg.WorkerID).Logger()
 	log.Info().Bool("once", w.cfg.Once).Msg("fix worker started")
+	if w.cfg.Fixstore != nil {
+		engines := fixauth.ProbeAll(ctx, fixauth.Resolve(ctx, w.cfg.Store, ""))
+		if err := fixauth.WriteStatus(w.cfg.Fixstore.Root(), engines); err != nil {
+			log.Warn().Err(err).Msg("could not write fixer engine status")
+		}
+	}
 
 	for {
 		select {
@@ -122,12 +134,38 @@ func (w *Worker) Run(ctx context.Context) error {
 		default:
 		}
 
-		// Requeue any jobs whose worker stopped heartbeating before we try to
-		// claim, so a dead worker's job is retried rather than stranded.
+		// Requeue any jobs / consoles whose worker stopped heartbeating
+		// before we try to claim, so a dead worker's work is retried.
 		if n, err := w.cfg.Store.ReclaimStaleJobs(ctx, time.Now().UTC().Add(-w.cfg.StaleAfter)); err != nil {
 			log.Warn().Err(err).Msg("reclaim stale jobs failed")
 		} else if n > 0 {
 			log.Info().Int("reclaimed", n).Msg("requeued stale jobs")
+		}
+		if n, err := w.cfg.Store.ReclaimStaleConsoles(ctx, time.Now().UTC().Add(-w.cfg.StaleAfter)); err != nil {
+			log.Warn().Err(err).Msg("reclaim stale consoles failed")
+		} else if n > 0 {
+			log.Info().Int("reclaimed", n).Msg("requeued stale consoles")
+		}
+
+		// Interactive login/shell waits on a human — claim those first.
+		cons, err := w.cfg.Store.ClaimNextFixerConsole(ctx, w.cfg.WorkerID)
+		if err != nil {
+			log.Warn().Err(err).Msg("console claim failed")
+			if w.cfg.Once {
+				return err
+			}
+			if !sleepCtx(ctx, w.cfg.PollInterval) {
+				return ctx.Err()
+			}
+			continue
+		}
+		if cons != nil {
+			w.processConsole(ctx, &log, cons)
+			if w.cfg.Once {
+				log.Info().Str("console", cons.ID).Msg("--once: one console processed; exiting")
+				return nil
+			}
+			continue
 		}
 
 		job, err := w.cfg.Store.ClaimNextFixJob(ctx, w.cfg.WorkerID)
@@ -174,15 +212,30 @@ func (w *Worker) process(ctx context.Context, log *zerolog.Logger, job *models.F
 		w.appendLog(job.ID, "job was cancelled before it started")
 		return
 	}
+	if err := lineage.SupersedeSiblings(ctx, w.cfg.Store, job); err != nil {
+		log.Warn().Err(err).Str("job", job.ID).Msg("supersede siblings failed")
+	}
 
 	jobCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	stopHeartbeat := w.startHeartbeat(jobCtx, job)
+	stopHeartbeat := w.startHeartbeat(jobCtx, job, cancel)
 	defer stopHeartbeat()
 
 	deps := w.cfg.Deps
 	deps.Store = w.cfg.Store
 	deps.Diffs = w.cfg.Fixstore
+	deps.CLIEnv = fixauth.Resolve(ctx, w.cfg.Store, job.UserID).Env()
+	deps.Model = job.Model
+	deps.Effort = job.Effort
+	deps.Variant = job.Variant
+	if w.cfg.Store != nil {
+		if v, err := w.cfg.Store.GetSetting(ctx, engine.SettingPromptInitial); err == nil {
+			deps.PromptInitial = v
+		}
+		if v, err := w.cfg.Store.GetSetting(ctx, engine.SettingPromptFollowup); err == nil {
+			deps.PromptFollowup = v
+		}
+	}
 	deps.Log = func(format string, args ...any) {
 		w.appendLog(job.ID, fmt.Sprintf(format, args...))
 	}
@@ -191,17 +244,69 @@ func (w *Worker) process(ctx context.Context, log *zerolog.Logger, job *models.F
 	if _, err := RunOrchestrator(jobCtx, job, deps); err != nil {
 		log.Warn().Err(err).Str("job", job.ID).Msg("job failed")
 		w.appendLog(job.ID, "job failed: "+err.Error())
+		done := context.WithoutCancel(ctx)
+		if latest, lerr := w.cfg.Store.GetFixJobByID(done, job.ID); lerr == nil && latest != nil {
+			if latest.Status != models.FixJobCancelled && latest.Status != models.FixJobFailed {
+				now := time.Now().UTC()
+				latest.Status = models.FixJobFailed
+				latest.Error = err.Error()
+				latest.FinishedAt = &now
+				_ = w.cfg.Store.UpdateFixJob(done, latest)
+			}
+		}
 		return
+	}
+	if latest, lerr := w.cfg.Store.GetFixJobByID(context.WithoutCancel(ctx), job.ID); lerr == nil && latest != nil {
+		job = latest
+	}
+	if child, cerr := lineage.AfterAgentRun(context.WithoutCancel(ctx), w.cfg.Store, job); cerr != nil {
+		log.Warn().Err(cerr).Str("job", job.ID).Msg("child scan enqueue failed")
+		w.appendLog(job.ID, "child scan enqueue failed: "+cerr.Error())
+	} else if child != nil {
+		w.appendLog(job.ID, fmt.Sprintf("child scan %s queued on %s", child.ID, child.Branch))
 	}
 	log.Info().Str("job", job.ID).Str("status", job.Status).Msg("job complete")
 	w.appendLog(job.ID, fmt.Sprintf("job %s finished with status %s", job.ID, job.Status))
 }
 
-// startHeartbeat stamps heartbeat_at periodically while the job runs, returning
-// a stop func. It also watches for a cancel (status flipped to cancelled via
-// the DELETE endpoint) and cancels the job's context so the orchestrator winds
-// down.
-func (w *Worker) startHeartbeat(ctx context.Context, job *models.FixJob) func() {
+// processConsole runs a claimed login/shell session on this worker. The
+// process inherits HOME so OAuth files persist on the worker volume.
+func (w *Worker) processConsole(ctx context.Context, log *zerolog.Logger, cons *models.FixerConsole) {
+	log.Info().Str("console", cons.ID).Str("kind", cons.Kind).Str("engine", cons.Engine).Msg("claimed console")
+	if cons.Status == models.FixerConsoleCancelled {
+		return
+	}
+
+	consCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	stopHeartbeat := w.startConsoleHeartbeat(consCtx, cons, cancel)
+	defer stopHeartbeat()
+
+	if err := console.Run(consCtx, w.cfg.Store, w.cfg.Fixstore, cons); err != nil {
+		log.Warn().Err(err).Str("console", cons.ID).Msg("console failed")
+		done := context.WithoutCancel(ctx)
+		latest, _ := w.cfg.Store.GetFixerConsoleByID(done, cons.ID)
+		if latest != nil && latest.Status != models.FixerConsoleCancelled && latest.Status != models.FixerConsoleExited {
+			latest.Status = models.FixerConsoleExited
+			latest.Error = err.Error()
+			now := time.Now().UTC()
+			latest.FinishedAt = &now
+			_ = w.cfg.Store.UpdateFixerConsole(done, latest)
+		}
+	}
+
+	if w.cfg.Fixstore != nil {
+		done := context.WithoutCancel(ctx)
+		engines := fixauth.ProbeAll(done, fixauth.Resolve(done, w.cfg.Store, cons.UserID))
+		if err := fixauth.WriteStatus(w.cfg.Fixstore.Root(), engines); err != nil {
+			log.Warn().Err(err).Msg("could not refresh fixer engine status")
+		}
+	}
+}
+
+// startConsoleHeartbeat stamps heartbeat_at and cancels the session if the
+// API flipped the row to cancelled.
+func (w *Worker) startConsoleHeartbeat(ctx context.Context, cons *models.FixerConsole, cancel context.CancelFunc) func() {
 	done := make(chan struct{})
 	go func() {
 		ticker := time.NewTicker(w.cfg.Heartbeat)
@@ -213,9 +318,49 @@ func (w *Worker) startHeartbeat(ctx context.Context, job *models.FixJob) func() 
 			case <-done:
 				return
 			case <-ticker.C:
+				latest, err := w.cfg.Store.GetFixerConsoleByID(ctx, cons.ID)
+				if err != nil || latest == nil || latest.Status == models.FixerConsoleCancelled {
+					cancel()
+					return
+				}
 				now := time.Now().UTC()
-				job.HeartbeatAt = &now
-				_ = w.cfg.Store.UpdateFixJob(ctx, job)
+				latest.HeartbeatAt = &now
+				_ = w.cfg.Store.UpdateFixerConsole(ctx, latest)
+			}
+		}
+	}()
+	return func() { close(done) }
+}
+
+// startHeartbeat stamps heartbeat_at periodically while the job runs, returning
+// a stop func. It also watches for a cancel (status flipped to cancelled via
+// the DELETE endpoint) and cancels the job's context so the orchestrator winds
+// down. Heartbeats reload the row so they cannot overwrite cancelled with
+// the in-memory running status.
+func (w *Worker) startHeartbeat(ctx context.Context, job *models.FixJob, cancel context.CancelFunc) func() {
+	done := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(w.cfg.Heartbeat)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-done:
+				return
+			case <-ticker.C:
+				latest, err := w.cfg.Store.GetFixJobByID(ctx, job.ID)
+				if err != nil || latest == nil {
+					// A read blip or a newer-schema column must not kill the job.
+					continue
+				}
+				if latest.Status == models.FixJobCancelled {
+					cancel()
+					return
+				}
+				now := time.Now().UTC()
+				latest.HeartbeatAt = &now
+				_ = w.cfg.Store.UpdateFixJob(ctx, latest)
 			}
 		}
 	}()

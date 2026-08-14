@@ -3,6 +3,7 @@ package routes
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"sort"
@@ -313,6 +314,108 @@ func UpdateRepo(w http.ResponseWriter, r *http.Request) {
 	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: repo})
 }
 
+// prepareRepoForSync clones or refreshes a repo's source. Tests replace this
+// so SyncRepo does not hit the network.
+var prepareRepoForSync = func(ctx context.Context, store db.Store, repo *models.Repo, branch string) (scantarget.Prepared, error) {
+	return (scantarget.Resolver{Store: store}).Sync(ctx, repo, branch)
+}
+
+// SetPrepareRepoForSyncForTest swaps the sync backend. The returned function
+// restores the previous implementation.
+func SetPrepareRepoForSyncForTest(fn func(context.Context, db.Store, *models.Repo, string) (scantarget.Prepared, error)) func() {
+	prev := prepareRepoForSync
+	if fn == nil {
+		prepareRepoForSync = func(ctx context.Context, store db.Store, repo *models.Repo, branch string) (scantarget.Prepared, error) {
+			return (scantarget.Resolver{Store: store}).Sync(ctx, repo, branch)
+		}
+	} else {
+		prepareRepoForSync = fn
+	}
+	return func() { prepareRepoForSync = prev }
+}
+
+type syncRepoResult struct {
+	*models.Repo
+	Branch            string `json:"branch"`
+	PreviousCommitSHA string `json:"previous_commit_sha,omitempty"`
+	Changed           bool   `json:"changed"`
+}
+
+// SyncRepo handles POST /api/repos/{id}/sync — pull the latest commits into
+// the local cache (or refresh recorded HEAD for local/SSH) without starting
+// a scan. Language detection is refreshed when a local tree is available.
+func SyncRepo(w http.ResponseWriter, r *http.Request) {
+	claims := auth.GetUserFromContext(r.Context())
+	if claims == nil {
+		response.WriteError(w, http.StatusUnauthorized, "unauthorized", "not authenticated")
+		return
+	}
+	h := DefaultHandler
+	if h == nil {
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "handler not initialized")
+		return
+	}
+
+	id := chi.URLParam(r, "id")
+	repo, ok := loadRepoForCaller(w, r, h.Store, id, claims)
+	if !ok {
+		return
+	}
+	if !canModifyOwned(claims, repo.UserID) {
+		response.WriteError(w, http.StatusForbidden, "forbidden", "you can only sync repositories you created")
+		return
+	}
+
+	branch := strings.TrimSpace(r.URL.Query().Get("branch"))
+	if branch == "" {
+		branch = repo.DefaultBranch
+	}
+
+	prepared, err := prepareRepoForSync(r.Context(), h.Store, repo, branch)
+	if err != nil {
+		wolflog.Warn().Err(err).Str("repo_id", id).Str("branch", branch).Msg("repo sync failed")
+		status := http.StatusBadGateway
+		code := "repo_sync_failed"
+		if repo.SourceType == models.SourceTypeLocal {
+			status = http.StatusBadRequest
+			code = "validation_error"
+		}
+		response.WriteError(w, status, code, "failed to sync repo: "+err.Error())
+		return
+	}
+	if prepared.Cleanup != nil {
+		defer prepared.Cleanup()
+	}
+
+	previous := repo.LastCommitSHA
+	repo.LastCommitSHA = prepared.CommitSHA
+	if prepared.DirtyState != "" {
+		repo.LastDirtyState = prepared.DirtyState
+	}
+	repo.UpdatedAt = time.Now()
+	if err := h.Store.UpdateRepo(r.Context(), repo); err != nil {
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to record synced commit")
+		return
+	}
+
+	if prepared.Path != "" && repo.SourceType != models.SourceTypeSSH {
+		applyRepoDetection(r.Context(), h.Store, repo.ID, prepared.Path)
+	}
+
+	updated, err := h.Store.GetRepoByID(r.Context(), repo.ID)
+	if err != nil {
+		updated = repo
+	}
+	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{
+		Data: syncRepoResult{
+			Repo:              updated,
+			Branch:            branch,
+			PreviousCommitSHA: previous,
+			Changed:           previous != prepared.CommitSHA,
+		},
+	})
+}
+
 func DeleteRepo(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetUserFromContext(r.Context())
 	if claims == nil {
@@ -336,23 +439,37 @@ func DeleteRepo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	scanIDs, err := h.Store.DeleteRepoCascade(r.Context(), id)
-	if err != nil {
-		wolflog.Error().Err(err).Str("repo_id", id).Msg("delete repo cascade failed")
-		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to delete repo: "+err.Error())
-		return
+	purge := wantPurgeRecords(r)
+	var scanIDs []string
+	if purge {
+		scanIDs, err = h.Store.DeleteRepoCascade(r.Context(), id)
+		if err != nil {
+			wolflog.Error().Err(err).Str("repo_id", id).Msg("delete repo cascade failed")
+			response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to delete repo: "+err.Error())
+			return
+		}
+		if len(scanIDs) > 0 && artifacts.Global != nil {
+			go artifacts.Global.DeleteScans(scanIDs)
+		}
+	} else {
+		if err := h.Store.DeleteRepoKeepHistory(r.Context(), id); err != nil {
+			if errors.Is(err, db.ErrHasScanRecords) {
+				response.WriteError(w, http.StatusConflict, "records_exist",
+					"this repo has scan records; pass purge=true to delete them as well")
+				return
+			}
+			wolflog.Error().Err(err).Str("repo_id", id).Msg("delete repo failed")
+			response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to delete repo: "+err.Error())
+			return
+		}
 	}
 
-	// Clean up artifact files on disk.
-	if len(scanIDs) > 0 {
-		go artifacts.Global.DeleteScans(scanIDs)
-	}
-
-	wolflog.Info().Str("repo_id", id).Str("repo_name", repo.Name).Int("scans_deleted", len(scanIDs)).Msg("repo deleted with cascade")
+	wolflog.Info().Str("repo_id", id).Str("repo_name", repo.Name).Int("scans_deleted", len(scanIDs)).Bool("purge", purge).Msg("repo deleted")
 
 	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: map[string]interface{}{
 		"message":       "repo deleted",
 		"scans_deleted": len(scanIDs),
+		"purged":        purge,
 	}})
 }
 
@@ -509,13 +626,17 @@ func GetRepoFixable(w http.ResponseWriter, r *http.Request) {
 
 	res := writability.Check(r.Context(), repo, h.Store, writability.DefaultProbes(h.Store))
 	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{
-		Data: models.RepoFixable{Writable: res.Writable, Reason: res.Reason},
+		Data: models.RepoFixable{Writable: res.Writable, CanPush: res.CanPush, Reason: res.Reason},
 	})
 }
 
 // runDetection runs language/framework detection on a repo and caches the results.
 // It is designed to be called in a goroutine so it doesn't block the HTTP response.
 func runDetection(store db.Store, repoID, sourcePath string) {
+	applyRepoDetection(context.Background(), store, repoID, sourcePath)
+}
+
+func applyRepoDetection(ctx context.Context, store db.Store, repoID, sourcePath string) {
 	result, err := detector.Detect(sourcePath)
 	if err != nil {
 		log.Printf("detection failed for repo %s: %v", repoID, err)
@@ -530,7 +651,7 @@ func runDetection(store db.Store, repoID, sourcePath string) {
 	langsJSON, _ := json.Marshal(langs)
 	fwJSON, _ := json.Marshal(result.Frameworks)
 
-	if err := store.UpdateRepoDetection(context.Background(), repoID, string(langsJSON), string(fwJSON)); err != nil {
+	if err := store.UpdateRepoDetection(ctx, repoID, string(langsJSON), string(fwJSON)); err != nil {
 		log.Printf("failed to save detection for repo %s: %v", repoID, err)
 	}
 }

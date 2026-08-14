@@ -5,8 +5,9 @@
 // agree on a single layout under the artifacts root so neither needs a shared
 // in-process broker:
 //
-//	<root>/fixes/<jobID>.log    — append-only progress log (the worker's Logf)
-//	<root>/fixes/<jobID>.diff   — the assembled branch diff (the DiffStore sink)
+//	<root>/fixes/<jobID>.log           — append-only progress log (the worker's Logf)
+//	<root>/fixes/<jobID>.diff          — the assembled branch diff (the DiffStore sink)
+//	<root>/fixes/console-<id>.log      — fixer console transcript (login / shell)
 //
 // The server tails the .log to feed its SSE relay and reads the .diff for
 // GET /fixes/{id}/diff. Keeping this tiny and filesystem-only means tests use a
@@ -37,6 +38,14 @@ func New(root string) *Store {
 	return &Store{root: root}
 }
 
+// Root is the artifacts directory this store writes under.
+func (s *Store) Root() string {
+	if s == nil {
+		return ""
+	}
+	return s.root
+}
+
 // fixesDir is the directory holding per-job artifacts, created on demand.
 func (s *Store) fixesDir() (string, error) {
 	dir := filepath.Join(s.root, dirName)
@@ -54,6 +63,11 @@ func (s *Store) LogPath(jobID string) string {
 // DiffPath returns the on-disk path of a job's diff artifact (it may not exist).
 func (s *Store) DiffPath(jobID string) string {
 	return filepath.Join(s.root, dirName, jobID+".diff")
+}
+
+// ConsoleLogPath is the transcript for a fixer console session.
+func (s *Store) ConsoleLogPath(consoleID string) string {
+	return filepath.Join(s.root, dirName, "console-"+consoleID+".log")
 }
 
 // AppendLog writes one progress line (a trailing newline is added). It is the
@@ -99,6 +113,37 @@ func (s *Store) SaveDiff(ctx context.Context, jobID, diff string) (string, error
 		return "", err
 	}
 	return name, nil
+}
+
+// AppendConsole writes one transcript line for a fixer console session.
+func (s *Store) AppendConsole(consoleID, line string) error {
+	return s.AppendLog("console-"+consoleID, line)
+}
+
+// AppendConsoleRaw writes PTY bytes as-is so a browser terminal can replay
+// CSI sequences and carriage returns. Do not add a trailing newline.
+func (s *Store) AppendConsoleRaw(consoleID string, data []byte) error {
+	if len(data) == 0 {
+		return nil
+	}
+	dir, err := s.fixesDir()
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	f, err := os.OpenFile(filepath.Join(dir, "console-"+consoleID+".log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o640) // #nosec G304 -- consoleID is a server-issued UUID
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = f.Write(data)
+	return err
+}
+
+// ReadConsole returns the console transcript, or empty if none exists yet.
+func (s *Store) ReadConsole(consoleID string) (string, error) {
+	return s.ReadLog("console-" + consoleID)
 }
 
 // ReadDiff returns the proposed diff for a job, or empty if none exists yet.

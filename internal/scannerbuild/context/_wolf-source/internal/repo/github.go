@@ -81,6 +81,25 @@ func pullRepo(dir, token string) error {
 	return nil
 }
 
+// CachedGitHubPath returns the on-disk scan clone for owner/repo when it
+// already exists. Empty means the cache has not been populated yet.
+func CachedGitHubPath(owner, repo string) string {
+	owner = filepath.Clean(owner)
+	repo = filepath.Clean(repo)
+	if owner == "." || owner == ".." || repo == "." || repo == ".." {
+		return ""
+	}
+	cacheDir, err := getCacheDir()
+	if err != nil {
+		return ""
+	}
+	dest := filepath.Join(cacheDir, "github", owner, repo)
+	if _, err := os.Stat(filepath.Join(dest, ".git")); err != nil {
+		return ""
+	}
+	return dest
+}
+
 func getCacheDir() (string, error) {
 	if root := os.Getenv("WOLF_WORKSPACE_ROOT"); root != "" {
 		return filepath.Join(root, ".wolf-cache", "repos"), nil
