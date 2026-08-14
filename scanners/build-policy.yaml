@@ -42,7 +42,7 @@ fixerVariants:
     platforms: [linux/amd64]
     authMode: none
     buildArgs:
-      GO_VERSION: 1.26.5
+      GO_VERSION: 1.26.6
       TYPESCRIPT_VERSION: 6.0.3
       GH_VERSION: 2.97.0
       GLAB_VERSION: 1.113.0
