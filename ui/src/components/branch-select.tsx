@@ -1,9 +1,7 @@
 // Branch picker for scan-trigger surfaces. Live-fetches the repo's
 // branches from GET /api/repos/{id}/branches and renders a <select>,
-// annotating the repo's default branch. While the fetch is in flight (or
-// if it fails), it renders a single-option select containing just the
-// default branch, so the surrounding form is never blocked — scanning the
-// default branch always remains possible.
+// annotating the repo's default branch. A failed live list is shown as
+// an error with Retry — we never pretend other branches do not exist.
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 
@@ -39,10 +37,9 @@ export function BranchSelect({
   });
 
   const fallback = defaultBranch || value || "main";
-  const branches =
-    q.data?.branches && q.data.branches.length > 0
-      ? q.data.branches
-      : [fallback];
+  const live =
+    q.data?.branches && q.data.branches.length > 0 ? q.data.branches : [];
+  const branches = live.length > 0 ? live : [fallback];
   const repoDefault = q.data?.default_branch || defaultBranch || "";
 
   const cls =
@@ -50,19 +47,47 @@ export function BranchSelect({
     "h-9 px-2 rounded-md bg-background border border-muted/40 text-sm";
 
   return (
-    <select
-      name={name}
-      value={value || repoDefault || fallback}
-      onChange={(e) => onChange(e.target.value)}
-      disabled={!repoId || q.isLoading}
-      className={cls}
-    >
-      {branches.map((b) => (
-        <option key={b} value={b}>
-          {b}
-          {b === repoDefault ? " (default)" : ""}
-        </option>
-      ))}
-    </select>
+    <div className="flex flex-col items-stretch gap-1 min-w-0">
+      <div className="flex items-center gap-1">
+        <select
+          name={name}
+          value={value || repoDefault || fallback}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={!repoId || q.isLoading}
+          className={cls}
+          aria-invalid={q.isError || undefined}
+          title={q.isError ? branchListError(q.error) : undefined}
+        >
+          {branches.map((b) => (
+            <option key={b} value={b}>
+              {b}
+              {b === repoDefault ? " (default)" : ""}
+            </option>
+          ))}
+        </select>
+        {q.isError && (
+          <button
+            type="button"
+            onClick={() => void q.refetch()}
+            className="h-9 px-2 rounded-md border border-border/60 text-sm hover:bg-muted/50"
+          >
+            Retry
+          </button>
+        )}
+      </div>
+      {q.isError && (
+        <p className="text-[11px] text-destructive leading-snug max-w-[18rem]">
+          Could not load live branches: {branchListError(q.error)}. Default is
+          still selectable.
+        </p>
+      )}
+    </div>
   );
+}
+
+function branchListError(err: unknown): string {
+  if (err instanceof Error && err.message.trim()) {
+    return err.message;
+  }
+  return "request failed";
 }

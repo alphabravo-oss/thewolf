@@ -14,7 +14,6 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/api/response"
 	"github.com/alphabravocompany/thewolf/internal/artifacts"
 	"github.com/alphabravocompany/thewolf/internal/auth"
-	gitpkg "github.com/alphabravocompany/thewolf/internal/fix/git"
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/scan/detector"
 	"github.com/alphabravocompany/thewolf/internal/setup"
@@ -405,6 +404,7 @@ type RepoDetection struct {
 	Branches      []string       `json:"branches"`
 	DefaultBranch string         `json:"default_branch"`
 	CurrentBranch string         `json:"current_branch"`
+	BranchError   string         `json:"branch_error,omitempty"`
 }
 
 // CollectionToolsResponse wraps tools together with per-repo detection data.
@@ -447,14 +447,28 @@ func CollectionTools(w http.ResponseWriter, r *http.Request) {
 	repos, _ := h.Store.ListReposInCollection(r.Context(), collectionID)
 	langSet := make(map[models.Language]bool)
 	var repoSummary []RepoDetection
-	for _, repo := range repos {
+	for i := range repos {
+		repo := repos[i]
+		branches, currentBranch, berr := repoBranchList(r.Context(), h, &repo)
+		branchErr := ""
+		if berr != nil {
+			branchErr = berr.Error()
+			branches = []string{}
+			currentBranch = ""
+		} else if branches == nil {
+			branches = []string{}
+		}
+		sort.Strings(branches)
+
 		result, err := detector.Detect(repo.SourcePath)
 		if err != nil {
 			repoSummary = append(repoSummary, RepoDetection{
 				RepoID:        repo.ID,
 				RepoName:      repo.Name,
-				Branches:      []string{},
+				Branches:      branches,
 				DefaultBranch: repo.DefaultBranch,
+				CurrentBranch: currentBranch,
+				BranchError:   branchErr,
 			})
 			continue
 		}
@@ -469,13 +483,6 @@ func CollectionTools(w http.ResponseWriter, r *http.Request) {
 		if frameworks == nil {
 			frameworks = []string{}
 		}
-		// List available branches for branch selection in the scan dialog.
-		branches, _ := gitpkg.ListBranches(repo.SourcePath)
-		if branches == nil {
-			branches = []string{}
-		}
-		sort.Strings(branches)
-		currentBranch, _ := gitpkg.CurrentBranch(repo.SourcePath)
 
 		repoSummary = append(repoSummary, RepoDetection{
 			RepoID:        repo.ID,
@@ -488,6 +495,7 @@ func CollectionTools(w http.ResponseWriter, r *http.Request) {
 			Branches:      branches,
 			DefaultBranch: repo.DefaultBranch,
 			CurrentBranch: currentBranch,
+			BranchError:   branchErr,
 		})
 		// Update the cache in the background so other views stay current.
 		go runDetection(h.Store, repo.ID, repo.SourcePath)

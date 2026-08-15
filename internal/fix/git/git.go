@@ -189,6 +189,20 @@ func ListBranches(repoPath string) ([]string, error) {
 	return branches, nil
 }
 
+// OriginURL returns `git remote get-url origin` for a local checkout.
+// Empty means the path has no origin (or is not a git repo).
+func OriginURL(repoPath string) string {
+	if strings.TrimSpace(repoPath) == "" {
+		return ""
+	}
+	cmd := exec.Command("git", "-C", repoPath, "remote", "get-url", "origin")
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
 // ListRemoteBranches returns branch names advertised by a git remote without
 // requiring a local checkout.
 func ListRemoteBranches(remoteURL, token string) ([]string, error) {

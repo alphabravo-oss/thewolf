@@ -140,6 +140,7 @@ export interface RepoDetection {
   branches: string[];
   default_branch: string;
   current_branch: string;
+  branch_error?: string;
 }
 
 export interface CollectionToolsResponse {
