@@ -229,7 +229,11 @@ export function Sidebar() {
         ref={openButtonRef}
         type="button"
         className={cn(
-          "md:hidden fixed top-3 left-3 z-30 size-9 grid place-items-center rounded-md",
+          // z-40 keeps the trigger above the sticky topbar (z-30) — at equal
+          // z-index the topbar wins on DOM order and its breadcrumb nav
+          // swallows the click. Still below the drawer backdrop and panel
+          // (z-40 later in DOM / z-50), so an open drawer covers it.
+          "md:hidden fixed top-3 left-3 z-40 size-9 grid place-items-center rounded-md",
           "bg-card border border-border shadow-md",
         )}
         aria-label="Open menu"
