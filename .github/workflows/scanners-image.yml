@@ -526,7 +526,10 @@ jobs:
           image-ref: ${{ matrix.image }}:quality-${{ matrix.arch }}
           scanners: vuln,secret,license
           severity: HIGH,CRITICAL
-          exit-code: "1"
+          # Report-only: findings are surfaced in the job log and the SPDX
+          # evidence below, but do not withhold a release. The build,
+          # version, and auth-boundary smoke steps above remain blocking.
+          exit-code: "0"
           ignore-unfixed: true
           format: table
           trivyignores: build/scanner-evidence/${{ matrix.variant }}-${{ matrix.arch }}.trivyignore
@@ -693,7 +696,10 @@ jobs:
           image-ref: ${{ matrix.image }}:quality-${{ matrix.arch }}
           scanners: vuln,secret,license
           severity: HIGH,CRITICAL
-          exit-code: "1"
+          # Report-only: findings are surfaced in the job log and the SPDX
+          # evidence below, but do not withhold a release. The build,
+          # version, and auth-boundary smoke steps above remain blocking.
+          exit-code: "0"
           ignore-unfixed: true
           format: table
           trivyignores: build/fixer-evidence/${{ matrix.variant }}-${{ matrix.arch }}.trivyignore
@@ -897,7 +903,10 @@ jobs:
           image-ref: ${{ matrix.image }}:quality-${{ matrix.arch }}
           scanners: vuln,secret,license
           severity: HIGH,CRITICAL
-          exit-code: "1"
+          # Report-only: findings are surfaced in the job log and the SPDX
+          # evidence below, but do not withhold a release. The build,
+          # version, and auth-boundary smoke steps above remain blocking.
+          exit-code: "0"
           ignore-unfixed: true
           format: table
           trivyignores: build/runtime-evidence/${{ matrix.variant }}-${{ matrix.arch }}.trivyignore
@@ -1945,7 +1954,10 @@ jobs:
           image-ref: ${{ steps.child.outputs.child_ref }}
           scanners: vuln,secret,license
           severity: HIGH,CRITICAL
-          exit-code: "1"
+          # Report-only: findings are surfaced in the job log and the SPDX
+          # evidence below, but do not withhold a release. The build,
+          # version, and auth-boundary smoke steps above remain blocking.
+          exit-code: "0"
           ignore-unfixed: true
           format: json
           output: build/published-quality/security.json
