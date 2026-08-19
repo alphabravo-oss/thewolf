@@ -33,7 +33,7 @@ GOLANGCI_LINT := $(shell command -v golangci-lint 2>/dev/null)
 AIR           := $(shell command -v air 2>/dev/null || echo $(shell go env GOPATH)/bin/air)
 
 .PHONY: all build test lint vet fmt ui-build dev dev-api dev-ui docker docker-buildx docker-up docker-down clean help helm-validate \
-        scanners-build scanners-buildx scanners-buildx-all scanners-buildx-setup scanners-smoke scanners-push scanners-validate scanners-quality scanners-docs scanners-docs-check scanners-upstream-check scanners-bump scanners-os-packages-check scanners-os-packages-refresh scanners-vulnerability-dbs-check scanners-vulnerability-dbs-refresh dev-scanners test-integration
+        scanners-build scanners-buildx scanners-buildx-all scanners-buildx-setup scanners-smoke scanners-push scanners-validate scanners-quality scanners-docs scanners-docs-check scanners-upstream-check scanners-bump scanners-os-packages-check scanners-os-packages-refresh scanners-vulnerability-dbs-check scanners-vulnerability-dbs-refresh scanners-sync scanners-context-check dev-scanners test-integration
 
 ## all: Build everything (Go binary + UI)
 all: build ui-build
@@ -134,6 +134,23 @@ ui-dev: dev-ui
 ## scanners-validate: Validate scanner manifest, version pins, image routing, embedded context, generated docs, and OS package lock
 scanners-validate: scanners-docs-check scanners-os-packages-check scanners-vulnerability-dbs-check scanners-context-check scanners-quality
 	@echo "==> Validating scanner metadata..."
+	go run ./cmd/scannertools validate
+
+## scanners-sync: Regenerate the embedded build context AND the scanner lock together
+# Any edit to a file inside internal/scannerbuild/context/ — which mirrors
+# cmd/, internal/, plugins/, scanners/ and fixer/ — invalidates BOTH the
+# embedded context and scanner-lock.yaml, because the lock records a hash of
+# every file in that context. Regenerating only one leaves the other stale and
+# the release factory fails in `discovery`, several minutes into a run, with a
+# message that names whichever check happened to run first. Run this instead of
+# either command on its own.
+scanners-sync:
+	@echo "==> Regenerating embedded scanner/fixer build context..."
+	go generate ./internal/scannerbuild/...
+	@echo "==> Regenerating scanner lock..."
+	go run ./cmd/scannertools lock
+	@echo "==> Verifying..."
+	go run ./internal/scannerbuild/cmd/synccontext --check
 	go run ./cmd/scannertools validate
 
 ## scanners-context-check: Verify the embedded scanner/fixer build context is canonical
