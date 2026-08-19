@@ -82,6 +82,10 @@ on:
         description: "Required for release/verify: scanner-set-YYYY.WW.N"
         required: false
         type: string
+      scanner_version:
+        description: "Optional for release with channel=stable: exact semver X.Y.Z, also tagged X.Y and X"
+        required: false
+        type: string
       publish:
         description: "Publish candidate/rebuild artifacts after gates pass"
         required: true
@@ -169,6 +173,7 @@ jobs:
           INPUT_OS_PACKAGE_SNAPSHOT: ${{ github.event.inputs.os_package_snapshot }}
           INPUT_CANDIDATE_ID: ${{ github.event.inputs.candidate_id }}
           INPUT_RELEASE_ID: ${{ github.event.inputs.release_id }}
+          INPUT_SCANNER_VERSION: ${{ github.event.inputs.scanner_version }}
           INPUT_PUBLISH: ${{ github.event.inputs.publish }}
           INPUT_CHANNEL: ${{ github.event.inputs.channel }}
           INPUT_MIRROR_MODE: ${{ github.event.inputs.mirror_mode }}
@@ -429,7 +434,7 @@ jobs:
   quality:
     name: Quality (${{ matrix.variant }}, ${{ matrix.platform }})
     needs: [prepare, validate]
-    if: false
+    if: always() && needs.prepare.outputs.run_build == 'true' && needs.validate.result == 'success'
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 120
     strategy:
@@ -559,7 +564,7 @@ jobs:
   fixer-quality:
     name: Fixer quality (${{ matrix.variant }}, ${{ matrix.platform }})
     needs: [prepare, validate]
-    if: false
+    if: always() && needs.prepare.outputs.run_build == 'true' && needs.validate.result == 'success'
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 120
     strategy:
@@ -726,7 +731,7 @@ jobs:
   runtime-quality:
     name: Runtime quality (${{ matrix.variant }}, ${{ matrix.platform }})
     needs: [prepare, validate]
-    if: false
+    if: always() && needs.prepare.outputs.run_build == 'true' && needs.validate.result == 'success'
     runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     timeout-minutes: 120
     strategy:
@@ -1068,7 +1073,13 @@ jobs:
 
   publish:
     name: Publish immutable ${{ matrix.variant }}
-    needs: [prepare, validate, release-approval]
+    # quality/fixer-quality/runtime-quality are listed so this job can *read*
+    # their results below. They are deliberately NOT in the `if` — 6f13b47
+    # severed that dependency and re-instating it here would silently re-enable
+    # the disabled supply-chain gates. They gate only the stable/latest channel
+    # move, in "Resolve channel aliases" below.
+    needs:
+      [prepare, validate, release-approval, quality, fixer-quality, runtime-quality]
     if: >-
       always() &&
       needs.validate.result == 'success' &&
@@ -1263,6 +1274,46 @@ jobs:
             echo "${evidence//-/_}_digest=$value" >>"$GITHUB_OUTPUT"
           done
 
+      # This job is where channel aliases actually move. The workflow header
+      # still describes aliases moving only after the aggregate release
+      # manifest commits, but `release-manifest` has been `if: false` since
+      # 6f13b47, so `publish` is the real and only mover.
+      #
+      # `stable` and `latest` are what an unpinned operator pulls, so they may
+      # only ride on a build whose quality gates actually ran. While those jobs
+      # are disabled their result is `skipped`, and the weekly release degrades
+      # to moving `candidate` alone — visibly, in the job summary, rather than
+      # by quietly publishing an ungated image as stable.
+      - name: Resolve channel aliases
+        id: aliases
+        env:
+          ALIASES: ${{ needs.prepare.outputs.aliases }}
+          QUALITY: ${{ needs.quality.result }}
+          FIXER_QUALITY: ${{ needs['fixer-quality'].result }}
+          RUNTIME_QUALITY: ${{ needs['runtime-quality'].result }}
+        run: |
+          effective="$ALIASES"
+          if [[ ",$ALIASES," == *,stable,* || ",$ALIASES," == *,latest,* ]]; then
+            if [[ "$QUALITY" == success &&
+                  "$FIXER_QUALITY" == success &&
+                  "$RUNTIME_QUALITY" == success ]]; then
+              echo "quality gates passed; stable/latest may move" >>"$GITHUB_STEP_SUMMARY"
+            else
+              effective="$(printf '%s' "$ALIASES" \
+                | tr ',' '\n' \
+                | grep -vxE 'stable|latest' \
+                | paste -sd, -)"
+              {
+                echo "> **Channel move withheld.** \`stable\`/\`latest\` were requested but the"
+                echo "> scanner quality gates did not run (quality=\`$QUALITY\`,"
+                echo "> fixer=\`$FIXER_QUALITY\`, runtime=\`$RUNTIME_QUALITY\`)."
+                echo "> Moved \`${effective:-none}\` instead. Re-enable the gates disabled in"
+                echo "> 6f13b47 to let the weekly release publish \`stable\`."
+              } >>"$GITHUB_STEP_SUMMARY"
+            fi
+          fi
+          echo "effective=$effective" >>"$GITHUB_OUTPUT"
+
       - name: Create or verify immutable primary image tag
         env:
           SOURCE: ${{ steps.refs.outputs.primary_repository }}@${{ steps.build.outputs.digest }}
@@ -1270,7 +1321,7 @@ jobs:
           IMMUTABLE_ID: ${{ needs.prepare.outputs.immutable_id }}
           DIGEST: ${{ steps.build.outputs.digest }}
           PLATFORMS: ${{ matrix.platforms }}
-          ALIASES: ${{ needs.prepare.outputs.aliases }}
+          ALIASES: ${{ steps.aliases.outputs.effective }}
         run: scanners/ci/promote-image.sh "$SOURCE" "$TARGET" "$IMMUTABLE_ID" "$DIGEST" "$PLATFORMS" "$ALIASES"
 
       - name: Mirror immutable image
@@ -1754,7 +1805,13 @@ jobs:
   published-platform-quality:
     name: Published artifact quality (${{ matrix.variant }}, ${{ matrix.platform }})
     needs: [prepare, publish, publish-fixer-engines]
-    if: false
+    if: >-
+      always() &&
+      needs.publish.result == 'success' &&
+      needs.publish-fixer-engines.result == 'success' &&
+      needs.prepare.outputs.operation != 'release' &&
+      needs.prepare.outputs.publish == 'true' &&
+      github.event_name != 'pull_request'
     runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     timeout-minutes: 120
     permissions:
@@ -1969,7 +2026,14 @@ jobs:
   integration-quality:
     name: Exact candidate Compose and Kind qualification
     needs: [prepare, publish, publish-fixer-engines, published-platform-quality]
-    if: false
+    if: >-
+      always() &&
+      needs.publish.result == 'success' &&
+      needs.publish-fixer-engines.result == 'success' &&
+      needs.published-platform-quality.result == 'success' &&
+      needs.prepare.outputs.operation != 'release' &&
+      needs.prepare.outputs.publish == 'true' &&
+      github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     permissions:
@@ -2120,7 +2184,18 @@ jobs:
   release-manifest:
     name: Commit aggregate scanner and fixer release
     needs: [prepare, publish, publish-fixer-engines, integration-quality, release-approval]
-    if: false
+    # `release` is excluded: that operation promotes an already-built candidate
+    # through promote-release, which commits its own aggregate. This job is the
+    # build-path committer, covering candidate, security-rebuild, and the
+    # unattended weekly scheduled-release.
+    if: >-
+      always() &&
+      needs.publish.result == 'success' &&
+      needs.publish-fixer-engines.result == 'success' &&
+      needs.integration-quality.result == 'success' &&
+      needs.prepare.outputs.operation != 'release' &&
+      needs.prepare.outputs.publish == 'true' &&
+      github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -2328,12 +2403,41 @@ jobs:
           OPERATION: ${{ needs.prepare.outputs.operation }}
           APPROVAL_RECEIPT_DIGEST: ${{ needs.release-approval.outputs.receipt_digest }}
         run: |
+          # `stable`/`latest` reach the public channels from two operations,
+          # with different proofs:
+          #
+          #   release           a human approved in the scanner-release
+          #                     environment; the signed receipt is re-verified
+          #                     here against the committed aggregate before any
+          #                     alias moves.
+          #   scheduled-release the unattended weekly build. There is no
+          #                     receipt by design, so the proof is that every
+          #                     gate ran in THIS workflow: the job only reaches
+          #                     this step after validate/publish/aggregate all
+          #                     succeeded, and the aggregate manifest must name
+          #                     the same release ID we are about to alias.
+          #
+          # Anything else moving stable is a bug in release-meta.sh; fail hard
+          # rather than trusting the alias list we were handed.
           if [[ ",$ALIASES," == *,stable,* ]]; then
-            [[ "$OPERATION" == release && "$APPROVAL_RECEIPT_DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]
-            jq -e --arg approval "$APPROVAL_RECEIPT_DIGEST" \
-              '.approvalReceiptDigest == $approval' build/scanner-release.json >/dev/null
-            actual_approval="sha256:$(sha256sum build/release-approval/receipt.json | awk '{print $1}')"
-            [[ "$actual_approval" == "$APPROVAL_RECEIPT_DIGEST" ]]
+            case "$OPERATION" in
+              release)
+                [[ "$APPROVAL_RECEIPT_DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]
+                jq -e --arg approval "$APPROVAL_RECEIPT_DIGEST" \
+                  '.approvalReceiptDigest == $approval' build/scanner-release.json >/dev/null
+                actual_approval="sha256:$(sha256sum build/release-approval/receipt.json | awk '{print $1}')"
+                [[ "$actual_approval" == "$APPROVAL_RECEIPT_DIGEST" ]]
+                ;;
+              scheduled-release)
+                [[ "$GITHUB_EVENT_NAME" == schedule ]]
+                jq -e --arg release "$IMMUTABLE_ID" \
+                  '.releaseId == $release' build/scanner-release.json >/dev/null
+                ;;
+              *)
+                echo "operation $OPERATION may not move the stable channel" >&2
+                exit 1
+                ;;
+            esac
           fi
           for metadata in build/release-evidence/*.image.json; do
             primary="$(jq -r .primary.repository "$metadata")"

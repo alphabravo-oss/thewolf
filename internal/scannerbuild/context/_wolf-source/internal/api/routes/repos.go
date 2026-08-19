@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"sort"
@@ -492,16 +493,9 @@ func ListRepoBranches(w http.ResponseWriter, r *http.Request) {
 		response.WriteError(w, http.StatusNotFound, "not_found", "repo not found")
 		return
 	}
-
-	var branches []string
-	current := ""
-	if repo.SourceType == models.SourceTypeSSH {
-		if repo.RemoteNodeID == nil {
-			response.WriteError(w, http.StatusBadRequest, "validation_error", "ssh repo has no remote node")
-			return
-		}
-		node, err := h.Store.GetRemoteNodeByID(r.Context(), *repo.RemoteNodeID)
-		if err != nil {
+	if repo.SourceType == models.SourceTypeSSH && repo.RemoteNodeID != nil {
+		node, nerr := h.Store.GetRemoteNodeByID(r.Context(), *repo.RemoteNodeID)
+		if nerr != nil {
 			response.WriteError(w, http.StatusNotFound, "not_found", "remote node not found")
 			return
 		}
@@ -509,38 +503,12 @@ func ListRepoBranches(w http.ResponseWriter, r *http.Request) {
 			response.WriteError(w, http.StatusForbidden, "forbidden", "remote node does not belong to current user")
 			return
 		}
-		info, err := (remote.Service{Store: h.Store}).GitInfo(r.Context(), node, repo.SourcePath)
-		if err != nil {
-			response.WriteError(w, http.StatusBadGateway, "ssh_git_info_failed", "failed to list remote branches: "+err.Error())
-			return
-		}
-		branches = info.Branches
-		current = info.CurrentBranch
-	} else if repo.SourceType == models.SourceTypeGitHub {
-		owner, name, err := scantarget.ParseGitHubSource(repo.SourcePath)
-		if err != nil {
-			response.WriteError(w, http.StatusBadRequest, "validation_error", err.Error())
-			return
-		}
-		token, err := githubTokenForRepo(r.Context(), h, repo)
-		if err != nil {
-			response.WriteError(w, http.StatusBadRequest, "validation_error", err.Error())
-			return
-		}
-		branches, err = listRemoteBranches("https://github.com/"+owner+"/"+name+".git", token)
-		if err != nil {
-			response.WriteError(w, http.StatusBadGateway, "github_branches_failed", "failed to list GitHub branches")
-			return
-		}
-		current = repo.DefaultBranch
-	} else {
-		var err error
-		branches, err = gitpkg.ListBranches(repo.SourcePath)
-		if err != nil {
-			response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to list branches: "+err.Error())
-			return
-		}
-		current, _ = gitpkg.CurrentBranch(repo.SourcePath)
+	}
+
+	branches, current, err := repoBranchList(r.Context(), h, repo)
+	if err != nil {
+		response.WriteError(w, http.StatusBadGateway, "branches_failed", err.Error())
+		return
 	}
 	sort.Strings(branches)
 
@@ -551,6 +519,92 @@ func ListRepoBranches(w http.ResponseWriter, r *http.Request) {
 			"current_branch": current,
 		},
 	})
+}
+
+// repoBranchList returns live remote branch names when a remote exists.
+// Callers must surface err instead of falling back to the default branch.
+func repoBranchList(ctx context.Context, h *Handler, repo *models.Repo) (branches []string, current string, err error) {
+	if repo == nil {
+		return nil, "", fmt.Errorf("repo is required")
+	}
+	switch repo.SourceType {
+	case models.SourceTypeSSH:
+		if repo.RemoteNodeID == nil {
+			return nil, "", fmt.Errorf("ssh repo has no remote node")
+		}
+		if h == nil || h.Store == nil {
+			return nil, "", fmt.Errorf("handler not initialized")
+		}
+		node, err := h.Store.GetRemoteNodeByID(ctx, *repo.RemoteNodeID)
+		if err != nil {
+			return nil, "", fmt.Errorf("remote node not found")
+		}
+		info, err := (remote.Service{Store: h.Store}).GitInfo(ctx, node, repo.SourcePath)
+		if err != nil {
+			return nil, "", fmt.Errorf("failed to list remote branches: %w", err)
+		}
+		return info.Branches, info.CurrentBranch, nil
+	case models.SourceTypeGitHub:
+		owner, name, err := scantarget.ParseGitHubSource(repo.SourcePath)
+		if err != nil {
+			return nil, "", err
+		}
+		token, err := githubTokenForRepo(ctx, h, repo)
+		if err != nil {
+			return nil, "", err
+		}
+		branches, err = listRemoteBranches("https://github.com/"+owner+"/"+name+".git", token)
+		if err != nil {
+			return nil, "", fmt.Errorf("failed to list GitHub branches: %w", err)
+		}
+		return branches, repo.DefaultBranch, nil
+	case models.SourceTypeGitLab, models.SourceTypeGit:
+		url := strings.TrimSpace(repo.SourcePath)
+		if url == "" {
+			return nil, "", fmt.Errorf("git source path is empty")
+		}
+		token := ""
+		if isGitHubRemoteURL(url) {
+			t, terr := githubTokenForRepo(ctx, h, repo)
+			if terr != nil {
+				return nil, "", terr
+			}
+			token = t
+		}
+		branches, err = listRemoteBranches(url, token)
+		if err != nil {
+			return nil, "", fmt.Errorf("failed to list remote branches: %w", err)
+		}
+		return branches, repo.DefaultBranch, nil
+	default:
+		origin := gitpkg.OriginURL(repo.SourcePath)
+		if origin != "" {
+			token := ""
+			if isGitHubRemoteURL(origin) {
+				t, terr := githubTokenForRepo(ctx, h, repo)
+				if terr != nil {
+					return nil, "", terr
+				}
+				token = t
+			}
+			branches, err = listRemoteBranches(origin, token)
+			if err != nil {
+				return nil, "", fmt.Errorf("failed to list remote branches: %w", err)
+			}
+			current, _ = gitpkg.CurrentBranch(repo.SourcePath)
+			return branches, current, nil
+		}
+		branches, err = gitpkg.ListBranches(repo.SourcePath)
+		if err != nil {
+			return nil, "", fmt.Errorf("failed to list branches: %w", err)
+		}
+		current, _ = gitpkg.CurrentBranch(repo.SourcePath)
+		return branches, current, nil
+	}
+}
+
+func isGitHubRemoteURL(raw string) bool {
+	return strings.Contains(strings.ToLower(raw), "github.com")
 }
 
 func githubTokenForRepo(ctx context.Context, h *Handler, repo *models.Repo) (string, error) {

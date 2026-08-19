@@ -299,8 +299,9 @@ func newServeCmd() *cobra.Command {
 			}
 
 			// Surface the resolved default scanner image tag at startup so the
-			// runtime default (2.0.0) vs. WOLF_SCANNERS_TAG override is obvious
-			// in the logs. The active refs are what a scan will actually pull.
+			// runtime default (scanners.DefaultScannersTag) vs. a
+			// WOLF_SCANNERS_TAG override is obvious in the logs. The active
+			// refs are what a scan will actually pull.
 			wolflog.L().Info().
 				Str("tag", scanners.ResolvedTag()).
 				Str("default_image", scanners.ActiveImageRefs()["default"]).

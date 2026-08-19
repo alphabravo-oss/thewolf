@@ -35,6 +35,11 @@ validate_release_id() {
         die "release_id must match scanner-set-YYYY.WW.N with an ISO week from 01 through 53"
 }
 
+validate_scanner_version() {
+    [[ "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] ||
+        die "scanner_version must be exact semver MAJOR.MINOR.PATCH"
+}
+
 validate_channel() {
     case "$1" in
         none | candidate | stable) ;;
@@ -71,6 +76,7 @@ resolve() {
     local channel="${INPUT_CHANNEL:-none}"
     local mirror_mode="${INPUT_MIRROR_MODE:-auto}"
     local os_package_snapshot="${INPUT_OS_PACKAGE_SNAPSHOT:-}"
+    local scanner_version="${INPUT_SCANNER_VERSION:-}"
     local sha="${GIT_SHA:-}"
     local short_sha
     local ref_slug
@@ -93,13 +99,27 @@ resolve() {
 					run_vulnerability_db_refresh=true
                     ;;
                 "43 3 * * 0")
-                    operation="candidate"
+                    # Unattended weekly release. Unlike the `release` dispatch
+                    # — which promotes an already-built candidate and requires
+                    # a protected-environment approval receipt — this path
+                    # builds and then moves the public channels itself, once
+                    # every quality, security, SBOM, signature, and provenance
+                    # gate has passed. There is deliberately no human in this
+                    # loop; `release` remains the gated route for anything a
+                    # person drives.
+                    operation="scheduled-release"
                     run_discovery=true
                     run_validation=true
                     run_build=true
                     publish=true
-                    immutable_id="scanner-candidate-$(date -u +%G-w%V)-${short_sha}-${run_suffix}"
-                    aliases="candidate"
+                    # A release identity, not a candidate one: this run
+                    # publishes the set the world consumes. The attempt number
+                    # supplies the sequence, so a re-run after a failure mints
+                    # a fresh immutable ID rather than colliding with the
+                    # partial one already pushed.
+                    immutable_id="scanner-set-$(date -u +%G.%V).${RUN_ATTEMPT:-1}"
+                    validate_release_id "$immutable_id"
+                    aliases="candidate,stable,latest"
                     ;;
                 *)
                     die "unrecognized scanner factory schedule"
@@ -178,7 +198,15 @@ resolve() {
                     validate_release_id "$immutable_id"
 					[[ "$channel" == "none" || "$channel" == "stable" ]] ||
 						die "release operations may move only the stable channel"
-                    [[ "$channel" == "none" ]] || aliases="$channel"
+                    # `latest` is an alias of `stable`, never of `candidate`:
+                    # an unqualified pull must land on the approved set.
+                    [[ "$channel" == "none" ]] || aliases="stable,latest"
+                    if [[ -n "$scanner_version" ]]; then
+                        [[ "$channel" == "stable" ]] ||
+                            die "scanner_version may only be applied to a stable release"
+                        validate_scanner_version "$scanner_version"
+                        aliases+=",$(version_aliases "$scanner_version")"
+                    fi
                     ;;
                 verify)
                     immutable_id="${INPUT_RELEASE_ID:-}"
@@ -209,8 +237,19 @@ resolve() {
 	if [[ "$publish" != "true" && -n "$aliases" ]]; then
 		die "a channel move requires publication"
 	fi
-	if [[ ",$aliases," == *,stable,* && "$operation" != "release" ]]; then
-		die "the stable channel requires the protected release operation"
+	# `stable` — and therefore `latest` — may move from exactly two operations:
+	# the human-driven, approval-gated `release`, and the unattended weekly
+	# `scheduled-release`. Every other operation, including manual `candidate`
+	# and `security-rebuild` dispatches, is still refused.
+	if [[ ",$aliases," == *,stable,* &&
+		"$operation" != "release" && "$operation" != "scheduled-release" ]]; then
+		die "the stable channel requires the release or scheduled-release operation"
+	fi
+	# `latest` must never point somewhere `stable` does not. The app-release
+	# path is the one exception: it tags Wolf-versioned compatibility aliases.
+	if [[ ",$aliases," == *,latest,* && ",$aliases," != *,stable,* &&
+		"$operation" != "legacy-release" ]]; then
+		die "latest may only move together with stable"
 	fi
     if [[ "$run_build" == "true" && -z "$immutable_id" ]]; then
         die "build operation did not resolve an immutable identifier"
@@ -247,17 +286,24 @@ parse_bool() {
     esac
 }
 
-legacy_aliases() {
+# Expand a version into its rolling family: 2.1.0 -> "2.1.0,2.1,2". A
+# pre-release or otherwise non-numeric version expands to itself only, so
+# "2.1.0-rc1" never captures the plain "2.1" / "2" tags.
+version_aliases() {
     local version="$1"
     local major minor patch rest
     IFS=. read -r major minor patch rest <<<"$version"
     local aliases="$version"
     if [[ -n "${patch:-}" && -z "${rest:-}" && "$patch" =~ ^[0-9]+$ ]]; then
-        aliases+=",${major}.${minor},${major},latest"
-    else
-        aliases+=",latest"
+        aliases+=",${major}.${minor},${major}"
     fi
     printf '%s' "$aliases"
+}
+
+# App-release (v*.*.*) compatibility tags: the version family plus `latest`.
+# Shape is unchanged from before version_aliases was factored out.
+legacy_aliases() {
+    printf '%s,latest' "$(version_aliases "$1")"
 }
 
 tags() {

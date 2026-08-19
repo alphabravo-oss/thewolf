@@ -37,24 +37,26 @@ output="$(env "${common[@]}" EVENT_NAME=workflow_dispatch INPUT_OPERATION=valida
 assert_output "$output" "run_validation=true"
 assert_output "$output" "run_build=false"
 
+# The weekly cron is an unattended release: it builds, then moves candidate,
+# stable, and latest itself. `release` stays the approval-gated path.
 output="$(env "${common[@]}" EVENT_NAME=schedule EVENT_SCHEDULE='43 3 * * 0' \
     scanners/ci/release-meta.sh resolve)"
-assert_output "$output" "operation=candidate"
+assert_output "$output" "operation=scheduled-release"
 assert_output "$output" "run_build=true"
 assert_output "$output" "run_validation=true"
 assert_output "$output" "publish=true"
-assert_output "$output" "aliases=candidate"
+assert_output "$output" "aliases=candidate,stable,latest"
 assert_output "$output" "run_os_package_refresh=false"
-grep -Eq '^immutable_id=scanner-candidate-[0-9]{4}-w[0-9]{2}-0123456789ab-r12345-a2$' \
-    <<<"$output" || fail "scheduled candidate identity is not attempt-unique"
+grep -Eq '^immutable_id=scanner-set-[0-9]{4}\.(0[1-9]|[1-4][0-9]|5[0-3])\.2$' \
+    <<<"$output" || fail "scheduled release identity is not a valid attempt-scoped release ID"
 retry_output="$(env GIT_SHA=0123456789abcdef0123456789abcdef01234567 \
     REF_NAME=main RUN_ID=12345 RUN_ATTEMPT=3 \
     EVENT_NAME=schedule EVENT_SCHEDULE='43 3 * * 0' \
     scanners/ci/release-meta.sh resolve)"
 retry_id="$(awk -F= '$1 == "immutable_id" {print $2}' <<<"$retry_output")"
 original_id="$(awk -F= '$1 == "immutable_id" {print $2}' <<<"$output")"
-[[ "$retry_id" != "$original_id" && "$retry_id" == *-r12345-a3 ]] ||
-    fail "candidate retry reused an immutable candidate identity"
+[[ "$retry_id" != "$original_id" && "$retry_id" == *.3 ]] ||
+    fail "scheduled release retry reused an immutable release identity"
 
 output="$(env "${common[@]}" EVENT_NAME=push \
     scanners/ci/release-meta.sh resolve)"
@@ -100,9 +102,36 @@ output="$(env "${common[@]}" EVENT_NAME=workflow_dispatch INPUT_OPERATION=releas
     INPUT_MIRROR_MODE=disabled scanners/ci/release-meta.sh resolve)"
 assert_output "$output" "immutable_id=scanner-set-2026.31.1"
 assert_output "$output" "candidate_id=scanner-candidate-2026-w31-0123456789ab"
-assert_output "$output" "aliases=stable"
+assert_output "$output" "aliases=stable,latest"
 assert_output "$output" "mirror_mode=disabled"
 assert_output "$output" "run_build=false"
+
+# An exact scanner_version mints the rolling semver family alongside the
+# channels; a pre-release expands to itself so it never captures "2"/"2.1".
+output="$(env "${common[@]}" EVENT_NAME=workflow_dispatch INPUT_OPERATION=release \
+    INPUT_CANDIDATE_ID=scanner-candidate-2026-w31-0123456789ab \
+    INPUT_RELEASE_ID=scanner-set-2026.31.1 INPUT_CHANNEL=stable \
+    INPUT_SCANNER_VERSION=2.1.0 \
+    INPUT_MIRROR_MODE=disabled scanners/ci/release-meta.sh resolve)"
+assert_output "$output" "aliases=stable,latest,2.1.0,2.1,2"
+
+for bad_version in v2.1.0 2.1 2.1.0-rc1 latest ""; do
+    if env "${common[@]}" EVENT_NAME=workflow_dispatch INPUT_OPERATION=release \
+        INPUT_CANDIDATE_ID=scanner-candidate-2026-w31-0123456789ab \
+        INPUT_RELEASE_ID=scanner-set-2026.31.1 INPUT_CHANNEL=none \
+        INPUT_SCANNER_VERSION="$bad_version" \
+        INPUT_MIRROR_MODE=disabled scanners/ci/release-meta.sh resolve 2>/dev/null |
+        grep -q "^aliases=.*${bad_version:-__none__}"; then
+        fail "scanner_version '$bad_version' leaked into aliases without a stable channel"
+    fi
+done
+
+# latest must never move without stable behind it.
+if env "${common[@]}" EVENT_NAME=workflow_dispatch INPUT_OPERATION=candidate \
+    INPUT_CHANNEL=latest INPUT_PUBLISH=true INPUT_MIRROR_MODE=disabled \
+    scanners/ci/release-meta.sh resolve >/dev/null 2>&1; then
+    fail "latest was accepted as a dispatchable channel"
+fi
 
 if env "${common[@]}" EVENT_NAME=workflow_dispatch INPUT_OPERATION=release \
     INPUT_RELEASE_ID=scanner-set-2026.31.1 INPUT_CHANNEL=stable \
@@ -129,7 +158,7 @@ output="$(env "${common[@]}" EVENT_NAME=workflow_dispatch INPUT_OPERATION=releas
     INPUT_CANDIDATE_ID=scanner-candidate-2026-w31-0123456789ab \
     INPUT_RELEASE_ID=scanner-set-2026.31.1 INPUT_CHANNEL=stable \
     INPUT_MIRROR_MODE=auto scanners/ci/release-meta.sh resolve)"
-assert_output "$output" "aliases=stable"
+assert_output "$output" "aliases=stable,latest"
 assert_output "$output" "mirror_mode=auto"
 
 if env "${common[@]}" EVENT_NAME=workflow_dispatch INPUT_OPERATION=release \

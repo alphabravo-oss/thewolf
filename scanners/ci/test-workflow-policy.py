@@ -178,17 +178,65 @@ def main() -> int:
         "non-empty SPDX 2.3 evidence for every final runtime",
     )
     require(
-        r"publish:\n.*?needs:\s*\[prepare, validate, release-approval\].*?"
+        r"publish:\n.*?needs:\s*\n\s*\[prepare, validate, release-approval, quality, fixer-quality, runtime-quality\].*?"
         r"needs\.validate\.result == 'success'",
         text,
         "regular image publication is blocked only on validation",
     )
-    require(r"quality:.*?if:\s*false", text, "scanner image quality is disabled for regular image publishing")
-    require(r"fixer-quality:.*?if:\s*false", text, "fixer image quality is disabled for regular image publishing")
-    require(r"runtime-quality:.*?if:\s*false", text, "runtime image quality is disabled for regular image publishing")
-    require(r"published-platform-quality:.*?if:\s*false", text, "published smoke is disabled for regular image publishing")
-    require(r"integration-quality:.*?if:\s*false", text, "integration qualification is disabled for regular image publishing")
-    require(r"release-manifest:.*?if:\s*false", text, "aggregate release manifest is disabled for regular image publishing")
+    # The quality jobs are in `needs` purely so publish can read their results;
+    # they must NOT re-enter the `if`, or the gates disabled in 6f13b47 would
+    # silently start blocking publication again.
+    reject(
+        r"publish:\n.*?if:\s*>-.*?needs\.(quality|fixer-quality|runtime-quality)\.result == 'success'.*?\n  publish-fixer-engines:",
+        text,
+        "publish must not re-block on the disabled quality gates",
+    )
+    # stable/latest are what an unpinned operator pulls, so they may only move
+    # when those gates actually ran.
+    require(
+        r"Resolve channel aliases.*?QUALITY:.*?needs\.quality\.result.*?"
+        r"FIXER_QUALITY:.*?needs\['fixer-quality'\]\.result.*?"
+        r"RUNTIME_QUALITY:.*?needs\['runtime-quality'\]\.result.*?"
+        r"stable.*?latest.*?grep -vxE 'stable\|latest'",
+        text,
+        "stable/latest channel moves require passing quality gates",
+    )
+    require(
+        r"Create or verify immutable primary image tag.*?"
+        r"ALIASES: \$\{\{ steps\.aliases\.outputs\.effective \}\}",
+        text,
+        "primary image promotion consumes the gated alias list",
+    )
+    # The quality chain and the aggregate committer are live again. Keyless
+    # signing, SLSA provenance, and SBOM attestation stay out for now — the
+    # gates here are the deterministic vulnerability/license/SPDX checks, not
+    # the supply-chain attestation that 6f13b47 also removed.
+    reject(
+        r"\n  (quality|fixer-quality|runtime-quality|published-platform-quality|integration-quality|release-manifest):\n.*?\n    if:\s*false\n",
+        text,
+        "no quality or release-manifest job may be hard-disabled",
+    )
+    for job in ("quality", "fixer-quality", "runtime-quality"):
+        require(
+            rf"\n  {job}:\n.*?if: always\(\) && needs\.prepare\.outputs\.run_build == 'true' && needs\.validate\.result == 'success'",
+            text,
+            f"{job} runs whenever a build is requested",
+        )
+    require(
+        r"published-platform-quality:.*?needs\.publish\.result == 'success' &&\s*\n\s*needs\.publish-fixer-engines\.result == 'success'",
+        text,
+        "published smoke gates on both publish jobs",
+    )
+    require(
+        r"integration-quality:.*?needs\.published-platform-quality\.result == 'success'",
+        text,
+        "integration qualification gates on the published smoke",
+    )
+    require(
+        r"release-manifest:.*?needs\.integration-quality\.result == 'success'",
+        text,
+        "aggregate release manifest gates on integration qualification",
+    )
     require(
         r"variant:\s*fixer-base.*?image_kind:\s*fixer.*?image:\s*wolf-fixer.*?platforms:\s*linux/amd64",
         text,
