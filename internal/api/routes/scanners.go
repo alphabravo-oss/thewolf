@@ -3,12 +3,16 @@ package routes
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"net/http"
+	"os"
 	"os/exec"
-	"runtime"
+	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -608,13 +612,17 @@ func ScannersImages(w http.ResponseWriter, r *http.Request) {
 			if d, err := dockerImageDigest(img); err == nil {
 				s.LocalDigest = d
 			}
-			if d, err := dockerManifestDigest(img); err != nil {
+			index, err := dockerIndexDigest(img)
+			if err != nil {
 				s.RemoteError = err.Error()
 			} else {
-				s.RemoteDigest = d
+				s.RemoteDigest = index
 			}
-			if s.LocalDigest != "" && s.RemoteDigest != "" && s.LocalDigest != s.RemoteDigest {
-				s.UpdatesAvailable = true
+			if s.LocalDigest != "" && index != "" && s.LocalDigest != index {
+				// Mismatch against the index is usually a real update, but a
+				// --platform pull records a child digest instead. Check those
+				// before claiming an update is available.
+				s.UpdatesAvailable = !slices.Contains(dockerChildDigests(img), s.LocalDigest)
 			}
 			results[i] = s
 		}()
@@ -703,87 +711,68 @@ func dockerImageDigest(ref string) (string, error) {
 	return "", nil
 }
 
-// dockerManifestDigest queries the registry for the current manifest
-// digest for ref's tag and returns the digest of the manifest entry
-// matching THIS host's platform (runtime.GOARCH). Without the platform
-// filter, multi-arch images would always look like "update available"
-// because the top-level manifest-list digest never matches any single
-// per-platform digest. Doesn't pull — `docker manifest inspect` only
-// fetches the small JSON.
-func dockerManifestDigest(ref string) (string, error) {
+// dockerIndexDigest returns the digest of what ref's tag currently points at,
+// in the SAME form docker records locally in RepoDigests, so the two compare
+// directly.
+//
+// An earlier version resolved only the child matching the host platform, on
+// the reasoning that an index digest "never matches any single per-platform
+// digest". That inverted the comparison and produced exactly the false
+// positives it meant to avoid: `docker pull` records whatever the tag resolved
+// to, which for a multi-arch image is the INDEX. Every multi-arch image
+// therefore reported an update forever no matter how recently it was pulled,
+// while single-platform images (where index and manifest digests coincide)
+// looked correct — which is why only the third-party tools were affected and
+// never the wolf-built ones.
+//
+// The digest is the sha256 of the raw manifest document, by definition of an
+// OCI digest, so this is right for both an index and a single-platform
+// manifest. buildx needs a writable config dir and the runtime home is
+// read-only, hence DOCKER_CONFIG; without it buildx exits 1 and every probe
+// fails. Doesn't pull — only the small JSON document is fetched.
+func dockerIndexDigest(ref string) (string, error) {
 	if _, err := exec.LookPath("docker"); err != nil {
 		return "", err
 	}
+	cmd := exec.Command("docker", "buildx", "imagetools", "inspect", "--raw", ref)
+	cmd.Env = append(os.Environ(), "DOCKER_CONFIG="+filepath.Join(os.TempDir(), "wolf-docker-cfg"))
+	out, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	b := bytes.TrimSpace(out)
+	if len(b) == 0 {
+		return "", errors.New("empty manifest for " + ref)
+	}
+	sum := sha256.Sum256(b)
+	return "sha256:" + hex.EncodeToString(sum[:]), nil
+}
+
+// dockerChildDigests lists the per-platform child digests of ref. Only
+// consulted when the index digest does NOT match what is stored locally: a
+// copy pulled with an explicit --platform records the child digest rather than
+// the index, and that is still up to date. Keeping this lookup lazy halves the
+// registry round-trips on the common all-current path.
+func dockerChildDigests(ref string) []string {
 	out, err := exec.Command("docker", "manifest", "inspect", "--verbose", ref).Output()
 	if err != nil {
-		// Single-arch fallback. Some images have only one manifest
-		// (no manifest-list); --verbose returns an empty array, but
-		// the non-verbose call returns the image manifest directly.
-		out, err = exec.Command("docker", "manifest", "inspect", ref).Output()
-		if err != nil {
-			return "", err
-		}
-		// Non-verbose, single manifest: top-level .config.digest is
-		// the image layer-config sha. Use that as the comparison
-		// anchor since we can't get a multi-arch index here.
-		var asObj map[string]any
-		if json.Unmarshal(out, &asObj) == nil {
-			if d, ok := asObj["digest"].(string); ok {
-				return d, nil
-			}
-			if cfg, ok := asObj["config"].(map[string]any); ok {
-				if d, ok := cfg["digest"].(string); ok {
-					return d, nil
-				}
-			}
-		}
-		return "", nil
+		return nil
 	}
-	// --verbose shape: array of
-	//   { "Ref": "...", "Descriptor": {"digest": "sha256:...",
-	//     "platform": {"architecture": "...", "os": "..."}}, ... }
 	var entries []map[string]any
-	if jerr := json.Unmarshal(out, &entries); jerr != nil || len(entries) == 0 {
-		// Some daemons return a SINGLE object when the image isn't
-		// multi-arch (no manifest-list). Fall through to the digest
-		// at .Descriptor.digest.
+	if json.Unmarshal(out, &entries) != nil {
 		var single map[string]any
-		if json.Unmarshal(out, &single) == nil {
-			if desc, ok := single["Descriptor"].(map[string]any); ok {
-				if d, ok := desc["digest"].(string); ok {
-					return d, nil
-				}
-			}
+		if json.Unmarshal(out, &single) != nil {
+			return nil
 		}
-		return "", nil
+		entries = []map[string]any{single}
 	}
-	// Match the current host's platform first. RepoDigests on the
-	// local image is the per-arch digest, so we need to compare apples
-	// to apples here.
+	var digests []string
 	for _, e := range entries {
-		desc, ok := e["Descriptor"].(map[string]any)
-		if !ok {
-			continue
-		}
-		plat, ok := desc["platform"].(map[string]any)
-		if !ok {
-			continue
-		}
-		archStr, _ := plat["architecture"].(string)
-		osStr, _ := plat["os"].(string)
-		if osStr == "linux" && archStr == runtime.GOARCH {
-			if d, ok := desc["digest"].(string); ok {
-				return d, nil
+		if desc, ok := e["Descriptor"].(map[string]any); ok {
+			if d, ok := desc["digest"].(string); ok && d != "" {
+				digests = append(digests, d)
 			}
 		}
 	}
-	// No platform match — image probably single-arch or doesn't
-	// support this arch. Return the first descriptor's digest as a
-	// last-ditch comparison anchor.
-	if desc, ok := entries[0]["Descriptor"].(map[string]any); ok {
-		if d, ok := desc["digest"].(string); ok {
-			return d, nil
-		}
-	}
-	return "", nil
+	return digests
 }

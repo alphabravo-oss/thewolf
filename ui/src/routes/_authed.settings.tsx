@@ -2963,6 +2963,21 @@ function ScannersTab() {
 // each, we show the LOCAL pull-time digest and the REMOTE current
 // digest. When they differ, an "Update" button appears that pulls
 // just that image. "Check for updates" re-runs the probe.
+
+/**
+ * Is this one of the images Wolf builds and releases itself?
+ *
+ * Matches on the repository path rather than the registry host, so a mirror
+ * or a private re-host of the same images still classifies correctly — an
+ * operator pointing WOLF_SCANNERS_IMAGE at their own registry should still
+ * see those under "built by Wolf", not lumped in with third-party tools.
+ */
+export function isWolfBuiltImage(image: string): boolean {
+  const path = image.split("@")[0].split(":")[0];
+  const name = path.split("/").pop() ?? "";
+  return name.startsWith("wolf-scanners") || name.startsWith("wolf-fixer");
+}
+
 function ImagesPanel() {
   const qc = useQueryClient();
   const notifiedUpdateDigest = useRef("");
@@ -3011,6 +3026,14 @@ function ImagesPanel() {
   });
   const images = q.data ?? [];
   const updateItems = images.filter((img) => img.updates_available);
+  // Two different things share this list, and they behave differently: the
+  // wolf-built images come off our own release factory and move with the
+  // configured channel, while the upstream ones are third-party tools pinned
+  // by exact version in scanner-lock.yaml and only change when that lock is
+  // bumped. Splitting them keeps "is our release current?" separable from
+  // "are the pinned third-party tools present?".
+  const wolfBuilt = images.filter((img) => isWolfBuiltImage(img.image));
+  const upstream = images.filter((img) => !isWolfBuiltImage(img.image));
   const updateDigest = updateItems
     .map((img) => `${img.image}:${img.remote_digest ?? ""}`)
     .join("|");
@@ -3023,12 +3046,86 @@ function ImagesPanel() {
     );
   }, [updateDigest, updateItems.length]);
 
+  const probeState = { loading: q.isLoading, error: q.isError };
+
+  return (
+    // Two separate cards rather than one card with two sections: these are
+    // different supply chains, not two views of the same list. The Wolf images
+    // are ours to rebuild and re-release; the upstream ones we only pin and
+    // pull. Keeping them in one card invited reading a single "N updates
+    // available" number that spanned both.
+    <div className="space-y-4">
+      <ImagesCard
+        title="Wolf scanner images"
+        description="Built and released by the Wolf scanner factory. These move with the configured release channel."
+        items={wolfBuilt}
+        probe={probeState}
+        pullOne={pullOne}
+        pullAll={pullAll}
+        onRefresh={() => q.refetch()}
+        refreshing={q.isFetching}
+        emptyLabel="No Wolf-built scanner images configured."
+      />
+      <ImagesCard
+        title="Upstream tool images"
+        description="Third-party scanners pinned to an exact version in scanner-lock.yaml. They change only when that lock is bumped."
+        items={upstream}
+        probe={probeState}
+        pullOne={pullOne}
+        onRefresh={() => q.refetch()}
+        refreshing={q.isFetching}
+        emptyLabel="No upstream tool images configured."
+      />
+    </div>
+  );
+}
+
+/**
+ * One card of scanner images: its own heading, its own outdated count, and its
+ * own actions. Each card owns a single supply chain so an operator can read
+ * "are my Wolf images current?" without that answer being averaged together
+ * with 25 pinned third-party tools.
+ */
+function ImagesCard({
+  title,
+  description,
+  items,
+  probe,
+  pullOne,
+  pullAll,
+  onRefresh,
+  refreshing,
+  emptyLabel,
+}: {
+  title: string;
+  description: string;
+  items: ImageStatus[];
+  probe: { loading: boolean; error: boolean };
+  pullOne: {
+    mutate: (image: string) => void;
+    isPending: boolean;
+    variables?: string;
+  };
+  /** Only the Wolf card gets a bulk action; `POST /scanners/pull` pulls the
+   *  configured channel, which is exactly the Wolf-built set. */
+  pullAll?: { mutate: () => void; isPending: boolean };
+  onRefresh: () => void;
+  refreshing: boolean;
+  emptyLabel: string;
+}) {
+  const stale = items.filter((i) => i.updates_available);
+
   return (
     <div className="glass-card p-5">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-medium">Configured scanner images</h3>
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="text-sm font-medium">{title}</h3>
+          <p className="mt-0.5 max-w-2xl text-2xs text-muted-foreground">
+            {description}
+          </p>
+        </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
-          {updateItems.length > 0 && (
+          {pullAll && stale.length > 0 && (
             <button
               type="button"
               onClick={() => pullAll.mutate()}
@@ -3046,12 +3143,12 @@ function ImagesPanel() {
           )}
           <button
             type="button"
-            onClick={() => qc.invalidateQueries({ queryKey: ["scanner-images"] })}
-            disabled={q.isFetching}
-            className="inline-flex items-center gap-1 h-8 px-2.5 rounded-md border border-border/60 text-xs hover:bg-muted/30 disabled:opacity-50"
-            title="Re-probe registries for the latest manifest digests"
+            onClick={onRefresh}
+            disabled={refreshing}
+            className="inline-flex items-center gap-1 h-8 px-2.5 rounded-md border border-border text-xs hover:bg-accent disabled:opacity-50"
+            title="Re-probe local and remote digests"
           >
-            {q.isFetching ? (
+            {refreshing ? (
               <Loader2Icon className="size-3.5 animate-spin" />
             ) : (
               <RefreshCwIcon className="size-3.5" />
@@ -3061,30 +3158,32 @@ function ImagesPanel() {
         </div>
       </div>
 
-      {updateItems.length > 0 && (
+      {stale.length > 0 && (
         <div className="mb-3 rounded-md border border-status-warning/30 bg-status-warning/10 px-3 py-2 text-xs text-status-warning">
           <span className="font-medium">
-            {updateItems.length} scanner image update
-            {updateItems.length === 1 ? "" : "s"} available.
+            {stale.length} of {items.length} image
+            {items.length === 1 ? "" : "s"} outdated.
           </span>{" "}
-          Pull the configured registry channel to use the latest scanner images.
+          Pull to move to the current digest.
         </div>
       )}
 
-      {q.isLoading ? (
+      {probe.loading ? (
         <p className="text-xs text-muted-foreground" role="status">
           Probing local + remote digests…
         </p>
-      ) : q.isError ? (
+      ) : probe.error ? (
         <p className="text-xs text-destructive" role="alert">
           Failed to probe scanner image digests.
         </p>
-      ) : images.length > 0 ? (
+      ) : items.length === 0 ? (
+        <p className="text-xs text-muted-foreground">{emptyLabel}</p>
+      ) : (
         <ul className="space-y-2 text-sm">
-          {images.map((img) => (
+          {items.map((img) => (
             <li
               key={img.image}
-              className="flex flex-wrap items-center gap-3 border-b border-border/20 pb-2 last:border-0 last:pb-0"
+              className="flex flex-wrap items-center gap-3 border-b border-border pb-2 last:border-0 last:pb-0"
             >
               <div className="font-mono text-xs flex-1 min-w-0 break-all">
                 {img.image}
@@ -3123,8 +3222,6 @@ function ImagesPanel() {
             </li>
           ))}
         </ul>
-      ) : (
-        <p className="text-xs text-muted-foreground">No images configured.</p>
       )}
     </div>
   );
