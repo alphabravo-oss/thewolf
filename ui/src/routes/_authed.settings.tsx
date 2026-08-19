@@ -44,6 +44,7 @@ import { FixerSettings } from "@/components/fixes/fixer-settings";
 import { useRuntimeCapabilities } from "@/lib/runtime-capabilities";
 import { safeErrorMessage } from "@/lib/safe-display";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { PageHeader } from "@/components/ui/page";
 
 // Legacy personal ?tab= values that have NO admin tab of the same name now
 // redirect to /account. (apikeys/secrets/nodes are kept here as ADMIN tabs —
@@ -117,24 +118,33 @@ function SettingsPage() {
 
   return (
     <div className="page stack page--narrow min-w-0">
-      <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
-      <p className="text-sm text-muted-foreground -mt-2">
-        Administration &amp; global oversight. Manage your own profile, keys,
-        and secrets under{" "}
-        <button
-          type="button"
-          onClick={() =>
-            navigate({ to: "/account", search: { section: "profile" } })
-          }
-          className="text-foreground hover:underline"
-        >
-          Account
-        </button>
-        .
-      </p>
+      {/* PageHeader owns the title/description pair. The previous hand-rolled
+          version pulled the description up with `-mt-2` to close the gap that
+          `.stack` opens between siblings — but a utility replaces that margin
+          rather than trimming it, so the net was -8px and the description
+          overlapped the heading. */}
+      <PageHeader
+        title="Settings"
+        description={
+          <>
+            Administration &amp; global oversight. Manage your own profile,
+            keys, and secrets under{" "}
+            <button
+              type="button"
+              onClick={() =>
+                navigate({ to: "/account", search: { section: "profile" } })
+              }
+              className="text-foreground hover:underline"
+            >
+              Account
+            </button>
+            .
+          </>
+        }
+      />
       <nav
         aria-label="Administration settings"
-        className="max-w-full overflow-x-auto overscroll-x-contain border-b border-border/40"
+        className="max-w-full overflow-x-auto overscroll-x-contain border-b border-border"
       >
         <div className="flex min-w-max gap-1">
           {TABS.map(({ key, label, Icon }) => {
@@ -246,7 +256,7 @@ function AdminApiKeysTab() {
             </thead>
             <tbody>
               {q.data.map((t) => (
-                <tr key={t.id} className="border-t border-border/20 align-top">
+                <tr key={t.id} className="border-t border-border align-top">
                   <td className="px-4 py-2">{ownerOf(t.user_id)}</td>
                   <td className="px-4 py-2">
                     {t.name}
@@ -264,7 +274,7 @@ function AdminApiKeysTab() {
                       {t.scopes.map((s) => (
                         <span
                           key={s}
-                          className="text-[10px] font-mono rounded bg-muted/40 border border-border/40 px-1.5 py-0.5"
+                          className="text-[10px] font-mono rounded bg-muted/40 border border-border px-1.5 py-0.5"
                         >
                           {s}
                         </span>
@@ -356,7 +366,7 @@ function AdminSecretsTab() {
             </thead>
             <tbody>
               {q.data.map((s) => (
-                <tr key={s.id} className="border-t border-border/20">
+                <tr key={s.id} className="border-t border-border">
                   <td className="px-4 py-2">{ownerOf(s.user_id)}</td>
                   <td className="px-4 py-2 font-mono text-xs">{s.key_type}</td>
                   <td className="px-4 py-2">{s.key_name}</td>
@@ -437,7 +447,7 @@ function AdminNodesTab() {
             </thead>
             <tbody>
               {q.data.map((n) => (
-                <tr key={n.id} className="border-t border-border/20">
+                <tr key={n.id} className="border-t border-border">
                   <td className="px-4 py-2">{ownerOf(n.user_id)}</td>
                   <td className="px-4 py-2">{n.name}</td>
                   <td className="px-4 py-2 font-mono text-xs text-muted-foreground">
@@ -513,7 +523,7 @@ function SeverityBadge({ severity }: { severity?: string }) {
       ? "bg-status-error/15 text-status-error border-status-error/30"
       : severity === "warning"
         ? "bg-status-warning/15 text-status-warning border-status-warning/30"
-        : "bg-muted/40 text-muted-foreground border-border/40";
+        : "bg-muted/40 text-muted-foreground border-border";
   return (
     <span
       className={
@@ -605,13 +615,13 @@ function AuditTab() {
             value={search}
             onChange={(e) => onFilter(() => setSearch(e.target.value))}
             placeholder="Search path, action, or method…"
-            className="w-full h-9 pl-8 pr-3 rounded-md bg-muted/40 border border-border/40 text-sm"
+            className="w-full h-9 pl-8 pr-3 rounded-md bg-muted/40 border border-border text-sm"
           />
         </div>
         <select
           value={category}
           onChange={(e) => onFilter(() => setCategory(e.target.value))}
-          className="h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm capitalize"
+          className="h-9 px-2 rounded-md bg-muted/40 border border-border text-sm capitalize"
         >
           {AUDIT_CATEGORIES.map((c) => (
             <option key={c} value={c}>
@@ -622,7 +632,7 @@ function AuditTab() {
         <select
           value={severity}
           onChange={(e) => onFilter(() => setSeverity(e.target.value))}
-          className="h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm capitalize"
+          className="h-9 px-2 rounded-md bg-muted/40 border border-border text-sm capitalize"
         >
           {AUDIT_SEVERITIES.map((sv) => (
             <option key={sv} value={sv}>
@@ -633,7 +643,7 @@ function AuditTab() {
         <select
           value={method}
           onChange={(e) => onFilter(() => setMethod(e.target.value))}
-          className="h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm"
+          className="h-9 px-2 rounded-md bg-muted/40 border border-border text-sm"
         >
           {AUDIT_METHODS.map((m) => (
             <option key={m} value={m}>
@@ -682,7 +692,7 @@ function AuditTab() {
             </thead>
             <tbody>
               {entries.map((e) => (
-                <tr key={e.id} className="border-t border-border/20 align-top">
+                <tr key={e.id} className="border-t border-border align-top">
                   <td className="px-4 py-2 text-xs text-muted-foreground whitespace-nowrap">
                     {new Date(e.created_at).toLocaleString()}
                   </td>
@@ -728,7 +738,7 @@ function AuditTab() {
             type="button"
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page <= 1}
-            className="inline-flex items-center gap-1 h-7 px-2 rounded-md border border-border/40 hover:bg-muted/40 disabled:opacity-40"
+            className="inline-flex items-center gap-1 h-7 px-2 rounded-md border border-border hover:bg-muted/40 disabled:opacity-40"
           >
             <ChevronLeftIcon className="size-3.5" /> Prev
           </button>
@@ -739,7 +749,7 @@ function AuditTab() {
             type="button"
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             disabled={page >= totalPages}
-            className="inline-flex items-center gap-1 h-7 px-2 rounded-md border border-border/40 hover:bg-muted/40 disabled:opacity-40"
+            className="inline-flex items-center gap-1 h-7 px-2 rounded-md border border-border hover:bg-muted/40 disabled:opacity-40"
           >
             Next <ChevronRightIcon className="size-3.5" />
           </button>
@@ -821,7 +831,7 @@ export function AccountTab() {
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
             placeholder="Shown in the UI instead of your email"
-            className="w-full h-9 px-3 rounded-md bg-muted/40 border border-border/40 text-sm"
+            className="w-full h-9 px-3 rounded-md bg-muted/40 border border-border text-sm"
           />
         </label>
         <label className="block space-y-1">
@@ -830,7 +840,7 @@ export function AccountTab() {
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full h-9 px-3 rounded-md bg-muted/40 border border-border/40 text-sm"
+            className="w-full h-9 px-3 rounded-md bg-muted/40 border border-border text-sm"
           />
         </label>
         {emailChanged && (
@@ -844,7 +854,7 @@ export function AccountTab() {
               value={currentPw}
               onChange={(e) => setCurrentPw(e.target.value)}
               autoComplete="current-password"
-              className="w-full h-9 px-3 rounded-md bg-muted/40 border border-border/40 text-sm"
+              className="w-full h-9 px-3 rounded-md bg-muted/40 border border-border text-sm"
             />
           </label>
         )}
@@ -874,7 +884,7 @@ export function AccountTab() {
               value={curPw}
               onChange={(e) => setCurPw(e.target.value)}
               autoComplete="current-password"
-              className="w-full h-9 px-3 rounded-md bg-muted/40 border border-border/40 text-sm"
+              className="w-full h-9 px-3 rounded-md bg-muted/40 border border-border text-sm"
             />
           </label>
           <label className="block space-y-1">
@@ -885,7 +895,7 @@ export function AccountTab() {
               onChange={(e) => setNewPw(e.target.value)}
               autoComplete="new-password"
               minLength={12}
-              className="w-full h-9 px-3 rounded-md bg-muted/40 border border-border/40 text-sm"
+              className="w-full h-9 px-3 rounded-md bg-muted/40 border border-border text-sm"
             />
           </label>
           <label className="block space-y-1">
@@ -898,7 +908,7 @@ export function AccountTab() {
               aria-invalid={pwMismatch}
               className={
                 "w-full h-9 px-3 rounded-md bg-muted/40 border text-sm " +
-                (pwMismatch ? "border-status-error" : "border-border/40")
+                (pwMismatch ? "border-status-error" : "border-border")
               }
             />
           </label>
@@ -929,7 +939,7 @@ export function AccountTab() {
             onClick={() =>
               navigate({ to: "/settings", search: { tab: "apikeys" } })
             }
-            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border/40 text-sm hover:bg-muted/40"
+            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border text-sm hover:bg-muted/40"
           >
             <KeyRoundIcon className="size-4" /> API Keys
           </button>
@@ -938,7 +948,7 @@ export function AccountTab() {
             onClick={() =>
               navigate({ to: "/settings", search: { tab: "security" } })
             }
-            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border/40 text-sm hover:bg-muted/40"
+            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border text-sm hover:bg-muted/40"
           >
             <LockIcon className="size-4" /> Two-factor auth
           </button>
@@ -1068,7 +1078,7 @@ function GeneralTab() {
                 value={current || knob.options[0]}
                 onChange={(e) => m.mutate({ [knob.key]: e.target.value })}
                 disabled={m.isPending}
-                className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm"
+                className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border text-sm"
               >
                 {knob.options.map((opt) => (
                   <option key={opt} value={opt}>
@@ -1110,7 +1120,7 @@ function BoolToggle({
         "inline-flex items-center gap-2 px-3 h-9 rounded-md text-sm border " +
         (value
           ? "bg-status-success/10 border-status-success/40 text-status-success"
-          : "bg-muted/40 border-border/40 text-muted-foreground hover:text-foreground") +
+          : "bg-muted/40 border-border text-muted-foreground hover:text-foreground") +
         " disabled:opacity-50"
       }
     >
@@ -1151,7 +1161,7 @@ function IntInput({
         min={min}
         max={max}
         onChange={(e) => setDraft(e.target.value)}
-        className="w-24 h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm tabular-nums"
+        className="w-24 h-9 px-2 rounded-md bg-muted/40 border border-border text-sm tabular-nums"
         disabled={disabled}
       />
       <button
@@ -1254,7 +1264,7 @@ export function SecurityTab() {
             "ml-auto shrink-0 rounded px-2 py-0.5 text-xs font-medium border " +
             (enabled
               ? "bg-status-success/10 border-status-success/40 text-status-success"
-              : "bg-muted/40 border-border/40 text-muted-foreground")
+              : "bg-muted/40 border-border text-muted-foreground")
           }
         >
           {enabled ? "On" : "Off"}
@@ -1330,7 +1340,7 @@ export function SecurityTab() {
               placeholder="123456"
               value={code}
               onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-              className="w-32 h-9 px-3 rounded-md bg-muted/40 border border-border/40 text-sm font-mono tracking-widest"
+              className="w-32 h-9 px-3 rounded-md bg-muted/40 border border-border text-sm font-mono tracking-widest"
             />
             <button
               type="button"
@@ -1382,7 +1392,7 @@ export function SecurityTab() {
                 placeholder="code to disable"
                 value={code}
                 onChange={(e) => setCode(e.target.value.trim())}
-                className="w-44 h-9 px-3 rounded-md bg-muted/40 border border-border/40 text-sm font-mono"
+                className="w-44 h-9 px-3 rounded-md bg-muted/40 border border-border text-sm font-mono"
               />
               <button
                 type="button"
@@ -1577,7 +1587,7 @@ export function ApiKeysTab() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="ci-pipeline"
-              className="w-full h-9 px-3 rounded-md bg-muted/40 border border-border/40 text-sm"
+              className="w-full h-9 px-3 rounded-md bg-muted/40 border border-border text-sm"
             />
           </label>
           <label className="block space-y-1">
@@ -1585,7 +1595,7 @@ export function ApiKeysTab() {
             <select
               value={expiryDays}
               onChange={(e) => setExpiryDays(Number(e.target.value))}
-              className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm"
+              className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border text-sm"
             >
               {EXPIRY_OPTIONS.map((o) => (
                 <option key={o.days} value={o.days}>
@@ -1608,7 +1618,7 @@ export function ApiKeysTab() {
                   "text-left rounded-md border px-3 py-2 text-sm " +
                   (role === p.key
                     ? "border-primary bg-primary/10"
-                    : "border-border/40 hover:border-border")
+                    : "border-border hover:border-border")
                 }
               >
                 <div className="font-medium">{p.label}</div>
@@ -1681,7 +1691,7 @@ export function ApiKeysTab() {
                 return (
                   <tr
                     key={t.id}
-                    className="border-t border-border/20 align-top"
+                    className="border-t border-border align-top"
                   >
                     <td className="px-4 py-2">
                       <div className="font-medium">{t.name}</div>
@@ -1699,7 +1709,7 @@ export function ApiKeysTab() {
                         {t.scopes.map((s) => (
                           <span
                             key={s}
-                            className="text-[10px] font-mono rounded bg-muted/40 border border-border/40 px-1.5 py-0.5"
+                            className="text-[10px] font-mono rounded bg-muted/40 border border-border px-1.5 py-0.5"
                           >
                             {s}
                           </span>
@@ -1831,7 +1841,7 @@ export function SecretsTab() {
             </thead>
             <tbody>
               {q.data.map((s) => (
-                <tr key={s.id} className="border-t border-border/20">
+                <tr key={s.id} className="border-t border-border">
                   <td className="px-4 py-2 font-mono text-xs">{s.key_type}</td>
                   <td className="px-4 py-2">
                     {s.key_name}
@@ -1904,7 +1914,7 @@ function NewSecretForm({
         <select
           value={keyType}
           onChange={(e) => setKeyType(e.target.value)}
-          className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm"
+          className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border text-sm"
         >
           {KEY_TYPES.map((k) => (
             <option key={k.value} value={k.value}>
@@ -1919,7 +1929,7 @@ function NewSecretForm({
           value={keyName}
           onChange={(e) => setKeyName(e.target.value)}
           placeholder="e.g. github-personal"
-          className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm"
+          className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border text-sm"
         />
       </Field>
       <Field label="Value">
@@ -1929,7 +1939,7 @@ function NewSecretForm({
           value={value}
           onChange={(e) => setValue(e.target.value)}
           placeholder="paste secret"
-          className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm font-mono"
+          className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border text-sm font-mono"
         />
       </Field>
       <button
@@ -2054,7 +2064,7 @@ export function NodesTab() {
             </thead>
             <tbody>
               {nodes.data.map((n) => (
-                <tr key={n.id} className="border-t border-border/20">
+                <tr key={n.id} className="border-t border-border">
                   <td className="px-4 py-2">
                     <div className="font-medium">{n.name}</div>
                     {n.base_path && (
@@ -2115,7 +2125,7 @@ export function NodesTab() {
                           })
                         }
                         disabled={update.isPending}
-                        className="h-8 px-2 rounded-md border border-border/40 text-xs hover:bg-muted/40 disabled:opacity-50"
+                        className="h-8 px-2 rounded-md border border-border text-xs hover:bg-muted/40 disabled:opacity-50"
                       >
                         {n.enabled ? "Disable" : "Enable"}
                       </button>
@@ -2206,7 +2216,7 @@ function NewNodeForm({
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="dev-box"
-            className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm"
+            className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border text-sm"
           />
         </Field>
         <Field label="Host">
@@ -2215,7 +2225,7 @@ function NewNodeForm({
             value={host}
             onChange={(e) => setHost(e.target.value)}
             placeholder="dev.example.com"
-            className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm font-mono"
+            className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border text-sm font-mono"
           />
         </Field>
         <Field label="Port">
@@ -2224,7 +2234,7 @@ function NewNodeForm({
             value={port}
             onChange={(e) => setPort(e.target.value)}
             inputMode="numeric"
-            className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm"
+            className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border text-sm"
           />
         </Field>
         <Field label="Username">
@@ -2233,7 +2243,7 @@ function NewNodeForm({
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             placeholder="alice"
-            className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm"
+            className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border text-sm"
           />
         </Field>
       </div>
@@ -2245,7 +2255,7 @@ function NewNodeForm({
               setAuthType(e.target.value as "private_key" | "password");
               setSecretId("");
             }}
-            className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm"
+            className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border text-sm"
           >
             <option value="private_key">Private key</option>
             <option value="password">Password</option>
@@ -2255,7 +2265,7 @@ function NewNodeForm({
           <select
             value={secretId}
             onChange={(e) => setSecretId(e.target.value)}
-            className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm"
+            className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border text-sm"
           >
             <option value="">Select secret…</option>
             {allowedSecrets.map((s) => (
@@ -2270,7 +2280,7 @@ function NewNodeForm({
             value={basePath}
             onChange={(e) => setBasePath(e.target.value)}
             placeholder="/home/alice/code"
-            className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm font-mono"
+            className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border text-sm font-mono"
           />
         </Field>
         <button
@@ -2292,7 +2302,7 @@ function NewNodeForm({
           value={knownHosts}
           onChange={(e) => setKnownHosts(e.target.value)}
           placeholder="dev.example.com ssh-ed25519 AAAA…"
-          className="w-full min-h-20 px-2 py-2 rounded-md bg-muted/40 border border-border/40 text-sm font-mono"
+          className="w-full min-h-20 px-2 py-2 rounded-md bg-muted/40 border border-border text-sm font-mono"
         />
       </Field>
     </form>
@@ -2385,7 +2395,7 @@ function UsersTab() {
                 // of settings). You also can't change your own role.
                 const lockDemote = isMe || (isAdmin && adminCount <= 1);
                 return (
-                  <tr key={u.id} className="border-t border-border/20">
+                  <tr key={u.id} className="border-t border-border">
                     <td className="px-4 py-2">
                       {u.email}
                       {isMe && (
@@ -2404,7 +2414,7 @@ function UsersTab() {
                           onChange={(e) =>
                             setRole.mutate({ id: u.id, role: e.target.value })
                           }
-                          className="h-7 px-1.5 rounded-md bg-muted/40 border border-border/40 text-xs disabled:opacity-60"
+                          className="h-7 px-1.5 rounded-md bg-muted/40 border border-border text-xs disabled:opacity-60"
                           title={
                             lockDemote
                               ? "There must be at least one admin"
@@ -2462,7 +2472,7 @@ function RoleBadge({ role }: { role: string }) {
         "rounded px-1.5 py-0.5 text-3xs font-semibold uppercase tracking-wide border " +
         (admin
           ? "bg-primary/15 text-primary border-primary/30"
-          : "bg-muted/40 text-muted-foreground border-border/40")
+          : "bg-muted/40 text-muted-foreground border-border")
       }
     >
       {admin ? "Admin" : "User"}
@@ -2496,7 +2506,7 @@ function NewUserForm({
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border/60 text-sm hover:bg-muted/30"
+          className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border text-sm hover:bg-muted/30"
         >
           <PlusIcon className="size-4" /> Add user
         </button>
@@ -2526,7 +2536,7 @@ function NewUserForm({
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="user@example.com"
-            className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm"
+            className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border text-sm"
           />
         </Field>
         <Field label="Password">
@@ -2537,14 +2547,14 @@ function NewUserForm({
             onChange={(e) => setPassword(e.target.value)}
             minLength={12}
             placeholder="At least 12 characters"
-            className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm"
+            className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border text-sm"
           />
         </Field>
         <Field label="Role">
           <select
             value={role}
             onChange={(e) => setRole(e.target.value)}
-            className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm"
+            className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border text-sm"
           >
             <option value="user">User</option>
             <option value="admin">Admin</option>
@@ -2562,7 +2572,7 @@ function NewUserForm({
         <button
           type="button"
           onClick={reset}
-          className="h-9 px-3 rounded-md border border-border/60 text-sm hover:bg-muted/30"
+          className="h-9 px-3 rounded-md border border-border text-sm hover:bg-muted/30"
         >
           Cancel
         </button>
@@ -2815,7 +2825,7 @@ function ScannersTab() {
             type="button"
             onClick={() => doctorMut.mutate()}
             disabled={doctorMut.isPending}
-            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border/60 text-sm hover:bg-muted/30 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border text-sm hover:bg-muted/30 disabled:opacity-50"
             title="Run scanner-backend diagnostics (docker reachable, image present, cache writable, etc.)"
           >
             {doctorMut.isPending ? (
@@ -2850,7 +2860,7 @@ function ScannersTab() {
         {/* Doctor result panel. */}
         {doctor && (
           <div
-            className="mt-4 rounded-md border border-border/40 bg-muted/20 p-3 text-sm space-y-1"
+            className="mt-4 rounded-md border border-border bg-muted/20 p-3 text-sm space-y-1"
             role={doctor.overall_ok ? "status" : "alert"}
             aria-live="polite"
           >
@@ -2893,7 +2903,7 @@ function ScannersTab() {
         {/* Pull result panel. */}
         {pull && (
           <div
-            className="mt-4 rounded-md border border-border/40 bg-muted/20 p-3 text-sm space-y-1"
+            className="mt-4 rounded-md border border-border bg-muted/20 p-3 text-sm space-y-1"
             role={pull.errors?.length ? "alert" : "status"}
             aria-live="polite"
           >
@@ -3251,7 +3261,7 @@ function DigestPill({
   if (!value) {
     return (
       <span
-        className="text-[10px] uppercase tracking-wide text-muted-foreground bg-muted/20 border border-border/30 rounded px-1.5 py-0.5"
+        className="text-[10px] uppercase tracking-wide text-muted-foreground bg-muted/20 border border-border rounded px-1.5 py-0.5"
         title={
           label === "local"
             ? "image not pulled yet — use 'Set up scanners' or the per-image Update"
@@ -3269,7 +3279,7 @@ function DigestPill({
     : value.slice(0, 16);
   return (
     <span
-      className="text-[10px] font-mono uppercase tracking-tight text-muted-foreground bg-muted/30 border border-border/30 rounded px-1.5 py-0.5"
+      className="text-[10px] font-mono uppercase tracking-tight text-muted-foreground bg-muted/30 border border-border rounded px-1.5 py-0.5"
       title={value}
     >
       {label}: {short}…

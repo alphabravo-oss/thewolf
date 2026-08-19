@@ -2,6 +2,7 @@
 // the top-right avatar menu. Admins get a separate /settings area for the
 // system + global oversight surfaces.
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { PageHeader } from "@/components/ui/page";
 import { KeyIcon, KeyRoundIcon, LockIcon, ServerIcon, UserIcon } from "lucide-react";
 import {
   AccountTab,
@@ -37,8 +38,11 @@ function AccountPage() {
 
   return (
     <div className="page stack page--narrow">
-      <h1 className="text-2xl font-semibold tracking-tight">Account</h1>
-      <nav className="flex gap-1 border-b border-border/40">
+      <PageHeader
+        title="Account"
+        description="Your profile, sign-in security, and personal API keys."
+      />
+      <nav className="flex gap-1 border-b border-border">
         {SECTIONS.map(({ key, label, Icon }) => {
           const active = section === key;
           return (

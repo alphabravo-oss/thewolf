@@ -32,7 +32,7 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen grid lg:grid-cols-2 bg-background text-foreground">
       {/* Hero (left) */}
-      <div className="relative hidden lg:flex flex-col justify-between p-12 border-r border-border/60 overflow-hidden">
+      <div className="relative hidden lg:flex flex-col justify-between p-12 border-r border-border overflow-hidden">
         <div
           aria-hidden
           className="pointer-events-none absolute inset-0 -z-10 opacity-70 [background:radial-gradient(55%_45%_at_25%_0%,color-mix(in_oklab,var(--primary)_16%,transparent),transparent_72%)]"

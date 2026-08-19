@@ -10,7 +10,7 @@ export function FrameworksChips({ raw }: { raw: string | null | undefined }) {
       {items.map((name) => (
         <span
           key={name}
-          className="inline-flex h-6 items-center rounded-md border border-border/60 bg-muted/30 px-2 text-xs text-foreground/80"
+          className="inline-flex h-6 items-center rounded-md border border-border bg-muted/30 px-2 text-xs text-foreground/80"
         >
           {name}
         </span>

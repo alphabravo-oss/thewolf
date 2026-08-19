@@ -216,7 +216,7 @@ export function FixJobView({
                 type="button"
                 onClick={() => resume.mutate("continue")}
                 disabled={resume.isPending}
-                className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border/60 text-sm hover:bg-muted/40 disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border text-sm hover:bg-muted/40 disabled:opacity-50"
               >
                 Continue
               </button>
@@ -255,7 +255,7 @@ export function FixJobView({
               type="button"
               onClick={() => accept.mutate()}
               disabled={accept.isPending}
-              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border/60 text-sm hover:bg-muted/40 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border text-sm hover:bg-muted/40 disabled:opacity-50"
             >
               Accept branch
             </button>
@@ -265,7 +265,7 @@ export function FixJobView({
             type="button"
             onClick={() => setConfirmCancel(true)}
             disabled={cancel.isPending}
-            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border/60 text-sm hover:bg-destructive/10 text-destructive disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border text-sm hover:bg-destructive/10 text-destructive disabled:opacity-50"
           >
             {cancel.isPending ? (
               <Loader2Icon className="size-4 animate-spin" />
@@ -508,7 +508,7 @@ function MutedList({ attempts }: { attempts: { outcome: string; tool_name?: stri
         </span>
       </button>
       {open && (
-        <ul className="divide-y divide-border/20 text-sm border-t border-border/30">
+        <ul className="divide-y divide-border/20 text-sm border-t border-border">
           {[...groups.entries()].map(([key, items]) => (
             <li key={key} className="px-5 py-2">
               <div className="flex items-baseline gap-2 min-w-0">
@@ -548,7 +548,7 @@ function WhyNotFixed({ notes }: { notes: OpenNote[] }) {
         </span>
       </button>
       {open && (
-        <ul className="divide-y divide-border/20 text-sm border-t border-border/30">
+        <ul className="divide-y divide-border/20 text-sm border-t border-border">
           {notes.map((n) => (
             <li key={n.id} className="px-5 py-2">
               <div className="flex items-baseline gap-2 min-w-0">

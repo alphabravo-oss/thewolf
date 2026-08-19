@@ -37,13 +37,13 @@ export function ListSkeleton({ rows = 6 }: { rows?: number }) {
 export function TableSkeleton({ rows = 8 }: { rows?: number }) {
   return (
     <div className="glass-card overflow-hidden">
-      <div className="px-4 py-3 border-b border-border/50">
+      <div className="px-4 py-3 border-b border-border">
         <Skeleton className="h-4 w-24" />
       </div>
       {Array.from({ length: rows }).map((_, i) => (
         <div
           key={i}
-          className="px-4 py-3 border-b border-border/30 grid grid-cols-6 gap-4"
+          className="px-4 py-3 border-b border-border grid grid-cols-6 gap-4"
         >
           <Skeleton className="h-3" />
           <Skeleton className="h-3 col-span-2" />

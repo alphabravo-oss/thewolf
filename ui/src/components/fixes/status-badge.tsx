@@ -7,14 +7,14 @@ export function StatusBadge({ status }: { status: FixJobStatus }) {
       : status === "failed"
         ? "text-status-error bg-status-error/10 border-status-error/30"
         : status === "superseded"
-          ? "text-muted-foreground bg-muted/20 border-border/30"
-          : "text-muted-foreground bg-muted/20 border-border/30"
+          ? "text-muted-foreground bg-muted/20 border-border"
+          : "text-muted-foreground bg-muted/20 border-border"
     : status === "push_failed"
       ? "text-status-warning bg-status-warning/10 border-status-warning/30"
       : status === "awaiting_review" || status === "awaiting_push"
         ? "text-status-warning bg-status-warning/10 border-status-warning/30"
         : status === "queued"
-        ? "text-muted-foreground bg-muted/20 border-border/30"
+        ? "text-muted-foreground bg-muted/20 border-border"
         : "text-status-info bg-status-info/10 border-status-info/30";
   return (
     <span

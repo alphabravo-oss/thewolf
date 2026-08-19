@@ -78,7 +78,7 @@ export function FixFindingButton({
               setEngine(e.target.value);
               setModel("");
             }}
-            className="h-8 px-2 rounded-md bg-muted/40 border border-border/40 text-xs max-w-[220px]"
+            className="h-8 px-2 rounded-md bg-muted/40 border border-border text-xs max-w-[220px]"
           >
             <option value="">Harness: default</option>
             {catalog.map((item) => (
@@ -90,7 +90,7 @@ export function FixFindingButton({
           <select
             value={model}
             onChange={(e) => setModel(e.target.value)}
-            className="h-8 px-2 rounded-md bg-muted/40 border border-border/40 text-xs max-w-[220px]"
+            className="h-8 px-2 rounded-md bg-muted/40 border border-border text-xs max-w-[220px]"
           >
             <option value="">Model: default</option>
             {harness.models.map((m) => (
@@ -103,7 +103,7 @@ export function FixFindingButton({
           <select
             value={effort}
             onChange={(e) => setEffort(e.target.value)}
-            className="h-8 px-2 rounded-md bg-muted/40 border border-border/40 text-xs"
+            className="h-8 px-2 rounded-md bg-muted/40 border border-border text-xs"
           >
             <option value="">Effort: default</option>
             {(harness.efforts ?? []).map((e) => (
@@ -132,7 +132,7 @@ export function FixFindingButton({
               ? fixable.reason
               : "Create a verified fix branch (no push)"
           }
-          className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border/60 text-sm hover:bg-muted/40 disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border text-sm hover:bg-muted/40 disabled:opacity-50"
         >
           {enqueue.isPending ? (
             <Loader2Icon className="size-4 animate-spin" />

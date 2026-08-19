@@ -69,7 +69,7 @@ export function BranchSelect({
           <button
             type="button"
             onClick={() => void q.refetch()}
-            className="h-9 px-2 rounded-md border border-border/60 text-sm hover:bg-muted/50"
+            className="h-9 px-2 rounded-md border border-border text-sm hover:bg-muted/50"
           >
             Retry
           </button>

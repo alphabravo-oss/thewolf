@@ -80,7 +80,7 @@ export function FixerSettings() {
                 fixer_model: "",
               })
             }
-            className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm"
+            className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border text-sm"
           >
             <option value="auto">Auto (first logged-in CLI, then API)</option>
             {catalog.map((e) => (
@@ -145,7 +145,7 @@ export function FixerSettings() {
                 className={`text-[10px] uppercase tracking-wide border rounded px-1.5 py-0.5 ${
                   row.auth === "oauth" || row.auth === "api_key"
                     ? "text-status-success bg-status-success/10 border-status-success/30"
-                    : "text-muted-foreground bg-muted/20 border-border/30"
+                    : "text-muted-foreground bg-muted/20 border-border"
                 }`}
               >
                 {row.auth === "none" ? "not connected" : row.auth}
@@ -177,7 +177,7 @@ export function FixerSettings() {
                   fixer_model: e.target.value,
                 })
               }
-              className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm"
+              className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border text-sm"
             >
               {liveModels.map((m) => (
                 <option key={m.id} value={m.id}>
@@ -196,7 +196,7 @@ export function FixerSettings() {
             <select
               value={effort}
               onChange={(e) => save.mutate({ fixer_effort: e.target.value })}
-              className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border/40 text-sm"
+              className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border text-sm"
             >
               {efforts.map((e) => (
                 <option key={e.id} value={e.id}>
@@ -296,7 +296,7 @@ function PromptEditor({
               setDraft(tmpl.default);
               onSave({ [tmpl.key]: "" });
             }}
-            className="h-8 px-2 rounded-md border border-border/50 text-xs hover:bg-muted/40 disabled:opacity-50"
+            className="h-8 px-2 rounded-md border border-border text-xs hover:bg-muted/40 disabled:opacity-50"
           >
             Reset to default
           </button>
@@ -315,7 +315,7 @@ function PromptEditor({
         onChange={(e) => setDraft(e.target.value)}
         spellCheck={false}
         rows={14}
-        className="w-full min-h-48 font-mono text-[11px] leading-relaxed rounded-md bg-muted/30 border border-border/40 p-3"
+        className="w-full min-h-48 font-mono text-[11px] leading-relaxed rounded-md bg-muted/30 border border-border p-3"
       />
     </div>
   );

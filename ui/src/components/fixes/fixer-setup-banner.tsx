@@ -32,7 +32,7 @@ export function FixerSetupBanner() {
         </div>
       </div>
       <ol className="mt-4 grid gap-3 md:grid-cols-3">
-        <li className="flex items-start gap-3 rounded-md border border-border/60 bg-background/40 p-3">
+        <li className="flex items-start gap-3 rounded-md border border-border bg-background/40 p-3">
           <TerminalIcon className="size-4 mt-0.5 text-muted-foreground shrink-0" />
           <span className="text-sm">
             {settingsFixer ? (
@@ -53,7 +53,7 @@ export function FixerSetupBanner() {
             )}
           </span>
         </li>
-        <li className="flex items-start gap-3 rounded-md border border-border/60 bg-background/40 p-3">
+        <li className="flex items-start gap-3 rounded-md border border-border bg-background/40 p-3">
           <KeyIcon className="size-4 mt-0.5 text-muted-foreground shrink-0" />
           <span className="text-sm">
             <Link
@@ -68,7 +68,7 @@ export function FixerSetupBanner() {
             </span>
           </span>
         </li>
-        <li className="flex items-start gap-3 rounded-md border border-border/60 bg-background/40 p-3">
+        <li className="flex items-start gap-3 rounded-md border border-border bg-background/40 p-3">
           <WrenchIcon className="size-4 mt-0.5 text-muted-foreground shrink-0" />
           <span className="text-sm">
             <span className="font-medium">Queue a Fix</span>

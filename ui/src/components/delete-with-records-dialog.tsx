@@ -63,7 +63,7 @@ export function DeleteWithRecordsDialog({
         className={`flex items-start gap-3 rounded-md border p-3 text-sm ${
           hasRecords && !purge
             ? "border-status-warning/50 bg-status-warning/10"
-            : "border-border/50 bg-muted/20"
+            : "border-border bg-muted/20"
         }`}
       >
         <Checkbox

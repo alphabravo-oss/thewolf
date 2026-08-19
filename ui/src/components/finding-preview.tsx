@@ -63,7 +63,7 @@ export function FindingPreview({ finding, onClose }: FindingPreviewProps) {
       role="dialog"
       aria-label="Finding preview"
     >
-      <header className="px-5 py-4 border-b border-border/50 flex items-start gap-3">
+      <header className="px-5 py-4 border-b border-border flex items-start gap-3">
         <SeverityBadge severity={finding.severity} />
         <div className="flex-1 min-w-0">
           <div className="text-xs uppercase tracking-wide text-muted-foreground">
@@ -137,7 +137,7 @@ export function FindingPreview({ finding, onClose }: FindingPreviewProps) {
         )}
       </div>
 
-      <footer className="px-5 py-3 border-t border-border/50 flex flex-wrap gap-2">
+      <footer className="px-5 py-3 border-t border-border flex flex-wrap gap-2">
         <StatusBtn
           label="Open"
           active={finding.status === "open"}

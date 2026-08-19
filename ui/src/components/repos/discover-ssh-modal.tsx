@@ -261,7 +261,7 @@ export function DiscoverSSHModal({
                 {selected.size} of {repos.length} selected
               </span>
             </div>
-            <div className="flex-1 min-h-0 overflow-y-auto rounded-md border border-border/40">
+            <div className="flex-1 min-h-0 overflow-y-auto rounded-md border border-border">
               <Table className="data-table">
                 <TableHeader>
                   <TableRow>

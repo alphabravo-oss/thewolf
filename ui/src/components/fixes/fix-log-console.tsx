@@ -139,7 +139,7 @@ export function FixLogConsole({
       {/* The streamed log. Monospace, fixed height, auto-scrolling. */}
       <div
         ref={scrollRef}
-        className="mono text-[11px] leading-relaxed max-h-[28rem] overflow-auto rounded-md border border-border/40 bg-black/40 p-3 whitespace-pre-wrap break-words"
+        className="mono text-[11px] leading-relaxed max-h-[28rem] overflow-auto rounded-md border border-border bg-black/40 p-3 whitespace-pre-wrap break-words"
       >
         {lines.length === 0 ? (
           <span className="text-muted-foreground">

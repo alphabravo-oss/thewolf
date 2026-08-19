@@ -32,8 +32,14 @@ test.describe("scanner settings and image inventory", () => {
     await expect(
       page.getByRole("button", { name: "Rebuild (local)" }),
     ).toHaveCount(0);
+    // The inventory is split by origin: images the Wolf release factory
+    // builds, and third-party tools pinned in scanner-lock.yaml. They are
+    // separate supply chains and each card carries its own outdated count.
     await expect(
-      page.getByRole("heading", { name: "Configured scanner images" }),
+      page.getByRole("heading", { name: "Wolf scanner images" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Upstream tool images" }),
     ).toBeVisible();
 
     await page.getByRole("button", { name: "Run Doctor" }).click();

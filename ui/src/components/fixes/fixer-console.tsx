@@ -229,7 +229,10 @@ export function FixerConsolePanel({
           )}
         </div>
         <div
-          className="relative min-w-0 overflow-hidden rounded-md border border-border/40 bg-[#0b0e14]"
+          // `log-viewer` is the shared terminal surface from globals.css; the
+          // previous hardcoded #0b0e14 was a Nocturne-era one-off that no
+          // longer tracks the palette.
+          className="log-viewer relative min-w-0 overflow-hidden rounded-md border border-border"
           onClick={() => termRef.current?.focus()}
         >
           <div ref={hostRef} className="h-80 w-full px-2 py-2" />

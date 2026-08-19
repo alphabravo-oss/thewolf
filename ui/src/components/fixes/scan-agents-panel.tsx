@@ -82,7 +82,7 @@ export function ScanAgentsPanel({
 
   return (
     <section className="glass-card overflow-hidden">
-      <div className="px-5 py-3 flex items-center justify-between gap-3 border-b border-border/30">
+      <div className="px-5 py-3 flex items-center justify-between gap-3 border-b border-border">
         <div className="min-w-0">
           <h2 className="text-sm font-medium">Agents</h2>
           {rem ? (

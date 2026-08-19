@@ -86,7 +86,7 @@ export function BrowsePathModal({
           </span>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto border border-border/40 rounded-md">
+        <div className="flex-1 min-h-0 overflow-y-auto border border-border rounded-md">
           {q.isLoading ? (
             <div className="p-6 grid place-items-center text-muted-foreground">
               <Loader2Icon className="size-4 animate-spin" />

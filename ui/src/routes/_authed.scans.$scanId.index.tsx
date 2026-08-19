@@ -786,7 +786,7 @@ function ToolCard({
         ? "border-status-warning/25 bg-status-warning/5"
         : tool.status === "running" || tool.status === "pending"
           ? "border-status-info/30 bg-status-info/5"
-          : "border-border/40 bg-muted/10";
+          : "border-border bg-muted/10";
   const meta =
     tool.status === "completed"
       ? tool.finding_count > 0

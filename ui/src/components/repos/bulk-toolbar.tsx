@@ -362,7 +362,7 @@ function DeleteDialog({
             touched.
           </DialogDescription>
         </DialogHeader>
-        <label className="flex items-start gap-3 rounded-md border border-border/50 bg-muted/20 p-3 text-sm">
+        <label className="flex items-start gap-3 rounded-md border border-border bg-muted/20 p-3 text-sm">
           <input
             type="checkbox"
             checked={purge}

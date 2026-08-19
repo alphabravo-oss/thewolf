@@ -3,8 +3,8 @@ export function GitHubTokenHelp({ compact = false }: { compact?: boolean }) {
     <div
       className={
         compact
-          ? "rounded-md border border-border/40 bg-muted/15 px-3 py-2 text-xs text-muted-foreground space-y-1.5"
-          : "rounded-md border border-border/40 bg-muted/15 px-4 py-3 text-sm text-muted-foreground space-y-2"
+          ? "rounded-md border border-border bg-muted/15 px-3 py-2 text-xs text-muted-foreground space-y-1.5"
+          : "rounded-md border border-border bg-muted/15 px-4 py-3 text-sm text-muted-foreground space-y-2"
       }
     >
       <p className="text-foreground/80 font-medium">

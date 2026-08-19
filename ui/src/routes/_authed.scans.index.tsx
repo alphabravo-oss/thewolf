@@ -481,7 +481,7 @@ function NewScanForm({ onClose }: { onClose: () => void }) {
           </div>
 
           {toolMode === "explicit" && (
-            <div className="border border-border/40 rounded-md p-3 space-y-2 bg-muted/10">
+            <div className="border border-border rounded-md p-3 space-y-2 bg-muted/10">
               {scanners.isLoading ? (
                 <div className="text-xs text-muted-foreground">
                   Loading scanners…

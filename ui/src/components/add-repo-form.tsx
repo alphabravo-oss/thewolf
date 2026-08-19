@@ -125,7 +125,7 @@ export function AddRepoForm({ collectionId, onDone }: AddRepoFormProps) {
     create.isPending;
 
   return (
-    <div className="border border-border/40 rounded-lg p-3 mb-4 space-y-3 bg-muted/10">
+    <div className="border border-border rounded-lg p-3 mb-4 space-y-3 bg-muted/10">
       <div className="flex items-center justify-between">
         <div className="text-xs text-muted-foreground">
           {collectionId ? "Add a repo to this collection" : "Add a repository"}

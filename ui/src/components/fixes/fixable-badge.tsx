@@ -25,7 +25,7 @@ export function FixableBadge({ repoId }: { repoId: string }) {
   }
   return (
     <span
-      className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground bg-muted/20 border border-border/30 rounded px-1.5 py-0.5"
+      className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground bg-muted/20 border border-border rounded px-1.5 py-0.5"
       title={reason}
     >
       <ShieldXIcon className="size-3" /> not fixable

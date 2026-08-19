@@ -73,7 +73,7 @@ export function RemediateScanButton({
         type="button"
         disabled={!writable || busy || enqueue.isPending}
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border/60 text-sm hover:bg-muted/40 disabled:opacity-50"
+        className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border text-sm hover:bg-muted/40 disabled:opacity-50"
       >
         <RepeatIcon className="size-4" />
         Run agent
@@ -101,7 +101,7 @@ export function RemediateScanButton({
                 className={`h-9 min-w-12 px-3 rounded-md border text-sm tabular-nums ${
                   runs === n
                     ? "bg-primary text-primary-foreground border-primary"
-                    : "border-border/60 hover:bg-muted/40"
+                    : "border-border hover:bg-muted/40"
                 }`}
               >
                 {n}

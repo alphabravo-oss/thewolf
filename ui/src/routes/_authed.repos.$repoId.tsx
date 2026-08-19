@@ -199,7 +199,7 @@ function RepoDetailPage() {
               onClick={() => sync.mutate()}
               disabled={sync.isPending || scan.busy}
               title="Pull latest commits without starting a scan"
-              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border/60 text-sm font-medium hover:bg-muted/50 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border text-sm font-medium hover:bg-muted/50 disabled:opacity-50"
             >
               <RefreshCwIcon
                 className={`size-4 ${sync.isPending ? "animate-spin" : ""}`}
@@ -341,7 +341,7 @@ function CurrentFindings({
   const total = q.data?.total ?? 0;
   return (
     <section className="glass-card overflow-hidden">
-      <div className="px-5 py-3 border-b border-border/30 flex items-center justify-between gap-3">
+      <div className="px-5 py-3 border-b border-border flex items-center justify-between gap-3">
         <div>
           <h2 className="text-sm font-medium">Current findings</h2>
           <p className="text-[11px] text-muted-foreground">
@@ -388,7 +388,7 @@ function CurrentFindings({
             ))}
           </ul>
           {total > rows.length ? (
-            <p className="px-5 py-2 text-[11px] text-muted-foreground border-t border-border/20">
+            <p className="px-5 py-2 text-[11px] text-muted-foreground border-t border-border">
               Showing {rows.length} of {total.toLocaleString()}.{" "}
               {latestScanId ? "Open the latest scan for the full list." : null}
             </p>
@@ -431,7 +431,7 @@ function RepoSuppressions({ repoId }: { repoId: string }) {
   const rows = q.data ?? [];
   return (
     <section className="glass-card overflow-hidden">
-      <div className="px-5 py-3 border-b border-border/30">
+      <div className="px-5 py-3 border-b border-border">
         <h2 className="text-sm font-medium">Repo suppressions</h2>
         <p className="text-[11px] text-muted-foreground">
           These hide matching findings on every future scan of this repo. Agent
@@ -578,7 +578,7 @@ function TrendsSection({
           <select
             value={branchFilter}
             onChange={(e) => setBranchFilter(e.target.value)}
-            className="text-xs bg-muted/40 border border-border/40 rounded px-2 h-7"
+            className="text-xs bg-muted/40 border border-border rounded px-2 h-7"
           >
             <option value="__all__">all branches</option>
             {branches.map((b) => (
