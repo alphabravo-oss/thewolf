@@ -32,6 +32,7 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { GitHubTokenHelp } from "@/components/github-token-help";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { useMe } from "@/lib/me";
 import type {
   AdminSecret,
@@ -232,8 +233,8 @@ function AdminApiKeysTab() {
         ) : !q.data || q.data.length === 0 ? (
           <div className="p-5 text-sm text-muted-foreground">No API keys.</div>
         ) : (
-          <table className="w-full text-sm">
-            <thead className="text-xs text-muted-foreground border-b border-border/30">
+          <table className="data-table">
+            <thead>
               <tr>
                 <th className="text-left px-4 py-2">Owner</th>
                 <th className="text-left px-4 py-2">Name</th>
@@ -285,7 +286,7 @@ function AdminApiKeysTab() {
                             label: `${ownerOf(t.user_id)}'s key "${t.name}"`,
                           })
                         }
-                        className="inline-flex items-center gap-1 h-7 px-2 rounded-md border border-red-500/40 text-red-300 hover:bg-red-500/10 text-xs"
+                        className="inline-flex items-center gap-1 h-7 px-2 rounded-md border border-status-error/40 text-status-error hover:bg-status-error/10 text-xs"
                       >
                         <Trash2Icon className="size-3.5" /> Revoke
                       </button>
@@ -343,8 +344,8 @@ function AdminSecretsTab() {
         ) : !q.data || q.data.length === 0 ? (
           <div className="p-5 text-sm text-muted-foreground">No secrets.</div>
         ) : (
-          <table className="w-full text-sm">
-            <thead className="text-xs text-muted-foreground border-b border-border/30">
+          <table className="data-table">
+            <thead>
               <tr>
                 <th className="text-left px-4 py-2">Owner</th>
                 <th className="text-left px-4 py-2">Type</th>
@@ -371,7 +372,7 @@ function AdminSecretsTab() {
                           label: `${ownerOf(s.user_id)}'s secret "${s.key_name}"`,
                         })
                       }
-                      className="inline-flex items-center gap-1 h-7 px-2 rounded-md border border-red-500/40 text-red-300 hover:bg-red-500/10 text-xs"
+                      className="inline-flex items-center gap-1 h-7 px-2 rounded-md border border-status-error/40 text-status-error hover:bg-status-error/10 text-xs"
                     >
                       <Trash2Icon className="size-3.5" /> Delete
                     </button>
@@ -424,8 +425,8 @@ function AdminNodesTab() {
         ) : !q.data || q.data.length === 0 ? (
           <div className="p-5 text-sm text-muted-foreground">No nodes.</div>
         ) : (
-          <table className="w-full text-sm">
-            <thead className="text-xs text-muted-foreground border-b border-border/30">
+          <table className="data-table">
+            <thead>
               <tr>
                 <th className="text-left px-4 py-2">Owner</th>
                 <th className="text-left px-4 py-2">Name</th>
@@ -454,7 +455,7 @@ function AdminNodesTab() {
                           label: `${ownerOf(n.user_id)}'s node "${n.name}"`,
                         })
                       }
-                      className="inline-flex items-center gap-1 h-7 px-2 rounded-md border border-red-500/40 text-red-300 hover:bg-red-500/10 text-xs"
+                      className="inline-flex items-center gap-1 h-7 px-2 rounded-md border border-status-error/40 text-status-error hover:bg-status-error/10 text-xs"
                     >
                       <Trash2Icon className="size-3.5" /> Delete
                     </button>
@@ -509,9 +510,9 @@ function SeverityBadge({ severity }: { severity?: string }) {
   if (!severity) return <span className="text-muted-foreground/50">—</span>;
   const cls =
     severity === "critical"
-      ? "bg-red-500/15 text-red-300 border-red-500/30"
+      ? "bg-status-error/15 text-status-error border-status-error/30"
       : severity === "warning"
-        ? "bg-amber-500/15 text-amber-400 border-amber-500/30"
+        ? "bg-status-warning/15 text-status-warning border-status-warning/30"
         : "bg-muted/40 text-muted-foreground border-border/40";
   return (
     <span
@@ -650,8 +651,8 @@ function AuditTab() {
             No matching audit entries.
           </div>
         ) : (
-          <table className="w-full text-sm">
-            <thead className="text-xs text-muted-foreground border-b border-border/30">
+          <table className="data-table">
+            <thead>
               <tr>
                 <th className="text-left px-4 py-2">
                   <button
@@ -705,7 +706,7 @@ function AuditTab() {
                     className={
                       "px-4 py-2 text-right text-xs tabular-nums " +
                       (e.status_code >= 400
-                        ? "text-red-300"
+                        ? "text-status-error"
                         : "text-muted-foreground")
                     }
                   >
@@ -836,7 +837,7 @@ export function AccountTab() {
           <label className="block space-y-1">
             <span className="text-xs text-muted-foreground">
               Current password{" "}
-              <span className="text-amber-400">(required to change email)</span>
+              <span className="text-status-warning">(required to change email)</span>
             </span>
             <input
               type="password"
@@ -897,7 +898,7 @@ export function AccountTab() {
               aria-invalid={pwMismatch}
               className={
                 "w-full h-9 px-3 rounded-md bg-muted/40 border text-sm " +
-                (pwMismatch ? "border-red-500" : "border-border/40")
+                (pwMismatch ? "border-status-error" : "border-border/40")
               }
             />
           </label>
@@ -1047,7 +1048,7 @@ function GeneralTab() {
               <label className="text-sm font-medium inline-flex items-center gap-1.5">
                 {knob.label}
                 {"alpha" in knob && knob.alpha && (
-                  <span className="rounded px-1.5 py-0.5 text-3xs font-semibold uppercase tracking-wide bg-amber-500/15 text-amber-500 border border-amber-500/30">
+                  <span className="rounded px-1.5 py-0.5 text-3xs font-semibold uppercase tracking-wide bg-status-warning/15 text-status-warning border border-status-warning/30">
                     Alpha
                   </span>
                 )}
@@ -1108,7 +1109,7 @@ function BoolToggle({
       className={
         "inline-flex items-center gap-2 px-3 h-9 rounded-md text-sm border " +
         (value
-          ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-300"
+          ? "bg-status-success/10 border-status-success/40 text-status-success"
           : "bg-muted/40 border-border/40 text-muted-foreground hover:text-foreground") +
         " disabled:opacity-50"
       }
@@ -1116,7 +1117,7 @@ function BoolToggle({
       <span
         className={
           "size-2 rounded-full " +
-          (value ? "bg-emerald-400" : "bg-muted-foreground/50")
+          (value ? "bg-status-success" : "bg-muted-foreground/50")
         }
       />
       {value ? "Enabled" : "Disabled"}
@@ -1252,7 +1253,7 @@ export function SecurityTab() {
           className={
             "ml-auto shrink-0 rounded px-2 py-0.5 text-xs font-medium border " +
             (enabled
-              ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-300"
+              ? "bg-status-success/10 border-status-success/40 text-status-success"
               : "bg-muted/40 border-border/40 text-muted-foreground")
           }
         >
@@ -1262,8 +1263,8 @@ export function SecurityTab() {
 
       {/* One-time recovery codes, shown right after activation. */}
       {recovery && (
-        <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-4 space-y-2">
-          <p className="text-sm font-medium text-amber-300">
+        <div className="rounded-md border border-status-warning/30 bg-status-warning/5 p-4 space-y-2">
+          <p className="text-sm font-medium text-status-warning">
             Save your recovery codes
           </p>
           <p className="text-xs text-muted-foreground">
@@ -1387,7 +1388,7 @@ export function SecurityTab() {
                 type="button"
                 onClick={() => disable.mutate()}
                 disabled={disable.isPending || code.length < 6}
-                className="h-9 px-4 rounded-md border border-red-500/40 text-red-300 hover:bg-red-500/10 text-sm disabled:opacity-50"
+                className="h-9 px-4 rounded-md border border-status-error/40 text-status-error hover:bg-status-error/10 text-sm disabled:opacity-50"
               >
                 {disable.isPending ? "Disabling…" : "Disable"}
               </button>
@@ -1529,8 +1530,8 @@ export function ApiKeysTab() {
 
       {/* One-time secret reveal. */}
       {created && (
-        <div className="rounded-md border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-3">
-          <p className="text-sm font-medium text-emerald-300">
+        <div className="rounded-md border border-status-success/30 bg-status-success/5 p-4 space-y-3">
+          <p className="text-sm font-medium text-status-success">
             Key created — copy it now, it won't be shown again
           </p>
           <div className="flex items-center gap-2">
@@ -1632,7 +1633,7 @@ export function ApiKeysTab() {
                 />
                 <span
                   className={
-                    s === "admin" ? "text-amber-300 font-mono" : "font-mono"
+                    s === "admin" ? "text-status-warning font-mono" : "font-mono"
                   }
                 >
                   {s}
@@ -1662,8 +1663,8 @@ export function ApiKeysTab() {
             No API keys yet.
           </div>
         ) : (
-          <table className="w-full text-sm">
-            <thead className="text-xs text-muted-foreground border-b border-border/30">
+          <table className="data-table">
+            <thead>
               <tr>
                 <th className="text-left px-4 py-2">Name</th>
                 <th className="text-left px-4 py-2">Prefix</th>
@@ -1717,7 +1718,7 @@ export function ApiKeysTab() {
                           onClick={() =>
                             setPending({ id: t.id, label: t.name })
                           }
-                          className="inline-flex items-center gap-1 h-7 px-2 rounded-md border border-red-500/40 text-red-300 hover:bg-red-500/10 text-xs"
+                          className="inline-flex items-center gap-1 h-7 px-2 rounded-md border border-status-error/40 text-status-error hover:bg-status-error/10 text-xs"
                         >
                           <Trash2Icon className="size-3.5" /> Revoke
                         </button>
@@ -1819,8 +1820,8 @@ export function SecretsTab() {
             No secrets stored.
           </div>
         ) : (
-          <table className="w-full text-sm">
-            <thead className="text-xs text-muted-foreground border-b border-border/30">
+          <table className="data-table">
+            <thead>
               <tr>
                 <th className="text-left px-4 py-2">Type</th>
                 <th className="text-left px-4 py-2">Name</th>
@@ -2041,8 +2042,8 @@ export function NodesTab() {
             No remote nodes configured.
           </div>
         ) : (
-          <table className="w-full text-sm">
-            <thead className="text-xs text-muted-foreground border-b border-border/30">
+          <table className="data-table">
+            <thead>
               <tr>
                 <th className="text-left px-4 py-2">Name</th>
                 <th className="text-left px-4 py-2">Host</th>
@@ -2069,7 +2070,7 @@ export function NodesTab() {
                   <td className="px-4 py-2 text-xs">
                     <span
                       className={
-                        n.enabled ? "text-emerald-500" : "text-muted-foreground"
+                        n.enabled ? "text-status-success" : "text-muted-foreground"
                       }
                     >
                       {n.enabled ? "enabled" : "disabled"}
@@ -2367,8 +2368,8 @@ function UsersTab() {
         {q.isLoading ? (
           <div className="p-5 text-sm text-muted-foreground">Loading…</div>
         ) : (
-          <table className="w-full text-sm">
-            <thead className="text-xs text-muted-foreground border-b border-border/30">
+          <table className="data-table">
+            <thead>
               <tr>
                 <th className="text-left px-4 py-2">Email</th>
                 <th className="text-left px-4 py-2">Role</th>
@@ -2576,6 +2577,72 @@ function NewUserForm({
 // per the API comment on /api/scanners/config.
 // ---------------------------------------------------------------------------
 
+/**
+ * Classify the tag on the resolved scanner image into the release channel it
+ * represents, so an operator can tell at a glance whether this deployment
+ * tracks a moving channel or is pinned to an exact set.
+ *
+ * The channels are produced by the scanner release factory
+ * (.github/workflows/scanners-image.yml); `stable`/`latest` move only on an
+ * approved or scheduled release, `candidate` on every gated build, and
+ * `scanner-set-YYYY.WW.N` never moves.
+ */
+export function describeScannerChannel(image: string): {
+  label: string;
+  detail: string;
+  tone: string;
+} {
+  // Strip the registry host before looking for the tag separator, or the
+  // colon in "host:port" would be mistaken for one.
+  const lastSlash = image.lastIndexOf("/");
+  const namePart = lastSlash === -1 ? image : image.slice(lastSlash + 1);
+  const atDigest = namePart.indexOf("@");
+  if (atDigest !== -1) {
+    return {
+      label: "Pinned digest",
+      detail: "Immutable — never moves.",
+      tone: "completed",
+    };
+  }
+  const colon = namePart.lastIndexOf(":");
+  const tag = colon === -1 ? "" : namePart.slice(colon + 1);
+
+  switch (tag) {
+    case "":
+      return {
+        label: "Unpinned",
+        detail: "No tag resolved; the registry default applies.",
+        tone: "warning",
+      };
+    case "stable":
+    case "latest":
+      return {
+        label: tag,
+        detail: "Approved release set. Updates on each scanner release.",
+        tone: "completed",
+      };
+    case "candidate":
+      return {
+        label: "candidate",
+        detail: "Newest gated build, not yet promoted to stable.",
+        tone: "running",
+      };
+    default:
+      if (/^scanner-set-\d{4}\.\d{2}\.\d+$/.test(tag)) {
+        return {
+          label: tag,
+          detail: "Pinned to an exact release set — never moves.",
+          tone: "completed",
+        };
+      }
+      return {
+        label: tag,
+        detail: "Custom or locally built tag.",
+        tone: "info",
+      };
+  }
+}
+
 interface ScannersConfig {
   image: string;
   image_overrides: Record<string, string> | null;
@@ -2691,8 +2758,21 @@ function ScannersTab() {
   }
 
   const cfg = cfgQ.data;
+  const channel = describeScannerChannel(cfg.image);
   const rows: Array<[string, React.ReactNode]> = [
     ["Default image", <code className="text-xs">{cfg.image}</code>],
+    [
+      "Release channel",
+      <span className="inline-flex items-center gap-2">
+        <StatusBadge
+          status={channel.tone}
+          label={channel.label}
+          size="sm"
+          showDot={false}
+        />
+        <span className="text-xs text-muted-foreground">{channel.detail}</span>
+      </span>,
+    ],
     ["Pull policy", cfg.pull_policy],
     ["Network", cfg.network],
     ["Memory", cfg.memory],
@@ -2754,12 +2834,16 @@ function ScannersTab() {
             wait on the first real scan. If pull errors out for the
             default image, surface the registry hint as a banner. */}
         {wolfBuiltMissing && (
-          <div className="mt-3 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+          <div className="mt-3 rounded-md border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-xs text-status-warning">
             <strong>Couldn't pull {cfg.image}.</strong> Check your network /
             registry credentials. The default registry is{" "}
             <code>ghcr.io/alphabravo-oss</code>; override via{" "}
             <code>WOLF_SCANNERS_IMAGE</code> to point at a mirror or a
-            locally-built image.
+            locally-built image. If the tag itself is missing, set{" "}
+            <code>WOLF_SCANNERS_TAG</code> to another channel —{" "}
+            <code>stable</code> and <code>latest</code> track the approved
+            release set, <code>candidate</code> the newest gated build, and{" "}
+            <code>scanner-set-YYYY.WW.N</code> pins an exact set.
           </div>
         )}
 
@@ -2772,7 +2856,7 @@ function ScannersTab() {
           >
             <div className="flex items-center gap-2 mb-1">
               {doctor.overall_ok ? (
-                <CheckIcon className="size-4 text-emerald-400" />
+                <CheckIcon className="size-4 text-status-success" />
               ) : (
                 <span className="text-destructive">●</span>
               )}
@@ -2784,7 +2868,7 @@ function ScannersTab() {
               {doctor.checks.map((c, i) => (
                 <li key={i} className="flex items-start gap-2">
                   <span
-                    className={c.ok ? "text-emerald-400" : "text-destructive"}
+                    className={c.ok ? "text-status-success" : "text-destructive"}
                   >
                     {c.ok ? "✓" : "✗"}
                   </span>
@@ -2978,7 +3062,7 @@ function ImagesPanel() {
       </div>
 
       {updateItems.length > 0 && (
-        <div className="mb-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+        <div className="mb-3 rounded-md border border-status-warning/30 bg-status-warning/10 px-3 py-2 text-xs text-status-warning">
           <span className="font-medium">
             {updateItems.length} scanner image update
             {updateItems.length === 1 ? "" : "s"} available.
@@ -3016,7 +3100,7 @@ function ImagesPanel() {
                 err={img.remote_error}
               />
               {img.updates_available && (
-                <span className="text-[10px] uppercase tracking-wide font-medium text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded px-1.5 py-0.5">
+                <span className="text-[10px] uppercase tracking-wide font-medium text-status-warning bg-status-warning/10 border border-status-warning/30 rounded px-1.5 py-0.5">
                   update available
                 </span>
               )}
@@ -3060,7 +3144,7 @@ function DigestPill({
   if (err) {
     return (
       <span
-        className="text-[10px] uppercase tracking-wide text-red-300 bg-red-500/10 border border-red-500/30 rounded px-1.5 py-0.5"
+        className="text-[10px] uppercase tracking-wide text-status-error bg-status-error/10 border border-status-error/30 rounded px-1.5 py-0.5"
         title={`${label} registry probe failed. Review server logs.`}
       >
         {label}: error

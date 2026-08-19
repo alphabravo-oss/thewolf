@@ -144,7 +144,7 @@ export function FixerSettings() {
               <span
                 className={`text-[10px] uppercase tracking-wide border rounded px-1.5 py-0.5 ${
                   row.auth === "oauth" || row.auth === "api_key"
-                    ? "text-emerald-300 bg-emerald-500/10 border-emerald-500/30"
+                    ? "text-status-success bg-status-success/10 border-status-success/30"
                     : "text-muted-foreground bg-muted/20 border-border/30"
                 }`}
               >

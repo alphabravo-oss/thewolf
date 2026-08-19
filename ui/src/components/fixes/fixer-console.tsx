@@ -206,7 +206,7 @@ export function FixerConsolePanel({
             href={session.last_url}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1 text-xs text-emerald-300 underline"
+            className="inline-flex items-center gap-1 text-xs text-status-success underline"
           >
             Open login URL
             <ExternalLinkIcon className="size-3" />

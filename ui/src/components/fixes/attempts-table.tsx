@@ -91,7 +91,7 @@ export function AttemptsTable({
 
   return (
     <div className="glass-card overflow-hidden">
-      <div className="flex items-center gap-2 px-5 py-3 text-sm font-medium border-b border-border/30">
+      <div className="flex items-center gap-2 px-5 py-3 text-sm font-medium border-b border-border">
         <ListChecksIcon className="size-4 text-muted-foreground" />
         Decisions
         <span className="text-xs text-muted-foreground">
@@ -100,22 +100,25 @@ export function AttemptsTable({
       </div>
 
       {tools.length > 0 && (
-        <div className="border-b border-border/20">
+        <div className="border-b border-border">
           <div className="px-5 py-2 text-xs font-medium text-muted-foreground">
             By scanner
             <span className="ml-2 font-normal">
               findings reported vs still open after this agent
             </span>
           </div>
-          <table className="w-full text-sm">
-            <thead className="text-xs uppercase tracking-wide text-muted-foreground bg-muted/20">
+          {/* Kept as a semantic table rather than a DataTable: the totals
+              row below is a <tfoot>, which the shared table has no concept of.
+              Styling comes from the shared `.data-table` class. */}
+          <table className="data-table">
+            <thead>
               <tr>
-                <th className="text-left px-4 py-2">Scanner</th>
-                <th className="text-right px-4 py-2">Before</th>
-                <th className="text-right px-4 py-2">Fixed</th>
-                <th className="text-right px-4 py-2">Muted</th>
-                <th className="text-right px-4 py-2">After</th>
-                <th className="text-right px-4 py-2">Rolled</th>
+                <th>Scanner</th>
+                <th className="text-right">Before</th>
+                <th className="text-right">Fixed</th>
+                <th className="text-right">Muted</th>
+                <th className="text-right">After</th>
+                <th className="text-right">Rolled</th>
               </tr>
             </thead>
             <tbody>
@@ -125,34 +128,28 @@ export function AttemptsTable({
                 return (
                   <tr
                     key={t.tool}
-                    className={`border-t border-border/20 cursor-pointer ${
-                      active ? "bg-primary/10" : "hover:bg-muted/20"
-                    }`}
+                    className={`cursor-pointer ${active ? "bg-accent" : ""}`}
                     onClick={() => selectTool(t.tool)}
                   >
-                    <td className="px-4 py-2 font-mono text-xs">{t.tool}</td>
-                    <td className="px-4 py-2 text-right tabular-nums">{t.total}</td>
-                    <td className="px-4 py-2 text-right tabular-nums text-emerald-300">
-                      {t.kept}
-                    </td>
-                    <td className="px-4 py-2 text-right tabular-nums">{t.muted ?? 0}</td>
-                    <td className="px-4 py-2 text-right tabular-nums">{after}</td>
-                    <td className="px-4 py-2 text-right tabular-nums text-amber-300">
-                      {t.rolled ?? 0}
-                    </td>
+                    <td className="font-mono text-xs">{t.tool}</td>
+                    <td className="text-right tabular-nums">{t.total}</td>
+                    <td className="text-right tabular-nums text-status-success">{t.kept}</td>
+                    <td className="text-right tabular-nums">{t.muted ?? 0}</td>
+                    <td className="text-right tabular-nums">{after}</td>
+                    <td className="text-right tabular-nums text-status-warning">{t.rolled ?? 0}</td>
                   </tr>
                 );
               })}
             </tbody>
             <tfoot>
-              <tr className="border-t border-border/40 bg-muted/15 font-medium">
+              <tr className="border-t border-border bg-muted/40 font-medium">
                 <td className="px-4 py-2 text-xs uppercase tracking-wide text-muted-foreground">
                   Total
                 </td>
                 <td className="px-4 py-2 text-right tabular-nums">
                   {tools.reduce((n, t) => n + t.total, 0)}
                 </td>
-                <td className="px-4 py-2 text-right tabular-nums text-emerald-300">
+                <td className="px-4 py-2 text-right tabular-nums text-status-success">
                   {tools.reduce((n, t) => n + t.kept, 0)}
                 </td>
                 <td className="px-4 py-2 text-right tabular-nums">
@@ -165,7 +162,7 @@ export function AttemptsTable({
                     0,
                   )}
                 </td>
-                <td className="px-4 py-2 text-right tabular-nums text-amber-300">
+                <td className="px-4 py-2 text-right tabular-nums text-status-warning">
                   {tools.reduce((n, t) => n + (t.rolled ?? 0), 0)}
                 </td>
               </tr>
@@ -174,7 +171,7 @@ export function AttemptsTable({
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-1.5 px-5 py-2 border-b border-border/20">
+      <div className="flex flex-wrap items-center gap-1.5 px-5 py-2 border-b border-border">
         {(
           [
             ["all", "All"],
@@ -194,8 +191,8 @@ export function AttemptsTable({
             className={
               "h-7 px-2 rounded-md text-[11px] border " +
               (outcomeFilter === id
-                ? "bg-primary/15 border-primary/40 text-foreground"
-                : "border-border/40 text-muted-foreground hover:bg-muted/30")
+                ? "bg-accent border-border text-foreground"
+                : "border-border text-muted-foreground hover:bg-accent hover:text-foreground")
             }
           >
             {label}
@@ -205,7 +202,7 @@ export function AttemptsTable({
           <button
             type="button"
             onClick={() => selectTool(toolFilter)}
-            className="h-7 px-2 rounded-md text-[11px] border border-border/40 text-muted-foreground hover:bg-muted/30"
+            className="h-7 px-2 rounded-md text-[11px] border border-border text-muted-foreground hover:bg-accent hover:text-foreground"
           >
             {toolFilter} ×
           </button>
@@ -227,13 +224,13 @@ export function AttemptsTable({
             if (visible.length === 0) return null;
             const closed = collapsed[g.tool];
             return (
-              <div key={g.tool} className="border-t border-border/20">
+              <div key={g.tool} className="border-t border-border">
                 <button
                   type="button"
                   onClick={() =>
                     setCollapsed((c) => ({ ...c, [g.tool]: !c[g.tool] }))
                   }
-                  className="w-full flex items-center gap-2 px-4 py-2 text-left text-xs font-medium bg-muted/15 hover:bg-muted/25"
+                  className="w-full flex items-center gap-2 px-4 py-2 text-left text-xs font-medium bg-muted/40 hover:bg-muted/60"
                 >
                   <ChevronDownIcon
                     className={`size-3.5 text-muted-foreground transition-transform ${
@@ -253,12 +250,12 @@ export function AttemptsTable({
             );
           })}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between px-4 py-2 text-xs border-t border-border/20">
+            <div className="flex items-center justify-between px-4 py-2 text-xs border-t border-border">
               <button
                 type="button"
                 onClick={() => setPage(Math.max(1, pageClamped - 1))}
                 disabled={pageClamped <= 1}
-                className="h-8 px-3 rounded-md hover:bg-muted/40 disabled:opacity-30"
+                className="h-8 px-3 rounded-md hover:bg-accent disabled:opacity-30"
               >
                 ← Prev
               </button>
@@ -269,7 +266,7 @@ export function AttemptsTable({
                 type="button"
                 onClick={() => setPage(Math.min(totalPages, pageClamped + 1))}
                 disabled={pageClamped >= totalPages}
-                className="h-8 px-3 rounded-md hover:bg-muted/40 disabled:opacity-30"
+                className="h-8 px-3 rounded-md hover:bg-accent disabled:opacity-30"
               >
                 Next →
               </button>
@@ -307,7 +304,7 @@ function ChangeRow({ card, onOpen }: { card: ChangeCard; onOpen: () => void }) {
     <button
       type="button"
       onClick={onOpen}
-      className="w-full text-left px-4 py-2.5 border-t border-border/15 hover:bg-muted/20"
+      className="w-full text-left px-4 py-2.5 border-t border-border hover:bg-accent/50"
     >
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
@@ -316,17 +313,17 @@ function ChangeRow({ card, onOpen }: { card: ChangeCard; onOpen: () => void }) {
             <div className="mt-0.5 text-[11px] text-muted-foreground truncate">{excerpt}</div>
           ) : null}
           {why ? (
-            <div className="mt-0.5 text-[11px] text-amber-200/90 truncate">{why}</div>
+            <div className="mt-0.5 text-[11px] text-status-warning truncate">{why}</div>
           ) : null}
         </div>
         <span
           title={info.hint}
           className={`shrink-0 text-[10px] uppercase tracking-wide border rounded px-1.5 py-0.5 ${
             info.tone === "ok"
-              ? "text-emerald-300 bg-emerald-500/10 border-emerald-500/30"
+              ? "text-status-success bg-status-success/10 border-status-success/30"
               : info.tone === "warn"
-                ? "text-amber-300 bg-amber-500/10 border-amber-500/30"
-                : "text-muted-foreground bg-muted/20 border-border/30"
+                ? "text-status-warning bg-status-warning/10 border-status-warning/30"
+                : "text-muted-foreground bg-muted border-border"
           }`}
         >
           {info.label}
@@ -393,7 +390,7 @@ function ChangePanel({
               ))}
             </ul>
             {excerpt.startsWith("rolled back:") && (
-              <p className="mt-3 text-xs text-amber-200">{excerpt}</p>
+              <p className="mt-3 text-xs text-status-warning">{excerpt}</p>
             )}
             {card.outcome === "kept" && (
               <div className="mt-4">
@@ -408,7 +405,7 @@ function ChangePanel({
                     change was a version bump already committed).
                   </p>
                 ) : (
-                  <pre className="mono text-[11px] leading-relaxed max-h-[28rem] overflow-auto rounded-md border border-border/40 bg-black/40 p-3 whitespace-pre">
+                  <pre className="mono text-[11px] leading-relaxed max-h-[28rem] overflow-auto rounded-md border border-border bg-muted/30 p-3 whitespace-pre">
                     {diffQ.data.split("\n").map((line, i) => (
                       <div key={i} className={hunkClass(line)}>
                         {line || " "}
@@ -427,9 +424,9 @@ function ChangePanel({
 
 function hunkClass(line: string): string {
   if (line.startsWith("+++") || line.startsWith("---")) return "text-muted-foreground";
-  if (line.startsWith("@@")) return "text-sky-300";
-  if (line.startsWith("+")) return "text-emerald-300";
-  if (line.startsWith("-")) return "text-rose-300";
+  if (line.startsWith("@@")) return "text-status-info";
+  if (line.startsWith("+")) return "text-status-success";
+  if (line.startsWith("-")) return "text-status-error";
   if (line.startsWith("diff ") || line.startsWith("index ")) return "text-muted-foreground/70";
   return "text-foreground/70";
 }

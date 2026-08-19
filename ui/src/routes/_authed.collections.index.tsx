@@ -7,7 +7,8 @@ import { useState } from "react";
 import { api } from "@/lib/api";
 import type { Collection } from "@/lib/types";
 import { ListSkeleton } from "@/components/skeleton";
-import { EmptyState } from "@/components/empty-state";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageHeader, PageShell } from "@/components/ui/page";
 
 export const Route = createFileRoute("/_authed/collections/")({
   component: CollectionsPage,
@@ -40,25 +41,25 @@ function CollectionsPage() {
   });
 
   return (
-    <div className="page stack">
-      <header className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Collections</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Group repos for batch scanning and cross-repo metrics.
-          </p>
-        </div>
-        {!creating && q.data && q.data.length > 0 && (
-          <button
-            type="button"
-            onClick={() => setCreating(true)}
-            className="inline-flex items-center gap-1.5 px-3 h-9 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition"
-          >
-            <PlusIcon className="size-4" />
-            New collection
-          </button>
-        )}
-      </header>
+    <PageShell>
+      <PageHeader
+        title="Collections"
+        description="Group repos for batch scanning and cross-repo metrics."
+        actions={
+          !creating &&
+          q.data &&
+          q.data.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setCreating(true)}
+              className="inline-flex items-center gap-1.5 px-3 h-9 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition"
+            >
+              <PlusIcon className="size-4" />
+              New collection
+            </button>
+          )
+        }
+      />
 
       {creating && (
         <CreateCollectionForm
@@ -103,7 +104,7 @@ function CollectionsPage() {
           ))}
         </ul>
       )}
-    </div>
+    </PageShell>
   );
 }
 
@@ -167,7 +168,7 @@ function CreateCollectionForm({
       </label>
 
       {error ? (
-        <div className="text-xs text-red-500">
+        <div className="text-xs text-status-error">
           {error instanceof Error ? error.message : "Failed to create collection"}
         </div>
       ) : null}

@@ -300,7 +300,7 @@ export function FixJobView({
       />
 
       {f.pause_reason && (
-        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+        <div className="rounded-md border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-sm text-status-warning">
           {f.pause_reason}
         </div>
       )}
@@ -400,9 +400,9 @@ function PushResult({
   const commitUrl = githubCommitUrl(sourcePath, sha);
   if (pushed) {
     return (
-      <div className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm">
-        <div className="font-medium text-emerald-200">Pushed to GitHub</div>
-        <p className="mt-1 text-emerald-100/80">
+      <div className="rounded-md border border-status-success/40 bg-status-success/10 px-4 py-3 text-sm">
+        <div className="font-medium text-status-success">Pushed to GitHub</div>
+        <p className="mt-1 text-status-success/80">
           {branch ? (
             <>
               Branch{" "}
@@ -446,7 +446,7 @@ function PushResult({
   }
   if (pushing) {
     return (
-      <div className="rounded-md border border-sky-500/40 bg-sky-500/10 px-4 py-3 text-sm text-sky-100">
+      <div className="rounded-md border border-status-info/40 bg-status-info/10 px-4 py-3 text-sm text-status-info">
         Pushing {branch ? <span className="font-mono">{branch}</span> : "the fix branch"}{" "}
         to GitHub…
       </div>
@@ -454,11 +454,11 @@ function PushResult({
   }
   if (status === "push_failed" || (status === "failed" && error)) {
     return (
-      <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
-        <div className="font-medium text-amber-100">
+      <div className="rounded-md border border-status-warning/40 bg-status-warning/10 px-4 py-3 text-sm">
+        <div className="font-medium text-status-warning">
           Fixes are on the branch — GitHub push did not land
         </div>
-        <p className="mt-1 text-amber-100/90">{pushFailureHint(error)}</p>
+        <p className="mt-1 text-status-warning/90">{pushFailureHint(error)}</p>
       </div>
     );
   }

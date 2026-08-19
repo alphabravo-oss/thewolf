@@ -8,7 +8,8 @@ import { GitBranchIcon, GitForkIcon, HardDriveIcon, PlusIcon, ServerIcon } from 
 import { api } from "@/lib/api";
 import type { Collection, Repo, Scan } from "@/lib/types";
 import { ListSkeleton } from "@/components/skeleton";
-import { EmptyState } from "@/components/empty-state";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageHeader, PageShell } from "@/components/ui/page";
 import { AddRepoForm } from "@/components/add-repo-form";
 import { ImportGitHubModal } from "@/components/repos/import-github-modal";
 import { DiscoverSSHModal } from "@/components/repos/discover-ssh-modal";
@@ -199,41 +200,39 @@ function ReposPage() {
   }, [reposQ.data, filters, collectionMembership, latestScanByRepo]);
 
   return (
-    <div className="page stack">
-      <div className="flex items-start justify-between gap-4 mb-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Repositories</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Source-code targets — local paths, GitHub, remote git URLs, or SSH nodes.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setShowImportGitHub(true)}
-            className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-background px-3 text-sm font-medium hover:bg-muted/40"
-          >
-            <GitForkIcon className="size-4" />
-            Import from GitHub
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowDiscoverSSH(true)}
-            className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-background px-3 text-sm font-medium hover:bg-muted/40"
-          >
-            <ServerIcon className="size-4" />
-            Discover SSH
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowAdd((v) => !v)}
-            className="inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:opacity-90"
-          >
-            <PlusIcon className="size-4" />
-            Add repo
-          </button>
-        </div>
-      </div>
+    <PageShell>
+      <PageHeader
+        title="Repositories"
+        description="Source-code targets — local paths, GitHub, remote git URLs, or SSH nodes."
+        actions={
+          <>
+            <button
+              type="button"
+              onClick={() => setShowImportGitHub(true)}
+              className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-background px-3 text-sm font-medium hover:bg-accent"
+            >
+              <GitForkIcon className="size-4" />
+              Import from GitHub
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowDiscoverSSH(true)}
+              className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-background px-3 text-sm font-medium hover:bg-accent"
+            >
+              <ServerIcon className="size-4" />
+              Discover SSH
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowAdd((v) => !v)}
+              className="inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:opacity-90"
+            >
+              <PlusIcon className="size-4" />
+              Add repo
+            </button>
+          </>
+        }
+      />
 
       {showImportGitHub && (
         <ImportGitHubModal onClose={() => setShowImportGitHub(false)} />
@@ -312,7 +311,7 @@ function ReposPage() {
         repos={reposQ.data ?? []}
         onClear={clearSelected}
       />
-    </div>
+    </PageShell>
   );
 }
 

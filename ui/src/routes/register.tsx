@@ -133,7 +133,7 @@ function RegisterPage() {
                   label="Confirm password"
                   hint={
                     mismatch ? (
-                      <span className="text-[11px] text-red-500">Passwords don't match.</span>
+                      <span className="text-[11px] text-status-error">Passwords don't match.</span>
                     ) : undefined
                   }
                 >

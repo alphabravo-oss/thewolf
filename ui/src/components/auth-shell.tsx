@@ -53,9 +53,9 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
 
         <div className="space-y-6">
           <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-muted-foreground">
-            <Feature dot="bg-emerald-500" label="Version-pinned tools" />
-            <Feature dot="bg-blue-500" label="Repeatable scan evidence" />
-            <Feature dot="bg-violet-400" label="AI assistance under guardrails" />
+            <Feature dot="bg-status-success" label="Version-pinned tools" />
+            <Feature dot="bg-status-info" label="Repeatable scan evidence" />
+            <Feature dot="bg-status-info" label="AI assistance under guardrails" />
           </div>
           <div className="text-xs text-muted-foreground">
             Built by{" "}
@@ -137,7 +137,7 @@ export function PasswordInput({
         className={
           authInputCls +
           " pr-10" +
-          (invalid ? " border-red-500 focus:border-red-500 focus:ring-red-500/25" : "")
+          (invalid ? " border-status-error focus:border-status-error focus:ring-status-error/25" : "")
         }
       />
       <button

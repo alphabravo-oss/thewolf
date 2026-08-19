@@ -7,8 +7,9 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import type { Repo, Scan } from "@/lib/types";
 import { parseToolList } from "@/lib/types";
-import { TableSkeleton } from "@/components/skeleton";
-import { EmptyState } from "@/components/empty-state";
+import { EmptyState } from "@/components/ui/empty-state";
+import { DataTable, type Column } from "@/components/ui/data-table";
+import { PageHeader, PageShell } from "@/components/ui/page";
 import { BranchSelect } from "@/components/branch-select";
 import { ScanStatusPill } from "@/components/scan-status-pill";
 import { StatusBadge } from "@/components/fixes/status-badge";
@@ -23,6 +24,16 @@ import {
 export const Route = createFileRoute("/_authed/scans/")({
   component: ScansPage,
 });
+
+// Stable empty array — a fresh `[]` fallback each render would invalidate the
+// table's data-dependent row models on every render.
+const EMPTY_SCANS: Scan[] = [];
+
+function durationMs(started?: string | null, completed?: string | null): number {
+  if (!started || !completed) return -1;
+  const ms = new Date(completed).getTime() - new Date(started).getTime();
+  return Number.isNaN(ms) || ms < 0 ? -1 : ms;
+}
 
 function formatDuration(
   started?: string | null,
@@ -124,6 +135,7 @@ function ScanAgentsCell({ jobs }: { jobs: FixJob[] }) {
 }
 
 function ScansPage() {
+  const navigate = useNavigate();
   const [showForm, setShowForm] = useState(false);
   const q = useQuery({
     queryKey: ["scans", "list"],
@@ -147,120 +159,149 @@ function ScansPage() {
     ...(childScansQ.data ?? []),
   ]);
 
+  const scans = q.data ?? EMPTY_SCANS;
+
+  const columns: Column<Scan>[] = [
+    {
+      key: "status",
+      header: "Status",
+      sortAccessor: (s) => s.status,
+      filter: { label: "Status" },
+      accessor: (s) => <ScanStatusPill status={s.status} size="sm" />,
+    },
+    {
+      key: "id",
+      header: "Scan ID",
+      sortAccessor: (s) => s.id,
+      accessor: (s) => (
+        <Link
+          to={s.status === "running" ? "/scans/$scanId/live" : "/scans/$scanId"}
+          params={{ scanId: s.id }}
+          className="font-mono text-xs text-muted-foreground hover:text-foreground hover:underline"
+          title={s.id}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {s.id.slice(0, 8)}
+        </Link>
+      ),
+    },
+    {
+      key: "repo",
+      header: "Repo · Branch",
+      sortAccessor: (s) => s.repo?.name ?? "",
+      accessor: (s) => (
+        <div className="min-w-0">
+          <div className="truncate text-sm font-medium">{s.repo?.name ?? "—"}</div>
+          <div className="truncate font-mono text-xs text-muted-foreground">{s.branch}</div>
+        </div>
+      ),
+    },
+    {
+      key: "tools",
+      header: "Tools",
+      sortAccessor: (s) => parseToolList(s.tools_completed).length,
+      accessor: (s) => {
+        const sel = parseToolList(s.tools_selected);
+        const done = parseToolList(s.tools_completed);
+        const failed = parseToolList(s.tools_failed);
+        return (
+          <span className="text-xs tabular-nums">
+            <span className="text-foreground">{done.length}</span>
+            <span className="text-muted-foreground">/{sel.length}</span>
+            {failed.length > 0 && (
+              <span className="ml-1 text-status-error">· {failed.length} failed</span>
+            )}
+          </span>
+        );
+      },
+    },
+    {
+      key: "findings",
+      header: "Findings",
+      align: "right",
+      sortAccessor: (s) => s.finding_count,
+      accessor: (s) => (
+        <span className="font-mono tabular-nums">{s.finding_count.toLocaleString()}</span>
+      ),
+    },
+    {
+      key: "agents",
+      header: "Agents",
+      sortable: false,
+      accessor: (s) => <ScanAgentsCell jobs={byScan.get(s.id) ?? []} />,
+    },
+    {
+      key: "started",
+      header: "Started",
+      sortAccessor: (s) => s.started_at ?? "",
+      accessor: (s) => (
+        <span className="text-xs text-muted-foreground">
+          {s.started_at ? new Date(s.started_at).toLocaleString() : "—"}
+        </span>
+      ),
+    },
+    {
+      key: "duration",
+      header: "Duration",
+      align: "right",
+      sortAccessor: (s) => durationMs(s.started_at, s.completed_at),
+      accessor: (s) => (
+        <span className="text-xs">{formatDuration(s.started_at, s.completed_at)}</span>
+      ),
+    },
+  ];
+
+  const isEmpty = !q.isLoading && scans.length === 0;
+
   return (
-    <div className="page stack">
-      <header className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">Scans</h1>
-        {!showForm && (
-          <button
-            type="button"
-            onClick={() => setShowForm(true)}
-            className="inline-flex items-center gap-2 px-3 h-9 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90"
-          >
-            <PlayIcon className="size-4" />
-            New scan
-          </button>
-        )}
-      </header>
+    <PageShell>
+      <PageHeader
+        title="Scans"
+        description="Every scan run across the fleet, newest first."
+        actions={
+          !showForm && (
+            <button
+              type="button"
+              onClick={() => setShowForm(true)}
+              className="inline-flex items-center gap-2 px-3 h-9 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90"
+            >
+              <PlayIcon className="size-4" />
+              New scan
+            </button>
+          )
+        }
+      />
 
       {showForm && <NewScanForm onClose={() => setShowForm(false)} />}
 
-      {q.isLoading ? (
-        <TableSkeleton rows={10} />
-      ) : !q.data || q.data.length === 0 ? (
-        !showForm && (
-          <EmptyState
-            icon={GaugeIcon}
-            title="No scans yet"
-            description="Click New scan above, or pick a repo from a collection."
-            cta={{ label: "New scan", onClick: () => setShowForm(true) }}
-          />
-        )
+      {isEmpty && !showForm ? (
+        <EmptyState
+          icon={GaugeIcon}
+          title="No scans yet"
+          description="Click New scan above, or pick a repo from a collection."
+          cta={{ label: "New scan", onClick: () => setShowForm(true) }}
+        />
       ) : (
-        <div className="glass-card overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="text-xs uppercase tracking-wide text-muted-foreground bg-muted/20">
-              <tr>
-                <th className="text-left font-medium px-4 py-2">Status</th>
-                <th className="text-left font-medium px-4 py-2">Scan ID</th>
-                <th className="text-left font-medium px-4 py-2">
-                  Repo · Branch
-                </th>
-                <th className="text-left font-medium px-4 py-2">Tools</th>
-                <th className="text-right font-medium px-4 py-2">Findings</th>
-                <th className="text-left font-medium px-4 py-2">Agents</th>
-                <th className="text-left font-medium px-4 py-2">Started</th>
-                <th className="text-right font-medium px-4 py-2">Duration</th>
-              </tr>
-            </thead>
-            <tbody>
-              {q.data.map((s) => {
-                const sel = parseToolList(s.tools_selected);
-                const done = parseToolList(s.tools_completed);
-                const failed = parseToolList(s.tools_failed);
-                return (
-                  <tr
-                    key={s.id}
-                    className="border-t border-border/30 table-row-hover"
-                  >
-                    <td className="px-4 py-2">
-                      <ScanStatusPill status={s.status} />
-                    </td>
-                    <td className="px-4 py-2">
-                      <Link
-                        to={
-                          s.status === "running"
-                            ? "/scans/$scanId/live"
-                            : "/scans/$scanId"
-                        }
-                        params={{ scanId: s.id }}
-                        className="font-mono text-xs hover:underline text-muted-foreground"
-                        title={s.id}
-                      >
-                        {s.id.slice(0, 8)}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-2">
-                      <div className="text-sm font-medium">
-                        {s.repo?.name ?? "—"}
-                      </div>
-                      <div className="text-xs text-muted-foreground font-mono">
-                        {s.branch}
-                      </div>
-                    </td>
-                    <td className="px-4 py-2 text-xs tabular-nums">
-                      <span className="text-foreground">{done.length}</span>
-                      <span className="text-muted-foreground">
-                        /{sel.length}
-                      </span>
-                      {failed.length > 0 && (
-                        <span className="text-red-400 ml-1">
-                          · {failed.length} failed
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2 text-right font-mono tabular-nums">
-                      {s.finding_count.toLocaleString()}
-                    </td>
-                    <td className="px-4 py-2">
-                      <ScanAgentsCell jobs={byScan.get(s.id) ?? []} />
-                    </td>
-                    <td className="px-4 py-2 text-xs text-muted-foreground">
-                      {s.started_at
-                        ? new Date(s.started_at).toLocaleString()
-                        : "—"}
-                    </td>
-                    <td className="px-3 py-2 text-xs">
-                      {formatDuration(s.started_at, s.completed_at)}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          data={scans}
+          columns={columns}
+          keyExtractor={(s) => s.id}
+          persistKey="scans"
+          density="compact"
+          loading={q.isLoading}
+          isError={q.isError}
+          onRetry={() => void q.refetch()}
+          searchPlaceholder="Search scans..."
+          emptyMessage="No scans match your filters"
+          onRowClick={(s) =>
+            navigate({
+              to: s.status === "running" ? "/scans/$scanId/live" : "/scans/$scanId",
+              params: { scanId: s.id },
+            })
+          }
+        />
       )}
-    </div>
+    </PageShell>
   );
 }
 

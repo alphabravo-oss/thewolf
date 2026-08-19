@@ -62,7 +62,7 @@ export function DeleteWithRecordsDialog({
         htmlFor={boxId}
         className={`flex items-start gap-3 rounded-md border p-3 text-sm ${
           hasRecords && !purge
-            ? "border-amber-500/50 bg-amber-500/10"
+            ? "border-status-warning/50 bg-status-warning/10"
             : "border-border/50 bg-muted/20"
         }`}
       >

@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2Icon, UploadIcon } from "lucide-react";
 import { toast } from "sonner";
 import { StatusBadge } from "@/components/fixes/status-badge";
+import { DataTable, type Column } from "@/components/ui/data-table";
 import { RemediateScanButton } from "@/components/fixes/remediate-scan-button";
 import {
   githubBranchUrl,
@@ -127,7 +128,7 @@ export function ScanAgentsPanel({
       </div>
 
       {published ? (
-        <div className="px-5 py-3 text-sm border-b border-emerald-500/30 bg-emerald-500/10 text-emerald-100">
+        <div className="px-5 py-3 text-sm border-b border-status-success/30 bg-status-success/10 text-status-success">
           Pushed{" "}
           {githubBranchUrl(sourcePath, published.result_branch) ? (
             <a
@@ -146,7 +147,7 @@ export function ScanAgentsPanel({
           ) : null}
         </div>
       ) : lastFail?.error ? (
-        <div className="px-5 py-3 text-sm border-b border-rose-500/30 bg-rose-500/10 text-rose-100">
+        <div className="px-5 py-3 text-sm border-b border-status-error/30 bg-status-error/10 text-status-error">
           {pushFailureHint(lastFail.error)}
         </div>
       ) : null}
@@ -157,95 +158,127 @@ export function ScanAgentsPanel({
           <span className="font-mono">wolf-fix/…</span> branch.
         </p>
       ) : (
-        <table className="w-full text-sm">
-          <thead className="text-xs uppercase tracking-wide text-muted-foreground bg-muted/20">
-            <tr>
-              <th className="text-left px-4 py-2">Run</th>
-              <th className="text-left px-4 py-2">Status</th>
-              <th className="text-right px-4 py-2">In</th>
-              <th className="text-right px-4 py-2">Out</th>
-              <th className="text-right px-4 py-2">Δ</th>
-              <th className="text-right px-4 py-2">Fixed</th>
-              <th className="text-right px-4 py-2">Muted</th>
-              <th className="text-left px-4 py-2">After</th>
-            </tr>
-          </thead>
-          <tbody>
-            {runs.map((r) => (
-              <RunRow key={r.job_id} run={r} />
-            ))}
-          </tbody>
-        </table>
+        <DataTable
+          data={runs}
+          columns={runColumns}
+          keyExtractor={(r) => r.job_id}
+          density="compact"
+          searchable={false}
+          pageSize={25}
+          emptyMessage="No agent runs yet"
+        />
       )}
     </section>
   );
 }
 
-function RunRow({ run }: { run: LineageRun }) {
-  const waitingChild =
-    isFixPaused(run.status as FixJobStatus) &&
-    run.child_scan_id &&
-    run.child_status &&
-    run.child_status !== "completed";
-  return (
-    <tr className="border-t border-border/20">
-      <td className="px-4 py-2">
-        <Link
-          to="/agents/$agentId"
-          params={{ agentId: run.job_id }}
-          className="font-mono text-xs hover:underline"
-        >
-          {run.run_index}/{run.planned_runs} · {run.job_id.slice(0, 8)}
-        </Link>
-      </td>
-      <td className="px-4 py-2">
-        <StatusBadge status={run.status as FixJobStatus} />
-      </td>
-      <td className="px-4 py-2 text-right tabular-nums">
-        {run.input_findings.toLocaleString()}
-      </td>
-      <td className="px-4 py-2 text-right tabular-nums">
-        {run.output_findings != null
-          ? run.output_findings.toLocaleString()
-          : "—"}
-      </td>
-      <td
-        className={`px-4 py-2 text-right tabular-nums ${
-          run.delta == null
+// Columns for the run-lineage table. Declared at module scope so the array
+// identity is stable across renders.
+const runColumns: Column<LineageRun>[] = [
+  {
+    key: "run",
+    header: "Run",
+    sortAccessor: (run) => run.run_index,
+    accessor: (run) => (
+      <Link
+        to="/agents/$agentId"
+        params={{ agentId: run.job_id }}
+        className="font-mono text-xs hover:underline"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {run.run_index}/{run.planned_runs} · {run.job_id.slice(0, 8)}
+      </Link>
+    ),
+  },
+  {
+    key: "status",
+    header: "Status",
+    sortAccessor: (run) => run.status,
+    accessor: (run) => <StatusBadge status={run.status as FixJobStatus} />,
+  },
+  {
+    key: "in",
+    header: "In",
+    align: "right",
+    sortAccessor: (run) => run.input_findings,
+    accessor: (run) => (
+      <span className="tabular-nums">{run.input_findings.toLocaleString()}</span>
+    ),
+  },
+  {
+    key: "out",
+    header: "Out",
+    align: "right",
+    sortAccessor: (run) => run.output_findings ?? -1,
+    accessor: (run) => (
+      <span className="tabular-nums">
+        {run.output_findings != null ? run.output_findings.toLocaleString() : "—"}
+      </span>
+    ),
+  },
+  {
+    key: "delta",
+    header: "Δ",
+    align: "right",
+    sortAccessor: (run) => run.delta ?? 0,
+    accessor: (run) => (
+      <span
+        className={
+          "tabular-nums " +
+          (run.delta == null
             ? "text-muted-foreground"
             : run.delta < 0
-              ? "text-emerald-300"
+              ? "text-status-success"
               : run.delta > 0
-                ? "text-amber-300"
-                : ""
-        }`}
+                ? "text-status-warning"
+                : "")
+        }
       >
         {fmtDelta(run.delta)}
-      </td>
-      <td className="px-4 py-2 text-right tabular-nums text-emerald-300">
-        {run.kept || "—"}
-      </td>
-      <td className="px-4 py-2 text-right tabular-nums">
-        {run.muted || "—"}
-      </td>
-      <td className="px-4 py-2 text-xs text-muted-foreground">
-        {waitingChild ? (
-          <span>rescanning…</span>
-        ) : run.child_scan_id ? (
-          <Link
-            to="/scans/$scanId"
-            params={{ scanId: run.child_scan_id }}
-            className="font-mono hover:underline"
-          >
-            {run.child_scan_id.slice(0, 8)}
-          </Link>
-        ) : (
-          "—"
-        )}
-      </td>
-    </tr>
-  );
-}
+      </span>
+    ),
+  },
+  {
+    key: "fixed",
+    header: "Fixed",
+    align: "right",
+    sortAccessor: (run) => run.kept ?? 0,
+    accessor: (run) => (
+      <span className="tabular-nums text-status-success">{run.kept || "—"}</span>
+    ),
+  },
+  {
+    key: "muted",
+    header: "Muted",
+    align: "right",
+    sortAccessor: (run) => run.muted ?? 0,
+    accessor: (run) => <span className="tabular-nums">{run.muted || "—"}</span>,
+  },
+  {
+    key: "after",
+    header: "After",
+    sortable: false,
+    accessor: (run) => {
+      const waitingChild =
+        isFixPaused(run.status as FixJobStatus) &&
+        run.child_scan_id &&
+        run.child_status &&
+        run.child_status !== "completed";
+      if (waitingChild) return <span className="text-xs text-muted-foreground">rescanning…</span>;
+      if (!run.child_scan_id) return <span className="text-xs text-muted-foreground">—</span>;
+      return (
+        <Link
+          to="/scans/$scanId"
+          params={{ scanId: run.child_scan_id }}
+          className="font-mono text-xs hover:underline"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {run.child_scan_id.slice(0, 8)}
+        </Link>
+      );
+    },
+  },
+];
 
 function fmtDelta(d: number | null | undefined): string {
   if (d == null) return "—";

@@ -262,7 +262,7 @@ export function DiscoverSSHModal({
               </span>
             </div>
             <div className="flex-1 min-h-0 overflow-y-auto rounded-md border border-border/40">
-              <Table>
+              <Table className="data-table">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-10">

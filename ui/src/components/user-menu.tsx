@@ -34,8 +34,6 @@ export function UserMenu() {
   }
 
   if (!me.data) return null;
-  const label = displayLabel(me.data);
-  const initial = label.charAt(0).toUpperCase();
 
   const go = (section: "profile" | "security" | "apikeys") =>
     navigate({ to: "/account", search: { section } });
@@ -43,21 +41,24 @@ export function UserMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
+        {/* Compact avatar + chevron only. The signed-in name is not repeated
+            in the bar — it lives in the dropdown header, which keeps the right
+            side of the topbar a fixed width regardless of how long a display
+            name is. */}
         <button
           type="button"
-          className="inline-flex items-center gap-2 h-9 pl-1.5 pr-2 rounded-md hover:bg-muted/50 outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+          className="flex items-center gap-2 h-8 pl-1 pr-2 rounded-md hover:bg-accent transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
           aria-label="Account menu"
         >
-          <span className="grid size-7 shrink-0 place-items-center rounded-full bg-primary/15 text-primary text-xs font-semibold">
-            {initial}
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-zinc-600 to-zinc-800">
+            <UserIcon className="h-3 w-3 text-zinc-300" />
           </span>
-          <span className="hidden sm:block max-w-[10rem] truncate text-sm">{label}</span>
-          <ChevronDownIcon className="size-4 text-muted-foreground" />
+          <ChevronDownIcon className="h-3 w-3 text-muted-foreground" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuLabel className="flex flex-col gap-0.5">
-          <span className="truncate">{me.data.display_name?.trim() || "Signed in"}</span>
+          <span className="truncate">{displayLabel(me.data)}</span>
           <span className="text-xs font-normal text-muted-foreground truncate">
             {me.data.email}
           </span>
@@ -73,7 +74,7 @@ export function UserMenu() {
           <KeyRoundIcon className="mr-2 size-4" /> API keys
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={handleLogout} className="text-red-400 focus:text-red-400">
+        <DropdownMenuItem onSelect={handleLogout} className="text-status-error focus:text-status-error">
           <LogOutIcon className="mr-2 size-4" /> Sign out
         </DropdownMenuItem>
       </DropdownMenuContent>

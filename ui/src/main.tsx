@@ -7,13 +7,14 @@ import {
 } from "@tanstack/react-router";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeColorSync } from "@/components/theme-color-sync";
-import { ThemeProvider } from "next-themes";
+import { ThemeProvider } from "@/lib/theme";
 
 import { routeTree } from "./routeTree.gen";
 
 // Self-hosted variable fonts (bundled into dist → fully offline, no CDN).
-// Hanken Grotesk for UI, JetBrains Mono for data/IDs/paths.
-import "@fontsource-variable/hanken-grotesk";
+// Inter for UI and JetBrains Mono for data/IDs/paths — the same pairing
+// Astronomer uses, so type renders identically across the two consoles.
+import "@fontsource-variable/inter";
 import "@fontsource-variable/jetbrains-mono";
 
 import "./styles/globals.css";
@@ -54,16 +55,10 @@ declare module "@tanstack/react-router" {
 const rootEl = document.getElementById("root")!;
 createRoot(rootEl).render(
   <StrictMode>
-    {/* next-themes manages the `dark`/`light` class on <html> + localStorage.
-        defaultTheme dark keeps the Nocturne dark look as the default; the
-        sidebar toggle flips it. enableSystem lets it follow the OS the very
-        first time if the user hasn't chosen yet. */}
-    <ThemeProvider
-      attribute="class"
-      defaultTheme="dark"
-      enableSystem
-      disableTransitionOnChange
-    >
+    {/* Astronomer's ThemeProvider (see lib/theme.tsx): toggles the `dark`
+        class on <html>, persists a three-way light|dark|system preference, and
+        defaults to dark — matching Astronomer's own default. */}
+    <ThemeProvider>
       <ThemeColorSync />
       <QueryClientProvider client={queryClient}>
         <RouterProvider router={router} />

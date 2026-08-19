@@ -1,85 +1,190 @@
 /* ============================================================================
-   The Wolf — "Nocturne" design system.
+   The Wolf — design system.
 
-   A refined, predator-grade dark operations console. Cool blue-black layered
-   surfaces, hairline borders, Hanken Grotesk (UI) + JetBrains Mono (data),
-   a single restrained ice-blue accent reserved for active / focus states,
-   and severity colour as the only saturated chroma.
+   Ported wholesale from the Astronomer console so the two products read as one
+   family: the same shadcn/zinc HSL token set, the same Inter + JetBrains Mono
+   pairing, the same light/dark contract (`:root` = light, `.dark` = dark), and
+   the same semantic component classes.
 
-   Almost all styling lives here as semantic component classes (.page, .panel,
-   .stat-card, .nav-item, .data-table, …) so route components stay free of
-   bespoke utility soup. Pages compose these classes; they don't redefine them.
+   Astronomer runs Tailwind v3 with a `tailwind.config.ts`; Wolf runs Tailwind
+   v4, where theme config lives in CSS. The token *values* below are copied
+   verbatim from Astronomer — only the plumbing differs:
+
+     v3 `tailwind.config.ts` colors  ->  `@theme inline` below
+     v3 `darkMode: 'class'`          ->  `@custom-variant dark`
+     v3 `@tailwind base/components`  ->  `@import "tailwindcss"`
+
+   Route components compose the semantic classes here (.page, .panel,
+   .glass-card, .nav-item, .data-table, .badge-*, …); they don't redefine them.
    ============================================================================ */
 
 @import "tailwindcss";
 
+/* Astronomer uses `darkMode: 'class'`. Tailwind v4 defaults `dark:` to the
+   prefers-color-scheme media query, so re-point it at the class. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* ----------------------------------------------------------------------------
-   Theme tokens. Tailwind 4 reads these to generate utilities (bg-card,
-   text-muted-foreground, border-border, font-mono, …). Colours are full
-   hsl() values — never wrap them again at use sites.
+   Raw token values — copied from astronomer/frontend/src/styles/globals.css.
+   Bare HSL triples (no hsl() wrapper) so Tailwind can compose alpha into them
+   via `hsl(var(--x) / <alpha-value>)`.
    ---------------------------------------------------------------------------- */
-@theme {
-  /* Type */
-  --font-sans: "Hanken Grotesk Variable", ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --font-mono: "JetBrains Mono Variable", ui-monospace, "SF Mono", Menlo, monospace;
+:root {
+  --font-inter: "Inter Variable", system-ui, sans-serif;
+  --font-mono-stack: "JetBrains Mono Variable", ui-monospace, monospace;
 
-  /* Layered cool blue-black surfaces (elevation increases with lightness) */
-  --color-background: hsl(225 22% 6.5%);
-  --color-foreground: hsl(220 22% 96%);
+  --background: 0 0% 100%;
+  --foreground: 240 10% 3.9%;
+  --card: 0 0% 100%;
+  --card-foreground: 240 10% 3.9%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 240 10% 3.9%;
+  --primary: 240 5.9% 10%;
+  --primary-foreground: 0 0% 98%;
+  --secondary: 240 4.8% 95.9%;
+  --secondary-foreground: 240 5.9% 10%;
+  --muted: 240 4.8% 95.9%;
+  --muted-foreground: 240 3.8% 46.1%;
+  --accent: 240 4.8% 95.9%;
+  --accent-foreground: 240 5.9% 10%;
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 240 5.9% 90%;
+  --input: 240 5.9% 90%;
+  --ring: 240 5.9% 10%;
+  --radius: 0.5rem;
+  --sidebar: 0 0% 98%;
+  --sidebar-foreground: 240 5.9% 10%;
+  --sidebar-border: 240 5.9% 90%;
+  --sidebar-accent: 240 4.8% 95.9%;
+  --sidebar-accent-foreground: 240 5.9% 10%;
 
-  --color-card: hsl(224 20% 9%);
-  --color-card-foreground: hsl(220 22% 96%);
+  /* Wolf-only aliases, expressed in the Astronomer palette so existing
+     `bg-elevated` / `text-faint` / `border-border-strong` call sites keep
+     resolving instead of silently dropping to transparent. */
+  --elevated: 240 4.8% 95.9%;
+  --faint: 240 3.8% 46.1%;
+  --border-strong: 240 5.9% 80%;
+  --destructive-text: 0 72% 45%;
+  --brand: 240 5.9% 10%;
+  --brand-muted: 240 3.8% 46.1%;
+  --brand-foreground: 0 0% 98%;
+}
 
-  --color-popover: hsl(224 22% 8%);
-  --color-popover-foreground: hsl(220 22% 96%);
+.dark {
+  --background: 240 10% 3.9%;
+  --foreground: 0 0% 98%;
+  --card: 240 10% 5.5%;
+  --card-foreground: 0 0% 98%;
+  --popover: 240 10% 5.5%;
+  --popover-foreground: 0 0% 98%;
+  --primary: 0 0% 98%;
+  --primary-foreground: 240 5.9% 10%;
+  --secondary: 240 3.7% 15.9%;
+  --secondary-foreground: 0 0% 98%;
+  --muted: 240 3.7% 15.9%;
+  --muted-foreground: 240 5% 64.9%;
+  --accent: 240 3.7% 15.9%;
+  --accent-foreground: 0 0% 98%;
+  --destructive: 0 62.8% 30.6%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 240 3.7% 15.9%;
+  --input: 240 3.7% 15.9%;
+  --ring: 240 4.9% 83.9%;
+  --sidebar: 240 10% 4.5%;
+  --sidebar-foreground: 240 4.8% 75%;
+  --sidebar-border: 240 3.7% 12%;
+  --sidebar-accent: 240 3.7% 10%;
+  --sidebar-accent-foreground: 0 0% 98%;
 
-  /* Raised / hover surface */
-  --color-elevated: hsl(223 18% 12.5%);
+  --elevated: 240 3.7% 15.9%;
+  --faint: 240 5% 64.9%;
+  --border-strong: 240 3.7% 26%;
+  --destructive-text: 0 84% 70%;
+  --brand: 0 0% 98%;
+  --brand-muted: 240 5% 64.9%;
+  --brand-foreground: 240 5.9% 10%;
+}
 
-  /* Near-white primary (buttons) for maximum contrast */
-  --color-primary: hsl(220 22% 96%);
-  --color-primary-foreground: hsl(225 25% 7%);
+/* ----------------------------------------------------------------------------
+   Tailwind theme. `inline` is required: the values reference `var(--…)` tokens
+   that are re-declared under `.dark`, so they must be substituted at use sites
+   rather than frozen at :root.
+   ---------------------------------------------------------------------------- */
+@theme inline {
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
 
-  --color-secondary: hsl(223 16% 15%);
-  --color-secondary-foreground: hsl(220 22% 96%);
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
 
-  --color-muted: hsl(223 16% 14%);
-  --color-muted-foreground: hsl(220 10% 58%);
-  --color-faint: hsl(220 9% 44%);
+  /* Astronomer's fixed status scale — identical hexes, so a "healthy" green in
+     Wolf is the same green as in Astronomer. */
+  --color-status-success: #10b981;
+  --color-status-warning: #f59e0b;
+  --color-status-error: #ef4444;
+  --color-status-info: #3b82f6;
+  --color-status-pending: #6366f1;
+  --color-status-neutral: #6b7280;
 
-  --color-accent: hsl(223 16% 15%);
-  --color-accent-foreground: hsl(220 22% 96%);
+  --color-sidebar: hsl(var(--sidebar));
+  --color-sidebar-foreground: hsl(var(--sidebar-foreground));
+  --color-sidebar-border: hsl(var(--sidebar-border));
+  --color-sidebar-accent: hsl(var(--sidebar-accent));
+  --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
 
-  --color-destructive: hsl(0 72% 52%);
-  --color-destructive-foreground: hsl(0 0% 100%);
-  --color-destructive-text: hsl(0 92% 78%);
+  --color-elevated: hsl(var(--elevated));
+  --color-faint: hsl(var(--faint));
+  --color-border-strong: hsl(var(--border-strong));
+  --color-destructive-text: hsl(var(--destructive-text));
+  --color-brand: hsl(var(--brand));
+  --color-brand-muted: hsl(var(--brand-muted));
+  --color-brand-foreground: hsl(var(--brand-foreground));
 
-  --color-border: hsl(222 14% 17%);
-  --color-border-strong: hsl(220 13% 26%);
-  --color-input: hsl(222 14% 17%);
-  --color-ring: hsl(199 89% 62%);
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
 
-  /* The one signature accent — moonlit ice-blue. Used sparingly. */
-  --color-brand: hsl(199 89% 62%);
-  --color-brand-muted: hsl(199 60% 50%);
-  --color-brand-foreground: hsl(225 25% 7%);
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-mono-stack);
 
-  /* Sidebar — a hair darker than the app, for a quiet seam of separation */
-  --color-sidebar: hsl(226 24% 5.5%);
-  --color-sidebar-foreground: hsl(220 14% 78%);
-  --color-sidebar-border: hsl(224 16% 12%);
-  --color-sidebar-accent: hsl(223 18% 12%);
-  --color-sidebar-accent-foreground: hsl(220 22% 96%);
-
-  --radius: 0.7rem;
-
-  --animate-fade-in: fade-in 0.18s ease-out;
+  --animate-fade-in: fade-in 0.3s ease-out;
+  --animate-slide-in-right: slide-in-right 0.3s ease-out;
+  --animate-pulse-dot: pulse-dot 2s ease-in-out infinite;
+  --animate-slide-up: slide-up 0.3s ease-out;
   --animate-rise: rise 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+@keyframes slide-in-right {
+  0% { transform: translateX(100%); }
+  100% { transform: translateX(0); }
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+@keyframes slide-up {
+  0% { transform: translateY(100%); }
+  100% { transform: translateY(0); }
 }
 @keyframes rise {
   from { opacity: 0; transform: translateY(8px); }
@@ -87,11 +192,11 @@
 }
 
 /* ----------------------------------------------------------------------------
-   Base layer
+   Base layer — Astronomer's `@layer base` block.
    ---------------------------------------------------------------------------- */
 @layer base {
-  /* Tailwind 4 defaults `border` to currentColor. Point it at the theme
-     border token globally (single hsl(), no double-wrap). */
+  /* Tailwind v4 defaults `border-*` to currentColor; Astronomer's v3 build
+     applied `@apply border-border` to `*`. Same effect, expressed natively. */
   *,
   ::before,
   ::after {
@@ -99,77 +204,69 @@
   }
 
   html {
-    color-scheme: dark;
     -webkit-text-size-adjust: 100%;
-    text-rendering: optimizeLegibility;
   }
 
   body {
-    font-family: var(--font-sans);
-    font-size: 0.875rem;
-    line-height: 1.5;
-    letter-spacing: -0.006em;
-    color: var(--color-foreground);
     background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    font-feature-settings: "cv01", "cv03", "ss01";
-    /* Atmosphere: a faint cool glow up top, deepening toward the floor. */
-    background-image:
-      radial-gradient(120% 80% at 50% -20%, hsl(220 40% 14% / 0.55), transparent 60%),
-      radial-gradient(80% 50% at 100% 0%, hsl(199 60% 20% / 0.12), transparent 55%);
-    background-attachment: fixed;
+    font-feature-settings: "rlig" 1, "calt" 1;
   }
 
-  /* Numbers read better aligned — tabular figures app-wide on data. */
+  /* Numbers read better aligned — tabular figures on data surfaces. */
   .tnum,
   .data-table td,
   .stat-value {
     font-variant-numeric: tabular-nums;
   }
 
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-muted);
+    border-radius: 9999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.3);
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-muted) transparent;
+  }
+
+  /* Selection */
   ::selection {
-    background: hsl(199 89% 62% / 0.28);
+    background: hsl(var(--primary) / 0.2);
     color: var(--color-foreground);
   }
 
-  /* Quiet, thin scrollbars that match the surface */
-  * {
-    scrollbar-width: thin;
-    scrollbar-color: var(--color-border-strong) transparent;
-  }
-  *::-webkit-scrollbar { width: 10px; height: 10px; }
-  *::-webkit-scrollbar-track { background: transparent; }
-  *::-webkit-scrollbar-thumb {
-    background: var(--color-border-strong);
-    border: 3px solid transparent;
-    background-clip: content-box;
-    border-radius: 999px;
-  }
-  *::-webkit-scrollbar-thumb:hover { background: hsl(220 12% 34%); }
-
-  /* Consistent, legible focus ring everywhere */
   :focus-visible {
-    outline: 2px solid var(--color-brand);
+    outline: 2px solid var(--color-ring);
     outline-offset: 2px;
     border-radius: 4px;
   }
 
-  h1, h2, h3, h4 { letter-spacing: -0.02em; }
-}
-
-.dark {
-  color-scheme: dark;
+  h1, h2, h3, h4 {
+    letter-spacing: -0.02em;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  html:focus-within {
-    scroll-behavior: auto;
-  }
-
-  *,
-  *::before,
-  *::after {
+  html:focus-within { scroll-behavior: auto; }
+  *, *::before, *::after {
     scroll-behavior: auto !important;
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
@@ -179,79 +276,142 @@
 }
 
 /* ----------------------------------------------------------------------------
-   Component layer — the semantic vocabulary pages compose from.
+   Component classes — Astronomer's `@layer components` block, plus the Wolf
+   semantic classes re-expressed in Astronomer tokens so every existing route
+   inherits the new look without a bespoke rewrite.
    ---------------------------------------------------------------------------- */
 @layer components {
+  /* --- Astronomer originals ------------------------------------------------ */
 
-  /* ---- Page scaffold ------------------------------------------------------ */
-  /* Every route's root element. Centralises gutters + max width so pages
-     never set their own padding. Pair with .stack for vertical rhythm. */
-  .page {
-    width: 100%;
-    max-width: 100rem; /* 1600px — fills wide monitors; centers only on ultra-wide */
-    margin-inline: auto;
-    padding: 1.75rem 1.5rem 4rem;
+  .text-gradient {
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+    background-image: linear-gradient(to right, var(--color-blue-400), var(--color-violet-400));
   }
-  @media (min-width: 768px) {
-    .page { padding: 2rem 2.25rem 5rem; }
-  }
-  /* Reading / form columns. Still generous on big screens. */
-  .page--narrow { max-width: 66rem; } /* 1056px — forms, settings */
-  .page--mid { max-width: 84rem; }    /* 1344px — detail pages with tables/grids */
 
-  /* Vertical rhythm — a drop-in for `space-y-*` (margin-based, no flex needed) */
+  .log-viewer {
+    background: #0a0a0f;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.25rem;
+    color: var(--color-zinc-300);
+  }
+  .log-viewer .log-timestamp { color: var(--color-zinc-600); user-select: none; }
+  .log-viewer .log-error { color: var(--color-red-400); }
+  .log-viewer .log-warn { color: var(--color-yellow-400); }
+
+  .gauge-bar {
+    height: 0.375rem;
+    border-radius: 9999px;
+    background: var(--color-muted);
+    overflow: hidden;
+  }
+  .gauge-bar-fill {
+    height: 100%;
+    border-radius: 9999px;
+    transition: all 0.5s ease-out;
+  }
+
+  /* Sidebar nav item — the exact Astronomer rule. */
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: var(--radius-md);
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    font-weight: 500;
+    color: var(--color-muted-foreground);
+    transition: all 0.15s;
+  }
+  .nav-item:hover {
+    color: var(--color-foreground);
+    background: var(--color-accent);
+  }
+  .nav-item.active {
+    color: var(--color-foreground);
+    background: var(--color-accent);
+  }
+  .nav-item svg { width: 1rem; height: 1rem; flex-shrink: 0; }
+
+  .nav-section {
+    padding: 0.75rem 0.75rem 0.375rem;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-muted-foreground);
+  }
+
+  /* --- Page scaffolding ---------------------------------------------------- */
+
+  /* The app shell already wraps <Outlet/> in `p-6 max-w-[1600px] mx-auto`
+     (Astronomer's layout), so `.page` must NOT re-apply padding or a measure —
+     doing so would double the gutter on every route. It survives only as a
+     full-width block; the two modifiers narrow the measure for form-heavy
+     pages, which Astronomer has no equivalent of but which keep settings and
+     detail forms readable at 1600px. */
+  .page { width: 100%; }
+  .page--narrow { max-width: 66rem; margin-inline: auto; }
+  .page--mid { max-width: 84rem; margin-inline: auto; }
+
+  /* Astronomer's PageShell is `space-y-6`. */
   .stack > * + * { margin-top: 1.5rem; }
   .stack-sm > * + * { margin-top: 0.75rem; }
   .stack-lg > * + * { margin-top: 2rem; }
 
-  /* ---- Page header -------------------------------------------------------- */
   .page-header {
     display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 1rem;
-    flex-wrap: wrap;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  @media (min-width: 640px) {
+    .page-header { flex-direction: row; align-items: flex-start; justify-content: space-between; }
   }
   .page-title {
-    font-size: 1.45rem;
+    font-size: 1.5rem;
+    line-height: 2rem;
     font-weight: 600;
     letter-spacing: -0.025em;
     color: var(--color-foreground);
   }
   .page-subtitle {
-    margin-top: 0.3rem;
+    margin-top: 0.25rem;
+    max-width: 48rem;
     font-size: 0.875rem;
+    line-height: 1.25rem;
     color: var(--color-muted-foreground);
-    max-width: 46rem;
   }
-  .page-actions { display: flex; align-items: center; gap: 0.5rem; }
+  .page-actions { display: flex; flex-shrink: 0; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
 
-  /* ---- Section heading (within a page) ------------------------------------ */
   .section-title {
-    font-size: 0.95rem;
+    font-size: 0.875rem;
     font-weight: 600;
-    letter-spacing: -0.01em;
     color: var(--color-foreground);
   }
   .eyebrow {
-    font-size: 0.6875rem;
-    font-weight: 600;
-    letter-spacing: 0.1em;
+    margin-bottom: 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 500;
     text-transform: uppercase;
-    color: var(--color-faint);
+    letter-spacing: 0.05em;
+    color: var(--color-muted-foreground);
   }
 
-  /* ---- Surfaces ----------------------------------------------------------- */
-  .surface {
-    background: var(--color-card);
+  /* --- Surfaces ------------------------------------------------------------ */
+
+  /* Astronomer's card idiom is `rounded-lg border border-border bg-card`.
+     `.surface`, `.panel`, and `.glass-card` all collapse onto it — Nocturne's
+     translucency and gradients are gone by design. */
+  .surface,
+  .panel,
+  .glass-card {
+    border-radius: var(--radius-lg);
     border: 1px solid var(--color-border);
-    border-radius: var(--radius);
-  }
-  .panel {
     background: var(--color-card);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius);
-    padding: 1.25rem;
+    color: var(--color-card-foreground);
   }
   .panel-pad { padding: 1.25rem; }
   .panel-header {
@@ -259,387 +419,245 @@
     align-items: center;
     justify-content: space-between;
     gap: 0.75rem;
-    padding: 1rem 1.25rem;
+    padding: 0.875rem 1.25rem;
     border-bottom: 1px solid var(--color-border);
   }
 
-  /* ---- Stat card (dashboard posture tiles) -------------------------------- */
   .stat-card {
-    position: relative;
-    background: linear-gradient(180deg, hsl(224 20% 10.5%), hsl(224 22% 8.5%));
+    border-radius: var(--radius-lg);
     border: 1px solid var(--color-border);
-    border-radius: var(--radius);
-    padding: 1.1rem 1.2rem;
-    overflow: hidden;
-    transition: border-color 0.18s ease, transform 0.18s ease;
+    background: var(--color-card);
+    padding: 1rem 1.25rem;
+    transition: border-color 0.15s;
   }
   .stat-card:hover { border-color: var(--color-border-strong); }
   .stat-label {
-    font-size: 0.6875rem;
-    font-weight: 600;
-    letter-spacing: 0.09em;
+    font-size: 0.75rem;
+    font-weight: 500;
     text-transform: uppercase;
-    color: var(--color-faint);
+    letter-spacing: 0.05em;
+    color: var(--color-muted-foreground);
   }
   .stat-value {
-    margin-top: 0.55rem;
-    font-size: 2rem;
+    margin-top: 0.35rem;
+    font-size: 1.5rem;
+    line-height: 2rem;
     font-weight: 600;
-    line-height: 1;
-    letter-spacing: -0.03em;
+    letter-spacing: -0.025em;
     color: var(--color-foreground);
-    font-variant-numeric: tabular-nums;
   }
   .stat-delta {
-    margin-top: 0.6rem;
     display: inline-flex;
     align-items: center;
-    gap: 0.3rem;
+    gap: 0.25rem;
+    margin-top: 0.35rem;
     font-size: 0.75rem;
     color: var(--color-muted-foreground);
   }
-  .stat-delta.up { color: hsl(0 72% 64%); }
-  .stat-delta.down { color: hsl(150 56% 52%); }
+  .stat-delta.up { color: var(--color-status-error); }
+  .stat-delta.down { color: var(--color-status-success); }
 
-  /* ---- Sidebar nav -------------------------------------------------------- */
-  .nav-section {
-    padding: 0.85rem 0.75rem 0.3rem;
-    font-size: 0.625rem;
-    font-weight: 600;
-    letter-spacing: 0.13em;
-    text-transform: uppercase;
-    color: var(--color-muted-foreground);
-  }
-  .nav-item {
-    position: relative;
-    display: flex;
-    align-items: center;
-    gap: 0.7rem;
-    height: 2.25rem;
-    padding-inline: 0.7rem;
-    border-radius: 0.55rem;
-    font-size: 0.875rem;
-    font-weight: 500;
-    color: hsl(220 13% 72%);
-    transition: color 0.15s ease, background-color 0.15s ease;
-  }
-  .nav-item svg {
-    width: 1.05rem;
-    height: 1.05rem;
-    flex-shrink: 0;
-    color: hsl(220 10% 52%);
-    transition: color 0.15s ease;
-  }
-  .nav-item:hover {
-    color: var(--color-foreground);
-    background: var(--color-sidebar-accent);
-  }
-  .nav-item:hover svg { color: hsl(220 14% 78%); }
-  .nav-item.active {
-    color: var(--color-foreground);
-    background: linear-gradient(90deg, hsl(199 80% 55% / 0.12), hsl(199 80% 55% / 0.02));
-  }
-  .nav-item.active svg { color: var(--color-brand); }
-  .nav-item.active::before {
-    content: "";
-    position: absolute;
-    left: -0.5rem;
-    top: 0.4rem;
-    bottom: 0.4rem;
-    width: 3px;
-    border-radius: 999px;
-    background: var(--color-brand);
-    box-shadow: 0 0 12px hsl(199 89% 62% / 0.6);
-  }
+  /* --- Tables -------------------------------------------------------------- */
 
-  /* ---- Data table --------------------------------------------------------- */
-  .data-table {
+  /* Wrapped in :where() so the whole selector contributes zero specificity.
+     A call site can then override any of it with a plain Tailwind utility
+     (`text-right`, `py-3`, …) instead of having to fight `.data-table thead th`,
+     which would otherwise outrank a single class. */
+  :where(.data-table) {
     width: 100%;
-    border-collapse: separate;
-    border-spacing: 0;
-    font-size: 0.8125rem;
+    border-collapse: collapse;
+    font-size: 0.875rem;
   }
-  .data-table thead th {
-    padding: 0.6rem 0.85rem;
+  :where(.data-table) thead th {
+    padding: 0.625rem 1rem;
     text-align: left;
-    font-size: 0.625rem;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--color-faint);
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--color-muted-foreground);
+    background: hsl(var(--muted) / 0.4);
     border-bottom: 1px solid var(--color-border);
     white-space: nowrap;
   }
-  .data-table tbody td {
-    padding: 0.7rem 0.85rem;
-    border-bottom: 1px solid hsl(222 14% 17% / 0.6);
-    color: var(--color-foreground);
+  :where(.data-table) tbody td {
+    padding: 0.625rem 1rem;
+    border-bottom: 1px solid var(--color-border);
     vertical-align: middle;
   }
-  .data-table tbody tr { transition: background-color 0.12s ease; }
-  .data-table tbody tr:hover { background: hsl(223 18% 12% / 0.5); }
-  .data-table tbody tr:last-child td { border-bottom: 0; }
+  :where(.data-table) tbody tr { transition: background-color 0.12s ease; }
+  :where(.data-table) tbody tr:hover { background: hsl(var(--accent) / 0.5); }
+  :where(.data-table) tbody tr:last-child td { border-bottom: 0; }
 
-  /* ---- List row (clickable card-row) ------------------------------------- */
   .row-link {
-    display: flex;
-    align-items: center;
-    gap: 0.9rem;
-    padding: 0.85rem 1rem;
-    border: 1px solid var(--color-border);
-    border-radius: 0.6rem;
-    background: var(--color-card);
-    transition: border-color 0.15s ease, background-color 0.15s ease;
+    color: var(--color-foreground);
+    font-weight: 500;
   }
-  .row-link:hover {
-    border-color: var(--color-border-strong);
-    background: var(--color-elevated);
-  }
+  .row-link:hover { text-decoration: underline; text-underline-offset: 2px; }
 
-  /* ---- Toolbar / filter bar ---------------------------------------------- */
   .toolbar {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 0.5rem;
-    flex-wrap: wrap;
   }
 
-  /* ---- Buttons ------------------------------------------------------------ */
+  /* --- Controls ------------------------------------------------------------ */
+
   .btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 0.45rem;
+    gap: 0.5rem;
     height: 2.25rem;
-    padding-inline: 0.85rem;
-    border-radius: 0.55rem;
-    font-size: 0.8125rem;
+    padding-inline: 0.875rem;
+    border-radius: var(--radius-md);
+    font-size: 0.875rem;
     font-weight: 500;
     white-space: nowrap;
-    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+    transition: all 0.15s;
   }
   .btn svg { width: 1rem; height: 1rem; }
   .btn-primary { background: var(--color-primary); color: var(--color-primary-foreground); }
   .btn-primary:hover { opacity: 0.9; }
   .btn-ghost { color: var(--color-muted-foreground); }
-  .btn-ghost:hover { color: var(--color-foreground); background: var(--color-sidebar-accent); }
+  .btn-ghost:hover { color: var(--color-foreground); background: var(--color-accent); }
   .btn-outline { border: 1px solid var(--color-border); color: var(--color-foreground); background: var(--color-card); }
-  .btn-outline:hover { border-color: var(--color-border-strong); background: var(--color-elevated); }
+  .btn-outline:hover { background: var(--color-accent); }
   .btn:disabled { opacity: 0.45; pointer-events: none; }
 
-  /* ---- Chips / badges ----------------------------------------------------- */
   .chip {
     display: inline-flex;
     align-items: center;
-    gap: 0.3rem;
+    gap: 0.35rem;
     height: 1.5rem;
-    padding-inline: 0.55rem;
-    border-radius: 999px;
+    padding-inline: 0.5rem;
+    border-radius: var(--radius-sm);
     border: 1px solid var(--color-border);
-    background: var(--color-secondary);
-    font-size: 0.6875rem;
-    font-weight: 500;
+    background: hsl(var(--muted) / 0.5);
+    font-size: 0.75rem;
     color: var(--color-muted-foreground);
   }
 
-  /* ---- Empty state -------------------------------------------------------- */
+  .kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.25rem;
+    height: 1.25rem;
+    padding-inline: 0.3rem;
+    border-radius: 0.25rem;
+    border: 1px solid var(--color-border);
+    background: var(--color-muted);
+    font-family: var(--font-mono);
+    font-size: 0.625rem;
+    color: var(--color-muted-foreground);
+  }
+
+  /* --- Empty state --------------------------------------------------------- */
+
   .empty-state {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     text-align: center;
-    gap: 0.55rem;
-    min-height: 22rem;
-    padding: 4rem 2.5rem;
+    padding: 3rem 1.5rem;
   }
   .empty-state .empty-icon {
     display: grid;
     place-items: center;
-    width: 3.25rem;
-    height: 3.25rem;
-    margin-bottom: 0.35rem;
-    border-radius: 999px;
-    background: var(--color-secondary);
-    color: var(--color-muted-foreground);
+    width: 3rem;
+    height: 3rem;
+    border-radius: 9999px;
+    border: 1px solid var(--color-border);
+    background: var(--color-muted);
+    margin-bottom: 1rem;
   }
   .empty-state .empty-icon svg {
     width: 1.25rem;
     height: 1.25rem;
+    color: var(--color-muted-foreground);
   }
   .empty-state h3 {
-    font-size: 1.05rem;
+    font-size: 0.875rem;
     font-weight: 600;
-    letter-spacing: -0.02em;
     color: var(--color-foreground);
   }
   .empty-state p {
+    margin-top: 0.35rem;
+    max-width: 28rem;
     font-size: 0.875rem;
-    line-height: 1.55;
     color: var(--color-muted-foreground);
-    max-width: 40rem;
-    text-wrap: pretty;
   }
   .empty-state .empty-actions { margin-top: 0.85rem; }
 
-  /* ---- Keyboard hint ------------------------------------------------------ */
-  .kbd {
-    display: inline-flex;
-    align-items: center;
-    height: 1.25rem;
-    padding-inline: 0.35rem;
-    border-radius: 0.3rem;
-    border: 1px solid var(--color-border);
-    background: var(--color-secondary);
+  /* --- Type helpers -------------------------------------------------------- */
+
+  .mono { font-family: var(--font-mono); }
+  .path {
     font-family: var(--font-mono);
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     color: var(--color-muted-foreground);
   }
 
-  /* ---- Mono helpers ------------------------------------------------------- */
-  .mono { font-family: var(--font-mono); }
-  .path { font-family: var(--font-mono); font-size: 0.75rem; color: var(--color-muted-foreground); }
+  /* --- Severity badges ------------------------------------------------------
+     Rebuilt on Astronomer's fixed status scale rather than Nocturne's bespoke
+     hues, and given explicit dark-mode variants the way Astronomer does. */
 
-  /* ---- Glass surface (the app's universal panel — 40+ uses) -------------- */
-  /* Pages add their own padding (.glass-card p-5, etc.); this provides the
-     surface treatment only. A faint top-down gradient + hairline border give
-     quiet depth without shadow heaviness. */
-  .glass-card {
-    background: linear-gradient(180deg, hsl(224 20% 10% / 0.85), hsl(225 22% 7.5% / 0.85));
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius);
-    backdrop-filter: blur(6px);
-  }
-
-  /* ---- Severity badges ---------------------------------------------------- */
   .badge {
     display: inline-flex;
     align-items: center;
     gap: 0.3rem;
-    height: 1.4rem;
+    height: 1.375rem;
     padding-inline: 0.5rem;
-    border-radius: 0.4rem;
+    border-radius: 9999px;
     border: 1px solid transparent;
     font-size: 0.6875rem;
-    font-weight: 600;
-    line-height: 1;
+    font-weight: 500;
     text-transform: capitalize;
     white-space: nowrap;
   }
-  .badge-critical { color: hsl(0 84% 74%);   background: hsl(0 72% 56% / 0.14);   border-color: hsl(0 72% 56% / 0.34); }
-  .badge-high     { color: hsl(28 92% 68%);  background: hsl(28 90% 55% / 0.14);  border-color: hsl(28 90% 55% / 0.32); }
-  .badge-medium   { color: hsl(42 95% 66%);  background: hsl(42 92% 52% / 0.14);  border-color: hsl(42 92% 52% / 0.32); }
-  .badge-low      { color: hsl(205 88% 72%); background: hsl(205 85% 58% / 0.14); border-color: hsl(205 85% 58% / 0.32); }
-  .badge-info     { color: hsl(220 13% 72%); background: hsl(220 12% 50% / 0.16); border-color: hsl(220 12% 50% / 0.3); }
+  .badge-critical { color: #b91c1c; background: rgb(239 68 68 / 0.10); border-color: rgb(239 68 68 / 0.30); }
+  .badge-high     { color: #c2410c; background: rgb(245 158 11 / 0.12); border-color: rgb(245 158 11 / 0.30); }
+  .badge-medium   { color: #a16207; background: rgb(245 158 11 / 0.14); border-color: rgb(245 158 11 / 0.32); }
+  .badge-low      { color: #1d4ed8; background: rgb(59 130 246 / 0.12); border-color: rgb(59 130 246 / 0.30); }
+  .badge-info     { color: #4b5563; background: rgb(107 114 128 / 0.12); border-color: rgb(107 114 128 / 0.28); }
 
-  /* ---- Accent glow (running-scan pill, focus emphasis) ------------------- */
-  .glow-info {
-    box-shadow: 0 0 0 1px hsl(199 89% 62% / 0.18), 0 10px 34px -14px hsl(199 89% 62% / 0.5);
-  }
+  .dark .badge-critical { color: #fca5a5; background: rgb(239 68 68 / 0.15); border-color: rgb(239 68 68 / 0.35); }
+  .dark .badge-high     { color: #fdba74; background: rgb(245 158 11 / 0.15); border-color: rgb(245 158 11 / 0.32); }
+  .dark .badge-medium   { color: #fcd34d; background: rgb(245 158 11 / 0.15); border-color: rgb(245 158 11 / 0.32); }
+  .dark .badge-low      { color: #93c5fd; background: rgb(59 130 246 / 0.15); border-color: rgb(59 130 246 / 0.32); }
+  .dark .badge-info     { color: #d1d5db; background: rgb(107 114 128 / 0.18); border-color: rgb(107 114 128 / 0.30); }
 
-  /* ---- Staggered reveal --------------------------------------------------- */
+  /* --- Motion -------------------------------------------------------------- */
+
   .reveal { animation: var(--animate-rise); }
   .reveal-1 { animation-delay: 0.04s; }
   .reveal-2 { animation-delay: 0.09s; }
   .reveal-3 { animation-delay: 0.14s; }
   .reveal-4 { animation-delay: 0.19s; }
   .reveal-5 { animation-delay: 0.24s; }
+
+  /* Nocturne's ice-blue glow has no Astronomer analogue; neutralised to a
+     plain ring so the class stays valid at its call sites. */
+  .glow-info { box-shadow: 0 0 0 1px hsl(var(--border)); }
 }
 
-/* Extra-small text utilities (were dropped in the Tailwind 4 migration) */
+/* ----------------------------------------------------------------------------
+   Utilities — Astronomer's `fontSize['2xs']` and `.no-scrollbar`.
+   ---------------------------------------------------------------------------- */
 @utility text-2xs {
-  font-size: 0.6875rem;
-  line-height: 1rem;
+  font-size: 0.625rem;
+  line-height: 0.875rem;
 }
 @utility text-3xs {
-  font-size: 0.625rem;
-  line-height: 0.9rem;
+  font-size: 0.5625rem;
+  line-height: 0.8rem;
 }
-
-/* ============================================================================
-   Light theme. next-themes sets <html class="light">; these overrides win by
-   being unlayered (plain CSS beats @layer). The dark palette lives in @theme
-   as the :root default, so absence of any class = dark (no-flash default).
-
-   A clean cool light theme tuned to match Nocturne's quality — cool off-white
-   surfaces, dark slate text, the same ice-blue accent darkened for contrast,
-   and severity colours re-tuned to read on white.
-   ============================================================================ */
-.light {
-  color-scheme: light;
-
-  --color-background: hsl(220 22% 98%);
-  --color-foreground: hsl(225 25% 14%);
-
-  --color-card: hsl(0 0% 100%);
-  --color-card-foreground: hsl(225 25% 14%);
-
-  --color-popover: hsl(0 0% 100%);
-  --color-popover-foreground: hsl(225 25% 14%);
-
-  --color-elevated: hsl(220 18% 95%);
-
-  --color-primary: hsl(225 28% 16%);
-  --color-primary-foreground: hsl(0 0% 100%);
-
-  --color-secondary: hsl(220 16% 93%);
-  --color-secondary-foreground: hsl(225 25% 18%);
-
-  --color-muted: hsl(220 16% 94%);
-  --color-muted-foreground: hsl(220 10% 40%);
-  --color-faint: hsl(220 10% 52%);
-
-  --color-accent: hsl(220 16% 93%);
-  --color-accent-foreground: hsl(225 25% 18%);
-
-  --color-destructive: hsl(0 72% 48%);
-  --color-destructive-foreground: hsl(0 0% 100%);
-  --color-destructive-text: hsl(0 72% 40%);
-
-  --color-border: hsl(220 16% 89%);
-  --color-border-strong: hsl(220 14% 76%);
-  --color-input: hsl(220 16% 89%);
-  --color-ring: hsl(199 89% 45%);
-
-  --color-brand: hsl(199 85% 42%);
-  --color-brand-muted: hsl(199 60% 40%);
-  --color-brand-foreground: hsl(0 0% 100%);
-
-  --color-sidebar: hsl(220 24% 96%);
-  --color-sidebar-foreground: hsl(225 16% 30%);
-  --color-sidebar-border: hsl(220 16% 88%);
-  --color-sidebar-accent: hsl(220 16% 91%);
-  --color-sidebar-accent-foreground: hsl(225 25% 16%);
+@utility no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
 }
-
-/* Component classes that hardcode dark hsl() need light-mode overrides. */
-.light body {
-  background-image:
-    radial-gradient(120% 80% at 50% -20%, hsl(210 45% 93% / 0.7), transparent 60%),
-    radial-gradient(80% 50% at 100% 0%, hsl(199 70% 90% / 0.4), transparent 55%);
+@utility bg-gradient-radial {
+  background-image: radial-gradient(var(--tw-gradient-stops));
 }
-.light .stat-card {
-  background: linear-gradient(180deg, hsl(0 0% 100%), hsl(220 22% 98%));
-}
-.light .glass-card {
-  background: linear-gradient(180deg, hsl(0 0% 100% / 0.92), hsl(220 24% 99% / 0.92));
-}
-.light .nav-item { color: hsl(225 14% 34%); }
-.light .nav-item svg { color: hsl(220 12% 48%); }
-.light .nav-item:hover { color: hsl(225 28% 16%); }
-.light .nav-item:hover svg { color: hsl(225 25% 22%); }
-.light .nav-item.active { color: hsl(225 28% 14%); }
-.light .nav-item.active {
-  background: linear-gradient(90deg, hsl(199 85% 50% / 0.14), hsl(199 85% 50% / 0.02));
-}
-.light .data-table tbody td { border-bottom-color: hsl(220 16% 92%); }
-.light .data-table tbody tr:hover { background: hsl(220 20% 96% / 0.8); }
-.light *::-webkit-scrollbar-thumb { background: hsl(220 14% 82%); }
-.light *::-webkit-scrollbar-thumb:hover { background: hsl(220 12% 72%); }
-
-/* Severity badges re-tuned for white backgrounds (darker text). */
-.light .badge-critical { color: hsl(0 74% 44%);  background: hsl(0 72% 56% / 0.10);  border-color: hsl(0 72% 56% / 0.28); }
-.light .badge-high     { color: hsl(22 88% 40%);  background: hsl(28 90% 55% / 0.12); border-color: hsl(28 90% 55% / 0.30); }
-.light .badge-medium   { color: hsl(35 90% 35%);  background: hsl(40 92% 52% / 0.14); border-color: hsl(40 92% 52% / 0.32); }
-.light .badge-low      { color: hsl(205 82% 40%); background: hsl(205 85% 56% / 0.12); border-color: hsl(205 85% 56% / 0.30); }
-.light .badge-info     { color: hsl(220 14% 38%); background: hsl(220 12% 50% / 0.12); border-color: hsl(220 12% 50% / 0.28); }

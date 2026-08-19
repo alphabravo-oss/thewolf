@@ -115,12 +115,12 @@ export function FixLogConsole({
           </span>
         )}
         {paused && (
-          <span className="inline-flex items-center gap-1.5 text-xs text-amber-300">
+          <span className="inline-flex items-center gap-1.5 text-xs text-status-warning">
             Paused
           </span>
         )}
         {done && (
-          <span className="inline-flex items-center gap-1.5 text-xs text-emerald-400">
+          <span className="inline-flex items-center gap-1.5 text-xs text-status-success">
             <CheckCircle2Icon className="size-3.5" /> Succeeded
           </span>
         )}

@@ -193,10 +193,10 @@ function StatusBtn({
         "px-2.5 h-8 rounded-md text-xs font-medium ring-1 transition",
         active
           ? tone === "success"
-            ? "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30"
+            ? "bg-status-success/15 text-status-success ring-status-success/30"
             : tone === "muted"
-              ? "bg-zinc-500/15 text-zinc-300 ring-zinc-500/30"
-              : "bg-blue-500/15 text-blue-300 ring-blue-500/30"
+              ? "bg-status-neutral/15 text-status-neutral ring-status-neutral/30"
+              : "bg-status-info/15 text-status-info ring-status-info/30"
           : "bg-transparent text-muted-foreground ring-border hover:bg-muted/40",
       )}
     >

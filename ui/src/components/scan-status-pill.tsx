@@ -1,21 +1,8 @@
-// Run-state pill. Used in scan lists, dashboard, live scan view.
-import { cva, type VariantProps } from "class-variance-authority";
+// Run-state pill for scans. Delegates to the shared StatusBadge so a "running"
+// scan is coloured identically to a running workload in Astronomer; the status
+// -> tone mapping lives in lib/utils.ts.
 import type { ScanStatus } from "@/lib/types";
-import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
-
-const scanStatusVariants = cva("", {
-  variants: {
-    status: {
-      pending:   "border-indigo-500/40 bg-indigo-500/15 text-indigo-300",
-      running:   "border-blue-500/40 bg-blue-500/15 text-blue-300 animate-pulse-glow",
-      completed: "border-emerald-500/40 bg-emerald-500/15 text-emerald-300",
-      failed:    "border-red-500/40 bg-red-500/15 text-red-300",
-      cancelled: "border-zinc-500/40 bg-zinc-500/15 text-zinc-300",
-    },
-  },
-  defaultVariants: { status: "pending" },
-});
+import { StatusBadge } from "@/components/ui/status-badge";
 
 const labels: Record<ScanStatus, string> = {
   pending: "Pending",
@@ -25,15 +12,22 @@ const labels: Record<ScanStatus, string> = {
   cancelled: "Cancelled",
 };
 
-type Props = VariantProps<typeof scanStatusVariants> & {
+type Props = {
+  status: ScanStatus | null | undefined;
   className?: string;
   children?: React.ReactNode;
+  size?: "sm" | "md" | "lg";
 };
 
-export function ScanStatusPill({ status, className, children }: Props) {
+export function ScanStatusPill({ status, className, children, size }: Props) {
+  const s = (status ?? "pending") as ScanStatus;
   return (
-    <Badge variant="outline" className={cn(scanStatusVariants({ status }), className)}>
-      {children ?? labels[(status ?? "pending") as ScanStatus]}
-    </Badge>
+    <StatusBadge
+      status={s}
+      label={typeof children === "string" ? children : labels[s]}
+      pulse={s === "running"}
+      size={size}
+      className={className}
+    />
   );
 }

@@ -1,30 +1,28 @@
-// ui/src/components/severity-badge.tsx
-import { cva, type VariantProps } from "class-variance-authority";
-import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
+// Severity pill. Now a thin wrapper over the shared StatusBadge so severities
+// draw from the same status scale as every other state pill in the app
+// (see components/ui/status-badge.tsx and the `--color-status-*` tokens in
+// globals.css). Kept as its own component because ~20 call sites pass a
+// `Severity` and expect the label to read as a severity, not a status.
+import type { Severity } from "@/lib/types";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { severityLabel } from "@/lib/severity";
 
-const severityVariants = cva("", {
-  variants: {
-    severity: {
-      critical: "border-red-500/40 bg-red-500/15 text-red-300",
-      high:     "border-orange-500/40 bg-orange-500/15 text-orange-300",
-      medium:   "border-amber-500/40 bg-amber-500/15 text-amber-300",
-      low:      "border-sky-500/40 bg-sky-500/15 text-sky-300",
-      info:     "border-zinc-500/40 bg-zinc-500/15 text-zinc-300",
-    },
-  },
-  defaultVariants: { severity: "info" },
-});
-
-type Props = VariantProps<typeof severityVariants> & {
+type Props = {
+  severity: Severity | null | undefined;
   className?: string;
   children?: React.ReactNode;
+  size?: "sm" | "md" | "lg";
 };
 
-export function SeverityBadge({ severity, className, children }: Props) {
+export function SeverityBadge({ severity, className, children, size }: Props) {
+  const sev = severity ?? "info";
   return (
-    <Badge variant="outline" className={cn(severityVariants({ severity }), className)}>
-      {children ?? severity}
-    </Badge>
+    <StatusBadge
+      status={sev}
+      label={typeof children === "string" ? children : severityLabel[sev]}
+      showDot={false}
+      size={size}
+      className={className}
+    />
   );
 }

@@ -156,7 +156,7 @@ export function FixFindingButton({
         </button>
       </div>
       {!probing && fixable && !fixable.writable && (
-        <span className="text-[11px] text-amber-300 max-w-xs text-right">
+        <span className="text-[11px] text-status-warning max-w-xs text-right">
           {fixable.reason}
         </span>
       )}

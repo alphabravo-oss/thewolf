@@ -3,10 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#0a0c10" data-theme-color-sync="true" />
+    <meta name="theme-color" content="#09090b" data-theme-color-sync="true" />
     <title>The Wolf</title>
     <!-- Fonts are self-hosted via @fontsource (imported in main.tsx) and
          bundled into dist — no external CDN, works fully offline. -->
+    <!-- `class="dark"` on <html> matches the ThemeProvider's dark default so
+         the first paint is not a white flash before hydration. -->
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
   </head>
   <body class="bg-background text-foreground antialiased">

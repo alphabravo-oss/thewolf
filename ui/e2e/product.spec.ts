@@ -222,33 +222,49 @@ test.describe("application shell accessibility", () => {
       probe.remove();
       return result;
     });
+    // The console now ships Astronomer's theme contract: `dark` is toggled as a
+    // class on <html> (there is no `light` class — its absence *is* light), and
+    // the topbar control cycles light -> dark -> system rather than flipping
+    // between two states.
     expect(initialTheme).toMatchObject({
       colorScheme: "dark",
-      metaColor: "#0a0c10",
+      metaColor: "#09090b",
     });
     expect(initialTheme.animationMs).toBeLessThanOrEqual(0.01);
     expect(initialTheme.transitionMs).toBeLessThanOrEqual(0.01);
 
-    await page.getByRole("button", { name: "Switch to light mode" }).click();
-    await expect(page.locator("html")).toHaveClass(/light/);
+    // Pin the OS preference so the `system` leg of the cycle is deterministic.
+    await page.emulateMedia({ colorScheme: "light" });
+
+    const themeButton = page.getByRole("button", { name: /^Theme:/ });
+
+    // dark -> system, which resolves to light under the emulated preference.
+    await themeButton.click();
+    await expect(page.locator("html")).not.toHaveClass(/dark/);
     await expect
       .poll(() =>
         page.locator('meta[name="theme-color"]').getAttribute("content"),
       )
-      .toBe("#f8f9fb");
+      .toBe("#ffffff");
     expect(
       await page.evaluate(
         () => getComputedStyle(document.documentElement).colorScheme,
       ),
     ).toBe("light");
 
-    await page.getByRole("button", { name: "Switch to dark mode" }).click();
+    // system -> light (explicit).
+    await themeButton.click();
+    await expect(themeButton).toHaveAttribute("aria-label", /^Theme: light/);
+    await expect(page.locator("html")).not.toHaveClass(/dark/);
+
+    // light -> dark, back to where we started.
+    await themeButton.click();
     await expect(page.locator("html")).toHaveClass(/dark/);
     await expect
       .poll(() =>
         page.locator('meta[name="theme-color"]').getAttribute("content"),
       )
-      .toBe("#0a0c10");
+      .toBe("#09090b");
   });
 });
 

@@ -16,7 +16,7 @@ export function FixableBadge({ repoId }: { repoId: string }) {
   if (writable) {
     return (
       <span
-        className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wide text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 rounded px-1.5 py-0.5"
+        className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wide text-status-success bg-status-success/10 border border-status-success/30 rounded px-1.5 py-0.5"
         title={reason}
       >
         <ShieldCheckIcon className="size-3" /> {can_push ? "fixable" : "fixable (no push)"}

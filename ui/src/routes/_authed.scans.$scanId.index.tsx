@@ -20,7 +20,8 @@ import { api } from "@/lib/api";
 import type { Finding, Scan, Severity } from "@/lib/types";
 import { parseToolList } from "@/lib/types";
 import { CardSkeleton, ListSkeleton } from "@/components/skeleton";
-import { EmptyState } from "@/components/empty-state";
+import { EmptyState } from "@/components/ui/empty-state";
+import { DataTable, type Column } from "@/components/ui/data-table";
 import { ScanStatusPill } from "@/components/scan-status-pill";
 import { SeverityBadge } from "@/components/severity-badge";
 import { CheckboxFilterRow } from "@/components/checkbox-filter-row";
@@ -30,7 +31,6 @@ export const Route = createFileRoute("/_authed/scans/$scanId/")({
   component: ScanDetailPage,
 });
 
-type SortKey = "severity" | "tool" | "file" | "title";
 
 // Shape returned by GET /api/scans/{id}/tools (added in server-side
 // per-tool status work).
@@ -128,9 +128,6 @@ function ScanDetailPage() {
     new Set(),
   );
   const [search, setSearch] = useState("");
-  const [sortKey, setSortKey] = useState<SortKey>("severity");
-  const [sortDesc, setSortDesc] = useState(true);
-  const [page, setPage] = useState(1);
 
   const findings = findingsQ.data?.items ?? [];
   const serverSuppressed = findingsQ.data?.suppressed ?? 0;
@@ -165,9 +162,12 @@ function ScanDetailPage() {
     return m;
   }, [findings]);
 
+  // Only the checkbox/tool filters and the free-text search are applied here.
+  // Sorting and pagination moved into the shared DataTable, which owns that
+  // state for every list in the console.
   const visible = useMemo(() => {
     const lowerSearch = search.trim().toLowerCase();
-    const out = findings.filter((f) => {
+    return findings.filter((f) => {
       if (filterTool && f.tool_name !== filterTool) return false;
       if (excludedSeverities.has(f.severity)) return false;
       if (excludedCategories.has(f.category)) return false;
@@ -177,52 +177,79 @@ function ScanDetailPage() {
       }
       return true;
     });
-    out.sort((a, b) => {
-      let cmp = 0;
-      switch (sortKey) {
-        case "severity":
-          cmp =
-            (SEVERITY_RANK[a.severity] ?? 0) -
-            (SEVERITY_RANK[b.severity] ?? 0);
-          break;
-        case "tool":
-          cmp = a.tool_name.localeCompare(b.tool_name);
-          break;
-        case "file":
-          cmp = a.file_path.localeCompare(b.file_path);
-          if (cmp === 0) cmp = (a.line_start ?? 0) - (b.line_start ?? 0);
-          break;
-        case "title":
-          cmp = a.title.localeCompare(b.title);
-          break;
-      }
-      return sortDesc ? -cmp : cmp;
-    });
-    return out;
-  }, [
-    findings,
-    filterTool,
-    excludedSeverities,
-    excludedCategories,
-    search,
-    sortKey,
-    sortDesc,
-  ]);
+  }, [findings, filterTool, excludedSeverities, excludedCategories, search]);
 
-  const totalPages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
-  const pageClamped = Math.min(page, totalPages);
-  const pageFindings = visible.slice(
-    (pageClamped - 1) * PAGE_SIZE,
-    pageClamped * PAGE_SIZE,
-  );
-
-  const toggleSort = (key: SortKey) => {
-    if (sortKey === key) setSortDesc(!sortDesc);
-    else {
-      setSortKey(key);
-      setSortDesc(true);
-    }
-  };
+  const findingColumns: Column<Finding>[] = [
+    {
+      key: "severity",
+      header: "Severity",
+      width: "8rem",
+      sortAccessor: (f) => SEVERITY_RANK[f.severity] ?? 0,
+      accessor: (f) => <SeverityBadge severity={f.severity} size="sm" />,
+    },
+    {
+      key: "tool",
+      header: "Tool",
+      width: "10rem",
+      sortAccessor: (f) => f.tool_name,
+      accessor: (f) => (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setFilterTool(f.tool_name);
+          }}
+          className="font-mono text-xs text-muted-foreground hover:text-foreground hover:underline"
+          title={`Filter by ${f.tool_name}`}
+        >
+          {f.tool_name}
+        </button>
+      ),
+    },
+    {
+      key: "title",
+      header: "Title",
+      sortAccessor: (f) => f.title,
+      accessor: (f) => (
+        <span className="min-w-0">
+          <Link
+            to="/findings/$findingId"
+            params={{ findingId: f.id }}
+            className="hover:underline"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {f.title}
+          </Link>
+          {f.rule_id && (
+            <span className="ml-2 font-mono text-[10px] text-muted-foreground">[{f.rule_id}]</span>
+          )}
+        </span>
+      ),
+    },
+    {
+      key: "file",
+      header: "File",
+      sortAccessor: (f) => `${f.file_path}:${String(f.line_start ?? 0).padStart(8, "0")}`,
+      accessor: (f) => (
+        <span
+          className="block max-w-xs truncate font-mono text-xs text-muted-foreground"
+          title={f.file_path}
+        >
+          {f.file_path}
+        </span>
+      ),
+    },
+    {
+      key: "line",
+      header: "Line",
+      align: "right",
+      width: "6rem",
+      sortAccessor: (f) => f.line_start ?? 0,
+      accessor: (f) => (
+        <span className="tabular-nums text-muted-foreground">{f.line_start || "—"}</span>
+      ),
+    },
+  ];
 
   const exportFindings = (format: "json" | "csv") => {
     const stamp = new Date().toISOString().replace(/[:.]/g, "-");
@@ -268,7 +295,6 @@ function ScanDetailPage() {
     setExcludedSeverities(new Set());
     setExcludedCategories(new Set());
     setSearch("");
-    setPage(1);
   };
 
   // Toggle helpers: flip a value's membership in an "excluded" set.
@@ -282,7 +308,6 @@ function ScanDetailPage() {
       else next.add(value);
       return next;
     });
-    setPage(1);
   };
 
   if (scanQ.isLoading || !scanQ.data) {
@@ -329,7 +354,7 @@ function ScanDetailPage() {
           <p className="text-xs text-muted-foreground">
             {completed.length}/{selected.length} tools completed
             {failed.length > 0 && (
-              <span className="text-red-400"> · {failed.length} failed</span>
+              <span className="text-status-error"> · {failed.length} failed</span>
             )}
             {" · "}
             {rawTotal > 0 ? (
@@ -375,7 +400,7 @@ function ScanDetailPage() {
 
       {scan.status === "cancelled" && (
         <div
-          className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200"
+          className="rounded-md border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-sm text-status-warning dark:text-status-warning"
           role="status"
           aria-live="polite"
         >
@@ -387,9 +412,9 @@ function ScanDetailPage() {
       )}
 
       {scan.status === "completed" && toolsSelectedCount(scan) === 0 && (
-        <div className="mb-4 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+        <div className="mb-4 rounded-md border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-sm text-status-warning">
           <div className="font-medium">No scanners ran</div>
-          <div className="text-xs text-amber-200/80 mt-0.5">
+          <div className="text-xs text-status-warning/80 mt-0.5">
             This scan completed without running any tools. The container scanner
             backend may not be configured — try{" "}
             <code className="font-mono text-xs">wolf doctor</code> from the CLI, or
@@ -441,26 +466,26 @@ function ScanDetailPage() {
         ) : (
           <>
             {serverSuppressed > 0 && !includeSuppressed && (
-              <div className="mb-3 text-xs px-3 py-2 rounded-md bg-amber-500/10 border border-amber-500/20 text-amber-200 flex items-center justify-between">
+              <div className="mb-3 text-xs px-3 py-2 rounded-md bg-status-warning/10 border border-status-warning/20 text-status-warning flex items-center justify-between">
                 <span>
                   {serverSuppressed.toLocaleString()} finding{serverSuppressed === 1 ? "" : "s"} hidden by suppression rules (vendor/, node_modules/, testdata/, generated files, lockfiles).
                 </span>
                 <button
                   type="button"
                   onClick={() => setIncludeSuppressed(true)}
-                  className="underline hover:text-amber-100"
+                  className="underline hover:text-status-warning"
                 >
                   Show all
                 </button>
               </div>
             )}
             {includeSuppressed && (
-              <div className="mb-3 text-xs px-3 py-2 rounded-md bg-blue-500/10 border border-blue-500/20 text-blue-200 flex items-center justify-between">
+              <div className="mb-3 text-xs px-3 py-2 rounded-md bg-status-info/10 border border-status-info/20 text-status-info flex items-center justify-between">
                 <span>Showing suppressed findings — these are typically noise.</span>
                 <button
                   type="button"
                   onClick={() => setIncludeSuppressed(false)}
-                  className="underline hover:text-blue-100"
+                  className="underline hover:text-status-info"
                 >
                   Hide suppressed
                 </button>
@@ -477,8 +502,7 @@ function ScanDetailPage() {
                   value={search}
                   onChange={(e) => {
                     setSearch(e.target.value);
-                    setPage(1);
-                  }}
+                                  }}
                   placeholder="Search title, file, rule…"
                   className="h-8 px-2 rounded-md bg-background border border-muted/40 w-64"
                 />
@@ -488,8 +512,7 @@ function ScanDetailPage() {
                   value={filterTool}
                   onChange={(e) => {
                     setFilterTool(e.target.value);
-                    setPage(1);
-                  }}
+                                  }}
                   className="h-8 px-2 rounded-md bg-background border border-muted/40"
                 >
                   <option value="">All tools ({findings.length})</option>
@@ -513,9 +536,7 @@ function ScanDetailPage() {
                   </button>
                 )}
                 <div className="ml-auto text-muted-foreground tabular-nums">
-                  {visible.length.toLocaleString()} of{" "}
-                  {findings.length.toLocaleString()} shown · page {pageClamped} of{" "}
-                  {totalPages}
+                  {visible.length.toLocaleString()} of {findings.length.toLocaleString()} shown
                 </div>
               </div>
               <CheckboxFilterRow
@@ -536,113 +557,17 @@ function ScanDetailPage() {
               )}
             </div>
 
-            <div className="glass-card overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="text-xs uppercase tracking-wide text-muted-foreground bg-muted/20">
-                  <tr>
-                    <SortableTh
-                      label="Severity"
-                      active={sortKey === "severity"}
-                      desc={sortDesc}
-                      onClick={() => toggleSort("severity")}
-                      className="text-left"
-                    />
-                    <SortableTh
-                      label="Tool"
-                      active={sortKey === "tool"}
-                      desc={sortDesc}
-                      onClick={() => toggleSort("tool")}
-                      className="text-left"
-                    />
-                    <SortableTh
-                      label="Title"
-                      active={sortKey === "title"}
-                      desc={sortDesc}
-                      onClick={() => toggleSort("title")}
-                      className="text-left"
-                    />
-                    <SortableTh
-                      label="File"
-                      active={sortKey === "file"}
-                      desc={sortDesc}
-                      onClick={() => toggleSort("file")}
-                      className="text-left"
-                    />
-                    <th className="text-right px-4 py-2 font-medium">Line</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pageFindings.map((f) => (
-                    <tr
-                      key={f.id}
-                      className="border-t border-border/30 table-row-hover"
-                    >
-                      <td className="px-4 py-2">
-                        <SeverityBadge severity={f.severity} />
-                      </td>
-                      <td className="px-4 py-2 font-mono text-xs">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setFilterTool(f.tool_name);
-                            setPage(1);
-                          }}
-                          className="hover:underline hover:text-foreground text-muted-foreground"
-                          title={`Filter by ${f.tool_name}`}
-                        >
-                          {f.tool_name}
-                        </button>
-                      </td>
-                      <td className="px-4 py-2">
-                        <Link
-                          to="/findings/$findingId"
-                          params={{ findingId: f.id }}
-                          className="hover:underline"
-                        >
-                          {f.title}
-                        </Link>
-                        {f.rule_id && (
-                          <span className="ml-2 text-[10px] font-mono text-muted-foreground">
-                            [{f.rule_id}]
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-2 font-mono text-xs text-muted-foreground truncate max-w-xs">
-                        {f.file_path}
-                      </td>
-                      <td className="px-4 py-2 text-right text-muted-foreground tabular-nums">
-                        {f.line_start || "—"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <DataTable
+              data={visible}
+              columns={findingColumns}
+              keyExtractor={(f) => f.id}
+              persistKey="scan-findings"
+              density="compact"
+              pageSize={PAGE_SIZE}
+              searchable={false}
+              emptyMessage="No findings match these filters"
+            />
 
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between mt-3 text-xs">
-                <button
-                  type="button"
-                  onClick={() => setPage(Math.max(1, pageClamped - 1))}
-                  disabled={pageClamped <= 1}
-                  className="h-8 px-3 rounded-md hover:bg-muted/40 disabled:opacity-30"
-                >
-                  ← Prev
-                </button>
-                <div className="text-muted-foreground tabular-nums">
-                  Showing {(pageClamped - 1) * PAGE_SIZE + 1}–
-                  {Math.min(pageClamped * PAGE_SIZE, visible.length)} of {visible.length.toLocaleString()}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setPage(Math.min(totalPages, pageClamped + 1))}
-                  disabled={pageClamped >= totalPages}
-                  className="h-8 px-3 rounded-md hover:bg-muted/40 disabled:opacity-30"
-                >
-                  Next →
-                </button>
-              </div>
-            )}
           </>
         )}
       </section>
@@ -660,32 +585,6 @@ function toolsSelectedCount(scan: { tools_selected?: string }): number {
   }
 }
 
-function SortableTh({
-  label,
-  active,
-  desc,
-  onClick,
-  className,
-}: {
-  label: string;
-  active: boolean;
-  desc: boolean;
-  onClick: () => void;
-  className?: string;
-}) {
-  return (
-    <th className={`px-4 py-2 font-medium ${className ?? ""}`}>
-      <button
-        type="button"
-        onClick={onClick}
-        className={`inline-flex items-center gap-1 hover:text-foreground ${active ? "text-foreground" : ""}`}
-      >
-        {label}
-        {active ? <span>{desc ? "▼" : "▲"}</span> : null}
-      </button>
-    </th>
-  );
-}
 
 function csvEscape(s: string): string {
   if (s == null) return "";
@@ -731,7 +630,7 @@ function CancelScanButton({ scanId }: { scanId: string }) {
           type="button"
           onClick={() => m.mutate()}
           disabled={m.isPending}
-          className="inline-flex items-center gap-1 px-3 h-9 rounded-md bg-red-500/20 ring-1 ring-red-500/40 text-red-200 text-sm hover:bg-red-500/30 disabled:opacity-50"
+          className="inline-flex items-center gap-1 px-3 h-9 rounded-md bg-status-error/20 ring-1 ring-status-error/40 text-status-error text-sm hover:bg-status-error/30 disabled:opacity-50"
         >
           <StopCircleIcon className="size-4" />
           {m.isPending ? "Cancelling…" : "Confirm cancel"}
@@ -750,7 +649,7 @@ function CancelScanButton({ scanId }: { scanId: string }) {
     <button
       type="button"
       onClick={() => setConfirming(true)}
-      className="inline-flex items-center gap-1 px-3 h-9 rounded-md bg-red-500/10 ring-1 ring-red-500/30 text-red-300 text-sm hover:bg-red-500/20"
+      className="inline-flex items-center gap-1 px-3 h-9 rounded-md bg-status-error/10 ring-1 ring-status-error/30 text-status-error text-sm hover:bg-status-error/20"
       title="Cancel the entire scan. Findings from tools that already completed are preserved."
     >
       <StopCircleIcon className="size-4" /> Cancel scan
@@ -817,15 +716,15 @@ function ToolsPanel({
         )}
         <h2 className="text-base font-semibold">Tools ({tools.length})</h2>
         <div className="text-xs text-muted-foreground tabular-nums flex flex-wrap gap-x-2">
-          <span className="text-green-400">{completed.length} done</span>
+          <span className="text-status-success">{completed.length} done</span>
           {failed.length > 0 && (
-            <span className="text-red-400">{failed.length} failed</span>
+            <span className="text-status-error">{failed.length} failed</span>
           )}
           {cancelled.length > 0 && (
-            <span className="text-amber-300">{cancelled.length} cancelled</span>
+            <span className="text-status-warning">{cancelled.length} cancelled</span>
           )}
           {active.length > 0 && (
-            <span className="text-blue-300">{active.length} active</span>
+            <span className="text-status-info">{active.length} active</span>
           )}
         </div>
       </button>
@@ -870,23 +769,23 @@ function ToolCard({
   });
   const icon =
     tool.status === "completed" ? (
-      <CheckCircle2Icon className="size-3.5 text-green-400 shrink-0" />
+      <CheckCircle2Icon className="size-3.5 text-status-success shrink-0" />
     ) : tool.status === "failed" ? (
-      <XCircleIcon className="size-3.5 text-red-400 shrink-0" />
+      <XCircleIcon className="size-3.5 text-status-error shrink-0" />
     ) : tool.status === "cancelled" ? (
-      <StopCircleIcon className="size-3.5 text-amber-300 shrink-0" />
+      <StopCircleIcon className="size-3.5 text-status-warning shrink-0" />
     ) : tool.status === "queued" ? (
       <LoaderIcon className="size-3.5 text-muted-foreground shrink-0" />
     ) : (
-      <LoaderIcon className="size-3.5 text-blue-300 animate-spin shrink-0" />
+      <LoaderIcon className="size-3.5 text-status-info animate-spin shrink-0" />
     );
   const tone =
     tool.status === "failed"
-      ? "border-red-500/30 bg-red-500/5"
+      ? "border-status-error/30 bg-status-error/5"
       : tool.status === "cancelled"
-        ? "border-amber-500/25 bg-amber-500/5"
+        ? "border-status-warning/25 bg-status-warning/5"
         : tool.status === "running" || tool.status === "pending"
-          ? "border-blue-400/30 bg-blue-500/5"
+          ? "border-status-info/30 bg-status-info/5"
           : "border-border/40 bg-muted/10";
   const meta =
     tool.status === "completed"
@@ -930,14 +829,14 @@ function ToolCard({
             disabled={cancel.isPending}
             aria-label={`Cancel ${tool.name}; the rest of the scan keeps going`}
             title={`Cancel ${tool.name}; the rest of the scan keeps going`}
-            className="inline-flex items-center justify-center size-4 rounded hover:bg-red-500/15 text-muted-foreground hover:text-red-300 disabled:opacity-50 shrink-0"
+            className="inline-flex items-center justify-center size-4 rounded hover:bg-status-error/15 text-muted-foreground hover:text-status-error disabled:opacity-50 shrink-0"
           >
             <XIcon className="size-3" />
           </button>
         )}
       </div>
       {showErr && tool.error && (
-        <pre className="mt-1.5 text-[10px] font-mono text-red-300/80 whitespace-pre-wrap break-all max-h-32 overflow-y-auto">
+        <pre className="mt-1.5 text-[10px] font-mono text-status-error/80 whitespace-pre-wrap break-all max-h-32 overflow-y-auto">
           {tool.error}
         </pre>
       )}

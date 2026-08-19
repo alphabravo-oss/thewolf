@@ -1,9 +1,12 @@
+// Keeps the browser-chrome colour (<meta name="theme-color">) in step with the
+// active theme. Values are Astronomer's `--background` in each mode: white in
+// light, near-black zinc in dark.
 import { useEffect } from "react";
-import { useTheme } from "next-themes";
+import { useTheme } from "@/lib/theme";
 
 const THEME_COLORS = {
-  dark: "#0a0c10",
-  light: "#f8f9fb",
+  dark: "#09090b",
+  light: "#ffffff",
 } as const;
 
 export function ThemeColorSync() {

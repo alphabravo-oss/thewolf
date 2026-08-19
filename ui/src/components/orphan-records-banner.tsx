@@ -48,7 +48,7 @@ export function OrphanRecordsBanner() {
 
   return (
     <>
-      <div className="mx-4 mt-4 md:mx-6 rounded-md border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm flex flex-wrap items-center justify-between gap-3">
+      <div className="mx-4 mt-4 md:mx-6 rounded-md border border-status-warning/40 bg-status-warning/10 px-4 py-3 text-sm flex flex-wrap items-center justify-between gap-3">
         <p>
           Leftover records remain after a repo was deleted: {what}. They are
           not tied to any project. Source code was never removed.
@@ -56,7 +56,7 @@ export function OrphanRecordsBanner() {
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="h-8 px-3 rounded-md bg-amber-500/20 border border-amber-500/40 text-xs font-medium hover:bg-amber-500/30"
+          className="h-8 px-3 rounded-md bg-status-warning/20 border border-status-warning/40 text-xs font-medium hover:bg-status-warning/30"
         >
           Remove leftover records
         </button>

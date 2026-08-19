@@ -7,19 +7,19 @@ import { NeedsAttention } from "@/components/fleet/needs-attention";
 import { InventoryBreakdown } from "@/components/fleet/inventory-breakdown";
 import { RecentActivity } from "@/components/fleet/recent-activity";
 
+import { PageHeader, PageShell } from "@/components/ui/page";
+
 export const Route = createFileRoute("/_authed/")({ component: FleetDashboard });
 
 function FleetDashboard() {
   return (
-    <div className="page stack">
-      <header className="page-header reveal reveal-1">
-        <div>
-          <h1 className="page-title">Fleet</h1>
-          <p className="page-subtitle">
-            Open findings, posture, and inventory across every repository wolf manages.
-          </p>
-        </div>
-      </header>
+    <PageShell>
+      <div className="reveal reveal-1">
+        <PageHeader
+          title="Fleet"
+          description="Open findings, posture, and inventory across every repository wolf manages."
+        />
+      </div>
       <div className="reveal reveal-2">
         <PostureCards />
       </div>
@@ -34,6 +34,6 @@ function FleetDashboard() {
         <InventoryBreakdown />
         <RecentActivity />
       </div>
-    </div>
+    </PageShell>
   );
 }
