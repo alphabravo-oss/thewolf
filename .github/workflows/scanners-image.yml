@@ -1884,13 +1884,28 @@ jobs:
           index_ref="${repository}@${index_digest}"
           docker buildx imagetools inspect --raw "$index_ref" \
             >build/published-metadata/index.json
-          child_digest="$(jq -er \
-            --arg arch "$ARCH" \
-            '[.manifests[] | select(.platform.os == "linux" and
-              .platform.architecture == $arch) | .digest] |
-             if length == 1 then .[0] else error("published platform child is absent or duplicated") end |
-             select(test("^sha256:[a-f0-9]{64}$"))' \
-            build/published-metadata/index.json)"
+          # The publish path emits a multi-platform index when it builds more
+          # than one platform, and a plain single-platform image manifest when
+          # it does not (884eb11 moved scanner releases to amd64-only, and
+          # 8138c03 carries the platform in manifest annotations instead of an
+          # index entry). Handle both: a manifest with no `.manifests` array is
+          # its own platform child, so the published digest IS the child
+          # digest — the arch is confirmed against the publish evidence rather
+          # than against an index entry that does not exist.
+          if jq -e 'has("manifests")' build/published-metadata/index.json >/dev/null; then
+            child_digest="$(jq -er \
+              --arg arch "$ARCH" \
+              '[.manifests[] | select(.platform.os == "linux" and
+                .platform.architecture == $arch) | .digest] |
+               if length == 1 then .[0] else error("published platform child is absent or duplicated") end |
+               select(test("^sha256:[a-f0-9]{64}$"))' \
+              build/published-metadata/index.json)"
+          else
+            jq -e --arg platform "$PLATFORM" \
+              '[.platforms[]] | index($platform) != null' "$metadata" >/dev/null ||
+              { echo "single-platform publish does not cover $PLATFORM" >&2; exit 1; }
+            child_digest="$index_digest"
+          fi
           {
             echo "index_ref=$index_ref"
             echo "index_digest=$index_digest"
