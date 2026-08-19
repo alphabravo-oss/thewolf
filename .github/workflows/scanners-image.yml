@@ -2121,6 +2121,17 @@ jobs:
             echo "STABLE_FIXTURE_IMAGE=$old"
             echo "DOCKER_SOCKET_GID=$(stat -c '%g' /var/run/docker.sock)"
           } >>"$GITHUB_ENV"
+          # The qualification adapter runs as its own unprivileged `wolf` user
+          # and receives this directory as its DOCKER_CONFIG. docker/login-action
+          # writes config.json 0600 owned by the runner user, so that user cannot
+          # read it — and a docker CLI that cannot read its config also fails to
+          # enumerate CLI plugins, which surfaces as the wrong error entirely:
+          # `docker: unknown command: docker compose`, even though
+          # docker-cli-compose is installed in the adapter image. Widen to
+          # read-only-for-all; the runner is ephemeral and single-tenant, and the
+          # directory is mounted :ro into the container.
+          chmod 0755 "$DOCKER_CONFIG"
+          chmod 0644 "$DOCKER_CONFIG"/config.json
 
       - name: Run exact-digest Compose and Kind scanner and rollout gates
         env:
