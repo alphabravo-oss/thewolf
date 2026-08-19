@@ -182,7 +182,11 @@ export async function installScannerApiMock(
   await page.route("**/api/**", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
-    const path = url.pathname.replace(/^\/api/, "");
+    // The client's BASE_URL is "/api/v1" (lib/api.ts). Strip the version
+    // segment as well as the "/api" prefix, or every handler below — which is
+    // keyed on the unversioned path — silently misses and the app renders a
+    // blank page with no failed request to point at.
+    const path = url.pathname.replace(/^\/api(?:\/v1)?/, "");
     const method = request.method();
 
     if (method === "GET") {

@@ -72,7 +72,11 @@ RUN cd /tmp/fixer-go-tools \
     && ln -sfn /opt/wolf/fix-tools/bin/goimports /usr/local/bin/goimports \
     && gh --version \
     && glab --version \
-    && goimports -h >/dev/null \
+    # goimports has no -h flag, so Go's flag package treats it as a parse
+    # error and exits non-zero — inside an `&&` chain that fails the build.
+    # Format a trivial file through stdin instead: it exercises the binary
+    # end to end (parse, rewrite imports, print) and exits 0.
+    && printf 'package main\n' | goimports >/dev/null \
     && rm -rf /tmp/fixer-go-tools
 
 WORKDIR /src

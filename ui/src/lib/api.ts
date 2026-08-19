@@ -2,8 +2,10 @@
 // `api.{get,post,put,delete}`, `getToken/setToken/clearToken`,
 // `ApiError`), but without Next-specific assumptions:
 //
-//   - BASE_URL falls back to "/api" so the Vite dev-server proxy (and the
-//     Go server serving the SPA from the same origin) Just Works.
+//   - BASE_URL falls back to "/api/v1" so the Vite dev-server proxy (and the
+//     Go server serving the SPA from the same origin) Just Works. Anything
+//     that stubs the API — notably e2e/scanner-api-mock.ts — has to account
+//     for the version segment.
 //   - typeof document checks remain because TanStack Router can prerender
 //     route trees during build.
 //   - Browser auth is carried by the server-set HttpOnly wolf_token cookie.

@@ -69,6 +69,16 @@
   --brand: 240 5.9% 10%;
   --brand-muted: 240 3.8% 46.1%;
   --brand-foreground: 0 0% 98%;
+
+  /* Astronomer's fixed status scale. These are tuned for light surfaces —
+     they are used as pill *text* over a 10%-alpha wash of themselves, which
+     only reads on a light ground. See the dark overrides below. */
+  --status-success: #10b981;
+  --status-warning: #f59e0b;
+  --status-error: #ef4444;
+  --status-info: #3b82f6;
+  --status-pending: #6366f1;
+  --status-neutral: #6b7280;
 }
 
 .dark {
@@ -104,6 +114,21 @@
   --brand: 0 0% 98%;
   --brand-muted: 240 5% 64.9%;
   --brand-foreground: 240 5.9% 10%;
+
+  /* The one deliberate deviation from Astronomer's palette. Its status scale
+     is a single fixed hex per tone, which is correct on a light ground but
+     fails WCAG AA as pill text on near-black: #6b7280 neutral lands at 3.7:1
+     and #3b82f6 info at ~3.9:1, both under the 4.5:1 floor (caught by the
+     axe check in e2e/product.spec.ts). Each tone shifts to its 300/400-weight
+     counterpart here, which clears 4.5:1 while staying the same hue — so the
+     dot, the 10% wash, and the border all move together and the pills still
+     read as the same colour language across both themes. */
+  --status-success: #34d399;
+  --status-warning: #fbbf24;
+  --status-error: #f87171;
+  --status-info: #60a5fa;
+  --status-pending: #a5b4fc;
+  --status-neutral: #9ca3af;
 }
 
 /* ----------------------------------------------------------------------------
@@ -133,14 +158,14 @@
   --color-card: hsl(var(--card));
   --color-card-foreground: hsl(var(--card-foreground));
 
-  /* Astronomer's fixed status scale — identical hexes, so a "healthy" green in
-     Wolf is the same green as in Astronomer. */
-  --color-status-success: #10b981;
-  --color-status-warning: #f59e0b;
-  --color-status-error: #ef4444;
-  --color-status-info: #3b82f6;
-  --color-status-pending: #6366f1;
-  --color-status-neutral: #6b7280;
+  /* Astronomer's status scale, theme-aware so the pill text stays legible on
+     both grounds (values in :root / .dark above). */
+  --color-status-success: var(--status-success);
+  --color-status-warning: var(--status-warning);
+  --color-status-error: var(--status-error);
+  --color-status-info: var(--status-info);
+  --color-status-pending: var(--status-pending);
+  --color-status-neutral: var(--status-neutral);
 
   --color-sidebar: hsl(var(--sidebar));
   --color-sidebar-foreground: hsl(var(--sidebar-foreground));
