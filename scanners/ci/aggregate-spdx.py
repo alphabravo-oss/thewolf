@@ -64,8 +64,12 @@ def aggregate(
 ) -> dict[str, Any]:
     if not re.fullmatch(r"[a-z0-9][a-z0-9._-]{0,126}", release_id):
         raise ValueError("release ID is not an OCI-safe lower-case identifier")
-    if not sources:
-        raise ValueError("at least one source SPDX document is required")
+    # Zero sources is a legitimate state, not an error: BuildKit SBOM
+    # attestation is disabled for scanner publishing (c961d4a), so the publish
+    # jobs emit no per-image SPDX documents to index. The aggregate is then an
+    # empty but well-formed index — the release manifest still records its
+    # digest, so the hash chain over the release stays intact and the absence
+    # of per-image SBOMs is explicit rather than a missing file.
 
     refs: list[dict[str, Any]] = []
     relationships: list[dict[str, str]] = []
@@ -124,7 +128,7 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--release-id", required=True)
     parser.add_argument("--created", required=True)
     parser.add_argument("--output", required=True, type=pathlib.Path)
-    parser.add_argument("sources", nargs="+", type=pathlib.Path)
+    parser.add_argument("sources", nargs="*", type=pathlib.Path)
     args = parser.parse_args(argv)
 
     result = aggregate(args.release_id, args.created, args.sources)

@@ -2337,11 +2337,21 @@ jobs:
           QUALIFICATION_RECEIPT_SHA256="sha256:$(sha256sum build/candidate-qualification.json | awk '{print $1}')"
           export SOURCE_DATE
           SOURCE_DATE="$(git show -s --format=%cI "$GITHUB_SHA")"
+          # Collect the per-image SPDX documents, if any. Without nullglob an
+          # unmatched pattern is passed through literally and the aggregator
+          # fails on a file named `*.spdx.json`. There legitimately are none
+          # right now: BuildKit SBOM attestation is disabled for scanner
+          # publishing (c961d4a), so the aggregate is a well-formed empty index
+          # and the release manifest still records its digest.
+          shopt -s nullglob
+          spdx_sources=(build/release-evidence/*.spdx.json)
+          shopt -u nullglob
+          printf 'aggregating %d per-image SPDX document(s)\n' "${#spdx_sources[@]}"
           scanners/ci/aggregate-spdx.py \
             --release-id "$SCANNER_RELEASE_ID" \
             --created "$SOURCE_DATE" \
             --output build/scanner-release.spdx.json \
-            build/release-evidence/*.spdx.json
+            "${spdx_sources[@]}"
           export AGGREGATE_SBOM_SHA256
           AGGREGATE_SBOM_SHA256="sha256:$(sha256sum build/scanner-release.spdx.json | awk '{print $1}')"
           # Pass the canonical eight images only. wolf-fixer-engines is an
