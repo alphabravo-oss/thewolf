@@ -42,9 +42,25 @@ if [[ -n "$expected_release_id$expected_lock_digest$expected_definition_digest$e
     }
 fi
 
-descriptor="$(docker buildx imagetools inspect "$ref" --format '{{json .Manifest}}')"
-manifest="$(docker buildx imagetools inspect --raw "$ref")"
-actual_digest="$(jq -r '.digest // empty' <<<"$descriptor")"
+# A tag read immediately after it is written can still resolve to the previous
+# manifest: GHCR is eventually consistent, and a verify that runs a second or
+# two behind an `oras copy` sees the stale digest and fails a publish that in
+# fact succeeded. Re-read a few times with a short backoff before treating a
+# mismatch as real. A genuinely wrong digest still fails, just a little later.
+descriptor=""
+manifest=""
+actual_digest=""
+for attempt in 1 2 3 4 5; do
+    descriptor="$(docker buildx imagetools inspect "$ref" --format '{{json .Manifest}}')"
+    manifest="$(docker buildx imagetools inspect --raw "$ref")"
+    actual_digest="$(jq -r '.digest // empty' <<<"$descriptor")"
+    [[ "$actual_digest" != "$expected_digest" ]] || break
+    if [[ "$attempt" -lt 5 ]]; then
+        printf 'digest for %s not settled yet (expected %s, got %s); retrying\n' \
+            "$ref" "$expected_digest" "${actual_digest:-missing}" >&2
+        sleep $((attempt * 3))
+    fi
+done
 [[ "$actual_digest" == "$expected_digest" ]] || {
     printf 'digest mismatch for %s: expected %s, got %s\n' "$ref" "$expected_digest" "${actual_digest:-missing}" >&2
     exit 1
