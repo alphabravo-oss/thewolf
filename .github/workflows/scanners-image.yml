@@ -969,7 +969,13 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # The Docker Hub mirror is optional — GHCR is canonical, and the
+      # mirror_mode dispatch input defaults to `disabled`. This requirement
+      # used to be unconditional, so a release of a candidate that was itself
+      # published without a mirror failed here before verifying anything.
+      # Demand credentials only when the mirror is actually required.
       - name: Require Docker Hub mirror credentials
+        if: needs.prepare.outputs.mirror_mode == 'required'
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -980,6 +986,7 @@ jobs:
           }
 
       - name: Log in to Docker Hub mirror
+        if: needs.prepare.outputs.mirror_mode != 'disabled'
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ${{ env.MIRROR_REGISTRY }}
@@ -999,10 +1006,14 @@ jobs:
           CANDIDATE_ID: ${{ needs.prepare.outputs.candidate_id }}
           RELEASE_REPOSITORY: ${{ env.PRIMARY_REGISTRY }}/${{ env.PRIMARY_NAMESPACE }}/wolf-scanner-releases
           MIRROR_RELEASE_REPOSITORY: ${{ env.MIRROR_REGISTRY }}/${{ env.MIRROR_NAMESPACE }}/wolf-scanner-releases
+          REQUIRE_MIRROR: ${{ needs.prepare.outputs.mirror_mode == 'required' }}
         run: |
+          # A candidate published without a mirror has no mirror closure to
+          # verify; insisting on one would fail every GHCR-only release. The
+          # script already takes this as its fifth argument.
           scanners/ci/verify-release-closure.sh \
             "$RELEASE_REPOSITORY" "$MIRROR_RELEASE_REPOSITORY" \
-            "$CANDIDATE_ID" build/candidate-verification true
+            "$CANDIDATE_ID" build/candidate-verification "$REQUIRE_MIRROR"
 
       - name: Upload content-addressed candidate verification evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
