@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"testing"
 )
 
 const (
@@ -65,16 +66,26 @@ func CommunityLimits() Limits {
 
 func LimitsEnabled() bool {
 	v := strings.ToLower(strings.TrimSpace(os.Getenv(LimitsEnv)))
-	return v == "1" || v == "true" || v == "yes"
+	if v == "0" || v == "false" || v == "no" || v == "off" {
+		return false
+	}
+	if v == "1" || v == "true" || v == "yes" {
+		return true
+	}
+	// Default on in production. go test stays unlimited unless a test opts in.
+	return !testing.Testing()
 }
 
-// EnforceCommunityLimits is opt-in and only applies to the Community checker.
+// EnforceCommunityLimits applies the 5/3/1 evaluation ceiling to Community
+// and to an unlicensed overlay. A signed commercial license lifts it.
 func EnforceCommunityLimits() bool {
 	if !LimitsEnabled() {
 		return false
 	}
-	_, ok := Active().(Community)
-	return ok
+	if l, ok := Active().(interface{ Licensed() bool }); ok && l.Licensed() {
+		return false
+	}
+	return true
 }
 
 // Checker answers whether a capability is granted.

@@ -10,6 +10,7 @@ produces the immutable, verifiable artifacts those components consume.
 | Trigger | Operation | Registry writes |
 |---|---|---|
 | Daily at 02:17 UTC | Read-only update discovery plus exact Trivy DB lock proposal | None |
+| Daily at 04:27 UTC (`trivy-db-refresh.yml`) | Resolve both Trivy DB tags, rewrite lock files, open a PR | PR only |
 | Sunday at 03:43 UTC | No-cache complete weekly candidate from the reviewed lock | Immutable candidate plus `candidate` alias |
 | Push to `main` affecting scanner definitions | Complete commit candidate | Immutable candidate plus legacy `main` aliases |
 | Pull request affecting scanner definitions | Seven-platform quality matrix | None |
@@ -38,10 +39,10 @@ freshness candidate from rebuilding the last reviewed immutable lock.
 The daily and on-demand vulnerability-database job resolves `trivy-db:2` and
 `trivy-java-db:1` independently, creates exact-digest eight-day locks,
 regenerates the scanner lock, validates the result, and uploads a review
-artifact. Image jobs derive `TRIVY_DB_REPOSITORY` and
-`TRIVY_JAVA_DB_REPOSITORY` from those reviewed files. Applying either proposal
-remains a reviewed Git change; the workflow has no repository-write
-permission.
+artifact. `.github/workflows/trivy-db-refresh.yml` runs the same generator
+on a daily schedule and opens a PR so `make scanners-validate` in Go CI
+does not go red when the 8-day lock expires. Image jobs derive
+`TRIVY_DB_REPOSITORY` and `TRIVY_JAVA_DB_REPOSITORY` from those reviewed files.
 
 ## Candidate publication transaction
 

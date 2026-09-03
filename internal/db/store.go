@@ -266,6 +266,11 @@ type Store interface {
 	SetSetting(ctx context.Context, key, value string) error
 	ListSettings(ctx context.Context) (map[string]string, error)
 
+	ListEnterpriseRecords(ctx context.Context, kind string) ([]models.EnterpriseRecord, error)
+	GetEnterpriseRecord(ctx context.Context, kind, id string) (*models.EnterpriseRecord, error)
+	PutEnterpriseRecord(ctx context.Context, rec *models.EnterpriseRecord) error
+	DeleteEnterpriseRecord(ctx context.Context, kind, id string) error
+
 	// Cascade Deletes
 	// ListScanIDsByCollection returns all scan IDs for a collection.
 	ListScanIDsByCollection(ctx context.Context, collectionID string) ([]string, error)

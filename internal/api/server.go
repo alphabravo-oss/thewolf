@@ -194,8 +194,18 @@ func NewServer(store db.Store, addr string) *Server {
 			r.Get("/scim/v2/Users", routes.SCIMUnavailable)
 			r.Post("/scim/v2/Users", routes.SCIMUnavailable)
 			r.Get("/scim/v2/Users/{id}", routes.SCIMUnavailable)
+			r.Put("/scim/v2/Users/{id}", routes.SCIMUnavailable)
+			r.Patch("/scim/v2/Users/{id}", routes.SCIMUnavailable)
+			r.Delete("/scim/v2/Users/{id}", routes.SCIMUnavailable)
 			r.Get("/scim/v2/Groups", routes.SCIMUnavailable)
 			r.Post("/scim/v2/Groups", routes.SCIMUnavailable)
+			r.Get("/scim/v2/Groups/{id}", routes.SCIMUnavailable)
+			r.Put("/scim/v2/Groups/{id}", routes.SCIMUnavailable)
+			r.Patch("/scim/v2/Groups/{id}", routes.SCIMUnavailable)
+			r.Delete("/scim/v2/Groups/{id}", routes.SCIMUnavailable)
+			r.Get("/scim/v2/ServiceProviderConfig", routes.SCIMUnavailable)
+			r.Get("/scim/v2/Schemas", routes.SCIMUnavailable)
+			r.Get("/scim/v2/ResourceTypes", routes.SCIMUnavailable)
 		})
 
 		// OpenAPI spec + Swagger UI — public by design.
@@ -208,6 +218,7 @@ func NewServer(store db.Store, addr string) *Server {
 			r.Get("/auth/providers", routes.AuthProviders)
 			r.Get("/auth/sso/{name}/start", routes.StartSSO)
 			r.Get("/auth/sso/{name}/callback", routes.SSOCallback)
+			r.Post("/auth/sso/{name}/callback", routes.SSOCallback)
 			r.Post("/auth/register", routes.Register)
 			r.Post("/auth/login", routes.Login)
 			// Step two of a 2FA login: exchange the challenge token + code for

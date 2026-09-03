@@ -188,6 +188,9 @@ var migration057SQL string
 //go:embed migrations/058_vulnerability_evidence.sql
 var migration058SQL string
 
+//go:embed migrations/059_enterprise_records.sql
+var migration059SQL string
+
 // SQLiteStore implements Store using SQLite.
 type SQLiteStore struct {
 	db *sqlx.DB
@@ -456,6 +459,9 @@ func (s *SQLiteStore) Migrate() error {
 		return err
 	}
 	if err := execAdditiveMigration(s.db, migration058SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration059SQL); err != nil {
 		return err
 	}
 	return sanitizePersistedSecretMasks(s.db)

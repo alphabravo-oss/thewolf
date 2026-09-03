@@ -32,15 +32,21 @@ func TestSyntheticCommunityLimits(t *testing.T) {
 	}
 	t.Setenv(LimitsEnv, "1")
 	if !EnforceCommunityLimits() {
-		t.Fatal("opt-in Community limits should enforce")
+		t.Fatal("explicit Community limits should enforce")
 	}
-	SetActive(denyAll{})
+	t.Setenv(LimitsEnv, "false")
 	if EnforceCommunityLimits() {
-		t.Fatal("non-Community checker must not enforce Community limits")
+		t.Fatal("explicit off")
+	}
+	t.Setenv(LimitsEnv, "1")
+	SetActive(licensed{})
+	if EnforceCommunityLimits() {
+		t.Fatal("signed license lifts the evaluation ceiling")
 	}
 	SetActive(nil)
 }
 
-type denyAll struct{}
+type licensed struct{}
 
-func (denyAll) Allows(string) bool { return false }
+func (licensed) Allows(string) bool { return true }
+func (licensed) Licensed() bool     { return true }

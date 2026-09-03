@@ -1,7 +1,9 @@
 package routes
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"sync"
@@ -151,6 +153,30 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func tryEnterprisePassword(ctx context.Context, principal, secret string) (string, bool) {
+	if !entitlement.Active().Allows(entitlement.Identity) {
+		return "", false
+	}
+	for _, name := range authprovider.Default.Names() {
+		if name == authprovider.Local {
+			continue
+		}
+		p := authprovider.Default.Lookup(name)
+		if p == nil {
+			continue
+		}
+		if _, redir := p.(authprovider.Redirector); redir {
+			continue
+		}
+		email, err := p.Authenticate(ctx, principal, secret)
+		email = strings.ToLower(strings.TrimSpace(email))
+		if err == nil && strings.Contains(email, "@") {
+			return email, true
+		}
+	}
+	return "", false
+}
+
 func AuthProviders(w http.ResponseWriter, r *http.Request) {
 	infos := authprovider.Default.Infos()
 	if !entitlement.Active().Allows(entitlement.Identity) {
@@ -204,19 +230,29 @@ func Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user, err := h.Store.GetUserByEmail(r.Context(), req.Email)
-	if err != nil {
-		auth.RecordLoginFailure(req.Email)
-		RecordAuthEvent(r, "", "auth.login.failed", "warning", http.StatusUnauthorized)
-		response.WriteError(w, http.StatusUnauthorized, "unauthorized", "invalid email or password")
-		return
+	localOK := false
+	if err == nil && user != nil {
+		ok, verr := auth.VerifyPassword(req.Password, user.PasswordHash)
+		localOK = verr == nil && ok
 	}
-
-	ok, err := auth.VerifyPassword(req.Password, user.PasswordHash)
-	if err != nil || !ok {
-		auth.RecordLoginFailure(req.Email)
-		RecordAuthEvent(r, user.ID, "auth.login.failed", "warning", http.StatusUnauthorized)
-		response.WriteError(w, http.StatusUnauthorized, "unauthorized", "invalid email or password")
-		return
+	if !localOK {
+		email, ok := tryEnterprisePassword(r.Context(), req.Email, req.Password)
+		if !ok {
+			auth.RecordLoginFailure(req.Email)
+			RecordAuthEvent(r, "", "auth.login.failed", "warning", http.StatusUnauthorized)
+			response.WriteError(w, http.StatusUnauthorized, "unauthorized", "invalid email or password")
+			return
+		}
+		user, err = ensureSSOUser(r, email)
+		if err != nil {
+			var le *communityLimitError
+			if errors.As(err, &le) {
+				response.WriteError(w, http.StatusConflict, le.code, le.msg)
+				return
+			}
+			response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to provision user")
+			return
+		}
 	}
 	auth.ClearLoginFailures(req.Email)
 

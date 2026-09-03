@@ -390,4 +390,6 @@ A single Go binary serves the API, the web console, and the embedded documentati
 
 Source available. Intended product license is Business Source License 1.1 with a four-year Change Date to Apache License 2.0. Counsel must supply `LICENSE` before a public BSL release. See [`LICENSE_POLICY.md`](LICENSE_POLICY.md) and [`NOTICE`](NOTICE). Copyright © AlphaBravo, Inc. All rights reserved.
 
+Community evaluation is capped at 5 repositories, 3 users, and 1 concurrent scan worker. Set `WOLF_COMMUNITY_LIMITS=0` to lift it; a signed Enterprise license also lifts it.
+
 <p align="center"><sub>The Wolf — built by <a href="https://alphabravo.io">AlphaBravo</a>.</sub></p>

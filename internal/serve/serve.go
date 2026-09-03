@@ -14,6 +14,7 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/api"
 	"github.com/alphabravocompany/thewolf/internal/api/routes"
 	"github.com/alphabravocompany/thewolf/internal/auth"
+	"github.com/alphabravocompany/thewolf/internal/controlbind"
 	"github.com/alphabravocompany/thewolf/internal/db"
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/secrets"
@@ -72,6 +73,7 @@ func Run(ctx context.Context, opt Options) error {
 		return fmt.Errorf("open store: %w", err)
 	}
 	defer func() { _ = store.Close() }()
+	controlbind.Bind(store)
 
 	if opt.Version != "" && opt.Version != "dev" {
 		routes.AppVersion = opt.Version

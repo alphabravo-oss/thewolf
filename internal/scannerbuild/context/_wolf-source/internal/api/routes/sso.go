@@ -78,22 +78,26 @@ func SSOCallback(w http.ResponseWriter, r *http.Request) {
 
 func ssoCallback(w http.ResponseWriter, r *http.Request, reg *authprovider.Registry) {
 	name := chi.URLParam(r, "name")
-	code := strings.TrimSpace(r.URL.Query().Get("code"))
-	state := strings.TrimSpace(r.URL.Query().Get("state"))
+	_ = r.ParseForm()
+	code := firstForm(r, "code", "SAMLResponse")
+	state := firstForm(r, "state", "RelayState")
 	if name == "" || code == "" || state == "" {
 		response.WriteError(w, http.StatusBadRequest, "bad_request", "code and state are required")
 		return
 	}
 	c, _ := r.Cookie("wolf_sso")
-	if c == nil || c.Value != state {
-		response.WriteError(w, http.StatusUnauthorized, "unauthorized", "invalid sso state")
-		return
-	}
+	cookieOK := c != nil && c.Value == state
 	ssoMu.Lock()
 	pending, ok := ssoState[state]
 	delete(ssoState, state)
 	ssoMu.Unlock()
 	if !ok || time.Now().After(pending.exp) || pending.provider != name {
+		response.WriteError(w, http.StatusUnauthorized, "unauthorized", "invalid sso state")
+		return
+	}
+	// SAML HTTP-POST ACS is a cross-site POST; SameSite=Lax omits the cookie.
+	// RelayState is the CSRF token in that case.
+	if !cookieOK && (r.Method != http.MethodPost || r.Form.Get("SAMLResponse") == "") {
 		response.WriteError(w, http.StatusUnauthorized, "unauthorized", "invalid sso state")
 		return
 	}
@@ -132,6 +136,15 @@ func ssoCallback(w http.ResponseWriter, r *http.Request, reg *authprovider.Regis
 	})
 	RecordAuthEvent(r, user.ID, "auth.sso.login", "info", http.StatusOK)
 	http.Redirect(w, r, "/", http.StatusFound)
+}
+
+func firstForm(r *http.Request, keys ...string) string {
+	for _, k := range keys {
+		if v := strings.TrimSpace(r.Form.Get(k)); v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 func ssoRedirectURI(r *http.Request, name string) string {
