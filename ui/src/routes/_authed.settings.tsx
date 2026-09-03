@@ -1074,6 +1074,15 @@ const GENERAL_KNOBS = [
 function GeneralTab() {
   const qc = useQueryClient();
   const q = useSettingsMap();
+  const editionQ = useQuery({
+    queryKey: ["edition"],
+    queryFn: async () =>
+      (await api.get<{
+        edition?: string;
+        product?: string;
+        licensed?: boolean;
+      }>("/edition")).data,
+  });
   const m = useMutation({
     mutationFn: (updates: Record<string, string>) =>
       api.put("/settings", updates),
@@ -1087,16 +1096,6 @@ function GeneralTab() {
   if (q.isLoading)
     return <p className="text-sm text-muted-foreground">Loading…</p>;
   const settings = q.data ?? {};
-
-  const editionQ = useQuery({
-    queryKey: ["edition"],
-    queryFn: async () =>
-      (await api.get<{
-        edition?: string;
-        product?: string;
-        licensed?: boolean;
-      }>("/edition")).data,
-  });
   const product = editionQ.data?.product ?? "Wolf Community";
   const editionName = editionQ.data?.edition ?? "community";
 
