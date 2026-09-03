@@ -24,12 +24,15 @@ import (
 )
 
 type Options struct {
-	Addr         string
-	SkipScanInit bool
-	APIOnly      bool
-	Version      string
-	Commit       string
-	BuildDate    string
+	Addr           string
+	SkipScanInit   bool
+	APIOnly        bool
+	Version        string
+	Commit         string
+	BuildDate      string
+	CoreCommit     string
+	OverlayVersion string
+	OverlayCommit  string
 }
 
 func OpenStore() (db.Store, error) {
@@ -83,6 +86,15 @@ func Run(ctx context.Context, opt Options) error {
 	}
 	if opt.BuildDate != "" {
 		routes.BuildDate = opt.BuildDate
+	}
+	if opt.CoreCommit != "" {
+		routes.CoreCommit = opt.CoreCommit
+	}
+	if opt.OverlayVersion != "" {
+		routes.OverlayVersion = opt.OverlayVersion
+	}
+	if opt.OverlayCommit != "" {
+		routes.OverlayCommit = opt.OverlayCommit
 	}
 
 	secret, err := resolveJWTSecret()

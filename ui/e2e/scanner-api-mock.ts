@@ -287,7 +287,13 @@ export async function installScannerApiMock(
       return json(route, target);
     }
     if (method === "GET" && path === "/version") {
-      return json(route, { version: "2.0.0-e2e", commit: "e2e0001" });
+      return json(route, {
+        version: "2.0.0-e2e",
+        commit: "e2e0001",
+        edition: "community",
+        product: "Wolf Community",
+        community: { version: "2.0.0-e2e", commit: "e2e0001" },
+      });
     }
     if (method === "GET" && path === "/settings") {
       return json(route, {

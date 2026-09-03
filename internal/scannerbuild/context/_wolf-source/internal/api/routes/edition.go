@@ -83,6 +83,7 @@ func GetEdition(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("ETag", `"`+edition.ContractVersion+`"`)
 	ed := edition.Default.Name()
+	info := versionInfo()
 	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{
 		Data: map[string]any{
 			"edition":          ed,
@@ -96,6 +97,8 @@ func GetEdition(w http.ResponseWriter, r *http.Request) {
 			"ui_routes":        visibleUIRoutes(checker),
 			"isolation":        map[string]any{"profile": iso, "scanner_network": netw},
 			"plugin_kinds":     pluginapi.Kinds(),
+			"community":        info["community"],
+			"overlay":          info["overlay"],
 		},
 	})
 }

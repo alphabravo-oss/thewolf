@@ -30,6 +30,8 @@ import { Route as AuthedAuditIndexRouteImport } from './routes/_authed.audit.ind
 import { Route as AuthedCollectionsIndexRouteImport } from './routes/_authed.collections.index'
 import { Route as AuthedCollectionsCollectionIdRouteImport } from './routes/_authed.collections.$collectionId'
 import { Route as AuthedEnterpriseSplatRouteImport } from './routes/_authed.enterprise.$'
+import { Route as AuthedEnterpriseIdentityRouteImport } from './routes/_authed.enterprise.identity'
+import { Route as AuthedEnterpriseTenancyRouteImport } from './routes/_authed.enterprise.tenancy'
 import { Route as AuthedFindingsIndexRouteImport } from './routes/_authed.findings.index'
 import { Route as AuthedFindingsFindingIdRouteImport } from './routes/_authed.findings.$findingId'
 import { Route as AuthedFixesIndexRouteImport } from './routes/_authed.fixes.index'
@@ -148,6 +150,17 @@ const AuthedEnterpriseSplatRoute = AuthedEnterpriseSplatRouteImport.update({
   path: '/enterprise/$',
   getParentRoute: () => AuthedRoute,
 } as any)
+const AuthedEnterpriseIdentityRoute =
+  AuthedEnterpriseIdentityRouteImport.update({
+    id: '/enterprise/identity',
+    path: '/enterprise/identity',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+const AuthedEnterpriseTenancyRoute = AuthedEnterpriseTenancyRouteImport.update({
+  id: '/enterprise/tenancy',
+  path: '/enterprise/tenancy',
+  getParentRoute: () => AuthedRoute,
+} as any)
 const AuthedFindingsIndexRoute = AuthedFindingsIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -229,6 +242,8 @@ export interface FileRoutesByFullPath {
   '/agents/$agentId': typeof AuthedAgentsAgentIdRoute
   '/collections/$collectionId': typeof AuthedCollectionsCollectionIdRoute
   '/enterprise/$': typeof AuthedEnterpriseSplatRoute
+  '/enterprise/identity': typeof AuthedEnterpriseIdentityRoute
+  '/enterprise/tenancy': typeof AuthedEnterpriseTenancyRoute
   '/findings/$findingId': typeof AuthedFindingsFindingIdRoute
   '/fixes/$fixId': typeof AuthedFixesFixIdRoute
   '/repos/$repoId': typeof AuthedReposRepoIdRoute
@@ -255,6 +270,8 @@ export interface FileRoutesByTo {
   '/agents/$agentId': typeof AuthedAgentsAgentIdRoute
   '/collections/$collectionId': typeof AuthedCollectionsCollectionIdRoute
   '/enterprise/$': typeof AuthedEnterpriseSplatRoute
+  '/enterprise/identity': typeof AuthedEnterpriseIdentityRoute
+  '/enterprise/tenancy': typeof AuthedEnterpriseTenancyRoute
   '/findings/$findingId': typeof AuthedFindingsFindingIdRoute
   '/fixes/$fixId': typeof AuthedFixesFixIdRoute
   '/repos/$repoId': typeof AuthedReposRepoIdRoute
@@ -290,6 +307,8 @@ export interface FileRoutesById {
   '/_authed/agents/$agentId': typeof AuthedAgentsAgentIdRoute
   '/_authed/collections/$collectionId': typeof AuthedCollectionsCollectionIdRoute
   '/_authed/enterprise/$': typeof AuthedEnterpriseSplatRoute
+  '/_authed/enterprise/identity': typeof AuthedEnterpriseIdentityRoute
+  '/_authed/enterprise/tenancy': typeof AuthedEnterpriseTenancyRoute
   '/_authed/findings/$findingId': typeof AuthedFindingsFindingIdRoute
   '/_authed/fixes/$fixId': typeof AuthedFixesFixIdRoute
   '/_authed/repos/$repoId': typeof AuthedReposRepoIdRoute
@@ -326,6 +345,8 @@ export interface FileRouteTypes {
     | '/agents/$agentId'
     | '/collections/$collectionId'
     | '/enterprise/$'
+    | '/enterprise/identity'
+    | '/enterprise/tenancy'
     | '/findings/$findingId'
     | '/fixes/$fixId'
     | '/repos/$repoId'
@@ -352,6 +373,8 @@ export interface FileRouteTypes {
     | '/agents/$agentId'
     | '/collections/$collectionId'
     | '/enterprise/$'
+    | '/enterprise/identity'
+    | '/enterprise/tenancy'
     | '/findings/$findingId'
     | '/fixes/$fixId'
     | '/repos/$repoId'
@@ -386,6 +409,8 @@ export interface FileRouteTypes {
     | '/_authed/agents/$agentId'
     | '/_authed/collections/$collectionId'
     | '/_authed/enterprise/$'
+    | '/_authed/enterprise/identity'
+    | '/_authed/enterprise/tenancy'
     | '/_authed/findings/$findingId'
     | '/_authed/fixes/$fixId'
     | '/_authed/repos/$repoId'
@@ -556,6 +581,20 @@ declare module '@tanstack/react-router' {
       path: '/enterprise/$'
       fullPath: '/enterprise/$'
       preLoaderRoute: typeof AuthedEnterpriseSplatRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/enterprise/identity': {
+      id: '/_authed/enterprise/identity'
+      path: '/enterprise/identity'
+      fullPath: '/enterprise/identity'
+      preLoaderRoute: typeof AuthedEnterpriseIdentityRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/enterprise/tenancy': {
+      id: '/_authed/enterprise/tenancy'
+      path: '/enterprise/tenancy'
+      fullPath: '/enterprise/tenancy'
+      preLoaderRoute: typeof AuthedEnterpriseTenancyRouteImport
       parentRoute: typeof AuthedRoute
     }
     '/_authed/findings/': {
@@ -783,6 +822,8 @@ interface AuthedRouteChildren {
   AuthedVulnerabilitiesRoute: typeof AuthedVulnerabilitiesRouteWithChildren
   AuthedIndexRoute: typeof AuthedIndexRoute
   AuthedEnterpriseSplatRoute: typeof AuthedEnterpriseSplatRoute
+  AuthedEnterpriseIdentityRoute: typeof AuthedEnterpriseIdentityRoute
+  AuthedEnterpriseTenancyRoute: typeof AuthedEnterpriseTenancyRoute
 }
 
 const AuthedRouteChildren: AuthedRouteChildren = {
@@ -799,6 +840,8 @@ const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedVulnerabilitiesRoute: AuthedVulnerabilitiesRouteWithChildren,
   AuthedIndexRoute: AuthedIndexRoute,
   AuthedEnterpriseSplatRoute: AuthedEnterpriseSplatRoute,
+  AuthedEnterpriseIdentityRoute: AuthedEnterpriseIdentityRoute,
+  AuthedEnterpriseTenancyRoute: AuthedEnterpriseTenancyRoute,
 }
 
 const AuthedRouteWithChildren =

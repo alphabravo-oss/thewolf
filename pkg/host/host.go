@@ -10,12 +10,15 @@ import (
 
 // Options is the public serve configuration. Overlay must not import internal/serve.
 type Options struct {
-	Addr         string
-	SkipScanInit bool
-	APIOnly      bool
-	Version      string
-	Commit       string
-	BuildDate    string
+	Addr           string
+	SkipScanInit   bool
+	APIOnly        bool
+	Version        string
+	Commit         string
+	BuildDate      string
+	CoreCommit     string
+	OverlayVersion string
+	OverlayCommit  string
 }
 
 func ListenAndServe(ctx context.Context, addr string) error {
@@ -26,5 +29,6 @@ func Serve(ctx context.Context, opt Options) error {
 	return serve.Run(ctx, serve.Options{
 		Addr: opt.Addr, SkipScanInit: opt.SkipScanInit, APIOnly: opt.APIOnly,
 		Version: opt.Version, Commit: opt.Commit, BuildDate: opt.BuildDate,
+		CoreCommit: opt.CoreCommit, OverlayVersion: opt.OverlayVersion, OverlayCommit: opt.OverlayCommit,
 	})
 }

@@ -2,6 +2,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import { shortRev, useVersion } from "@/lib/edition";
 
 type EditionInfo = {
   edition?: string;
@@ -52,6 +53,7 @@ export function LicenseTab() {
       toast.error(e instanceof Error ? e.message : "Install failed"),
   });
 
+  const versionQ = useVersion();
   const edition = editionQ.data;
   const license = licenseQ.data;
   const entitlements = Object.entries(edition?.entitlements ?? {}).sort(
@@ -63,12 +65,21 @@ export function LicenseTab() {
       <section className="glass-card p-5 space-y-2">
         <h3 className="text-sm font-medium">Edition</h3>
         <p className="text-sm">
-          {license?.product ?? "Wolf Community"}
+          {versionQ.data?.product ?? license?.product ?? "Wolf Community"}
           <span className="text-muted-foreground">
             {" "}
-            · {edition?.edition ?? license?.edition ?? "community"}
+            · {versionQ.data?.edition ?? edition?.edition ?? license?.edition ?? "community"}
           </span>
         </p>
+        <p className="text-xs text-muted-foreground font-mono">
+          Community v{versionQ.data?.community?.version ?? versionQ.data?.version ?? ""}
+          {versionQ.data?.community?.commit ? ` (${shortRev(versionQ.data.community.commit)})` : ""}
+        </p>
+        {versionQ.data?.overlay ? (
+          <p className="text-xs text-muted-foreground font-mono">
+            Enterprise overlay {shortRev(versionQ.data.overlay.version || versionQ.data.overlay.commit)}
+          </p>
+        ) : null}
         <p className="text-xs text-muted-foreground">
           {license?.commercial_license
             ? "A commercial license is active."

@@ -12,6 +12,7 @@ import {
   authInputCls,
 } from "@/components/auth-shell";
 import { api, sessionStatus, waitForSession } from "@/lib/api";
+import { useVersion } from "@/lib/edition";
 import type { AuthResponse } from "@/lib/types";
 
 type AuthProvider = { name: string; kind: string };
@@ -31,6 +32,7 @@ export const Route = createFileRoute("/login")({
 function LoginPage() {
   const navigate = useNavigate();
   const search = Route.useSearch();
+  const version = useVersion();
   const [submitting, setSubmitting] = useState(false);
 
   // Cookie is still valid after a restart; pull the user back when the API
@@ -152,9 +154,13 @@ function LoginPage() {
       ) : (
         <>
           <div className="space-y-1.5">
-            <h2 className="text-2xl font-semibold tracking-tight">Sign in to The Wolf</h2>
+            <h2 className="text-2xl font-semibold tracking-tight">
+              Sign in to {version.data?.product ?? "The Wolf"}
+            </h2>
             <p className="text-sm text-muted-foreground">
-              Enter your credentials to continue.
+              {version.data?.edition === "enterprise"
+                ? "Enterprise SSO is available when configured. Local break-glass stays on."
+                : "Enter your credentials to continue."}
             </p>
           </div>
           <form

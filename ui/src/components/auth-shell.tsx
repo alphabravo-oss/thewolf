@@ -4,15 +4,17 @@
 import { useState } from "react";
 import { ArrowRightIcon, EyeIcon, EyeOffIcon } from "lucide-react";
 import { WolfLogo } from "@/components/wolf-logo";
+import { shortRev, useVersion } from "@/lib/edition";
 
 function Brand({ className = "" }: { className?: string }) {
+  const v = useVersion();
   return (
     <div className={"flex items-center gap-2.5 " + className}>
       <WolfLogo className="size-8" />
       <div className="leading-tight">
-        <div className="text-sm font-semibold">The Wolf</div>
+        <div className="text-sm font-semibold">{v.data?.product ?? "The Wolf"}</div>
         <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-          by AlphaBravo
+          {v.data?.edition === "enterprise" ? "Enterprise" : "Community"} · by AlphaBravo
         </div>
       </div>
     </div>
@@ -29,6 +31,7 @@ function Feature({ dot, label }: { dot: string; label: string }) {
 }
 
 export function AuthShell({ children }: { children: React.ReactNode }) {
+  const v = useVersion();
   return (
     <div className="min-h-screen grid lg:grid-cols-2 bg-background text-foreground">
       {/* Hero (left) */}
@@ -57,7 +60,14 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
             <Feature dot="bg-status-info" label="Repeatable scan evidence" />
             <Feature dot="bg-status-info" label="AI assistance under guardrails" />
           </div>
-          <div className="text-xs text-muted-foreground">
+          <div className="text-xs text-muted-foreground space-y-1">
+            <p>
+              Community v{v.data?.community?.version ?? v.data?.version ?? ""}
+              {v.data?.community?.commit ? ` · ${shortRev(v.data.community.commit)}` : ""}
+            </p>
+            {v.data?.overlay ? (
+              <p>Enterprise overlay {shortRev(v.data.overlay.version || v.data.overlay.commit)}</p>
+            ) : null}
             Built by{" "}
             <a
               href="https://alphabravo.io"

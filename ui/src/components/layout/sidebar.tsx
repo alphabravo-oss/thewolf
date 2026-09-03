@@ -17,7 +17,6 @@
 // desktop viewport. It is kept because dropping it would regress accessibility
 // on small screens.
 import { Link, useRouterState } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   BookOpen,
@@ -29,17 +28,20 @@ import {
   ChevronRight,
   ChevronUp,
   Gauge,
+  KeyRound,
   Layers,
   LayoutDashboard,
   Menu,
   Package,
+  Plug,
   ScrollText,
   Settings,
   ShieldAlert,
+  ShieldCheck,
   X,
 } from "lucide-react";
 import { WolfLogo } from "@/components/wolf-logo";
-import { api } from "@/lib/api";
+import { useEdition, useVersion, shortRev } from "@/lib/edition";
 import { useFlag } from "@/lib/flags";
 import { useIsAdmin } from "@/lib/me";
 import { useUIStore } from "@/lib/store-ui";
@@ -62,19 +64,18 @@ type NavGroup = {
 // -> a repo -> a scan -> its findings, so there is no top-level Repos item.
 // Scans and Findings are owner-scoped inbox views for every signed-in user.
 // Agents only when autonomous fixing is on.
+const enterpriseIcons: Record<string, typeof Package> = {
+  "/enterprise/identity": KeyRound,
+  "/enterprise/tenancy": Building2,
+  "/enterprise/integrations": Plug,
+  "/enterprise/attack-paths": ShieldAlert,
+  "/enterprise/verifications": ShieldCheck,
+};
+
 function useNavGroups(): NavGroup[] {
   const autofix = useFlag("autofix_enabled");
   const isAdmin = useIsAdmin();
-  const editionQ = useQuery({
-    queryKey: ["edition"],
-    queryFn: async () =>
-      (
-        await api.get<{
-          ui_routes?: { path: string; title: string }[];
-        }>("/edition")
-      ).data,
-    staleTime: 5 * 60 * 1000,
-  });
+  const editionQ = useEdition();
 
   return useMemo(() => {
     const platform: NavItem[] = [
@@ -95,7 +96,7 @@ function useNavGroups(): NavGroup[] {
       .map((rt) => ({
         label: rt.title,
         to: rt.path,
-        icon: Building2,
+        icon: enterpriseIcons[rt.path] ?? Building2,
       }));
 
     const admin: NavItem[] = [];
@@ -122,20 +123,7 @@ export function Sidebar() {
   const collapsed = useUIStore((s) => s.sidebarCollapsed);
   const setCollapsed = useUIStore((s) => s.setSidebarCollapsed);
 
-  // App version for the footer (GET /version → { version }).
-  const versionQ = useQuery({
-    queryKey: ["version"],
-    queryFn: async () => {
-      const r = await api.get<{
-        version: string;
-        edition?: string;
-        product?: string;
-        license?: string;
-      }>("/version");
-      return r.data;
-    },
-    staleTime: 5 * 60 * 1000,
-  });
+  const versionQ = useVersion();
 
   // Multiple groups stay open at once — a single-open accordion would collapse
   // your context every time you expanded another. Seeded from `defaultOpen`.
@@ -310,9 +298,12 @@ export function Sidebar() {
               </div>
               <div className="flex flex-col min-w-0">
                 <span className="text-sm font-semibold text-foreground tracking-tight truncate leading-tight">
-                  The Wolf
+                  {versionQ.data?.product ?? "The Wolf"}
                 </span>
-                <span className="text-[10px] text-muted-foreground leading-tight">by AlphaBravo</span>
+                <span className="text-[10px] text-muted-foreground leading-tight">
+                  {versionQ.data?.edition === "enterprise" ? "Enterprise · " : "Community · "}
+                  by AlphaBravo
+                </span>
               </div>
             </Link>
           )}
@@ -372,12 +363,23 @@ export function Sidebar() {
           {!railCollapsed && (
             <div className="px-3 py-1 space-y-0.5">
               <p className="text-[10px] text-muted-foreground tabular-nums">
-                The Wolf {versionQ.data?.version ? `v${versionQ.data.version}` : ""}
+                Community v{versionQ.data?.community?.version ?? versionQ.data?.version ?? ""}
+                {versionQ.data?.community?.commit
+                  ? ` · ${shortRev(versionQ.data.community.commit)}`
+                  : versionQ.data?.commit
+                    ? ` · ${shortRev(versionQ.data.commit)}`
+                    : ""}
               </p>
-              <p className="text-[10px] text-muted-foreground">
-                {versionQ.data?.product ?? versionQ.data?.edition ?? "community"}{" "}
-                · {versionQ.data?.license ?? "source-available"}
-              </p>
+              {versionQ.data?.overlay ? (
+                <p className="text-[10px] text-muted-foreground tabular-nums">
+                  Enterprise overlay {shortRev(versionQ.data.overlay.version || versionQ.data.overlay.commit)}
+                </p>
+              ) : (
+                <p className="text-[10px] text-muted-foreground">
+                  {versionQ.data?.product ?? "Wolf Community"} ·{" "}
+                  {versionQ.data?.license ?? "source-available"}
+                </p>
+              )}
               <p className="text-[10px] text-muted-foreground">
                 Built by{" "}
                 <a

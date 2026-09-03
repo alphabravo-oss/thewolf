@@ -17,9 +17,12 @@ var startTime = time.Now()
 
 // Version info set via ldflags
 var (
-	AppVersion  = "0.2.0"
-	BuildCommit = "dev"
-	BuildDate   = "unknown"
+	AppVersion     = "0.2.0"
+	BuildCommit    = "dev"
+	BuildDate      = "unknown"
+	CoreCommit     = ""
+	OverlayVersion = ""
+	OverlayCommit  = ""
 )
 
 // Health always returns 200 if the server process is alive. Dependency and
@@ -113,6 +116,10 @@ func Metrics(w http.ResponseWriter, r *http.Request) {
 }
 
 func Version(w http.ResponseWriter, r *http.Request) {
+	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: versionInfo()})
+}
+
+func versionInfo() map[string]any {
 	ed := edition.Default.Name()
 	kind := "source-available"
 	if entitlement.Licensed() {
@@ -120,15 +127,28 @@ func Version(w http.ResponseWriter, r *http.Request) {
 	} else if ed != edition.Community {
 		kind = "unlicensed"
 	}
-	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{
-		Data: map[string]string{
+	core := BuildCommit
+	if CoreCommit != "" {
+		core = CoreCommit
+	}
+	out := map[string]any{
+		"version": AppVersion,
+		"commit":  BuildCommit,
+		"date":    BuildDate,
+		"name":    "the-wolf",
+		"edition": ed,
+		"product": edition.Product(ed),
+		"license": kind,
+		"community": map[string]string{
 			"version": AppVersion,
-			"commit":  BuildCommit,
-			"date":    BuildDate,
-			"name":    "the-wolf",
-			"edition": ed,
-			"product": edition.Product(ed),
-			"license": kind,
+			"commit":  core,
 		},
-	})
+	}
+	if OverlayVersion != "" || OverlayCommit != "" {
+		out["overlay"] = map[string]string{
+			"version": OverlayVersion,
+			"commit":  OverlayCommit,
+		}
+	}
+	return out
 }

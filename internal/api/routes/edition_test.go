@@ -69,6 +69,32 @@ func TestGetEditionIsPublicCommunity(t *testing.T) {
 		t.Fatal("community must not grant remaining enterprise caps")
 	}
 
+	verR := chi.NewRouter()
+	verR.Get("/api/version", routes.Version)
+	ver := httptest.NewRecorder()
+	verR.ServeHTTP(ver, httptest.NewRequest(http.MethodGet, "/api/version", nil))
+	if ver.Code != http.StatusOK {
+		t.Fatalf("version: %d %s", ver.Code, ver.Body.String())
+	}
+	if !strings.Contains(ver.Body.String(), `"community"`) {
+		t.Fatalf("version must report community: %s", ver.Body.String())
+	}
+	if strings.Contains(ver.Body.String(), `"overlay"`) {
+		t.Fatal("community binary must not report an overlay version")
+	}
+
+	t.Cleanup(func() {
+		routes.OverlayVersion = ""
+		routes.OverlayCommit = ""
+	})
+	routes.OverlayVersion = "ee-dev"
+	routes.OverlayCommit = "abc1234deadbeef"
+	ver2 := httptest.NewRecorder()
+	verR.ServeHTTP(ver2, httptest.NewRequest(http.MethodGet, "/api/version", nil))
+	if !strings.Contains(ver2.Body.String(), `"overlay"`) || !strings.Contains(ver2.Body.String(), "ee-dev") {
+		t.Fatalf("overlay version: %s", ver2.Body.String())
+	}
+
 	lic := get("/api/license")
 	if lic.Code != http.StatusOK {
 		t.Fatalf("license: %d", lic.Code)
