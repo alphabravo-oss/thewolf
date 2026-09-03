@@ -20,6 +20,13 @@ func newAuthCmd() *cobra.Command {
 		authProfileCmd(),
 		authPasswdCmd(),
 		authTokenCmd(),
+		&cobra.Command{
+			Use: "providers", Short: "List login providers",
+			Annotations: apiAnno("GET", "/auth/providers"), Args: cobra.NoArgs,
+			RunE: func(cmd *cobra.Command, _ []string) error {
+				return runRender(cmd, "GET", "/auth/providers", nil)
+			},
+		},
 	)
 	return cmd
 }

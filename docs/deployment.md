@@ -17,6 +17,7 @@ docker compose --profile proxy up -d --build
 # Public + HTTPS + hardened Docker access (recommended for shared hosts):
 docker compose -f docker-compose.yml -f docker-compose.hardened.yml \
   --profile proxy up -d --build
+# Scanner containers default to --network none; see docs/scan-isolation.md.
 ```
 
 Add `--profile postgres` to any of the above to use Postgres instead of SQLite.

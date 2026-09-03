@@ -73,6 +73,26 @@ func TestBuildStableFingerprintCanCorrelateAcrossToolsWithFineCategory(t *testin
 	}
 }
 
+func TestBuild_SCAUsesCVENotFineCategory(t *testing.T) {
+	a := models.Finding{
+		ToolName:     "trivy",
+		Category:     models.CategorySCA,
+		RuleID:       "CVE-1",
+		FineCategory: "vulnerable-dependency",
+		FilePath:     "go.mod",
+	}
+	b := a
+	b.RuleID = "CVE-2"
+	if Build(a).Stable == Build(b).Stable {
+		t.Fatal("SCA fingerprints should differ when CVE RuleIDs differ")
+	}
+	c := a
+	c.ToolName = "grype"
+	if Build(a).Stable != Build(c).Stable {
+		t.Fatal("SCA fingerprints should match across tools for the same CVE")
+	}
+}
+
 func TestApplyBackfillsLegacyFingerprintWhenEmpty(t *testing.T) {
 	f := models.Finding{ToolName: "semgrep", RuleID: "no-eval", FilePath: "/scan/main.py"}
 	Apply(&f)

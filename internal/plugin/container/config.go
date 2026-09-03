@@ -128,10 +128,16 @@ type Config struct {
 	// PullPolicy controls EnsureImage behavior at startup.
 	PullPolicy PullPolicy
 
-	// Network is the docker --network value. "bridge" (default), "none"
-	// (paranoid mode; some tools degrade), or "host" (discouraged; defeats
-	// isolation).
+	// Network is the docker --network value for offline tools.
+	// Default is "none" (deny-by-default). Tools with network_required
+	// use AllowNetwork instead (default "bridge").
 	Network string
+
+	// AllowNetwork is used when a tool declares network_required.
+	AllowNetwork string
+
+	// Isolation is standard (deny-by-default), strict, or relaxed (legacy bridge).
+	Isolation string
 
 	// UID and GID are the host uid:gid passed via --user. Resolved once at
 	// startup via os.Getuid()/os.Getgid(). Zero values are valid (means root,
@@ -191,7 +197,9 @@ func DefaultConfig() *Config {
 		DockerPath:               "docker",
 		Image:                    "wolf-scanners:dev",
 		PullPolicy:               PullIfNotPresent,
-		Network:                  "bridge",
+		Network:                  "none",
+		AllowNetwork:             "bridge",
+		Isolation:                IsolationFromEnv(),
 		UID:                      os.Getuid(),
 		GID:                      os.Getgid(),
 		HostReposRoot:            "",
@@ -230,9 +238,18 @@ func (c *Config) Validate() error {
 	if c.RepoVolume != "" && !dockerVolumeNamePattern.MatchString(c.RepoVolume) {
 		return fmt.Errorf("container repository volume name is invalid")
 	}
+	if c.Isolation == "" {
+		c.Isolation = IsolationFromEnv()
+	}
 	if c.Network == "" {
-		// We allow this — docker defaults to bridge — but it's worth flagging.
-		c.Network = "bridge"
+		if strings.EqualFold(c.Isolation, IsolationRelaxed) {
+			c.Network = "bridge"
+		} else {
+			c.Network = "none"
+		}
+	}
+	if c.AllowNetwork == "" {
+		c.AllowNetwork = "bridge"
 	}
 	if (c.HostReposRoot == "") != (c.InContainerReposRoot == "") {
 		return fmt.Errorf("HostReposRoot and InContainerReposRoot must both be set, or both empty (got host=%q, in-container=%q)",

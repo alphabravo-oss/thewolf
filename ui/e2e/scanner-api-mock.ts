@@ -293,7 +293,53 @@ export async function installScannerApiMock(
       return json(route, {
         scan_api_enabled: true,
         scanner_release_management_enabled: true,
+        scanner_notify_only: "true",
       });
+    }
+    if (method === "PUT" && path === "/settings") {
+      return json(route, request.postDataJSON() ?? {});
+    }
+    if (method === "GET" && path === "/setup/status") {
+      return json(route, {
+        repo_count: 1,
+        collection_count: 0,
+        has_completed_scan: true,
+        overall_ok: true,
+      });
+    }
+    if (method === "POST" && path === "/setup/sample-repo") {
+      return json(route, apiCreatedRepository, 201);
+    }
+    if (method === "GET" && path === "/notifications") {
+      return json(route, { items: [] });
+    }
+    if (method === "GET" && path === "/admin/disk") {
+      return json(route, {
+        artifacts_bytes: 1_048_576,
+        workspaces_bytes: 2_097_152,
+        db_bytes: 4_096,
+      });
+    }
+    if (method === "POST" && path === "/admin/workspaces/reap") {
+      return json(route, { reaped: 0 });
+    }
+    if (method === "POST" && path === "/webhooks/outbound/test") {
+      return json(route, { ok: true });
+    }
+    if (method === "GET" && path === "/schedules") {
+      return json(route, []);
+    }
+    if (method === "POST" && path === "/schedules") {
+      const body = (request.postDataJSON() ?? {}) as Record<string, unknown>;
+      return json(route, { id: "schedule-1", ...body }, 201);
+    }
+    const scheduleMatch = /^\/schedules\/([^/]+)$/.exec(path);
+    if (method === "PUT" && scheduleMatch) {
+      const body = (request.postDataJSON() ?? {}) as Record<string, unknown>;
+      return json(route, { id: scheduleMatch[1], ...body });
+    }
+    if (method === "DELETE" && scheduleMatch) {
+      return json(route, { ok: true });
     }
     if (method === "GET" && path === "/scans") {
       return json(route, [state.apiCreatedScan]);

@@ -42,6 +42,10 @@ export class ApiError extends Error {
   }
 }
 
+export function isNotFound(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 404;
+}
+
 export interface ApiResult<T> {
   response: ApiResponse<T>;
   headers: Headers;

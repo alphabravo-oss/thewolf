@@ -4,6 +4,8 @@ package middleware
 import (
 	"net"
 	"net/http"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -57,17 +59,22 @@ func (rl *RateLimiter) cleanupLoop() {
 }
 
 func (rl *RateLimiter) allow(ip string) bool {
+	ok, _, _ := rl.take(ip)
+	return ok
+}
+
+func (rl *RateLimiter) take(ip string) (ok bool, remaining, limit int) {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
+	limit = rl.burst
 
 	now := time.Now()
-	b, ok := rl.visitors[ip]
-	if !ok {
+	b, exists := rl.visitors[ip]
+	if !exists {
 		rl.visitors[ip] = &bucket{tokens: rl.burst - 1, lastSeen: now}
-		return true
+		return true, rl.burst - 1, limit
 	}
 
-	// Refill tokens based on elapsed time.
 	elapsed := now.Sub(b.lastSeen)
 	refill := int(elapsed/rl.interval) * rl.rate
 	if refill > 0 {
@@ -80,23 +87,28 @@ func (rl *RateLimiter) allow(ip string) bool {
 
 	if b.tokens > 0 {
 		b.tokens--
-		return true
+		return true, b.tokens, limit
 	}
-	return false
+	return false, 0, limit
+}
+
+func setRateHeaders(w http.ResponseWriter, remaining, limit int) {
+	w.Header().Set("X-RateLimit-Limit", strconv.Itoa(limit))
+	w.Header().Set("X-RateLimit-Remaining", strconv.Itoa(remaining))
 }
 
 // Handler returns middleware that rate-limits requests by client IP.
 func (rl *RateLimiter) Handler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ip := rateLimitRemoteKey(r.RemoteAddr)
-
-		if !rl.allow(ip) {
+		ip := clientIP(r)
+		ok, rem, limit := rl.take(ip)
+		setRateHeaders(w, rem, limit)
+		if !ok {
 			wolflog.Warn().Str("ip", ip).Str("path", r.URL.Path).Msg("rate limit exceeded")
 			w.Header().Set("Retry-After", "1")
 			response.WriteError(w, http.StatusTooManyRequests, "rate_limited", "too many requests, please try again later")
 			return
 		}
-
 		next.ServeHTTP(w, r)
 	})
 }
@@ -106,6 +118,24 @@ func rateLimitRemoteKey(remoteAddr string) string {
 		return host
 	}
 	return remoteAddr
+}
+
+// clientIP uses X-Forwarded-For only when the immediate peer is loopback
+// (Compose/Caddy). Otherwise RemoteAddr, so spoofed XFF from the internet
+// is ignored.
+func clientIP(r *http.Request) string {
+	peer := rateLimitRemoteKey(r.RemoteAddr)
+	if peer == "127.0.0.1" || peer == "::1" {
+		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+			if i := strings.IndexByte(xff, ','); i >= 0 {
+				xff = xff[:i]
+			}
+			if ip := strings.TrimSpace(xff); ip != "" {
+				return ip
+			}
+		}
+	}
+	return peer
 }
 
 // StrictHandler returns middleware with tighter limits, suitable for
@@ -137,7 +167,9 @@ func (rl *RateLimiter) HandlerForToken(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		if !rl.allow("tok:" + tokenID) {
+		ok, rem, limit := rl.take("tok:" + tokenID)
+		setRateHeaders(w, rem, limit)
+		if !ok {
 			wolflog.Warn().Str("token_id", tokenID).Str("path", r.URL.Path).Msg("token rate limit exceeded")
 			w.Header().Set("Retry-After", "1")
 			response.WriteError(w, http.StatusTooManyRequests, "rate_limited", "too many requests for this token")

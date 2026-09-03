@@ -73,8 +73,8 @@ func TestConfig_Validate(t *testing.T) {
 		if err := c.Validate(); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if c.Network != "bridge" {
-			t.Errorf("Network defaulted to %q, want bridge", c.Network)
+		if c.Network != "none" {
+			t.Errorf("Network defaulted to %q, want none", c.Network)
 		}
 	})
 	t.Run("repos_root_pairing", func(t *testing.T) {
@@ -185,8 +185,8 @@ func TestDefaultConfig(t *testing.T) {
 	if c.Image == "" {
 		t.Error("default Image is empty")
 	}
-	if c.Network != "bridge" {
-		t.Errorf("default Network = %q, want bridge", c.Network)
+	if c.Network != "none" {
+		t.Errorf("default Network = %q, want none", c.Network)
 	}
 	if c.PullPolicy != PullIfNotPresent {
 		t.Errorf("default PullPolicy = %v, want IfNotPresent", c.PullPolicy)

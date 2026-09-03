@@ -80,6 +80,9 @@ func Apply(findings []models.Finding, rs RuleSet) ([]models.Finding, int) {
 // matches checks whether r applies to f. All three predicates (path,
 // category, rule_id) must hold; an empty predicate is "any".
 func matches(r Rule, f models.Finding) bool {
+	if strings.HasPrefix(r.Reason, "default:lockfile") && f.Category == models.CategorySCA {
+		return false
+	}
 	if r.PathGlob != "" && !pathMatch(r.PathGlob, f.FilePath) {
 		return false
 	}

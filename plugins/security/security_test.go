@@ -65,6 +65,9 @@ func TestParseDetectSecretsOutput(t *testing.T) {
 	if findings[0].Title != `Potential AWS Access Key detected` {
 		t.Errorf("kept finding should be AWS Access Key, got title=%q", findings[0].Title)
 	}
+	if findings[0].RuleID != "AWS Access Key:def456" {
+		t.Errorf("kept finding RuleID = %q, want AWS Access Key:def456", findings[0].RuleID)
+	}
 
 	for _, f := range findings {
 		if f.ToolName != "detect-secrets" {
@@ -232,5 +235,39 @@ func TestParseOSVScannerOutput(t *testing.T) {
 	}
 	if f.FilePath != "package.json" {
 		t.Errorf("expected file path package.json, got %s", f.FilePath)
+	}
+	if f.Severity != models.SeverityHigh {
+		t.Errorf("expected severity high for CVSS 7.5, got %s", f.Severity)
+	}
+}
+
+func TestMapOSVSeverity(t *testing.T) {
+	sevs := func(score string) []struct {
+		Type  string `json:"type"`
+		Score string `json:"score"`
+	} {
+		if score == "" {
+			return nil
+		}
+		return []struct {
+			Type  string `json:"type"`
+			Score string `json:"score"`
+		}{{Type: "CVSS_V3", Score: score}}
+	}
+	tests := []struct {
+		score string
+		want  models.Severity
+	}{
+		{"9.8", models.SeverityCritical},
+		{"7.5", models.SeverityHigh},
+		{"4.0", models.SeverityMedium},
+		{"3.9", models.SeverityLow},
+		{"", models.SeverityHigh},
+		{"CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H", models.SeverityHigh},
+	}
+	for _, tc := range tests {
+		if got := mapOSVSeverity(sevs(tc.score)); got != tc.want {
+			t.Errorf("mapOSVSeverity(%q) = %s, want %s", tc.score, got, tc.want)
+		}
 	}
 }

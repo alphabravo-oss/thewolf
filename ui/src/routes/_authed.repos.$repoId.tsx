@@ -5,6 +5,8 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeftIcon,
+  CopyIcon,
+  DownloadIcon,
   PlayIcon,
   RefreshCwIcon,
   Trash2Icon,
@@ -22,10 +24,10 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { api } from "@/lib/api";
-import type { Finding, Repo, Scan } from "@/lib/types";
+import { api, isNotFound } from "@/lib/api";
+import type { Finding, Repo, Scan, ScanSchedule } from "@/lib/types";
 import { SeverityBadge } from "@/components/severity-badge";
 import { CardSkeleton } from "@/components/skeleton";
 import { BranchSelect } from "@/components/branch-select";
@@ -87,7 +89,19 @@ function RepoDetailPage() {
   });
 
   const [scanBranch, setScanBranch] = useState("");
+  const [profile, setProfile] = useState<"fast" | "standard" | "release">(
+    "standard",
+  );
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const latestCompleted = scansQ.data?.find((s) => s.status === "completed");
+  const gateQ = useQuery({
+    queryKey: ["scan", latestCompleted?.id, "gate"],
+    queryFn: async () => {
+      const res = await api.get<ScanGate>(`/scans/${latestCompleted!.id}/gate`);
+      return res.data;
+    },
+    enabled: !!latestCompleted?.id,
+  });
 
   const me = useMe();
 
@@ -98,6 +112,7 @@ function RepoDetailPage() {
     scan.launch({
       repo_id: repoId,
       branch: scanBranch.trim() || repoQ.data?.default_branch || "main",
+      profile,
     });
   }
 
@@ -185,14 +200,33 @@ function RepoDetailPage() {
           <div className="text-sm text-muted-foreground font-mono break-all mt-1">
             {r.source_path}
           </div>
+          <p className="text-xs text-muted-foreground mt-1">
+            {latestCompleted ? (
+              <GateLine gate={gateQ.data} />
+            ) : (
+              "No scan yet"
+            )}
+          </p>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 flex-wrap justify-end">
           <BranchSelect
             repoId={repoId}
             value={scanBranch}
             onChange={setScanBranch}
             defaultBranch={r.default_branch}
           />
+          <select
+            aria-label="Scan profile"
+            value={profile}
+            onChange={(e) =>
+              setProfile(e.target.value as "fast" | "standard" | "release")
+            }
+            className="h-9 px-2 rounded-md bg-background border border-muted/40 text-sm"
+          >
+            <option value="fast">Fast</option>
+            <option value="standard">Standard</option>
+            <option value="release">Release</option>
+          </select>
           {canModify(me.data, r.user_id) && (
             <button
               type="button"
@@ -216,6 +250,26 @@ function RepoDetailPage() {
             <PlayIcon className="size-4" />
             {scan.busy ? "Starting…" : "Scan now"}
           </button>
+          <button
+            type="button"
+            onClick={() => {
+              void navigator.clipboard?.writeText(ciSnippet(repoId));
+              toast.success("CI snippet copied");
+            }}
+            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border text-sm font-medium hover:bg-muted/50"
+          >
+            <CopyIcon className="size-4" />
+            Copy CI snippet
+          </button>
+          {latestCompleted ? (
+            <a
+              href={`/api/v1/scans/${latestCompleted.id}/sarif`}
+              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border text-sm font-medium hover:bg-muted/50"
+            >
+              <DownloadIcon className="size-4" />
+              SARIF
+            </a>
+          ) : null}
           {canModify(me.data, r.user_id) && (
             <button
               type="button"
@@ -228,6 +282,13 @@ function RepoDetailPage() {
           )}
         </div>
       </div>
+      <p className="text-xs text-muted-foreground">
+        Point GitHub Settings → Webhooks at{" "}
+        <code className="font-mono">
+          {`${typeof window !== "undefined" ? window.location.origin : ""}/api/v1/webhooks/github`}
+        </code>{" "}
+        (push + pull_request). Secret is Settings → Scanner updates.
+      </p>
 
       <section className="glass-card p-5 grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
         <Field label="Source type" value={r.source_type} mono />
@@ -271,9 +332,14 @@ function RepoDetailPage() {
         />
       </section>
 
+      <ScheduleCard
+        repoId={repoId}
+        defaultBranch={r.default_branch || "main"}
+      />
+
       <CurrentFindings
         repoId={repoId}
-        latestScanId={scansQ.data?.find((s) => s.status === "completed")?.id}
+        latestScanId={latestCompleted?.id}
       />
 
       <RepoSuppressions repoId={repoId} />
@@ -318,6 +384,162 @@ function RepoDetailPage() {
         )}
       </section>
     </div>
+  );
+}
+
+const INTERVALS: { minutes: number; label: string }[] = [
+  { minutes: 15, label: "15m" },
+  { minutes: 60, label: "1h" },
+  { minutes: 360, label: "6h" },
+  { minutes: 1440, label: "daily" },
+];
+
+function ScheduleCard({
+  repoId,
+  defaultBranch,
+}: {
+  repoId: string;
+  defaultBranch: string;
+}) {
+  const qc = useQueryClient();
+  const q = useQuery({
+    queryKey: ["schedules"],
+    queryFn: async () => {
+      try {
+        const r = await api.get<ScanSchedule[] | { items: ScanSchedule[] }>(
+          "/schedules",
+        );
+        if (Array.isArray(r.data)) return r.data;
+        return r.data?.items ?? [];
+      } catch (e) {
+        if (isNotFound(e)) return null;
+        throw e;
+      }
+    },
+  });
+  const existing = q.data?.find((s) => s.repo_id === repoId);
+  const [interval, setInterval] = useState(60);
+  const [profile, setProfile] = useState<"fast" | "standard" | "release">(
+    "standard",
+  );
+  const [quietStart, setQuietStart] = useState("");
+  const [quietEnd, setQuietEnd] = useState("");
+  const [enabled, setEnabled] = useState(true);
+
+  useEffect(() => {
+    if (!existing) return;
+    setInterval(existing.interval_minutes || 60);
+    if (
+      existing.profile === "fast" ||
+      existing.profile === "standard" ||
+      existing.profile === "release"
+    ) {
+      setProfile(existing.profile);
+    }
+    setQuietStart(existing.quiet_start || "");
+    setQuietEnd(existing.quiet_end || "");
+    setEnabled(existing.enabled);
+  }, [existing]);
+
+  const save = useMutation({
+    mutationFn: async () => {
+      const body: Partial<ScanSchedule> = {
+        repo_id: repoId,
+        interval_minutes: interval,
+        branch: defaultBranch,
+        profile,
+        quiet_start: quietStart || undefined,
+        quiet_end: quietEnd || undefined,
+        enabled,
+      };
+      if (existing?.id) {
+        return (
+          await api.put<ScanSchedule>(`/schedules/${existing.id}`, {
+            ...body,
+            id: existing.id,
+          })
+        ).data;
+      }
+      return (await api.post<ScanSchedule>("/schedules", body)).data;
+    },
+    onSuccess: () => {
+      toast.success("Schedule saved");
+      qc.invalidateQueries({ queryKey: ["schedules"] });
+    },
+    onError: (e) =>
+      toast.error(e instanceof Error ? e.message : "Schedule save failed"),
+  });
+
+  if (q.data === null) return null;
+
+  return (
+    <section className="glass-card p-5 space-y-3">
+      <h2 className="text-sm font-medium">Schedule</h2>
+      <div className="flex flex-wrap items-end gap-3 text-sm">
+        <label className="space-y-1">
+          <span className="block text-xs text-muted-foreground">Interval</span>
+          <select
+            value={interval}
+            onChange={(e) => setInterval(Number(e.target.value))}
+            className="h-9 px-2 rounded-md bg-background border border-muted/40 text-sm"
+          >
+            {INTERVALS.map((opt) => (
+              <option key={opt.minutes} value={opt.minutes}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="space-y-1">
+          <span className="block text-xs text-muted-foreground">Profile</span>
+          <select
+            value={profile}
+            onChange={(e) =>
+              setProfile(e.target.value as "fast" | "standard" | "release")
+            }
+            className="h-9 px-2 rounded-md bg-background border border-muted/40 text-sm"
+          >
+            <option value="fast">Fast</option>
+            <option value="standard">Standard</option>
+            <option value="release">Release</option>
+          </select>
+        </label>
+        <label className="space-y-1">
+          <span className="block text-xs text-muted-foreground">Quiet start</span>
+          <input
+            type="time"
+            value={quietStart}
+            onChange={(e) => setQuietStart(e.target.value)}
+            className="h-9 px-2 rounded-md bg-background border border-muted/40 text-sm"
+          />
+        </label>
+        <label className="space-y-1">
+          <span className="block text-xs text-muted-foreground">Quiet end</span>
+          <input
+            type="time"
+            value={quietEnd}
+            onChange={(e) => setQuietEnd(e.target.value)}
+            className="h-9 px-2 rounded-md bg-background border border-muted/40 text-sm"
+          />
+        </label>
+        <label className="inline-flex items-center gap-2 h-9 text-sm">
+          <input
+            type="checkbox"
+            checked={enabled}
+            onChange={(e) => setEnabled(e.target.checked)}
+          />
+          Enabled
+        </label>
+        <button
+          type="button"
+          onClick={() => save.mutate()}
+          disabled={save.isPending || q.isLoading}
+          className="inline-flex items-center h-9 px-3 rounded-md bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
+        >
+          {save.isPending ? "Saving…" : "Save"}
+        </button>
+      </div>
+    </section>
   );
 }
 
@@ -497,6 +719,48 @@ interface SyncRepoResult extends Repo {
   branch: string;
   previous_commit_sha?: string;
   changed: boolean;
+}
+
+type ScanGate = {
+  evaluation?: { status?: string };
+  result?: { status?: string };
+  finding_count?: number;
+};
+
+function GateLine({ gate }: { gate?: ScanGate }) {
+  const status = gate?.evaluation?.status ?? gate?.result?.status;
+  if (!status) return <>Latest scan completed</>;
+  const tone =
+    status === "fail" || status === "failed"
+      ? "text-status-error"
+      : status === "warn" || status === "warning"
+        ? "text-status-warning"
+        : "text-status-success";
+  return (
+    <>
+      Gate <span className={`${tone} font-medium`}>{status}</span>
+      {gate?.finding_count != null
+        ? ` · ${gate.finding_count.toLocaleString()} findings`
+        : ""}
+    </>
+  );
+}
+
+function ciSnippet(repoId: string) {
+  return `name: wolf
+on: [push, pull_request]
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          curl -fsS -X POST "$WOLF_URL/api/v1/scans" \\
+            -H "Authorization: Bearer $WOLF_TOKEN" \\
+            -H "Content-Type: application/json" \\
+            -d '{"repo_id":"${repoId}","profile":"fast"}'
+          wolf scan gate --fail-exit-code
+# wolf scan gate --fail-exit-code fails the job on new findings and secrets.`;
 }
 
 // detected_languages is JSON-encoded: {"go": 219, "python": 2, ...}

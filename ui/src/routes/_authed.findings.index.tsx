@@ -1,10 +1,14 @@
-// Fleet findings inbox. Two views:
+// Fleet findings inbox. Three views:
 //   - By repo: current-open counts per product (the working default)
 //   - By rule: the same CVE/rule across many products
+//   - List: individual findings with bulk triage (defaults to new-since-baseline)
 // Deep work stays on the scan page / repo current-findings list.
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BugIcon, ChevronDownIcon } from "lucide-react";
+import { toast } from "sonner";
+import { api } from "@/lib/api";
 import { EmptyState } from "@/components/ui/empty-state";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { PageHeader, PageShell } from "@/components/ui/page";
@@ -15,7 +19,7 @@ import {
   type AggregateRow,
   type FindingsByRepoRow,
 } from "@/lib/fleet";
-import type { Severity } from "@/lib/types";
+import type { Finding, FindingStatus, Severity } from "@/lib/types";
 
 type RepoRow = FindingsByRepoRow;
 type SeverityKey = "critical" | "high" | "medium" | "low" | "info";
@@ -24,8 +28,9 @@ type SeverityKey = "critical" | "high" | "medium" | "low" | "info";
 // table's data-dependent row models on every render.
 const EMPTY_REPO_ROWS: RepoRow[] = [];
 const EMPTY_RULE_ROWS: AggregateRow[] = [];
+const EMPTY_FINDINGS: Finding[] = [];
 
-type View = "repo" | "rule";
+type View = "repo" | "rule" | "list";
 
 // view is omitted for the default "by repo" inbox so /findings links
 // elsewhere do not have to pass search params.
@@ -34,7 +39,11 @@ type Search = { view?: View; q?: string };
 export const Route = createFileRoute("/_authed/findings/")({
   validateSearch: (s: Record<string, unknown>): Search => {
     const view: View =
-      s.view === "rule" || typeof s.rule_id === "string" ? "rule" : "repo";
+      s.view === "rule" || typeof s.rule_id === "string"
+        ? "rule"
+        : s.view === "list"
+          ? "list"
+          : "repo";
     const q =
       typeof s.q === "string"
         ? s.q
@@ -42,7 +51,7 @@ export const Route = createFileRoute("/_authed/findings/")({
           ? s.rule_id
           : undefined;
     return {
-      ...(view === "rule" ? { view } : {}),
+      ...(view !== "repo" ? { view } : {}),
       ...(q ? { q } : {}),
     };
   },
@@ -51,7 +60,8 @@ export const Route = createFileRoute("/_authed/findings/")({
 
 function FindingsPage() {
   const params = Route.useSearch();
-  const view: View = params.view === "rule" ? "rule" : "repo";
+  const view: View =
+    params.view === "rule" ? "rule" : params.view === "list" ? "list" : "repo";
   const q = params.q;
   const navigate = Route.useNavigate();
 
@@ -66,6 +76,7 @@ function FindingsPage() {
               [
                 ["repo", "By repo"],
                 ["rule", "By rule"],
+                ["list", "List"],
               ] as const
             ).map(([id, label]) => (
               <button
@@ -73,7 +84,7 @@ function FindingsPage() {
                 type="button"
                 onClick={() =>
                   navigate({
-                    search: id === "rule" ? { view: "rule", q } : { q },
+                    search: id === "repo" ? { q } : { view: id, q },
                   })
                 }
                 className={
@@ -90,7 +101,7 @@ function FindingsPage() {
         }
       />
 
-      {view === "repo" ? <ByRepo /> : <ByRule />}
+      {view === "repo" ? <ByRepo /> : view === "rule" ? <ByRule /> : <FindingsList />}
     </PageShell>
   );
 }
@@ -291,4 +302,220 @@ function ByRule() {
       onRowClick={(r) => setOpen((cur) => (cur === r.key ? null : r.key))}
     />
   );
+}
+
+const SEVERITY_RANK: Record<string, number> = {
+  critical: 5,
+  high: 4,
+  medium: 3,
+  low: 2,
+  info: 1,
+};
+
+function FindingsList() {
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+  const [scope, setScope] = useState<"new" | "all">("new");
+
+  const q = useQuery({
+    queryKey: ["findings", "list", scope],
+    queryFn: async () => {
+      const params = new URLSearchParams({ per_page: "200", status: "open" });
+      if (scope === "new") params.set("baseline_state", "new,resurfaced");
+      const r = await api.get<Finding[]>(`/findings?${params.toString()}`);
+      return r.data ?? [];
+    },
+  });
+  const rows = q.data ?? EMPTY_FINDINGS;
+
+  const bulk = useMutation({
+    mutationFn: async (vars: { ids: string[]; status: FindingStatus }) => {
+      await api.post("/findings/bulk", vars);
+    },
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ["findings"] });
+      toast.success(
+        `Marked ${vars.ids.length} finding${vars.ids.length === 1 ? "" : "s"} as ${vars.status.replace("_", " ")}`,
+      );
+    },
+    onError: (e) =>
+      toast.error(e instanceof Error ? e.message : "Bulk update failed"),
+  });
+
+  const columns: Column<Finding>[] = [
+    {
+      key: "severity",
+      header: "Severity",
+      width: "8rem",
+      sortAccessor: (f) => SEVERITY_RANK[f.severity] ?? 0,
+      accessor: (f) => <SeverityBadge severity={f.severity} size="sm" />,
+    },
+    {
+      key: "title",
+      header: "Title",
+      sortAccessor: (f) => f.title,
+      accessor: (f) => (
+        <Link
+          to="/findings/$findingId"
+          params={{ findingId: f.id }}
+          className="hover:underline"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {f.title}
+        </Link>
+      ),
+    },
+    {
+      key: "repo",
+      header: "Repo",
+      sortAccessor: (f) => f.repo?.name ?? f.repo_id,
+      accessor: (f) =>
+        f.repo_id ? (
+          <Link
+            to="/repos/$repoId"
+            params={{ repoId: f.repo_id }}
+            className="text-xs hover:underline"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {f.repo?.name || f.repo_id.slice(0, 8)}
+          </Link>
+        ) : (
+          "—"
+        ),
+    },
+    {
+      key: "file",
+      header: "File",
+      sortAccessor: (f) => f.file_path ?? "",
+      accessor: (f) => (
+        <span className="block max-w-xs truncate font-mono text-xs text-muted-foreground">
+          {f.file_path || "—"}
+        </span>
+      ),
+    },
+    {
+      key: "baseline",
+      header: "Baseline",
+      sortAccessor: (f) => f.baseline_state ?? "",
+      accessor: (f) => (
+        <span className="text-xs text-muted-foreground">
+          {f.baseline_state || "—"}
+        </span>
+      ),
+    },
+  ];
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-1.5">
+        {(
+          [
+            ["new", "New since baseline"],
+            ["all", "All open"],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setScope(id)}
+            className={
+              "h-8 px-3 rounded-md text-xs border transition-colors " +
+              (scope === id
+                ? "bg-accent border-border text-foreground"
+                : "border-border text-muted-foreground hover:bg-accent hover:text-foreground")
+            }
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {!q.isLoading && rows.length === 0 ? (
+        scope === "new" ? (
+          <EmptyState
+            icon={BugIcon}
+            title="No new findings since baseline"
+            description="New and resurfaced issues land here. Switch to all open to triage the backlog."
+            cta={{ label: "Show all open", onClick: () => setScope("all") }}
+          />
+        ) : (
+          <EmptyState
+            icon={BugIcon}
+            title="No open findings"
+            description="Run a scan and current-open findings land here."
+            cta={{ label: "Go to repos", to: "/repos" }}
+          />
+        )
+      ) : (
+        <DataTable
+          data={rows}
+          columns={columns}
+          keyExtractor={(f) => f.id}
+          persistKey="findings-list"
+          density="compact"
+          selectable
+          loading={q.isLoading}
+          isError={q.isError}
+          onRetry={() => void q.refetch()}
+          searchPlaceholder="Filter findings..."
+          emptyMessage="No findings match"
+          onRowClick={(f) =>
+            navigate({
+              to: "/findings/$findingId",
+              params: { findingId: f.id },
+            })
+          }
+          bulkActions={(selected) => (
+            <>
+              <button
+                type="button"
+                disabled={bulk.isPending}
+                onClick={() =>
+                  bulk.mutate({
+                    ids: selected.map((f) => f.id),
+                    status: "wont_fix",
+                  })
+                }
+                className="h-7 px-2 rounded-md border border-border text-xs hover:bg-muted/40 disabled:opacity-50"
+              >
+                Won't fix
+              </button>
+              <button
+                type="button"
+                disabled={bulk.isPending}
+                onClick={() =>
+                  bulk.mutate({
+                    ids: selected.map((f) => f.id),
+                    status: "false_positive",
+                  })
+                }
+                className="h-7 px-2 rounded-md border border-border text-xs hover:bg-muted/40 disabled:opacity-50"
+              >
+                False positive
+              </button>
+              <button
+                type="button"
+                onClick={() => downloadFindingsJson(selected)}
+                className="h-7 px-2 rounded-md border border-border text-xs hover:bg-muted/40"
+              >
+                Export JSON
+              </button>
+            </>
+          )}
+        />
+      )}
+    </div>
+  );
+}
+
+function downloadFindingsJson(rows: Finding[]) {
+  const blob = new Blob([JSON.stringify(rows, null, 2)], {
+    type: "application/json",
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "findings.json";
+  a.click();
+  URL.revokeObjectURL(url);
 }

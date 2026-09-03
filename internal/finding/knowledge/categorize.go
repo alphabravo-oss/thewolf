@@ -19,19 +19,29 @@ func Categorize(tool, ruleID string) (fineCategory, fixStrategy string) {
 	}
 
 	switch tool {
-	case "trivy":
-		// Trivy's vulnerability findings carry CVE-#### as ruleID; map
-		// them all to a single "vulnerable-dependency" category.
-		if strings.HasPrefix(strings.ToUpper(ruleID), "CVE-") {
-			return "vulnerable-dependency", "update-vulnerable-dependency"
-		}
-		if strings.HasPrefix(ruleID, "GHSA-") {
+	case "trivy", "grype", "osv-scanner", "govulncheck", "pip-audit", "npm-audit", "cargo-audit":
+		if isAdvisoryID(ruleID) {
 			return "vulnerable-dependency", "update-vulnerable-dependency"
 		}
 	case "semgrep":
 		if fc, fs := CategorizeBySemgrepPrefix(ruleID); fc != "" {
 			return fc, fs
 		}
+	case "trufflehog", "detect-secrets", "gitleaks":
+		return "hardcoded-secret", "rotate-and-remove-secret"
+	case "checkov", "kics":
+		return "iac-misconfiguration", "harden-iac"
+	case "codeql":
+		if fc, fs := CategorizeBySemgrepPrefix(ruleID); fc != "" {
+			return fc, fs
+		}
 	}
 	return "", ""
+}
+
+func isAdvisoryID(ruleID string) bool {
+	u := strings.ToUpper(ruleID)
+	return strings.HasPrefix(u, "CVE-") || strings.HasPrefix(u, "GHSA-") ||
+		strings.HasPrefix(u, "OSV-") || strings.HasPrefix(u, "GHS-") ||
+		strings.HasPrefix(strings.ToLower(ruleID), "ghsa-")
 }

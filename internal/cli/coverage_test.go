@@ -32,6 +32,10 @@ var cliExempt = map[string]string{
 	"POST /auth/mfa/setup":    "two-factor enrollment is a browser/QR flow",
 	"POST /auth/mfa/activate": "two-factor enrollment is a browser/QR flow",
 	"POST /auth/mfa/disable":  "two-factor enrollment is a browser/QR flow",
+	"POST /webhooks/github":   "inbound GitHub HMAC webhook",
+
+	"GET /auth/sso/{}/start":    "browser SSO redirect",
+	"GET /auth/sso/{}/callback": "browser SSO callback",
 }
 
 // TestCLICoversEveryEndpoint is the CLI counterpart to the OpenAPI coverage

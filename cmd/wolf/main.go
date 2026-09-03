@@ -15,7 +15,6 @@ package main
 
 import (
 	"context"
-	cryptorand "crypto/rand"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -29,10 +28,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 
-	"github.com/alphabravocompany/thewolf/internal/api"
-	"github.com/alphabravocompany/thewolf/internal/api/routes"
 	"github.com/alphabravocompany/thewolf/internal/artifacts"
-	"github.com/alphabravocompany/thewolf/internal/auth"
 	"github.com/alphabravocompany/thewolf/internal/cli"
 	"github.com/alphabravocompany/thewolf/internal/db"
 	"github.com/alphabravocompany/thewolf/internal/enrich"
@@ -43,7 +39,7 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/scan/report"
 	"github.com/alphabravocompany/thewolf/internal/scan/runner"
 	scannermanifest "github.com/alphabravocompany/thewolf/internal/scannertools/manifest"
-	"github.com/alphabravocompany/thewolf/internal/secrets"
+	"github.com/alphabravocompany/thewolf/internal/serve"
 	"github.com/alphabravocompany/thewolf/internal/setup/scanners"
 	"github.com/alphabravocompany/thewolf/internal/wolflog"
 	_ "github.com/alphabravocompany/thewolf/plugins"
@@ -82,6 +78,9 @@ func main() {
 	rootCmd.AddCommand(
 		newServeCmd(),
 		newDoctorCmd(),
+		newInitCmd(),
+		newBackupCmd(),
+		newRestoreCmd(),
 		newPullCmd(),
 		newVersionCmd(),
 		scanCmd,
@@ -122,27 +121,7 @@ func initLogger() {
 
 // openStore opens the configured database backend. Defaults to SQLite at
 // ~/.wolf/wolf.db.
-func openStore() (db.Store, error) {
-	driver := envOr("WOLF_DB_DRIVER", "sqlite")
-	switch strings.ToLower(driver) {
-	case "sqlite":
-		dsn := os.Getenv("WOLF_DB_DSN")
-		if dsn == "" {
-			home, _ := os.UserHomeDir()
-			_ = os.MkdirAll(home+"/.wolf", 0o750)
-			dsn = home + "/.wolf/wolf.db"
-		}
-		return db.NewSQLite(dsn)
-	case "postgres":
-		dsn := os.Getenv("WOLF_DB_DSN")
-		if dsn == "" {
-			return nil, fmt.Errorf("WOLF_DB_DSN required for postgres driver")
-		}
-		return db.NewPostgres(dsn)
-	default:
-		return nil, fmt.Errorf("unknown db driver %q", driver)
-	}
-}
+func openStore() (db.Store, error) { return serve.OpenStore() }
 
 // installScannerBackend wires the container backend into the process. Failures
 // here are warnings, not fatal — operators may want to run `wolf doctor` and
@@ -151,51 +130,6 @@ func openStore() (db.Store, error) {
 func installScannerBackend(ctx context.Context) error {
 	_, err := scanners.LoadAndInstall(ctx)
 	return err
-}
-
-// bootstrapAdmin creates the WOLF_ADMIN_EMAIL user on startup when both
-// WOLF_ADMIN_EMAIL and WOLF_ADMIN_PASSWORD are set and no user with that
-// email exists yet. Idempotent on subsequent restarts. Lets fresh dev
-// installs log in without a manual /auth/register step.
-func bootstrapAdmin(ctx context.Context, store db.Store) error {
-	email := strings.TrimSpace(strings.ToLower(os.Getenv("WOLF_ADMIN_EMAIL")))
-	password := os.Getenv("WOLF_ADMIN_PASSWORD")
-	if email == "" || password == "" {
-		return nil
-	}
-	if len(password) < 8 {
-		return fmt.Errorf("WOLF_ADMIN_PASSWORD must be at least 8 characters")
-	}
-	if existing, _ := store.GetUserByEmail(ctx, email); existing != nil {
-		// Ensure the bootstrap admin always has the admin role (e.g. an install
-		// that pre-dates roles, or a demoted account).
-		if existing.Role != models.RoleAdmin {
-			existing.Role = models.RoleAdmin
-			if err := store.UpdateUser(ctx, existing); err != nil {
-				return fmt.Errorf("promote bootstrap admin: %w", err)
-			}
-			wolflog.L().Info().Str("email", email).Msg("admin bootstrap: promoted existing user to admin")
-		}
-		return nil
-	}
-	hash, err := auth.HashPassword(password)
-	if err != nil {
-		return fmt.Errorf("hash admin password: %w", err)
-	}
-	now := time.Now().UTC()
-	user := &models.User{
-		ID:           uuid.New().String(),
-		Email:        email,
-		PasswordHash: hash,
-		Role:         models.RoleAdmin,
-		CreatedAt:    now,
-		UpdatedAt:    now,
-	}
-	if err := store.CreateUser(ctx, user); err != nil {
-		return fmt.Errorf("create admin user: %w", err)
-	}
-	wolflog.L().Info().Str("email", email).Msg("admin bootstrap: created default admin from WOLF_ADMIN_EMAIL / WOLF_ADMIN_PASSWORD")
-	return nil
 }
 
 // --- serve ------------------------------------------------------------------
@@ -212,115 +146,10 @@ func newServeCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, cancel := signal.NotifyContext(cmd.Context(), syscall.SIGINT, syscall.SIGTERM)
 			defer cancel()
-			if apiOnly {
-				if err := os.Setenv("WOLF_API_ONLY", "true"); err != nil {
-					return fmt.Errorf("enable API-only mode: %w", err)
-				}
-			}
-
-			if !skipScanInit {
-				if err := installScannerBackend(ctx); err != nil {
-					wolflog.L().Warn().Err(err).Msg("scanner backend not ready at startup; UI will surface diagnostics")
-				}
-			}
-
-			store, err := openStore()
-			if err != nil {
-				return fmt.Errorf("open store: %w", err)
-			}
-			defer func() { _ = store.Close() }()
-
-			// Only override the declared version (routes.AppVersion) when the
-			// build actually stamped one via ldflags; a plain `go build` leaves
-			// version="dev", and we'd rather show the declared release.
-			if version != "" && version != "dev" {
-				routes.AppVersion = version
-			}
-			routes.BuildCommit = commit
-			routes.BuildDate = buildDate
-
-			// JWT secret resolution order:
-			//   1. WOLF_MASTER_KEY env — preferred for production / clustered
-			//      deployments (every replica must share the same secret).
-			//   2. ~/.wolf/jwt-secret — auto-persisted dev fallback so tokens
-			//      survive `wolf serve` restarts without forcing the operator
-			//      to remember an env var. Generated lazily on first run,
-			//      written 0600.
-			//   3. Random per-process — only when (2) is unwritable (e.g.
-			//      no home dir). Logs a warning because every restart now
-			//      kicks every logged-in user out.
-			//
-			// crypto/rand reads exactly the requested number of bytes from the
-			// OS CSPRNG. A prior bug used os.ReadFile("/dev/urandom") which
-			// streamed the (infinite) device until OOM — keep that lesson by
-			// staying on crypto/rand.
-			secret := []byte(envOr("WOLF_MASTER_KEY", ""))
-			if len(secret) == 0 {
-				if home, herr := os.UserHomeDir(); herr == nil && home != "" {
-					path := filepath.Join(home, ".wolf", "jwt-secret")
-					if data, rerr := os.ReadFile(path); rerr == nil && len(data) >= 32 { // #nosec G304 -- path is validated upstream (scan-root / artifact-dir / configured input)
-						secret = data
-					} else {
-						secret = make([]byte, 32)
-						if _, err := cryptorand.Read(secret); err != nil {
-							return fmt.Errorf("read CSPRNG for JWT secret: %w", err)
-						}
-						if mkErr := os.MkdirAll(filepath.Dir(path), 0o700); mkErr == nil {
-							if wErr := os.WriteFile(path, secret, 0o600); wErr == nil {
-								wolflog.L().Info().Str("path", path).Msg("JWT secret persisted; tokens will survive restart")
-							} else {
-								wolflog.L().Warn().Err(wErr).Msg("WOLF_MASTER_KEY unset and ~/.wolf/jwt-secret not writable; tokens won't survive restart")
-							}
-						}
-					}
-				} else {
-					secret = make([]byte, 32)
-					if _, err := cryptorand.Read(secret); err != nil {
-						return fmt.Errorf("read CSPRNG for JWT secret: %w", err)
-					}
-					wolflog.L().Warn().Msg("WOLF_MASTER_KEY unset and no home dir; tokens won't survive restart")
-				}
-			}
-			auth.SetJWTSecret(secret)
-
-			// Load the master encryption key for the secrets store. Without
-			// this, every `POST /config/secrets` returns 500 — and that in
-			// turn blocks GitHub-token, SSH-credential, and AI-key entry.
-			if err := secrets.LoadMasterKey(); err != nil {
-				wolflog.L().Warn().Err(err).Msg("secrets master key unavailable; the secrets store will reject writes")
-			}
-
-			// Bootstrap a default admin from WOLF_ADMIN_EMAIL + WOLF_ADMIN_PASSWORD
-			// when both are set. Idempotent — only creates the user if no row
-			// with that email exists. Lets fresh dev installs log in without
-			// a manual /auth/register step.
-			if err := bootstrapAdmin(ctx, store); err != nil {
-				wolflog.L().Warn().Err(err).Msg("admin bootstrap skipped")
-			}
-
-			// Surface the resolved default scanner image tag at startup so the
-			// runtime default (scanners.DefaultScannersTag) vs. a
-			// WOLF_SCANNERS_TAG override is obvious in the logs. The active
-			// refs are what a scan will actually pull.
-			wolflog.L().Info().
-				Str("tag", scanners.ResolvedTag()).
-				Str("default_image", scanners.ActiveImageRefs()["default"]).
-				Msg("resolved scanner image tag (override with WOLF_SCANNERS_TAG)")
-
-			srv := api.NewServer(store, addr)
-			wolflog.L().Info().Str("addr", addr).Msg("wolf serve")
-
-			errCh := make(chan error, 1)
-			go func() { errCh <- srv.Start() }()
-
-			select {
-			case err := <-errCh:
-				return err
-			case <-ctx.Done():
-				shutdownCtx, sc := context.WithTimeout(context.Background(), 15*time.Second)
-				defer sc()
-				return srv.Shutdown(shutdownCtx)
-			}
+			return serve.Run(ctx, serve.Options{
+				Addr: addr, SkipScanInit: skipScanInit, APIOnly: apiOnly,
+				Version: version, Commit: commit, BuildDate: buildDate,
+			})
 		},
 	}
 	cmd.Flags().StringVar(&addr, "bind", ":8778", "address:port to bind the HTTP server")
@@ -375,7 +204,7 @@ func newVersionCmd() *cobra.Command {
 		Use:   "version",
 		Short: "Print version info",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Printf("wolf %s\n  commit:     %s\n  built:      %s\n",
+			fmt.Printf("wolf %s\n  commit:     %s\n  built:      %s\n  edition:    community\n  license:    source-available\n",
 				version, commit, buildDate)
 		},
 	}
@@ -387,6 +216,7 @@ func newScanCmd() *cobra.Command {
 	var (
 		repoPath           string
 		branch             string
+		profile            string
 		tools              []string
 		concurrency        int
 		heavyConcurrency   int
@@ -487,6 +317,13 @@ func newScanCmd() *cobra.Command {
 				OnToolOutput: func(toolName, line string) {
 					fmt.Printf("[%s] %s\n", toolName, line)
 				},
+			}
+			scanProfile := strings.ToLower(strings.TrimSpace(profile))
+			if scanProfile == "pr" {
+				scanProfile = "fast"
+			}
+			if scanProfile == "fast" && len(tools) == 0 {
+				cfg.DisabledTools = localHeavyToolNames()
 			}
 			if !allScanners && len(tools) == 0 {
 				cfg.Languages = langs
@@ -599,6 +436,7 @@ func newScanCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&repoPath, "repo", "", "repository path (required)")
 	cmd.Flags().StringVar(&branch, "branch", "main", "branch label for the scan record")
+	cmd.Flags().StringVar(&profile, "profile", "standard", "scan profile (standard, full, targeted, fast, pr, release)")
 	cmd.Flags().StringSliceVar(&tools, "tools", nil, "explicit tool list (default: auto-detect by language)")
 	cmd.Flags().IntVar(&concurrency, "concurrency", 4, "parallel tool execution cap")
 	cmd.Flags().IntVar(&heavyConcurrency, "heavy-concurrency", 1, "parallel heavy scanner execution cap")
@@ -608,6 +446,20 @@ func newScanCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&planOnly, "plan-only", false, "emit scanner run/skip plan and exit without scanning")
 	cmd.Flags().StringVar(&outDir, "out", "", "artifacts root directory (default ~/.wolf/artifacts)")
 	return cmd
+}
+
+func localHeavyToolNames() []string {
+	m, err := scannermanifest.LoadDefault()
+	if err != nil || m == nil {
+		return nil
+	}
+	var names []string
+	for name, tool := range m.Tools {
+		if tool.ResourceClass == "heavy" {
+			names = append(names, name)
+		}
+	}
+	return names
 }
 
 func buildLocalScannerPlan(langs []models.Language, tools []string, allScanners bool) (planner.Result, error) {

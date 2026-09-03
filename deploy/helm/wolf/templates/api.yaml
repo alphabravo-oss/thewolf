@@ -60,6 +60,12 @@ spec:
             - {name: WOLF_SCANNER_LEGACY_BUILD_ENDPOINTS, value: {{ $legacyBuildEndpoints | quote }}}
             - {name: WOLF_ARTIFACTS_ROOT, value: /artifacts}
             - {name: WOLF_GIT_ALLOWED_CIDRS, value: {{ .Values.gitAllowedCIDRs | quote }}}
+            {{- if ((.Values.verify).killSwitch) }}
+            - {name: WOLF_VERIFY_KILL_SWITCH, value: "true"}
+            {{- end }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
             {{- if $portableTrustSecret }}
             - {name: WOLF_SCANNER_BUNDLE_TRUST_POLICY_FILE, value: /run/wolf/offline-bundles/portable/trust-policy.json}
             {{- end }}

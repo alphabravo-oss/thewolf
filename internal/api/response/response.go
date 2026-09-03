@@ -32,9 +32,14 @@ type ErrorDetail struct {
 	Message string `json:"message"`
 }
 
-// ErrorResponse wraps an error.
+// ErrorResponse wraps an error. Extra RFC 9457 fields keep the existing
+// `error` object so current clients keep working.
 type ErrorResponse struct {
-	Error ErrorDetail `json:"error"`
+	Error  ErrorDetail `json:"error"`
+	Type   string      `json:"type,omitempty"`
+	Title  string      `json:"title,omitempty"`
+	Status int         `json:"status,omitempty"`
+	Detail string      `json:"detail,omitempty"`
 }
 
 // WriteJSON writes a JSON response.
@@ -54,6 +59,10 @@ func WriteError(w http.ResponseWriter, status int, code, message string) {
 		wolflog.Debug().Int("status", status).Str("code", code).Str("message", message).Msg("client error")
 	}
 	WriteJSON(w, status, ErrorResponse{
-		Error: ErrorDetail{Code: code, Message: message},
+		Error:  ErrorDetail{Code: code, Message: message},
+		Type:   "about:blank",
+		Title:  code,
+		Status: status,
+		Detail: message,
 	})
 }

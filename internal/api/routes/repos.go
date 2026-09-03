@@ -183,6 +183,10 @@ func CreateRepo(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if rejectCommunityLimit(w, r.Context(), h.Store, limitRepos) {
+		return
+	}
+
 	now := time.Now()
 	repo := &models.Repo{
 		ID:                 uuid.New().String(),

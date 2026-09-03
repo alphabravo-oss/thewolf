@@ -46,6 +46,7 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/fix/budget"
 	"github.com/alphabravocompany/thewolf/internal/fix/engine"
 	"github.com/alphabravocompany/thewolf/internal/fix/hygiene"
+	"github.com/alphabravocompany/thewolf/internal/fix/pr"
 	"github.com/alphabravocompany/thewolf/internal/fix/verify"
 	"github.com/alphabravocompany/thewolf/internal/fix/workspace"
 	"github.com/alphabravocompany/thewolf/internal/models"
@@ -625,6 +626,22 @@ func finishWithPush(
 		job.Pushed = true
 		job.PushSHA = sha
 		logf("job %s: pushed branch %s (%s)", job.ID, ws.Branch(), sha)
+		if repo != nil && repo.SourceType == models.SourceTypeGitHub {
+			base := repo.DefaultBranch
+			if base == "" {
+				base = "main"
+			}
+			prRes, _ := pr.CreateGitHubPR(ctx, pr.PRRequest{
+				RepoPath:   ws.Path(),
+				BranchName: ws.Branch(),
+				BaseBranch: base,
+			})
+			if prRes != nil && prRes.Error != "" {
+				logf("job %s: GitHub PR create failed: %s", job.ID, prRes.Error)
+			} else if prRes != nil && prRes.URL != "" {
+				logf("job %s: GitHub PR %s", job.ID, prRes.URL)
+			}
+		}
 		return result, nil
 	}
 

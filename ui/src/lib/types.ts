@@ -216,6 +216,10 @@ export interface Scan {
   remediation_id?: string;
   fix_job_id?: string;
   status: ScanStatus;
+  failure_code?: string;
+  failure_message?: string;
+  attempt?: number;
+  phase?: string;
   // The API stores these as JSON-encoded strings, NOT arrays. Use
   // parseToolList() to get a real string[] for length / iteration.
   tools_selected: string;
@@ -226,11 +230,47 @@ export interface Scan {
   coverage_summary?: Record<string, unknown>;
   ai_enabled?: boolean;
   ai_summary?: string;
+  profile?: string;
   started_at?: string;
   completed_at?: string;
   created_at: string;
   updated_at: string;
   repo?: Repo;
+}
+
+export interface VulnerabilityEvidence {
+  id: string;
+  vulnerability_id: string;
+  finding_id: string;
+  tool_name: string;
+  title: string;
+  file_path: string;
+  line_start: number;
+  rule_id?: string;
+  reason: string;
+  created_at: string;
+}
+
+export interface Vulnerability {
+  id: string;
+  repo_id: string;
+  scan_id: string;
+  canonical_key: string;
+  title: string;
+  severity: Severity;
+  category: Category;
+  fine_category?: string;
+  confidence?: string;
+  baseline_state?: string;
+  composite_score: number;
+  evidence_count: number;
+  finding_ids?: string[];
+  corroborated_by?: string[];
+  suppressed?: boolean;
+  merge_reason?: string;
+  evidence?: VulnerabilityEvidence[];
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Finding {
@@ -255,6 +295,15 @@ export interface Finding {
   status: FindingStatus;
   cwe_id?: string;
   rule_id?: string;
+  fine_category?: string;
+  confidence?: string;
+  corroborated_by?: string[];
+  baseline_state?: string;
+  fix_strategy_id?: string;
+  fix_strategy?: { id: string; title: string; body: string };
+  suppressed?: boolean;
+  suppressed_reason?: string;
+  introduced_in_scan_id?: string;
   sarif_data?: Record<string, unknown>;
   module_name?: string;
   function_name?: string;
@@ -630,6 +679,40 @@ export interface ResolutionRate {
 
 // Settings map
 export type AppSettings = Record<string, string>;
+
+export interface ScanSchedule {
+  id: string;
+  repo_id?: string;
+  collection_id?: string;
+  interval_minutes: number;
+  branch?: string;
+  profile?: string;
+  quiet_start?: string;
+  quiet_end?: string;
+  enabled: boolean;
+  last_run_at?: string;
+  last_sha?: string;
+}
+
+export interface SetupStatus {
+  repo_count: number;
+  collection_count: number;
+  has_completed_scan: boolean;
+  overall_ok?: boolean;
+}
+
+export interface InboxNotification {
+  type: string;
+  title: string;
+  href?: string;
+  at?: string;
+}
+
+export interface DiskUsage {
+  artifacts_bytes: number;
+  workspaces_bytes: number;
+  db_bytes: number;
+}
 
 // parseToolList unwraps the API's JSON-encoded tool list strings into a
 // real string[]. Returns [] for empty / null / "null" / malformed inputs.

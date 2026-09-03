@@ -49,10 +49,21 @@ func setupTestEnv(t *testing.T) *testEnv {
 
 	r := chi.NewRouter()
 	r.Post("/api/auth/register", routes.Register)
+	r.Post("/api/webhooks/github", routes.GitHubWebhook)
 	r.Group(func(r chi.Router) {
 		r.Use(auth.Middleware)
 		// Repos
 		r.Post("/api/repos", routes.CreateRepo)
+		r.Get("/api/schedules", routes.ListSchedules)
+		r.Post("/api/schedules", routes.CreateSchedule)
+		r.Put("/api/schedules/{id}", routes.UpdateSchedule)
+		r.Delete("/api/schedules/{id}", routes.DeleteSchedule)
+		r.Get("/api/setup/status", routes.GetSetupStatus)
+		r.Post("/api/setup/sample-repo", routes.CreateSampleRepo)
+		r.Get("/api/notifications", routes.ListNotifications)
+		r.Get("/api/admin/disk", routes.AdminDisk)
+		r.Post("/api/admin/workspaces/reap", routes.AdminReapWorkspaces)
+		r.Post("/api/webhooks/outbound/test", routes.TestOutboundWebhook)
 		r.Delete("/api/repos/{id}", routes.DeleteRepo)
 		r.Post("/api/collections", routes.CreateCollection)
 		r.Delete("/api/collections/{id}", routes.DeleteCollection)
@@ -75,6 +86,7 @@ func setupTestEnv(t *testing.T) *testEnv {
 		r.Get("/api/scans/{id}/tools", routes.GetScanTools)
 		r.Get("/api/scans/{id}/scanner-runs", routes.GetScannerRunRecords)
 		r.Get("/api/scans/{id}/stream", routes.StreamScan)
+		r.Post("/api/scans/{id}/retry", routes.RetryScan)
 		r.Delete("/api/scans/{id}", routes.CancelScan)
 		// Source credentials
 		r.Get("/api/credentials", routes.ListCredentials)
@@ -86,9 +98,17 @@ func setupTestEnv(t *testing.T) *testEnv {
 		r.Post("/api/config/secrets", routes.CreateSecret)
 		// Findings
 		r.Get("/api/findings", routes.ListFindings)
+		r.Post("/api/findings/bulk", routes.BulkUpdateFindings)
 		r.Get("/api/findings/{id}", routes.GetFinding)
 		r.Put("/api/findings/{id}/status", routes.UpdateFindingStatus)
 		r.Get("/api/findings/trends", routes.FindingTrends)
+		r.Get("/api/vulnerabilities", routes.ListVulnerabilities)
+		r.Get("/api/vulnerabilities/{id}/attack-path", routes.GetAttackPath)
+		r.Post("/api/vulnerabilities/{id}/investigate", routes.InvestigateVulnerability)
+		r.Post("/api/vulnerabilities/{id}/verify", routes.VerifyVulnerability)
+		r.Get("/api/vulnerabilities/{id}", routes.GetVulnerability)
+		r.Post("/api/vulnerabilities/{id}/split", routes.SplitVulnerability)
+		r.Post("/api/vulnerabilities/{id}/merge", routes.MergeVulnerability)
 		// SARIF
 		r.Post("/api/sarif/import", routes.ImportSARIF)
 		// Suppressions
@@ -1023,6 +1043,60 @@ func TestCreateScan(t *testing.T) {
 	}
 }
 
+func TestRetryScanCreatesNewScanFromFailed(t *testing.T) {
+	t.Setenv("WOLF_SCAN_EXECUTION_MODE", "queue")
+	env := setupTestEnv(t)
+	defer env.Store.Close()
+
+	repoID := env.createRepo(t)
+	now := time.Now()
+	sourceID := uuid.New().String()
+	requestJSON, _ := json.Marshal(map[string]string{
+		"repo_id": repoID, "branch": "main", "profile": "standard",
+	})
+	if err := env.Store.CreateScan(context.Background(), &models.Scan{
+		ID: sourceID, UserID: env.UserID, RepoID: repoID, Branch: "main",
+		Status: models.ScanStatusFailed, Profile: "standard",
+		RequestJSON: string(requestJSON), ToolsSelected: "[]",
+		CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("CreateScan failed: %v", err)
+	}
+
+	w := env.doRequest(http.MethodPost, "/api/scans/"+sourceID+"/retry", nil)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("retry failed scan: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Data models.Scan `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode retry: %v", err)
+	}
+	if resp.Data.ID == "" || resp.Data.ID == sourceID {
+		t.Fatalf("retry must create a new scan id, got %q", resp.Data.ID)
+	}
+	if resp.Data.RepoID != repoID {
+		t.Fatalf("retry repo_id = %q, want %q", resp.Data.RepoID, repoID)
+	}
+
+	completedID := uuid.New().String()
+	if err := env.Store.CreateScan(context.Background(), &models.Scan{
+		ID: completedID, UserID: env.UserID, RepoID: repoID, Branch: "main",
+		Status: models.ScanStatusCompleted, RequestJSON: string(requestJSON),
+		CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("CreateScan completed: %v", err)
+	}
+	w = env.doRequest(http.MethodPost, "/api/scans/"+completedID+"/retry", nil)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("retry completed: expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "retry_not_allowed") {
+		t.Fatalf("expected retry_not_allowed, got %s", w.Body.String())
+	}
+}
+
 func TestCreateScanMissingRepoID(t *testing.T) {
 	env := setupTestEnv(t)
 	defer env.Store.Close()
@@ -1689,6 +1763,36 @@ func TestListFindings(t *testing.T) {
 	json.Unmarshal(w.Body.Bytes(), &resp)
 	if resp.Meta.Total != 1 {
 		t.Errorf("expected 1 sca finding, got %d", resp.Meta.Total)
+	}
+}
+
+func TestListFindingsBaselineStateFilter(t *testing.T) {
+	env := setupTestEnv(t)
+	defer env.Store.Close()
+
+	repoID := env.createRepo(t)
+	now := time.Now()
+	scan := &models.Scan{
+		ID: uuid.New().String(), UserID: env.UserID, RepoID: repoID,
+		Status: models.ScanStatusCompleted, CreatedAt: now, UpdatedAt: now,
+	}
+	env.Store.CreateScan(context.Background(), scan)
+	env.Store.CreateFindings(context.Background(), []models.Finding{
+		{ID: uuid.New().String(), ScanID: scan.ID, RepoID: repoID, Severity: models.SeverityHigh, Title: "new", Status: models.StatusOpen, BaselineState: "new", CreatedAt: now, UpdatedAt: now},
+		{ID: uuid.New().String(), ScanID: scan.ID, RepoID: repoID, Severity: models.SeverityHigh, Title: "existing", Status: models.StatusOpen, BaselineState: "existing", CreatedAt: now, UpdatedAt: now},
+		{ID: uuid.New().String(), ScanID: scan.ID, RepoID: repoID, Severity: models.SeverityHigh, Title: "empty", Status: models.StatusOpen, CreatedAt: now, UpdatedAt: now},
+	})
+
+	w := env.doRequest(http.MethodGet, "/api/findings?baseline_state=new", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Meta struct{ Total int } `json:"meta"`
+	}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp.Meta.Total != 1 {
+		t.Fatalf("expected 1 new finding, got %d", resp.Meta.Total)
 	}
 }
 

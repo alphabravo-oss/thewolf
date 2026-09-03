@@ -80,9 +80,13 @@ func parseDetectSecretsOutput(data []byte) ([]models.Finding, error) {
 
 	var findings []models.Finding
 	for file, secrets := range output.Results {
-		for i, s := range secrets {
+		for _, s := range secrets {
 			if detectSecretsNoiseTypes[s.Type] {
 				continue
+			}
+			id := s.HashedSecret
+			if id == "" {
+				id = strconv.Itoa(s.LineNumber)
 			}
 			findings = append(findings, models.Finding{
 				ToolName:    "detect-secrets",
@@ -92,7 +96,7 @@ func parseDetectSecretsOutput(data []byte) ([]models.Finding, error) {
 				Description: fmt.Sprintf("Possible secret of type %q found at line %d", s.Type, s.LineNumber),
 				FilePath:    file,
 				LineStart:   s.LineNumber,
-				RuleID:      "detect-secrets-" + strconv.Itoa(i),
+				RuleID:      s.Type + ":" + id,
 				Status:      models.StatusOpen,
 			})
 		}

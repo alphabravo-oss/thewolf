@@ -183,9 +183,7 @@ func CommandContext(ctx context.Context, cfg *Config, opts Options, tool string,
 		}
 	}
 	dockerArgs = append(dockerArgs, "--workdir", workdir)
-
-	// Network policy.
-	dockerArgs = append(dockerArgs, "--network", cfg.Network)
+	dockerArgs = appendIsolationFlags(dockerArgs, cfg, tool)
 
 	// Resource limits. MemoryOverride wins over cfg.Memory when set.
 	memLimit := cfg.Memory
@@ -382,7 +380,8 @@ func BuildDockerArgs(cfg *Config, opts Options, tool string, args ...string) (co
 			workdir = ScanMountPoint
 		}
 	}
-	dockerArgs = append(dockerArgs, "--workdir", workdir, "--network", cfg.Network)
+	dockerArgs = append(dockerArgs, "--workdir", workdir)
+	dockerArgs = appendIsolationFlags(dockerArgs, cfg, tool)
 
 	memLimit := cfg.Memory
 	if opts.MemoryOverride != "" {

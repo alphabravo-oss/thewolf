@@ -12,6 +12,8 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/api/response"
 	"github.com/alphabravocompany/thewolf/internal/auth"
 	"github.com/alphabravocompany/thewolf/internal/models"
+	"github.com/alphabravocompany/thewolf/pkg/authprovider"
+	"github.com/alphabravocompany/thewolf/pkg/entitlement"
 )
 
 type registerRequest struct {
@@ -111,6 +113,10 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		role = models.RoleAdmin
 	}
 
+	if rejectCommunityLimit(w, r.Context(), h.Store, limitUsers) {
+		return
+	}
+
 	now := time.Now()
 	user := &models.User{
 		ID:           uuid.New().String(),
@@ -143,6 +149,17 @@ func Register(w http.ResponseWriter, r *http.Request) {
 			"refresh_token": tokens.RefreshToken,
 		},
 	})
+}
+
+func AuthProviders(w http.ResponseWriter, r *http.Request) {
+	infos := authprovider.Default.Infos()
+	if !entitlement.Active().Allows(entitlement.Identity) {
+		infos = []authprovider.Info{{Name: authprovider.Local, Kind: authprovider.KindPassword}}
+	}
+	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: map[string]any{
+		"providers":         infos,
+		"local_break_glass": true,
+	}})
 }
 
 func AuthSettings(w http.ResponseWriter, r *http.Request) {
@@ -181,8 +198,14 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if auth.LoginLocked(req.Email) {
+		response.WriteError(w, http.StatusTooManyRequests, "locked", "too many login attempts")
+		return
+	}
+
 	user, err := h.Store.GetUserByEmail(r.Context(), req.Email)
 	if err != nil {
+		auth.RecordLoginFailure(req.Email)
 		RecordAuthEvent(r, "", "auth.login.failed", "warning", http.StatusUnauthorized)
 		response.WriteError(w, http.StatusUnauthorized, "unauthorized", "invalid email or password")
 		return
@@ -190,10 +213,12 @@ func Login(w http.ResponseWriter, r *http.Request) {
 
 	ok, err := auth.VerifyPassword(req.Password, user.PasswordHash)
 	if err != nil || !ok {
+		auth.RecordLoginFailure(req.Email)
 		RecordAuthEvent(r, user.ID, "auth.login.failed", "warning", http.StatusUnauthorized)
 		response.WriteError(w, http.StatusUnauthorized, "unauthorized", "invalid email or password")
 		return
 	}
+	auth.ClearLoginFailures(req.Email)
 
 	// Second factor: if the user has TOTP active, the password alone earns no
 	// session. Hand back a short-lived challenge to be exchanged for a session

@@ -12,9 +12,11 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 
 	"github.com/alphabravocompany/thewolf/internal/api/response"
 	"github.com/alphabravocompany/thewolf/internal/auth"
+	"github.com/alphabravocompany/thewolf/internal/finding/knowledge"
 	"github.com/alphabravocompany/thewolf/internal/models"
 )
 
@@ -42,6 +44,7 @@ func ListFindings(w http.ResponseWriter, r *http.Request) {
 	repoIDFilter := q.Get("repo_id")
 	collectionID := q.Get("collection_id")
 	statusFilter := parseCSV(q.Get("status"))
+	baselineStateFilter := parseCSV(q.Get("baseline_state"))
 	sortField := q.Get("sort")
 	sortOrder := q.Get("order")
 	page := parseIntDefault(q.Get("page"), 1)
@@ -91,6 +94,7 @@ func ListFindings(w http.ResponseWriter, r *http.Request) {
 		tools:             toolFilter,
 		repoID:            repoIDFilter,
 		statuses:          statusFilter,
+		baselineStates:    baselineStateFilter,
 		collectionRepoIDs: collectionRepoIDs,
 	})
 
@@ -134,8 +138,25 @@ func GetFinding(w http.ResponseWriter, r *http.Request) {
 		response.WriteError(w, http.StatusNotFound, "not_found", fmt.Sprintf("finding %s not found", id))
 		return
 	}
+	if !findingVisibleToCaller(w, r, h.Store, finding, claims) {
+		return
+	}
 
-	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: finding})
+	type strategyBody struct {
+		ID    string `json:"id"`
+		Title string `json:"title"`
+		Body  string `json:"body"`
+	}
+	out := struct {
+		models.Finding
+		FixStrategy *strategyBody `json:"fix_strategy,omitempty"`
+	}{Finding: *finding}
+	if finding.FixStrategyID != "" {
+		if s, ok := knowledge.GetStrategy(finding.FixStrategyID); ok {
+			out.FixStrategy = &strategyBody{ID: s.ID, Title: s.Title, Body: s.Body}
+		}
+	}
+	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: out})
 }
 
 // UpdateFindingStatus handles PUT /api/findings/:id/status — update finding status.
@@ -154,9 +175,12 @@ func UpdateFindingStatus(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
 	// Verify finding exists.
-	_, err := h.Store.GetFindingByID(r.Context(), id)
+	finding, err := h.Store.GetFindingByID(r.Context(), id)
 	if err != nil {
 		response.WriteError(w, http.StatusNotFound, "not_found", fmt.Sprintf("finding %s not found", id))
+		return
+	}
+	if !findingVisibleToCaller(w, r, h.Store, finding, claims) {
 		return
 	}
 	// Parse request body.
@@ -405,6 +429,7 @@ func ExportFindings(w http.ResponseWriter, r *http.Request) {
 	toolFilter := parseCSV(q.Get("tool"))
 	repoIDFilter := q.Get("repo_id")
 	statusFilter := parseCSV(q.Get("status"))
+	baselineStateFilter := parseCSV(q.Get("baseline_state"))
 	collectionID := q.Get("collection_id")
 
 	var collectionRepoIDs map[string]bool
@@ -426,6 +451,7 @@ func ExportFindings(w http.ResponseWriter, r *http.Request) {
 		tools:             toolFilter,
 		repoID:            repoIDFilter,
 		statuses:          statusFilter,
+		baselineStates:    baselineStateFilter,
 		collectionRepoIDs: collectionRepoIDs,
 	})
 
@@ -477,6 +503,99 @@ func ExportFindings(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+type bulkUpdateFindingsRequest struct {
+	IDs      []string `json:"ids"`
+	Status   string   `json:"status,omitempty"`
+	Suppress *struct {
+		Reason string `json:"reason"`
+	} `json:"suppress,omitempty"`
+}
+
+// BulkUpdateFindings handles POST /api/findings/bulk.
+func BulkUpdateFindings(w http.ResponseWriter, r *http.Request) {
+	claims := auth.GetUserFromContext(r.Context())
+	if claims == nil {
+		response.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing user context")
+		return
+	}
+	h := DefaultHandler
+	if h == nil {
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "handler not initialized")
+		return
+	}
+
+	var req bulkUpdateFindingsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.WriteError(w, http.StatusBadRequest, "bad_request", "invalid request body")
+		return
+	}
+	if len(req.IDs) == 0 {
+		response.WriteError(w, http.StatusBadRequest, "validation_error", "ids is required")
+		return
+	}
+	if len(req.IDs) > 200 {
+		response.WriteError(w, http.StatusBadRequest, "validation_error", "at most 200 ids are allowed")
+		return
+	}
+
+	var newStatus models.Status
+	if req.Status != "" {
+		newStatus = models.Status(req.Status)
+		if !isValidFindingStatus(newStatus) {
+			response.WriteError(w, http.StatusBadRequest, "validation_error",
+				fmt.Sprintf("invalid status %q; allowed values: open, wont_fix, false_positive", req.Status))
+			return
+		}
+	}
+
+	findings := make([]*models.Finding, 0, len(req.IDs))
+	for _, id := range req.IDs {
+		finding, err := h.Store.GetFindingByID(r.Context(), id)
+		if err != nil || !findingAccessibleToCaller(r, h.Store, finding, claims) {
+			response.WriteError(w, http.StatusForbidden, "forbidden", "finding not visible")
+			return
+		}
+		findings = append(findings, finding)
+	}
+
+	suppressReason := ""
+	if req.Suppress != nil {
+		suppressReason = strings.TrimSpace(req.Suppress.Reason)
+	}
+
+	for _, finding := range findings {
+		if req.Status != "" {
+			if err := h.Store.UpdateFindingStatus(r.Context(), finding.ID, newStatus); err != nil {
+				response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to update finding status")
+				return
+			}
+		}
+		if suppressReason != "" {
+			s, ok := buildSuppressionFromRequest(w, r, h, claims.UserID, suppressionRequest{
+				FindingID: finding.ID,
+				Reason:    suppressReason,
+			}, nil)
+			if !ok {
+				return
+			}
+			if err := h.Store.CreateFindingSuppression(r.Context(), s); err != nil {
+				response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to create suppression")
+				return
+			}
+			_ = h.Store.CreateFindingSuppressionAudit(r.Context(), &models.FindingSuppressionAudit{
+				ID:            uuid.New().String(),
+				SuppressionID: s.ID,
+				Action:        "created",
+				ActorID:       claims.UserID,
+				DetailsJSON:   "{}",
+			})
+			applyOneSuppressionToExistingFindings(r, h, *s)
+		}
+	}
+
+	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: map[string]int{"updated": len(findings)}})
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -491,6 +610,7 @@ type findingFilter struct {
 	tools             []string
 	repoID            string
 	statuses          []string
+	baselineStates    []string
 	collectionRepoIDs map[string]bool
 }
 
@@ -517,6 +637,9 @@ func filterFindings(findings []models.Finding, f findingFilter) []models.Finding
 			continue
 		}
 		if len(f.statuses) > 0 && !containsStr(f.statuses, string(finding.Status)) {
+			continue
+		}
+		if len(f.baselineStates) > 0 && !containsStr(f.baselineStates, finding.BaselineState) {
 			continue
 		}
 		if f.collectionRepoIDs != nil && !f.collectionRepoIDs[finding.RepoID] {

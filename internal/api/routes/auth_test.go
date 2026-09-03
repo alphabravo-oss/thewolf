@@ -47,6 +47,11 @@ func setupTestRouter(t *testing.T) (*chi.Mux, db.Store) {
 
 	r := chi.NewRouter()
 	r.Get("/api/auth/settings", routes.AuthSettings)
+	r.Get("/api/auth/providers", routes.AuthProviders)
+	r.Get("/api/auth/sso/{name}/start", routes.StartSSO)
+	r.Get("/api/auth/sso/{name}/callback", routes.SSOCallback)
+	r.Get("/api/scim/v2/Users", routes.SCIMUnavailable)
+	r.Post("/api/scim/v2/Users", routes.SCIMUnavailable)
 	r.Post("/api/auth/register", routes.Register)
 	r.Post("/api/auth/login", routes.Login)
 	r.Post("/api/auth/logout", routes.Logout)
@@ -263,6 +268,36 @@ func TestAuthSettingsReportsRegistrationState(t *testing.T) {
 	}
 }
 
+func TestAuthProvidersListsLocal(t *testing.T) {
+	r, store := setupTestRouter(t)
+	defer store.Close()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/auth/providers", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("auth providers: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Data struct {
+			Providers []struct {
+				Name string `json:"name"`
+				Kind string `json:"kind"`
+			} `json:"providers"`
+			LocalBreakGlass bool `json:"local_break_glass"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if !resp.Data.LocalBreakGlass {
+		t.Fatal("local break-glass must stay advertised")
+	}
+	if len(resp.Data.Providers) != 1 || resp.Data.Providers[0].Name != "local" || resp.Data.Providers[0].Kind != "password" {
+		t.Fatalf("providers = %+v", resp.Data.Providers)
+	}
+}
+
 func TestLoginInvalidPassword(t *testing.T) {
 	r, store := setupTestRouter(t)
 	defer store.Close()
@@ -287,6 +322,52 @@ func TestLoginInvalidPassword(t *testing.T) {
 
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("bad login: expected 401, got %d", w.Code)
+	}
+}
+
+func TestLoginLockout(t *testing.T) {
+	r, store := setupTestRouter(t)
+	defer store.Close()
+
+	email := "lockout@example.com"
+	password := "password1234"
+	body, _ := json.Marshal(map[string]string{"email": email, "password": password})
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/register", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("register: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+
+	login := func(pw string) *httptest.ResponseRecorder {
+		b, _ := json.Marshal(map[string]string{"email": email, "password": pw})
+		req := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(b))
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		return w
+	}
+
+	for i := 0; i < 10; i++ {
+		w := login("wrongpassword")
+		if w.Code != http.StatusUnauthorized {
+			t.Fatalf("fail %d: expected 401, got %d: %s", i+1, w.Code, w.Body.String())
+		}
+	}
+
+	w = login(password)
+	if w.Code != http.StatusTooManyRequests {
+		t.Fatalf("locked login: expected 429, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode lockout: %v", err)
+	}
+	if resp.Error.Code != "locked" {
+		t.Fatalf("lockout code: got %q, want locked", resp.Error.Code)
 	}
 }
 

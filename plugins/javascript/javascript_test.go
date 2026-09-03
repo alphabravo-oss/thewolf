@@ -88,4 +88,10 @@ func TestParseNPMAuditOutput(t *testing.T) {
 	if f.CWEID != "CVE-2020-8203" {
 		t.Errorf("finding[0].CWEID = %q, want %q", f.CWEID, "CVE-2020-8203")
 	}
+	if f.RuleID != "CVE-2020-8203" {
+		t.Errorf("finding[0].RuleID = %q, want %q", f.RuleID, "CVE-2020-8203")
+	}
+	if f.FilePath != "package.json" {
+		t.Errorf("finding[0].FilePath = %q, want %q", f.FilePath, "package.json")
+	}
 }

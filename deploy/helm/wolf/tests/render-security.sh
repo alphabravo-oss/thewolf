@@ -29,6 +29,26 @@ helm template wolf "$chart_dir" \
 grep -q "image: ghcr.io/alphabravo-oss/thewolf@$wolf_digest" "$tmp_dir/rendered.yaml"
 grep -q "image: postgres@$postgres_digest" "$tmp_dir/rendered.yaml"
 grep -q "automountServiceAccountToken: false" "$tmp_dir/rendered.yaml"
+# Phase 5: API pods must not receive the docker socket.
+if awk '/app.kubernetes.io\/component: api/{p=1} p&&/kind: /{p=0} p' "$tmp_dir/rendered.yaml" | grep -q 'docker.sock'; then
+  echo "API deployment must not mount docker.sock" >&2
+  exit 1
+fi
+if grep -q WOLF_VERIFY_KILL_SWITCH "$tmp_dir/rendered.yaml"; then
+  echo "Community default must not set WOLF_VERIFY_KILL_SWITCH" >&2
+  exit 1
+fi
+
+helm template wolf "$chart_dir" \
+  --set-string masterKey=test-master-key \
+  --set-string postgres.password=test-postgres-password \
+  --set-string image.digest="$wolf_digest" \
+  --set-string postgres.digest="$postgres_digest" \
+  --set verify.killSwitch=true \
+  --set-json 'extraEnv=[{"name":"WOLF_OIDC_ISSUER","value":"https://idp.example"}]' \
+  >"$tmp_dir/overlay-env.yaml"
+grep -q 'name: WOLF_VERIFY_KILL_SWITCH' "$tmp_dir/overlay-env.yaml"
+grep -q 'name: WOLF_OIDC_ISSUER' "$tmp_dir/overlay-env.yaml"
 grep -A20 'app.kubernetes.io/component: postgres' "$tmp_dir/rendered.yaml" |
   grep -q 'runAsNonRoot: true'
 grep -A20 'app.kubernetes.io/component: postgres' "$tmp_dir/rendered.yaml" |

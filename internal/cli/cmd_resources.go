@@ -532,6 +532,31 @@ func newFindingCmd() *cobra.Command {
 	}
 	setStatus.Flags().StringVar(&status, "status", "", "new status (e.g. open, fixed, false_positive)")
 
+	var bulkIDs []string
+	var bulkStatus, bulkReason string
+	bulk := &cobra.Command{
+		Use:         "bulk",
+		Short:       "Bulk-update finding status or suppress findings",
+		Annotations: apiAnno("POST", "/findings/bulk"),
+		Args:        cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if len(bulkIDs) == 0 {
+				return fmt.Errorf("--ids is required")
+			}
+			body := map[string]any{"ids": bulkIDs}
+			if bulkStatus != "" {
+				body["status"] = bulkStatus
+			}
+			if bulkReason != "" {
+				body["suppress"] = map[string]any{"reason": bulkReason}
+			}
+			return runRender(cmd, "POST", "/findings/bulk", body)
+		},
+	}
+	bulk.Flags().StringSliceVar(&bulkIDs, "ids", nil, "finding IDs")
+	bulk.Flags().StringVar(&bulkStatus, "status", "", "status to set (open, wont_fix, false_positive)")
+	bulk.Flags().StringVar(&bulkReason, "reason", "", "suppression reason")
+
 	cmd.AddCommand(
 		listCmd("/findings", "List findings"),
 		getCmd("/findings", "Get a finding"),
@@ -542,7 +567,15 @@ func newFindingCmd() *cobra.Command {
 				return runRender(cmd, "GET", "/findings/aggregate", nil)
 			},
 		},
+		&cobra.Command{
+			Use: "by-repo", Short: "Current-open findings grouped by repository", Args: cobra.NoArgs,
+			Annotations: apiAnno("GET", "/findings/by-repo"),
+			RunE: func(cmd *cobra.Command, _ []string) error {
+				return runRender(cmd, "GET", "/findings/by-repo", nil)
+			},
+		},
 		setStatus,
+		bulk,
 		&cobra.Command{
 			Use: "export", Short: "Export findings",
 			Annotations: apiAnno("GET", "/findings/export"), Args: cobra.NoArgs,
@@ -558,6 +591,47 @@ func newFindingCmd() *cobra.Command {
 			Annotations: apiAnno("GET", "/findings/trends/export"), Args: cobra.NoArgs,
 			RunE: func(cmd *cobra.Command, _ []string) error {
 				return runRender(cmd, "GET", "/findings/trends/export", nil)
+			},
+		},
+	)
+	return cmd
+}
+
+func newVulnerabilityCmd() *cobra.Command {
+	cmd := group("vulnerability", "Inspect canonical vulnerabilities (finding compatibility layer)")
+	cmd.AddCommand(
+		listCmd("/vulnerabilities", "List vulnerabilities"),
+		getCmd("/vulnerabilities", "Get a vulnerability"),
+		subGetCmd("evidence <id>", "List evidence members of a vulnerability", "/vulnerabilities/%s/evidence"),
+		subGetCmd("attack-path <id>", "Enterprise attack path (Community 404)", "/vulnerabilities/%s/attack-path"),
+		&cobra.Command{
+			Use: "investigate <id>", Short: "Evidence-grounded investigation (Community 404)",
+			Annotations: apiAnno("POST", "/vulnerabilities/{}/investigate"), Args: cobra.ExactArgs(1),
+			RunE: func(cmd *cobra.Command, args []string) error {
+				return runRender(cmd, "POST", "/vulnerabilities/"+args[0]+"/investigate", map[string]any{})
+			},
+		},
+		&cobra.Command{
+			Use: "verify <id>", Short: "Governed verification; production-deny default (Community 404)",
+			Annotations: apiAnno("POST", "/vulnerabilities/{}/verify"), Args: cobra.ExactArgs(1),
+			RunE: func(cmd *cobra.Command, args []string) error {
+				return runRender(cmd, "POST", "/vulnerabilities/"+args[0]+"/verify", map[string]any{"environment": "production"})
+			},
+		},
+		&cobra.Command{
+			Use: "split <id> <finding-id>", Short: "Split a finding out into a new vulnerability",
+			Annotations: apiAnno("POST", "/vulnerabilities/{}/split"), Args: cobra.ExactArgs(2),
+			RunE: func(cmd *cobra.Command, args []string) error {
+				return runRender(cmd, "POST", "/vulnerabilities/"+args[0]+"/split",
+					map[string]any{"finding_ids": []string{args[1]}})
+			},
+		},
+		&cobra.Command{
+			Use: "merge <id> <other-id>", Short: "Merge another vulnerability into this one",
+			Annotations: apiAnno("POST", "/vulnerabilities/{}/merge"), Args: cobra.ExactArgs(2),
+			RunE: func(cmd *cobra.Command, args []string) error {
+				return runRender(cmd, "POST", "/vulnerabilities/"+args[0]+"/merge",
+					map[string]any{"vulnerability_id": args[1]})
 			},
 		},
 	)
@@ -946,6 +1020,7 @@ func newFixCmd() *cobra.Command {
 		engines,
 		resume,
 		diff,
+		subGetCmd("commits <id>", "List commits on a fix job's workspace branch", "/fixes/%s/commits"),
 		watchCmd("Stream a fix job's worker logs", "/fixes/%s/stream"),
 		deleteCmd("cancel <id>", "Cancel a fix job", "/fixes/%s"),
 		consoleStart,
@@ -1116,6 +1191,13 @@ func newSettingsCmd() *cobra.Command {
 			RunE: func(cmd *cobra.Command, _ []string) error { return runRender(cmd, "GET", "/settings", nil) },
 		},
 		set,
+		&cobra.Command{
+			Use: "test-webhook", Short: "Send a test outbound webhook",
+			Annotations: apiAnno("POST", "/webhooks/outbound/test"), Args: cobra.NoArgs,
+			RunE: func(cmd *cobra.Command, _ []string) error {
+				return runRender(cmd, "POST", "/webhooks/outbound/test", nil)
+			},
+		},
 	)
 	return cmd
 }
@@ -1470,10 +1552,71 @@ func newFleetCmd() *cobra.Command {
 // --- admin oversight --------------------------------------------------------
 
 func newAdminCmd() *cobra.Command {
+	var reapHours int
+	reap := &cobra.Command{
+		Use:         "reap",
+		Short:       "Remove stale scan workspaces",
+		Annotations: apiAnno("POST", "/admin/workspaces/reap"),
+		Args:        cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			body := map[string]any{}
+			if cmd.Flags().Changed("max-age-hours") {
+				body["max_age_hours"] = reapHours
+			}
+			return runRender(cmd, "POST", "/admin/workspaces/reap", body)
+		},
+	}
+	reap.Flags().IntVar(&reapHours, "max-age-hours", 72, "delete workspaces older than this")
 	cmd := group("admin", "Cross-user oversight (admin)")
 	cmd.AddCommand(
 		listCmd("/admin/tokens", "List all users' API tokens"),
 		listCmd("/admin/secrets", "List all users' secrets (masked)"),
+		&cobra.Command{
+			Use: "disk", Short: "Show artifact, workspace, and database disk usage",
+			Annotations: apiAnno("GET", "/admin/disk"), Args: cobra.NoArgs,
+			RunE: func(cmd *cobra.Command, _ []string) error { return runRender(cmd, "GET", "/admin/disk", nil) },
+		},
+		reap,
+	)
+	return cmd
+}
+
+func newLicenseCmd() *cobra.Command {
+	cmd := group("license", "Edition and commercial license status")
+	cmd.AddCommand(
+		&cobra.Command{
+			Use: "status", Short: "Show commercial license status",
+			Annotations: apiAnno("GET", "/license"), Args: cobra.NoArgs,
+			RunE: func(cmd *cobra.Command, _ []string) error {
+				return runRender(cmd, "GET", "/license", nil)
+			},
+		},
+		&cobra.Command{
+			Use: "validate [file]", Short: "Validate a license blob (Community always reports invalid)",
+			Annotations: apiAnno("POST", "/license/validate"), Args: cobra.MaximumNArgs(1),
+			RunE: func(cmd *cobra.Command, args []string) error {
+				body := map[string]any{"license": ""}
+				if len(args) == 1 {
+					b, err := os.ReadFile(args[0])
+					if err != nil {
+						return err
+					}
+					body["license"] = string(b)
+				}
+				return runRender(cmd, "POST", "/license/validate", body)
+			},
+		},
+		&cobra.Command{
+			Use: "install <file>", Short: "Install a commercial license (Community rejects)",
+			Annotations: apiAnno("POST", "/license/install"), Args: cobra.ExactArgs(1),
+			RunE: func(cmd *cobra.Command, args []string) error {
+				b, err := os.ReadFile(args[0])
+				if err != nil {
+					return err
+				}
+				return runRender(cmd, "POST", "/license/install", map[string]any{"license": string(b)})
+			},
+		},
 	)
 	return cmd
 }
@@ -1499,6 +1642,19 @@ func newSystemCmd() *cobra.Command {
 		}
 	}
 
+	evidence := &cobra.Command{
+		Use: "evidence", Short: "List evidence (requires --vulnerability-id)",
+		Annotations: apiAnno("GET", "/evidence"), Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			id, _ := cmd.Flags().GetString("vulnerability-id")
+			if id == "" {
+				return fmt.Errorf("--vulnerability-id is required")
+			}
+			return runRender(cmd, "GET", "/evidence?vulnerability_id="+url.QueryEscape(id), nil)
+		},
+	}
+	evidence.Flags().String("vulnerability-id", "", "vulnerability id")
+
 	cmd.AddCommand(
 		&cobra.Command{Use: "health", Short: "Liveness probe",
 			Annotations: apiAnno("GET", "/health"), Args: cobra.NoArgs,
@@ -1509,6 +1665,30 @@ func newSystemCmd() *cobra.Command {
 		&cobra.Command{Use: "version", Short: "Server build version",
 			Annotations: apiAnno("GET", "/version"), Args: cobra.NoArgs,
 			RunE: func(cmd *cobra.Command, _ []string) error { return runRender(cmd, "GET", "/version", nil) }},
+		&cobra.Command{Use: "edition", Short: "Edition and entitlement status",
+			Annotations: apiAnno("GET", "/edition"), Args: cobra.NoArgs,
+			RunE: func(cmd *cobra.Command, _ []string) error { return runRender(cmd, "GET", "/edition", nil) }},
+		&cobra.Command{Use: "coverage", Short: "Honest scanner coverage matrix",
+			Annotations: apiAnno("GET", "/coverage"), Args: cobra.NoArgs,
+			RunE: func(cmd *cobra.Command, _ []string) error { return runRender(cmd, "GET", "/coverage", nil) }},
+		&cobra.Command{Use: "scan-profiles", Short: "Named scan profiles",
+			Annotations: apiAnno("GET", "/scan-profiles"), Args: cobra.NoArgs,
+			RunE: func(cmd *cobra.Command, _ []string) error { return runRender(cmd, "GET", "/scan-profiles", nil) }},
+		&cobra.Command{Use: "capability <name>", Short: "Capability status (Community 404s enterprise/cloud)",
+			Annotations: apiAnno("GET", "/capabilities/{name}"), Args: cobra.ExactArgs(1),
+			RunE: func(cmd *cobra.Command, args []string) error {
+				return runRender(cmd, "GET", "/capabilities/"+args[0], nil)
+			}},
+		&cobra.Command{Use: "license", Short: "Commercial license status",
+			Annotations: apiAnno("GET", "/license"), Args: cobra.NoArgs,
+			RunE: func(cmd *cobra.Command, _ []string) error { return runRender(cmd, "GET", "/license", nil) }},
+		&cobra.Command{Use: "mcp-status", Short: "Whether MCP is enabled",
+			Annotations: apiAnno("GET", "/mcp/status"), Args: cobra.NoArgs,
+			RunE: func(cmd *cobra.Command, _ []string) error { return runRender(cmd, "GET", "/mcp/status", nil) }},
+		&cobra.Command{Use: "webhook-events", Short: "Named outbound webhook events",
+			Annotations: apiAnno("GET", "/webhooks/events"), Args: cobra.NoArgs,
+			RunE: func(cmd *cobra.Command, _ []string) error { return runRender(cmd, "GET", "/webhooks/events", nil) }},
+		evidence,
 		&cobra.Command{Use: "setup-status", Short: "First-run setup status",
 			Annotations: apiAnno("GET", "/config/setup"), Args: cobra.NoArgs,
 			RunE: func(cmd *cobra.Command, _ []string) error { return runRender(cmd, "GET", "/config/setup", nil) }},

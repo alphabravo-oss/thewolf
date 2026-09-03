@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
@@ -103,7 +104,7 @@ func parseOSVScannerOutput(data []byte) ([]models.Finding, error) {
 				findings = append(findings, models.Finding{
 					ToolName:    "osv-scanner",
 					Category:    models.CategorySCA,
-					Severity:    models.SeverityHigh,
+					Severity:    mapOSVSeverity(v.Severity),
 					Title:       fmt.Sprintf("%s: %s", v.ID, v.Summary),
 					Description: fmt.Sprintf("Package: %s@%s (%s)\n\n%s", pkg.Package.Name, pkg.Package.Version, pkg.Package.Ecosystem, v.Details),
 					FilePath:    r.Source.Path,
@@ -115,4 +116,27 @@ func parseOSVScannerOutput(data []byte) ([]models.Finding, error) {
 		}
 	}
 	return findings, nil
+}
+
+func mapOSVSeverity(sevs []struct {
+	Type  string `json:"type"`
+	Score string `json:"score"`
+}) models.Severity {
+	for _, s := range sevs {
+		n, err := strconv.ParseFloat(strings.TrimSpace(s.Score), 64)
+		if err != nil {
+			continue
+		}
+		switch {
+		case n >= 9:
+			return models.SeverityCritical
+		case n >= 7:
+			return models.SeverityHigh
+		case n >= 4:
+			return models.SeverityMedium
+		default:
+			return models.SeverityLow
+		}
+	}
+	return models.SeverityHigh
 }

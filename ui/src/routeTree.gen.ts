@@ -17,16 +17,19 @@ import { Route as AuthedAccountRouteImport } from './routes/_authed.account'
 import { Route as AuthedAgentsRouteImport } from './routes/_authed.agents'
 import { Route as AuthedAuditRouteImport } from './routes/_authed.audit'
 import { Route as AuthedCollectionsRouteImport } from './routes/_authed.collections'
+import { Route as AuthedCoverageRouteImport } from './routes/_authed.coverage'
 import { Route as AuthedFindingsRouteImport } from './routes/_authed.findings'
 import { Route as AuthedFixesRouteImport } from './routes/_authed.fixes'
 import { Route as AuthedReposRouteImport } from './routes/_authed.repos'
 import { Route as AuthedScansRouteImport } from './routes/_authed.scans'
 import { Route as AuthedSettingsRouteImport } from './routes/_authed.settings'
+import { Route as AuthedVulnerabilitiesRouteImport } from './routes/_authed.vulnerabilities'
 import { Route as AuthedAgentsIndexRouteImport } from './routes/_authed.agents.index'
 import { Route as AuthedAgentsAgentIdRouteImport } from './routes/_authed.agents.$agentId'
 import { Route as AuthedAuditIndexRouteImport } from './routes/_authed.audit.index'
 import { Route as AuthedCollectionsIndexRouteImport } from './routes/_authed.collections.index'
 import { Route as AuthedCollectionsCollectionIdRouteImport } from './routes/_authed.collections.$collectionId'
+import { Route as AuthedEnterpriseSplatRouteImport } from './routes/_authed.enterprise.$'
 import { Route as AuthedFindingsIndexRouteImport } from './routes/_authed.findings.index'
 import { Route as AuthedFindingsFindingIdRouteImport } from './routes/_authed.findings.$findingId'
 import { Route as AuthedFixesIndexRouteImport } from './routes/_authed.fixes.index'
@@ -35,6 +38,8 @@ import { Route as AuthedReposIndexRouteImport } from './routes/_authed.repos.ind
 import { Route as AuthedReposRepoIdRouteImport } from './routes/_authed.repos.$repoId'
 import { Route as AuthedScansIndexRouteImport } from './routes/_authed.scans.index'
 import { Route as AuthedScansScanIdRouteImport } from './routes/_authed.scans.$scanId'
+import { Route as AuthedVulnerabilitiesIndexRouteImport } from './routes/_authed.vulnerabilities.index'
+import { Route as AuthedVulnerabilitiesVulnerabilityIdRouteImport } from './routes/_authed.vulnerabilities.$vulnerabilityId'
 import { Route as AuthedScansScanIdIndexRouteImport } from './routes/_authed.scans.$scanId.index'
 import { Route as AuthedScansScanIdLiveRouteImport } from './routes/_authed.scans.$scanId.live'
 
@@ -77,6 +82,11 @@ const AuthedCollectionsRoute = AuthedCollectionsRouteImport.update({
   path: '/collections',
   getParentRoute: () => AuthedRoute,
 } as any)
+const AuthedCoverageRoute = AuthedCoverageRouteImport.update({
+  id: '/coverage',
+  path: '/coverage',
+  getParentRoute: () => AuthedRoute,
+} as any)
 const AuthedFindingsRoute = AuthedFindingsRouteImport.update({
   id: '/findings',
   path: '/findings',
@@ -100,6 +110,11 @@ const AuthedScansRoute = AuthedScansRouteImport.update({
 const AuthedSettingsRoute = AuthedSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => AuthedRoute,
+} as any)
+const AuthedVulnerabilitiesRoute = AuthedVulnerabilitiesRouteImport.update({
+  id: '/vulnerabilities',
+  path: '/vulnerabilities',
   getParentRoute: () => AuthedRoute,
 } as any)
 const AuthedAgentsIndexRoute = AuthedAgentsIndexRouteImport.update({
@@ -128,6 +143,11 @@ const AuthedCollectionsCollectionIdRoute =
     path: '/$collectionId',
     getParentRoute: () => AuthedCollectionsRoute,
   } as any)
+const AuthedEnterpriseSplatRoute = AuthedEnterpriseSplatRouteImport.update({
+  id: '/enterprise/$',
+  path: '/enterprise/$',
+  getParentRoute: () => AuthedRoute,
+} as any)
 const AuthedFindingsIndexRoute = AuthedFindingsIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -168,6 +188,18 @@ const AuthedScansScanIdRoute = AuthedScansScanIdRouteImport.update({
   path: '/$scanId',
   getParentRoute: () => AuthedScansRoute,
 } as any)
+const AuthedVulnerabilitiesIndexRoute =
+  AuthedVulnerabilitiesIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthedVulnerabilitiesRoute,
+  } as any)
+const AuthedVulnerabilitiesVulnerabilityIdRoute =
+  AuthedVulnerabilitiesVulnerabilityIdRouteImport.update({
+    id: '/$vulnerabilityId',
+    path: '/$vulnerabilityId',
+    getParentRoute: () => AuthedVulnerabilitiesRoute,
+  } as any)
 const AuthedScansScanIdIndexRoute = AuthedScansScanIdIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -187,17 +219,21 @@ export interface FileRoutesByFullPath {
   '/agents': typeof AuthedAgentsRouteWithChildren
   '/audit': typeof AuthedAuditRouteWithChildren
   '/collections': typeof AuthedCollectionsRouteWithChildren
+  '/coverage': typeof AuthedCoverageRoute
   '/findings': typeof AuthedFindingsRouteWithChildren
   '/fixes': typeof AuthedFixesRouteWithChildren
   '/repos': typeof AuthedReposRouteWithChildren
   '/scans': typeof AuthedScansRouteWithChildren
   '/settings': typeof AuthedSettingsRoute
+  '/vulnerabilities': typeof AuthedVulnerabilitiesRouteWithChildren
   '/agents/$agentId': typeof AuthedAgentsAgentIdRoute
   '/collections/$collectionId': typeof AuthedCollectionsCollectionIdRoute
+  '/enterprise/$': typeof AuthedEnterpriseSplatRoute
   '/findings/$findingId': typeof AuthedFindingsFindingIdRoute
   '/fixes/$fixId': typeof AuthedFixesFixIdRoute
   '/repos/$repoId': typeof AuthedReposRepoIdRoute
   '/scans/$scanId': typeof AuthedScansScanIdRouteWithChildren
+  '/vulnerabilities/$vulnerabilityId': typeof AuthedVulnerabilitiesVulnerabilityIdRoute
   '/agents/': typeof AuthedAgentsIndexRoute
   '/audit/': typeof AuthedAuditIndexRoute
   '/collections/': typeof AuthedCollectionsIndexRoute
@@ -205,6 +241,7 @@ export interface FileRoutesByFullPath {
   '/fixes/': typeof AuthedFixesIndexRoute
   '/repos/': typeof AuthedReposIndexRoute
   '/scans/': typeof AuthedScansIndexRoute
+  '/vulnerabilities/': typeof AuthedVulnerabilitiesIndexRoute
   '/scans/$scanId/live': typeof AuthedScansScanIdLiveRoute
   '/scans/$scanId/': typeof AuthedScansScanIdIndexRoute
 }
@@ -212,13 +249,16 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/account': typeof AuthedAccountRoute
+  '/coverage': typeof AuthedCoverageRoute
   '/settings': typeof AuthedSettingsRoute
   '/': typeof AuthedIndexRoute
   '/agents/$agentId': typeof AuthedAgentsAgentIdRoute
   '/collections/$collectionId': typeof AuthedCollectionsCollectionIdRoute
+  '/enterprise/$': typeof AuthedEnterpriseSplatRoute
   '/findings/$findingId': typeof AuthedFindingsFindingIdRoute
   '/fixes/$fixId': typeof AuthedFixesFixIdRoute
   '/repos/$repoId': typeof AuthedReposRepoIdRoute
+  '/vulnerabilities/$vulnerabilityId': typeof AuthedVulnerabilitiesVulnerabilityIdRoute
   '/agents': typeof AuthedAgentsIndexRoute
   '/audit': typeof AuthedAuditIndexRoute
   '/collections': typeof AuthedCollectionsIndexRoute
@@ -226,6 +266,7 @@ export interface FileRoutesByTo {
   '/fixes': typeof AuthedFixesIndexRoute
   '/repos': typeof AuthedReposIndexRoute
   '/scans': typeof AuthedScansIndexRoute
+  '/vulnerabilities': typeof AuthedVulnerabilitiesIndexRoute
   '/scans/$scanId/live': typeof AuthedScansScanIdLiveRoute
   '/scans/$scanId': typeof AuthedScansScanIdIndexRoute
 }
@@ -238,18 +279,22 @@ export interface FileRoutesById {
   '/_authed/agents': typeof AuthedAgentsRouteWithChildren
   '/_authed/audit': typeof AuthedAuditRouteWithChildren
   '/_authed/collections': typeof AuthedCollectionsRouteWithChildren
+  '/_authed/coverage': typeof AuthedCoverageRoute
   '/_authed/findings': typeof AuthedFindingsRouteWithChildren
   '/_authed/fixes': typeof AuthedFixesRouteWithChildren
   '/_authed/repos': typeof AuthedReposRouteWithChildren
   '/_authed/scans': typeof AuthedScansRouteWithChildren
   '/_authed/settings': typeof AuthedSettingsRoute
+  '/_authed/vulnerabilities': typeof AuthedVulnerabilitiesRouteWithChildren
   '/_authed/': typeof AuthedIndexRoute
   '/_authed/agents/$agentId': typeof AuthedAgentsAgentIdRoute
   '/_authed/collections/$collectionId': typeof AuthedCollectionsCollectionIdRoute
+  '/_authed/enterprise/$': typeof AuthedEnterpriseSplatRoute
   '/_authed/findings/$findingId': typeof AuthedFindingsFindingIdRoute
   '/_authed/fixes/$fixId': typeof AuthedFixesFixIdRoute
   '/_authed/repos/$repoId': typeof AuthedReposRepoIdRoute
   '/_authed/scans/$scanId': typeof AuthedScansScanIdRouteWithChildren
+  '/_authed/vulnerabilities/$vulnerabilityId': typeof AuthedVulnerabilitiesVulnerabilityIdRoute
   '/_authed/agents/': typeof AuthedAgentsIndexRoute
   '/_authed/audit/': typeof AuthedAuditIndexRoute
   '/_authed/collections/': typeof AuthedCollectionsIndexRoute
@@ -257,6 +302,7 @@ export interface FileRoutesById {
   '/_authed/fixes/': typeof AuthedFixesIndexRoute
   '/_authed/repos/': typeof AuthedReposIndexRoute
   '/_authed/scans/': typeof AuthedScansIndexRoute
+  '/_authed/vulnerabilities/': typeof AuthedVulnerabilitiesIndexRoute
   '/_authed/scans/$scanId/live': typeof AuthedScansScanIdLiveRoute
   '/_authed/scans/$scanId/': typeof AuthedScansScanIdIndexRoute
 }
@@ -270,17 +316,21 @@ export interface FileRouteTypes {
     | '/agents'
     | '/audit'
     | '/collections'
+    | '/coverage'
     | '/findings'
     | '/fixes'
     | '/repos'
     | '/scans'
     | '/settings'
+    | '/vulnerabilities'
     | '/agents/$agentId'
     | '/collections/$collectionId'
+    | '/enterprise/$'
     | '/findings/$findingId'
     | '/fixes/$fixId'
     | '/repos/$repoId'
     | '/scans/$scanId'
+    | '/vulnerabilities/$vulnerabilityId'
     | '/agents/'
     | '/audit/'
     | '/collections/'
@@ -288,6 +338,7 @@ export interface FileRouteTypes {
     | '/fixes/'
     | '/repos/'
     | '/scans/'
+    | '/vulnerabilities/'
     | '/scans/$scanId/live'
     | '/scans/$scanId/'
   fileRoutesByTo: FileRoutesByTo
@@ -295,13 +346,16 @@ export interface FileRouteTypes {
     | '/login'
     | '/register'
     | '/account'
+    | '/coverage'
     | '/settings'
     | '/'
     | '/agents/$agentId'
     | '/collections/$collectionId'
+    | '/enterprise/$'
     | '/findings/$findingId'
     | '/fixes/$fixId'
     | '/repos/$repoId'
+    | '/vulnerabilities/$vulnerabilityId'
     | '/agents'
     | '/audit'
     | '/collections'
@@ -309,6 +363,7 @@ export interface FileRouteTypes {
     | '/fixes'
     | '/repos'
     | '/scans'
+    | '/vulnerabilities'
     | '/scans/$scanId/live'
     | '/scans/$scanId'
   id:
@@ -320,18 +375,22 @@ export interface FileRouteTypes {
     | '/_authed/agents'
     | '/_authed/audit'
     | '/_authed/collections'
+    | '/_authed/coverage'
     | '/_authed/findings'
     | '/_authed/fixes'
     | '/_authed/repos'
     | '/_authed/scans'
     | '/_authed/settings'
+    | '/_authed/vulnerabilities'
     | '/_authed/'
     | '/_authed/agents/$agentId'
     | '/_authed/collections/$collectionId'
+    | '/_authed/enterprise/$'
     | '/_authed/findings/$findingId'
     | '/_authed/fixes/$fixId'
     | '/_authed/repos/$repoId'
     | '/_authed/scans/$scanId'
+    | '/_authed/vulnerabilities/$vulnerabilityId'
     | '/_authed/agents/'
     | '/_authed/audit/'
     | '/_authed/collections/'
@@ -339,6 +398,7 @@ export interface FileRouteTypes {
     | '/_authed/fixes/'
     | '/_authed/repos/'
     | '/_authed/scans/'
+    | '/_authed/vulnerabilities/'
     | '/_authed/scans/$scanId/live'
     | '/_authed/scans/$scanId/'
   fileRoutesById: FileRoutesById
@@ -407,6 +467,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedCollectionsRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/_authed/coverage': {
+      id: '/_authed/coverage'
+      path: '/coverage'
+      fullPath: '/coverage'
+      preLoaderRoute: typeof AuthedCoverageRouteImport
+      parentRoute: typeof AuthedRoute
+    }
     '/_authed/findings': {
       id: '/_authed/findings'
       path: '/findings'
@@ -440,6 +507,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof AuthedSettingsRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/vulnerabilities': {
+      id: '/_authed/vulnerabilities'
+      path: '/vulnerabilities'
+      fullPath: '/vulnerabilities'
+      preLoaderRoute: typeof AuthedVulnerabilitiesRouteImport
       parentRoute: typeof AuthedRoute
     }
     '/_authed/agents/': {
@@ -476,6 +550,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/collections/$collectionId'
       preLoaderRoute: typeof AuthedCollectionsCollectionIdRouteImport
       parentRoute: typeof AuthedCollectionsRoute
+    }
+    '/_authed/enterprise/$': {
+      id: '/_authed/enterprise/$'
+      path: '/enterprise/$'
+      fullPath: '/enterprise/$'
+      preLoaderRoute: typeof AuthedEnterpriseSplatRouteImport
+      parentRoute: typeof AuthedRoute
     }
     '/_authed/findings/': {
       id: '/_authed/findings/'
@@ -532,6 +613,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/scans/$scanId'
       preLoaderRoute: typeof AuthedScansScanIdRouteImport
       parentRoute: typeof AuthedScansRoute
+    }
+    '/_authed/vulnerabilities/': {
+      id: '/_authed/vulnerabilities/'
+      path: '/'
+      fullPath: '/vulnerabilities/'
+      preLoaderRoute: typeof AuthedVulnerabilitiesIndexRouteImport
+      parentRoute: typeof AuthedVulnerabilitiesRoute
+    }
+    '/_authed/vulnerabilities/$vulnerabilityId': {
+      id: '/_authed/vulnerabilities/$vulnerabilityId'
+      path: '/$vulnerabilityId'
+      fullPath: '/vulnerabilities/$vulnerabilityId'
+      preLoaderRoute: typeof AuthedVulnerabilitiesVulnerabilityIdRouteImport
+      parentRoute: typeof AuthedVulnerabilitiesRoute
     }
     '/_authed/scans/$scanId/': {
       id: '/_authed/scans/$scanId/'
@@ -658,17 +753,36 @@ const AuthedScansRouteWithChildren = AuthedScansRoute._addFileChildren(
   AuthedScansRouteChildren,
 )
 
+interface AuthedVulnerabilitiesRouteChildren {
+  AuthedVulnerabilitiesVulnerabilityIdRoute: typeof AuthedVulnerabilitiesVulnerabilityIdRoute
+  AuthedVulnerabilitiesIndexRoute: typeof AuthedVulnerabilitiesIndexRoute
+}
+
+const AuthedVulnerabilitiesRouteChildren: AuthedVulnerabilitiesRouteChildren = {
+  AuthedVulnerabilitiesVulnerabilityIdRoute:
+    AuthedVulnerabilitiesVulnerabilityIdRoute,
+  AuthedVulnerabilitiesIndexRoute: AuthedVulnerabilitiesIndexRoute,
+}
+
+const AuthedVulnerabilitiesRouteWithChildren =
+  AuthedVulnerabilitiesRoute._addFileChildren(
+    AuthedVulnerabilitiesRouteChildren,
+  )
+
 interface AuthedRouteChildren {
   AuthedAccountRoute: typeof AuthedAccountRoute
   AuthedAgentsRoute: typeof AuthedAgentsRouteWithChildren
   AuthedAuditRoute: typeof AuthedAuditRouteWithChildren
   AuthedCollectionsRoute: typeof AuthedCollectionsRouteWithChildren
+  AuthedCoverageRoute: typeof AuthedCoverageRoute
   AuthedFindingsRoute: typeof AuthedFindingsRouteWithChildren
   AuthedFixesRoute: typeof AuthedFixesRouteWithChildren
   AuthedReposRoute: typeof AuthedReposRouteWithChildren
   AuthedScansRoute: typeof AuthedScansRouteWithChildren
   AuthedSettingsRoute: typeof AuthedSettingsRoute
+  AuthedVulnerabilitiesRoute: typeof AuthedVulnerabilitiesRouteWithChildren
   AuthedIndexRoute: typeof AuthedIndexRoute
+  AuthedEnterpriseSplatRoute: typeof AuthedEnterpriseSplatRoute
 }
 
 const AuthedRouteChildren: AuthedRouteChildren = {
@@ -676,12 +790,15 @@ const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedAgentsRoute: AuthedAgentsRouteWithChildren,
   AuthedAuditRoute: AuthedAuditRouteWithChildren,
   AuthedCollectionsRoute: AuthedCollectionsRouteWithChildren,
+  AuthedCoverageRoute: AuthedCoverageRoute,
   AuthedFindingsRoute: AuthedFindingsRouteWithChildren,
   AuthedFixesRoute: AuthedFixesRouteWithChildren,
   AuthedReposRoute: AuthedReposRouteWithChildren,
   AuthedScansRoute: AuthedScansRouteWithChildren,
   AuthedSettingsRoute: AuthedSettingsRoute,
+  AuthedVulnerabilitiesRoute: AuthedVulnerabilitiesRouteWithChildren,
   AuthedIndexRoute: AuthedIndexRoute,
+  AuthedEnterpriseSplatRoute: AuthedEnterpriseSplatRoute,
 }
 
 const AuthedRouteWithChildren =

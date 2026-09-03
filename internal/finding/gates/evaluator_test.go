@@ -36,6 +36,34 @@ func TestDefaultPolicyWarnsMediumSecurity(t *testing.T) {
 	}
 }
 
+func TestFastPRPolicyGatesNewHighButNotExisting(t *testing.T) {
+	policy := FastPRPolicy()
+	if policy.Name != "fast-pr-gate" {
+		t.Fatalf("name = %q, want fast-pr-gate", policy.Name)
+	}
+
+	existingHigh := Evaluate(policy, []models.Finding{
+		{ID: "existing-high", Severity: models.SeverityHigh, Category: models.CategorySAST, BaselineState: "existing"},
+	})
+	if existingHigh.Status == StatusFail {
+		t.Fatalf("existing high SAST should not fail: %+v", existingHigh)
+	}
+
+	newHigh := Evaluate(policy, []models.Finding{
+		{ID: "new-high", Severity: models.SeverityHigh, Category: models.CategorySAST, BaselineState: "new"},
+	})
+	if newHigh.Status != StatusFail {
+		t.Fatalf("new high SAST should fail: %+v", newHigh)
+	}
+
+	existingSecret := Evaluate(policy, []models.Finding{
+		{ID: "secret", Severity: models.SeverityLow, Category: models.CategorySecrets, BaselineState: "existing"},
+	})
+	if existingSecret.Status != StatusFail {
+		t.Fatalf("unsuppressed secret should fail regardless of existing: %+v", existingSecret)
+	}
+}
+
 func TestParsePolicyAndConfidenceMinimum(t *testing.T) {
 	rules := []Rule{{
 		ID:            "high-confidence-medium",

@@ -1,6 +1,6 @@
 // Scan detail with full findings exploration: filter by tool/severity,
 // sort, paginate, export to JSON/CSV.
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeftIcon,
@@ -11,12 +11,15 @@ import {
   DownloadIcon,
   FilterXIcon,
   LoaderIcon,
+  RefreshCwIcon,
   StopCircleIcon,
   XCircleIcon,
   XIcon,
 } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import { api } from "@/lib/api";
+import { useSSE } from "@/lib/sse";
 import type { Finding, Scan, Severity } from "@/lib/types";
 import { parseToolList } from "@/lib/types";
 import { CardSkeleton, ListSkeleton } from "@/components/skeleton";
@@ -36,7 +39,14 @@ export const Route = createFileRoute("/_authed/scans/$scanId/")({
 // per-tool status work).
 interface ToolStatusEntry {
   name: string;
-  status: "completed" | "failed" | "running" | "queued" | "cancelled" | "pending";
+  status:
+    | "completed"
+    | "failed"
+    | "running"
+    | "queued"
+    | "cancelled"
+    | "pending"
+    | "skipped";
   finding_count: number;
   raw_count?: number;
   has_output: boolean;
@@ -64,6 +74,8 @@ const PAGE_SIZE = 100;
 
 function ScanDetailPage() {
   const { scanId } = Route.useParams();
+  const qc = useQueryClient();
+  const navigate = useNavigate();
 
   const scanQ = useQuery({
     queryKey: ["scan", scanId],
@@ -78,6 +90,28 @@ function ScanDetailPage() {
     },
   });
 
+  const scanLive =
+    scanQ.data?.status === "pending" || scanQ.data?.status === "running";
+  useSSE<{ type?: string }>({
+    path: `/scans/${scanId}/stream`,
+    enabled: !!scanLive,
+    onEvent: (ev) => {
+      if (ev.type !== "scan_progress") return;
+      qc.invalidateQueries({ queryKey: ["scan", scanId] });
+      qc.invalidateQueries({ queryKey: ["scan", scanId, "findings"] });
+    },
+  });
+
+  const workersQ = useQuery({
+    queryKey: ["scanners", "workers"],
+    queryFn: async () =>
+      (await api.get<{ heartbeat_at?: string }[]>("/scanners/workers")).data ??
+      [],
+    enabled: scanQ.data?.status === "pending",
+    staleTime: 0,
+    refetchInterval: 3000,
+  });
+
   const toolsQ = useQuery({
     queryKey: ["scan", scanId, "tools"],
     queryFn: async () => {
@@ -90,16 +124,38 @@ function ScanDetailPage() {
     },
   });
 
+  const gateQ = useQuery({
+    queryKey: ["scan", scanId, "gate"],
+    queryFn: async () => {
+      const r = await api.get<ScanGate>(`/scans/${scanId}/gate`);
+      return r.data;
+    },
+    enabled:
+      scanQ.data?.status === "completed" || scanQ.data?.status === "failed",
+  });
+
+  const retry = useMutation({
+    mutationFn: async () => {
+      const r = await api.post<Scan>(`/scans/${scanId}/retry`);
+      return r.data;
+    },
+    onSuccess: (data) => {
+      toast.success("Retry started");
+      if (data?.id) {
+        navigate({ to: "/scans/$scanId", params: { scanId: data.id } });
+      }
+    },
+    onError: (e) =>
+      toast.error(e instanceof Error ? e.message : "Retry failed"),
+  });
+
   const [includeSuppressed, setIncludeSuppressed] = useState(false);
 
-  // Fetch up to 20k findings — large but capped. The API also paginates
-  // server-side; if a scan exceeds this we'd need cursor pagination.
+  // First page of findings; DataTable paginates locally.
   const findingsQ = useQuery({
     queryKey: ["scan", scanId, "findings", includeSuppressed],
     queryFn: async () => {
-      // API caps per_page at 50000 — plenty for any single-scan view.
-      // If you ever exceed that, switch to server-side pagination.
-      const q = new URLSearchParams({ per_page: "50000" });
+      const q = new URLSearchParams({ per_page: "200" });
       if (includeSuppressed) q.set("include_suppressed", "true");
       const r = await api.get<Finding[]>(`/scans/${scanId}/findings?${q.toString()}`);
       return {
@@ -377,10 +433,52 @@ function ScanDetailPage() {
           <p className="text-xs text-muted-foreground mt-0.5">
             <ScanTimestamps scan={scan} />
           </p>
+          {(scan.status === "completed" || scan.status === "failed") &&
+            gateQ.data && (
+              <p className="text-xs text-muted-foreground mt-0.5">
+                <GateLine gate={gateQ.data} />
+              </p>
+            )}
         </div>
         <ScanStatusPill status={scan.status} />
         {scan.status === "running" && <CancelScanButton scanId={scanId} />}
+        {(scan.status === "failed" || scan.status === "cancelled") && (
+          <button
+            type="button"
+            onClick={() => retry.mutate()}
+            disabled={retry.isPending}
+            className="inline-flex items-center gap-1 px-3 h-9 rounded-md border border-border text-sm hover:bg-muted/50 disabled:opacity-50"
+          >
+            <RefreshCwIcon
+              className={`size-4 ${retry.isPending ? "animate-spin" : ""}`}
+            />
+            {retry.isPending ? "Retrying…" : "Retry"}
+          </button>
+        )}
       </div>
+
+      {scan.status === "pending" &&
+        workersQ.isSuccess &&
+        scanWorkersOffline(workersQ.data) && (
+          <div
+            className="rounded-md border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-sm text-status-warning dark:text-status-warning"
+            role="status"
+          >
+            Scan queued — no scan worker is running.
+          </div>
+        )}
+
+      {(scan.failure_message || scan.failure_code) && (
+        <div
+          className="rounded-md border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-sm text-status-warning dark:text-status-warning"
+          role="status"
+        >
+          {scan.failure_message || scan.failure_code}
+          {scan.failure_code && scan.failure_message ? (
+            <span className="ml-2 font-mono text-xs">{scan.failure_code}</span>
+          ) : null}
+        </div>
+      )}
 
       {(scan.status === "completed" ||
         scan.status === "cancelled" ||
@@ -411,9 +509,12 @@ function ScanDetailPage() {
         </div>
       )}
 
-      {scan.status === "completed" && toolsSelectedCount(scan) === 0 && (
+      {scan.status === "completed" &&
+        scan.finding_count === 0 &&
+        (toolsSelectedCount(scan) === 0 ||
+          ((toolsQ.data?.length ?? 0) === 0 && !toolsQ.isLoading)) && (
         <div className="mb-4 rounded-md border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-sm text-status-warning">
-          <div className="font-medium">No scanners ran</div>
+          <div className="font-medium">No scanners ran — check Docker / pull images</div>
           <div className="text-xs text-status-warning/80 mt-0.5">
             This scan completed without running any tools. The container scanner
             backend may not be configured — try{" "}
@@ -575,6 +676,47 @@ function ScanDetailPage() {
   );
 }
 
+function scanWorkersOffline(
+  workers: { heartbeat_at?: string }[] | undefined,
+): boolean {
+  if (!workers || workers.length === 0) return true;
+  const cutoff = Date.now() - 60_000;
+  return workers.every((w) => {
+    const t = Date.parse(w.heartbeat_at ?? "");
+    return !Number.isFinite(t) || t < cutoff;
+  });
+}
+
+type ScanGate = {
+  evaluation?: { status?: string };
+  result?: { status?: string };
+  finding_count?: number;
+};
+
+function GateLine({ gate }: { gate?: ScanGate }) {
+  const status = gate?.evaluation?.status ?? gate?.result?.status;
+  if (!status) return null;
+  const tone =
+    status === "fail" || status === "failed"
+      ? "text-status-error"
+      : status === "warn" || status === "warning"
+        ? "text-status-warning"
+        : "text-status-success";
+  return (
+    <>
+      Gate <span className={`${tone} font-medium`}>{status}</span>
+      {gate?.finding_count != null
+        ? ` · ${gate.finding_count.toLocaleString()} findings`
+        : ""}
+    </>
+  );
+}
+
+function toolSkipReason(error?: string) {
+  if (!error) return undefined;
+  return error.includes("not present locally") ? "image not pulled" : error;
+}
+
 function toolsSelectedCount(scan: { tools_selected?: string }): number {
   if (!scan.tools_selected) return 0;
   try {
@@ -688,12 +830,13 @@ function ToolsPanel({
   }
   const completed = tools.filter((t) => t.status === "completed");
   const failed = tools.filter((t) => t.status === "failed");
+  const skipped = tools.filter((t) => t.status === "skipped");
   const cancelled = tools.filter((t) => t.status === "cancelled");
   const active = tools.filter(
     (t) => t.status === "running" || t.status === "queued" || t.status === "pending",
   );
   const rank = (s: ToolStatusEntry["status"]) =>
-    s === "running" || s === "pending" ? 0 : s === "queued" ? 1 : s === "failed" ? 2 : s === "cancelled" ? 3 : 4;
+    s === "running" || s === "pending" ? 0 : s === "queued" ? 1 : s === "failed" ? 2 : s === "skipped" ? 3 : s === "cancelled" ? 4 : 5;
   const ordered = [...tools].sort((a, b) => {
     const d = rank(a.status) - rank(b.status);
     if (d !== 0) return d;
@@ -719,6 +862,9 @@ function ToolsPanel({
           <span className="text-status-success">{completed.length} done</span>
           {failed.length > 0 && (
             <span className="text-status-error">{failed.length} failed</span>
+          )}
+          {skipped.length > 0 && (
+            <span className="text-muted-foreground">{skipped.length} skipped</span>
           )}
           {cancelled.length > 0 && (
             <span className="text-status-warning">{cancelled.length} cancelled</span>
@@ -772,6 +918,8 @@ function ToolCard({
       <CheckCircle2Icon className="size-3.5 text-status-success shrink-0" />
     ) : tool.status === "failed" ? (
       <XCircleIcon className="size-3.5 text-status-error shrink-0" />
+    ) : tool.status === "skipped" ? (
+      <StopCircleIcon className="size-3.5 text-muted-foreground shrink-0" />
     ) : tool.status === "cancelled" ? (
       <StopCircleIcon className="size-3.5 text-status-warning shrink-0" />
     ) : tool.status === "queued" ? (
@@ -784,9 +932,11 @@ function ToolCard({
       ? "border-status-error/30 bg-status-error/5"
       : tool.status === "cancelled"
         ? "border-status-warning/25 bg-status-warning/5"
-        : tool.status === "running" || tool.status === "pending"
-          ? "border-status-info/30 bg-status-info/5"
-          : "border-border bg-muted/10";
+        : tool.status === "skipped"
+          ? "border-border bg-muted/10"
+          : tool.status === "running" || tool.status === "pending"
+            ? "border-status-info/30 bg-status-info/5"
+            : "border-border bg-muted/10";
   const meta =
     tool.status === "completed"
       ? tool.finding_count > 0
@@ -796,13 +946,19 @@ function ToolCard({
         ? "queued"
         : tool.status === "cancelled"
           ? "cancelled"
-          : tool.status === "failed"
-            ? "failed"
-            : "running";
+          : tool.status === "skipped"
+            ? "skipped"
+            : tool.status === "failed"
+              ? "failed"
+              : "running";
   const canCancel =
     cancellable && (tool.status === "running" || tool.status === "queued");
+  const reason = toolSkipReason(tool.error);
   const canShowErr =
-    (tool.status === "failed" || tool.status === "cancelled") && !!tool.error;
+    (tool.status === "failed" ||
+      tool.status === "cancelled" ||
+      tool.status === "skipped") &&
+    !!tool.error;
 
   return (
     <div className={`rounded-md border px-2 py-1.5 min-w-0 ${tone}`}>
@@ -835,6 +991,14 @@ function ToolCard({
           </button>
         )}
       </div>
+      {reason && (
+        <p
+          className="mt-1 text-[10px] text-muted-foreground truncate"
+          title={tool.error}
+        >
+          {reason}
+        </p>
+      )}
       {showErr && tool.error && (
         <pre className="mt-1.5 text-[10px] font-mono text-status-error/80 whitespace-pre-wrap break-all max-h-32 overflow-y-auto">
           {tool.error}

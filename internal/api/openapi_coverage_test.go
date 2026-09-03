@@ -27,6 +27,13 @@ func TestOpenAPICoversEveryRoute(t *testing.T) {
 		"GET /api/v1/docs":          true,
 		"GET /api/v1/docs/redoc":    true,
 		"GET /api/v1/docs/static/*": true,
+		// SCIM is a well-known IdP path. Community 404s; overlay handles it.
+		// Not in the public OpenAPI catalog (PRD 10.2).
+		"GET /api/v1/scim/v2/Users":      true,
+		"POST /api/v1/scim/v2/Users":     true,
+		"GET /api/v1/scim/v2/Users/{id}": true,
+		"GET /api/v1/scim/v2/Groups":     true,
+		"POST /api/v1/scim/v2/Groups":    true,
 	}
 
 	walkErr := chi.Walk(srv.Router, func(method, route string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {

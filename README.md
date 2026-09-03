@@ -8,18 +8,18 @@
 
 <p align="center">
   <img alt="Version" src="https://img.shields.io/badge/version-0.2.0-1f6feb?style=flat-square" />
-  <img alt="Scanners" src="https://img.shields.io/badge/scanners-49-1f6feb?style=flat-square" />
+  <img alt="Scanners" src="https://img.shields.io/badge/scanners-53-1f6feb?style=flat-square" />
   <img alt="Self-hosted" src="https://img.shields.io/badge/deployment-self--hosted-2ea043?style=flat-square" />
   <img alt="AI" src="https://img.shields.io/badge/AI-assisted%20remediation-8957e5?style=flat-square" />
   <img alt="API" src="https://img.shields.io/badge/API-OpenAPI%203.0-0969da?style=flat-square" />
-  <img alt="License" src="https://img.shields.io/badge/license-proprietary-6e7681?style=flat-square" />
+  <img alt="License" src="https://img.shields.io/badge/license-source--available-6e7681?style=flat-square" />
 </p>
 
 ---
 
 > **Measure code. Improve it. Prove it got better.**
 >
-> The Wolf unifies **49 best-in-class security and quality scanners** behind a single console, API, and CLI, then runs them as reproducible, version-pinned evidence against every repository in your fleet. Whether code was written by a developer, generated with AI, or changed by an automated fix, Wolf makes it answer to deterministic scanners, quality gates, baselines, and targeted rescans before you trust it. No per-seat licensing. No code leaving your perimeter. No forty tools to install and babysit. Just Docker, and a platform that runs entirely on your terms.
+> The Wolf unifies **53 best-in-class security and quality scanners** behind a single console, API, and CLI, then runs them as reproducible, version-pinned evidence against every repository in your fleet. Whether code was written by a developer, generated with AI, or changed by an automated fix, Wolf makes it answer to deterministic scanners, quality gates, baselines, and targeted rescans before you trust it. No per-seat licensing. No code leaving your perimeter. No forty tools to install and babysit. Just Docker, and a platform that runs entirely on your terms.
 
 ---
 
@@ -50,7 +50,7 @@ The Wolf collapses that sprawl into one platform:
 
 ### Unified Scanning
 
-**49 scanners, one deterministic engine.** SAST, SCA, secrets, containers, IaC, DAST, SBOM, license, privacy/PII, K8s, and more — running in parallel, version-pinned, and fully reproducible.
+**53 scanners, one deterministic engine.** SAST, SCA, secrets, containers, IaC, DAST, SBOM, license, privacy/PII, K8s, and more — running in parallel, version-pinned, and fully reproducible.
 
 </td>
 <td width="33%" valign="top">
@@ -99,7 +99,7 @@ The Wolf collapses that sprawl into one platform:
 
 ### One platform, every scanner
 
-The Wolf orchestrates **49 industry-standard tools** across every major category — and it doesn't ask you to install a single one. Each tool runs in its own short-lived, locked-down container; the only thing on your host is Docker. That gives teams a deterministic improvement loop: scan code consistently, fix what matters, and rescan the exact evidence before merging. It works for traditional development, AI-assisted development, and autonomous remediation.
+The Wolf orchestrates **53 industry-standard tools** across every major category — and it doesn't ask you to install a single one. Each tool runs in its own short-lived, locked-down container; the only thing on your host is Docker. That gives teams a deterministic improvement loop: scan code consistently, fix what matters, and rescan the exact evidence before merging. It works for traditional development, AI-assisted development, and autonomous remediation.
 
 - **Comprehensive coverage** — SAST, software composition analysis (SCA), secret detection, container & image hardening, infrastructure-as-code, Kubernetes, policy-as-code, DAST, SBOM generation, license compliance, privacy/PII data-flow, dependency freshness, repository hygiene, and per-language linting for Python, Go, JavaScript/TypeScript, Java, Kotlin, Ruby, PHP, Rust, C/C++, Swift, and more.
 - **Parallel by design** — every applicable tool runs concurrently with configurable concurrency, so a full multi-tool scan finishes in the time of your slowest scanner, not the sum of all of them.
@@ -112,7 +112,7 @@ The Wolf orchestrates **49 industry-standard tools** across every major category
 Built for the reality of modern engineering orgs: dozens or hundreds of services, spread across laptops, build hosts, and Git providers.
 
 - **The Fleet dashboard** — open findings by severity with week-over-week trend, your most vulnerable shared components ("14 repos still depend on log4j 1.2"), a prioritized *needs-attention* list (failing gates, stale scans, new criticals), and a live inventory by source, collection, and language.
-- **Org-wide visibility** — flip on Fleet Mode and the whole organization shares one view of every repo, scan, and finding — governed by role and scope, not siloed per user.
+- **Org-wide visibility** — administrators see the whole fleet; other users stay owner-scoped. There is no global `fleet_mode` toggle.
 - **Bulk onboarding** — import an entire GitHub organization in one flow, or point at an SSH host and auto-discover every git repository on it. Go from zero to a fully-mapped fleet in minutes.
 - **Collections** — group repositories by team, environment, or tier; scan them as a batch and track cross-repo metrics and posture per collection.
 - **Branch-aware trends** — track findings per branch over time and prove your security posture is improving.
@@ -197,13 +197,17 @@ wolf config set-context prod --server https://wolf.internal --token wolf_...
 #   wolf auth login --server https://wolf.internal --email you@example.com
 
 wolf repo create --name acme --type github --path acme/payments
-SCAN=$(wolf scan create --repo <repo-id> -o json | jq -r .data.id)
+SCAN=$(wolf scan create --repo <repo-id> --profile fast -o json | jq -r .data.id)
 wolf scan watch "$SCAN"                       # live progress
-wolf scan gate "$SCAN" --fail-exit-code       # block the pipeline on policy
+wolf scan gate "$SCAN" --fail-exit-code       # exit 5 on policy fail
 wolf sarif export "$SCAN" > findings.sarif    # feed your dashboards
+wolf init                                     # first-run local layout
+wolf backup -o ./wolf-backup.tar              # control-plane backup
+wolf mcp                                      # stdio MCP; server needs WOLF_MCP_ENABLED=1
 ```
 
 Interactive API docs ship with the product at **`/api/v1/docs`** (Swagger UI) and **`/api/v1/docs/redoc`** — no internet required.
+Disconnected installs: **[`docs/disconnected.md`](docs/disconnected.md)**. CLI map: **[`docs/cli.md`](docs/cli.md)**.
 For durable remote scans from CI or another service—including one-shot Git/SSH
 sources, credentials, idempotency, SSE replay, workers, and Kubernetes native
 Jobs—see **[`docs/remote-scanning-api.md`](docs/remote-scanning-api.md)**.
@@ -216,7 +220,7 @@ registry mirrors, air-gapped installs, and advanced custom builds—see
 
 ## The scanner catalog
 
-**49 scanners. One console.** Every tool is either pulled from its maintainer's official image, bundled in The Wolf's slim default image, or available in an opt-in heavyweight bucket — all orchestrated identically.
+**53 scanners. One console.** Every tool is either pulled from its maintainer's official image, bundled in The Wolf's slim default image, or available in an opt-in heavyweight bucket — all orchestrated identically.
 
 ### Cross-language & security
 
@@ -384,6 +388,6 @@ A single Go binary serves the API, the web console, and the embedded documentati
 
 ## License
 
-Proprietary. Copyright © AlphaBravo, Inc. All rights reserved.
+Source available. Intended product license is Business Source License 1.1 with a four-year Change Date to Apache License 2.0. Counsel must supply `LICENSE` before a public BSL release. See [`LICENSE_POLICY.md`](LICENSE_POLICY.md) and [`NOTICE`](NOTICE). Copyright © AlphaBravo, Inc. All rights reserved.
 
 <p align="center"><sub>The Wolf — built by <a href="https://alphabravo.io">AlphaBravo</a>.</sub></p>

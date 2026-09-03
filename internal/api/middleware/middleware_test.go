@@ -163,6 +163,23 @@ func TestRecoverMaxBytesError_RePanicsOtherErrors(t *testing.T) {
 	handler.ServeHTTP(w, req)
 }
 
+func TestRateLimiterHandlerSetsHeaders(t *testing.T) {
+	rl := NewRateLimiter(1, 2, time.Second)
+	h := rl.Handler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "10.0.0.9:9"
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Header().Get("X-RateLimit-Limit") != "2" {
+		t.Fatalf("limit = %q", w.Header().Get("X-RateLimit-Limit"))
+	}
+	if w.Header().Get("X-RateLimit-Remaining") == "" {
+		t.Fatal("missing remaining")
+	}
+}
+
 func TestRateLimiter_AllowsBurst(t *testing.T) {
 	rl := NewRateLimiter(1, 3, time.Second)
 

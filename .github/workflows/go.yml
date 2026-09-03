@@ -25,6 +25,24 @@ jobs:
       - name: go vet
         run: go vet ./...
 
+      - name: public core must not import Enterprise
+        run: |
+          if grep -R --include='*.go' -n 'github.com/alphabravocompany/wolf-enterprise' .; then
+            echo "Community core must not import wolf-enterprise" >&2
+            exit 1
+          fi
+
+      - name: license hygiene
+        run: |
+          test -f LICENSE_POLICY.md
+          test -f NOTICE
+          test -f CONTRIBUTING.md
+          grep -q '53 scanners' README.md
+          if grep -Eiq 'open source|proprietary' README.md; then
+            echo "README must not call Community OSI open source or proprietary" >&2
+            exit 1
+          fi
+
       - name: go build
         run: go build ./...
 

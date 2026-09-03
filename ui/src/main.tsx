@@ -55,9 +55,7 @@ declare module "@tanstack/react-router" {
 const rootEl = document.getElementById("root")!;
 createRoot(rootEl).render(
   <StrictMode>
-    {/* Astronomer's ThemeProvider (see lib/theme.tsx): toggles the `dark`
-        class on <html>, persists a three-way light|dark|system preference, and
-        defaults to dark — matching Astronomer's own default. */}
+    {/* ThemeProvider applies the persisted light/dark/system preference. */}
     <ThemeProvider>
       <ThemeColorSync />
       <QueryClientProvider client={queryClient}>

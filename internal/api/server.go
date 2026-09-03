@@ -28,6 +28,7 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/scannerfeature"
 	"github.com/alphabravocompany/thewolf/internal/scannerobservability"
 	"github.com/alphabravocompany/thewolf/internal/wolflog"
+	"github.com/alphabravocompany/thewolf/pkg/edition"
 )
 
 // Re-export response types for backward compatibility.
@@ -136,6 +137,7 @@ func NewServer(store db.Store, addr string) *Server {
 		},
 		ExposedHeaders: []string{
 			"Deprecation", "ETag", "Link", "Retry-After",
+			"X-RateLimit-Limit", "X-RateLimit-Remaining", "X-Request-ID",
 			"X-Wolf-Release-ID", "X-Wolf-Manifest-Digest", "X-Wolf-Bundle-Digest",
 			"X-Wolf-Bundle-Signature-Status", "Traceparent",
 			"X-Wolf-Operation-ID", "X-Wolf-Trace-ID",
@@ -181,6 +183,19 @@ func NewServer(store db.Store, addr string) *Server {
 			r.Get("/ready", routes.Ready)
 			r.Get("/metrics", routes.Metrics)
 			r.Get("/version", routes.Version)
+			r.Get("/edition", routes.GetEdition)
+			r.Get("/license", routes.GetLicense)
+			r.Get("/coverage", routes.GetCoverage)
+			r.Get("/scan-profiles", routes.ListScanProfiles)
+			r.Get("/capabilities/{name}", routes.GetCapability)
+			r.Get("/mcp/status", routes.MCPStatus)
+			r.Post("/webhooks/github", routes.GitHubWebhook)
+			r.Get("/webhooks/events", routes.ListWebhookEvents)
+			r.Get("/scim/v2/Users", routes.SCIMUnavailable)
+			r.Post("/scim/v2/Users", routes.SCIMUnavailable)
+			r.Get("/scim/v2/Users/{id}", routes.SCIMUnavailable)
+			r.Get("/scim/v2/Groups", routes.SCIMUnavailable)
+			r.Post("/scim/v2/Groups", routes.SCIMUnavailable)
 		})
 
 		// OpenAPI spec + Swagger UI — public by design.
@@ -190,6 +205,9 @@ func NewServer(store db.Store, addr string) *Server {
 		r.Group(func(r chi.Router) {
 			r.Use(authLimiter.Handler)
 			r.Get("/auth/settings", routes.AuthSettings)
+			r.Get("/auth/providers", routes.AuthProviders)
+			r.Get("/auth/sso/{name}/start", routes.StartSSO)
+			r.Get("/auth/sso/{name}/callback", routes.SSOCallback)
 			r.Post("/auth/register", routes.Register)
 			r.Post("/auth/login", routes.Login)
 			// Step two of a 2FA login: exchange the challenge token + code for
@@ -206,6 +224,8 @@ func NewServer(store db.Store, addr string) *Server {
 			// When the org mandates MFA, confine not-yet-enrolled sessions to
 			// the enrollment endpoints. No-op when MFA isn't required.
 			r.Use(routes.MFAEnrollmentGuard)
+
+			r.With(auth.RequireScope(apikey.ScopeReadRepos)).Post("/mcp", routes.HandleMCP)
 
 			rRepos := auth.RequireScope(apikey.ScopeReadRepos)
 			wRepos := auth.RequireScope(apikey.ScopeWriteRepos)
@@ -254,6 +274,8 @@ func NewServer(store db.Store, addr string) *Server {
 			})
 
 			r.With(adminScope).With(adminOnly).Get("/audit-log", routes.ListAuditLog)
+			r.With(adminScope).With(adminOnly).Post("/license/validate", routes.ValidateLicense)
+			r.With(adminScope).With(adminOnly).Post("/license/install", routes.InstallLicense)
 
 			// Admin oversight: read-only global views across all users.
 			r.Route("/admin", func(r chi.Router) {
@@ -261,6 +283,8 @@ func NewServer(store db.Store, addr string) *Server {
 				r.Use(adminOnly)
 				r.Get("/tokens", routes.AdminListTokens)
 				r.Get("/secrets", routes.AdminListSecrets)
+				r.Get("/disk", routes.AdminDisk)
+				r.Post("/workspaces/reap", routes.AdminReapWorkspaces)
 			})
 
 			r.Route("/users", func(r chi.Router) {
@@ -325,6 +349,18 @@ func NewServer(store db.Store, addr string) *Server {
 				r.With(rRepos).Get("/{id}/metrics", routes.CollectionMetrics)
 			})
 
+			r.Route("/schedules", func(r chi.Router) {
+				r.With(rScans).Get("/", routes.ListSchedules)
+				r.With(wScans).Post("/", routes.CreateSchedule)
+				r.With(wScans).Put("/{id}", routes.UpdateSchedule)
+				r.With(wScans).Delete("/{id}", routes.DeleteSchedule)
+			})
+
+			r.With(rScans).Get("/notifications", routes.ListNotifications)
+			r.With(rRepos).Get("/setup/status", routes.GetSetupStatus)
+			r.With(wRepos).Post("/setup/sample-repo", routes.CreateSampleRepo)
+			r.With(wConfig).With(adminOnly).Post("/webhooks/outbound/test", routes.TestOutboundWebhook)
+
 			r.Route("/scans", func(r chi.Router) {
 				r.With(rScans).Get("/", routes.ListScans)
 				r.With(rScans).Get("/trends", routes.ScansTrends)
@@ -357,6 +393,7 @@ func NewServer(store db.Store, addr string) *Server {
 				r.With(rScans).Get("/{id}/ai-logs", routes.ListAILogs)
 				r.With(rScans).Get("/{id}/tool-summaries", routes.GetToolSummaries)
 				r.With(rScans).Get("/{id}/recommendations", routes.GetScanRecommendations)
+				r.With(wScans).Post("/{id}/retry", routes.RetryScan)
 				r.With(wScans).Delete("/{id}", routes.CancelScan)
 				r.With(wScans).Delete("/{id}/tools/{toolName}", routes.CancelScanTool)
 			})
@@ -368,8 +405,22 @@ func NewServer(store db.Store, addr string) *Server {
 				r.With(rFind).Get("/trends/export", routes.ExportFindingTrends)
 				r.With(rFind).Get("/aggregate", routes.FindingsAggregate)
 				r.With(rFind).Get("/by-repo", routes.FindingsByRepo)
+				r.With(wFind).Post("/bulk", routes.BulkUpdateFindings)
 				r.With(rFind).Get("/{id}", routes.GetFinding)
 				r.With(wFind).Put("/{id}/status", routes.UpdateFindingStatus)
+			})
+
+			r.With(rFind).Get("/evidence", routes.ListEvidence)
+
+			r.Route("/vulnerabilities", func(r chi.Router) {
+				r.With(rFind).Get("/", routes.ListVulnerabilities)
+				r.With(rFind).Get("/{id}/attack-path", routes.GetAttackPath)
+				r.With(rFind).Get("/{id}/evidence", routes.ListEvidence)
+				r.With(rFind).Post("/{id}/investigate", routes.InvestigateVulnerability)
+				r.With(wFind).Post("/{id}/verify", routes.VerifyVulnerability)
+				r.With(rFind).Get("/{id}", routes.GetVulnerability)
+				r.With(wFind).Post("/{id}/split", routes.SplitVulnerability)
+				r.With(wFind).Post("/{id}/merge", routes.MergeVulnerability)
 			})
 
 			r.Route("/sarif", func(r chi.Router) {
@@ -553,6 +604,10 @@ func NewServer(store db.Store, addr string) *Server {
 			})
 
 			r.With(rConfig).Get("/ai-providers", routes.ListAIProviders)
+
+			// Overlay modules register /enterprise/* here so they inherit
+			// session auth. Handlers still 404 without the matching entitlement.
+			edition.Default.Mount(r)
 		})
 	})
 

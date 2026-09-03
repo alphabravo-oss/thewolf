@@ -54,7 +54,14 @@ export function FixFindingButton({
       toast.error(e instanceof Error ? e.message : "Failed to queue fix"),
   });
 
-  if (flagLoading || !autofixEnabled) return null;
+  if (flagLoading) return null;
+  if (!autofixEnabled) {
+    return (
+      <a href="/settings?tab=general" className="text-xs text-muted-foreground hover:underline">
+        Enable autonomous fixing in Settings
+      </a>
+    );
+  }
 
   const fixable = fixableQ.data;
   const probing = fixableQ.isLoading;

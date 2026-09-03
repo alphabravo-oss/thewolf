@@ -8,8 +8,9 @@
 // docs/version block.
 //
 // What stays Wolf: the nav items themselves, and the gating rules behind them —
-// the fleet-wide lists are admin-only, Agents is behind the `autofix_enabled`
-// flag, and Collections is the folder model everyone browses.
+// Scans/Findings are for every signed-in user, Agents is behind the
+// `autofix_enabled` flag, Audit is admin-only, and Collections is the folder
+// model everyone browses.
 //
 // The mobile drawer (off-canvas below `md`, focus-trapped, Escape to close) is
 // Wolf's own and has no Astronomer counterpart — Astronomer's console assumes a
@@ -22,16 +23,19 @@ import {
   BookOpen,
   Bot,
   Bug,
+  Building2,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   ChevronUp,
   Gauge,
+  Layers,
   LayoutDashboard,
   Menu,
   Package,
   ScrollText,
   Settings,
+  ShieldAlert,
   X,
 } from "lucide-react";
 import { WolfLogo } from "@/components/wolf-logo";
@@ -56,27 +60,43 @@ type NavGroup = {
 
 // Navigation follows the folder model: you browse Collections -> a collection
 // -> a repo -> a scan -> its findings, so there is no top-level Repos item.
-// The cross-repo global lists (Scans, Findings) only make sense as a fleet
-// view, and Agents only when autonomous fixing is on.
+// Scans and Findings are owner-scoped inbox views for every signed-in user.
+// Agents only when autonomous fixing is on.
 function useNavGroups(): NavGroup[] {
   const autofix = useFlag("autofix_enabled");
   const isAdmin = useIsAdmin();
+  const editionQ = useQuery({
+    queryKey: ["edition"],
+    queryFn: async () =>
+      (
+        await api.get<{
+          ui_routes?: { path: string; title: string }[];
+        }>("/edition")
+      ).data,
+    staleTime: 5 * 60 * 1000,
+  });
 
   return useMemo(() => {
     const platform: NavItem[] = [
-      { label: "Dashboard", to: "/", icon: LayoutDashboard, exact: true },
+      { label: "Home", to: "/", icon: LayoutDashboard, exact: true },
       { label: "Collections", to: "/collections", icon: Package },
     ];
 
-    // The cross-repo fleet lists are the admin view; regular users browse
-    // their own work via Collections.
-    const fleet: NavItem[] = isAdmin
-      ? [
-          { label: "Scans", to: "/scans", icon: Gauge },
-          { label: "Findings", to: "/findings", icon: Bug },
-        ]
-      : [];
+    const fleet: NavItem[] = [
+      { label: "Scans", to: "/scans", icon: Gauge },
+      { label: "Findings", to: "/findings", icon: Bug },
+      { label: "Vulnerabilities", to: "/vulnerabilities", icon: ShieldAlert },
+      { label: "Coverage", to: "/coverage", icon: Layers },
+    ];
     if (autofix.enabled) fleet.push({ label: "Agents", to: "/agents", icon: Bot });
+
+    const enterprise: NavItem[] = (editionQ.data?.ui_routes ?? [])
+      .filter((rt) => rt.path?.startsWith("/enterprise/") && rt.title)
+      .map((rt) => ({
+        label: rt.title,
+        to: rt.path,
+        icon: Building2,
+      }));
 
     const admin: NavItem[] = [];
     if (isAdmin) admin.push({ label: "Audit", to: "/audit", icon: ScrollText });
@@ -85,9 +105,10 @@ function useNavGroups(): NavGroup[] {
     return [
       { label: "Platform", items: platform, defaultOpen: true },
       { label: "Fleet", items: fleet, defaultOpen: true },
+      { label: "Enterprise", items: enterprise, defaultOpen: true },
       { label: "Administration", items: admin, defaultOpen: true },
     ].filter((g) => g.items.length > 0);
-  }, [autofix.enabled, isAdmin]);
+  }, [autofix.enabled, isAdmin, editionQ.data?.ui_routes]);
 }
 
 function isActive(pathname: string, item: NavItem) {
@@ -105,8 +126,13 @@ export function Sidebar() {
   const versionQ = useQuery({
     queryKey: ["version"],
     queryFn: async () => {
-      const r = await api.get<{ version: string }>("/version");
-      return r.data?.version ?? "";
+      const r = await api.get<{
+        version: string;
+        edition?: string;
+        product?: string;
+        license?: string;
+      }>("/version");
+      return r.data;
     },
     staleTime: 5 * 60 * 1000,
   });
@@ -346,7 +372,11 @@ export function Sidebar() {
           {!railCollapsed && (
             <div className="px-3 py-1 space-y-0.5">
               <p className="text-[10px] text-muted-foreground tabular-nums">
-                The Wolf {versionQ.data ? `v${versionQ.data}` : ""}
+                The Wolf {versionQ.data?.version ? `v${versionQ.data.version}` : ""}
+              </p>
+              <p className="text-[10px] text-muted-foreground">
+                {versionQ.data?.product ?? versionQ.data?.edition ?? "community"}{" "}
+                · {versionQ.data?.license ?? "source-available"}
               </p>
               <p className="text-[10px] text-muted-foreground">
                 Built by{" "}

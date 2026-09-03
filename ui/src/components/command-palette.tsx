@@ -9,6 +9,8 @@ import {
   PackageIcon,
   GaugeIcon,
   BugIcon,
+  ShieldAlertIcon,
+  LayersIcon,
   SettingsIcon,
   KeyboardIcon,
   LayoutDashboardIcon,
@@ -87,7 +89,7 @@ export function CommandPalette() {
           <PaletteItem
             onSelect={() => go("/")}
             icon={LayoutDashboardIcon}
-            label="Dashboard"
+            label="Home"
             shortcut="g d"
           />
           <PaletteItem
@@ -107,6 +109,17 @@ export function CommandPalette() {
             icon={BugIcon}
             label="Findings"
             shortcut="g f"
+          />
+          <PaletteItem
+            onSelect={() => go("/vulnerabilities")}
+            icon={ShieldAlertIcon}
+            label="Vulnerabilities"
+            shortcut="g v"
+          />
+          <PaletteItem
+            onSelect={() => go("/coverage")}
+            icon={LayersIcon}
+            label="Coverage"
           />
           <PaletteItem
             onSelect={() => go("/settings")}

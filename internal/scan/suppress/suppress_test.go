@@ -180,6 +180,21 @@ func TestApply_RealCodeNotSuppressed(t *testing.T) {
 	}
 }
 
+func TestApply_LockfileDoesNotSuppressSCA(t *testing.T) {
+	sca := models.Finding{FilePath: "Cargo.lock", Category: models.CategorySCA, ToolName: "cargo-audit"}
+	sast := models.Finding{FilePath: "Cargo.lock", Category: models.CategorySAST, ToolName: "semgrep"}
+	out, n := Apply([]models.Finding{sca, sast}, DefaultRules())
+	if n != 1 {
+		t.Fatalf("expected 1 suppression (sast only), got %d", n)
+	}
+	if out[0].Suppressed {
+		t.Error("cargo-audit SCA on Cargo.lock should NOT be suppressed")
+	}
+	if !out[1].Suppressed || out[1].SuppressedReason != "default:lockfile" {
+		t.Errorf("sast finding on Cargo.lock SHOULD be suppressed, got %+v", out[1])
+	}
+}
+
 func TestParseWolfIgnore(t *testing.T) {
 	src := `
 # a comment

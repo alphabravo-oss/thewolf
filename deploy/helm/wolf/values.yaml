@@ -364,6 +364,12 @@ masterKey: ""
 apiOnly: false
 gitAllowedCIDRs: ""
 
+# Overlay-composed env (OIDC, license pubkey). Community default empty.
+extraEnv: []
+verify:
+  # Overlay sets true. Community leaves runtime verification denied by default.
+  killSwitch: false
+
 resources:
   api:
     requests: {cpu: 200m, memory: 256Mi}

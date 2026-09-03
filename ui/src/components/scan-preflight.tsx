@@ -25,6 +25,7 @@ export type ScanParams = {
   branch?: string;
   tools?: string[];
   all_scanners?: boolean;
+  profile?: string;
 };
 
 type MissingImage = { tool: string; image: string };

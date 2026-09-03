@@ -20,8 +20,8 @@ import {
   Moon,
   Sun,
 } from "lucide-react";
-import { api } from "@/lib/api";
-import type { Scan } from "@/lib/types";
+import { api, isNotFound } from "@/lib/api";
+import type { InboxNotification, Scan } from "@/lib/types";
 import { useTheme } from "@/lib/theme";
 import { useUIStore } from "@/lib/store-ui";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -37,6 +37,7 @@ const routeLabels: Record<string, string> = {
   repos: "Repositories",
   scans: "Scans",
   findings: "Findings",
+  vulnerabilities: "Vulnerabilities",
   fixes: "Fixes",
   agents: "Agents",
   audit: "Audit Log",
@@ -47,9 +48,9 @@ const routeLabels: Record<string, string> = {
 
 function generateBreadcrumbs(pathname: string): { label: string; href: string }[] {
   const segments = pathname.split("/").filter(Boolean);
-  if (segments.length === 0) return [{ label: "Dashboard", href: "/" }];
+  if (segments.length === 0) return [{ label: "Home", href: "/" }];
 
-  const crumbs: { label: string; href: string }[] = [{ label: "Dashboard", href: "/" }];
+  const crumbs: { label: string; href: string }[] = [{ label: "Home", href: "/" }];
   let path = "";
   for (const segment of segments) {
     path += `/${segment}`;
@@ -61,6 +62,26 @@ function generateBreadcrumbs(pathname: string): { label: string; href: string }[
     crumbs.push({ label, href: path });
   }
   return crumbs;
+}
+
+function scanIdFromHref(href?: string): string | undefined {
+  if (!href) return undefined;
+  const match = href.match(/\/scans\/([^/?#]+)/);
+  return match?.[1];
+}
+
+function goNotification(
+  navigate: ReturnType<typeof useNavigate>,
+  href?: string,
+) {
+  const scanId = scanIdFromHref(href);
+  if (scanId) {
+    void navigate({ to: "/scans/$scanId", params: { scanId } });
+    return;
+  }
+  if (href?.startsWith("/")) {
+    void navigate({ to: href });
+  }
 }
 
 export function Topbar() {
@@ -93,6 +114,23 @@ export function Topbar() {
     refetchInterval: 60_000,
   });
 
+  const { data: inbox } = useQuery({
+    queryKey: ["notifications"],
+    queryFn: async () => {
+      try {
+        const r = await api.get<
+          { items: InboxNotification[] } | InboxNotification[]
+        >("/notifications");
+        if (Array.isArray(r.data)) return r.data;
+        return r.data?.items ?? [];
+      } catch (e) {
+        if (isNotFound(e)) return [];
+        throw e;
+      }
+    },
+    staleTime: 15_000,
+  });
+
   const { theme, resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -101,7 +139,15 @@ export function Topbar() {
 
   const runningScans = running ?? [];
   const failedScans = failed ?? [];
-  const notificationCount = runningScans.length + failedScans.length;
+  const seenScanIds = new Set(
+    [...runningScans, ...failedScans].map((scan) => scan.id),
+  );
+  const extraNotes = (inbox ?? []).filter((item) => {
+    const id = scanIdFromHref(item.href);
+    return !id || !seenScanIds.has(id);
+  });
+  const notificationCount =
+    runningScans.length + failedScans.length + extraNotes.length;
 
   // Close the notification dropdown on outside click.
   useEffect(() => {
@@ -114,7 +160,6 @@ export function Topbar() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  // Astronomer cycles light → dark → system → light.
   const cycleTheme = () => {
     if (theme === "light") setTheme("dark");
     else if (theme === "dark") setTheme("system");
@@ -183,7 +228,6 @@ export function Topbar() {
           <kbd className="font-mono text-[10px]">K</kbd>
         </button>
 
-        {/* Theme toggle */}
         <button
           type="button"
           onClick={cycleTheme}
@@ -227,7 +271,7 @@ export function Topbar() {
               <div className="max-h-80 overflow-y-auto">
                 {notificationCount === 0 ? (
                   <div className="px-4 py-8 text-center text-sm text-muted-foreground">
-                    Nothing running or failed
+                    Nothing needs you
                   </div>
                 ) : (
                   <>
@@ -276,6 +320,29 @@ export function Topbar() {
                               {scan.created_at ? formatRelativeTime(scan.created_at) : ""}
                             </span>
                           </span>
+                        </span>
+                      </button>
+                    ))}
+                    {extraNotes.map((item, i) => (
+                      <button
+                        key={`inbox:${item.href ?? item.title}:${item.at ?? i}`}
+                        type="button"
+                        onClick={() => {
+                          goNotification(navigate, item.href);
+                          setNotificationOpen(false);
+                        }}
+                        className="flex w-full items-start gap-3 border-b border-border last:border-0 px-4 py-3 text-left hover:bg-accent/50 transition-colors"
+                      >
+                        <Bell className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-medium text-foreground">
+                            {item.title}
+                          </span>
+                          {item.at ? (
+                            <span className="mt-0.5 block text-2xs text-muted-foreground">
+                              {formatRelativeTime(item.at)}
+                            </span>
+                          ) : null}
                         </span>
                       </button>
                     ))}

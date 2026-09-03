@@ -5,19 +5,27 @@
 //   g c → /collections
 //   g s → /scans
 //   g f → /findings
+//   g v → /vulnerabilities
 //   g , → /settings
 //
 // The map is kept in sync with the bindings shown in shortcuts-overlay.tsx.
 import { useEffect } from "react";
 import { useNavigate } from "@tanstack/react-router";
 
-type Target = "/" | "/collections" | "/scans" | "/findings" | "/settings";
+type Target =
+  | "/"
+  | "/collections"
+  | "/scans"
+  | "/findings"
+  | "/vulnerabilities"
+  | "/settings";
 
 const map: Record<string, Target> = {
   d: "/",
   c: "/collections",
   s: "/scans",
   f: "/findings",
+  v: "/vulnerabilities",
   ",": "/settings",
 };
 

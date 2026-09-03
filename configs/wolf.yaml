@@ -41,7 +41,7 @@ scan:
       codeql: "alphabravodevops/wolf-scanners-codeql:2.0.0"
 
     pull_policy: "IfNotPresent"   # IfNotPresent | Always | Never
-    network: "bridge"         # bridge | none (paranoid) | host (discouraged)
+    network: "none"           # none (default, deny-by-default) | bridge | host (discouraged). Tools with network_required get bridge.
     memory: "2g"
     cpus: "1.5"
 

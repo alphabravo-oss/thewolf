@@ -7,12 +7,14 @@
 import { createFileRoute, useNavigate, redirect } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  BadgeCheckIcon,
   CheckIcon,
   ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   ChevronUpIcon,
   DownloadIcon,
+  HardDriveIcon,
   KeyIcon,
   KeyRoundIcon,
   Loader2Icon,
@@ -30,7 +32,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { api } from "@/lib/api";
+import { api, isNotFound } from "@/lib/api";
 import { GitHubTokenHelp } from "@/components/github-token-help";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useMe } from "@/lib/me";
@@ -38,13 +40,17 @@ import type {
   AdminSecret,
   ApiToken,
   ApiTokenCreated,
+  DiskUsage,
   RemoteNode,
 } from "@/lib/types";
+import { formatBytes } from "@/lib/utils";
+import { useSettingsMap } from "@/lib/flags";
 import { FixerSettings } from "@/components/fixes/fixer-settings";
 import { useRuntimeCapabilities } from "@/lib/runtime-capabilities";
 import { safeErrorMessage } from "@/lib/safe-display";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PageHeader } from "@/components/ui/page";
+import { LicenseTab } from "@/components/license-settings";
 
 // Legacy personal ?tab= values that have NO admin tab of the same name now
 // redirect to /account. (apikeys/secrets/nodes are kept here as ADMIN tabs —
@@ -85,6 +91,8 @@ type TabKey =
   | "secrets"
   | "nodes"
   | "scanners"
+  | "scanner-updates"
+  | "license"
   | "audit";
 
 // Settings is the admin surface: system config + a global, cross-user
@@ -98,6 +106,8 @@ const TABS: { key: TabKey; label: string; Icon: typeof SettingsIcon }[] = [
   { key: "secrets", label: "Secrets", Icon: KeyIcon },
   { key: "nodes", label: "Nodes", Icon: ServerIcon },
   { key: "scanners", label: "Scanners", Icon: ShieldIcon },
+  { key: "scanner-updates", label: "Scanner updates", Icon: RefreshCwIcon },
+  { key: "license", label: "License", Icon: BadgeCheckIcon },
   { key: "audit", label: "Audit", Icon: ScrollTextIcon },
 ];
 
@@ -183,6 +193,8 @@ function SettingsPage() {
         {activeTab === "secrets" && <AdminSecretsTab />}
         {activeTab === "nodes" && <AdminNodesTab />}
         {activeTab === "scanners" && <ScannersTab />}
+        {activeTab === "scanner-updates" && <ScannerUpdatesTab />}
+        {activeTab === "license" && <LicenseTab />}
         {activeTab === "audit" && <AuditTab />}
       </section>
     </div>
@@ -962,11 +974,6 @@ export function AccountTab() {
 // General — global toggles backed by GET/PUT /api/settings
 // ---------------------------------------------------------------------------
 
-interface SettingRow {
-  key: string;
-  value: string;
-}
-
 // Knobs we expose. Anything else in the settings KV is left untouched.
 const GENERAL_KNOBS = [
   {
@@ -1014,23 +1021,7 @@ const GENERAL_KNOBS = [
 
 function GeneralTab() {
   const qc = useQueryClient();
-  const q = useQuery({
-    queryKey: ["settings"],
-    queryFn: async () => {
-      const r = await api.get<SettingRow[] | Record<string, string>>(
-        "/settings",
-      );
-      // The endpoint returns either an array of {key,value} or a map.
-      // Normalize to a map for the form below.
-      const out: Record<string, string> = {};
-      if (Array.isArray(r.data)) {
-        for (const row of r.data) out[row.key] = row.value;
-      } else if (r.data && typeof r.data === "object") {
-        for (const [k, v] of Object.entries(r.data)) out[k] = String(v);
-      }
-      return out;
-    },
-  });
+  const q = useSettingsMap();
   const m = useMutation({
     mutationFn: (updates: Record<string, string>) =>
       api.put("/settings", updates),
@@ -1045,7 +1036,30 @@ function GeneralTab() {
     return <p className="text-sm text-muted-foreground">Loading…</p>;
   const settings = q.data ?? {};
 
+  const editionQ = useQuery({
+    queryKey: ["edition"],
+    queryFn: async () =>
+      (await api.get<{
+        edition?: string;
+        product?: string;
+        licensed?: boolean;
+      }>("/edition")).data,
+  });
+  const product = editionQ.data?.product ?? "Wolf Community";
+  const editionName = editionQ.data?.edition ?? "community";
+
   return (
+    <div className="space-y-4">
+    <section className="glass-card p-5 space-y-2">
+      <h3 className="text-sm font-medium">Edition</h3>
+      <p className="text-xs text-muted-foreground">
+        {product} — {editionName}.{" "}
+        {editionQ.data?.licensed
+          ? "A commercial license is active."
+          : "No commercial license is installed in this binary."}{" "}
+        See the License tab for entitlements and install.
+      </p>
+    </section>
     <section className="glass-card p-5 space-y-5">
       {GENERAL_KNOBS.map((knob) => {
         const current = settings[knob.key] ?? "";
@@ -1099,6 +1113,8 @@ function GeneralTab() {
         );
       })}
     </section>
+    <DiskCard />
+    </div>
   );
 }
 
@@ -1174,6 +1190,185 @@ function IntInput({
         Save
       </button>
     </div>
+  );
+}
+
+function DiskCard() {
+  const qc = useQueryClient();
+  const q = useQuery({
+    queryKey: ["admin", "disk"],
+    queryFn: async () => {
+      try {
+        return (await api.get<DiskUsage>("/admin/disk")).data ?? null;
+      } catch (e) {
+        if (isNotFound(e)) return null;
+        throw e;
+      }
+    },
+  });
+  const reap = useMutation({
+    mutationFn: () =>
+      api.post("/admin/workspaces/reap", { max_age_hours: 72 }),
+    onSuccess: () => {
+      toast.success("Reaped workspaces older than 72 hours");
+      qc.invalidateQueries({ queryKey: ["admin", "disk"] });
+    },
+    onError: (e) =>
+      toast.error(e instanceof Error ? e.message : "Reap failed"),
+  });
+  if (q.data == null) return null;
+  const rows: [string, number][] = [
+    ["Artifacts", q.data.artifacts_bytes ?? 0],
+    ["Workspaces", q.data.workspaces_bytes ?? 0],
+    ["Database", q.data.db_bytes ?? 0],
+  ];
+  return (
+    <section className="glass-card p-5 space-y-3">
+      <div className="flex items-center gap-2">
+        <HardDriveIcon className="size-4 text-muted-foreground" />
+        <h3 className="text-sm font-medium">Disk</h3>
+      </div>
+      <dl className="grid grid-cols-3 gap-3 text-sm">
+        {rows.map(([label, bytes]) => (
+          <div key={label}>
+            <dt className="text-xs text-muted-foreground">{label}</dt>
+            <dd className="font-mono">{formatBytes(bytes)}</dd>
+          </div>
+        ))}
+      </dl>
+      <button
+        type="button"
+        onClick={() => reap.mutate()}
+        disabled={reap.isPending}
+        className="inline-flex items-center h-9 px-3 rounded-md border border-border text-sm hover:bg-muted/30 disabled:opacity-50"
+      >
+        {reap.isPending ? "Reaping…" : "Reap old workspaces"}
+      </button>
+    </section>
+  );
+}
+
+function ScannerUpdatesTab() {
+  const qc = useQueryClient();
+  const q = useSettingsMap();
+  const save = useMutation({
+    mutationFn: (updates: Record<string, string>) =>
+      api.put("/settings", updates),
+    onSuccess: () => {
+      toast.success("Settings saved");
+      qc.invalidateQueries({ queryKey: ["settings"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Save failed"),
+  });
+  const testHook = useMutation({
+    mutationFn: () => api.post("/webhooks/outbound/test"),
+    onSuccess: () => toast.success("Test delivery sent"),
+    onError: (e) =>
+      toast.error(e instanceof Error ? e.message : "Test delivery failed"),
+  });
+
+  const settings = q.data ?? {};
+  const notifyOnly = settings.scanner_notify_only !== "false";
+  const [githubSecret, setGithubSecret] = useState("");
+  const [outboundUrl, setOutboundUrl] = useState("");
+  const [outboundSecret, setOutboundSecret] = useState("");
+
+  useEffect(() => {
+    if (!q.data) return;
+    setGithubSecret(q.data.github_webhook_secret ?? "");
+    setOutboundUrl(q.data.outbound_webhook_url ?? "");
+    setOutboundSecret(q.data.outbound_webhook_secret ?? "");
+  }, [q.data]);
+
+  if (q.isLoading)
+    return <p className="text-sm text-muted-foreground">Loading…</p>;
+
+  return (
+    <section className="glass-card p-5 space-y-5">
+      <div>
+        <h3 className="text-sm font-medium">Scanner updates</h3>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Factory discovery, candidates, and releases stay CLI (
+          <code>wolf scanner-release</code>); this toggle is the Community
+          default.
+        </p>
+      </div>
+      <label className="flex items-start gap-2 text-sm">
+        <input
+          type="checkbox"
+          className="mt-0.5"
+          checked={notifyOnly}
+          disabled={save.isPending}
+          onChange={(e) =>
+            save.mutate({
+              scanner_notify_only: e.target.checked ? "true" : "false",
+            })
+          }
+        />
+        <span>Notify only (do not auto-promote scanner releases)</span>
+      </label>
+      <div className="space-y-3">
+        <label className="block space-y-1">
+          <span className="text-xs text-muted-foreground">
+            GitHub webhook secret
+          </span>
+          <input
+            type="password"
+            autoComplete="off"
+            value={githubSecret}
+            onChange={(e) => setGithubSecret(e.target.value)}
+            className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border text-sm font-mono"
+          />
+        </label>
+        <label className="block space-y-1">
+          <span className="text-xs text-muted-foreground">
+            Outbound webhook URL
+          </span>
+          <input
+            type="url"
+            value={outboundUrl}
+            onChange={(e) => setOutboundUrl(e.target.value)}
+            className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border text-sm font-mono"
+          />
+        </label>
+        <label className="block space-y-1">
+          <span className="text-xs text-muted-foreground">
+            Outbound webhook secret
+          </span>
+          <input
+            type="password"
+            autoComplete="off"
+            value={outboundSecret}
+            onChange={(e) => setOutboundSecret(e.target.value)}
+            className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border text-sm font-mono"
+          />
+        </label>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={save.isPending}
+            onClick={() =>
+              save.mutate({
+                github_webhook_secret: githubSecret,
+                outbound_webhook_url: outboundUrl,
+                outbound_webhook_secret: outboundSecret,
+              })
+            }
+            className="inline-flex items-center h-9 px-3 rounded-md bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
+          >
+            Save webhooks
+          </button>
+          <button
+            type="button"
+            disabled={testHook.isPending}
+            onClick={() => testHook.mutate()}
+            className="inline-flex items-center h-9 px-3 rounded-md border border-border text-sm hover:bg-muted/30 disabled:opacity-50"
+          >
+            {testHook.isPending ? "Sending…" : "Test delivery"}
+          </button>
+        </div>
+      </div>
+    </section>
   );
 }
 

@@ -1,5 +1,7 @@
 package suppress
 
+import "os"
+
 // DefaultRules returns the built-in suppression ruleset applied before any
 // repo-local `.wolfignore`. These rules encode universal FP patterns:
 //
@@ -10,10 +12,12 @@ package suppress
 // Each rule's Reason follows the "default:<short-name>" convention so the
 // renderer can render them grouped.
 //
-// To disable a default for a specific repo, add a `!`-prefixed entry to
-// `.wolfignore` (negation overrides). To disable defaults globally, set
-// `WOLF_DISABLE_DEFAULT_SUPPRESSIONS=1` in the runner config.
+// `!` lines in `.wolfignore` are ignored (negation is not implemented).
+// Set WOLF_DISABLE_DEFAULT_SUPPRESSIONS=1 to skip this ruleset.
 func DefaultRules() RuleSet {
+	if os.Getenv("WOLF_DISABLE_DEFAULT_SUPPRESSIONS") == "1" {
+		return RuleSet{}
+	}
 	return RuleSet{Rules: []Rule{
 		// --- Vendored / installed dependencies — all categories ---
 		{PathGlob: "**/vendor/**", Reason: "default:vendor"},

@@ -61,9 +61,7 @@ export function FindingsToolbar({
 
   const bulkUpdate = useMutation({
     mutationFn: async (status: FindingStatus) => {
-      await Promise.all(
-        selectedIds.map((id) => api.put(`/findings/${id}`, { status })),
-      );
+      await api.post("/findings/bulk", { ids: selectedIds, status });
     },
     onSuccess: (_d, status) => {
       qc.invalidateQueries({ queryKey: ["findings"] });

@@ -468,8 +468,8 @@ func TestGateBatch_MissingImageLeavesUncleared(t *testing.T) {
 	f := goFinding()
 	f.ID = "f-missing"
 	out, err := GateBatch(context.Background(), ws, []models.Finding{f}, sc, Options{})
-	if err != nil {
-		t.Fatalf("missing image is a soft fail, not a gate error: %v", err)
+	if err == nil || !IsMissingImage(err) {
+		t.Fatalf("missing image must fail verification, err=%v", err)
 	}
 	got := out[f.ID]
 	if got == nil || got.Passed || got.FindingCleared || !got.UnableToVerify {

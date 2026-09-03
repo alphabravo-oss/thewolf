@@ -1,4 +1,5 @@
 // Redirect /scans/$scanId/live → /scans/$scanId.
+// SSE for pending/running scans is on the detail page (`useSSE /scans/{id}/stream`).
 //
 // The dedicated live page was redundant once the detail page got a
 // per-tool status panel + cancel buttons + partial-results banner

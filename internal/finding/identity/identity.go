@@ -66,6 +66,9 @@ func Digest(parts ...string) string {
 func Build(f models.Finding) Fingerprints {
 	path := NormalizePath(f.FilePath)
 	ruleKey := firstNonEmpty(f.FineCategory, f.RuleID, f.Title, string(f.Category))
+	if f.Category == models.CategorySCA {
+		ruleKey = firstNonEmpty(f.RuleID, f.CWEID, f.Title, f.FineCategory)
+	}
 	symbolKey := firstNonEmpty(f.FunctionName, f.ModuleName, f.SymbolKind)
 	snippetHash := normalizedSnippetHash(f.CodeSnippet)
 	line := fmt.Sprintf("%d:%d", f.LineStart, f.LineEnd)

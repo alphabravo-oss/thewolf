@@ -1,6 +1,10 @@
 package profile
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/alphabravocompany/thewolf/pkg/fixengine"
+)
 
 func TestCatalogHasHarnesses(t *testing.T) {
 	got := map[string]bool{}
@@ -13,6 +17,14 @@ func TestCatalogHasHarnesses(t *testing.T) {
 	for _, name := range []string{"claude-code", "codex", "opencode", "api"} {
 		if !got[name] {
 			t.Fatalf("missing harness %s", name)
+		}
+	}
+	for _, name := range fixengine.CommunityHarnesses() {
+		if name == "api-patch" || name == "auto" {
+			continue // picker catalog is the interactive set; these stay Community engines
+		}
+		if !got[name] {
+			t.Fatalf("Community harness %s missing from picker catalog", name)
 		}
 	}
 }

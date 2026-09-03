@@ -78,7 +78,7 @@ func (p *NPMAuditPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) (
 		// npm-audit emits no file_path; the package.json that declared
 		// the vulnerable dep is the right anchor for the UI's file
 		// column + the click-through to source.
-		if findings[i].FilePath == "" {
+		if findings[i].FilePath == "" || findings[i].FilePath == "package.json" {
 			findings[i].FilePath = relPkg
 		} else {
 			findings[i].FilePath = container.NormalizePath(findings[i].FilePath)
@@ -132,6 +132,13 @@ func parseNPMAuditOutput(data []byte) ([]models.Finding, error) {
 			if title == "" {
 				title = pkgName
 			}
+			ruleID := via.CVE
+			if ruleID == "" {
+				ruleID = via.URL
+			}
+			if ruleID == "" {
+				ruleID = title
+			}
 
 			findings = append(findings, models.Finding{
 				ToolName:    "npm-audit",
@@ -140,6 +147,8 @@ func parseNPMAuditOutput(data []byte) ([]models.Finding, error) {
 				Title:       title,
 				Description: fmt.Sprintf("Vulnerable package: %s (range: %s, cve: %s, url: %s)", pkgName, via.Range, via.CVE, via.URL),
 				CWEID:       via.CVE,
+				RuleID:      ruleID,
+				FilePath:    "package.json",
 				Status:      models.StatusOpen,
 			})
 		}

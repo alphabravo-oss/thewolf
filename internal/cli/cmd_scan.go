@@ -15,7 +15,7 @@ import (
 // a local one-shot scan, while `wolf scan list`, `wolf scan create`, etc.
 // drive the server's scan API.
 func AddScanSubcommands(scan *cobra.Command) {
-	var repoID, collectionID, branch string
+	var repoID, collectionID, branch, profile string
 	var tools []string
 	var aiEnabled bool
 	create := &cobra.Command{
@@ -34,6 +34,9 @@ func AddScanSubcommands(scan *cobra.Command) {
 			if branch != "" {
 				body["branch"] = branch
 			}
+			if profile != "" {
+				body["profile"] = profile
+			}
 			if len(tools) > 0 {
 				body["tools"] = tools
 			}
@@ -46,6 +49,7 @@ func AddScanSubcommands(scan *cobra.Command) {
 	create.Flags().StringVar(&repoID, "repo", "", "repository ID")
 	create.Flags().StringVar(&collectionID, "collection", "", "collection ID")
 	create.Flags().StringVar(&branch, "branch", "", "branch to scan")
+	create.Flags().StringVar(&profile, "profile", "", "scan profile (standard, full, targeted, fast, pr, release)")
 	create.Flags().StringSliceVar(&tools, "tools", nil, "explicit tool list")
 	create.Flags().BoolVar(&aiEnabled, "ai", false, "enable AI enrichment")
 
@@ -167,7 +171,7 @@ func AddScanSubcommands(scan *cobra.Command) {
 	}
 	gate.Flags().BoolVar(&gateFailExitCode, "fail-exit-code", false, "return exit code 2 when the quality gate fails")
 
-	var preflightRepo, preflightBranch string
+	var preflightRepo, preflightBranch, preflightProfile string
 	preflight := &cobra.Command{
 		Use:         "preflight",
 		Short:       "Preview which tools a scan would run",
@@ -181,11 +185,15 @@ func AddScanSubcommands(scan *cobra.Command) {
 			if preflightBranch != "" {
 				body["branch"] = preflightBranch
 			}
+			if preflightProfile != "" {
+				body["profile"] = preflightProfile
+			}
 			return runRender(cmd, "POST", "/scans/preflight", body)
 		},
 	}
 	preflight.Flags().StringVar(&preflightRepo, "repo", "", "repository ID")
 	preflight.Flags().StringVar(&preflightBranch, "branch", "", "branch to preflight")
+	preflight.Flags().StringVar(&preflightProfile, "profile", "", "scan profile (standard, full, targeted, fast, pr, release)")
 
 	downloadArtifact := &cobra.Command{
 		Use:         "download-artifact <id> <artifact-id>",
@@ -233,6 +241,7 @@ func AddScanSubcommands(scan *cobra.Command) {
 		create,
 		releaseRescan,
 		preflight,
+		actionCmd("retry <id>", "Retry a failed or cancelled scan", "POST", "/scans/%s/retry"),
 		deleteCmd("cancel <id>", "Cancel a scan", "/scans/%s"),
 		cancelTool,
 		subGetCmd("diff <id>", "Diff a scan against its baseline", "/scans/%s/diff"),

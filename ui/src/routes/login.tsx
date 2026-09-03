@@ -14,6 +14,8 @@ import {
 import { api, sessionStatus, waitForSession } from "@/lib/api";
 import type { AuthResponse } from "@/lib/types";
 
+type AuthProvider = { name: string; kind: string };
+
 type LoginSearch = { from?: string };
 
 export const Route = createFileRoute("/login")({
@@ -52,6 +54,16 @@ function LoginPage() {
   // we switch to the code step instead of completing the login.
   const [mfaToken, setMfaToken] = useState<string | null>(null);
   const [code, setCode] = useState("");
+  const [sso, setSSO] = useState<AuthProvider[]>([]);
+
+  useEffect(() => {
+    void api
+      .get<{ providers?: AuthProvider[] }>("/auth/providers")
+      .then((r) => {
+        setSSO((r.data?.providers ?? []).filter((p) => p.kind === "redirect"));
+      })
+      .catch(() => setSSO([]));
+  }, []);
 
   // Route the user after a session is established, honoring forced enrollment.
   function afterLogin(res: AuthResponse) {
@@ -185,6 +197,23 @@ function LoginPage() {
               {submitting ? "Signing in…" : "Sign in"}
             </AuthSubmit>
           </form>
+          {sso.length > 0 ? (
+            <div className="space-y-2">
+              <p className="text-center text-xs text-muted-foreground">
+                Local sign-in remains available for break-glass
+              </p>
+              <p className="text-center text-xs text-muted-foreground">or</p>
+              {sso.map((p) => (
+                <a
+                  key={p.name}
+                  href={`/api/v1/auth/sso/${encodeURIComponent(p.name)}/start`}
+                  className="flex h-9 items-center justify-center rounded-md border border-border text-sm hover:bg-muted/40"
+                >
+                  Continue with {p.name}
+                </a>
+              ))}
+            </div>
+          ) : null}
           <div className="text-center text-xs text-muted-foreground">
             Don't have an account?{" "}
             <a href="/register" className="text-foreground hover:underline">

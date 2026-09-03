@@ -857,6 +857,42 @@ func TestRun_PushModePushesFixBranch(t *testing.T) {
 	}
 }
 
+func TestRun_PushModeGitHubAttemptsPRWithoutFailingJob(t *testing.T) {
+	store := baseStore()
+	store.repo.SourceType = models.SourceTypeGitHub
+	store.repo.DefaultBranch = ""
+	ws := &stubWorkspace{changed: []string{"main.go"}, path: t.TempDir()}
+	job := twoFindingJob()
+	job.Mode = models.FixModePush
+	job.MaxAttempts = 1
+	job.FindingIDList = []string{"keep-me"}
+	var logs []string
+	deps := Deps{
+		Store:       store,
+		Writability: passWritability{},
+		Workspaces:  &stubPreparer{ws: ws},
+		Engines: &chainSelector{build: func() EngineChain {
+			return &stubChain{tiers: []engine.SubprocessEngine{&fixEngine{name: "claude-code"}}}
+		}},
+		Verifier: &stubVerifier{pass: map[string]bool{"keep-me": true}},
+		Diffs:    &stubDiffs{},
+		Log: func(format string, args ...any) {
+			logs = append(logs, fmt.Sprintf(format, args...))
+		},
+	}
+	res, err := Run(context.Background(), job, deps)
+	if err != nil {
+		t.Fatalf("Run: %v (PR create must not fail the job)", err)
+	}
+	if !res.Summary.Pushed || ws.pushCalls != 1 {
+		t.Fatalf("expected a push, got pushed=%v calls=%d", res.Summary.Pushed, ws.pushCalls)
+	}
+	joined := strings.Join(logs, "\n")
+	if !strings.Contains(joined, "GitHub PR") {
+		t.Fatalf("expected a GitHub PR log after push, got:\n%s", joined)
+	}
+}
+
 func TestRun_PushFailureKeepsFixesAndDoesNotFailJob(t *testing.T) {
 	store := baseStore()
 	ws := &stubWorkspace{

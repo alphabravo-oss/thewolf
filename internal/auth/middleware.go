@@ -210,13 +210,16 @@ func RequireScope(required ...string) func(http.Handler) http.Handler {
 // Matched on suffix so it works regardless of the /api or /api/v1 prefix.
 func isPublicPath(path string) bool {
 	for _, suffix := range []string{
-		"/auth/register", "/auth/login", "/auth/settings",
+		"/auth/register", "/auth/login", "/auth/settings", "/auth/providers",
 		"/health", "/ready", "/version",
 		"/openapi.json", "/docs",
 	} {
 		if strings.HasSuffix(path, suffix) {
 			return true
 		}
+	}
+	if strings.Contains(path, "/auth/sso/") || strings.Contains(path, "/scim/v2/") {
+		return true
 	}
 	return strings.Contains(path, "/docs/")
 }

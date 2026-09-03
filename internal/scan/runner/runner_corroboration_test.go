@@ -83,6 +83,42 @@ func TestDeduplicate_DifferentFilesStaySeparate(t *testing.T) {
 	}
 }
 
+func TestDeduplicate_SCADistinctCVEsStaySeparate(t *testing.T) {
+	in := []models.Finding{
+		{ToolName: "trivy", Category: models.CategorySCA, FilePath: "go.mod", LineStart: 0,
+			FineCategory: "vulnerable-dependency", RuleID: "CVE-1", Severity: models.SeverityHigh},
+		{ToolName: "trivy", Category: models.CategorySCA, FilePath: "go.mod", LineStart: 0,
+			FineCategory: "vulnerable-dependency", RuleID: "CVE-2", Severity: models.SeverityHigh},
+	}
+	out := Deduplicate(in)
+	if len(out) != 2 {
+		t.Fatalf("expected 2 SCA findings (distinct CVEs), got %d", len(out))
+	}
+}
+
+func TestDeduplicate_SCASameCVECrossToolCollapses(t *testing.T) {
+	in := []models.Finding{
+		{ToolName: "trivy", Category: models.CategorySCA, FilePath: "go.mod", LineStart: 0,
+			FineCategory: "vulnerable-dependency", RuleID: "CVE-1", Severity: models.SeverityHigh},
+		{ToolName: "grype", Category: models.CategorySCA, FilePath: "go.mod", LineStart: 0,
+			FineCategory: "vulnerable-dependency", RuleID: "CVE-1", Severity: models.SeverityHigh},
+	}
+	out := Deduplicate(in)
+	if len(out) != 1 {
+		t.Fatalf("expected 1 corroborated SCA finding, got %d", len(out))
+	}
+	if got := len(out[0].CorroboratedBy); got != 2 {
+		t.Errorf("CorroboratedBy len = %d, want 2 (%v)", got, out[0].CorroboratedBy)
+	}
+	seen := map[string]bool{}
+	for _, name := range out[0].CorroboratedBy {
+		seen[name] = true
+	}
+	if !seen["trivy"] || !seen["grype"] {
+		t.Errorf("CorroboratedBy = %v, want trivy and grype", out[0].CorroboratedBy)
+	}
+}
+
 func TestApplyKnowledge_GosecG201(t *testing.T) {
 	f := models.Finding{ToolName: "gosec", RuleID: "G201"}
 	if !applyKnowledge(&f) {

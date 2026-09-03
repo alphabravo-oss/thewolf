@@ -105,6 +105,12 @@ func TestLocationWeight_LowPatterns(t *testing.T) {
 	}
 }
 
+func TestLocationWeight_DoesNotMatchAuthor(t *testing.T) {
+	if got := LocationWeight("pkg/author.go"); got != 1.0 {
+		t.Errorf("LocationWeight(author.go) = %v, want 1.0 (not auth)", got)
+	}
+}
+
 func TestLocationWeight_Default(t *testing.T) {
 	paths := []string{
 		"src/utils/helpers.go",
@@ -198,12 +204,12 @@ func TestScoreFinding_FillsAllFields(t *testing.T) {
 	if f.LocationWeight != 3.0 {
 		t.Errorf("LocationWeight = %v, want 3.0", f.LocationWeight)
 	}
-	if f.AIContextScore != 5.0 {
-		t.Errorf("AIContextScore = %v, want 5.0 (default)", f.AIContextScore)
+	if f.AIContextScore != 1.0 {
+		t.Errorf("AIContextScore = %v, want 1.0 (no AI)", f.AIContextScore)
 	}
-	// 10 * 3 * 5 = 150 -> 150/300*100 = 50
-	if !almostEqual(f.CompositeScore, 50.0, eps) {
-		t.Errorf("CompositeScore = %v, want 50", f.CompositeScore)
+	// 10 * 3 * 1 = 30 -> 30/300*100 = 10
+	if !almostEqual(f.CompositeScore, 10.0, eps) {
+		t.Errorf("CompositeScore = %v, want 10", f.CompositeScore)
 	}
 }
 
@@ -259,13 +265,13 @@ func TestScoreFindings_ScoresAll(t *testing.T) {
 		t.Fatalf("len(scored) = %d, want 3", len(scored))
 	}
 
-	// First: critical + auth (3x) + default AI (5) -> 10*3*5=150 -> 50
-	if !almostEqual(scored[0].CompositeScore, 50.0, eps) {
-		t.Errorf("[0] CompositeScore = %v, want 50", scored[0].CompositeScore)
+	// First: critical + auth (3x) + no AI (1) -> 10*3*1=30 -> 10
+	if !almostEqual(scored[0].CompositeScore, 10.0, eps) {
+		t.Errorf("[0] CompositeScore = %v, want 10", scored[0].CompositeScore)
 	}
 
-	// Second: info + testdata (0.5x) + default AI (5) -> 1*0.5*5=2.5 -> 2.5/300*100 = 0.833...
-	want1 := 2.5 / 300.0 * 100.0
+	// Second: info + testdata (0.5x) + no AI (1) -> 1*0.5*1=0.5 -> 0.5/300*100
+	want1 := 0.5 / 300.0 * 100.0
 	if !almostEqual(scored[1].CompositeScore, want1, eps) {
 		t.Errorf("[1] CompositeScore = %v, want %v", scored[1].CompositeScore, want1)
 	}

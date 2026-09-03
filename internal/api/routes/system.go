@@ -2,12 +2,15 @@ package routes
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/alphabravocompany/thewolf/internal/api/response"
 	"github.com/alphabravocompany/thewolf/internal/scannerobservability"
 	"github.com/alphabravocompany/thewolf/internal/wolflog"
+	"github.com/alphabravocompany/thewolf/pkg/edition"
+	"github.com/alphabravocompany/thewolf/pkg/entitlement"
 )
 
 var startTime = time.Now()
@@ -26,6 +29,7 @@ func Health(w http.ResponseWriter, r *http.Request) {
 	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{
 		Data: map[string]interface{}{
 			"status":                 "ok",
+			"edition":                edition.Default.Name(),
 			"uptime_ms":              time.Since(startTime).Milliseconds(),
 			"release_factory":        releaseFactory,
 			"scanner_release_alerts": scannerReleaseAlertHealth(r.Context()),
@@ -95,16 +99,36 @@ func scannerReleaseAlertHealth(ctx context.Context) map[string]any {
 }
 
 func Metrics(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+	fmt.Fprintf(w, "# HELP wolf_edition_info Current Wolf edition.\n# TYPE wolf_edition_info gauge\nwolf_edition_info{edition=%q} 1\n", edition.Default.Name())
+	fmt.Fprintf(w, "# HELP wolf_contract_info Public pkg/edition contract semver.\n# TYPE wolf_contract_info gauge\nwolf_contract_info{version=%q} 1\n", edition.ContractVersion)
+	for _, c := range entitlement.Catalog() {
+		v := 0
+		if entitlement.Active().Allows(c) {
+			v = 1
+		}
+		fmt.Fprintf(w, "wolf_entitlement{capability=%q} %d\n", c, v)
+	}
 	scannerobservability.Default.MetricsHandler().ServeHTTP(w, r)
 }
 
 func Version(w http.ResponseWriter, r *http.Request) {
+	ed := edition.Default.Name()
+	kind := "source-available"
+	if entitlement.Licensed() {
+		kind = "commercial"
+	} else if ed != edition.Community {
+		kind = "unlicensed"
+	}
 	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{
 		Data: map[string]string{
 			"version": AppVersion,
 			"commit":  BuildCommit,
 			"date":    BuildDate,
 			"name":    "the-wolf",
+			"edition": ed,
+			"product": edition.Product(ed),
+			"license": kind,
 		},
 	})
 }

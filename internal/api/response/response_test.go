@@ -80,6 +80,9 @@ func TestWriteError(t *testing.T) {
 			if resp.Error.Message != tc.message {
 				t.Errorf("expected error message %q, got %q", tc.message, resp.Error.Message)
 			}
+			if resp.Status != tc.status || resp.Title != tc.code || resp.Detail != tc.message {
+				t.Fatalf("rfc9457 = %+v", resp)
+			}
 		})
 	}
 }

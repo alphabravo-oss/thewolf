@@ -78,6 +78,13 @@ func TestEveryEndpointAuthScopeAndReachability(t *testing.T) {
 			// Public endpoints: a missing credential must not yield 401.
 			if ep.Scope == "" {
 				w := reqFrom(srv, ep.Method, path, "", ip, body)
+				if ep.Path == "/webhooks/github" {
+					// HMAC is the credential; unsigned posts are 401 by design.
+					if w.Code != http.StatusUnauthorized && w.Code != http.StatusAccepted {
+						t.Errorf("github webhook: expected 401 or 202, got %d", w.Code)
+					}
+					return
+				}
 				if w.Code == http.StatusUnauthorized {
 					t.Errorf("public endpoint returned 401")
 				}

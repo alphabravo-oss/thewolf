@@ -55,6 +55,7 @@ export function AddRepoForm({ collectionId, onDone }: AddRepoFormProps) {
   const [branch, setBranch] = useState("main");
   const [remoteNodeId, setRemoteNodeId] = useState("");
   const [githubSecretId, setGithubSecretId] = useState("");
+  const [scanNow, setScanNow] = useState(true);
   const qc = useQueryClient();
   const secretsQ = useQuery({
     queryKey: ["config", "secrets", "github-token"],
@@ -101,6 +102,13 @@ export function AddRepoForm({ collectionId, onDone }: AddRepoFormProps) {
       if (collectionId) {
         await api.post(`/collections/${collectionId}/repos`, { repo_id: repoId });
       }
+      if (scanNow) {
+        try {
+          await api.post("/scans", { repo_id: repoId, profile: "standard" });
+        } catch (e) {
+          toast.error(e instanceof Error ? e.message : "Scan failed to start");
+        }
+      }
       return repoId;
     },
     onSuccess: (repoId) => {
@@ -108,6 +116,7 @@ export function AddRepoForm({ collectionId, onDone }: AddRepoFormProps) {
       if (collectionId) {
         qc.invalidateQueries({ queryKey: ["collection", collectionId] });
       }
+      qc.invalidateQueries({ queryKey: ["scans"] });
       toast.success("Repository created");
       onDone(repoId);
     },
@@ -333,7 +342,15 @@ export function AddRepoForm({ collectionId, onDone }: AddRepoFormProps) {
           />
         </Field>
 
-        <div className="flex justify-end">
+        <div className="flex items-center justify-between gap-3">
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={scanNow}
+              onChange={(e) => setScanNow(e.target.checked)}
+            />
+            Scan now
+          </label>
           <button
             type="submit"
             disabled={submitDisabled}

@@ -105,7 +105,7 @@ Each pillar below is written to stand alone. Every one includes what it is, the 
 
 ### The unified scanner engine and language coverage
 
-**What it is.** The Wolf runs an entire arsenal of best-in-class open source scanners through one engine, and presents everything they find as a single, consistent result. One scan covers application code, dependencies, secrets, containers, infrastructure as code, and documentation quality, across the many languages a real codebase contains.
+**What it is.** The Wolf runs an entire arsenal of best-in-class federated scanners through one engine, and presents everything they find as a single, consistent result. One scan covers application code, dependencies, secrets, containers, infrastructure as code, and documentation quality, across the many languages a real codebase contains. The Community product is source available, not OSI open source.
 
 **Key features.**
 

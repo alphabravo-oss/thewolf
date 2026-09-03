@@ -21,6 +21,7 @@ const groups: { title: string; items: { keys: string; label: string }[] }[] = [
       { keys: "g c", label: "Go to collections" },
       { keys: "g s", label: "Go to scans" },
       { keys: "g f", label: "Go to findings" },
+      { keys: "g v", label: "Go to vulnerabilities" },
     ],
   },
   {
