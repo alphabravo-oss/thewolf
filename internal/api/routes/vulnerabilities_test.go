@@ -231,14 +231,10 @@ func TestSplitAndMergeVulnerability(t *testing.T) {
 	if neu.Data.ID == id || len(neu.Data.FindingIDs) != 1 || neu.Data.FindingIDs[0] != b {
 		t.Fatalf("split result = %+v", neu.Data)
 	}
-	orig, err := e.Store.GetVulnerabilityByID(ctx, id)
-	if err != nil {
-		t.Fatal(err)
-	}
 	if err := e.Store.RefreshVulnerabilityEvidence(ctx, id); err != nil {
 		t.Fatal(err)
 	}
-	orig, err = e.Store.GetVulnerabilityByID(ctx, id)
+	orig, err := e.Store.GetVulnerabilityByID(ctx, id)
 	if err != nil {
 		t.Fatal(err)
 	}
