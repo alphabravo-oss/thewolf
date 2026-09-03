@@ -5,6 +5,7 @@ import { GaugeIcon, PlayIcon, XIcon } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import { COMMUNITY_LIMIT_COPY, isCommunityLimit } from "@/lib/safe-display";
 import type { Repo, Scan } from "@/lib/types";
 import { parseToolList } from "@/lib/types";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -353,7 +354,9 @@ function NewScanForm({ onClose }: { onClose: () => void }) {
       navigate({ to: "/scans/$scanId/live", params: { scanId: scan.id } });
     },
     onError: (e) => {
-      toast.error(e instanceof Error ? e.message : "Failed to start scan");
+      toast.error(
+        isCommunityLimit(e) ? COMMUNITY_LIMIT_COPY : e instanceof Error ? e.message : "Failed to start scan",
+      );
     },
   });
 

@@ -1130,11 +1130,7 @@ func executeScan(parent context.Context, h *Handler, scanID, userID, repoID, bra
 					break
 				}
 			}
-			dbFindings, _ = suppress.Apply(dbFindings, suppress.DefaultRules())
-			suppress.ApplyGitignore(dbFindings, repoPath)
-			if wolfignoreRules, werr := suppress.ParseWolfIgnoreFile(filepath.Join(repoPath, ".wolfignore")); werr == nil {
-				dbFindings, _ = suppress.Apply(dbFindings, wolfignoreRules)
-			}
+			dbFindings, _ = suppress.ApplyRepo(dbFindings, repoPath)
 			visible := 0
 			for _, f := range dbFindings {
 				if !f.Suppressed {
@@ -1638,9 +1634,7 @@ func GetScanResult(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	findings, _ := h.Store.ListFindingsByScan(r.Context(), scanID)
-	findings, _ = suppress.Apply(findings, suppress.DefaultRules())
-	applyGitignoreByRepoID(r.Context(), h, scan.RepoID, findings)
-	applyWolfIgnoreByRepoID(r.Context(), h, scan.RepoID, findings)
+	applyPathSuppressions(r.Context(), h, scan.RepoID, findings)
 	severityTotals := map[string]int{"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
 	toolTotals := make(map[string]int)
 	total := 0
@@ -1737,11 +1731,7 @@ func GetScanFindings(w http.ResponseWriter, r *http.Request) {
 	// This is intentionally a query-time filter (rather than persisting
 	// the flag at scan time) so a default-rules change applies to all
 	// historical scans without a backfill.
-	findings, _ = suppress.Apply(findings, suppress.DefaultRules())
-	// Layer the repo's gitignore on top — files the user has explicitly
-	// chosen to exclude from version control are noise by definition.
-	applyGitignoreByRepoID(r.Context(), h, scan.RepoID, findings)
-	applyWolfIgnoreByRepoID(r.Context(), h, scan.RepoID, findings)
+	applyPathSuppressions(r.Context(), h, scan.RepoID, findings)
 	includeSuppressed := r.URL.Query().Get("include_suppressed") == "true"
 	suppressedCount := 0
 	if !includeSuppressed {
@@ -3798,36 +3788,49 @@ func paginateSlice(total, page, perPage int) (start, end int) {
 	return
 }
 
-// applyGitignoreByRepoID applies the repo's gitignore as an additional
-// suppression pass. Looks up the repo by ID, resolves its on-disk path,
-// then defers to suppress.ApplyGitignore which uses `git check-ignore`
-// for canonical semantics (negations, nested .gitignore, etc.). Silent
-// no-op when the repo can't be found or the path isn't a git repo — the
-// underlying call already degrades gracefully.
-func applyGitignoreByRepoID(ctx context.Context, h *Handler, repoID string, findings []models.Finding) {
-	if h == nil || repoID == "" || len(findings) == 0 {
+// applyPathSuppressions is the one matcher used by the findings API, gates,
+// and scan summaries: defaults + .wolfignore + gitignore.
+func applyPathSuppressions(ctx context.Context, h *Handler, repoID string, findings []models.Finding) {
+	if h == nil || len(findings) == 0 {
 		return
 	}
-	repo, err := h.Store.GetRepoByID(ctx, repoID)
-	if err != nil || repo.SourcePath == "" {
-		return
+	path := ""
+	if repoID != "" {
+		if repo, err := h.Store.GetRepoByID(ctx, repoID); err == nil && repo != nil {
+			path = repo.SourcePath
+		}
 	}
-	suppress.ApplyGitignore(findings, repo.SourcePath)
+	_, _ = suppress.ApplyRepo(findings, path)
 }
 
-func applyWolfIgnoreByRepoID(ctx context.Context, h *Handler, repoID string, findings []models.Finding) {
-	if h == nil || repoID == "" || len(findings) == 0 {
+func dropSuppressed(findings []models.Finding) []models.Finding {
+	kept := findings[:0]
+	for _, f := range findings {
+		if !f.Suppressed {
+			kept = append(kept, f)
+		}
+	}
+	return kept
+}
+
+func applyPathSuppressionsForFindings(ctx context.Context, h *Handler, findings []models.Finding) {
+	if h == nil || len(findings) == 0 {
 		return
 	}
-	repo, err := h.Store.GetRepoByID(ctx, repoID)
-	if err != nil || repo.SourcePath == "" {
-		return
+	byRepo := map[string][]int{}
+	for i := range findings {
+		byRepo[findings[i].RepoID] = append(byRepo[findings[i].RepoID], i)
 	}
-	rs, err := suppress.ParseWolfIgnoreFile(filepath.Join(repo.SourcePath, ".wolfignore"))
-	if err != nil || len(rs.Rules) == 0 {
-		return
+	for repoID, idxs := range byRepo {
+		subset := make([]models.Finding, len(idxs))
+		for j, i := range idxs {
+			subset[j] = findings[i]
+		}
+		applyPathSuppressions(ctx, h, repoID, subset)
+		for j, i := range idxs {
+			findings[i] = subset[j]
+		}
 	}
-	_, _ = suppress.Apply(findings, rs)
 }
 
 func maybeAutoCreateBaseline(ctx context.Context, h *Handler, scan *models.Scan) {
@@ -4165,9 +4168,7 @@ func ScansTrends(w http.ResponseWriter, r *http.Request) {
 		if ferr != nil {
 			continue
 		}
-		findings, _ = suppress.Apply(findings, suppress.DefaultRules())
-		applyGitignoreByRepoID(r.Context(), h, s.RepoID, findings)
-		applyWolfIgnoreByRepoID(r.Context(), h, s.RepoID, findings)
+		applyPathSuppressions(r.Context(), h, s.RepoID, findings)
 
 		entry := scanTrendEntry{
 			ScanID: s.ID,
@@ -4262,9 +4263,7 @@ func GetScanTools(w http.ResponseWriter, r *http.Request) {
 	// the /findings endpoint does so per-tool numbers match the visible
 	// table.
 	findings, _ := h.Store.ListFindingsByScan(r.Context(), scanID)
-	findings, _ = suppress.Apply(findings, suppress.DefaultRules())
-	applyGitignoreByRepoID(r.Context(), h, scan.RepoID, findings)
-	applyWolfIgnoreByRepoID(r.Context(), h, scan.RepoID, findings)
+	applyPathSuppressions(r.Context(), h, scan.RepoID, findings)
 	visibleCounts := make(map[string]int)
 	totalCounts := make(map[string]int)
 	for _, f := range findings {

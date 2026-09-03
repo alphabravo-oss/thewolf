@@ -9,6 +9,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import { COMMUNITY_LIMIT_COPY, isCommunityLimit } from "@/lib/safe-display";
 import type { Scan } from "@/lib/types";
 import { runtimeCapabilitiesQuery } from "@/lib/runtime-capabilities";
 import {
@@ -55,7 +56,9 @@ export function useScanWithPreflight() {
       qc.invalidateQueries({ queryKey: ["scans"] });
       navigate({ to: "/scans/$scanId", params: { scanId: r.data.id } });
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to start scan");
+      toast.error(
+        isCommunityLimit(e) ? COMMUNITY_LIMIT_COPY : e instanceof Error ? e.message : "Failed to start scan",
+      );
     } finally {
       reset();
     }

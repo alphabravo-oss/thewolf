@@ -12,6 +12,7 @@ import {
   authInputCls,
 } from "@/components/auth-shell";
 import { api, hasSession } from "@/lib/api";
+import { COMMUNITY_LIMIT_COPY, isCommunityLimit } from "@/lib/safe-display";
 import type { AuthResponse } from "@/lib/types";
 
 export const Route = createFileRoute("/register")({
@@ -51,7 +52,9 @@ function RegisterPage() {
         toast.success("Welcome to Wolf");
         navigate({ to: "/" });
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Registration failed");
+        toast.error(
+          isCommunityLimit(e) ? COMMUNITY_LIMIT_COPY : e instanceof Error ? e.message : "Registration failed",
+        );
       } finally {
         setSubmitting(false);
       }

@@ -3,6 +3,12 @@
 Durable suppressions let teams hide accepted or irrelevant findings without
 rewriting historical scan evidence.
 
+Path suppressions (built-in defaults, repo `.wolfignore`, and gitignore) use
+one matcher for the findings API, scan artifacts, and quality gates. A finding
+the inbox hides must not fail CI. `.wolfignore` lines starting with `!` are
+ignored (negation is not implemented). `WOLF_DISABLE_DEFAULT_SUPPRESSIONS=1`
+skips the built-in path rules.
+
 ## Scope Types
 
 Supported scopes:

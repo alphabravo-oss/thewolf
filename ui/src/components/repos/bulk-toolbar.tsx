@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import { COMMUNITY_LIMIT_COPY, isCommunityLimit } from "@/lib/safe-display";
 import type { Collection, Repo, Scan } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import {
@@ -151,13 +152,17 @@ function ScanDialog({
       );
       const ok = results.filter((r) => r.status === "fulfilled").length;
       const failed = results.length - ok;
-      return { ok, failed };
+      const limit = results.some((r) => r.status === "rejected" && isCommunityLimit(r.reason));
+      return { ok, failed, limit };
     },
-    onSuccess: ({ ok, failed }) => {
+    onSuccess: ({ ok, failed, limit }) => {
       qc.invalidateQueries({ queryKey: ["scans"] });
+      if (limit) {
+        toast.error(COMMUNITY_LIMIT_COPY);
+      }
       if (failed === 0) {
         toast.success(`Started ${ok} scan${ok === 1 ? "" : "s"}`);
-      } else {
+      } else if (!limit) {
         toast.warning(`Started ${ok} scan${ok === 1 ? "" : "s"}; ${failed} failed`);
       }
       onDone();

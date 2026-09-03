@@ -42,17 +42,8 @@ func WriteAll(dir string, rcfg ReportConfig, manifest Manifest) (WriteAllResult,
 		return res, fmt.Errorf("create scan dir: %w", err)
 	}
 
-	// Apply suppression. The repo-local .wolfignore is opened relative to
-	// the manifest's RepoPath when present. Default rules always apply
-	// unless the env override is set (callers set this).
-	wolfignoreRules, _ := suppress.ParseWolfIgnoreFile(filepath.Join(manifest.RepoPath, ".wolfignore"))
-	ruleset := suppress.Combine(suppress.DefaultRules(), wolfignoreRules)
 	var suppressedCount int
-	rcfg.Findings, suppressedCount = suppress.Apply(rcfg.Findings, ruleset)
-	// Layer the repo's gitignore on top of glob-based rules so files the
-	// user explicitly excludes from version control don't surface in the
-	// exported artifacts. Uses git check-ignore for canonical semantics.
-	suppressedCount += suppress.ApplyGitignore(rcfg.Findings, manifest.RepoPath)
+	rcfg.Findings, suppressedCount = suppress.ApplyRepo(rcfg.Findings, manifest.RepoPath)
 	manifest.Counts.Suppressed = suppressedCount
 	manifest.Counts.Visible = len(rcfg.Findings) - suppressedCount
 	// Recompute high-severity over visible findings only — that's the

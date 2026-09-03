@@ -72,6 +72,10 @@ func ListFindings(w http.ResponseWriter, r *http.Request) {
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to load findings")
 		return
 	}
+	applyPathSuppressionsForFindings(ctx, h, findings)
+	if q.Get("include_suppressed") != "true" {
+		findings = dropSuppressed(findings)
+	}
 
 	// If collection_id is specified, resolve the repo IDs in that collection.
 	var collectionRepoIDs map[string]bool
@@ -421,6 +425,10 @@ func ExportFindings(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to load findings")
 		return
+	}
+	applyPathSuppressionsForFindings(ctx, h, findings)
+	if q.Get("include_suppressed") != "true" {
+		findings = dropSuppressed(findings)
 	}
 
 	// Apply filters.

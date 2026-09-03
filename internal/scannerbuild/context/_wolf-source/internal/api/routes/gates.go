@@ -14,7 +14,6 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/auth"
 	"github.com/alphabravocompany/thewolf/internal/finding/gates"
 	"github.com/alphabravocompany/thewolf/internal/models"
-	"github.com/alphabravocompany/thewolf/internal/scan/suppress"
 )
 
 type policyRequest struct {
@@ -210,9 +209,7 @@ func evaluateAndPersistGateContext(ctx context.Context, h *Handler, scanID, user
 			parsed = gates.DefaultPolicy()
 		}
 	}
-	findings, _ = suppress.Apply(findings, suppress.DefaultRules())
-	applyGitignoreByRepoID(ctx, h, scan.RepoID, findings)
-	applyWolfIgnoreByRepoID(ctx, h, scan.RepoID, findings)
+	applyPathSuppressions(ctx, h, scan.RepoID, findings)
 	eval := gates.Evaluate(parsed, findings)
 	summaryJSON, _ := json.Marshal(eval.Summary)
 	matchesJSON, _ := json.Marshal(eval.MatchedRules)

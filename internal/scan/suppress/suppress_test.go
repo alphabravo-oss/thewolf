@@ -1,6 +1,8 @@
 package suppress
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -192,6 +194,25 @@ func TestApply_LockfileDoesNotSuppressSCA(t *testing.T) {
 	}
 	if !out[1].Suppressed || out[1].SuppressedReason != "default:lockfile" {
 		t.Errorf("sast finding on Cargo.lock SHOULD be suppressed, got %+v", out[1])
+	}
+}
+
+func TestApplyRepoIsTheSharedMatcher(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, ".wolfignore"), []byte("**/legacy/**\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	findings := []models.Finding{
+		{FilePath: "vendor/lib.c", Severity: models.SeverityCritical},
+		{FilePath: "legacy/secret.go", FineCategory: "hardcoded-secret", Severity: models.SeverityHigh},
+		{FilePath: "cmd/main.go", Severity: models.SeverityHigh},
+	}
+	out, n := ApplyRepo(findings, dir)
+	if n != 2 {
+		t.Fatalf("suppressed %d, want 2", n)
+	}
+	if !out[0].Suppressed || !out[1].Suppressed || out[2].Suppressed {
+		t.Fatalf("flags = %+v %+v %+v", out[0].Suppressed, out[1].Suppressed, out[2].Suppressed)
 	}
 }
 

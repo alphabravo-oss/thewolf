@@ -188,6 +188,18 @@ func contains(haystack []string, needle string) bool {
 	return false
 }
 
+// ApplyRepo is the one matcher for UI, artifacts, and gates: built-in
+// defaults, repo `.wolfignore`, then gitignore. repoPath may be empty.
+func ApplyRepo(findings []models.Finding, repoPath string) ([]models.Finding, int) {
+	var wolf RuleSet
+	if repoPath != "" {
+		wolf, _ = ParseWolfIgnoreFile(filepath.Join(repoPath, ".wolfignore"))
+	}
+	findings, n := Apply(findings, Combine(DefaultRules(), wolf))
+	n += ApplyGitignore(findings, repoPath)
+	return findings, n
+}
+
 // Combine merges multiple RuleSets in order. Later sets are appended after
 // earlier ones, preserving first-match semantics within Apply.
 func Combine(sets ...RuleSet) RuleSet {

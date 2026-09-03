@@ -8,6 +8,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Link } from "@tanstack/react-router";
 import { api } from "@/lib/api";
+import { isCommunityLimit, COMMUNITY_LIMIT_COPY } from "@/lib/safe-display";
 import type { Repo } from "@/lib/types";
 
 type Mode = "local" | "github" | "git" | "ssh";
@@ -121,8 +122,7 @@ export function AddRepoForm({ collectionId, onDone }: AddRepoFormProps) {
       onDone(repoId);
     },
     onError: (e) => {
-      const msg = e instanceof Error ? e.message : "Create failed";
-      toast.error(msg);
+      toast.error(isCommunityLimit(e) ? COMMUNITY_LIMIT_COPY : e instanceof Error ? e.message : "Create failed");
     },
   });
 
