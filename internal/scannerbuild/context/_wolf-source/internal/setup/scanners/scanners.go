@@ -79,7 +79,7 @@ func EnvDefaults() Config {
 			"WOLF_SCANNERS_DOCKERHUB_MIRROR", "",
 		)),
 		PullPolicy: envOr("WOLF_SCANNERS_PULL_POLICY", "IfNotPresent"),
-		Network:    envOr("WOLF_SCANNERS_NETWORK", "bridge"),
+		Network:    envOr("WOLF_SCANNERS_NETWORK", "none"),
 		Memory:     envOr("WOLF_SCANNERS_MEMORY", "2g"),
 		CPUs:       envOr("WOLF_SCANNERS_CPUS", "1.5"),
 		// Default to a host bind-mount under ~/.wolf/scanner-cache so
@@ -209,6 +209,8 @@ func (c Config) ToContainerConfig() (*container.Config, error) {
 		UpstreamTools:            upstream,
 		PullPolicy:               pp,
 		Network:                  c.Network,
+		Isolation:                container.IsolationFromEnv(),
+		AllowNetwork:             envOr("WOLF_SCANNERS_ALLOW_NETWORK", "bridge"),
 		UID:                      os.Getuid(),
 		GID:                      os.Getgid(),
 		HostReposRoot:            c.HostReposRoot,
@@ -473,7 +475,12 @@ func Doctor(ctx context.Context, w io.Writer) error {
 		}
 	}
 
-	step("docker reachable", func() error { return container.DockerAvailable(ctx) })
+	step("docker reachable", func() error {
+		if err := container.DockerAvailable(ctx); err != nil {
+			return fmt.Errorf("%w (if permission denied, set DOCKER_GID to the docker socket group)", err)
+		}
+		return nil
+	})
 	step("scanners image present", func() error {
 		if !container.ImageReady(cfg) {
 			return fmt.Errorf("image %q not ready", cfg.Image)
@@ -489,6 +496,9 @@ func Doctor(ctx context.Context, w io.Writer) error {
 	step("repos-root pairing", func() error {
 		if (cfg.HostReposRoot == "") != (cfg.InContainerReposRoot == "") {
 			return errors.New("HostReposRoot and InContainerReposRoot must both be set or both empty")
+		}
+		if cfg.HostReposRoot != "" && !filepath.IsAbs(cfg.HostReposRoot) {
+			return fmt.Errorf("HostReposRoot %q is relative; dockerd resolves it against its cwd — set an absolute path", cfg.HostReposRoot)
 		}
 		return nil
 	})

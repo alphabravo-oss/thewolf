@@ -101,6 +101,18 @@ func DefaultPolicy() Policy {
 	}
 }
 
+func FastPRPolicy() Policy {
+	p := DefaultPolicy()
+	p.Name = "fast-pr-gate"
+	for i := range p.Rules {
+		switch p.Rules[i].ID {
+		case "fail-critical", "fail-high-security":
+			p.Rules[i].BaselineState = []string{"new", "resurfaced"}
+		}
+	}
+	return p
+}
+
 func ParsePolicy(name, mode, rulesJSON string) (Policy, error) {
 	var rules []Rule
 	if strings.TrimSpace(rulesJSON) != "" {

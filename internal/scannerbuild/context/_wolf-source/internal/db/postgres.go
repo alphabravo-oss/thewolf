@@ -273,6 +273,15 @@ func (s *PostgresStore) Migrate() error {
 	if err := execAdditiveMigration(s.db, migration055SQL); err != nil {
 		return err
 	}
+	if err := execAdditiveMigration(s.db, migration056SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration057SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration058SQL); err != nil {
+		return err
+	}
 	return sanitizePersistedSecretMasks(s.db)
 }
 

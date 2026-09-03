@@ -73,6 +73,10 @@ func parseWolfIgnoreLine(raw, source string, lineNo int) (Rule, bool) {
 		return Rule{}, false
 	}
 	pathGlob := parts[0]
+	if strings.HasPrefix(pathGlob, "!") {
+		// Negation is not implemented; drop the line rather than suppress.
+		return Rule{}, false
+	}
 	rule := Rule{
 		PathGlob: pathGlob,
 		Reason:   source + ":" + pathGlob,

@@ -61,6 +61,11 @@ var auditRules = []auditRule{
 	{http.MethodDelete, underPrefix("/config/secrets/"), "secret.deleted", CatSecrets, SevWarning},
 	// Configuration
 	{http.MethodPut, eq("/settings"), "settings.updated", CatConfiguration, SevWarning},
+	{http.MethodPost, eq("/license/validate"), "license.validated", CatConfiguration, SevInfo},
+	{http.MethodPost, eq("/license/install"), "license.install", CatConfiguration, SevWarning},
+	{http.MethodPost, eq("/mcp"), "mcp.invoke", CatSystem, SevInfo},
+	{http.MethodGet, eq("/scim/v2/Users"), "scim.users.list", CatAuthorization, SevInfo},
+	{http.MethodPost, eq("/scim/v2/Users"), "scim.users.create", CatAuthorization, SevWarning},
 	{http.MethodPut, eq("/scanner-supply-chain/policy"), "scanner.policy.updated", CatConfiguration, SevCritical},
 	{http.MethodPost, eq("/scanner-supply-chain/registries"), "scanner.registry.created", CatConfiguration, SevCritical},
 	{http.MethodPatch, underPrefix("/scanner-supply-chain/registries/"), "scanner.registry.updated", CatConfiguration, SevCritical},

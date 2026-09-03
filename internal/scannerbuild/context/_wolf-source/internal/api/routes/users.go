@@ -135,6 +135,9 @@ func CreateUserAdmin(w http.ResponseWriter, r *http.Request) {
 		response.WriteError(w, http.StatusConflict, "conflict", "email already registered")
 		return
 	}
+	if rejectCommunityLimit(w, r.Context(), h.Store, limitUsers) {
+		return
+	}
 
 	hash, err := auth.HashPassword(req.Password)
 	if err != nil {

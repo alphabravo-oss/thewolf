@@ -309,10 +309,21 @@ func GateBatch(ctx context.Context, ws Workspace, findings []models.Finding, sca
 	}
 	post, err := rescanFiles(ctx, scanner, ws.Path(), files, tool)
 	if err != nil {
-		detail := "targeted rescan failed — keep edits, leave findings open"
 		if IsMissingImage(err) {
-			detail = "scanner image missing — keep edits, leave findings open"
+			for _, f := range rescanable {
+				res := base()
+				res.Built = true
+				res.UnableToVerify = true
+				res.Stages = append(res.Stages, buildFor(f))
+				res.Stages = append(res.Stages, StageResult{
+					Stage: StageFindingCleared, Passed: false, Skipped: false,
+					Detail: "scanner image missing",
+				})
+				out[findingKey(f)] = finalize(res)
+			}
+			return out, fmt.Errorf("%w: %v", ErrMissingImage, err)
 		}
+		detail := "targeted rescan failed — keep edits, leave findings open"
 		for _, f := range rescanable {
 			res := base()
 			res.Built = true

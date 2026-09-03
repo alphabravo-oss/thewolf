@@ -36,9 +36,21 @@ func Endpoints() []Endpoint {
 		{"GET", "/ready", "system", "Readiness probe", "", "", false},
 		{"GET", "/metrics", "system", "Prometheus metrics", "", "", false},
 		{"GET", "/version", "system", "Build version info", "", "", false},
+		{"GET", "/edition", "system", "Edition, modules, entitlements, and Community limits", "", "", false},
+		{"GET", "/license", "system", "Commercial license status (Community has none)", "", "", false},
+		{"GET", "/coverage", "system", "Honest scanner coverage matrix from tools.yaml", "", "", false},
+		{"GET", "/scan-profiles", "scans", "Named scan profiles (fast/standard/release)", "", "", true},
+		{"GET", "/capabilities/{name}", "system", "Capability status (Community 404s enterprise/cloud)", "", "", false},
+		{"POST", "/license/validate", "system", "Validate a commercial license blob (Community always reports invalid)", "admin", "LicenseBlobRequest", false},
+		{"POST", "/license/install", "system", "Install a commercial license (admin; Community rejects)", "admin", "LicenseBlobRequest", false},
+		{"GET", "/mcp/status", "system", "Whether MCP is enabled", "", "", false},
+		{"POST", "/mcp", "mcp", "JSON-RPC MCP over application services (default off)", "read:repos", "", false},
 
 		// Auth (public).
 		{"GET", "/auth/settings", "auth", "Get public authentication settings", "", "", false},
+		{"GET", "/auth/providers", "auth", "List login providers (Community: local)", "", "", false},
+		{"GET", "/auth/sso/{name}/start", "auth", "Start SSO for a registered redirect provider", "", "", false},
+		{"GET", "/auth/sso/{name}/callback", "auth", "SSO callback; issues a local session", "", "", false},
 		{"POST", "/auth/register", "auth", "Register a new user", "", "RegisterRequest", false},
 		{"POST", "/auth/login", "auth", "Log in and receive a JWT", "", "LoginRequest", false},
 		{"POST", "/auth/mfa/login", "auth", "Complete two-factor login (exchange challenge + code for a session)", "", "", false},
@@ -66,6 +78,8 @@ func Endpoints() []Endpoint {
 		// Admin oversight (admin).
 		{"GET", "/admin/tokens", "admin", "List all users' API tokens (metadata only)", "admin", "", true},
 		{"GET", "/admin/secrets", "admin", "List all users' secrets, masked (existence only)", "admin", "", true},
+		{"GET", "/admin/disk", "admin", "Disk usage for artifacts, workspaces, and the database", "admin", "", false},
+		{"POST", "/admin/workspaces/reap", "admin", "Remove stale scan workspaces older than a TTL", "admin", "", false},
 
 		// Users (admin).
 		{"GET", "/users", "users", "List users", "admin", "", true},
@@ -115,6 +129,22 @@ func Endpoints() []Endpoint {
 		{"GET", "/collections/{id}/tools", "collections", "List a collection's tools", "read:repos", "", true},
 		{"GET", "/collections/{id}/metrics", "collections", "Get a collection's metrics", "read:repos", "", false},
 
+		// Schedules.
+		{"GET", "/schedules", "schedules", "List scan schedules", "read:scans", "", true},
+		{"POST", "/schedules", "schedules", "Create a scan schedule", "write:scans", "", false},
+		{"PUT", "/schedules/{id}", "schedules", "Update a scan schedule", "write:scans", "", false},
+		{"DELETE", "/schedules/{id}", "schedules", "Delete a scan schedule", "write:scans", "", false},
+
+		// Setup and notifications.
+		{"GET", "/setup/status", "setup", "First-run setup counts", "read:repos", "", false},
+		{"POST", "/setup/sample-repo", "setup", "Create the sample repository", "write:repos", "", false},
+		{"GET", "/notifications", "notifications", "In-app notification bell", "read:scans", "", false},
+
+		// Webhooks.
+		{"POST", "/webhooks/github", "webhooks", "Inbound GitHub webhook", "", "", false},
+		{"GET", "/webhooks/events", "webhooks", "Named application event catalog for outbound webhooks", "", "", true},
+		{"POST", "/webhooks/outbound/test", "webhooks", "Send a test outbound webhook", "write:config", "", false},
+
 		// Scans.
 		{"GET", "/scans", "scans", "List scans", "read:scans", "", true},
 		{"GET", "/scans/trends", "scans", "Scan trends over time", "read:scans", "", false},
@@ -122,6 +152,7 @@ func Endpoints() []Endpoint {
 		{"DELETE", "/scans/orphans", "scans", "Delete leftover scans/findings for missing repos", "write:scans", "", false},
 		{"POST", "/scans", "scans", "Start a scan", "write:scans", "CreateScanRequest", false},
 		{"POST", "/scans/{id}/release-rescans", "scans", "Create a distinct scan pinned to an explicitly selected scanner release", "write:scans + operate:scanner-supply-chain", "ReleaseRescanRequest", false},
+		{"POST", "/scans/{id}/retry", "scans", "Retry a failed or cancelled scan with the original request", "write:scans", "", false},
 		{"POST", "/scans/preflight", "scans", "Check which selected scanners are missing their image before scanning", "read:scans", "PreflightScanRequest", false},
 		{"GET", "/scans/{id}", "scans", "Get a scan", "read:scans", "", false},
 		{"GET", "/scans/{id}/lineage", "scans", "Get origin-scan lineage (children and agents)", "read:scans", "", false},
@@ -162,8 +193,20 @@ func Endpoints() []Endpoint {
 		{"GET", "/findings/trends/export", "findings", "Export finding trends", "read:findings", "", false},
 		{"GET", "/findings/aggregate", "findings", "Aggregate findings (e.g. top vulnerable rules)", "read:findings", "", true},
 		{"GET", "/findings/by-repo", "findings", "Current-open findings grouped by repository", "read:findings", "", true},
+		{"POST", "/findings/bulk", "findings", "Bulk-update finding status or suppress findings", "write:findings", "BulkUpdateFindingsRequest", false},
 		{"GET", "/findings/{id}", "findings", "Get a finding", "read:findings", "", false},
 		{"PUT", "/findings/{id}/status", "findings", "Change a finding's status", "write:findings", "FindingStatusRequest", false},
+
+		// Canonical vulnerabilities (dual-write of finding clusters).
+		{"GET", "/vulnerabilities", "vulnerabilities", "List canonical vulnerabilities (finding compatibility layer)", "read:findings", "", true},
+		{"GET", "/evidence", "vulnerabilities", "List evidence for a vulnerability (query vulnerability_id)", "read:findings", "", true},
+		{"GET", "/vulnerabilities/{id}", "vulnerabilities", "Get a canonical vulnerability and its evidence", "read:findings", "", false},
+		{"GET", "/vulnerabilities/{id}/evidence", "vulnerabilities", "List evidence members of a vulnerability", "read:findings", "", true},
+		{"GET", "/vulnerabilities/{id}/attack-path", "intelligence", "Enterprise attack path from cited evidence (Community 404)", "read:findings", "", false},
+		{"POST", "/vulnerabilities/{id}/investigate", "intelligence", "Evidence-grounded investigation with citations (Community 404)", "read:findings", "InvestigateRequest", false},
+		{"POST", "/vulnerabilities/{id}/verify", "verification", "Governed runtime verification; production-deny default (Community 404)", "write:findings", "VerifyRequest", false},
+		{"POST", "/vulnerabilities/{id}/split", "vulnerabilities", "Split selected finding evidence into a new vulnerability", "write:findings", "SplitVulnerabilityRequest", false},
+		{"POST", "/vulnerabilities/{id}/merge", "vulnerabilities", "Merge another vulnerability's evidence into this one", "write:findings", "MergeVulnerabilityRequest", false},
 
 		// SARIF.
 		{"POST", "/sarif/import", "sarif", "Import SARIF findings", "write:scans", "SARIFImportRequest", false},
@@ -191,6 +234,7 @@ func Endpoints() []Endpoint {
 		{"DELETE", "/fixes/consoles/{id}", "fixes", "Cancel a fixer console session", "write:fixes", "", false},
 		{"GET", "/fixes/{id}", "fixes", "Get a fix job and its attempts", "read:fixes", "", false},
 		{"GET", "/fixes/{id}/diff", "fixes", "Get the proposed diff for a fix job", "read:fixes", "", false},
+		{"GET", "/fixes/{id}/commits", "fixes", "List commits on a fix job's workspace branch", "read:fixes", "", false},
 		{"GET", "/fixes/{id}/stream", "fixes", "Stream fix worker logs (SSE)", "read:fixes", "", false},
 		{"POST", "/fixes/{id}/resume", "fixes", "Continue a paused fix job or push its branch", "write:fixes", "ResumeFixRequest", false},
 		{"DELETE", "/fixes/{id}", "fixes", "Cancel a fix job", "write:fixes", "", false},
@@ -338,7 +382,8 @@ func SpecJSON() []byte {
 		"info": map[string]any{
 			"title":       "wolf API",
 			"version":     Version,
-			"description": "The wolf code-scanning platform API. Every endpoint here is also reachable from the `wolf` CLI. Authenticate with a JWT (interactive login) or a `wolf_`-prefixed API token (Authorization: Bearer).",
+			"description": "The Wolf code-scanning platform API (53 scanners). Community is source available, not OSI open source. Every endpoint here is also reachable from the `wolf` CLI. Authenticate with a JWT (interactive login) or a `wolf_`-prefixed API token (Authorization: Bearer).",
+			"license":     map[string]any{"name": "Source available (BSL 1.1 intended; LICENSE pending counsel)", "url": "https://github.com/alphabravo-oss/thewolf"},
 		},
 		"servers": []any{
 			map[string]any{"url": "/api/v1"},
@@ -354,9 +399,9 @@ func SpecJSON() []byte {
 func buildTags() []any {
 	order := []string{
 		"system", "auth", "tokens", "audit", "users", "repos", "credentials",
-		"nodes", "collections", "scans", "sources", "fleet", "findings", "sarif",
-		"suppressions", "policies", "fixes", "loops", "config", "scanners",
-		"scanner-supply-chain", "ai",
+		"nodes", "collections", "schedules", "scans", "sources", "fleet", "findings", "sarif",
+		"suppressions", "policies", "fixes", "loops", "config", "setup", "notifications",
+		"webhooks", "scanners", "scanner-supply-chain", "ai", "admin",
 	}
 	tags := make([]any, 0, len(order))
 	for _, t := range order {
@@ -1068,13 +1113,23 @@ func scannerSynchronousPost(ep Endpoint) bool {
 }
 
 func errRef(desc string) map[string]any {
+	schema := map[string]any{"$ref": "#/components/schemas/ErrorResponse"}
 	return map[string]any{
 		"description": desc,
+		"headers":     rateLimitHeaders(),
 		"content": map[string]any{
-			"application/json": map[string]any{
-				"schema": map[string]any{"$ref": "#/components/schemas/ErrorResponse"},
-			},
+			"application/json":         map[string]any{"schema": schema},
+			"application/problem+json": map[string]any{"schema": schema},
 		},
+	}
+}
+
+func rateLimitHeaders() map[string]any {
+	return map[string]any{
+		"X-RateLimit-Limit":     map[string]any{"schema": map[string]any{"type": "integer"}, "description": "Bucket size"},
+		"X-RateLimit-Remaining": map[string]any{"schema": map[string]any{"type": "integer"}, "description": "Tokens left"},
+		"Retry-After":           map[string]any{"schema": map[string]any{"type": "integer"}, "description": "Seconds to wait when limited"},
+		"X-Request-ID":          map[string]any{"schema": map[string]any{"type": "string"}, "description": "Correlation id"},
 	}
 }
 
@@ -1474,6 +1529,10 @@ func buildComponents() map[string]any {
 							"message": str,
 						},
 					},
+					"type":   str,
+					"title":  str,
+					"status": map[string]any{"type": "integer"},
+					"detail": str,
 				},
 			},
 			"RegisterRequest": objSchema(map[string]any{"email": str, "password": str}, "email", "password"),
@@ -1521,14 +1580,14 @@ func buildComponents() map[string]any {
 					"username": str, "base_path": str, "known_hosts": str,
 				}, "kind"),
 				"collection_id": str, "branch": str,
-				"profile":    map[string]any{"type": "string", "enum": []string{"standard", "full", "targeted"}},
+				"profile":    map[string]any{"type": "string", "enum": []string{"standard", "full", "targeted", "fast", "pr", "release"}},
 				"categories": strArr, "tools": strArr, "disabled_tools": strArr,
 				"include_paths": strArr, "exclude_paths": strArr, "client_reference": str,
 				"ai_enabled": map[string]any{"type": "boolean"}, "ai_engine": str, "ai_model": str,
 			}),
 			"PreflightScanRequest": objSchema(map[string]any{
 				"repo_id":    str,
-				"profile":    map[string]any{"type": "string", "enum": []string{"standard", "full", "targeted"}},
+				"profile":    map[string]any{"type": "string", "enum": []string{"standard", "full", "targeted", "fast", "pr", "release"}},
 				"categories": strArr, "tools": strArr, "all_scanners": map[string]any{"type": "boolean"},
 				"disabled_tools": strArr, "include_paths": strArr, "exclude_paths": strArr,
 			}, "repo_id"),
@@ -1539,7 +1598,19 @@ func buildComponents() map[string]any {
 				"type": str, "name": str, "secret": str, "username": str,
 				"known_hosts": str, "allowed_hosts": strArr,
 			}, "type", "name", "secret", "allowed_hosts"),
+			"LicenseBlobRequest":   objSchema(map[string]any{"license": str}, "license"),
 			"FindingStatusRequest": objSchema(map[string]any{"status": str}, "status"),
+			"BulkUpdateFindingsRequest": objSchema(map[string]any{
+				"ids":    strArr,
+				"status": str,
+				"suppress": objSchema(map[string]any{
+					"reason": str,
+				}),
+			}, "ids"),
+			"SplitVulnerabilityRequest": objSchema(map[string]any{"finding_ids": strArr}, "finding_ids"),
+			"MergeVulnerabilityRequest": objSchema(map[string]any{"vulnerability_id": str}, "vulnerability_id"),
+			"InvestigateRequest":        objSchema(map[string]any{"question": str}),
+			"VerifyRequest":             objSchema(map[string]any{"environment": str, "class": str}),
 			"CreateFixRequest": objSchema(map[string]any{
 				"repo_id": str, "scan_id": str, "finding_ids": strArr,
 				"target_branch": str, "engine": str, "mode": str,

@@ -75,30 +75,44 @@ func SeverityScore(s models.Severity) float64 {
 //   - 0.5x: vendor, node_modules, generated, mock, fixture, testdata
 //   - 1x: default for all other paths
 //
-// The first matching group wins; patterns within a group are checked with
-// case-insensitive substring matching.
+// The first matching group wins; patterns match a path segment (or a
+// substring that contains "/" like "api/routes"), not "auth" inside "author.go".
 func LocationWeight(filePath string) float64 {
-	lower := strings.ToLower(filePath)
+	lower := strings.ToLower(strings.ReplaceAll(filePath, "\\", "/"))
 
 	for _, pattern := range highWeightPatterns {
-		if strings.Contains(lower, pattern) {
+		if pathHasToken(lower, pattern) {
 			return 3.0
 		}
 	}
-
 	for _, pattern := range mediumWeightPatterns {
-		if strings.Contains(lower, pattern) {
+		if pathHasToken(lower, pattern) {
 			return 2.0
 		}
 	}
-
 	for _, pattern := range lowWeightPatterns {
-		if strings.Contains(lower, pattern) {
+		if pathHasToken(lower, pattern) {
 			return 0.5
 		}
 	}
-
 	return 1.0
+}
+
+func pathHasToken(lowerPath, pattern string) bool {
+	if strings.Contains(pattern, "/") {
+		return strings.Contains(lowerPath, pattern)
+	}
+	for _, seg := range strings.Split(lowerPath, "/") {
+		if seg == pattern {
+			return true
+		}
+		if i := strings.LastIndex(seg, "."); i > 0 {
+			if seg[:i] == pattern {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // CompositeScore calculates the normalized composite priority score.
@@ -135,14 +149,13 @@ func DependencyBoost(dependentsCount int) float64 {
 }
 
 // ScoreFinding computes and fills in all score fields on a Finding.
-// If AIContextScore is zero, it defaults to 5.
-// The Finding is modified in place and also returned for convenience.
+// If AIContextScore is zero, it defaults to 1 (no AI signal — not a fake 5).
 func ScoreFinding(f *models.Finding) *models.Finding {
 	f.ToolSeverityScore = SeverityScore(f.Severity)
 	f.LocationWeight = LocationWeight(f.FilePath)
 
 	if f.AIContextScore == 0 {
-		f.AIContextScore = 5.0
+		f.AIContextScore = 1.0
 	}
 
 	f.CompositeScore = CompositeScore(f.ToolSeverityScore, f.LocationWeight, f.AIContextScore)

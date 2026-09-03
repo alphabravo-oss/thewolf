@@ -96,6 +96,7 @@ func ScanPreflight(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	applyScanProfile(h, &createReq, repo.ID)
 
 	var languages []models.Language
 	var langCounts map[string]int
@@ -107,9 +108,9 @@ func ScanPreflight(w http.ResponseWriter, r *http.Request) {
 	}
 	sort.Slice(languages, func(i, j int) bool { return languages[i] < languages[j] })
 
-	selectedTools := req.Tools
-	toolsExplicit := len(req.Tools) > 0
-	if req.Profile == "full" || len(req.Categories) > 0 {
+	selectedTools := createReq.Tools
+	toolsExplicit := len(createReq.Tools) > 0
+	if createReq.Profile == "full" || len(createReq.Categories) > 0 {
 		selectedTools = toolsForProfile(h, createReq, languages)
 		toolsExplicit = true
 	}
@@ -117,7 +118,7 @@ func ScanPreflight(w http.ResponseWriter, r *http.Request) {
 		Registry:      h.Registry,
 		Tools:         selectedTools,
 		ToolsExplicit: toolsExplicit,
-		DisabledTools: req.DisabledTools,
+		DisabledTools: createReq.DisabledTools,
 	}
 	// Auto-detect (no explicit tools, not all-scanners): use cached languages
 	// so the estimate matches what the scan would select, without cloning.

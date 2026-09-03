@@ -52,7 +52,7 @@ func RenderFixHigh(cfg FixDocConfig) string {
 		if f.Suppressed {
 			continue
 		}
-		if isHighPriority(f) && f.FineCategory != "" {
+		if isHighPriority(f) {
 			picked = append(picked, f)
 		}
 	}

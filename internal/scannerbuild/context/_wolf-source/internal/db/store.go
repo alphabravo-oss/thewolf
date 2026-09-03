@@ -184,7 +184,27 @@ type Store interface {
 	UpdateFinding(ctx context.Context, f *models.Finding) error
 	UpdateFindingStatus(ctx context.Context, id string, status models.Status) error
 
+	// Canonical vulnerabilities (Phase 7 dual-write of finding clusters)
+	UpsertVulnerability(ctx context.Context, v *models.Vulnerability) error
+	GetVulnerabilityByID(ctx context.Context, id string) (*models.Vulnerability, error)
+	GetVulnerabilityByRepoKey(ctx context.Context, repoID, canonicalKey string) (*models.Vulnerability, error)
+	ListVulnerabilitiesByRepo(ctx context.Context, repoID string) ([]models.Vulnerability, error)
+	ListVulnerabilitiesByScan(ctx context.Context, scanID string) ([]models.Vulnerability, error)
+	ListVulnerabilitiesForUser(ctx context.Context, userID string, fleetMode bool) ([]models.Vulnerability, error)
+	InsertVulnerabilityEvidence(ctx context.Context, e *models.VulnerabilityEvidence) error
+	ListEvidenceByVulnerability(ctx context.Context, vulnerabilityID string) ([]models.VulnerabilityEvidence, error)
+	MoveVulnerabilityEvidence(ctx context.Context, evidenceIDs []string, toVulnerabilityID string) error
+	DeleteVulnerability(ctx context.Context, id string) error
+	RefreshVulnerabilityEvidence(ctx context.Context, vulnerabilityID string) error
+
 	// Baselines and Comparisons
+	CreateScanSchedule(ctx context.Context, schedule *models.ScanSchedule) error
+	GetScanScheduleByID(ctx context.Context, id string) (*models.ScanSchedule, error)
+	ListScanSchedulesByUser(ctx context.Context, userID string) ([]models.ScanSchedule, error)
+	ListEnabledScanSchedules(ctx context.Context) ([]models.ScanSchedule, error)
+	UpdateScanSchedule(ctx context.Context, schedule *models.ScanSchedule) error
+	DeleteScanSchedule(ctx context.Context, id string) error
+
 	CreateScanBaseline(ctx context.Context, baseline *models.ScanBaseline) error
 	ListScanBaselines(ctx context.Context, repoID, branch string) ([]models.ScanBaseline, error)
 	GetScanBaselineByName(ctx context.Context, repoID, branch, name string) (*models.ScanBaseline, error)

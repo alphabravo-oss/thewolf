@@ -40,6 +40,25 @@ func loadRepoForCaller(w http.ResponseWriter, r *http.Request, store db.Store, r
 	return repo, true
 }
 
+func findingAccessibleToCaller(r *http.Request, store db.Store, finding *models.Finding, claims *auth.Claims) bool {
+	if fleetVisible(r.Context(), store, claims.UserID) {
+		return true
+	}
+	repo, err := store.GetRepoByID(r.Context(), finding.RepoID)
+	return err == nil && canModifyOwned(claims, repo.UserID)
+}
+
+// findingVisibleToCaller is the GetFinding/UpdateFindingStatus IDOR guard.
+// Admins (fleetVisible) may read any finding; everyone else must own the repo.
+// Cross-tenant misses 404 so we don't confirm the finding exists.
+func findingVisibleToCaller(w http.ResponseWriter, r *http.Request, store db.Store, finding *models.Finding, claims *auth.Claims) bool {
+	if findingAccessibleToCaller(r, store, finding, claims) {
+		return true
+	}
+	response.WriteError(w, http.StatusNotFound, "not_found", "finding not found")
+	return false
+}
+
 func loadScanForCaller(w http.ResponseWriter, r *http.Request, store db.Store, scanID string, claims *auth.Claims) (*models.Scan, bool) {
 	if claims == nil {
 		response.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing user context")

@@ -14,6 +14,7 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/auth"
 	"github.com/alphabravocompany/thewolf/internal/finding/gates"
 	"github.com/alphabravocompany/thewolf/internal/models"
+	"github.com/alphabravocompany/thewolf/internal/scan/suppress"
 )
 
 type policyRequest struct {
@@ -195,10 +196,23 @@ func evaluateAndPersistGateContext(ctx context.Context, h *Handler, scanID, user
 		return models.QualityGateResult{}, gates.Evaluation{}, models.QualityPolicy{}, 0, err
 	}
 	policy := resolvePolicy(ctx, h, scan)
-	parsed, err := gates.ParsePolicy(policy.Name, policy.Mode, policy.RulesJSON)
-	if err != nil {
-		parsed = gates.DefaultPolicy()
+	var parsed gates.Policy
+	if policy.ID == "default" && isFastProfile(scan.Profile) {
+		parsed = gates.FastPRPolicy()
+		policy.Name = parsed.Name
+		policy.Mode = parsed.Mode
+		if data, merr := json.Marshal(parsed.Rules); merr == nil {
+			policy.RulesJSON = string(data)
+		}
+	} else {
+		parsed, err = gates.ParsePolicy(policy.Name, policy.Mode, policy.RulesJSON)
+		if err != nil {
+			parsed = gates.DefaultPolicy()
+		}
 	}
+	findings, _ = suppress.Apply(findings, suppress.DefaultRules())
+	applyGitignoreByRepoID(ctx, h, scan.RepoID, findings)
+	applyWolfIgnoreByRepoID(ctx, h, scan.RepoID, findings)
 	eval := gates.Evaluate(parsed, findings)
 	summaryJSON, _ := json.Marshal(eval.Summary)
 	matchesJSON, _ := json.Marshal(eval.MatchedRules)

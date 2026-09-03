@@ -158,10 +158,14 @@ func NewCommandGroups() []*cobra.Command {
 		newCredentialCmd(),
 		newNodeCmd(),
 		newCollectionCmd(),
+		newScheduleCmd(),
+		newSetupCmd(),
+		newNotificationCmd(),
 		newBaselineCmd(),
 		newCompareCmd(),
 		newFleetCmd(),
 		newFindingCmd(),
+		newVulnerabilityCmd(),
 		newSarifCmd(),
 		newSuppressCmd(),
 		newPolicyCmd(),
@@ -175,6 +179,8 @@ func NewCommandGroups() []*cobra.Command {
 		newScannerCmd(),
 		newAdminCmd(),
 		newAuditCmd(),
+		newLicenseCmd(),
 		newSystemCmd(),
+		newMCPCmd(),
 	}
 }

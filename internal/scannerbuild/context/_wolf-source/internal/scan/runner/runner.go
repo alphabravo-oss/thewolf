@@ -22,6 +22,7 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/finding/knowledge"
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
+	"github.com/alphabravocompany/thewolf/internal/plugin/container"
 	"github.com/alphabravocompany/thewolf/internal/scannerruntime"
 	"github.com/alphabravocompany/thewolf/internal/scannertools/manifest"
 	"github.com/alphabravocompany/thewolf/internal/wolflog"
@@ -144,13 +145,22 @@ func Fingerprint(toolName, ruleID, title, filePath string) string {
 	return identity.Build(f).Stable
 }
 
-// dedupKey returns the deduplication key for a finding. When a fine_category
-// is set (from the knowledge-base lookup that happens at parse time), the
-// key uses it so two tools reporting the same SQL injection at the same
-// line collapse into one record. When no fine_category is known, falls back
-// to rule_id / title — preserving the pre-Phase-2 behavior for uncategorized
-// findings.
+// dedupKey returns the deduplication key for a finding. SCA findings key on
+// vulnerability identity so distinct CVEs in the same lockfile (line 0,
+// shared fine_category) do not collapse. Other findings use
+// (file, line, fine_category) when a fine_category is set, else
+// rule_id / title.
 func dedupKey(f models.Finding) string {
+	if f.Category == models.CategorySCA {
+		id := f.RuleID
+		if id == "" {
+			id = f.CWEID
+		}
+		if id == "" {
+			id = f.Title
+		}
+		return "sca:" + strings.ToLower(id)
+	}
 	if f.FineCategory != "" {
 		return fmt.Sprintf("%s:%d:%s", f.FilePath, f.LineStart, f.FineCategory)
 	}
@@ -468,6 +478,11 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 
 	// Select tools.
 	plugins := SelectTools(cfg)
+	netReq := make(map[string]bool, len(cfg.ToolResources))
+	for name, spec := range cfg.ToolResources {
+		netReq[name] = spec.NetworkRequired || spec.Class == "network"
+	}
+	container.SetNetworkRequirements(netReq)
 
 	// Check availability and partition into runnable vs skipped.
 	var runnable []models.Plugin

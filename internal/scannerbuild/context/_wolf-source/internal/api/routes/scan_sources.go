@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
+	scannermanifest "github.com/alphabravocompany/thewolf/internal/scannertools/manifest"
 	"github.com/alphabravocompany/thewolf/internal/scantarget"
 )
 
@@ -209,6 +210,9 @@ func materializeSSHSource(ctx context.Context, h *Handler, userID string, source
 }
 
 func createVisibleSourceRepo(ctx context.Context, h *Handler, repo *models.Repo) (*models.Repo, error) {
+	if err := checkCommunityLimit(ctx, h.Store, limitRepos); err != nil {
+		return nil, err
+	}
 	if err := h.Store.CreateRepo(ctx, repo); err != nil {
 		if existing := findSourceRepo(ctx, h, repo.UserID, repo.SourceFingerprint); existing != nil {
 			return existing, nil
@@ -287,14 +291,15 @@ func sourceName(source *scanSourceRequest, fallback string) string {
 }
 
 func validateScanRequestSelectors(h *Handler, req *createScanRequest) error {
+	req.Profile = strings.ToLower(strings.TrimSpace(req.Profile))
 	switch req.Profile {
-	case "", "standard", "full":
+	case "", "standard", "full", "fast", "pr", "release":
 	case "targeted":
 		if len(req.Tools) == 0 && len(req.Categories) == 0 && len(req.IncludePaths) == 0 {
 			return fmt.Errorf("targeted profile requires tools, categories, or include_paths")
 		}
 	default:
-		return fmt.Errorf("profile must be standard, full, or targeted")
+		return fmt.Errorf("profile must be standard, full, targeted, fast, pr, or release")
 	}
 	knownCategories := map[string]bool{
 		"sast": true, "sca": true, "secrets": true, "quality": true, "container": true,
@@ -336,6 +341,61 @@ func validateScopePattern(pattern string) error {
 		}
 	}
 	return nil
+}
+
+func isFastProfile(p string) bool {
+	switch strings.ToLower(strings.TrimSpace(p)) {
+	case "fast", "pr":
+		return true
+	default:
+		return false
+	}
+}
+
+func heavyToolNames() []string {
+	m, err := scannermanifest.LoadDefault()
+	if err != nil || m == nil {
+		return nil
+	}
+	var names []string
+	for name, tool := range m.Tools {
+		if tool.ResourceClass == "heavy" {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
+func applyScanProfile(h *Handler, req *createScanRequest, repoID string) {
+	if h == nil || req == nil {
+		return
+	}
+	req.Profile = strings.ToLower(strings.TrimSpace(req.Profile))
+	if len(req.Tools) > 0 {
+		return
+	}
+	if !isFastProfile(req.Profile) {
+		return
+	}
+	if repoID != "" && h.Store != nil {
+		scans, err := h.Store.ListScansByRepo(context.Background(), repoID)
+		if err != nil {
+			return
+		}
+		hasCompleted := false
+		for i := range scans {
+			if scans[i].Status == models.ScanStatusCompleted {
+				hasCompleted = true
+				break
+			}
+		}
+		if !hasCompleted {
+			return
+		}
+	}
+	for _, name := range heavyToolNames() {
+		req.DisabledTools = appendUniqueString(req.DisabledTools, name)
+	}
 }
 
 func toolsForProfile(h *Handler, req createScanRequest, languages []models.Language) []string {
