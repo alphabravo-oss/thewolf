@@ -164,7 +164,12 @@ func commandForOrArgs(cons *models.FixerConsole, wrapped []string) []string {
 // insist on a TTY still print their OAuth URL. Operator shells stay on
 // a plain pipe so stdin from the UI queue is delivered reliably.
 func maybePTY(args []string) []string {
-	if len(args) == 0 || args[0] == "/bin/sh" {
+	if len(args) == 0 {
+		return args
+	}
+	switch args[0] {
+	case "claude", "codex", "opencode":
+	default:
 		return args
 	}
 	if _, err := exec.LookPath("script"); err != nil {
