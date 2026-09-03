@@ -6,6 +6,7 @@ image:
   tag: latest
   allowMutableTag: false
   pullPolicy: IfNotPresent
+  pullSecrets: []
 
 replicaCount: 1
 worker:

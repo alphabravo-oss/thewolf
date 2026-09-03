@@ -35,6 +35,10 @@ spec:
         app.kubernetes.io/instance: {{ .Release.Name }}
         app.kubernetes.io/component: api
     spec:
+{{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+{{ toYaml . | indent 8 }}
+{{- end }}
       serviceAccountName: {{ include "wolf.fullname" . }}-api
       securityContext:
         runAsNonRoot: true

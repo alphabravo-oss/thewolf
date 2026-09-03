@@ -18,6 +18,15 @@
         },
         "allowMutableTag": {
           "type": "boolean"
+        },
+        "pullSecrets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" }
+            }
+          }
         }
       }
     },

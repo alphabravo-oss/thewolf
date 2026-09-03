@@ -49,6 +49,15 @@ helm template wolf "$chart_dir" \
   >"$tmp_dir/overlay-env.yaml"
 grep -q 'name: WOLF_VERIFY_KILL_SWITCH' "$tmp_dir/overlay-env.yaml"
 grep -q 'name: WOLF_OIDC_ISSUER' "$tmp_dir/overlay-env.yaml"
+
+helm template wolf "$chart_dir" \
+  --set-string masterKey=test-master-key \
+  --set-string postgres.password=test-postgres-password \
+  --set-string image.digest="$wolf_digest" \
+  --set-string postgres.digest="$postgres_digest" \
+  --set-json 'image.pullSecrets=[{"name":"ghcr-alphabravo"}]' \
+  >"$tmp_dir/pull-secrets.yaml"
+grep -q 'name: ghcr-alphabravo' "$tmp_dir/pull-secrets.yaml"
 grep -A20 'app.kubernetes.io/component: postgres' "$tmp_dir/rendered.yaml" |
   grep -q 'runAsNonRoot: true'
 grep -A20 'app.kubernetes.io/component: postgres' "$tmp_dir/rendered.yaml" |

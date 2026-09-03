@@ -18,6 +18,10 @@ spec:
         app.kubernetes.io/instance: {{ .Release.Name }}
         app.kubernetes.io/component: scan-worker
     spec:
+{{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+{{ toYaml . | indent 8 }}
+{{- end }}
       serviceAccountName: {{ include "wolf.workerServiceAccountName" . }}
       securityContext:
         runAsNonRoot: true
