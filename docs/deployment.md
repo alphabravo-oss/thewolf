@@ -170,6 +170,21 @@ The chart refuses a tag-only Wolf or PostgreSQL image by default.
 `image.allowMutableTag` and `postgres.allowMutableImage` are development-only
 escape hatches and should not be enabled in a qualified environment.
 
+Ingress is off by default. The API NetworkPolicy already allows TCP 8778, so
+enabling Ingress does not require a NetworkPolicy change:
+
+```bash
+helm upgrade --install wolf deploy/helm/wolf \
+  --namespace wolf --create-namespace \
+  --set-string masterKey="$(openssl rand -hex 32)" \
+  --set-string postgres.password="REPLACE_WITH_A_SECRET" \
+  --set-string image.digest="sha256:REPLACE_WITH_64_HEX_CHARACTERS" \
+  --set-string postgres.digest="sha256:REPLACE_WITH_64_HEX_CHARACTERS" \
+  --set ingress.enabled=true \
+  --set-string ingress.className=nginx \
+  --set-json 'ingress.hosts=[{"host":"wolf.example.com","paths":[{"path":"/","pathType":"Prefix"}]}]'
+```
+
 Network-required scanner Jobs also default to no egress. Populate
 `networkPolicy.scannerEgressCIDRs` with the smallest approved destination set,
 including the cluster DNS resolver CIDR where DNS is required. A port-only

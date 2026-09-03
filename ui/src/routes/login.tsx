@@ -71,7 +71,7 @@ function LoginPage() {
   function afterLogin(res: AuthResponse) {
     if (res.enrollment_required) {
       toast.message("Set up two-factor authentication to continue");
-      navigate({ to: "/settings", search: { tab: "security" } });
+      navigate({ to: "/account", search: { section: "security" } });
       return;
     }
     toast.success("Welcome back");

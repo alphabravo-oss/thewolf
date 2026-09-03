@@ -248,7 +248,7 @@ function RepoDetailPage() {
             className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-50"
           >
             <PlayIcon className="size-4" />
-            {scan.busy ? "Starting…" : "Scan now"}
+            {scan.busy ? "Starting…" : "Scan this"}
           </button>
           <button
             type="button"
@@ -287,7 +287,7 @@ function RepoDetailPage() {
         <code className="font-mono">
           {`${typeof window !== "undefined" ? window.location.origin : ""}/api/v1/webhooks/github`}
         </code>{" "}
-        (push + pull_request). Secret is Settings → Scanner updates.
+        (push + pull_request). Secret is Settings → Scanners (enable Advanced for webhook secret).
       </p>
 
       <section className="glass-card p-5 grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
@@ -358,7 +358,7 @@ function RepoDetailPage() {
           <div className="text-sm text-muted-foreground">Loading…</div>
         ) : !scansQ.data || scansQ.data.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            No scans yet. Click <strong>Scan now</strong> above to run one.
+            No scans yet. Click <strong>Scan this</strong> above to run one.
           </p>
         ) : (
           <ul className="divide-y divide-border/30">

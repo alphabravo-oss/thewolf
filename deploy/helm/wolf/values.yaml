@@ -332,6 +332,21 @@ service:
   type: ClusterIP
   port: 8778
 
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  # hosts:
+  #   - host: wolf.example.com
+  #     paths:
+  #       - path: /
+  #         pathType: Prefix
+  hosts: []
+  # tls:
+  #   - secretName: wolf-tls
+  #     hosts: [wolf.example.com]
+  tls: []
+
 postgres:
   image: postgres
   # Pin the exact approved PostgreSQL image. A combined image@sha256 reference

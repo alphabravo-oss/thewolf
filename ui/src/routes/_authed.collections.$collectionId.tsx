@@ -10,6 +10,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeftIcon,
   PencilIcon,
+  PlayIcon,
   PlusIcon,
   Trash2Icon,
   XIcon,
@@ -24,6 +25,7 @@ import { AddRepoForm } from "@/components/add-repo-form";
 import { PostureCards } from "@/components/fleet/posture-cards";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { DeleteWithRecordsDialog } from "@/components/delete-with-records-dialog";
+import { useScanWithPreflight } from "@/components/scan-preflight";
 
 // GetCollection returns a wrapped shape: { data: { collection, repos, scans } }
 type CollectionDetail = {
@@ -45,6 +47,7 @@ function CollectionDetailPage() {
   const [adding, setAdding] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<Repo | null>(null);
+  const scan = useScanWithPreflight();
 
   const q = useQuery({
     queryKey: ["collection", collectionId],
@@ -228,6 +231,21 @@ function CollectionDetailPage() {
                 </Link>
                 <button
                   type="button"
+                  onClick={() =>
+                    scan.launch({
+                      repo_id: r.id,
+                      branch: r.default_branch || "main",
+                      profile: "standard",
+                    })
+                  }
+                  disabled={scan.busy}
+                  className="inline-flex h-7 items-center gap-1 rounded px-2 text-xs font-medium hover:bg-muted/50 disabled:opacity-50"
+                >
+                  <PlayIcon className="size-3.5" />
+                  Scan this
+                </button>
+                <button
+                  type="button"
                   onClick={() => setRemoveTarget(r)}
                   className="size-7 grid place-items-center rounded hover:bg-muted/50"
                   aria-label="Remove from collection"
@@ -246,6 +264,8 @@ function CollectionDetailPage() {
           )
         )}
       </section>
+
+      {scan.dialog}
 
       {scans && scans.length > 0 && (
         <section className="glass-card p-5">
