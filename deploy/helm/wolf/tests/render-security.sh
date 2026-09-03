@@ -38,6 +38,37 @@ if grep -q WOLF_VERIFY_KILL_SWITCH "$tmp_dir/rendered.yaml"; then
   echo "Community default must not set WOLF_VERIFY_KILL_SWITCH" >&2
   exit 1
 fi
+if grep -q "kind: Ingress" "$tmp_dir/rendered.yaml"; then
+  echo "Ingress must be disabled by default" >&2
+  exit 1
+fi
+
+if helm template wolf "$chart_dir" \
+  --set-string masterKey=test-master-key \
+  --set-string postgres.password=test-postgres-password \
+  --set-string image.digest="$wolf_digest" \
+  --set-string postgres.digest="$postgres_digest" \
+  --set ingress.enabled=true \
+  >"$tmp_dir/ingress-missing-hosts.yaml" 2>"$tmp_dir/ingress-missing-hosts.err"; then
+  echo "expected ingress.enabled without hosts to fail" >&2
+  exit 1
+fi
+grep -q "ingress.hosts is required" "$tmp_dir/ingress-missing-hosts.err"
+
+helm template wolf "$chart_dir" \
+  --set-string masterKey=test-master-key \
+  --set-string postgres.password=test-postgres-password \
+  --set-string image.digest="$wolf_digest" \
+  --set-string postgres.digest="$postgres_digest" \
+  --set ingress.enabled=true \
+  --set-string ingress.className=nginx \
+  --set-json 'ingress.hosts=[{"host":"wolf.example.com","paths":[{"path":"/","pathType":"Prefix"}]}]' \
+  >"$tmp_dir/ingress.yaml"
+grep -q "kind: Ingress" "$tmp_dir/ingress.yaml"
+grep -q "host: \"wolf.example.com\"" "$tmp_dir/ingress.yaml"
+grep -q "ingressClassName: nginx" "$tmp_dir/ingress.yaml"
+grep -q "name: wolf-wolf" "$tmp_dir/ingress.yaml"
+grep -q "number: 8778" "$tmp_dir/ingress.yaml"
 
 helm template wolf "$chart_dir" \
   --set-string masterKey=test-master-key \

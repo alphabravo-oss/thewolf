@@ -2,7 +2,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { GaugeIcon, PlayIcon, XIcon } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { COMMUNITY_LIMIT_COPY, isCommunityLimit } from "@/lib/safe-display";
@@ -138,6 +138,7 @@ function ScanAgentsCell({ jobs }: { jobs: FixJob[] }) {
 function ScansPage() {
   const navigate = useNavigate();
   const [showForm, setShowForm] = useState(false);
+  const [emptyFormDismissed, setEmptyFormDismissed] = useState(false);
   const q = useQuery({
     queryKey: ["scans", "list"],
     queryFn: async () => {
@@ -253,6 +254,9 @@ function ScansPage() {
   ];
 
   const isEmpty = !q.isLoading && scans.length === 0;
+  useEffect(() => {
+    if (isEmpty && !emptyFormDismissed) setShowForm(true);
+  }, [isEmpty, emptyFormDismissed]);
 
   return (
     <PageShell>
@@ -273,7 +277,14 @@ function ScansPage() {
         }
       />
 
-      {showForm && <NewScanForm onClose={() => setShowForm(false)} />}
+      {showForm && (
+        <NewScanForm
+          onClose={() => {
+            setShowForm(false);
+            setEmptyFormDismissed(true);
+          }}
+        />
+      )}
 
       {isEmpty && !showForm ? (
         <EmptyState

@@ -1,4 +1,4 @@
-// Settings page — General / Secrets / Users / Scanners.
+// Settings page — General / Users / Scanners / License (primary).
 //
 // Tab state lives in the URL (?tab=…) so deep links work and refresh
 // preserves which section the user was on. Scan presets were deliberately
@@ -62,8 +62,11 @@ const LEGACY_PERSONAL: Record<string, "profile" | "security"> = {
 
 export const Route = createFileRoute("/_authed/settings")({
   // Accept any string here; beforeLoad does the routing/redirects.
-  validateSearch: (s: Record<string, unknown>) => ({
+  validateSearch: (s: Record<string, unknown>): { tab: string; advanced?: boolean } => ({
     tab: typeof s.tab === "string" ? s.tab : "general",
+    ...(s.advanced === true || s.advanced === "1" || s.advanced === "true"
+      ? { advanced: true }
+      : {}),
   }),
   beforeLoad: async ({ search }) => {
     // Personal surfaces moved to /account.
@@ -95,27 +98,31 @@ type TabKey =
   | "license"
   | "audit";
 
+type TabGroup = "primary" | "more" | "advanced";
+
 // Settings is the admin surface: system config + a global, cross-user
 // oversight view of API keys / secrets / nodes, plus the audit log. Personal
 // (per-user) management lives under /account.
-const TABS: { key: TabKey; label: string; Icon: typeof SettingsIcon }[] = [
-  { key: "general", label: "General", Icon: SettingsIcon },
-  { key: "fixer", label: "Fixer", Icon: WrenchIcon },
-  { key: "users", label: "Users", Icon: UsersIcon },
-  { key: "apikeys", label: "API Keys", Icon: KeyRoundIcon },
-  { key: "secrets", label: "Secrets", Icon: KeyIcon },
-  { key: "nodes", label: "Nodes", Icon: ServerIcon },
-  { key: "scanners", label: "Scanners", Icon: ShieldIcon },
-  { key: "scanner-updates", label: "Scanner updates", Icon: RefreshCwIcon },
-  { key: "license", label: "License", Icon: BadgeCheckIcon },
-  { key: "audit", label: "Audit", Icon: ScrollTextIcon },
+const TABS: { key: TabKey; label: string; Icon: typeof SettingsIcon; group: TabGroup }[] = [
+  { key: "general", label: "General", Icon: SettingsIcon, group: "primary" },
+  { key: "users", label: "Users", Icon: UsersIcon, group: "primary" },
+  { key: "scanners", label: "Scanners", Icon: ShieldIcon, group: "primary" },
+  { key: "license", label: "License", Icon: BadgeCheckIcon, group: "primary" },
+  { key: "fixer", label: "Fixer", Icon: WrenchIcon, group: "more" },
+  { key: "apikeys", label: "API Keys", Icon: KeyRoundIcon, group: "more" },
+  { key: "secrets", label: "Secrets", Icon: KeyIcon, group: "more" },
+  { key: "nodes", label: "Nodes", Icon: ServerIcon, group: "more" },
+  { key: "audit", label: "Audit", Icon: ScrollTextIcon, group: "more" },
+  { key: "scanner-updates", label: "Scanner updates", Icon: RefreshCwIcon, group: "advanced" },
 ];
 
 function SettingsPage() {
-  const { tab } = Route.useSearch();
+  const { tab, advanced } = Route.useSearch();
   const navigate = useNavigate();
   const activeTabRef = useRef<HTMLButtonElement>(null);
-  const activeTab: TabKey = TABS.some((t) => t.key === tab)
+  const showAdvanced = advanced || tab === "scanner-updates";
+  const visibleTabs = TABS.filter((t) => t.group !== "advanced" || showAdvanced);
+  const activeTab: TabKey = visibleTabs.some((t) => t.key === tab)
     ? (tab as TabKey)
     : "general";
 
@@ -157,28 +164,73 @@ function SettingsPage() {
         className="max-w-full overflow-x-auto overscroll-x-contain border-b border-border"
       >
         <div className="flex min-w-max gap-1">
-          {TABS.map(({ key, label, Icon }) => {
-            const active = activeTab === key;
-            return (
-              <button
-                key={key}
-                ref={active ? activeTabRef : undefined}
-                type="button"
-                aria-current={active ? "page" : undefined}
-                onClick={() =>
-                  navigate({ to: "/settings", search: { tab: key } })
-                }
-                className={
-                  "-mb-px inline-flex h-9 items-center gap-1.5 border-b-2 px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring " +
-                  (active
-                    ? "border-primary text-foreground"
-                    : "border-transparent text-muted-foreground hover:text-foreground")
-                }
-              >
-                <Icon className="size-4" aria-hidden="true" /> {label}
-              </button>
-            );
-          })}
+          {visibleTabs
+            .filter((t) => t.group === "primary")
+            .map(({ key, label, Icon }) => {
+              const active = activeTab === key;
+              return (
+                <button
+                  key={key}
+                  ref={active ? activeTabRef : undefined}
+                  type="button"
+                  aria-current={active ? "page" : undefined}
+                  onClick={() =>
+                    navigate({
+                      to: "/settings",
+                      search: { tab: key, ...(showAdvanced ? { advanced: true } : {}) },
+                    })
+                  }
+                  className={
+                    "-mb-px inline-flex h-9 items-center gap-1.5 border-b-2 px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring " +
+                    (active
+                      ? "border-primary text-foreground"
+                      : "border-transparent text-muted-foreground hover:text-foreground")
+                  }
+                >
+                  <Icon className="size-4" aria-hidden="true" /> {label}
+                </button>
+              );
+            })}
+        </div>
+        <div className="flex min-w-max gap-1">
+          {visibleTabs
+            .filter((t) => t.group !== "primary")
+            .map(({ key, label, Icon }) => {
+              const active = activeTab === key;
+              return (
+                <button
+                  key={key}
+                  ref={active ? activeTabRef : undefined}
+                  type="button"
+                  aria-current={active ? "page" : undefined}
+                  onClick={() =>
+                    navigate({
+                      to: "/settings",
+                      search: { tab: key, ...(showAdvanced ? { advanced: true } : {}) },
+                    })
+                  }
+                  className={
+                    "-mb-px inline-flex h-8 items-center gap-1.5 border-b-2 px-3 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring " +
+                    (active
+                      ? "border-primary text-foreground"
+                      : "border-transparent text-muted-foreground hover:text-foreground")
+                  }
+                >
+                  <Icon className="size-3.5" aria-hidden="true" /> {label}
+                </button>
+              );
+            })}
+          {!showAdvanced ? (
+            <button
+              type="button"
+              onClick={() =>
+                navigate({ to: "/settings", search: { tab: "scanner-updates", advanced: true } })
+              }
+              className="-mb-px inline-flex h-8 items-center px-3 text-xs text-muted-foreground hover:text-foreground"
+            >
+              Advanced
+            </button>
+          ) : null}
         </div>
       </nav>
 
@@ -949,7 +1001,7 @@ export function AccountTab() {
           <button
             type="button"
             onClick={() =>
-              navigate({ to: "/settings", search: { tab: "apikeys" } })
+              navigate({ to: "/account", search: { section: "apikeys" } })
             }
             className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border text-sm hover:bg-muted/40"
           >
@@ -958,7 +1010,7 @@ export function AccountTab() {
           <button
             type="button"
             onClick={() =>
-              navigate({ to: "/settings", search: { tab: "security" } })
+              navigate({ to: "/account", search: { section: "security" } })
             }
             className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border text-sm hover:bg-muted/40"
           >
@@ -1022,6 +1074,15 @@ const GENERAL_KNOBS = [
 function GeneralTab() {
   const qc = useQueryClient();
   const q = useSettingsMap();
+  const editionQ = useQuery({
+    queryKey: ["edition"],
+    queryFn: async () =>
+      (await api.get<{
+        edition?: string;
+        product?: string;
+        licensed?: boolean;
+      }>("/edition")).data,
+  });
   const m = useMutation({
     mutationFn: (updates: Record<string, string>) =>
       api.put("/settings", updates),
@@ -1035,16 +1096,6 @@ function GeneralTab() {
   if (q.isLoading)
     return <p className="text-sm text-muted-foreground">Loading…</p>;
   const settings = q.data ?? {};
-
-  const editionQ = useQuery({
-    queryKey: ["edition"],
-    queryFn: async () =>
-      (await api.get<{
-        edition?: string;
-        product?: string;
-        licensed?: boolean;
-      }>("/edition")).data,
-  });
   const product = editionQ.data?.product ?? "Wolf Community";
   const editionName = editionQ.data?.edition ?? "community";
 
