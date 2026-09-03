@@ -32,6 +32,13 @@ jobs:
             exit 1
           fi
 
+      - name: public CI must not clone the private overlay
+        run: |
+          if grep -R --include='*.yml' -E 'repository:[[:space:]]*.*wolf-enterprise' .github/workflows; then
+            echo "public CI must not check out wolf-enterprise" >&2
+            exit 1
+          fi
+
       - name: license hygiene
         run: |
           test -f LICENSE_POLICY.md
