@@ -3,7 +3,7 @@ package plugin
 import "runtime"
 
 // IsArm64Host reports whether wolf is running on an arm64 host. Some upstream
-// scanner images (bearer, scorecard) are published amd64-only; under Docker
+// scanner images (bearer) are published amd64-only; under Docker
 // Desktop / Rancher Desktop they run via qemu emulation and crash with Go
 // runtime panics ("lfstack.push invalid packing") or fail to find the
 // entrypoint. Plugins whose images are arm64-incompatible can use this to

@@ -78,7 +78,7 @@ tools:
   renovate: {family: dependency, strategy: gated-executable, parserOwned: true, parserFormat: json, thresholdProfile: network, rationale: "Requires controlled package-manager endpoints and never receives production credentials in fixtures."}
   rubocop: {family: ruby, strategy: executable-fixture, parserOwned: true, parserFormat: json, thresholdProfile: light}
   ruff: {family: python, strategy: executable-fixture, parserOwned: true, parserFormat: json, thresholdProfile: light}
-  scorecard: {family: supply-chain, strategy: gated-executable, parserOwned: true, parserFormat: json, thresholdProfile: network, rationale: "The upstream image is amd64-only and repository API calls require controlled test credentials."}
+  scorecard: {family: supply-chain, strategy: gated-executable, parserOwned: true, parserFormat: json, thresholdProfile: network, rationale: "Repository API calls require controlled test credentials."}
   semgrep: {family: polyglot, strategy: gated-executable, parserOwned: true, parserFormat: json, thresholdProfile: heavy, rationale: "Runs only in the exact-digest upstream image with pinned local rules."}
   shellcheck: {family: shell, strategy: executable-fixture, parserOwned: true, parserFormat: json, thresholdProfile: light}
   spectral: {family: documentation, strategy: gated-executable, parserOwned: true, parserFormat: json, thresholdProfile: light, rationale: "The exact-digest upstream image is amd64-only."}

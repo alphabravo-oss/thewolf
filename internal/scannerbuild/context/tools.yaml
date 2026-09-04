@@ -688,15 +688,15 @@ tools:
     default_timeout: 10m
     plugin_package: plugins/security
     integration_tier: upstream
-    pinned_version: "5.0.0"
+    pinned_version: "5.5.0"
     version_variable: SCORECARD_VERSION
     image:
-      pinned_reference: gcr.io/openssf/scorecard:v5.0.0
+      pinned_reference: ghcr.io/ossf/scorecard:v5.5.0@sha256:3f24714e9366917adb7a05635382c97dfecb14b21eaef3dfa2ea48c8e23e0795
       entrypoint: /scorecard
-      platforms: ["linux/amd64"]
+      platforms: ["linux/amd64", "linux/arm64"]
     update_source:
       type: docker_registry
-      repository: gcr.io/openssf/scorecard
+      repository: ghcr.io/ossf/scorecard
       tag_pattern: '^v\d+\.\d+\.\d+$'
   semgrep:
     display_name: Semgrep
