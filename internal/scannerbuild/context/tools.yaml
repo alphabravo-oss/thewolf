@@ -691,7 +691,7 @@ tools:
     pinned_version: "5.5.0"
     version_variable: SCORECARD_VERSION
     image:
-      pinned_reference: ghcr.io/ossf/scorecard:v5.5.0@sha256:3f24714e9366917adb7a05635382c97dfecb14b21eaef3dfa2ea48c8e23e0795
+      pinned_reference: ghcr.io/ossf/scorecard:v5.5.0
       entrypoint: /scorecard
       platforms: ["linux/amd64", "linux/arm64"]
     update_source:
