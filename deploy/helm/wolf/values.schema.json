@@ -33,6 +33,26 @@
     "postgres": {
       "type": "object",
       "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["bundled", "cnpg", "external"]
+        },
+        "sslmode": { "type": "string" },
+        "cnpg": {
+          "type": "object",
+          "properties": {
+            "instances": { "type": "integer", "minimum": 1 },
+            "imageName": { "type": "string" }
+          }
+        },
+        "external": {
+          "type": "object",
+          "properties": {
+            "dsn": { "type": "string" },
+            "existingSecret": { "type": "string" },
+            "existingSecretKey": { "type": "string" }
+          }
+        },
         "image": {
           "type": "string",
           "minLength": 1

@@ -1,0 +1,43 @@
+{{- if eq (include "wolf.postgresMode" .) "cnpg" }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "wolf.cnpgClusterName" . }}-app
+  labels:
+    {{- include "wolf.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+type: kubernetes.io/basic-auth
+stringData:
+  username: {{ required "postgres.username is required" .Values.postgres.username | quote }}
+  password: {{ required "postgres.password is required" .Values.postgres.password | quote }}
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ include "wolf.cnpgClusterName" . }}
+  labels:
+    {{- include "wolf.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+spec:
+  instances: {{ .Values.postgres.cnpg.instances | default 1 }}
+  {{- if .Values.postgres.cnpg.imageName }}
+  imageName: {{ .Values.postgres.cnpg.imageName | quote }}
+  {{- end }}
+  enableSuperuserAccess: false
+  inheritedMetadata:
+    labels:
+      app.kubernetes.io/name: {{ include "wolf.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: postgres
+  bootstrap:
+    initdb:
+      database: {{ .Values.postgres.database | quote }}
+      owner: {{ .Values.postgres.username | quote }}
+      secret:
+        name: {{ include "wolf.cnpgClusterName" . }}-app
+  storage:
+    size: {{ .Values.postgres.storage }}
+    {{- if .Values.postgres.storageClassName }}
+    storageClass: {{ .Values.postgres.storageClassName | quote }}
+    {{- end }}
+{{- end }}

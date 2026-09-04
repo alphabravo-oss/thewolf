@@ -866,8 +866,95 @@ function GeneralTab() {
         );
       })}
     </section>
+    <DatabaseCard />
     <DiskCard />
     </div>
+  );
+}
+
+type DatabaseInfo = {
+  driver: string;
+  user?: string;
+  host?: string;
+  database?: string;
+  sslmode?: string;
+  env_managed?: boolean;
+  file_set?: boolean;
+};
+
+function DatabaseCard() {
+  const q = useQuery({
+    queryKey: ["admin-database"],
+    queryFn: async () => (await api.get<DatabaseInfo>("/admin/database")).data,
+  });
+  const [dsn, setDsn] = useState("");
+  const test = useMutation({
+    mutationFn: () => api.post("/admin/database/test", { dsn }),
+    onSuccess: () => toast.success("Connected"),
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Unreachable"),
+  });
+  const save = useMutation({
+    mutationFn: () => api.put("/admin/database", { dsn }),
+    onSuccess: () =>
+      toast.success("Saved. Restart Wolf to use this database."),
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Save failed"),
+  });
+  const info = q.data;
+  const helmLocked = !!info?.env_managed;
+  return (
+    <section className="glass-card p-5 space-y-3">
+      <h3 className="text-sm font-medium">Database</h3>
+      <p className="text-xs text-muted-foreground">
+        {info?.driver === "postgres" ? (
+          <>
+            Postgres {info.user ? `${info.user}@` : ""}
+            {info.host || "—"}/{info.database || "—"}
+            {info.sslmode ? ` · sslmode=${info.sslmode}` : ""}
+          </>
+        ) : (
+          <>SQLite {info?.database ? `(${info.database})` : ""}</>
+        )}
+      </p>
+      {helmLocked ? (
+        <p className="text-xs text-muted-foreground">
+          DSN comes from Helm (<code className="font-mono">postgres.mode</code>
+          : bundled, cnpg, or external). Change values and helm upgrade.
+        </p>
+      ) : (
+        <>
+          <p className="text-xs text-muted-foreground">
+            Point this instance at a remote Postgres. Restart Wolf after save.
+            Helm installs should use <code className="font-mono">postgres.mode=external</code> instead.
+          </p>
+          <input
+            type="password"
+            autoComplete="off"
+            value={dsn}
+            onChange={(e) => setDsn(e.target.value)}
+            placeholder="postgres://user:pass@host:5432/wolf?sslmode=require"
+            className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border text-sm font-mono"
+          />
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={!dsn.trim() || test.isPending}
+              onClick={() => test.mutate()}
+              className="h-9 px-3 rounded-md border border-border text-sm hover:bg-muted/40 disabled:opacity-50"
+            >
+              Test
+            </button>
+            <button
+              type="button"
+              disabled={!dsn.trim() || save.isPending}
+              onClick={() => save.mutate()}
+              className="h-9 px-3 rounded-md bg-primary text-primary-foreground text-sm disabled:opacity-50"
+            >
+              Save for next start
+            </button>
+          </div>
+        </>
+      )}
+    </section>
   );
 }
 

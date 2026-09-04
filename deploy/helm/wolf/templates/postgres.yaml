@@ -1,3 +1,4 @@
+{{- if eq (include "wolf.postgresMode" .) "bundled" }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -67,3 +68,4 @@ spec:
     app.kubernetes.io/component: postgres
   ports:
     - {name: postgres, port: 5432, targetPort: postgres}
+{{- end }}
