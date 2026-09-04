@@ -105,20 +105,20 @@ func Run(ctx context.Context, store db.Store, fs *fixstore.Store, cons *models.F
 	defer stopPump()
 
 	var wg sync.WaitGroup
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-		relayOutput(ctx, store, fs, cons, stdout)
-	}()
+	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		pumpStdin(pumpCtx, store, cons.ID, stdin)
 	}()
 
-	waitErr := cmd.Wait()
+	// Drain stdout before Wait: Wait closes StdoutPipe and drops unread bytes
+	// (os/exec: "incorrect to call Wait before all reads from the pipe have
+	// completed"). Fast commands + -race on Ubuntu hit that every time.
+	relayOutput(writeCtx, store, fs, cons, stdout)
 	stopPump()
 	_ = stdin.Close()
 	wg.Wait()
+	waitErr := cmd.Wait()
 
 	finish := time.Now().UTC()
 	latest, _ := store.GetFixerConsoleByID(writeCtx, cons.ID)
