@@ -32,7 +32,7 @@ Wolf scanner metadata is authored in `scanners/tools.yaml`. This table is genera
 | `pluto` | infra | upstream | `5.9.0` (`PLUTO_VERSION`) | `us-docker.pkg.dev/fairwinds-ops/oss/pluto:v5.9.0` | `linux/amd64`, `linux/arm64` | `docker:us-docker.pkg.dev/fairwinds-ops/oss/pluto` |
 | `poutine` | sast | upstream | `1.1.6` (`POUTINE_VERSION`) | `ghcr.io/boostsecurityio/poutine:1.1.6@sha256:722a8e0999b583c1540fe2974e691032b2d9d21b9256a17965132b6bfd0081b0` | `linux/amd64`, `linux/arm64` | `docker:ghcr.io/boostsecurityio/poutine` |
 | `renovate` | sca | upstream | `39.55.0` (`RENOVATE_VERSION`) | `ghcr.io/renovatebot/renovate:39.55.0` | `linux/amd64`, `linux/arm64` | `docker:ghcr.io/renovatebot/renovate` |
-| `scorecard` | sast | upstream | `5.0.0` (`SCORECARD_VERSION`) | `gcr.io/openssf/scorecard:v5.0.0` | `linux/amd64` | `docker:gcr.io/openssf/scorecard` |
+| `scorecard` | sast | upstream | `5.5.0` (`SCORECARD_VERSION`) | `ghcr.io/ossf/scorecard:v5.5.0` | `linux/amd64`, `linux/arm64` | `docker:ghcr.io/ossf/scorecard` |
 | `semgrep` | sast | upstream | `1.92.0` (`SEMGREP_VERSION`) | `semgrep/semgrep:1.92.0` | `linux/amd64`, `linux/arm64` | `docker:semgrep/semgrep` |
 | `spectral` | docs | upstream | `6.13.1` (`SPECTRAL_VERSION`) | `stoplight/spectral:6.13.1` | `linux/amd64` | `docker:stoplight/spectral` |
 | `swiftlint` | quality | upstream | `0.57.0` (`SWIFTLINT_VERSION`) | `ghcr.io/realm/swiftlint:0.57.0@sha256:012687cd214bab0ea50ab0b0bfbf1a803b7d25c90765a04d1d2b56aae78830d9` | `linux/amd64` | `docker:ghcr.io/realm/swiftlint` |

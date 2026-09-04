@@ -280,7 +280,7 @@ func TestApplyDockerHubMirror(t *testing.T) {
 		"official": {Image: "alpine:3.20"},
 		"ghcr":     {Image: "ghcr.io/google/osv-scanner:v1.9.1"},
 		"quay":     {Image: "quay.io/kubescape/kubescape-cli:v3.0.22"},
-		"gcr":      {Image: "gcr.io/openssf/scorecard:v5.0.0"},
+		"gcr":      {Image: "gcr.io/example/tool:v1"},
 	}
 
 	got := applyDockerHubMirror(in, "https://mirror.gcr.io/")
@@ -291,7 +291,7 @@ func TestApplyDockerHubMirror(t *testing.T) {
 		"official": "mirror.gcr.io/library/alpine:3.20",
 		"ghcr":     "ghcr.io/google/osv-scanner:v1.9.1",
 		"quay":     "quay.io/kubescape/kubescape-cli:v3.0.22",
-		"gcr":      "gcr.io/openssf/scorecard:v5.0.0",
+		"gcr":      "gcr.io/example/tool:v1",
 	}
 	for tool, image := range want {
 		if got[tool].Image != image {
