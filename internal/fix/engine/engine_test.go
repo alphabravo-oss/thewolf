@@ -2,11 +2,26 @@ package engine
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 )
+
+func TestCodexPromptUsesFindingsFileAndBatch(t *testing.T) {
+	filePrompt := CodexPrompt(FixRequest{FindingsFile: "/tmp/findings.md", Finding: models.Finding{Title: "one"}})
+	if !strings.Contains(filePrompt, "/tmp/findings.md") {
+		t.Fatalf("file prompt = %q", filePrompt)
+	}
+	batch := CodexPrompt(FixRequest{Findings: []models.Finding{
+		{Title: "A", FilePath: "a.go", LineStart: 1},
+		{Title: "B", FilePath: "b.go", LineStart: 2},
+	}})
+	if !strings.Contains(batch, "A") || !strings.Contains(batch, "B") || !strings.Contains(batch, "2 findings") {
+		t.Fatalf("batch prompt = %q", batch)
+	}
+}
 
 func TestNewEngine(t *testing.T) {
 	tests := []struct {

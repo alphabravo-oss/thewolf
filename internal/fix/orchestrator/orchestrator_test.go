@@ -13,6 +13,7 @@ import (
 
 	"github.com/alphabravocompany/thewolf/internal/fix/engine"
 	"github.com/alphabravocompany/thewolf/internal/fix/hygiene"
+	"github.com/alphabravocompany/thewolf/internal/fix/pr"
 	"github.com/alphabravocompany/thewolf/internal/fix/verify"
 	"github.com/alphabravocompany/thewolf/internal/models"
 )
@@ -858,6 +859,13 @@ func TestRun_PushModePushesFixBranch(t *testing.T) {
 }
 
 func TestRun_PushModeGitHubAttemptsPRWithoutFailingJob(t *testing.T) {
+	var got pr.PRRequest
+	orig := githubPR
+	t.Cleanup(func() { githubPR = orig })
+	githubPR = func(_ context.Context, req pr.PRRequest) (*pr.PRResult, error) {
+		got = req
+		return &pr.PRResult{URL: "https://github.com/example/repo/pull/1"}, nil
+	}
 	store := baseStore()
 	store.repo.SourceType = models.SourceTypeGitHub
 	store.repo.DefaultBranch = ""
@@ -887,9 +895,46 @@ func TestRun_PushModeGitHubAttemptsPRWithoutFailingJob(t *testing.T) {
 	if !res.Summary.Pushed || ws.pushCalls != 1 {
 		t.Fatalf("expected a push, got pushed=%v calls=%d", res.Summary.Pushed, ws.pushCalls)
 	}
+	if len(got.Findings) == 0 || got.Category == "" || got.Validation == "" {
+		t.Fatalf("PR request missing findings/category/validation: %+v", got)
+	}
 	joined := strings.Join(logs, "\n")
 	if !strings.Contains(joined, "GitHub PR") {
 		t.Fatalf("expected a GitHub PR log after push, got:\n%s", joined)
+	}
+}
+
+func TestRun_PushModeGitHubPRFailurePauses(t *testing.T) {
+	orig := githubPR
+	t.Cleanup(func() { githubPR = orig })
+	githubPR = func(context.Context, pr.PRRequest) (*pr.PRResult, error) {
+		return &pr.PRResult{Error: "gh not logged in"}, nil
+	}
+	store := baseStore()
+	store.repo.SourceType = models.SourceTypeGitHub
+	ws := &stubWorkspace{changed: []string{"main.go"}, path: t.TempDir()}
+	job := twoFindingJob()
+	job.Mode = models.FixModePush
+	job.MaxAttempts = 1
+	job.FindingIDList = []string{"keep-me"}
+	res, err := Run(context.Background(), job, Deps{
+		Store:       store,
+		Writability: passWritability{},
+		Workspaces:  &stubPreparer{ws: ws},
+		Engines: &chainSelector{build: func() EngineChain {
+			return &stubChain{tiers: []engine.SubprocessEngine{&fixEngine{name: "claude-code"}}}
+		}},
+		Verifier: &stubVerifier{pass: map[string]bool{"keep-me": true}},
+		Diffs:    &stubDiffs{},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if res.PauseStatus != models.FixJobPushFailed {
+		t.Fatalf("pause = %q", res.PauseStatus)
+	}
+	if !strings.Contains(job.PauseReason, "pr create failed") {
+		t.Fatalf("reason = %q", job.PauseReason)
 	}
 }
 

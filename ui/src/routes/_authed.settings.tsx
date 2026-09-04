@@ -9,10 +9,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   BadgeCheckIcon,
   CheckIcon,
-  ChevronDownIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  ChevronUpIcon,
   DownloadIcon,
   HardDriveIcon,
   KeyIcon,
@@ -20,7 +16,6 @@ import {
   Loader2Icon,
   LockIcon,
   PlusIcon,
-  SearchIcon,
   RefreshCwIcon,
   ScrollTextIcon,
   ServerIcon,
@@ -51,6 +46,7 @@ import { COMMUNITY_LIMIT_COPY, isCommunityLimit, safeErrorMessage } from "@/lib/
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PageHeader } from "@/components/ui/page";
 import { LicenseTab } from "@/components/license-settings";
+import { DataTable, type Column } from "@/components/ui/data-table";
 
 // Legacy personal ?tab= values that have NO admin tab of the same name now
 // redirect to /account. (apikeys/secrets/nodes are kept here as ADMIN tabs —
@@ -70,7 +66,11 @@ export const Route = createFileRoute("/_authed/settings")({
   }),
   beforeLoad: async ({ search }) => {
     // Personal surfaces moved to /account.
-    const legacy = LEGACY_PERSONAL[(search as { tab?: string }).tab ?? ""];
+    const tab = (search as { tab?: string }).tab ?? "";
+    if (tab === "audit") {
+      throw redirect({ to: "/audit" });
+    }
+    const legacy = LEGACY_PERSONAL[tab];
     if (legacy) {
       throw redirect({ to: "/account", search: { section: legacy } });
     }
@@ -247,7 +247,6 @@ function SettingsPage() {
         {activeTab === "scanners" && <ScannersTab />}
         {activeTab === "scanner-updates" && <ScannerUpdatesTab />}
         {activeTab === "license" && <LicenseTab />}
-        {activeTab === "audit" && <AuditTab />}
       </section>
     </div>
   );
@@ -272,6 +271,51 @@ function useOwnerLookup() {
 
 function AdminCard({ children }: { children: React.ReactNode }) {
   return <section className="glass-card overflow-x-auto">{children}</section>;
+}
+
+function adminApiKeyColumns(
+  ownerOf: (id?: string) => string,
+  setPending: (p: { id: string; label: string }) => void,
+): Column<ApiToken>[] {
+  return [
+    { key: "owner", header: "Owner", sortAccessor: (t) => ownerOf(t.user_id), accessor: (t) => ownerOf(t.user_id) },
+    {
+      key: "name",
+      header: "Name",
+      sortAccessor: (t) => t.name,
+      accessor: (t) => (
+        <>
+          {t.name}
+          {t.revoked_at && (
+            <span className="ml-1 text-[10px] uppercase text-muted-foreground">revoked</span>
+          )}
+        </>
+      ),
+    },
+    { key: "prefix", header: "Prefix", sortAccessor: (t) => t.token_prefix, accessor: (t) => <span className="font-mono text-xs text-muted-foreground">{t.token_prefix}…</span> },
+    { key: "scopes", header: "Scopes", sortAccessor: (t) => t.scopes.join(" "), accessor: (t) => t.scopes.join(", ") },
+    {
+      key: "expires",
+      header: "Expires",
+      sortAccessor: (t) => t.expires_at ?? "",
+      accessor: (t) => (t.expires_at ? new Date(t.expires_at).toLocaleDateString() : "never"),
+    },
+    {
+      key: "actions",
+      header: "",
+      sortable: false,
+      accessor: (t) =>
+        t.revoked_at ? null : (
+          <button
+            type="button"
+            onClick={() => setPending({ id: t.id, label: `${ownerOf(t.user_id)}'s key "${t.name}"` })}
+            className="inline-flex items-center gap-1 h-7 px-2 rounded-md border border-status-error/40 text-status-error hover:bg-status-error/10 text-xs"
+          >
+            <Trash2Icon className="size-3.5" /> Revoke
+          </button>
+        ),
+    },
+  ];
 }
 
 function AdminApiKeysTab() {
@@ -302,75 +346,18 @@ function AdminApiKeysTab() {
         visible; the secret itself is never recoverable.
       </p>
       <AdminCard>
-        {q.isLoading ? (
-          <div className="p-5 text-sm text-muted-foreground">Loading…</div>
-        ) : !q.data || q.data.length === 0 ? (
-          <div className="p-5 text-sm text-muted-foreground">No API keys.</div>
-        ) : (
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th className="text-left px-4 py-2">Owner</th>
-                <th className="text-left px-4 py-2">Name</th>
-                <th className="text-left px-4 py-2">Prefix</th>
-                <th className="text-left px-4 py-2">Scopes</th>
-                <th className="text-left px-4 py-2">Expires</th>
-                <th className="text-right px-4 py-2 w-20"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {q.data.map((t) => (
-                <tr key={t.id} className="border-t border-border align-top">
-                  <td className="px-4 py-2">{ownerOf(t.user_id)}</td>
-                  <td className="px-4 py-2">
-                    {t.name}
-                    {t.revoked_at && (
-                      <span className="ml-1 text-[10px] uppercase text-muted-foreground">
-                        revoked
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-2 font-mono text-xs text-muted-foreground">
-                    {t.token_prefix}…
-                  </td>
-                  <td className="px-4 py-2">
-                    <div className="flex flex-wrap gap-1">
-                      {t.scopes.map((s) => (
-                        <span
-                          key={s}
-                          className="text-[10px] font-mono rounded bg-muted/40 border border-border px-1.5 py-0.5"
-                        >
-                          {s}
-                        </span>
-                      ))}
-                    </div>
-                  </td>
-                  <td className="px-4 py-2 text-xs text-muted-foreground">
-                    {t.expires_at
-                      ? new Date(t.expires_at).toLocaleDateString()
-                      : "never"}
-                  </td>
-                  <td className="px-4 py-2 text-right">
-                    {!t.revoked_at && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setPending({
-                            id: t.id,
-                            label: `${ownerOf(t.user_id)}'s key "${t.name}"`,
-                          })
-                        }
-                        className="inline-flex items-center gap-1 h-7 px-2 rounded-md border border-status-error/40 text-status-error hover:bg-status-error/10 text-xs"
-                      >
-                        <Trash2Icon className="size-3.5" /> Revoke
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+        <DataTable
+          data={q.data ?? []}
+          columns={adminApiKeyColumns(ownerOf, setPending)}
+          keyExtractor={(t) => t.id}
+          persistKey="wolf-admin-apikeys"
+          density="compact"
+          loading={q.isLoading}
+          isError={q.isError}
+          onRetry={() => void q.refetch()}
+          emptyMessage="No API keys."
+          searchPlaceholder="Search keys..."
+        />
       </AdminCard>
       <ConfirmDialog
         open={!!pending}
@@ -413,49 +400,42 @@ function AdminSecretsTab() {
         secret exists and delete it, but never read another user's value.
       </p>
       <AdminCard>
-        {q.isLoading ? (
-          <div className="p-5 text-sm text-muted-foreground">Loading…</div>
-        ) : !q.data || q.data.length === 0 ? (
-          <div className="p-5 text-sm text-muted-foreground">No secrets.</div>
-        ) : (
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th className="text-left px-4 py-2">Owner</th>
-                <th className="text-left px-4 py-2">Type</th>
-                <th className="text-left px-4 py-2">Name</th>
-                <th className="text-left px-4 py-2">Value</th>
-                <th className="text-right px-4 py-2 w-20"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {q.data.map((s) => (
-                <tr key={s.id} className="border-t border-border">
-                  <td className="px-4 py-2">{ownerOf(s.user_id)}</td>
-                  <td className="px-4 py-2 font-mono text-xs">{s.key_type}</td>
-                  <td className="px-4 py-2">{s.key_name}</td>
-                  <td className="px-4 py-2 font-mono text-xs text-muted-foreground">
-                    {s.value}
-                  </td>
-                  <td className="px-4 py-2 text-right">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setPending({
-                          id: s.id,
-                          label: `${ownerOf(s.user_id)}'s secret "${s.key_name}"`,
-                        })
-                      }
-                      className="inline-flex items-center gap-1 h-7 px-2 rounded-md border border-status-error/40 text-status-error hover:bg-status-error/10 text-xs"
-                    >
-                      <Trash2Icon className="size-3.5" /> Delete
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+        <DataTable
+          data={q.data ?? []}
+          columns={[
+            { key: "owner", header: "Owner", sortAccessor: (s) => ownerOf(s.user_id), accessor: (s) => ownerOf(s.user_id) },
+            { key: "type", header: "Type", sortAccessor: (s) => s.key_type, accessor: (s) => s.key_type },
+            { key: "name", header: "Name", sortAccessor: (s) => s.key_name, accessor: (s) => s.key_name },
+            { key: "value", header: "Value", sortable: false, accessor: () => "••••" },
+            {
+              key: "actions",
+              header: "",
+              sortable: false,
+              accessor: (s) => (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setPending({
+                      id: s.id,
+                      label: `${ownerOf(s.user_id)}'s secret "${s.key_name}"`,
+                    })
+                  }
+                  className="inline-flex items-center gap-1 h-7 px-2 rounded-md border border-status-error/40 text-status-error hover:bg-status-error/10 text-xs"
+                >
+                  <Trash2Icon className="size-3.5" /> Delete
+                </button>
+              ),
+            },
+          ]}
+          keyExtractor={(s) => s.id}
+          persistKey="wolf-admin-secrets"
+          density="compact"
+          loading={q.isLoading}
+          isError={q.isError}
+          onRetry={() => void q.refetch()}
+          emptyMessage="No secrets."
+          searchPlaceholder="Search secrets..."
+        />
       </AdminCard>
       <ConfirmDialog
         open={!!pending}
@@ -494,51 +474,42 @@ function AdminNodesTab() {
     <div className="space-y-2">
       <p className="text-xs text-muted-foreground">Every user's SSH nodes.</p>
       <AdminCard>
-        {q.isLoading ? (
-          <div className="p-5 text-sm text-muted-foreground">Loading…</div>
-        ) : !q.data || q.data.length === 0 ? (
-          <div className="p-5 text-sm text-muted-foreground">No nodes.</div>
-        ) : (
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th className="text-left px-4 py-2">Owner</th>
-                <th className="text-left px-4 py-2">Name</th>
-                <th className="text-left px-4 py-2">Host</th>
-                <th className="text-left px-4 py-2">Enabled</th>
-                <th className="text-right px-4 py-2 w-20"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {q.data.map((n) => (
-                <tr key={n.id} className="border-t border-border">
-                  <td className="px-4 py-2">{ownerOf(n.user_id)}</td>
-                  <td className="px-4 py-2">{n.name}</td>
-                  <td className="px-4 py-2 font-mono text-xs text-muted-foreground">
-                    {n.username}@{n.host}:{n.port}
-                  </td>
-                  <td className="px-4 py-2 text-xs">
-                    {n.enabled ? "yes" : "no"}
-                  </td>
-                  <td className="px-4 py-2 text-right">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setPending({
-                          id: n.id,
-                          label: `${ownerOf(n.user_id)}'s node "${n.name}"`,
-                        })
-                      }
-                      className="inline-flex items-center gap-1 h-7 px-2 rounded-md border border-status-error/40 text-status-error hover:bg-status-error/10 text-xs"
-                    >
-                      <Trash2Icon className="size-3.5" /> Delete
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+        <DataTable
+          data={q.data ?? []}
+          columns={[
+            { key: "owner", header: "Owner", sortAccessor: (n) => ownerOf(n.user_id), accessor: (n) => ownerOf(n.user_id) },
+            { key: "name", header: "Name", sortAccessor: (n) => n.name, accessor: (n) => n.name },
+            { key: "host", header: "Host", sortAccessor: (n) => n.host, accessor: (n) => `${n.username}@${n.host}:${n.port}` },
+            { key: "enabled", header: "Enabled", sortAccessor: (n) => (n.enabled ? "yes" : "no"), accessor: (n) => (n.enabled ? "yes" : "no") },
+            {
+              key: "actions",
+              header: "",
+              sortable: false,
+              accessor: (n) => (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setPending({
+                      id: n.id,
+                      label: `${ownerOf(n.user_id)}'s node "${n.name}"`,
+                    })
+                  }
+                  className="inline-flex items-center gap-1 h-7 px-2 rounded-md border border-status-error/40 text-status-error hover:bg-status-error/10 text-xs"
+                >
+                  <Trash2Icon className="size-3.5" /> Delete
+                </button>
+              ),
+            },
+          ]}
+          keyExtractor={(n) => n.id}
+          persistKey="wolf-admin-nodes"
+          density="compact"
+          loading={q.isLoading}
+          isError={q.isError}
+          onRetry={() => void q.refetch()}
+          emptyMessage="No nodes."
+          searchPlaceholder="Search nodes..."
+        />
       </AdminCard>
       <ConfirmDialog
         open={!!pending}
@@ -553,275 +524,6 @@ function AdminNodesTab() {
   );
 }
 
-interface AuditEntry {
-  id: string;
-  user_id: string;
-  method: string;
-  path: string;
-  action: string;
-  status_code: number;
-  created_at: string;
-  event_type?: string;
-  category?: string;
-  severity?: string;
-  ip?: string;
-}
-
-const AUDIT_METHODS = ["", "POST", "PUT", "DELETE"];
-const AUDIT_CATEGORIES = [
-  "",
-  "authentication",
-  "authorization",
-  "configuration",
-  "secrets",
-  "data",
-  "system",
-];
-const AUDIT_SEVERITIES = ["", "info", "warning", "critical"];
-const AUDIT_PER_PAGE = 25;
-
-function SeverityBadge({ severity }: { severity?: string }) {
-  if (!severity) return <span className="text-muted-foreground/50">—</span>;
-  const cls =
-    severity === "critical"
-      ? "bg-status-error/15 text-status-error border-status-error/30"
-      : severity === "warning"
-        ? "bg-status-warning/15 text-status-warning border-status-warning/30"
-        : "bg-muted/40 text-muted-foreground border-border";
-  return (
-    <span
-      className={
-        "rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide border " +
-        cls
-      }
-    >
-      {severity}
-    </span>
-  );
-}
-
-function AuditTab() {
-  const ownerOf = useOwnerLookup();
-  const [search, setSearch] = useState("");
-  const [method, setMethod] = useState("");
-  const [category, setCategory] = useState("");
-  const [severity, setSeverity] = useState("");
-  const [sort, setSort] = useState<"time" | "status">("time");
-  const [order, setOrder] = useState<"asc" | "desc">("desc");
-  const [page, setPage] = useState(1);
-
-  const q = useQuery({
-    queryKey: [
-      "audit-log",
-      search,
-      method,
-      category,
-      severity,
-      sort,
-      order,
-      page,
-    ],
-    queryFn: async () => {
-      const params = new URLSearchParams({
-        page: String(page),
-        per_page: String(AUDIT_PER_PAGE),
-        sort,
-        order,
-      });
-      if (search.trim()) params.set("q", search.trim());
-      if (method) params.set("method", method);
-      if (category) params.set("category", category);
-      if (severity) params.set("severity", severity);
-      const res = await api.get<AuditEntry[]>(
-        `/audit-log?${params.toString()}`,
-      );
-      return { entries: res.data ?? [], total: res.meta?.total ?? 0 };
-    },
-    placeholderData: (prev) => prev, // keep the current page visible while the next loads
-  });
-
-  const total = q.data?.total ?? 0;
-  const totalPages = Math.max(1, Math.ceil(total / AUDIT_PER_PAGE));
-  const entries = q.data?.entries ?? [];
-
-  // Changing a filter resets to page 1.
-  const onFilter = (fn: () => void) => {
-    fn();
-    setPage(1);
-  };
-  const toggleSort = (col: "time" | "status") =>
-    onFilter(() => {
-      if (sort === col) setOrder((o) => (o === "desc" ? "asc" : "desc"));
-      else {
-        setSort(col);
-        setOrder("desc");
-      }
-    });
-  const sortMark = (col: "time" | "status") =>
-    sort === col ? (
-      order === "desc" ? (
-        <ChevronDownIcon className="inline size-3" />
-      ) : (
-        <ChevronUpIcon className="inline size-3" />
-      )
-    ) : null;
-
-  return (
-    <div className="space-y-3">
-      <p className="text-xs text-muted-foreground">
-        Every mutating request — who did what, where, and the response status.
-      </p>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative flex-1 min-w-[12rem]">
-          <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-          <input
-            value={search}
-            onChange={(e) => onFilter(() => setSearch(e.target.value))}
-            placeholder="Search path, action, or method…"
-            className="w-full h-9 pl-8 pr-3 rounded-md bg-muted/40 border border-border text-sm"
-          />
-        </div>
-        <select
-          value={category}
-          onChange={(e) => onFilter(() => setCategory(e.target.value))}
-          className="h-9 px-2 rounded-md bg-muted/40 border border-border text-sm capitalize"
-        >
-          {AUDIT_CATEGORIES.map((c) => (
-            <option key={c} value={c}>
-              {c || "All categories"}
-            </option>
-          ))}
-        </select>
-        <select
-          value={severity}
-          onChange={(e) => onFilter(() => setSeverity(e.target.value))}
-          className="h-9 px-2 rounded-md bg-muted/40 border border-border text-sm capitalize"
-        >
-          {AUDIT_SEVERITIES.map((sv) => (
-            <option key={sv} value={sv}>
-              {sv || "All severities"}
-            </option>
-          ))}
-        </select>
-        <select
-          value={method}
-          onChange={(e) => onFilter(() => setMethod(e.target.value))}
-          className="h-9 px-2 rounded-md bg-muted/40 border border-border text-sm"
-        >
-          {AUDIT_METHODS.map((m) => (
-            <option key={m} value={m}>
-              {m || "All methods"}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <AdminCard>
-        {q.isLoading && !q.data ? (
-          <div className="p-5 text-sm text-muted-foreground">Loading…</div>
-        ) : entries.length === 0 ? (
-          <div className="p-5 text-sm text-muted-foreground">
-            No matching audit entries.
-          </div>
-        ) : (
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th className="text-left px-4 py-2">
-                  <button
-                    type="button"
-                    onClick={() => toggleSort("time")}
-                    className="hover:text-foreground"
-                  >
-                    When {sortMark("time")}
-                  </button>
-                </th>
-                <th className="text-left px-4 py-2">Severity</th>
-                <th className="text-left px-4 py-2">Event</th>
-                <th className="text-left px-4 py-2">Category</th>
-                <th className="text-left px-4 py-2">User</th>
-                <th className="text-left px-4 py-2">Source</th>
-                <th className="text-left px-4 py-2">Request</th>
-                <th className="text-right px-4 py-2">
-                  <button
-                    type="button"
-                    onClick={() => toggleSort("status")}
-                    className="hover:text-foreground"
-                  >
-                    Status {sortMark("status")}
-                  </button>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {entries.map((e) => (
-                <tr key={e.id} className="border-t border-border align-top">
-                  <td className="px-4 py-2 text-xs text-muted-foreground whitespace-nowrap">
-                    {new Date(e.created_at).toLocaleString()}
-                  </td>
-                  <td className="px-4 py-2">
-                    <SeverityBadge severity={e.severity} />
-                  </td>
-                  <td className="px-4 py-2 font-mono text-xs">
-                    {e.event_type || e.action}
-                  </td>
-                  <td className="px-4 py-2 text-xs text-muted-foreground capitalize">
-                    {e.category || "—"}
-                  </td>
-                  <td className="px-4 py-2 text-xs">{ownerOf(e.user_id)}</td>
-                  <td className="px-4 py-2 font-mono text-xs text-muted-foreground">
-                    {e.ip || "—"}
-                  </td>
-                  <td className="px-4 py-2 font-mono text-xs text-muted-foreground">
-                    {e.method} {e.path}
-                  </td>
-                  <td
-                    className={
-                      "px-4 py-2 text-right text-xs tabular-nums " +
-                      (e.status_code >= 400
-                        ? "text-status-error"
-                        : "text-muted-foreground")
-                    }
-                  >
-                    {e.status_code}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </AdminCard>
-
-      <div className="flex items-center justify-between text-xs text-muted-foreground">
-        <span>
-          {total.toLocaleString()} {total === 1 ? "entry" : "entries"}
-        </span>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page <= 1}
-            className="inline-flex items-center gap-1 h-7 px-2 rounded-md border border-border hover:bg-muted/40 disabled:opacity-40"
-          >
-            <ChevronLeftIcon className="size-3.5" /> Prev
-          </button>
-          <span className="tabular-nums">
-            Page {page} / {totalPages}
-          </span>
-          <button
-            type="button"
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            disabled={page >= totalPages}
-            className="inline-flex items-center gap-1 h-7 px-2 rounded-md border border-border hover:bg-muted/40 disabled:opacity-40"
-          >
-            Next <ChevronRightIcon className="size-3.5" />
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Account — per-user profile (display name, email, password) + links to the
@@ -1910,82 +1612,44 @@ export function ApiKeysTab() {
         </button>
       </div>
 
-      {/* Existing keys. */}
       <div className="glass-card overflow-hidden">
-        {q.isLoading ? (
-          <div className="p-5 text-sm text-muted-foreground">Loading…</div>
-        ) : !q.data || q.data.length === 0 ? (
-          <div className="p-5 text-sm text-muted-foreground">
-            No API keys yet.
-          </div>
-        ) : (
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th className="text-left px-4 py-2">Name</th>
-                <th className="text-left px-4 py-2">Prefix</th>
-                <th className="text-left px-4 py-2">Scopes</th>
-                <th className="text-left px-4 py-2">Expires</th>
-                <th className="text-right px-4 py-2 w-20"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {q.data.map((t) => {
-                const revoked = !!t.revoked_at;
-                const expired =
-                  !!t.expires_at && new Date(t.expires_at) < new Date();
-                return (
-                  <tr
-                    key={t.id}
-                    className="border-t border-border align-top"
+        <DataTable
+          data={q.data ?? []}
+          columns={[
+            { key: "name", header: "Name", sortAccessor: (t) => t.name, accessor: (t) => t.name },
+            { key: "prefix", header: "Prefix", sortAccessor: (t) => t.token_prefix, accessor: (t) => `${t.token_prefix}…` },
+            { key: "scopes", header: "Scopes", sortAccessor: (t) => t.scopes.join(" "), accessor: (t) => t.scopes.join(", ") },
+            {
+              key: "expires",
+              header: "Expires",
+              sortAccessor: (t) => t.expires_at ?? "",
+              accessor: (t) => (t.expires_at ? new Date(t.expires_at).toLocaleDateString() : "never"),
+            },
+            {
+              key: "actions",
+              header: "",
+              sortable: false,
+              accessor: (t) =>
+                t.revoked_at ? null : (
+                  <button
+                    type="button"
+                    onClick={() => setPending({ id: t.id, label: t.name })}
+                    className="inline-flex items-center gap-1 h-7 px-2 rounded-md border border-status-error/40 text-status-error hover:bg-status-error/10 text-xs"
                   >
-                    <td className="px-4 py-2">
-                      <div className="font-medium">{t.name}</div>
-                      {(revoked || expired) && (
-                        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                          {revoked ? "revoked" : "expired"}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2 font-mono text-xs text-muted-foreground">
-                      {t.token_prefix}…
-                    </td>
-                    <td className="px-4 py-2">
-                      <div className="flex flex-wrap gap-1">
-                        {t.scopes.map((s) => (
-                          <span
-                            key={s}
-                            className="text-[10px] font-mono rounded bg-muted/40 border border-border px-1.5 py-0.5"
-                          >
-                            {s}
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="px-4 py-2 text-xs text-muted-foreground">
-                      {t.expires_at
-                        ? new Date(t.expires_at).toLocaleDateString()
-                        : "never"}
-                    </td>
-                    <td className="px-4 py-2 text-right">
-                      {!revoked && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setPending({ id: t.id, label: t.name })
-                          }
-                          className="inline-flex items-center gap-1 h-7 px-2 rounded-md border border-status-error/40 text-status-error hover:bg-status-error/10 text-xs"
-                        >
-                          <Trash2Icon className="size-3.5" /> Revoke
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
+                    <Trash2Icon className="size-3.5" /> Revoke
+                  </button>
+                ),
+            },
+          ]}
+          keyExtractor={(t) => t.id}
+          persistKey="wolf-account-apikeys"
+          density="compact"
+          loading={q.isLoading}
+          isError={q.isError}
+          onRetry={() => void q.refetch()}
+          emptyMessage="No API keys yet."
+          searchPlaceholder="Search keys..."
+        />
       </div>
       <ConfirmDialog
         open={!!pending}
@@ -2069,58 +1733,55 @@ export function SecretsTab() {
         disabled={create.isPending}
       />
       <div className="glass-card overflow-hidden">
-        {q.isLoading ? (
-          <div className="p-5 text-sm text-muted-foreground">Loading…</div>
-        ) : !q.data || q.data.length === 0 ? (
-          <div className="p-5 text-sm text-muted-foreground">
-            No secrets stored.
-          </div>
-        ) : (
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th className="text-left px-4 py-2">Type</th>
-                <th className="text-left px-4 py-2">Name</th>
-                <th className="text-left px-4 py-2">Value</th>
-                <th className="text-right px-4 py-2 w-12"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {q.data.map((s) => (
-                <tr key={s.id} className="border-t border-border">
-                  <td className="px-4 py-2 font-mono text-xs">{s.key_type}</td>
-                  <td className="px-4 py-2">
-                    {s.key_name}
-                    {s.metadata?.login ? (
-                      <div className="text-[11px] text-muted-foreground">
-                        {s.metadata.login}
-                        {s.metadata.scopes?.length
-                          ? ` · ${s.metadata.scopes.join(", ")}`
-                          : ""}
-                      </div>
-                    ) : null}
-                  </td>
-                  <td className="px-4 py-2 font-mono text-xs text-muted-foreground">
-                    {s.value}
-                  </td>
-                  <td className="px-4 py-2 text-right">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setPending({ id: s.id, label: s.key_name })
-                      }
-                      disabled={del.isPending}
-                      className="text-muted-foreground hover:text-destructive disabled:opacity-50"
-                      aria-label="Delete"
-                    >
-                      <Trash2Icon className="size-4" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+        <DataTable
+          data={q.data ?? []}
+          columns={[
+            { key: "type", header: "Type", sortAccessor: (s) => s.key_type, accessor: (s) => <span className="font-mono text-xs">{s.key_type}</span> },
+            {
+              key: "name",
+              header: "Name",
+              sortAccessor: (s) => s.key_name,
+              accessor: (s) => (
+                <span>
+                  {s.key_name}
+                  {s.metadata?.login ? (
+                    <div className="text-[11px] text-muted-foreground">
+                      {s.metadata.login}
+                      {s.metadata.scopes?.length
+                        ? ` · ${s.metadata.scopes.join(", ")}`
+                        : ""}
+                    </div>
+                  ) : null}
+                </span>
+              ),
+            },
+            { key: "value", header: "Value", sortable: false, accessor: () => "••••" },
+            {
+              key: "actions",
+              header: "",
+              sortable: false,
+              accessor: (s) => (
+                <button
+                  type="button"
+                  onClick={() => setPending({ id: s.id, label: s.key_name })}
+                  disabled={del.isPending}
+                  className="text-muted-foreground hover:text-destructive disabled:opacity-50"
+                  aria-label="Delete"
+                >
+                  <Trash2Icon className="size-4" />
+                </button>
+              ),
+            },
+          ]}
+          keyExtractor={(s) => s.id}
+          persistKey="wolf-account-secrets"
+          density="compact"
+          loading={q.isLoading}
+          isError={q.isError}
+          onRetry={() => void q.refetch()}
+          emptyMessage="No secrets stored."
+          searchPlaceholder="Search secrets..."
+        />
       </div>
       <ConfirmDialog
         open={!!pending}
@@ -2291,106 +1952,108 @@ export function NodesTab() {
         onSubmit={(body) => create.mutate(body)}
       />
       <div className="glass-card overflow-hidden">
-        {nodes.isLoading ? (
-          <div className="p-5 text-sm text-muted-foreground">Loading…</div>
-        ) : !nodes.data || nodes.data.length === 0 ? (
-          <div className="p-5 text-sm text-muted-foreground">
-            No remote nodes configured.
-          </div>
-        ) : (
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th className="text-left px-4 py-2">Name</th>
-                <th className="text-left px-4 py-2">Host</th>
-                <th className="text-left px-4 py-2">Auth</th>
-                <th className="text-left px-4 py-2">Status</th>
-                <th className="text-right px-4 py-2 w-28"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {nodes.data.map((n) => (
-                <tr key={n.id} className="border-t border-border">
-                  <td className="px-4 py-2">
-                    <div className="font-medium">{n.name}</div>
-                    {n.base_path && (
-                      <div className="text-xs text-muted-foreground font-mono">
-                        {n.base_path}
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-4 py-2 font-mono text-xs">
-                    {n.username}@{n.host}:{n.port || 22}
-                  </td>
-                  <td className="px-4 py-2 text-xs">{n.auth_type}</td>
-                  <td className="px-4 py-2 text-xs">
-                    <span
-                      className={
-                        n.enabled ? "text-status-success" : "text-muted-foreground"
-                      }
-                    >
-                      {n.enabled ? "enabled" : "disabled"}
-                    </span>
-                    {n.last_check_status && (
-                      <span className="text-muted-foreground">
-                        {" "}
-                        · {n.last_check_status}
-                      </span>
-                    )}
-                    {n.last_check_error && (
-                      <div
-                        className="text-destructive truncate max-w-[240px]"
-                        title={n.last_check_error}
-                      >
-                        {n.last_check_error}
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-4 py-2">
-                    <div className="flex justify-end gap-2">
-                      <button
-                        type="button"
-                        onClick={() => check.mutate(n.id)}
-                        disabled={check.isPending}
-                        className="size-8 grid place-items-center rounded-md hover:bg-muted/50 disabled:opacity-50"
-                        aria-label="Check node"
-                        title="Check node"
-                      >
-                        {check.isPending ? (
-                          <Loader2Icon className="size-4 animate-spin" />
-                        ) : (
-                          <CheckIcon className="size-4" />
-                        )}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          update.mutate({
-                            id: n.id,
-                            body: { enabled: !n.enabled },
-                          })
-                        }
-                        disabled={update.isPending}
-                        className="h-8 px-2 rounded-md border border-border text-xs hover:bg-muted/40 disabled:opacity-50"
-                      >
-                        {n.enabled ? "Disable" : "Enable"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setPending({ id: n.id, label: n.name })}
-                        disabled={del.isPending}
-                        className="size-8 grid place-items-center rounded-md hover:bg-destructive/10 text-destructive disabled:opacity-50"
-                        aria-label="Delete node"
-                      >
-                        <Trash2Icon className="size-4" />
-                      </button>
+        <DataTable
+          data={nodes.data ?? []}
+          columns={[
+            {
+              key: "name",
+              header: "Name",
+              sortAccessor: (n) => n.name,
+              accessor: (n) => (
+                <span>
+                  <div className="font-medium">{n.name}</div>
+                  {n.base_path ? (
+                    <div className="text-xs text-muted-foreground font-mono">{n.base_path}</div>
+                  ) : null}
+                </span>
+              ),
+            },
+            {
+              key: "host",
+              header: "Host",
+              sortAccessor: (n) => n.host,
+              accessor: (n) => (
+                <span className="font-mono text-xs">
+                  {n.username}@{n.host}:{n.port || 22}
+                </span>
+              ),
+            },
+            { key: "auth", header: "Auth", sortAccessor: (n) => n.auth_type, accessor: (n) => n.auth_type },
+            {
+              key: "status",
+              header: "Status",
+              sortAccessor: (n) => (n.enabled ? "enabled" : "disabled"),
+              accessor: (n) => (
+                <span className="text-xs">
+                  <span className={n.enabled ? "text-status-success" : "text-muted-foreground"}>
+                    {n.enabled ? "enabled" : "disabled"}
+                  </span>
+                  {n.last_check_status ? (
+                    <span className="text-muted-foreground"> · {n.last_check_status}</span>
+                  ) : null}
+                  {n.last_check_error ? (
+                    <div className="text-destructive truncate max-w-[240px]" title={n.last_check_error}>
+                      {n.last_check_error}
                     </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+                  ) : null}
+                </span>
+              ),
+            },
+            {
+              key: "actions",
+              header: "",
+              sortable: false,
+              accessor: (n) => (
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => check.mutate(n.id)}
+                    disabled={check.isPending}
+                    className="size-8 grid place-items-center rounded-md hover:bg-muted/50 disabled:opacity-50"
+                    aria-label="Check node"
+                    title="Check node"
+                  >
+                    {check.isPending ? (
+                      <Loader2Icon className="size-4 animate-spin" />
+                    ) : (
+                      <CheckIcon className="size-4" />
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      update.mutate({
+                        id: n.id,
+                        body: { enabled: !n.enabled },
+                      })
+                    }
+                    disabled={update.isPending}
+                    className="h-8 px-2 rounded-md border border-border text-xs hover:bg-muted/40 disabled:opacity-50"
+                  >
+                    {n.enabled ? "Disable" : "Enable"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPending({ id: n.id, label: n.name })}
+                    disabled={del.isPending}
+                    className="size-8 grid place-items-center rounded-md hover:bg-destructive/10 text-destructive disabled:opacity-50"
+                    aria-label="Delete node"
+                  >
+                    <Trash2Icon className="size-4" />
+                  </button>
+                </div>
+              ),
+            },
+          ]}
+          keyExtractor={(n) => n.id}
+          persistKey="wolf-account-nodes"
+          density="compact"
+          loading={nodes.isLoading}
+          isError={nodes.isError}
+          onRetry={() => void nodes.refetch()}
+          emptyMessage="No remote nodes configured."
+          searchPlaceholder="Search nodes..."
+        />
       </div>
       <ConfirmDialog
         open={!!pending}
@@ -2623,81 +2286,90 @@ function UsersTab() {
         disabled={create.isPending}
       />
       <div className="glass-card overflow-hidden">
-        {q.isLoading ? (
-          <div className="p-5 text-sm text-muted-foreground">Loading…</div>
-        ) : (
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th className="text-left px-4 py-2">Email</th>
-                <th className="text-left px-4 py-2">Role</th>
-                <th className="text-left px-4 py-2">Created</th>
-                <th className="text-right px-4 py-2 w-12"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {(q.data ?? []).map((u) => {
+        <DataTable
+          data={q.data ?? []}
+          columns={[
+            {
+              key: "email",
+              header: "Email",
+              sortAccessor: (u) => u.email,
+              accessor: (u) => (
+                <span>
+                  {u.email}
+                  {u.id === meId ? (
+                    <span className="ml-2 text-[10px] uppercase tracking-wide text-muted-foreground">
+                      you
+                    </span>
+                  ) : null}
+                </span>
+              ),
+            },
+            {
+              key: "role",
+              header: "Role",
+              sortAccessor: (u) => u.role,
+              accessor: (u) => {
                 const isMe = u.id === meId;
                 const isAdmin = u.role === "admin";
-                // Don't let the last admin be demoted (would lock everyone out
-                // of settings). You also can't change your own role.
                 const lockDemote = isMe || (isAdmin && adminCount <= 1);
+                if (isMe) return <RoleBadge role={u.role} />;
                 return (
-                  <tr key={u.id} className="border-t border-border">
-                    <td className="px-4 py-2">
-                      {u.email}
-                      {isMe && (
-                        <span className="ml-2 text-[10px] uppercase tracking-wide text-muted-foreground">
-                          you
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2">
-                      {isMe ? (
-                        <RoleBadge role={u.role} />
-                      ) : (
-                        <select
-                          value={isAdmin ? "admin" : "user"}
-                          disabled={setRole.isPending || lockDemote}
-                          onChange={(e) =>
-                            setRole.mutate({ id: u.id, role: e.target.value })
-                          }
-                          className="h-7 px-1.5 rounded-md bg-muted/40 border border-border text-xs disabled:opacity-60"
-                          title={
-                            lockDemote
-                              ? "There must be at least one admin"
-                              : "Change role"
-                          }
-                        >
-                          <option value="user">User</option>
-                          <option value="admin">Admin</option>
-                        </select>
-                      )}
-                    </td>
-                    <td className="px-4 py-2 text-xs text-muted-foreground">
-                      {new Date(u.created_at).toLocaleDateString()}
-                    </td>
-                    <td className="px-4 py-2 text-right">
-                      {!isMe && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setPending({ id: u.id, label: u.email })
-                          }
-                          disabled={del.isPending}
-                          className="text-muted-foreground hover:text-destructive disabled:opacity-50"
-                          aria-label="Delete"
-                        >
-                          <Trash2Icon className="size-4" />
-                        </button>
-                      )}
-                    </td>
-                  </tr>
+                  <select
+                    value={isAdmin ? "admin" : "user"}
+                    disabled={setRole.isPending || lockDemote}
+                    onChange={(e) =>
+                      setRole.mutate({ id: u.id, role: e.target.value })
+                    }
+                    className="h-7 px-1.5 rounded-md bg-muted/40 border border-border text-xs disabled:opacity-60"
+                    title={
+                      lockDemote
+                        ? "There must be at least one admin"
+                        : "Change role"
+                    }
+                  >
+                    <option value="user">User</option>
+                    <option value="admin">Admin</option>
+                  </select>
                 );
-              })}
-            </tbody>
-          </table>
-        )}
+              },
+            },
+            {
+              key: "created",
+              header: "Created",
+              sortAccessor: (u) => u.created_at,
+              accessor: (u) => (
+                <span className="text-xs text-muted-foreground">
+                  {new Date(u.created_at).toLocaleDateString()}
+                </span>
+              ),
+            },
+            {
+              key: "actions",
+              header: "",
+              sortable: false,
+              accessor: (u) =>
+                u.id === meId ? null : (
+                  <button
+                    type="button"
+                    onClick={() => setPending({ id: u.id, label: u.email })}
+                    disabled={del.isPending}
+                    className="text-muted-foreground hover:text-destructive disabled:opacity-50"
+                    aria-label="Delete"
+                  >
+                    <Trash2Icon className="size-4" />
+                  </button>
+                ),
+            },
+          ]}
+          keyExtractor={(u) => u.id}
+          persistKey="wolf-settings-users"
+          density="compact"
+          loading={q.isLoading}
+          isError={q.isError}
+          onRetry={() => void q.refetch()}
+          emptyMessage="No users."
+          searchPlaceholder="Search users..."
+        />
       </div>
       <ConfirmDialog
         open={!!pending}

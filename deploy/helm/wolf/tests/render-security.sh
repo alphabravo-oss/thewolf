@@ -42,6 +42,17 @@ if grep -q "kind: Ingress" "$tmp_dir/rendered.yaml"; then
   echo "Ingress must be disabled by default" >&2
   exit 1
 fi
+grep -q "name: wolf-wolf-postgres" "$tmp_dir/rendered.yaml"
+# Default-deny is on; Postgres must accept 5432 only from Wolf components.
+postgres_np="$(awk '/name: wolf-wolf-postgres$/{p=1} p&&/^---$/{exit} p' "$tmp_dir/rendered.yaml")"
+echo "$postgres_np" | grep -q "app.kubernetes.io/component: postgres"
+echo "$postgres_np" | grep -q "app.kubernetes.io/component: api"
+echo "$postgres_np" | grep -q "app.kubernetes.io/component: scan-worker"
+echo "$postgres_np" | grep -q "app.kubernetes.io/component: fixer"
+worker_np="$(awk '/name: wolf-wolf-worker$/{p=1} p&&/^---$/{exit} p' "$tmp_dir/rendered.yaml")"
+# `to:` is above the 5432 port in this rule; a ports-only 5432 would have neither.
+echo "$worker_np" | grep -B8 "port: 5432" | grep -q "to:"
+echo "$worker_np" | grep -B8 "port: 5432" | grep -q "component: postgres"
 
 if helm template wolf "$chart_dir" \
   --set-string masterKey=test-master-key \

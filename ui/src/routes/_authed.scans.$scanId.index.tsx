@@ -17,6 +17,7 @@ import {
   XIcon,
 } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
+import type { PaginationState } from "@tanstack/react-table";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useSSE } from "@/lib/sse";
@@ -27,6 +28,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { ScanStatusPill } from "@/components/scan-status-pill";
 import { SeverityBadge } from "@/components/severity-badge";
+import { severityRank } from "@/lib/severity";
 import { CheckboxFilterRow } from "@/components/checkbox-filter-row";
 import { ScanAgentsPanel } from "@/components/fixes/scan-agents-panel";
 
@@ -53,14 +55,6 @@ interface ToolStatusEntry {
   error?: string;
 }
 
-const SEVERITY_RANK: Record<Severity, number> = {
-  critical: 5,
-  high: 4,
-  medium: 3,
-  low: 2,
-  info: 1,
-};
-
 // Severity filter pills, most-severe first.
 const SEVERITY_ORDER: Severity[] = [
   "critical",
@@ -70,7 +64,7 @@ const SEVERITY_ORDER: Severity[] = [
   "info",
 ];
 
-const PAGE_SIZE = 100;
+const PAGE_SIZE = 50;
 
 function ScanDetailPage() {
   const { scanId } = Route.useParams();
@@ -150,29 +144,6 @@ function ScanDetailPage() {
   });
 
   const [includeSuppressed, setIncludeSuppressed] = useState(false);
-
-  // First page of findings; DataTable paginates locally.
-  const findingsQ = useQuery({
-    queryKey: ["scan", scanId, "findings", includeSuppressed],
-    queryFn: async () => {
-      const q = new URLSearchParams({ per_page: "200" });
-      if (includeSuppressed) q.set("include_suppressed", "true");
-      const r = await api.get<Finding[]>(`/scans/${scanId}/findings?${q.toString()}`);
-      return {
-        items: r.data ?? [],
-        total: r.meta?.total ?? 0,
-        suppressed: r.meta?.suppressed ?? 0,
-      };
-    },
-    // Poll while the scan is running so the table fills in as tools
-    // complete (findings are persisted per-tool as each scanner finishes).
-    // Stops polling once the scan reaches a terminal state.
-    refetchInterval: () => {
-      const s = scanQ.data?.status;
-      return s === "running" || s === "pending" ? 3000 : false;
-    },
-  });
-
   const [filterTool, setFilterTool] = useState<string>("");
   // Severity/category filters track what's *excluded* (unchecked). An empty
   // set means "show everything" — which is also the correct default before
@@ -184,29 +155,90 @@ function ScanDetailPage() {
     new Set(),
   );
   const [search, setSearch] = useState("");
+  const [pagination, setPagination] = useState<PaginationState>({
+    pageIndex: 0,
+    pageSize: PAGE_SIZE,
+  });
+
+  const statsQ = useQuery({
+    queryKey: ["scan", scanId, "findings", "stats"],
+    queryFn: async () => {
+      const r = await api.get<{
+        total: number;
+        by_severity: Record<string, number>;
+        by_tool: Record<string, number>;
+        by_category: Record<string, number>;
+      }>(`/scans/${scanId}/findings/stats`);
+      return r.data;
+    },
+    refetchInterval: () => {
+      const s = scanQ.data?.status;
+      return s === "running" || s === "pending" ? 3000 : false;
+    },
+  });
+
+  const includedSeverities = SEVERITY_ORDER.filter((s) => !excludedSeverities.has(s));
+  const categoryKeys = Object.keys(statsQ.data?.by_category ?? {}).sort();
+  const includedCategories = categoryKeys.filter((c) => !excludedCategories.has(c));
+
+  const findingsQ = useQuery({
+    queryKey: [
+      "scan",
+      scanId,
+      "findings",
+      includeSuppressed,
+      filterTool,
+      includedSeverities.join(","),
+      includedCategories.join(","),
+      pagination.pageIndex,
+      pagination.pageSize,
+    ],
+    queryFn: async () => {
+      const q = new URLSearchParams({
+        page: String(pagination.pageIndex + 1),
+        per_page: String(pagination.pageSize),
+      });
+      if (includeSuppressed) q.set("include_suppressed", "true");
+      if (filterTool) q.set("tool", filterTool);
+      if (excludedSeverities.size > 0) {
+        q.set("severity", includedSeverities.join(",") || "_");
+      }
+      if (excludedCategories.size > 0) {
+        q.set("category", includedCategories.join(",") || "_");
+      }
+      const r = await api.get<Finding[]>(`/scans/${scanId}/findings?${q.toString()}`);
+      return {
+        items: r.data ?? [],
+        total: r.meta?.total ?? 0,
+        suppressed: r.meta?.suppressed ?? 0,
+      };
+    },
+    refetchInterval: () => {
+      const s = scanQ.data?.status;
+      return s === "running" || s === "pending" ? 3000 : false;
+    },
+  });
+
+  useEffect(() => {
+    setPagination((p) => (p.pageIndex === 0 ? p : { ...p, pageIndex: 0 }));
+  }, [filterTool, excludedSeverities, excludedCategories, includeSuppressed]);
 
   const findings = findingsQ.data?.items ?? [];
   const serverSuppressed = findingsQ.data?.suppressed ?? 0;
   const serverTotal = findingsQ.data?.total ?? 0;
-  // The DB persists per-tool findings *before* dedup, so the raw row
-  // count == visible + suppressed. The scan record's finding_count is
-  // post-dedup and may not match — we prefer the DB-reported numbers
-  // because they reconcile with what the table actually shows.
-  const rawTotal = serverTotal + (includeSuppressed ? 0 : serverSuppressed);
+  const rawTotal =
+    (statsQ.data?.total ?? serverTotal + (includeSuppressed ? 0 : serverSuppressed));
 
-  // Distinct tools + per-tool counts → drives the tool filter.
   const toolCounts = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const f of findings) m.set(f.tool_name, (m.get(f.tool_name) ?? 0) + 1);
-    return Array.from(m.entries()).sort(([a], [b]) => a.localeCompare(b));
-  }, [findings]);
+    const m = statsQ.data?.by_tool ?? {};
+    return Object.entries(m).sort(([a], [b]) => a.localeCompare(b));
+  }, [statsQ.data]);
 
-  // Distinct categories present in this scan, with counts.
   const categoryCounts = useMemo(() => {
     const m = new Map<string, number>();
-    for (const f of findings) m.set(f.category, (m.get(f.category) ?? 0) + 1);
+    for (const [k, n] of Object.entries(statsQ.data?.by_category ?? {})) m.set(k, n);
     return m;
-  }, [findings]);
+  }, [statsQ.data]);
   const categoryOptions = useMemo(
     () => Array.from(categoryCounts.keys()).sort(),
     [categoryCounts],
@@ -214,33 +246,27 @@ function ScanDetailPage() {
 
   const severityCounts = useMemo(() => {
     const m = new Map<string, number>();
-    for (const f of findings) m.set(f.severity, (m.get(f.severity) ?? 0) + 1);
+    for (const [k, n] of Object.entries(statsQ.data?.by_severity ?? {})) {
+      if (n > 0) m.set(k, n);
+    }
     return m;
-  }, [findings]);
+  }, [statsQ.data]);
 
-  // Only the checkbox/tool filters and the free-text search are applied here.
-  // Sorting and pagination moved into the shared DataTable, which owns that
-  // state for every list in the console.
   const visible = useMemo(() => {
     const lowerSearch = search.trim().toLowerCase();
+    if (!lowerSearch) return findings;
     return findings.filter((f) => {
-      if (filterTool && f.tool_name !== filterTool) return false;
-      if (excludedSeverities.has(f.severity)) return false;
-      if (excludedCategories.has(f.category)) return false;
-      if (lowerSearch) {
-        const hay = `${f.title} ${f.file_path} ${f.rule_id ?? ""}`.toLowerCase();
-        if (!hay.includes(lowerSearch)) return false;
-      }
-      return true;
+      const hay = `${f.title} ${f.file_path} ${f.rule_id ?? ""}`.toLowerCase();
+      return hay.includes(lowerSearch);
     });
-  }, [findings, filterTool, excludedSeverities, excludedCategories, search]);
+  }, [findings, search]);
 
   const findingColumns: Column<Finding>[] = [
     {
       key: "severity",
       header: "Severity",
       width: "8rem",
-      sortAccessor: (f) => SEVERITY_RANK[f.severity] ?? 0,
+      sortAccessor: (f) => severityRank[f.severity] ?? 0,
       accessor: (f) => <SeverityBadge severity={f.severity} size="sm" />,
     },
     {
@@ -307,12 +333,29 @@ function ScanDetailPage() {
     },
   ];
 
-  const exportFindings = (format: "json" | "csv") => {
+  const exportFindings = async (format: "json" | "csv") => {
+    const q = new URLSearchParams({ per_page: "200" });
+    if (includeSuppressed) q.set("include_suppressed", "true");
+    if (filterTool) q.set("tool", filterTool);
+    if (excludedSeverities.size > 0) {
+      q.set("severity", includedSeverities.join(",") || "_");
+    }
+    if (excludedCategories.size > 0) {
+      q.set("category", includedCategories.join(",") || "_");
+    }
+    const r = await api.get<Finding[]>(`/scans/${scanId}/findings?${q.toString()}`);
+    let rows = r.data ?? [];
+    const lowerSearch = search.trim().toLowerCase();
+    if (lowerSearch) {
+      rows = rows.filter((f) =>
+        `${f.title} ${f.file_path} ${f.rule_id ?? ""}`.toLowerCase().includes(lowerSearch),
+      );
+    }
     const stamp = new Date().toISOString().replace(/[:.]/g, "-");
     const base = `${scanQ.data?.repo?.name ?? scanId.slice(0, 8)}-${stamp}`;
     if (format === "json") {
       downloadBlob(
-        JSON.stringify(visible, null, 2),
+        JSON.stringify(rows, null, 2),
         `${base}.json`,
         "application/json",
       );
@@ -328,7 +371,7 @@ function ScanDetailPage() {
         "status",
       ];
       const lines = [headers.join(",")];
-      for (const f of visible) {
+      for (const f of rows) {
         lines.push(
           [
             f.id,
@@ -554,9 +597,9 @@ function ScanDetailPage() {
           </div>
         </div>
 
-        {findingsQ.isLoading ? (
+        {findingsQ.isLoading && !findingsQ.data ? (
           <ListSkeleton rows={8} />
-        ) : findings.length === 0 ? (
+        ) : (statsQ.data?.total ?? serverTotal) === 0 ? (
           toolsSelectedCount(scan) > 0 ? (
             <EmptyState
               icon={BugIcon}
@@ -616,7 +659,7 @@ function ScanDetailPage() {
                                   }}
                   className="h-8 px-2 rounded-md bg-background border border-muted/40"
                 >
-                  <option value="">All tools ({findings.length})</option>
+                  <option value="">All tools ({(statsQ.data?.total ?? serverTotal).toLocaleString()})</option>
                   {toolCounts.map(([name, count]) => (
                     <option key={name} value={name}>
                       {name} ({count})
@@ -637,7 +680,7 @@ function ScanDetailPage() {
                   </button>
                 )}
                 <div className="ml-auto text-muted-foreground tabular-nums">
-                  {visible.length.toLocaleString()} of {findings.length.toLocaleString()} shown
+                  {visible.length.toLocaleString()} of {serverTotal.toLocaleString()} shown
                 </div>
               </div>
               <CheckboxFilterRow
@@ -667,6 +710,11 @@ function ScanDetailPage() {
               pageSize={PAGE_SIZE}
               searchable={false}
               emptyMessage="No findings match these filters"
+              serverSide={{
+                rowCount: serverTotal,
+                pagination,
+                onPaginationChange: setPagination,
+              }}
             />
 
           </>

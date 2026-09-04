@@ -27,6 +27,7 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/api/sse"
 	"github.com/alphabravocompany/thewolf/internal/artifacts"
 	"github.com/alphabravocompany/thewolf/internal/auth"
+	"github.com/alphabravocompany/thewolf/internal/db"
 	findingdiff "github.com/alphabravocompany/thewolf/internal/finding/diff"
 	findingsuppression "github.com/alphabravocompany/thewolf/internal/finding/suppression"
 	"github.com/alphabravocompany/thewolf/internal/fix/lineage"
@@ -1397,60 +1398,23 @@ func ListScans(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var (
-		scans []models.Scan
-		err   error
-	)
-	if fleetVisible(r.Context(), h.Store, claims.UserID) {
-		scans, err = h.Store.ListAllScans(r.Context())
-	} else {
-		scans, err = h.Store.ListScansByUser(r.Context(), claims.UserID)
-	}
+	page, perPage := parsePagination(r)
+	scans, total, err := h.Store.ListScansPage(r.Context(), db.ScanListQuery{
+		UserID:    claims.UserID,
+		Fleet:     fleetVisible(r.Context(), h.Store, claims.UserID),
+		RepoID:    r.URL.Query().Get("repo_id"),
+		Status:    r.URL.Query().Get("status"),
+		RootsOnly: strings.EqualFold(r.URL.Query().Get("roots"), "1") || strings.EqualFold(r.URL.Query().Get("roots"), "true"),
+		Limit:     perPage,
+		Offset:    (page - 1) * perPage,
+	})
 	if err != nil {
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to list scans")
 		return
 	}
 
-	// Build repo lookup for populating scan.Repo.
-	repoCache := make(map[string]*models.Repo)
-	for i := range scans {
-		rid := scans[i].RepoID
-		if _, ok := repoCache[rid]; !ok {
-			if repo, rerr := h.Store.GetRepoByID(r.Context(), rid); rerr == nil {
-				repoCache[rid] = repo
-			}
-		}
-		scans[i].Repo = repoCache[rid]
-	}
-
-	// Apply optional filters.
-	repoID := r.URL.Query().Get("repo_id")
-	status := r.URL.Query().Get("status")
-	rootsOnly := strings.EqualFold(r.URL.Query().Get("roots"), "1") ||
-		strings.EqualFold(r.URL.Query().Get("roots"), "true")
-
-	filtered := make([]models.Scan, 0, len(scans))
-	for _, s := range scans {
-		if repoID != "" && s.RepoID != repoID {
-			continue
-		}
-		if status != "" && string(s.Status) != status {
-			continue
-		}
-		if rootsOnly && strings.TrimSpace(s.OriginScanID) != "" {
-			continue
-		}
-		filtered = append(filtered, s)
-	}
-
-	// Pagination.
-	page, perPage := parsePagination(r)
-	total := len(filtered)
-	start, end := paginateSlice(total, page, perPage)
-	paged := filtered[start:end]
-
 	response.WriteJSON(w, http.StatusOK, response.ListResponse{
-		Data: paged,
+		Data: scans,
 		Meta: response.ListMeta{Total: total, Page: page, PerPage: perPage},
 	})
 }
@@ -1750,6 +1714,7 @@ func GetScanFindings(w http.ResponseWriter, r *http.Request) {
 	severityFilter := r.URL.Query().Get("severity")
 	toolFilter := r.URL.Query().Get("tool")
 	statusFilter := r.URL.Query().Get("status")
+	categories := parseCSV(r.URL.Query().Get("category"))
 	baselineStates := parseCSV(r.URL.Query().Get("baseline_state"))
 
 	var severities map[string]bool
@@ -1766,6 +1731,9 @@ func GetScanFindings(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		if toolFilter != "" && f.ToolName != toolFilter {
+			continue
+		}
+		if len(categories) > 0 && !containsStr(categories, string(f.Category)) {
 			continue
 		}
 		if statusFilter != "" && string(f.Status) != statusFilter {
@@ -1849,24 +1817,18 @@ func GetScanFindingStats(w http.ResponseWriter, r *http.Request) {
 	if !ensureScanOwner(w, scan, claims) {
 		return
 	}
-	findings, err := h.Store.ListFindingsByScan(r.Context(), scanID)
+	stats, err := h.Store.ScanFindingStats(r.Context(), scanID)
 	if err != nil {
 		response.WriteError(w, http.StatusNotFound, "not_found", fmt.Sprintf("scan %s not found", scanID))
 		return
 	}
 
-	bySeverity := map[string]int{"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
-	byTool := make(map[string]int)
-	for _, f := range findings {
-		bySeverity[string(f.Severity)]++
-		byTool[f.ToolName]++
-	}
-
 	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{
 		Data: map[string]interface{}{
-			"total":       len(findings),
-			"by_severity": bySeverity,
-			"by_tool":     byTool,
+			"total":       stats.Total,
+			"by_severity": stats.BySeverity,
+			"by_tool":     stats.ByTool,
+			"by_category": stats.ByCategory,
 		},
 	})
 }

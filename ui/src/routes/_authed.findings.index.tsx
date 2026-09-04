@@ -5,6 +5,7 @@
 // Deep work stays on the scan page / repo current-findings list.
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
+import type { PaginationState } from "@tanstack/react-table";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BugIcon, ChevronDownIcon } from "lucide-react";
 import { toast } from "sonner";
@@ -13,6 +14,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { PageHeader, PageShell } from "@/components/ui/page";
 import { SeverityBadge } from "@/components/severity-badge";
+import { severityRank } from "@/lib/severity";
 import {
   useFindingsByRepo,
   useTopVulnerableRules,
@@ -304,29 +306,29 @@ function ByRule() {
   );
 }
 
-const SEVERITY_RANK: Record<string, number> = {
-  critical: 5,
-  high: 4,
-  medium: 3,
-  low: 2,
-  info: 1,
-};
-
 function FindingsList() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [scope, setScope] = useState<"new" | "all">("new");
+  const [pagination, setPagination] = useState<PaginationState>({
+    pageIndex: 0,
+    pageSize: 50,
+  });
 
   const q = useQuery({
-    queryKey: ["findings", "list", scope],
+    queryKey: ["findings", "list", scope, pagination.pageIndex, pagination.pageSize],
     queryFn: async () => {
-      const params = new URLSearchParams({ per_page: "200", status: "open" });
+      const params = new URLSearchParams({
+        page: String(pagination.pageIndex + 1),
+        per_page: String(pagination.pageSize),
+        status: "open",
+      });
       if (scope === "new") params.set("baseline_state", "new,resurfaced");
       const r = await api.get<Finding[]>(`/findings?${params.toString()}`);
-      return r.data ?? [];
+      return { items: r.data ?? [], total: r.meta?.total ?? 0 };
     },
   });
-  const rows = q.data ?? EMPTY_FINDINGS;
+  const rows = q.data?.items ?? EMPTY_FINDINGS;
 
   const bulk = useMutation({
     mutationFn: async (vars: { ids: string[]; status: FindingStatus }) => {
@@ -347,7 +349,7 @@ function FindingsList() {
       key: "severity",
       header: "Severity",
       width: "8rem",
-      sortAccessor: (f) => SEVERITY_RANK[f.severity] ?? 0,
+      sortAccessor: (f) => severityRank[f.severity] ?? 0,
       accessor: (f) => <SeverityBadge severity={f.severity} size="sm" />,
     },
     {
@@ -417,7 +419,10 @@ function FindingsList() {
           <button
             key={id}
             type="button"
-            onClick={() => setScope(id)}
+            onClick={() => {
+              setScope(id);
+              setPagination((p) => ({ ...p, pageIndex: 0 }));
+            }}
             className={
               "h-8 px-3 rounded-md text-xs border transition-colors " +
               (scope === id
@@ -430,7 +435,7 @@ function FindingsList() {
         ))}
       </div>
 
-      {!q.isLoading && rows.length === 0 ? (
+      {!q.isLoading && (q.data?.total ?? 0) === 0 ? (
         scope === "new" ? (
           <EmptyState
             icon={BugIcon}
@@ -454,6 +459,12 @@ function FindingsList() {
           persistKey="findings-list"
           density="compact"
           selectable
+          pageSize={pagination.pageSize}
+          serverSide={{
+            rowCount: q.data?.total ?? 0,
+            pagination,
+            onPaginationChange: setPagination,
+          }}
           loading={q.isLoading}
           isError={q.isError}
           onRetry={() => void q.refetch()}

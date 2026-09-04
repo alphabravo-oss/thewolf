@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/alphabravocompany/thewolf/pkg/authprovider"
+	"github.com/alphabravocompany/thewolf/pkg/control"
 	"github.com/alphabravocompany/thewolf/pkg/entitlement"
 )
 
@@ -29,6 +30,24 @@ func (ssoStub) Redeem(context.Context, string, string) (string, error) {
 type ssoAllow struct{}
 
 func (ssoAllow) Allows(string) bool { return true }
+
+func TestMappedWolfRoleMostPrivileged(t *testing.T) {
+	recs := []control.Record{
+		{Name: "eng", Body: `{"role":"user"}`},
+		{Name: "admins", Body: `{"role":"admin"}`},
+	}
+	role, ok := mappedWolfRole([]string{"eng", "admins"}, recs)
+	if !ok || role != "admin" {
+		t.Fatalf("both groups: %q %v", role, ok)
+	}
+	role, ok = mappedWolfRole([]string{"eng"}, recs)
+	if !ok || role != "user" {
+		t.Fatalf("eng: %q %v", role, ok)
+	}
+	if _, ok := mappedWolfRole(nil, recs); ok {
+		t.Fatal("empty groups must not map")
+	}
+}
 
 func TestStartSSORedirectsWhenProviderRegistered(t *testing.T) {
 	entitlement.SetActive(ssoAllow{})

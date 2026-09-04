@@ -366,6 +366,9 @@ export async function installScannerApiMock(
         { name: "trivy", category: "sca", languages: [] },
       ]);
     }
+    if (method === "POST" && path === "/scans/preflight") {
+      return json(route, { missing: [] });
+    }
     if (method === "POST" && path === "/scans") {
       const body = request.postDataJSON() as {
         repo_id?: string;
