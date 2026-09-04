@@ -77,6 +77,7 @@ func setupTestEnv(t *testing.T) *testEnv {
 		r.Delete("/api/scans/orphans", routes.PurgeOrphanScans)
 		r.Get("/api/scans/{id}", routes.GetScan)
 		r.Get("/api/scans/{id}/findings", routes.GetScanFindings)
+		r.Get("/api/scans/{id}/findings/stats", routes.GetScanFindingStats)
 		r.Get("/api/scans/{id}/manifest", routes.GetScanManifest)
 		r.Get("/api/scans/{id}/gate", routes.GetScanGate)
 		r.Get("/api/scans/{id}/diff", routes.GetScanDiff)
@@ -2264,5 +2265,141 @@ func TestPaginationDefaults(t *testing.T) {
 	w := env.doRequest(http.MethodGet, "/api/scans?page=abc&per_page=-1", nil)
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestListScansPagesAreDisjoint(t *testing.T) {
+	env := setupTestEnv(t)
+	defer env.Store.Close()
+	repoID := env.createRepo(t)
+	now := time.Now().UTC()
+	ids := make([]string, 5)
+	for i := 0; i < 5; i++ {
+		id := uuid.New().String()
+		ids[i] = id
+		if err := env.Store.CreateScan(context.Background(), &models.Scan{
+			ID: id, UserID: env.UserID, RepoID: repoID,
+			Status:    models.ScanStatusCompleted,
+			CreatedAt: now.Add(time.Duration(i) * time.Second),
+			UpdatedAt: now.Add(time.Duration(i) * time.Second),
+		}); err != nil {
+			t.Fatalf("create scan %d: %v", i, err)
+		}
+	}
+
+	type listBody struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+		Meta struct {
+			Total   int `json:"total"`
+			Page    int `json:"page"`
+			PerPage int `json:"per_page"`
+		} `json:"meta"`
+	}
+	p1 := env.doRequest(http.MethodGet, "/api/scans?per_page=2&page=1", nil)
+	p2 := env.doRequest(http.MethodGet, "/api/scans?per_page=2&page=2", nil)
+	if p1.Code != http.StatusOK || p2.Code != http.StatusOK {
+		t.Fatalf("pages: %d %d", p1.Code, p2.Code)
+	}
+	var a, b listBody
+	if err := json.Unmarshal(p1.Body.Bytes(), &a); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(p2.Body.Bytes(), &b); err != nil {
+		t.Fatal(err)
+	}
+	if a.Meta.Total != 5 || a.Meta.PerPage != 2 || len(a.Data) != 2 {
+		t.Fatalf("page 1 meta=%+v n=%d", a.Meta, len(a.Data))
+	}
+	if len(b.Data) != 2 {
+		t.Fatalf("page 2 n=%d", len(b.Data))
+	}
+	seen := map[string]bool{}
+	for _, row := range append(a.Data, b.Data...) {
+		if seen[row.ID] {
+			t.Fatalf("id %s on both pages", row.ID)
+		}
+		seen[row.ID] = true
+	}
+
+	capW := env.doRequest(http.MethodGet, "/api/scans?per_page=50000", nil)
+	var capped listBody
+	json.Unmarshal(capW.Body.Bytes(), &capped)
+	if capped.Meta.PerPage != 200 {
+		t.Fatalf("per_page cap: got %d", capped.Meta.PerPage)
+	}
+}
+
+func TestScanFindingStatsMatchList(t *testing.T) {
+	env := setupTestEnv(t)
+	defer env.Store.Close()
+	repoID := env.createRepo(t)
+	scanID := env.createScan(t, repoID)
+	sevs := []models.Severity{
+		models.SeverityCritical, models.SeverityCritical, models.SeverityCritical,
+		models.SeverityHigh, models.SeverityHigh,
+	}
+	for i, sev := range sevs {
+		if err := env.Store.CreateFinding(context.Background(), &models.Finding{
+			ID:             uuid.New().String(),
+			ScanID:         scanID,
+			RepoID:         repoID,
+			Fingerprint:    fmt.Sprintf("fp-%d", i),
+			ToolName:       "gosec",
+			Category:       models.CategorySAST,
+			Severity:       sev,
+			Title:          fmt.Sprintf("finding %d", i),
+			FilePath:       "app.go",
+			LineStart:      i + 1,
+			CompositeScore: float64(10 - i),
+			Status:         models.StatusOpen,
+		}); err != nil {
+			t.Fatalf("finding %d: %v", i, err)
+		}
+	}
+
+	list := env.doRequest(http.MethodGet, "/api/scans/"+scanID+"/findings?per_page=2&page=1", nil)
+	page2 := env.doRequest(http.MethodGet, "/api/scans/"+scanID+"/findings?per_page=2&page=2", nil)
+	if list.Code != http.StatusOK || page2.Code != http.StatusOK {
+		t.Fatalf("findings pages: %d %d %s", list.Code, page2.Code, list.Body.String())
+	}
+	var p1, p2 struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+		Meta struct {
+			Total int `json:"total"`
+		} `json:"meta"`
+	}
+	json.Unmarshal(list.Body.Bytes(), &p1)
+	json.Unmarshal(page2.Body.Bytes(), &p2)
+	if p1.Meta.Total != 5 || len(p1.Data) != 2 || len(p2.Data) != 2 {
+		t.Fatalf("findings page: total=%d n1=%d n2=%d", p1.Meta.Total, len(p1.Data), len(p2.Data))
+	}
+	seenF := map[string]bool{}
+	for _, row := range append(p1.Data, p2.Data...) {
+		if seenF[row.ID] {
+			t.Fatalf("finding id %s on both pages", row.ID)
+		}
+		seenF[row.ID] = true
+	}
+
+	statsW := env.doRequest(http.MethodGet, "/api/scans/"+scanID+"/findings/stats", nil)
+	if statsW.Code != http.StatusOK {
+		t.Fatalf("stats: %d %s", statsW.Code, statsW.Body.String())
+	}
+	var stats struct {
+		Data struct {
+			Total      int            `json:"total"`
+			BySeverity map[string]int `json:"by_severity"`
+		} `json:"data"`
+	}
+	json.Unmarshal(statsW.Body.Bytes(), &stats)
+	if stats.Data.Total != p1.Meta.Total {
+		t.Fatalf("stats total %d != list total %d", stats.Data.Total, p1.Meta.Total)
+	}
+	if stats.Data.BySeverity["critical"] != 3 || stats.Data.BySeverity["high"] != 2 {
+		t.Fatalf("severity counts: %+v", stats.Data.BySeverity)
 	}
 }

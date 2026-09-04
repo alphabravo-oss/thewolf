@@ -1,11 +1,11 @@
 // Scans list + scan-trigger form.
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { GaugeIcon, PlayIcon, XIcon } from "lucide-react";
 import { useEffect, useState } from "react";
-import { toast } from "sonner";
+import type { PaginationState } from "@tanstack/react-table";
 import { api } from "@/lib/api";
-import { COMMUNITY_LIMIT_COPY, isCommunityLimit } from "@/lib/safe-display";
+import { useScanWithPreflight } from "@/components/scan-preflight";
 import type { Repo, Scan } from "@/lib/types";
 import { parseToolList } from "@/lib/types";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -139,11 +139,21 @@ function ScansPage() {
   const navigate = useNavigate();
   const [showForm, setShowForm] = useState(false);
   const [emptyFormDismissed, setEmptyFormDismissed] = useState(false);
+  const [pagination, setPagination] = useState<PaginationState>({
+    pageIndex: 0,
+    pageSize: 50,
+  });
   const q = useQuery({
-    queryKey: ["scans", "list"],
+    queryKey: ["scans", "list", pagination.pageIndex, pagination.pageSize],
     queryFn: async () => {
-      const r = await api.get<Scan[]>("/scans?limit=200&roots=1");
-      return r.data ?? [];
+      const params = new URLSearchParams({
+        page: String(pagination.pageIndex + 1),
+        per_page: String(pagination.pageSize),
+        roots: "1",
+      });
+      const r = await api.get<Scan[]>(`/scans?${params}`);
+      const items = r.data ?? [];
+      return { items, total: r.meta?.total ?? items.length };
     },
     refetchInterval: 10_000,
   });
@@ -157,11 +167,11 @@ function ScansPage() {
     refetchInterval: 10_000,
   });
   const byScan = jobsByScan(jobsQ.data, [
-    ...(q.data ?? []),
+    ...(q.data?.items ?? []),
     ...(childScansQ.data ?? []),
   ]);
 
-  const scans = q.data ?? EMPTY_SCANS;
+  const scans = q.data?.items ?? EMPTY_SCANS;
 
   const columns: Column<Scan>[] = [
     {
@@ -253,7 +263,7 @@ function ScansPage() {
     },
   ];
 
-  const isEmpty = !q.isLoading && scans.length === 0;
+  const isEmpty = !q.isLoading && scans.length === 0 && (q.data?.total ?? 0) === 0;
   useEffect(() => {
     if (isEmpty && !emptyFormDismissed) setShowForm(true);
   }, [isEmpty, emptyFormDismissed]);
@@ -300,11 +310,17 @@ function ScansPage() {
           keyExtractor={(s) => s.id}
           persistKey="scans"
           density="compact"
+          pageSize={pagination.pageSize}
           loading={q.isLoading}
           isError={q.isError}
           onRetry={() => void q.refetch()}
-          searchPlaceholder="Search scans..."
+          searchPlaceholder="Search this page..."
           emptyMessage="No scans match your filters"
+          serverSide={{
+            rowCount: q.data?.total ?? 0,
+            pagination,
+            onPaginationChange: setPagination,
+          }}
           onRowClick={(s) =>
             navigate({
               to: s.status === "running" ? "/scans/$scanId/live" : "/scans/$scanId",
@@ -318,12 +334,11 @@ function ScansPage() {
 }
 
 // New-scan form: pick a repo, optionally narrow the tool list, override
-// branch, POST /api/scans, navigate to the live scan view.
+// branch, then start via useScanWithPreflight (same path as Scan this).
 type ScannerSummary = { name: string; category: string; languages: string[] };
 
 function NewScanForm({ onClose }: { onClose: () => void }) {
-  const navigate = useNavigate();
-  const qc = useQueryClient();
+  const scan = useScanWithPreflight();
   const repos = useQuery({
     queryKey: ["repos", "for-scan"],
     queryFn: async () => {
@@ -345,31 +360,6 @@ function NewScanForm({ onClose }: { onClose: () => void }) {
   //   - "explicit" → only the checked tools run
   const [toolMode, setToolMode] = useState<"auto" | "explicit">("auto");
   const [picked, setPicked] = useState<Set<string>>(new Set());
-
-  const m = useMutation({
-    mutationFn: async () => {
-      const repo = repos.data?.find((r) => r.id === repoId);
-      const body: Record<string, unknown> = {
-        repo_id: repoId,
-        branch: branch.trim() || repo?.default_branch || "main",
-      };
-      if (toolMode === "explicit" && picked.size > 0) {
-        body.tools = Array.from(picked).sort();
-      }
-      const r = await api.post<Scan>("/scans", body);
-      return r.data;
-    },
-    onSuccess: (scan) => {
-      qc.invalidateQueries({ queryKey: ["scans"] });
-      toast.success("Scan started");
-      navigate({ to: "/scans/$scanId/live", params: { scanId: scan.id } });
-    },
-    onError: (e) => {
-      toast.error(
-        isCommunityLimit(e) ? COMMUNITY_LIMIT_COPY : e instanceof Error ? e.message : "Failed to start scan",
-      );
-    },
-  });
 
   const selectedRepo = repos.data?.find((r) => r.id === repoId);
 
@@ -401,7 +391,14 @@ function NewScanForm({ onClose }: { onClose: () => void }) {
       onSubmit={(e) => {
         e.preventDefault();
         if (!repoId) return;
-        m.mutate();
+        const repo = repos.data?.find((r) => r.id === repoId);
+        scan.launch({
+          repo_id: repoId,
+          branch: branch.trim() || repo?.default_branch || "main",
+          ...(toolMode === "explicit" && picked.size > 0
+            ? { tools: Array.from(picked).sort() }
+            : {}),
+        });
       }}
       className="glass-card p-4 space-y-3 max-w-2xl"
     >
@@ -574,19 +571,20 @@ function NewScanForm({ onClose }: { onClose: () => void }) {
           type="submit"
           disabled={
             !repoId ||
-            m.isPending ||
+            scan.busy ||
             (toolMode === "explicit" && picked.size === 0)
           }
           className="h-8 px-3 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-50 inline-flex items-center gap-1.5"
         >
           <PlayIcon className="size-3.5" />
-          {m.isPending
+          {scan.busy
             ? "Starting…"
             : toolMode === "explicit"
               ? `Start scan (${picked.size})`
               : "Start scan"}
         </button>
       </div>
+      {scan.dialog}
     </form>
   );
 }

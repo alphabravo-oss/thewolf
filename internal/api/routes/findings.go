@@ -66,7 +66,8 @@ func ListFindings(w http.ResponseWriter, r *http.Request) {
 		page = 1
 	}
 
-	// Collect findings from user's scans.
+	// Path-suppress + current-open dedup happen in Go, so LIMIT cannot move
+	// into SQL without changing which rows are visible. Paginate after drop.
 	findings, err := gatherUserFindings(ctx, h, claims.UserID)
 	if err != nil {
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to load findings")

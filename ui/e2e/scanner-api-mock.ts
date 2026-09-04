@@ -348,7 +348,15 @@ export async function installScannerApiMock(
       return json(route, { ok: true });
     }
     if (method === "GET" && path === "/scans") {
-      return json(route, [state.apiCreatedScan]);
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          data: [state.apiCreatedScan],
+          meta: { total: 1, page: 1, per_page: 50 },
+        }),
+      });
+      return;
     }
     if (method === "GET" && path === "/repos") {
       return json(route, [apiCreatedRepository]);
@@ -365,6 +373,9 @@ export async function installScannerApiMock(
         { name: "semgrep", category: "sast", languages: ["python"] },
         { name: "trivy", category: "sca", languages: [] },
       ]);
+    }
+    if (method === "POST" && path === "/scans/preflight") {
+      return json(route, { missing: [] });
     }
     if (method === "POST" && path === "/scans") {
       const body = request.postDataJSON() as {
@@ -405,6 +416,14 @@ export async function installScannerApiMock(
           has_output: false,
         },
       ]);
+    }
+    if (method === "GET" && path === "/scans/scan-api-created/findings/stats") {
+      return json(route, {
+        total: 1,
+        by_severity: { critical: 0, high: 1, medium: 0, low: 0, info: 0 },
+        by_tool: { semgrep: 1 },
+        by_category: { sast: 1 },
+      });
     }
     if (method === "GET" && path === "/scans/scan-api-created/findings") {
       await route.fulfill({

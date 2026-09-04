@@ -83,6 +83,37 @@ type AuditQuery struct {
 	Offset   int    // rows to skip
 }
 
+// ScanListQuery pages scans in SQL. Empty UserID with Fleet=true lists everyone.
+type ScanListQuery struct {
+	UserID    string
+	Fleet     bool
+	RepoID    string
+	Status    string
+	RootsOnly bool
+	Limit     int
+	Offset    int
+}
+
+// VulnListQuery pages canonical vulnerabilities in SQL.
+type VulnListQuery struct {
+	UserID string
+	Fleet  bool
+	RepoID string
+	ScanID string
+	Limit  int
+	Offset int
+}
+
+// ScanFindingStats is GROUP BY counts for one scan. Path-suppress is not
+// applied (that matcher is query-time on file paths); persisted suppressed
+// rows are included so the numbers match ListFindingsByScan.
+type ScanFindingStats struct {
+	Total      int
+	BySeverity map[string]int
+	ByTool     map[string]int
+	ByCategory map[string]int
+}
+
 // Store defines the interface for all database operations.
 type Store interface {
 	// Lifecycle
@@ -153,6 +184,7 @@ type Store interface {
 	CreateScan(ctx context.Context, scan *models.Scan) error
 	GetScanByID(ctx context.Context, id string) (*models.Scan, error)
 	ListAllScans(ctx context.Context) ([]models.Scan, error)
+	ListScansPage(ctx context.Context, q ScanListQuery) ([]models.Scan, int, error)
 	ListScansByUser(ctx context.Context, userID string) ([]models.Scan, error)
 	ListScansByRepo(ctx context.Context, repoID string) ([]models.Scan, error)
 	ListScansByCollection(ctx context.Context, collectionID string) ([]models.Scan, error)
@@ -180,6 +212,7 @@ type Store interface {
 	CreateFindings(ctx context.Context, findings []models.Finding) error
 	GetFindingByID(ctx context.Context, id string) (*models.Finding, error)
 	ListFindingsByScan(ctx context.Context, scanID string) ([]models.Finding, error)
+	ScanFindingStats(ctx context.Context, scanID string) (ScanFindingStats, error)
 	ListFindingsByRepo(ctx context.Context, repoID string) ([]models.Finding, error)
 	UpdateFinding(ctx context.Context, f *models.Finding) error
 	UpdateFindingStatus(ctx context.Context, id string, status models.Status) error
@@ -191,6 +224,7 @@ type Store interface {
 	ListVulnerabilitiesByRepo(ctx context.Context, repoID string) ([]models.Vulnerability, error)
 	ListVulnerabilitiesByScan(ctx context.Context, scanID string) ([]models.Vulnerability, error)
 	ListVulnerabilitiesForUser(ctx context.Context, userID string, fleetMode bool) ([]models.Vulnerability, error)
+	ListVulnerabilitiesPage(ctx context.Context, q VulnListQuery) ([]models.Vulnerability, int, error)
 	InsertVulnerabilityEvidence(ctx context.Context, e *models.VulnerabilityEvidence) error
 	ListEvidenceByVulnerability(ctx context.Context, vulnerabilityID string) ([]models.VulnerabilityEvidence, error)
 	MoveVulnerabilityEvidence(ctx context.Context, evidenceIDs []string, toVulnerabilityID string) error

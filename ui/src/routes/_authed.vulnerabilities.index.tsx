@@ -1,22 +1,17 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import type { PaginationState } from "@tanstack/react-table";
 import { ShieldAlert } from "lucide-react";
 import { api } from "@/lib/api";
 import { EmptyState } from "@/components/ui/empty-state";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { PageHeader, PageShell } from "@/components/ui/page";
 import { SeverityBadge } from "@/components/severity-badge";
+import { severityRank } from "@/lib/severity";
 import type { Vulnerability } from "@/lib/types";
 
 const EMPTY: Vulnerability[] = [];
-
-const SEVERITY_RANK: Record<string, number> = {
-  critical: 5,
-  high: 4,
-  medium: 3,
-  low: 2,
-  info: 1,
-};
 
 export const Route = createFileRoute("/_authed/vulnerabilities/")({
   component: VulnerabilitiesPage,
@@ -24,21 +19,30 @@ export const Route = createFileRoute("/_authed/vulnerabilities/")({
 
 function VulnerabilitiesPage() {
   const navigate = useNavigate();
+  const [pagination, setPagination] = useState<PaginationState>({
+    pageIndex: 0,
+    pageSize: 50,
+  });
   const q = useQuery({
-    queryKey: ["vulnerabilities"],
+    queryKey: ["vulnerabilities", pagination.pageIndex, pagination.pageSize],
     queryFn: async () => {
-      const r = await api.get<Vulnerability[]>("/vulnerabilities?per_page=200");
-      return r.data ?? [];
+      const params = new URLSearchParams({
+        page: String(pagination.pageIndex + 1),
+        per_page: String(pagination.pageSize),
+      });
+      const r = await api.get<Vulnerability[]>(`/vulnerabilities?${params}`);
+      const items = r.data ?? [];
+      return { items, total: r.meta?.total ?? items.length };
     },
   });
-  const rows = q.data ?? EMPTY;
+  const rows = q.data?.items ?? EMPTY;
 
   const columns: Column<Vulnerability>[] = [
     {
       key: "severity",
       header: "Severity",
       width: "8rem",
-      sortAccessor: (v) => SEVERITY_RANK[v.severity] ?? 0,
+      sortAccessor: (v) => severityRank[v.severity] ?? 0,
       accessor: (v) => <SeverityBadge severity={v.severity} size="sm" />,
     },
     {
@@ -93,7 +97,7 @@ function VulnerabilitiesPage() {
         title="Vulnerabilities"
         description="Canonical issues clustered from scanner findings. Findings stay the compatibility layer."
       />
-      {!q.isLoading && rows.length === 0 ? (
+      {!q.isLoading && (q.data?.total ?? 0) === 0 ? (
         <EmptyState
           icon={ShieldAlert}
           title="No vulnerabilities yet"
@@ -106,11 +110,17 @@ function VulnerabilitiesPage() {
           keyExtractor={(v) => v.id}
           persistKey="vulnerabilities"
           density="compact"
+          pageSize={pagination.pageSize}
           loading={q.isLoading}
           isError={q.isError}
           onRetry={() => void q.refetch()}
-          searchPlaceholder="Filter title, tools..."
+          searchPlaceholder="Search this page..."
           emptyMessage="No vulnerabilities match"
+          serverSide={{
+            rowCount: q.data?.total ?? 0,
+            pagination,
+            onPaginationChange: setPagination,
+          }}
           onRowClick={(v) =>
             navigate({
               to: "/vulnerabilities/$vulnerabilityId",

@@ -52,6 +52,8 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/models"
 )
 
+var githubPR = pr.CreateGitHubPR
+
 // defaultPerFixTimeout bounds a single-finding engine attempt when the job
 // carries no explicit per-fix budget. It mirrors engine.DefaultTimeout.
 const defaultPerFixTimeout = 5 * time.Minute
@@ -631,12 +633,21 @@ func finishWithPush(
 			if base == "" {
 				base = "main"
 			}
-			prRes, _ := pr.CreateGitHubPR(ctx, pr.PRRequest{
+			prRes, _ := githubPR(ctx, pr.PRRequest{
 				RepoPath:   ws.Path(),
 				BranchName: ws.Branch(),
 				BaseBranch: base,
+				Category:   prCategory(summary),
+				Findings:   prFindings(summary),
+				Validation: fmt.Sprintf("%d kept, %d remaining", summary.Kept, summary.Remaining),
 			})
 			if prRes != nil && prRes.Error != "" {
+				if cleanup != nil {
+					*cleanup = false
+				}
+				job.Error = prRes.Error
+				job.PauseReason = "pr create failed: " + prRes.Error
+				result.PauseStatus = models.FixJobPushFailed
 				logf("job %s: GitHub PR create failed: %s", job.ID, prRes.Error)
 			} else if prRes != nil && prRes.URL != "" {
 				logf("job %s: GitHub PR %s", job.ID, prRes.URL)
@@ -655,6 +666,28 @@ func finishWithPush(
 	}
 	logf("job %s: branch %s assembled (%d kept, %d unfixable)", job.ID, ws.Branch(), summary.Kept, summary.Unfixable)
 	return result, nil
+}
+
+func prFindings(summary Summary) []models.Finding {
+	var out []models.Finding
+	for _, round := range summary.Rounds {
+		for _, title := range round.Cleared {
+			out = append(out, models.Finding{Title: title})
+		}
+	}
+	if len(out) == 0 && summary.Kept > 0 {
+		out = []models.Finding{{Title: "automated fix"}}
+	}
+	return out
+}
+
+func prCategory(summary Summary) models.Category {
+	for _, n := range summary.Open {
+		if n.Tool != "" {
+			return models.CategorySAST
+		}
+	}
+	return models.CategorySAST
 }
 
 func pushFailureReason(err error) string {

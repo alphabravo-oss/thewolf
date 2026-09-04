@@ -16,7 +16,10 @@ spec:
     - ports:
         - {protocol: UDP, port: 53}
         - {protocol: TCP, port: 53}
-        - {protocol: TCP, port: 5432}
+    - to:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/component: postgres}
+      ports: [{protocol: TCP, port: 5432}]
 ---
 {{- end }}
 apiVersion: apps/v1
@@ -92,7 +95,10 @@ spec:
         - {protocol: UDP, port: 53}
         - {protocol: TCP, port: 53}
         - {protocol: TCP, port: 443}
-        - {protocol: TCP, port: 5432}
+    - to:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/component: postgres}
+      ports: [{protocol: TCP, port: 5432}]
 ---
 {{- end }}
 apiVersion: apps/v1
@@ -182,7 +188,10 @@ spec:
         - {protocol: UDP, port: 53}
         - {protocol: TCP, port: 53}
         - {protocol: TCP, port: 443}
-        - {protocol: TCP, port: 5432}
+    - to:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/component: postgres}
+      ports: [{protocol: TCP, port: 5432}]
 ---
 {{- end }}
 apiVersion: apps/v1
@@ -274,7 +283,10 @@ spec:
     - ports:
         - {protocol: UDP, port: 53}
         - {protocol: TCP, port: 53}
-        - {protocol: TCP, port: 5432}
+    - to:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/component: postgres}
+      ports: [{protocol: TCP, port: 5432}]
 ---
 {{- end }}
 apiVersion: apps/v1
@@ -352,7 +364,10 @@ spec:
     - ports:
         - {protocol: UDP, port: 53}
         - {protocol: TCP, port: 53}
-        - {protocol: TCP, port: 5432}
+    - to:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/component: postgres}
+      ports: [{protocol: TCP, port: 5432}]
         {{- range .Values.scannerRelease.notification.egressPorts }}
         - {protocol: TCP, port: {{ . }}}
         {{- end }}
@@ -459,7 +474,10 @@ spec:
     - ports:
         - {protocol: UDP, port: 53}
         - {protocol: TCP, port: 53}
-        - {protocol: TCP, port: 5432}
+    - to:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/component: postgres}
+      ports: [{protocol: TCP, port: 5432}]
 ---
 {{- end }}
 apiVersion: apps/v1
@@ -536,7 +554,10 @@ spec:
     - ports:
         - {protocol: UDP, port: 53}
         - {protocol: TCP, port: 53}
-        - {protocol: TCP, port: 5432}
+    - to:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/component: postgres}
+      ports: [{protocol: TCP, port: 5432}]
         {{- range .Values.scannerRelease.registry.egressPorts }}
         - {protocol: TCP, port: {{ . }}}
         {{- end }}
@@ -723,7 +744,10 @@ spec:
         - {protocol: TCP, port: 53}
         - {protocol: TCP, port: 22}
         - {protocol: TCP, port: 443}
-        - {protocol: TCP, port: 5432}
+    - to:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/component: postgres}
+      ports: [{protocol: TCP, port: 5432}]
 ---
 {{- end }}
 apiVersion: apps/v1

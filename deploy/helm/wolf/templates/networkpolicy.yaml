@@ -28,6 +28,68 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
+  name: {{ include "wolf.fullname" . }}-postgres
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: postgres
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/instance: {{ .Release.Name }}
+              app.kubernetes.io/component: api
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/instance: {{ .Release.Name }}
+              app.kubernetes.io/component: scan-worker
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/instance: {{ .Release.Name }}
+              app.kubernetes.io/component: fixer
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/instance: {{ .Release.Name }}
+              app.kubernetes.io/component: scanner-custom-build
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/instance: {{ .Release.Name }}
+              app.kubernetes.io/component: scanner-release-scheduler
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/instance: {{ .Release.Name }}
+              app.kubernetes.io/component: scanner-release-discovery
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/instance: {{ .Release.Name }}
+              app.kubernetes.io/component: scanner-release-proposal
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/instance: {{ .Release.Name }}
+              app.kubernetes.io/component: scanner-release-alert
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/instance: {{ .Release.Name }}
+              app.kubernetes.io/component: scanner-release-notification
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/instance: {{ .Release.Name }}
+              app.kubernetes.io/component: scanner-release-rollout
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/instance: {{ .Release.Name }}
+              app.kubernetes.io/component: scanner-release-registry
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/instance: {{ .Release.Name }}
+              app.kubernetes.io/component: scanner-release-builder
+      ports: [{protocol: TCP, port: 5432}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
   name: {{ include "wolf.fullname" . }}-worker
 spec:
   podSelector:
@@ -41,7 +103,10 @@ spec:
         - {protocol: TCP, port: 22}
         - {protocol: UDP, port: 53}
         - {protocol: TCP, port: 53}
-        - {protocol: TCP, port: 5432}
+    - to:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/component: postgres}
+      ports: [{protocol: TCP, port: 5432}]
 ---
 {{- if .Values.fixer.enabled }}
 apiVersion: networking.k8s.io/v1
@@ -59,7 +124,10 @@ spec:
         - {protocol: TCP, port: 443}
         - {protocol: UDP, port: 53}
         - {protocol: TCP, port: 53}
-        - {protocol: TCP, port: 5432}
+    - to:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/component: postgres}
+      ports: [{protocol: TCP, port: 5432}]
 ---
 {{- end }}
 {{- if .Values.scannerRelease.customBuild.enabled }}
@@ -80,7 +148,10 @@ spec:
         - {protocol: UDP, port: 53}
         - {protocol: TCP, port: 53}
         - {protocol: TCP, port: 443}
-        - {protocol: TCP, port: 5432}
+    - to:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/component: postgres}
+      ports: [{protocol: TCP, port: 5432}]
 ---
 {{- end }}
 apiVersion: networking.k8s.io/v1

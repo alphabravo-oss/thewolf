@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { ScrollTextIcon } from "lucide-react";
 import { api } from "@/lib/api";
-import { EmptyState } from "@/components/ui/empty-state";
+import { EmptyState, PermissionState } from "@/components/ui/empty-state";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { PageHeader, PageShell } from "@/components/ui/page";
 import { cn, formatRelativeTime } from "@/lib/utils";
@@ -93,9 +93,9 @@ function AuditPage() {
     return (
       <PageShell>
         <PageHeader title="Audit log" />
-        <EmptyState
-          icon={ScrollTextIcon}
+        <PermissionState
           title="Admin only"
+          permission="admin"
           description="The audit log is only readable by users with the admin scope."
         />
       </PageShell>

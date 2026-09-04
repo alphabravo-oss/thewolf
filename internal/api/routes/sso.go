@@ -1,8 +1,10 @@
 package routes
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
@@ -16,6 +18,7 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/auth"
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/pkg/authprovider"
+	"github.com/alphabravocompany/thewolf/pkg/control"
 	"github.com/alphabravocompany/thewolf/pkg/entitlement"
 )
 
@@ -111,7 +114,7 @@ func ssoCallback(w http.ResponseWriter, r *http.Request, reg *authprovider.Regis
 		response.WriteError(w, http.StatusNotFound, "not_found", "sso provider not found")
 		return
 	}
-	email, err := redir.Redeem(r.Context(), code, ssoRedirectURI(r, name))
+	email, groups, err := redeemSSO(r.Context(), redir, code, ssoRedirectURI(r, name))
 	if err != nil || strings.TrimSpace(email) == "" {
 		response.WriteError(w, http.StatusUnauthorized, "unauthorized", "sso login failed")
 		return
@@ -127,6 +130,7 @@ func ssoCallback(w http.ResponseWriter, r *http.Request, reg *authprovider.Regis
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to provision user")
 		return
 	}
+	applySSOGroups(r.Context(), user, groups)
 	if err := issueSessionCookie(w, r, user.ID); err != nil {
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to create session")
 		return
@@ -194,4 +198,73 @@ func ensureSSOUser(r *http.Request, email string) (*models.User, error) {
 		return nil, err
 	}
 	return u, nil
+}
+
+func redeemSSO(ctx context.Context, redir authprovider.Redirector, code, redirectURI string) (string, []string, error) {
+	if g, ok := redir.(authprovider.GroupedRedirector); ok {
+		id, err := g.RedeemIdentity(ctx, code, redirectURI)
+		return id.Email, id.Groups, err
+	}
+	email, err := redir.Redeem(ctx, code, redirectURI)
+	return email, nil, err
+}
+
+func applySSOGroups(ctx context.Context, user *models.User, groups []string) {
+	if user == nil || len(groups) == 0 {
+		return
+	}
+	api := control.RecordsAPI()
+	if api == nil {
+		return
+	}
+	recs, err := api.List(ctx, "group-mappings")
+	if err != nil || len(recs) == 0 {
+		return
+	}
+	role, ok := mappedWolfRole(groups, recs)
+	if !ok || role == string(user.Role) {
+		return
+	}
+	user.Role = role
+	if DefaultHandler != nil && DefaultHandler.Store != nil {
+		_ = DefaultHandler.Store.UpdateUser(ctx, user)
+	}
+}
+
+func mappedWolfRole(groups []string, recs []control.Record) (string, bool) {
+	if len(groups) == 0 {
+		return "", false
+	}
+	byName := map[string]string{}
+	for _, rec := range recs {
+		r := mappingRole(rec.Body)
+		if r != "admin" && r != "user" {
+			continue
+		}
+		byName[rec.Name] = r
+	}
+	found, role := false, "user"
+	for _, g := range groups {
+		r, ok := byName[g]
+		if !ok {
+			continue
+		}
+		found = true
+		if r == "admin" {
+			return "admin", true
+		}
+		role = r
+	}
+	return role, found
+}
+
+func mappingRole(body string) string {
+	body = strings.TrimSpace(body)
+	var parsed struct {
+		Role string `json:"role"`
+	}
+	if json.Unmarshal([]byte(body), &parsed) == nil && parsed.Role != "" {
+		return strings.ToLower(strings.TrimSpace(parsed.Role))
+	}
+	return strings.ToLower(body)
 }

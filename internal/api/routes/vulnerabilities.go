@@ -11,6 +11,7 @@ import (
 
 	"github.com/alphabravocompany/thewolf/internal/api/response"
 	"github.com/alphabravocompany/thewolf/internal/auth"
+	"github.com/alphabravocompany/thewolf/internal/db"
 	"github.com/alphabravocompany/thewolf/internal/finding/identity"
 	"github.com/alphabravocompany/thewolf/internal/models"
 )
@@ -41,42 +42,29 @@ func ListVulnerabilities(w http.ResponseWriter, r *http.Request) {
 		page = 1
 	}
 	fleet := fleetVisible(r.Context(), h.Store, claims.UserID)
-	vulns, err := h.Store.ListVulnerabilitiesForUser(r.Context(), claims.UserID, fleet)
+	filter := db.VulnListQuery{
+		UserID: claims.UserID,
+		Fleet:  fleet,
+		RepoID: q.Get("repo_id"),
+		ScanID: q.Get("scan_id"),
+		Limit:  perPage,
+		Offset: (page - 1) * perPage,
+	}
+	vulns, total, err := h.Store.ListVulnerabilitiesPage(r.Context(), filter)
 	if err != nil {
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to load vulnerabilities")
 		return
 	}
-	if len(vulns) == 0 {
+	if total == 0 {
 		backfillVulnerabilities(r.Context(), h, claims.UserID, fleet)
-		vulns, err = h.Store.ListVulnerabilitiesForUser(r.Context(), claims.UserID, fleet)
+		vulns, total, err = h.Store.ListVulnerabilitiesPage(r.Context(), filter)
 		if err != nil {
 			response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to load vulnerabilities")
 			return
 		}
 	}
-	repoID := q.Get("repo_id")
-	scanID := q.Get("scan_id")
-	filtered := vulns[:0]
-	for _, v := range vulns {
-		if repoID != "" && v.RepoID != repoID {
-			continue
-		}
-		if scanID != "" && v.ScanID != scanID {
-			continue
-		}
-		filtered = append(filtered, v)
-	}
-	total := len(filtered)
-	start := (page - 1) * perPage
-	if start > total {
-		start = total
-	}
-	end := start + perPage
-	if end > total {
-		end = total
-	}
 	response.WriteJSON(w, http.StatusOK, response.ListResponse{
-		Data: filtered[start:end],
+		Data: vulns,
 		Meta: response.ListMeta{Total: total, Page: page, PerPage: perPage},
 	})
 }

@@ -122,6 +122,11 @@ test.describe("ordinary remote scan workflow", () => {
     await expect(
       page.getByRole("link", { name: "Command injection from request input" }),
     ).toBeVisible();
+    expect(recorded(state, "POST", "/scans/preflight")[0].body).toEqual({
+      repo_id: "repo-api-created",
+      branch: "main",
+      tools: ["semgrep"],
+    });
     expect(recorded(state, "POST", "/scans")[0].body).toEqual({
       repo_id: "repo-api-created",
       branch: "main",
