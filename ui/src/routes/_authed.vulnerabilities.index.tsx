@@ -31,7 +31,8 @@ function VulnerabilitiesPage() {
         per_page: String(pagination.pageSize),
       });
       const r = await api.get<Vulnerability[]>(`/vulnerabilities?${params}`);
-      return { items: r.data ?? [], total: r.meta?.total ?? 0 };
+      const items = r.data ?? [];
+      return { items, total: r.meta?.total ?? items.length };
     },
   });
   const rows = q.data?.items ?? EMPTY;

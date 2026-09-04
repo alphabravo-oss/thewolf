@@ -207,9 +207,10 @@ function ScanDetailPage() {
         q.set("category", includedCategories.join(",") || "_");
       }
       const r = await api.get<Finding[]>(`/scans/${scanId}/findings?${q.toString()}`);
+      const items = r.data ?? [];
       return {
-        items: r.data ?? [],
-        total: r.meta?.total ?? 0,
+        items,
+        total: r.meta?.total ?? items.length,
         suppressed: r.meta?.suppressed ?? 0,
       };
     },
@@ -599,7 +600,7 @@ function ScanDetailPage() {
 
         {findingsQ.isLoading && !findingsQ.data ? (
           <ListSkeleton rows={8} />
-        ) : (statsQ.data?.total ?? serverTotal) === 0 ? (
+        ) : findings.length === 0 && (statsQ.data?.total ?? serverTotal) === 0 ? (
           toolsSelectedCount(scan) > 0 ? (
             <EmptyState
               icon={BugIcon}

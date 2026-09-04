@@ -325,7 +325,8 @@ function FindingsList() {
       });
       if (scope === "new") params.set("baseline_state", "new,resurfaced");
       const r = await api.get<Finding[]>(`/findings?${params.toString()}`);
-      return { items: r.data ?? [], total: r.meta?.total ?? 0 };
+      const items = r.data ?? [];
+      return { items, total: r.meta?.total ?? items.length };
     },
   });
   const rows = q.data?.items ?? EMPTY_FINDINGS;

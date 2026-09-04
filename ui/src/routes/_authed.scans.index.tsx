@@ -152,7 +152,8 @@ function ScansPage() {
         roots: "1",
       });
       const r = await api.get<Scan[]>(`/scans?${params}`);
-      return { items: r.data ?? [], total: r.meta?.total ?? 0 };
+      const items = r.data ?? [];
+      return { items, total: r.meta?.total ?? items.length };
     },
     refetchInterval: 10_000,
   });
@@ -262,7 +263,7 @@ function ScansPage() {
     },
   ];
 
-  const isEmpty = !q.isLoading && (q.data?.total ?? 0) === 0;
+  const isEmpty = !q.isLoading && scans.length === 0 && (q.data?.total ?? 0) === 0;
   useEffect(() => {
     if (isEmpty && !emptyFormDismissed) setShowForm(true);
   }, [isEmpty, emptyFormDismissed]);
