@@ -171,6 +171,32 @@ type Codex struct{}
 
 func (c *Codex) Name() string { return "codex" }
 
+// CodexPrompt is the CLI prompt. Prefer the batch findings file when the
+// orchestrator provided one; otherwise a single finding one-liner.
+func CodexPrompt(req FixRequest) string {
+	if f := strings.TrimSpace(req.FindingsFile); f != "" {
+		return "Fix the findings listed in " + f
+	}
+	if n := len(req.Findings); n > 0 {
+		var b strings.Builder
+		fmt.Fprintf(&b, "Fix %d findings:\n", n)
+		for i, f := range req.Findings {
+			if i >= 8 {
+				fmt.Fprintf(&b, "- … %d more\n", n-8)
+				break
+			}
+			fmt.Fprintf(&b, "- %s (%s:%d)\n", f.Title, f.FilePath, f.LineStart)
+		}
+		return b.String()
+	}
+	return fmt.Sprintf("Fix: %s in %s:%d. %s",
+		req.Finding.Title,
+		req.Finding.FilePath,
+		req.Finding.LineStart,
+		req.Finding.Description,
+	)
+}
+
 func (c *Codex) Available() bool {
 	_, err := exec.LookPath("codex")
 	return err == nil
@@ -184,12 +210,7 @@ func (c *Codex) Fix(ctx context.Context, req FixRequest) (*FixResult, error) {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	prompt := fmt.Sprintf("Fix: %s in %s:%d. %s",
-		req.Finding.Title,
-		req.Finding.FilePath,
-		req.Finding.LineStart,
-		req.Finding.Description,
-	)
+	prompt := CodexPrompt(req)
 
 	args := []string{"--approval-mode", "full-auto", "--quiet"}
 	if model := firstNonEmpty(req.Model); model != "" {

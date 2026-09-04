@@ -18,6 +18,17 @@ type Redirector interface {
 	Redeem(ctx context.Context, code, redirectURI string) (email string, err error)
 }
 
+// Identity is the SSO redeem result. Groups are IdP group names used to map Wolf roles.
+type Identity struct {
+	Email  string
+	Groups []string
+}
+
+// GroupedRedirector is optional. SSO uses it when the IdP returns groups.
+type GroupedRedirector interface {
+	RedeemIdentity(ctx context.Context, code, redirectURI string) (Identity, error)
+}
+
 // Local is the Community password provider name. The real verifier stays in
 // internal/auth; this package is the registration contract.
 const (
