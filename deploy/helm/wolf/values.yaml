@@ -348,15 +348,32 @@ ingress:
   tls: []
 
 postgres:
+  # bundled: in-chart Deployment (default).
+  # cnpg: CloudNativePG Cluster CR. Install the operator first:
+  #   helm repo add cnpg https://cloudnative-pg.github.io/charts
+  #   helm upgrade --install cnpg --namespace cnpg-system --create-namespace cnpg/cloudnative-pg
+  #   (or deploy their `cluster` chart yourself and set mode=external)
+  # external: remote Postgres; set external.dsn or external.existingSecret.
+  mode: bundled
   image: postgres
   # Pin the exact approved PostgreSQL image. A combined image@sha256 reference
-  # in image is also accepted.
+  # in image is also accepted. Required for mode=bundled only.
   digest: ""
   allowMutableImage: false
   database: wolf
   username: wolf
   password: ""
+  # Empty uses the mode default (disable for bundled, require for cnpg).
+  sslmode: ""
   storage: 10Gi
+  cnpg:
+    instances: 1
+    # Empty lets the operator pick its default Postgres image.
+    imageName: ""
+  external:
+    dsn: ""
+    existingSecret: ""
+    existingSecretKey: uri
   # Empty selects the cluster default provisioner. Set an explicit class for
   # production or static-volume qualification environments.
   storageClassName: ""

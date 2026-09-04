@@ -36,10 +36,10 @@ type Options struct {
 }
 
 func OpenStore() (db.Store, error) {
-	driver := envOr("WOLF_DB_DRIVER", "sqlite")
-	switch strings.ToLower(driver) {
+	cfg := db.ResolveDatabase()
+	switch strings.ToLower(cfg.Driver) {
 	case "sqlite":
-		dsn := os.Getenv("WOLF_DB_DSN")
+		dsn := cfg.DSN
 		if dsn == "" {
 			home, _ := os.UserHomeDir()
 			_ = os.MkdirAll(home+"/.wolf", 0o750)
@@ -47,13 +47,12 @@ func OpenStore() (db.Store, error) {
 		}
 		return db.NewSQLite(dsn)
 	case "postgres":
-		dsn := os.Getenv("WOLF_DB_DSN")
-		if dsn == "" {
+		if cfg.DSN == "" {
 			return nil, fmt.Errorf("WOLF_DB_DSN required for postgres driver")
 		}
-		return db.NewPostgres(dsn)
+		return db.NewPostgres(cfg.DSN)
 	default:
-		return nil, fmt.Errorf("unknown db driver %q", driver)
+		return nil, fmt.Errorf("unknown db driver %q", cfg.Driver)
 	}
 }
 

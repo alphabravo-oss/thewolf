@@ -20,10 +20,8 @@ spec:
   ingress:
     - ports: [{protocol: TCP, port: 8778}]
   egress:
-    - to:
-        - podSelector:
-            matchLabels: {app.kubernetes.io/component: postgres}
-      ports: [{protocol: TCP, port: 5432}]
+    {{- include "wolf.postgres5432Egress" . | nindent 4 }}
+{{- if ne (include "wolf.postgresMode" .) "external" }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -86,6 +84,7 @@ spec:
               app.kubernetes.io/instance: {{ .Release.Name }}
               app.kubernetes.io/component: scanner-release-builder
       ports: [{protocol: TCP, port: 5432}]
+{{- end }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -103,10 +102,7 @@ spec:
         - {protocol: TCP, port: 22}
         - {protocol: UDP, port: 53}
         - {protocol: TCP, port: 53}
-    - to:
-        - podSelector:
-            matchLabels: {app.kubernetes.io/component: postgres}
-      ports: [{protocol: TCP, port: 5432}]
+    {{- include "wolf.postgres5432Egress" . | nindent 4 }}
 ---
 {{- if .Values.fixer.enabled }}
 apiVersion: networking.k8s.io/v1
@@ -124,10 +120,7 @@ spec:
         - {protocol: TCP, port: 443}
         - {protocol: UDP, port: 53}
         - {protocol: TCP, port: 53}
-    - to:
-        - podSelector:
-            matchLabels: {app.kubernetes.io/component: postgres}
-      ports: [{protocol: TCP, port: 5432}]
+    {{- include "wolf.postgres5432Egress" . | nindent 4 }}
 ---
 {{- end }}
 {{- if .Values.scannerRelease.customBuild.enabled }}
@@ -148,10 +141,7 @@ spec:
         - {protocol: UDP, port: 53}
         - {protocol: TCP, port: 53}
         - {protocol: TCP, port: 443}
-    - to:
-        - podSelector:
-            matchLabels: {app.kubernetes.io/component: postgres}
-      ports: [{protocol: TCP, port: 5432}]
+    {{- include "wolf.postgres5432Egress" . | nindent 4 }}
 ---
 {{- end }}
 apiVersion: networking.k8s.io/v1

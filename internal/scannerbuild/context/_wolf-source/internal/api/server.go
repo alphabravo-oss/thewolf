@@ -295,6 +295,9 @@ func NewServer(store db.Store, addr string) *Server {
 				r.Get("/tokens", routes.AdminListTokens)
 				r.Get("/secrets", routes.AdminListSecrets)
 				r.Get("/disk", routes.AdminDisk)
+				r.Get("/database", routes.AdminGetDatabase)
+				r.Post("/database/test", routes.AdminTestDatabase)
+				r.Put("/database", routes.AdminSaveDatabase)
 				r.Post("/workspaces/reap", routes.AdminReapWorkspaces)
 			})
 

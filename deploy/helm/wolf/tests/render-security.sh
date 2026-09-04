@@ -507,4 +507,51 @@ if helm template wolf "$chart_dir" "${managed_args[@]}" \
 fi
 grep -Eq "dns.namespaceSelectorLabels.*(required|object)" "$tmp_dir/managed-missing-dns-selector.err"
 
+helm template wolf "$chart_dir" \
+  --set-string masterKey=test-master-key \
+  --set-string postgres.password=test-postgres-password \
+  --set-string image.digest="$wolf_digest" \
+  --set postgres.mode=cnpg \
+  >"$tmp_dir/cnpg.yaml"
+grep -q "kind: Cluster" "$tmp_dir/cnpg.yaml"
+grep -q "apiVersion: postgresql.cnpg.io/v1" "$tmp_dir/cnpg.yaml"
+grep -q "name: wolf-wolf-cnpg-rw" "$tmp_dir/cnpg.yaml" || grep -q "wolf-wolf-cnpg-rw:5432" "$tmp_dir/cnpg.yaml"
+if grep -q "POSTGRES_DB" "$tmp_dir/cnpg.yaml"; then
+  echo "cnpg mode must not render the bundled postgres Deployment" >&2
+  exit 1
+fi
+grep -q "sslmode=require" "$tmp_dir/cnpg.yaml"
+
+helm template wolf "$chart_dir" \
+  --set-string masterKey=test-master-key \
+  --set-string image.digest="$wolf_digest" \
+  --set postgres.mode=external \
+  --set-string postgres.external.dsn="postgres://wolf:secret@db.example:5432/wolf?sslmode=require" \
+  >"$tmp_dir/external.yaml"
+if grep -q "kind: Cluster" "$tmp_dir/external.yaml"; then
+  echo "external mode must not render a CNPG Cluster" >&2
+  exit 1
+fi
+if grep -q "POSTGRES_DB" "$tmp_dir/external.yaml"; then
+  echo "external mode must not render the bundled postgres Deployment" >&2
+  exit 1
+fi
+grep -q "db.example:5432" "$tmp_dir/external.yaml"
+# 5432 egress is not pod-scoped when the database is off-cluster.
+ext_worker="$(awk '/name: wolf-wolf-worker$/{p=1} p&&/^---$/{exit} p' "$tmp_dir/external.yaml")"
+if echo "$ext_worker" | grep -B8 "port: 5432" | grep -q "component: postgres"; then
+  echo "external 5432 egress must not require in-cluster postgres pods" >&2
+  exit 1
+fi
+
+helm template wolf "$chart_dir" \
+  --set-string masterKey=test-master-key \
+  --set-string image.digest="$wolf_digest" \
+  --set postgres.mode=external \
+  --set-string postgres.external.existingSecret=pg-from-cnpg \
+  --set-string postgres.external.existingSecretKey=uri \
+  >"$tmp_dir/external-secret.yaml"
+grep -q "name: pg-from-cnpg" "$tmp_dir/external-secret.yaml"
+grep -q "key: uri" "$tmp_dir/external-secret.yaml"
+
 echo "Helm security render checks passed"

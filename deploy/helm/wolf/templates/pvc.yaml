@@ -29,6 +29,7 @@ spec:
   resources:
     requests:
       storage: {{ .Values.artifacts.size }}
+{{- if eq (include "wolf.postgresMode" .) "bundled" }}
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -44,6 +45,7 @@ spec:
   resources:
     requests:
       storage: {{ .Values.postgres.storage }}
+{{- end }}
 {{- if .Values.fixer.enabled }}
 ---
 apiVersion: v1
