@@ -282,7 +282,8 @@ tools:
   gokart:
     display_name: GoKart
     category: sast
-    resource_class: medium
+    # Whole-program SSA taint analysis: ~5.5 GB on a 3k-file Go service.
+    resource_class: heavy
     network_required: true
     default_timeout: 10m
     plugin_package: plugins/go
