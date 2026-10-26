@@ -129,6 +129,7 @@ func deriveFindingBaseline(ctx context.Context, tx *sqlx.Tx, current models.Scan
 		}
 	}
 	baselineID := current.BaselineScanID
+	savedAuto := false
 	if current.BaselineResolvedAt == nil {
 		// The auto baseline is the saved branch backlog. Named baselines are used
 		// through explicit comparisons; merely creating one does not select it.
@@ -136,6 +137,7 @@ func deriveFindingBaseline(ctx context.Context, tx *sqlx.Tx, current models.Scan
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return false, err
 		}
+		savedAuto = err == nil
 		if errors.Is(err, sql.ErrNoRows) {
 			baselineID = ""
 			if latest != nil {
@@ -145,7 +147,16 @@ func deriveFindingBaseline(ctx context.Context, tx *sqlx.Tx, current models.Scan
 	}
 	if baselineID != "" && baselineID != scanID {
 		if _, ok := prior[baselineID]; !ok {
-			return false, errors.New("saved baseline is not a prior successful compatible branch scan")
+			if !savedAuto {
+				return false, errors.New("saved baseline is not a prior successful compatible branch scan")
+			}
+			// An automatic baseline saved by older rules (e.g. from a scan with failed
+			// tools) must not block publication: use the latest qualifying scan, exactly
+			// as when none is saved. Completion replaces the stale record.
+			baselineID = ""
+			if latest != nil {
+				baselineID = latest.ID
+			}
 		}
 	}
 	var evidence []models.Finding
