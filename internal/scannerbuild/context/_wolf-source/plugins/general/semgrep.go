@@ -116,13 +116,21 @@ func (p *SemgrepPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([
 	}
 	var result semgrepOutput
 	if json.Unmarshal(plugin.ExtractJSON(out), &result) == nil {
+		// Semgrep marks per-file parse problems (partial parsing, unparseable files
+		// such as Helm templates) as level "warn" and still analyzes everything
+		// else. Only real errors make coverage incomplete.
+		var failures []string
 		for _, issue := range result.Errors {
+			if issue.Level == "warn" {
+				continue
+			}
+			failures = append(failures, strings.SplitN(issue.Message, "\n", 2)[0])
 			if opts.OnParseError != nil {
-				opts.OnParseError(fmt.Errorf("semgrep: %s", strings.SplitN(issue.Message, "\n", 2)[0]))
+				opts.OnParseError(fmt.Errorf("semgrep: %s", failures[len(failures)-1]))
 			}
 		}
-		if len(result.Errors) > 0 {
-			runErr = errors.Join(runErr, fmt.Errorf("semgrep returned %d findings with %d analysis warnings/errors; coverage is incomplete; first: %s", len(findings), len(result.Errors), strings.SplitN(result.Errors[0].Message, "\n", 2)[0]))
+		if len(failures) > 0 {
+			runErr = errors.Join(runErr, fmt.Errorf("semgrep returned %d findings with %d analysis errors; coverage is incomplete; first: %s", len(findings), len(failures), failures[0]))
 		}
 	}
 	return findings, errors.Join(runErr, readErr)
@@ -147,6 +155,7 @@ type semgrepOutput struct {
 	Results []semgrepResult `json:"results"`
 	Errors  []struct {
 		Message string `json:"message"`
+		Level   string `json:"level"`
 	} `json:"errors"`
 }
 
