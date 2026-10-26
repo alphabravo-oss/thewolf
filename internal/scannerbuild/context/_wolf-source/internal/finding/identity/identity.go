@@ -33,6 +33,9 @@ var cweRE = regexp.MustCompile(`(?i)^(?:CWE-)?([0-9]+)(?:$|\b)`)
 func NormalizePath(path string) string {
 	path = strings.TrimSpace(path)
 	path = strings.TrimPrefix(path, "file://")
+	if strings.Contains(path, "://") {
+		return path // DAST locations are URLs, not repository paths
+	}
 	path = strings.ReplaceAll(path, `\`, "/")
 	path = filepath.ToSlash(path)
 	path = strings.TrimPrefix(path, "./")
