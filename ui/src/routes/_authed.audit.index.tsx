@@ -1,12 +1,13 @@
 // Audit log — every mutating API request, with the actor and response status.
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { ScrollTextIcon } from "lucide-react";
-import { api } from "@/lib/api";
-import { EmptyState, PermissionState } from "@/components/ui/empty-state";
+import { api, ApiError } from "@/lib/api";
+import { Input } from "@/components/ui/input";
+import { PermissionState } from "@/components/ui/empty-state";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { PageHeader, PageShell } from "@/components/ui/page";
-import { cn, formatRelativeTime } from "@/lib/utils";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { formatRelativeTime } from "@/lib/utils";
 
 type AuditEntry = {
   id: string;
@@ -17,10 +18,23 @@ type AuditEntry = {
   token_id?: string;
   resource_id?: string;
   action: string;
+  event_type?: string;
+  category?: string;
+  severity?: string;
+  ip?: string;
   created_at: string;
 };
 
+type AuditSearch = { q?: string; method?: string; category?: string; severity?: string; event?: string; actor?: string; ip?: string; from?: string; before?: string; page?: number; sort?: "time" | "status"; order?: "asc" | "desc" };
+const filterKeys = ["method", "category", "severity", "event", "actor", "ip", "from", "before"] as const;
+
 export const Route = createFileRoute("/_authed/audit/")({
+  validateSearch: (s): AuditSearch => ({
+    ...Object.fromEntries(["q", ...filterKeys].map((key) => [key, typeof s[key] === "string" ? s[key] : undefined])),
+    page: Number.isSafeInteger(Number(s.page)) && Number(s.page) > 0 ? Number(s.page) : 1,
+    sort: s.sort === "status" ? "status" : "time",
+    order: s.order === "asc" ? "asc" : "desc",
+  }),
   component: AuditPage,
 });
 
@@ -31,16 +45,15 @@ const EMPTY_ENTRIES: AuditEntry[] = [];
 const columns: Column<AuditEntry>[] = [
   {
     key: "method",
+    sortable: false,
     header: "Method",
     width: "7rem",
-    sortAccessor: (r) => r.method,
-    filter: { label: "Method" },
     accessor: (r) => <span className="font-mono text-xs">{r.method}</span>,
   },
   {
     key: "path",
+    sortable: false,
     header: "Path",
-    sortAccessor: (r) => r.path,
     accessor: (r) => (
       <span className="block max-w-[40ch] truncate font-mono text-xs" title={r.path}>
         {r.path}
@@ -56,16 +69,20 @@ const columns: Column<AuditEntry>[] = [
   },
   {
     key: "actor",
+    sortable: false,
     header: "Actor",
-    sortAccessor: (r) => r.token_id ?? r.user_id,
     accessor: (r) => (
       <span className="font-mono text-xs">
         {r.token_id ? `token:${r.token_id.slice(0, 8)}…` : `user:${r.user_id.slice(0, 8)}…`}
       </span>
     ),
   },
+  { key: "event", sortable: false, header: "Event", accessor: (r) => r.event_type || r.action },
+  { key: "category", sortable: false, header: "Category", accessor: (r) => r.category || "—" },
+  { key: "severity", sortable: false, header: "Severity", accessor: (r) => r.severity || "—" },
+  { key: "ip", sortable: false, header: "Client IP", accessor: (r) => r.ip || "—" },
   {
-    key: "when",
+    key: "time",
     header: "When",
     align: "right",
     sortAccessor: (r) => r.created_at,
@@ -78,17 +95,25 @@ const columns: Column<AuditEntry>[] = [
 ];
 
 function AuditPage() {
+  const search = Route.useSearch();
+  const navigate = Route.useNavigate();
+  const update = (next: Partial<AuditSearch>) => void navigate({ search: { ...search, page: 1, ...next } });
+  const pagination = { pageIndex: (search.page ?? 1) - 1, pageSize: 50 };
   const q = useQuery({
-    queryKey: ["audit-log"],
+    queryKey: ["audit-log", search],
     queryFn: async () => {
-      const { data } = await api.get<{ data: AuditEntry[] }>("/audit-log?limit=100");
-      return data.data ?? [];
+      const params = new URLSearchParams({ page: String(search.page ?? 1), per_page: String(pagination.pageSize) });
+      for (const key of ["q", "sort", "order", ...filterKeys] as const) {
+        if (search[key]) params.set(key, search[key]);
+      }
+      const result = await api.get<AuditEntry[]>(`/audit-log?${params}`);
+      return { items: result.data ?? EMPTY_ENTRIES, total: result.meta?.total ?? 0 };
     },
   });
 
   // A 403 here is expected for non-admins, and reads better as a permission
   // state than as a generic table error.
-  const forbidden = q.isError && /403|forbidden/i.test((q.error as Error).message);
+  const forbidden = q.error instanceof ApiError && q.error.status === 403;
   if (forbidden) {
     return (
       <PageShell>
@@ -102,35 +127,45 @@ function AuditPage() {
     );
   }
 
-  const rows = q.data ?? EMPTY_ENTRIES;
+  const rows = q.data?.items ?? EMPTY_ENTRIES;
 
   return (
     <PageShell>
       <PageHeader
         title="Audit log"
-        description="Every mutating API request — POST, PUT, DELETE — with the actor, the resource, and the response status. Most recent 100."
+        description="Search recorded events across the full audit history. Dates use UTC; Before excludes that day."
       />
-      {!q.isLoading && !q.isError && rows.length === 0 ? (
-        <EmptyState
-          icon={ScrollTextIcon}
-          title="No audit entries yet"
-          description="Mutating API requests will land here once anyone changes anything."
-        />
-      ) : (
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 mb-4">
+        {filterKeys.map((key) => (
+          <label key={key} className="text-sm space-y-1">
+            <span>{({ method: "Method", category: "Category", severity: "Severity", event: "Event", actor: "Actor ID", ip: "Client IP", from: "From (UTC)", before: "Before (UTC)" })[key]}</span>
+            <Input type={key === "from" || key === "before" ? "date" : "text"} value={search[key] ?? ""} onChange={(e) => update({ [key]: e.target.value || undefined })} />
+          </label>
+        ))}
+      </div>
         <DataTable
           data={rows}
           columns={columns}
           keyExtractor={(r) => r.id}
           persistKey="audit"
           density="compact"
+          pageSize={pagination.pageSize}
+          serverSide={{
+            rowCount: q.data?.total ?? 0,
+            pagination,
+            onPaginationChange: (next) => update({ page: next.pageIndex + 1 }),
+            search: search.q ?? "",
+            onSearchChange: (q) => update({ q: q || undefined }),
+            sorting: [{ id: search.sort ?? "time", desc: search.order !== "asc" }],
+            onSortingChange: ([sort]) => update({ sort: sort?.id === "status" ? "status" : "time", order: sort?.desc ? "desc" : "asc" }),
+          }}
           loading={q.isLoading}
           isError={q.isError}
           errorMessage={q.isError ? (q.error as Error).message : undefined}
           onRetry={() => void q.refetch()}
-          searchPlaceholder="Search paths, actors..."
-          emptyMessage="No entries match your filters"
+          searchPlaceholder="Search events, paths, actors, IPs..."
+          emptyMessage="No audit entries match your filters"
         />
-      )}
     </PageShell>
   );
 }
@@ -138,17 +173,6 @@ function AuditPage() {
 // Response-status chip, coloured on the shared status scale rather than raw
 // Tailwind palette colours.
 function StatusPill({ code }: { code: number }) {
-  const tone =
-    code >= 500
-      ? "bg-status-error/10 text-status-error"
-      : code >= 400
-        ? "bg-status-warning/10 text-status-warning"
-        : code >= 300
-          ? "bg-status-info/10 text-status-info"
-          : "bg-status-success/10 text-status-success";
-  return (
-    <span className={cn("inline-flex h-5 items-center rounded px-1.5 text-xs font-medium tabular-nums", tone)}>
-      {code}
-    </span>
-  );
+  const status = code >= 500 ? "failed" : code >= 400 ? "warning" : code >= 300 ? "redirected" : "success";
+  return <StatusBadge status={status} label={String(code)} showDot={false} size="sm" className="tabular-nums" />;
 }

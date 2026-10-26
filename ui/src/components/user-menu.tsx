@@ -1,6 +1,7 @@
 // Top-right account menu: avatar + name trigger with a dropdown to the
 // personal surfaces (Account, two-factor, API keys) and sign-out.
 import { useNavigate } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   ChevronDownIcon,
   KeyRoundIcon,
@@ -21,6 +22,7 @@ import { useMe, displayLabel } from "@/lib/me";
 
 export function UserMenu() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const me = useMe();
 
   async function handleLogout() {
@@ -30,12 +32,13 @@ export function UserMenu() {
       // best-effort; drop the local cookie regardless
     }
     clearToken();
+    queryClient.clear();
     navigate({ to: "/login" });
   }
 
   if (!me.data) return null;
 
-  const go = (section: "profile" | "security" | "apikeys") =>
+  const go = (section: "profile" | "security" | "apikeys" | "secrets") =>
     navigate({ to: "/account", search: { section } });
 
   return (
@@ -73,6 +76,7 @@ export function UserMenu() {
         <DropdownMenuItem onSelect={() => go("apikeys")}>
           <KeyRoundIcon className="mr-2 size-4" /> API keys
         </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => go("secrets")}><KeyRoundIcon className="mr-2 size-4" />Secrets</DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={handleLogout} className="text-status-error focus:text-status-error">
           <LogOutIcon className="mr-2 size-4" /> Sign out

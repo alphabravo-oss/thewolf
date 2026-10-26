@@ -9,7 +9,9 @@ interface UIState {
   // Command palette open/close. Triggered by ⌘K / Ctrl+K and by topbar
   // search button.
   paletteOpen: boolean;
-  openPalette: () => void;
+  paletteQuery: string;
+  setPaletteQuery: (query: string) => void;
+  openPalette: (query?: string) => void;
   closePalette: () => void;
   togglePalette: () => void;
 
@@ -28,9 +30,11 @@ export const useUIStore = create<UIState>()(
   persist(
     (set, get) => ({
       paletteOpen: false,
-      openPalette: () => set({ paletteOpen: true }),
+      paletteQuery: "",
+      setPaletteQuery: (paletteQuery) => set({ paletteQuery }),
+      openPalette: (paletteQuery = "") => set({ paletteOpen: true, paletteQuery }),
       closePalette: () => set({ paletteOpen: false }),
-      togglePalette: () => set({ paletteOpen: !get().paletteOpen }),
+      togglePalette: () => set({ paletteOpen: !get().paletteOpen, paletteQuery: "" }),
 
       shortcutsOpen: false,
       openShortcuts: () => set({ shortcutsOpen: true }),

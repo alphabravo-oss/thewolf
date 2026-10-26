@@ -12,8 +12,10 @@
 //   - GET    /fixes/{id}/stream  SSE log relay (consumed via useSSE)
 //   - DELETE /fixes/{id}         cancel a queued/running job
 //   - GET    /repos/{id}/fixable writability verdict {writable, reason}
+import { useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "./api";
+import { useFlag } from "./flags";
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? "/api/v1";
 
@@ -33,7 +35,7 @@ export type FixJobStatus =
   | "cancelled"
   | "superseded";
 
-export type FixAttemptOutcome = "kept" | "rolled_back" | "unfixable" | "muted";
+export type FixAttemptOutcome = "kept" | "rolled_back" | "unfixable" | "muted" | "running" | "interrupted" | "unverified";
 
 export interface FixJob {
   id: string;
@@ -63,6 +65,7 @@ export interface FixJob {
   status: FixJobStatus;
   claimed_by?: string;
   result_branch?: string;
+  workspace_path?: string;
   diff_artifact_id?: string;
   summary: string;
   error?: string;
@@ -161,29 +164,11 @@ export interface CreateFixRequest {
 // surface are all dark until autofix_enabled is true.
 // ---------------------------------------------------------------------------
 
-interface SettingRow {
-  key: string;
-  value: string;
-}
-
 // useAutofixEnabled reads autofix_enabled from GET /settings (array of
 // {key,value} or a map). Defaults to false on error/absent. Components gate
 // their fix surface on `enabled`; `isLoading` lets them avoid a flash.
 export function useAutofixEnabled() {
-  const q = useQuery({
-    queryKey: ["settings"],
-    queryFn: async () => {
-      const r = await api.get<SettingRow[] | Record<string, string>>("/settings");
-      const out: Record<string, string> = {};
-      if (Array.isArray(r.data)) {
-        for (const row of r.data) out[row.key] = row.value;
-      } else if (r.data && typeof r.data === "object") {
-        for (const [k, v] of Object.entries(r.data)) out[k] = String(v);
-      }
-      return out;
-    },
-  });
-  return { enabled: q.data?.autofix_enabled === "true", isLoading: q.isLoading };
+  return useFlag("autofix_enabled");
 }
 
 // ---------------------------------------------------------------------------
@@ -218,12 +203,20 @@ export function useFixJobs(enabled = true) {
   });
 }
 
+export function isFixCleanupPending(job: FixJob | undefined): boolean {
+  return job?.status === "cancelled" && job.pause_reason === "cancellation_cleanup";
+}
+
 export function useFixJob(id: string, enabled = true) {
   return useQuery({
     queryKey: ["fix-job", id],
     enabled,
     refetchInterval: (q) => {
-      const status = (q.state.data as FixJobDetail | undefined)?.status;
+      const job = q.state.data as FixJobDetail | undefined;
+      if (isFixCleanupPending(job)) return 4_000;
+      // Publication is saved before the worker releases the shared checkout.
+      if (job?.status === "succeeded" && job.pushed && job.workspace_path && job.remediation_id && !job.error) return 4_000;
+      const status = job?.status;
       // Stop polling once the job reaches a terminal state.
       return status === "succeeded" ||
         status === "failed" ||
@@ -243,13 +236,29 @@ export function useFixJob(id: string, enabled = true) {
 
 // enqueueFix POSTs a new fix job. Throws ApiError on the 403 autofix_disabled
 // gate (flag off) so the caller can surface it.
-export async function enqueueFix(body: CreateFixRequest): Promise<FixJob> {
-  const r = await api.post<FixJob>("/fixes", body);
+export async function enqueueFix(body: CreateFixRequest, key: string): Promise<FixJob> {
+  const r = await api.post<FixJob>("/fixes", body, { headers: { "Idempotency-Key": key } });
   return r.data as FixJob;
 }
 
-export async function cancelFix(id: string): Promise<void> {
-  await api.delete(`/fixes/${id}`);
+// Retain the same key after an uncertain response; a changed intent gets a new key.
+export function useFixSubmission() {
+  const pending = useRef<{ intent: string; key: string } | null>(null);
+  return async (body: CreateFixRequest) => {
+    const intent = JSON.stringify(body);
+    if (pending.current?.intent !== intent) {
+      pending.current = { intent, key: Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) => byte.toString(16).padStart(2, "0")).join("") };
+    }
+    const submission = pending.current;
+    const job = await enqueueFix(body, submission.key);
+    if (pending.current === submission) pending.current = null;
+    return job;
+  };
+}
+
+export async function cancelFix(id: string): Promise<FixJob> {
+  const r = await api.delete<FixJob>(`/fixes/${id}`);
+  return r.data as FixJob;
 }
 
 export async function resumeFix(
@@ -319,10 +328,10 @@ export interface LineageRun {
   error?: string;
 }
 
-export function useScanLineage(scanId: string | undefined) {
+export function useScanLineage(scanId: string | undefined, enabled = true) {
   return useQuery({
     queryKey: ["scan-lineage", scanId],
-    enabled: !!scanId,
+    enabled: !!scanId && enabled,
     refetchInterval: (q) => {
       const runs = q.state.data?.runs ?? [];
       const live = runs.some(
@@ -400,11 +409,12 @@ export function useFixEngines(enabled = true) {
     refetchInterval: 15_000,
     queryFn: async () => {
       const r = await api.get<{
-        worker: FixEngineStatus[];
-        catalog: FixCatalogEngine[];
-        defaults: Record<string, string>;
-        api_keys: { anthropic: boolean; openai: boolean; xai?: boolean };
-        oauth_hint: string;
+        configured?: boolean;
+        worker?: FixEngineStatus[];
+        catalog?: FixCatalogEngine[];
+        defaults?: Record<string, string>;
+        api_keys?: { anthropic: boolean; openai: boolean; xai?: boolean };
+        oauth_hint?: string;
         home?: string;
         console_shell?: boolean;
         prompts?: {
@@ -549,6 +559,13 @@ export function decisionInfo(
   excerpt: string,
 ): { label: string; hint: string; tone: "ok" | "warn" | "mute" } {
   const ex = excerpt.trim();
+  if (outcome === "running" || outcome === "interrupted" || outcome === "unverified") {
+    return {
+      label: outcome,
+      hint: outcome === "running" ? "The engine is working; verification has not finished." : "No verified result was recorded for this attempt. Retained edits require verification.",
+      tone: "warn",
+    };
+  }
   if (ex.startsWith("MUTE:") || outcome === "muted") {
     return {
       label: "muted",

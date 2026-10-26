@@ -3,7 +3,22 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import { installScannerApiMock, recorded } from "./scanner-api-mock";
 
 test.describe("scanner settings and image inventory", () => {
-  test("keeps existing scanner controls functional @visual", async ({
+  test("unknown scanner runtime offers retry without Docker actions", async ({ page }) => {
+    const state = await installScannerApiMock(page);
+    let failed = true;
+    await page.route(/\/api(?:\/v1)?\/scanners\/runtime-capabilities$/, (route) => failed
+      ? route.fulfill({ status: 503, json: { error: { code: "unavailable", message: "Runtime unavailable" } } })
+      : route.fallback());
+    await page.goto("/settings?tab=scanners");
+    await expect(page.getByRole("button", { name: "Retry runtime check" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Run Doctor" })).toHaveCount(0);
+    expect(state.getRequests.some((path) => path.startsWith("/scanners/config") || path.startsWith("/scanners/images"))).toBe(false);
+    failed = false;
+    await page.getByRole("button", { name: "Retry runtime check" }).click();
+    await expect(page.getByRole("button", { name: "Run Doctor" })).toBeVisible();
+  });
+
+  test("keeps one scoped scanner download surface functional @visual", async ({
     page,
   }) => {
     const state = await installScannerApiMock(page);
@@ -15,20 +30,24 @@ test.describe("scanner settings and image inventory", () => {
     const settingsNavigation = page.getByRole("navigation", {
       name: "Administration settings",
     });
-    await expect(
-      settingsNavigation.getByRole("button", {
-        name: "Scanners",
-        exact: true,
-      }),
-    ).toHaveAttribute("aria-current", "page");
-    await expectActiveControlWithinScrollableNavigation(settingsNavigation);
+    if (page.viewportSize()!.width < 1024) {
+      await expect(page.getByRole("combobox", { name: "Administration section" })).toHaveText("Scanners");
+    } else {
+      await expect(
+        settingsNavigation.getByRole("button", {
+          name: "Scanners",
+          exact: true,
+        }),
+      ).toHaveAttribute("aria-current", "page");
+      await expectActiveControlWithinScrollableNavigation(settingsNavigation);
+    }
     await expectNoPageOverflow(page);
     await expect(
       page.getByRole("heading", { name: "Scanner release management" }),
     ).toHaveCount(0);
     await expect(
       page.getByRole("button", { name: "Set up scanners (pull images)" }),
-    ).toBeEnabled();
+    ).toHaveCount(0);
     await expect(
       page.getByRole("button", { name: "Rebuild (local)" }),
     ).toHaveCount(0);
@@ -59,15 +78,13 @@ test.describe("scanner settings and image inventory", () => {
     expect(recorded(state, "POST", "/scanners/images/pull")[0].body).toEqual({
       image: "docker.io/alphabravodevops/wolf-scanners:2.0.0",
     });
-    await page
-      .getByRole("button", { name: "Set up scanners (pull images)" })
-      .click();
-    await expect
-      .poll(() => recorded(state, "POST", "/scanners/pull").length, {
-        message: "the existing scanner image setup control should call its API",
-      })
-      .toBe(1);
-    await expect(page.getByText("Pulled 4 images")).toBeVisible();
+    await page.getByRole("button", { name: "Update Wolf images" }).click();
+    await expect.poll(() => recorded(state, "POST", "/scanners/images/pull").length).toBe(2);
+    expect(recorded(state, "POST", "/scanners/pull")).toHaveLength(0);
+    expect(recorded(state, "POST", "/scanners/images/pull")[1].body).toEqual({
+      image: "docker.io/alphabravodevops/wolf-scanners:2.0.0",
+    });
+    await expect(page.getByText("Pulled 1 scanner image", { exact: true })).toBeVisible();
 
     await expectSemanticPage(page);
     await expectAutomatedAccessibility(page);
@@ -235,8 +252,7 @@ test.describe("application shell accessibility", () => {
     });
     // The console now ships Astronomer's theme contract: `dark` is toggled as a
     // class on <html> (there is no `light` class — its absence *is* light), and
-    // the topbar control cycles light -> dark -> system rather than flipping
-    // between two states.
+    // the topbar menu offers light, dark and system preferences.
     expect(initialTheme).toMatchObject({
       colorScheme: "dark",
       metaColor: "#09090b",
@@ -249,8 +265,9 @@ test.describe("application shell accessibility", () => {
 
     const themeButton = page.getByRole("button", { name: /^Theme:/ });
 
-    // dark -> system, which resolves to light under the emulated preference.
+    // System resolves to light under the emulated preference.
     await themeButton.click();
+    await page.getByRole("menuitemradio", { name: "System", exact: true }).click();
     await expect(page.locator("html")).not.toHaveClass(/dark/);
     await expect
       .poll(() =>
@@ -263,13 +280,15 @@ test.describe("application shell accessibility", () => {
       ),
     ).toBe("light");
 
-    // system -> light (explicit).
+    // Select light explicitly.
     await themeButton.click();
+    await page.getByRole("menuitemradio", { name: "Light", exact: true }).click();
     await expect(themeButton).toHaveAttribute("aria-label", /^Theme: light/);
     await expect(page.locator("html")).not.toHaveClass(/dark/);
 
-    // light -> dark, back to where we started.
+    // Select dark again.
     await themeButton.click();
+    await page.getByRole("menuitemradio", { name: "Dark", exact: true }).click();
     await expect(page.locator("html")).toHaveClass(/dark/);
     await expect
       .poll(() =>

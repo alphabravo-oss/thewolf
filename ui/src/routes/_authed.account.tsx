@@ -2,6 +2,7 @@
 // the top-right avatar menu. Admins get a separate /settings area for the
 // system + global oversight surfaces.
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PageHeader } from "@/components/ui/page";
 import { KeyIcon, KeyRoundIcon, LockIcon, ServerIcon, UserIcon } from "lucide-react";
 import {
@@ -37,24 +38,32 @@ function AccountPage() {
   const navigate = useNavigate();
 
   return (
-    <div className="page stack page--narrow">
+    <div className="page stack min-w-0">
       <PageHeader
         title="Account"
         description="Your profile, sign-in security, and personal API keys."
       />
-      <nav className="flex gap-1 border-b border-border">
+      <div className="grid gap-6 lg:grid-cols-[180px_minmax(0,1fr)]">
+      <div className="lg:hidden">
+        <Select value={section} onValueChange={(section) => navigate({ to: "/account", search: { section: section as SectionKey } })}>
+          <SelectTrigger aria-label="Account section"><SelectValue /></SelectTrigger>
+          <SelectContent>{SECTIONS.map(({key, label}) => <SelectItem key={key} value={key}>{label}</SelectItem>)}</SelectContent>
+        </Select>
+      </div>
+      <nav aria-label="Account sections" className="hidden lg:block space-y-1">
         {SECTIONS.map(({ key, label, Icon }) => {
           const active = section === key;
           return (
             <button
               key={key}
               type="button"
+              aria-current={active ? "page" : undefined}
               onClick={() => navigate({ to: "/account", search: { section: key } })}
               className={
-                "inline-flex items-center gap-1.5 px-3 h-9 text-sm border-b-2 -mb-px " +
+                "flex w-full items-center gap-2 px-3 py-2 text-sm rounded-md text-left " +
                 (active
-                  ? "border-primary text-foreground"
-                  : "border-transparent text-muted-foreground hover:text-foreground")
+                  ? "bg-accent font-medium text-foreground"
+                  : "text-muted-foreground hover:bg-accent/50 hover:text-foreground")
               }
             >
               <Icon className="size-4" /> {label}
@@ -63,11 +72,14 @@ function AccountPage() {
         })}
       </nav>
 
+      <div className="min-w-0 max-w-4xl">
       {section === "profile" && <AccountTab />}
       {section === "security" && <SecurityTab />}
       {section === "apikeys" && <ApiKeysTab />}
       {section === "secrets" && <SecretsTab />}
       {section === "nodes" && <NodesTab />}
+      </div>
+      </div>
     </div>
   );
 }

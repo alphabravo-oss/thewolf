@@ -40,7 +40,7 @@ export default defineConfig({
     video: "retain-on-failure",
   },
   webServer: {
-    command: `pnpm build && pnpm exec vite preview --host 127.0.0.1 --port ${port}`,
+    command: `pnpm exec vite build --outDir /tmp/wolf-mocked-${port}/dist --emptyOutDir && pnpm exec vite preview --outDir /tmp/wolf-mocked-${port}/dist --host 127.0.0.1 --port ${port}`,
     url: `http://127.0.0.1:${port}`,
     reuseExistingServer: false,
     timeout: 120_000,

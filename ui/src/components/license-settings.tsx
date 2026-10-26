@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
+import { ErrorState } from "@/components/ui/empty-state";
 import { api } from "@/lib/api";
 import { shortRev, useVersion } from "@/lib/edition";
 
@@ -55,10 +56,15 @@ export function LicenseTab() {
 
   const versionQ = useVersion();
   const edition = editionQ.data;
+  const version = versionQ.data?.community?.version || versionQ.data?.version;
+  const commit = versionQ.data?.community?.commit || versionQ.data?.commit;
   const license = licenseQ.data;
   const entitlements = Object.entries(edition?.entitlements ?? {}).sort(
     ([a], [b]) => a.localeCompare(b),
   );
+
+  if (editionQ.isPending || licenseQ.isPending) return <p role="status" className="text-sm text-muted-foreground">Loading license…</p>;
+  if (editionQ.isError || licenseQ.isError) return <ErrorState title="Could not load license" onRetry={() => { void editionQ.refetch(); void licenseQ.refetch(); }} />;
 
   return (
     <div className="space-y-4">
@@ -71,10 +77,9 @@ export function LicenseTab() {
             · {versionQ.data?.edition ?? edition?.edition ?? license?.edition ?? "community"}
           </span>
         </p>
-        <p className="text-xs text-muted-foreground font-mono">
-          Community v{versionQ.data?.community?.version ?? versionQ.data?.version ?? ""}
-          {versionQ.data?.community?.commit ? ` (${shortRev(versionQ.data.community.commit)})` : ""}
-        </p>
+        {version && version !== "unknown" && <p className="text-xs text-muted-foreground font-mono">
+          v{version.replace(/^v/, "")}{commit && commit !== "unknown" ? ` · ${shortRev(commit)}` : ""}
+        </p>}
         {versionQ.data?.overlay ? (
           <p className="text-xs text-muted-foreground font-mono">
             Enterprise overlay {shortRev(versionQ.data.overlay.version || versionQ.data.overlay.commit)}
@@ -149,14 +154,16 @@ export function LicenseTab() {
         </p>
         <input
           type="file"
+          aria-label="License file"
           className="block text-xs"
           onChange={(e) => {
             const file = e.target.files?.[0];
             if (!file) return;
-            void file.text().then(setBlob);
+            void file.text().then(setBlob).catch(() => toast.error("Could not read license file"));
           }}
         />
         <textarea
+          aria-label="License contents"
           value={blob}
           onChange={(e) => setBlob(e.target.value)}
           rows={6}
@@ -167,7 +174,7 @@ export function LicenseTab() {
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            disabled={validate.isPending}
+            disabled={!blob.trim() || validate.isPending}
             onClick={() => validate.mutate()}
             className="h-8 px-3 rounded-md border border-border text-xs hover:bg-muted/40 disabled:opacity-50"
           >

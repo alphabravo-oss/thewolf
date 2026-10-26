@@ -28,7 +28,7 @@ export type ToolRollup = {
   after?: number;
 };
 
-type OutcomeFilter = "all" | "kept" | "rolled_back" | "muted" | "unfixable";
+type OutcomeFilter = "all" | FixAttempt["outcome"];
 
 export type ChangeCard = {
   key: string;
@@ -179,6 +179,9 @@ export function AttemptsTable({
             ["rolled_back", "Rolled back"],
             ["muted", "Muted"],
             ["unfixable", "Skipped"],
+            ["running", "Running"],
+            ["interrupted", "Interrupted"],
+            ["unverified", "Unverified"],
           ] as const
         ).map(([id, label]) => (
           <button

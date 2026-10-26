@@ -1,5 +1,6 @@
 // Scans list + scan-trigger form.
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useForm, useStore } from "@tanstack/react-form";
 import { useQuery } from "@tanstack/react-query";
 import { GaugeIcon, PlayIcon, XIcon } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -12,6 +13,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { PageHeader, PageShell } from "@/components/ui/page";
 import { BranchSelect } from "@/components/branch-select";
+import { ScanWorkerNotice } from "@/components/scan-worker-notice";
 import { ScanStatusPill } from "@/components/scan-status-pill";
 import { StatusBadge } from "@/components/fixes/status-badge";
 import {
@@ -22,7 +24,17 @@ import {
 } from "@/lib/fixes";
 
 
+type ScanSearch = { repo_id?: string; status?: string; q?: string; page?: number; sort?: string; order?: "asc" | "desc" };
+
 export const Route = createFileRoute("/_authed/scans/")({
+  validateSearch: (s): ScanSearch => ({
+    repo_id: typeof s.repo_id === "string" ? s.repo_id : undefined,
+    status: typeof s.status === "string" && ["pending", "running", "completed", "failed", "cancelled"].includes(s.status) ? s.status : undefined,
+    q: typeof s.q === "string" ? s.q : undefined,
+    page: Number.isInteger(Number(s.page)) && Number(s.page) > 0 ? Number(s.page) : undefined,
+    sort: typeof s.sort === "string" && ["status", "id", "repo", "findings", "started"].includes(s.sort) ? s.sort : undefined,
+    order: s.order === "asc" ? "asc" : "desc",
+  }),
   component: ScansPage,
 });
 
@@ -139,18 +151,20 @@ function ScansPage() {
   const navigate = useNavigate();
   const [showForm, setShowForm] = useState(false);
   const [emptyFormDismissed, setEmptyFormDismissed] = useState(false);
-  const [pagination, setPagination] = useState<PaginationState>({
-    pageIndex: 0,
-    pageSize: 50,
-  });
+  const search = Route.useSearch();
+  const pagination = { pageIndex: (search.page ?? 1) - 1, pageSize: 50 };
+  const setPagination = (next: PaginationState) => void navigate({ to: "/scans", search: { ...search, page: next.pageIndex + 1 } });
   const q = useQuery({
-    queryKey: ["scans", "list", pagination.pageIndex, pagination.pageSize],
+    queryKey: ["scans", "list", search, pagination.pageIndex, pagination.pageSize],
     queryFn: async () => {
       const params = new URLSearchParams({
         page: String(pagination.pageIndex + 1),
         per_page: String(pagination.pageSize),
         roots: "1",
       });
+      for (const key of ["repo_id", "status", "q", "sort", "order"] as const) {
+        if (search[key]) params.set(key, search[key]);
+      }
       const r = await api.get<Scan[]>(`/scans?${params}`);
       const items = r.data ?? [];
       return { items, total: r.meta?.total ?? items.length };
@@ -179,7 +193,7 @@ function ScansPage() {
       header: "Status",
       sortAccessor: (s) => s.status,
       filter: { label: "Status" },
-      accessor: (s) => <ScanStatusPill status={s.status} size="sm" />,
+      accessor: (s) => <ScanStatusPill scan={s} status={s.status} size="sm" />,
     },
     {
       key: "id",
@@ -210,6 +224,7 @@ function ScansPage() {
     },
     {
       key: "tools",
+      sortable: false,
       header: "Tools",
       sortAccessor: (s) => parseToolList(s.tools_completed).length,
       accessor: (s) => {
@@ -254,6 +269,7 @@ function ScansPage() {
     },
     {
       key: "duration",
+      sortable: false,
       header: "Duration",
       align: "right",
       sortAccessor: (s) => durationMs(s.started_at, s.completed_at),
@@ -263,16 +279,16 @@ function ScansPage() {
     },
   ];
 
-  const isEmpty = !q.isLoading && scans.length === 0 && (q.data?.total ?? 0) === 0;
+  const isEmpty = !q.isLoading && !q.isError && scans.length === 0 && (q.data?.total ?? 0) === 0;
   useEffect(() => {
-    if (isEmpty && !emptyFormDismissed) setShowForm(true);
-  }, [isEmpty, emptyFormDismissed]);
+    if (isEmpty && !search.q && !search.status && !search.repo_id && !emptyFormDismissed) setShowForm(true);
+  }, [isEmpty, emptyFormDismissed, search.q, search.status, search.repo_id]);
 
   return (
     <PageShell>
       <PageHeader
-        title="Scans"
-        description="Every scan run across the fleet, newest first."
+        title={search.repo_id ? "Repository scans" : "All scans"}
+        description={search.repo_id ? "Scan runs for the selected repository. Open a run to inspect its tools, coverage, gate, and findings." : "Scan runs across all repositories you can access, including every collection. Each scan is one execution against a branch or source."}
         actions={
           !showForm && (
             <button
@@ -287,6 +303,16 @@ function ScansPage() {
         }
       />
 
+      <ScanWorkerNotice />
+      <div className="flex flex-wrap items-center gap-3">
+        <label className="text-sm">Status <select aria-label="Scan status" value={search.status ?? ""}
+          onChange={(e) => void navigate({ to: "/scans", search: { ...search, status: e.target.value || undefined, page: 1 } })}
+          className="ml-2 h-9 rounded-md border border-border bg-background px-2">
+          <option value="">All statuses</option>
+          {["pending", "running", "completed", "failed", "cancelled"].map((status) => <option key={status} value={status}>{status}</option>)}
+        </select></label>
+        {search.repo_id && <button className="text-sm underline" onClick={() => void navigate({ to: "/scans", search: { ...search, repo_id: undefined, page: 1 } })}>Clear repository filter</button>}
+      </div>
       {showForm && (
         <NewScanForm
           onClose={() => {
@@ -296,7 +322,7 @@ function ScansPage() {
         />
       )}
 
-      {isEmpty && !showForm ? (
+      {isEmpty && !showForm && !search.q && !search.status && !search.repo_id ? (
         <EmptyState
           icon={GaugeIcon}
           title="No scans yet"
@@ -314,12 +340,16 @@ function ScansPage() {
           loading={q.isLoading}
           isError={q.isError}
           onRetry={() => void q.refetch()}
-          searchPlaceholder="Search this page..."
+          searchPlaceholder="Search scans, repositories, branches..."
           emptyMessage="No scans match your filters"
           serverSide={{
             rowCount: q.data?.total ?? 0,
             pagination,
             onPaginationChange: setPagination,
+            search: search.q ?? "",
+            onSearchChange: (q) => void navigate({ to: "/scans", search: { ...search, q: q || undefined, page: 1 }, replace: true }),
+            sorting: search.sort ? [{ id: search.sort, desc: search.order !== "asc" }] : [],
+            onSortingChange: ([sort]) => void navigate({ to: "/scans", search: { ...search, sort: sort?.id, order: sort?.desc ? "desc" : "asc", page: 1 } }),
           }}
           onRowClick={(s) =>
             navigate({
@@ -353,13 +383,21 @@ function NewScanForm({ onClose }: { onClose: () => void }) {
       return r.data ?? [];
     },
   });
-  const [repoId, setRepoId] = useState("");
-  const [branch, setBranch] = useState("");
-  // Tool selection mode:
-  //   - "auto"     → empty tools array → backend auto-detects by language
-  //   - "explicit" → only the checked tools run
-  const [toolMode, setToolMode] = useState<"auto" | "explicit">("auto");
-  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const form = useForm({
+    defaultValues: { repoId: "", branch: "", toolMode: "auto" as "auto" | "explicit", picked: new Set<string>() },
+    validators: { onSubmit: ({ value }) => !value.repoId ? "Choose a repository." :
+      value.toolMode === "explicit" && value.picked.size === 0 ? "Choose at least one scanner." : undefined },
+    onSubmit: ({ value }) => {
+      const repo = repos.data?.find((r) => r.id === value.repoId);
+      scan.launch({ repo_id: value.repoId, branch: value.branch.trim() || repo?.default_branch || "main",
+        ...(value.toolMode === "explicit" ? { tools: Array.from(value.picked).sort() } : {}) });
+    },
+  });
+  const { repoId, branch, toolMode, picked } = useStore(form.store, (state) => state.values);
+  const setRepoId = (value: string) => form.setFieldValue("repoId", value);
+  const setBranch = (value: string) => form.setFieldValue("branch", value);
+  const setToolMode = (value: "auto" | "explicit") => form.setFieldValue("toolMode", value);
+  const setPicked = (value: Set<string> | ((prev: Set<string>) => Set<string>)) => form.setFieldValue("picked", value);
 
   const selectedRepo = repos.data?.find((r) => r.id === repoId);
 
@@ -390,15 +428,7 @@ function NewScanForm({ onClose }: { onClose: () => void }) {
     <form
       onSubmit={(e) => {
         e.preventDefault();
-        if (!repoId) return;
-        const repo = repos.data?.find((r) => r.id === repoId);
-        scan.launch({
-          repo_id: repoId,
-          branch: branch.trim() || repo?.default_branch || "main",
-          ...(toolMode === "explicit" && picked.size > 0
-            ? { tools: Array.from(picked).sort() }
-            : {}),
-        });
+        void form.handleSubmit();
       }}
       className="glass-card p-4 space-y-3 max-w-2xl"
     >
@@ -414,11 +444,14 @@ function NewScanForm({ onClose }: { onClose: () => void }) {
         </button>
       </div>
 
+      <form.Subscribe selector={(state) => state.errors}>{(errors) => errors.length > 0 &&
+        <p role="alert" className="text-sm text-status-danger">{errors.join(" ")}</p>}</form.Subscribe>
+      {repos.isError && <p role="alert" className="text-sm text-status-danger">Could not load repositories. <button type="button" onClick={() => void repos.refetch()}>Retry</button></p>}
       <label className="block">
         <span className="text-xs text-muted-foreground">Repo *</span>
         {repos.isLoading ? (
           <div className="text-xs text-muted-foreground mt-1">Loading…</div>
-        ) : !repos.data || repos.data.length === 0 ? (
+        ) : repos.isError ? null : !repos.data || repos.data.length === 0 ? (
           <div className="text-xs text-muted-foreground mt-1">
             No repos. Add one from a{" "}
             <Link to="/collections" className="underline">
@@ -526,7 +559,7 @@ function NewScanForm({ onClose }: { onClose: () => void }) {
                         <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
                           {cat}
                         </div>
-                        <div className="grid grid-cols-3 gap-1 text-xs">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 text-xs">
                           {items.map((s) => (
                             <label
                               key={s.name}

@@ -1,6 +1,6 @@
 import type { PropsWithChildren } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -51,9 +51,9 @@ describe("BranchSelect", () => {
       },
     });
     renderSelect();
-    await waitFor(() => {
-      expect(screen.getByRole("option", { name: "dev" })).toBeInTheDocument();
-    });
+    await waitFor(() => expect(mocks.get).toHaveBeenCalled());
+    fireEvent.keyDown(await screen.findByRole("combobox"), { key: "ArrowDown" });
+    expect(await screen.findByRole("option", { name: "dev" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "main (default)" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument();
   });
@@ -67,8 +67,9 @@ describe("BranchSelect", () => {
       ).toBeInTheDocument();
     });
     expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
-    const options = screen.getAllByRole("option");
+    fireEvent.keyDown(screen.getByRole("combobox"), { key: "ArrowDown" });
+    const options = await screen.findAllByRole("option");
     expect(options).toHaveLength(1);
-    expect(options[0]).toHaveValue("main");
+    expect(options[0]).toHaveTextContent(/^main/);
   });
 });

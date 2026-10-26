@@ -1,13 +1,12 @@
 // Scan detail with full findings exploration: filter by tool/severity,
 // sort, paginate, export to JSON/CSV.
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeftIcon,
+  AlertTriangleIcon,
   BugIcon,
   CheckCircle2Icon,
-  ChevronDownIcon,
-  ChevronRightIcon,
   DownloadIcon,
   FilterXIcon,
   LoaderIcon,
@@ -16,20 +15,28 @@ import {
   XCircleIcon,
   XIcon,
 } from "lucide-react";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
-import type { PaginationState } from "@tanstack/react-table";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useDebouncedValue } from "@tanstack/react-pacer";
+import type { PaginationState, SortingState } from "@tanstack/react-table";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useSSE } from "@/lib/sse";
-import type { Finding, Scan, Severity } from "@/lib/types";
+import type { Finding, Scan, ScanScope, Severity } from "@/lib/types";
 import { parseToolList } from "@/lib/types";
 import { CardSkeleton, ListSkeleton } from "@/components/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { DataTable, type Column } from "@/components/ui/data-table";
+import { ScanWorkerNotice } from "@/components/scan-worker-notice";
 import { ScanStatusPill } from "@/components/scan-status-pill";
 import { SeverityBadge } from "@/components/severity-badge";
 import { severityRank } from "@/lib/severity";
 import { CheckboxFilterRow } from "@/components/checkbox-filter-row";
+import { useScanWithPreflight } from "@/components/scan-preflight";
+import { useIsAdmin, useMe, displayLabel } from "@/lib/me";
+import { useAutofixEnabled } from "@/lib/fixes";
+import { useRuntimeCapabilities } from "@/lib/runtime-capabilities";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScanAgentsPanel } from "@/components/fixes/scan-agents-panel";
 
 export const Route = createFileRoute("/_authed/scans/$scanId/")({
@@ -48,11 +55,16 @@ interface ToolStatusEntry {
     | "queued"
     | "cancelled"
     | "pending"
-    | "skipped";
+    | "skipped"
+    | "partial";
   finding_count: number;
   raw_count?: number;
   has_output: boolean;
   error?: string;
+}
+
+function hasPartialResults(tool: ToolStatusEntry) {
+  return tool.status === "partial" || (tool.status === "failed" && (tool.raw_count ?? tool.finding_count) > 0);
 }
 
 // Severity filter pills, most-severe first.
@@ -70,6 +82,19 @@ function ScanDetailPage() {
   const { scanId } = Route.useParams();
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const retryTools = useScanWithPreflight();
+  const isAdmin = useIsAdmin();
+  const me = useMe();
+  const { enabled: autofixEnabled } = useAutofixEnabled();
+  const capabilities = useRuntimeCapabilities();
+  const [connectedScan, setConnectedScan] = useState<string | null>(null);
+  const streamConnected = connectedScan === scanId;
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (refreshTimer.current) clearTimeout(refreshTimer.current);
+    refreshTimer.current = null;
+  }, [scanId]);
+  const [output, setOutput] = useState<{ scanId: string; lines: string[] }>({ scanId, lines: [] });
 
   const scanQ = useQuery({
     queryKey: ["scan", scanId],
@@ -77,33 +102,39 @@ function ScanDetailPage() {
       const r = await api.get<Scan>(`/scans/${scanId}`);
       return r.data;
     },
-    // Poll while running so the page self-updates.
+    // Poll only until SSE connects or while it is unavailable.
     refetchInterval: (q) => {
       const s = q.state.data?.status;
-      return s === "running" || s === "pending" ? 3000 : false;
+      return !streamConnected && (s === "running" || s === "pending") ? 3000 : false;
     },
   });
 
   const scanLive =
     scanQ.data?.status === "pending" || scanQ.data?.status === "running";
-  useSSE<{ type?: string }>({
+  useSSE<{ type?: string; tool_name?: string; line?: string }>({
     path: `/scans/${scanId}/stream`,
     enabled: !!scanLive,
-    onEvent: (ev) => {
-      if (ev.type !== "scan_progress") return;
-      qc.invalidateQueries({ queryKey: ["scan", scanId] });
-      qc.invalidateQueries({ queryKey: ["scan", scanId, "findings"] });
+    onOpen: () => {
+      setConnectedScan(scanId);
+      void qc.invalidateQueries({ queryKey: ["scan", scanId] });
     },
-  });
-
-  const workersQ = useQuery({
-    queryKey: ["scanners", "workers"],
-    queryFn: async () =>
-      (await api.get<{ heartbeat_at?: string }[]>("/scanners/workers")).data ??
-      [],
-    enabled: scanQ.data?.status === "pending",
-    staleTime: 0,
-    refetchInterval: 3000,
+    onError: () => setConnectedScan(null),
+    onEvent: (ev) => {
+      if (ev.type === "tool_output" && typeof ev.line === "string") {
+        const line = `[${ev.tool_name ?? "scanner"}] ${ev.line}`.slice(0, 2048);
+        setOutput((previous) => ({ scanId, lines: [...(previous.scanId === scanId ? previous.lines : []), line].slice(-200) }));
+      } else if (["scan_complete", "scan_cancelled"].includes(ev.type ?? "")) {
+        if (refreshTimer.current) clearTimeout(refreshTimer.current);
+        refreshTimer.current = null;
+        void qc.invalidateQueries({ queryKey: ["scan", scanId] });
+      } else if (["scan_progress", "scan_status", "tools_selected"].includes(ev.type ?? "") && !refreshTimer.current) {
+        // One refresh per burst: 33 tools must not exhaust the API rate limit.
+        refreshTimer.current = setTimeout(() => {
+          refreshTimer.current = null;
+          void qc.invalidateQueries({ queryKey: ["scan", scanId] });
+        }, 1000);
+      }
+    },
   });
 
   const toolsQ = useQuery({
@@ -114,7 +145,7 @@ function ScanDetailPage() {
     },
     refetchInterval: () => {
       const status = scanQ.data?.status;
-      return status === "running" || status === "pending" ? 3000 : false;
+      return !streamConnected && (status === "running" || status === "pending") ? 3000 : false;
     },
   });
 
@@ -155,6 +186,8 @@ function ScanDetailPage() {
     new Set(),
   );
   const [search, setSearch] = useState("");
+  const [debouncedSearch] = useDebouncedValue(search, { wait: 250 });
+  const [sorting, setSorting] = useState<SortingState>([{ id: "severity", desc: true }]);
   const [pagination, setPagination] = useState<PaginationState>({
     pageIndex: 0,
     pageSize: PAGE_SIZE,
@@ -173,7 +206,7 @@ function ScanDetailPage() {
     },
     refetchInterval: () => {
       const s = scanQ.data?.status;
-      return s === "running" || s === "pending" ? 3000 : false;
+      return !streamConnected && (s === "running" || s === "pending") ? 3000 : false;
     },
   });
 
@@ -192,12 +225,17 @@ function ScanDetailPage() {
       includedCategories.join(","),
       pagination.pageIndex,
       pagination.pageSize,
+      sorting,
+      debouncedSearch,
     ],
     queryFn: async () => {
       const q = new URLSearchParams({
         page: String(pagination.pageIndex + 1),
         per_page: String(pagination.pageSize),
+        sort: sorting[0]?.id ?? "severity",
+        order: sorting[0]?.desc === false ? "asc" : "desc",
       });
+      if (debouncedSearch.trim()) q.set("q", debouncedSearch.trim());
       if (includeSuppressed) q.set("include_suppressed", "true");
       if (filterTool) q.set("tool", filterTool);
       if (excludedSeverities.size > 0) {
@@ -214,21 +252,29 @@ function ScanDetailPage() {
         suppressed: r.meta?.suppressed ?? 0,
       };
     },
+    placeholderData: keepPreviousData,
     refetchInterval: () => {
       const s = scanQ.data?.status;
-      return s === "running" || s === "pending" ? 3000 : false;
+      return !streamConnected && (s === "running" || s === "pending") ? 3000 : false;
     },
   });
 
   useEffect(() => {
     setPagination((p) => (p.pageIndex === 0 ? p : { ...p, pageIndex: 0 }));
-  }, [filterTool, excludedSeverities, excludedCategories, includeSuppressed]);
+  }, [filterTool, excludedSeverities, excludedCategories, includeSuppressed, debouncedSearch]);
+
+  useEffect(() => {
+    const status = scanQ.data?.status;
+    if (status && status !== "running" && status !== "pending") {
+      void qc.invalidateQueries({ queryKey: ["scan", scanId, "findings"] });
+      void qc.invalidateQueries({ queryKey: ["scan", scanId, "tools"] });
+    }
+  }, [scanQ.data?.status, scanId, qc]);
 
   const findings = findingsQ.data?.items ?? [];
   const serverSuppressed = findingsQ.data?.suppressed ?? 0;
   const serverTotal = findingsQ.data?.total ?? 0;
-  const rawTotal =
-    (statsQ.data?.total ?? serverTotal + (includeSuppressed ? 0 : serverSuppressed));
+
 
   const toolCounts = useMemo(() => {
     const m = statsQ.data?.by_tool ?? {};
@@ -253,14 +299,6 @@ function ScanDetailPage() {
     return m;
   }, [statsQ.data]);
 
-  const visible = useMemo(() => {
-    const lowerSearch = search.trim().toLowerCase();
-    if (!lowerSearch) return findings;
-    return findings.filter((f) => {
-      const hay = `${f.title} ${f.file_path} ${f.rule_id ?? ""}`.toLowerCase();
-      return hay.includes(lowerSearch);
-    });
-  }, [findings, search]);
 
   const findingColumns: Column<Finding>[] = [
     {
@@ -271,7 +309,7 @@ function ScanDetailPage() {
       accessor: (f) => <SeverityBadge severity={f.severity} size="sm" />,
     },
     {
-      key: "tool",
+      key: "tool_name",
       header: "Tool",
       width: "10rem",
       sortAccessor: (f) => f.tool_name,
@@ -310,7 +348,7 @@ function ScanDetailPage() {
       ),
     },
     {
-      key: "file",
+      key: "file_path",
       header: "File",
       sortAccessor: (f) => `${f.file_path}:${String(f.line_start ?? 0).padStart(8, "0")}`,
       accessor: (f) => (
@@ -323,7 +361,7 @@ function ScanDetailPage() {
       ),
     },
     {
-      key: "line",
+      key: "line_start",
       header: "Line",
       align: "right",
       width: "6rem",
@@ -335,7 +373,8 @@ function ScanDetailPage() {
   ];
 
   const exportFindings = async (format: "json" | "csv") => {
-    const q = new URLSearchParams({ per_page: "200" });
+    const q = new URLSearchParams({ per_page: "200", sort: sorting[0]?.id ?? "severity", order: sorting[0]?.desc === false ? "asc" : "desc" });
+    if (search.trim()) q.set("q", search.trim());
     if (includeSuppressed) q.set("include_suppressed", "true");
     if (filterTool) q.set("tool", filterTool);
     if (excludedSeverities.size > 0) {
@@ -345,13 +384,7 @@ function ScanDetailPage() {
       q.set("category", includedCategories.join(",") || "_");
     }
     const r = await api.get<Finding[]>(`/scans/${scanId}/findings?${q.toString()}`);
-    let rows = r.data ?? [];
-    const lowerSearch = search.trim().toLowerCase();
-    if (lowerSearch) {
-      rows = rows.filter((f) =>
-        `${f.title} ${f.file_path} ${f.rule_id ?? ""}`.toLowerCase().includes(lowerSearch),
-      );
-    }
+    const rows = r.data ?? [];
     const stamp = new Date().toISOString().replace(/[:.]/g, "-");
     const base = `${scanQ.data?.repo?.name ?? scanId.slice(0, 8)}-${stamp}`;
     if (format === "json") {
@@ -410,6 +443,7 @@ function ScanDetailPage() {
     });
   };
 
+  if (scanQ.isError) return <div className="page stack"><p role="alert">Could not load this scan. <button className="underline" onClick={() => void scanQ.refetch()}>Retry</button></p></div>;
   if (scanQ.isLoading || !scanQ.data) {
     return (
       <div className="page stack">
@@ -420,169 +454,86 @@ function ScanDetailPage() {
   const scan = scanQ.data;
   const completed = parseToolList(scan.tools_completed);
   const selected = parseToolList(scan.tools_selected);
-  const failed = parseToolList(scan.tools_failed);
+  const tools = toolsQ.data ?? [];
+  const partial = tools.filter(hasPartialResults);
+  const failed = tools.filter((tool) => tool.status === "failed" && !hasPartialResults(tool));
+  const stopped = tools.filter((tool) => tool.status === "cancelled");
+  // Anything that did not give full coverage can be rerun on its own, including tools the user stopped.
+  const retryable = tools.filter((tool) => tool.status === "failed" || tool.status === "cancelled" || hasPartialResults(tool));
+  const done = tools.filter((tool) => tool.status === "completed");
+  const active = tools.filter((tool) => ["running", "pending", "queued"].includes(tool.status));
+  const running = active.filter((tool) => tool.status === "running");
+  const missingImages = tools.filter((tool) => /not present locally|image.*not found|no such image/i.test(tool.error ?? ""));
+  const incomplete = scan.completeness === "incomplete" || retryable.length > 0 || selected.length === 0 || selected.some((name) => !completed.includes(name)) || (toolsQ.isSuccess && done.length === 0);
+  const launchRetryTools = () => retryTools.launch({ repo_id: scan.repo_id, collection_id: scan.collection_id, branch: scan.branch, profile: scan.profile, tools: retryable.map((tool) => tool.name) });
+  const verdict = scanLive
+    ? scan.status === "pending" ? "Queued: waiting for a scan worker" : running.length > 0 ? `Scanning: ${running.slice(0, 3).map((tool) => tool.name).join(", ")}${running.length > 3 ? ` and ${running.length - 3} more` : ""}` : "Scanning: preparing scanners and publishing results"
+    : scan.status === "failed" ? `Scan failed: ${/no such file or directory/i.test(scan.failure_message ?? "") ? "the repository source is unavailable" : (scan.failure_message || scan.completion_reason || "analysis could not finish").split("\n")[0]}`
+    : scan.status === "cancelled" ? "Scan cancelled. Results collected before cancellation are shown."
+    : toolsQ.isPending ? "Checking scanner coverage…"
+    : toolsQ.isError ? "Coverage unavailable: scanner results could not be loaded"
+    : incomplete ? `Incomplete coverage: ${tools.length === 0 || selected.length === 0 ? "no scanners ran" : retryable.length > 0 ? `${[failed.length && `${failed.length} failed`, partial.length && `${partial.length} partial`, stopped.length && `${stopped.length} stopped`].filter(Boolean).join(", ")} of ${tools.length} scanners` : "not all selected scanners finished"} — results so far are shown`
+    : gateVerdict(gateQ.data, gateQ.isError);
 
   return (
     <div className="page stack">
-      <div className="flex items-center gap-3">
-        <Link
-          to="/scans"
-          className="size-9 grid place-items-center rounded-md hover:bg-muted/50"
-          aria-label="Back"
-        >
-          <ArrowLeftIcon className="size-4" />
-        </Link>
-        <div className="flex-1 min-w-0">
-          <h1 className="text-xl font-semibold truncate">
-            {scan.repo?.name ?? scan.id.slice(0, 8)}{" "}
-            <span className="text-muted-foreground font-normal">
-              · {scan.branch}
-            </span>
-            {scan.origin_scan_id ? (
-              <span className="ml-2 text-xs font-normal text-muted-foreground">
-                child of{" "}
-                <Link
-                  to="/scans/$scanId"
-                  params={{ scanId: scan.origin_scan_id }}
-                  className="font-mono hover:underline"
-                >
-                  {scan.origin_scan_id.slice(0, 8)}
-                </Link>
-              </span>
-            ) : null}
+      {retryTools.dialog}
+      <header className="space-y-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <Link to="/scans" className="size-9 grid place-items-center rounded-md hover:bg-muted/50" aria-label="Back to scans"><ArrowLeftIcon className="size-4" /></Link>
+          <h1 className="min-w-0 flex-1 text-xl font-semibold break-words">
+            <Link to="/repos/$repoId" params={{ repoId: scan.repo_id }} className="hover:underline">{scan.repo?.name ?? "Repository"}</Link>
+            <span className="font-normal text-muted-foreground"> · {scan.branch || "Default branch"} · <span className="capitalize">{scan.profile || "Custom"}</span></span>
           </h1>
-          <p className="text-xs text-muted-foreground">
-            {completed.length}/{selected.length} tools completed
-            {failed.length > 0 && (
-              <span className="text-status-error"> · {failed.length} failed</span>
-            )}
-            {" · "}
-            {rawTotal > 0 ? (
-              <>
-                {serverTotal.toLocaleString()} visible
-                {serverSuppressed > 0 && !includeSuppressed && (
-                  <> · {serverSuppressed.toLocaleString()} suppressed</>
-                )}
-                {" · "}
-                {rawTotal.toLocaleString()} total
-              </>
-            ) : (
-              <>{scan.finding_count.toLocaleString()} findings</>
-            )}
-          </p>
-          {/* When-it-ran line. Prefer started_at for the anchor (the
-              moment the runner started executing tools), fall back to
-              created_at if the scan never got past pending. Duration
-              shows once we know both endpoints. */}
-          <p className="text-xs text-muted-foreground mt-0.5">
-            <ScanTimestamps scan={scan} />
-          </p>
-          {(scan.status === "completed" || scan.status === "failed") &&
-            gateQ.data && (
-              <p className="text-xs text-muted-foreground mt-0.5">
-                <GateLine gate={gateQ.data} />
-              </p>
-            )}
+          <ScanStatusPill scan={scan} status={scan.status} incomplete={incomplete || toolsQ.isError} gateStatus={gateQ.data?.evaluation?.status ?? gateQ.data?.result?.status ?? (gateQ.isError ? "unavailable" : "pending")} />
         </div>
-        <ScanStatusPill status={scan.status} />
-        {scan.status === "running" && <CancelScanButton scanId={scanId} />}
-        {(scan.status === "failed" || scan.status === "cancelled") && (
-          <button
-            type="button"
-            onClick={() => retry.mutate()}
-            disabled={retry.isPending}
-            className="inline-flex items-center gap-1 px-3 h-9 rounded-md border border-border text-sm hover:bg-muted/50 disabled:opacity-50"
-          >
-            <RefreshCwIcon
-              className={`size-4 ${retry.isPending ? "animate-spin" : ""}`}
-            />
-            {retry.isPending ? "Retrying…" : "Retry"}
-          </button>
-        )}
-      </div>
+        <p role="status" aria-live="polite" className="min-h-6 text-base font-medium break-words">{verdict}</p>
+        <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+          <span><ScanTimestamps scan={scan} /></span>
+          <span>{completed.length}/{selected.length} tools completed · Attempt {scan.attempt || 1}</span>
+          {scan.failure_code && <span className="font-mono">{scan.failure_code}</span>}
+          {scan.commit_sha && <span title={scan.commit_sha}>Commit <span className="font-mono">{scan.commit_sha.slice(0, 7)}</span></span>}
+          {me.data?.id === scan.user_id && <span>Requested by {displayLabel(me.data)}</span>}
+          {scan.origin_scan_id && <Link to="/scans/$scanId" params={{ scanId: scan.origin_scan_id }} className="underline">Original scan</Link>}
+          <Link to="/repos/$repoId" params={{ repoId: scan.repo_id }} search={{ tab: "tests", test_scan: scanId, collection_id: scan.collection_id }} className="hover:underline">Test coverage</Link>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {!scanLive && retryable.length > 0 && <Button onClick={() => void launchRetryTools()} disabled={retryTools.busy} aria-describedby="retry-tools-scope"><RefreshCwIcon className="size-4" />{retryTools.busy ? "Checking scanners…" : `Retry ${retryable.length} ${retryable.length === 1 ? "tool" : "tools"}`}</Button>}
+          {(scan.status === "failed" || scan.status === "cancelled") && <Button variant="outline" onClick={() => retry.mutate()} disabled={retry.isPending || retryTools.busy}><RefreshCwIcon className="size-4" />{retry.isPending ? "Retrying…" : "Retry whole scan"}</Button>}
+          {scanLive && <CancelScanButton scanId={scanId} />}
+        </div>
+        {!scanLive && retryable.length > 0 && <details className="text-xs text-muted-foreground" id="retry-tools-scope"><summary className="cursor-pointer">Retry scope: {retryable.length} failed, partial or stopped {retryable.length === 1 ? "tool" : "tools"} · new scan on {scan.branch || "the default branch"}</summary><p className="mt-1 break-words">{retryable.map((tool) => tool.name).join(", ")}. Completed tools are not rerun. Original results remain in this scan.</p></details>}
+      </header>
 
-      {scan.status === "pending" &&
-        workersQ.isSuccess &&
-        scanWorkersOffline(workersQ.data) && (
-          <div
-            className="rounded-md border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-sm text-status-warning dark:text-status-warning"
-            role="status"
-          >
-            Scan queued — no scan worker is running.
+      <section aria-label="Scanner coverage" className="rounded-lg border border-border px-4 py-3 space-y-2">
+        <ToolsPanel tools={toolsQ.data} loading={toolsQ.isPending} error={toolsQ.isError} onRefresh={() => void toolsQ.refetch()} scanId={scanId} scanStatus={scan.status} />
+        {(scanLive || tools.length > 0) && <div className="space-y-1"><div role="progressbar" aria-label="Scanner progress" aria-valuemin={0} aria-valuemax={Math.max(tools.length, 1)} aria-valuenow={tools.length - active.length} className="h-1 overflow-hidden rounded-full bg-muted"><div className={`h-full transition-[width] motion-reduce:transition-none ${scanLive ? "bg-primary" : "bg-muted-foreground/50"}`} style={{ width: `${tools.length ? (tools.length - active.length) / tools.length * 100 : 0}%` }} /></div><p className="text-xs text-muted-foreground">{tools.length - active.length} of {tools.length} scanners finished{!scanLive && active.length > 0 ? " · unfinished tools did not report a result" : ""}</p></div>}
+        {missingImages.length > 0 && <p className="text-xs text-muted-foreground">{missingImages.length} scanners need images that are not downloaded.{isAdmin && capabilities.data?.docker_image_management && !scanLive && retryable.length > 0 ? <> <button type="button" className="underline hover:text-foreground" disabled={retryTools.busy} onClick={() => void launchRetryTools()}>Prepare images & retry</button></> : !isAdmin ? " Ask an administrator to prepare the images." : ""}</p>}
+        {scanLive && <ScanWorkerNotice />}
+      </section>
+
+      <section aria-label="Scan findings summary" className="rounded-lg border border-border bg-muted/20 p-4 space-y-3">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div aria-live="polite" aria-atomic="true" className="flex items-baseline gap-3">
+            <h2 className="text-sm font-medium text-muted-foreground">{scanLive ? "Findings reported so far" : "Findings reported"}</h2>
+            <p className="text-2xl font-semibold tracking-tight tabular-nums">{(statsQ.data?.total ?? scan.finding_count).toLocaleString()}</p>
           </div>
-        )}
-
-      {(scan.failure_message || scan.failure_code) && (
-        <div
-          className="rounded-md border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-sm text-status-warning dark:text-status-warning"
-          role="status"
-        >
-          {scan.failure_message || scan.failure_code}
-          {scan.failure_code && scan.failure_message ? (
-            <span className="ml-2 font-mono text-xs">{scan.failure_code}</span>
-          ) : null}
+          <p className="text-xs text-muted-foreground">{scanLive ? "Live results · updates as tools report" : "Scanner results"} · includes suppressed findings</p>
         </div>
-      )}
+        <dl className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+          {SEVERITY_ORDER.map((severity) => <div key={severity} className="rounded-md border border-border bg-background/50 px-3 py-2"><dt><SeverityBadge severity={severity} size="sm" /></dt><dd className="mt-1 text-xl font-semibold tabular-nums">{statsQ.data ? (statsQ.data.by_severity[severity] ?? 0).toLocaleString() : "—"}</dd></div>)}
+        </dl>
+        {statsQ.isError && <p role="alert" className="text-xs text-status-warning">Severity totals could not refresh. <button type="button" onClick={() => void statsQ.refetch()} className="underline">Retry totals</button></p>}
+      </section>
 
-      {(scan.status === "completed" ||
-        scan.status === "cancelled" ||
-        scan.origin_scan_id) &&
-        scan.repo_id && (
-          <ScanAgentsPanel
-            scanId={scan.origin_scan_id || scanId}
-            repoId={scan.repo_id}
-            originFindings={scan.origin_scan_id ? undefined : scan.finding_count}
-            github={
-              scan.source_type === "github" ||
-              scan.repo?.source_type === "github"
-            }
-            sourcePath={scan.source_path || scan.repo?.source_path}
-          />
-        )}
-
-      {scan.status === "cancelled" && (
-        <div
-          className="rounded-md border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-sm text-status-warning dark:text-status-warning"
-          role="status"
-          aria-live="polite"
-        >
-          <strong>Scan cancelled.</strong>{" "}
-          Showing {scan.finding_count.toLocaleString()} findings from{" "}
-          {completed.length} of {selected.length} tools that completed before
-          cancellation.
-        </div>
-      )}
-
-      {scan.status === "completed" &&
-        scan.finding_count === 0 &&
-        (toolsSelectedCount(scan) === 0 ||
-          ((toolsQ.data?.length ?? 0) === 0 && !toolsQ.isLoading)) && (
-        <div className="mb-4 rounded-md border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-sm text-status-warning">
-          <div className="font-medium">No scanners ran — check Docker / pull images</div>
-          <div className="text-xs text-status-warning/80 mt-0.5">
-            This scan completed without running any tools. The container scanner
-            backend may not be configured — try{" "}
-            <code className="font-mono text-xs">wolf doctor</code> from the CLI, or
-            open Settings → Scanners to pull missing images.
-          </div>
-        </div>
-      )}
-
-      <ToolsPanel
-        tools={toolsQ.data}
-        loading={toolsQ.isLoading}
-        scanId={scanId}
-        scanStatus={scan.status}
-      />
-
-      <section>
+      <section aria-label="Scan findings">
         <div className="flex items-end justify-between gap-3 mb-3">
           <h2 className="text-base font-semibold">Findings</h2>
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => exportFindings("json")}
-              disabled={visible.length === 0}
+              disabled={findings.length === 0}
               className="h-8 px-2.5 rounded-md hover:bg-muted/40 text-xs inline-flex items-center gap-1 disabled:opacity-50"
             >
               <DownloadIcon className="size-3.5" /> JSON
@@ -590,7 +541,7 @@ function ScanDetailPage() {
             <button
               type="button"
               onClick={() => exportFindings("csv")}
-              disabled={visible.length === 0}
+              disabled={findings.length === 0}
               className="h-8 px-2.5 rounded-md hover:bg-muted/40 text-xs inline-flex items-center gap-1 disabled:opacity-50"
             >
               <DownloadIcon className="size-3.5" /> CSV
@@ -600,12 +551,14 @@ function ScanDetailPage() {
 
         {findingsQ.isLoading && !findingsQ.data ? (
           <ListSkeleton rows={8} />
-        ) : findings.length === 0 && (statsQ.data?.total ?? serverTotal) === 0 ? (
+        ) : findingsQ.isError ? (
+          <p role="alert" className="text-sm text-status-error">Could not load findings. <button type="button" onClick={() => void findingsQ.refetch()} className="underline">Retry findings</button></p>
+        ) : findings.length === 0 && (statsQ.data?.total ?? serverTotal) === 0 && !search && !filterTool && excludedSeverities.size === 0 && excludedCategories.size === 0 ? (
           toolsSelectedCount(scan) > 0 ? (
             <EmptyState
               icon={BugIcon}
-              title="No findings"
-              description="This scan completed without any issues. Nice."
+              title={scanLive ? "Waiting for findings" : "No findings reported"}
+              description={scanLive ? "Results will appear as scanners finish their analysis." : "Review scanner coverage before treating this scan as a clean result."}
             />
           ) : null
         ) : (
@@ -647,26 +600,14 @@ function ScanDetailPage() {
                   value={search}
                   onChange={(e) => {
                     setSearch(e.target.value);
-                                  }}
+                  }}
                   placeholder="Search title, file, rule…"
                   className="h-8 px-2 rounded-md bg-background border border-muted/40 w-64"
                 />
-                <select
-                  name="finding_tool_filter"
-                  aria-label="Filter findings by tool"
-                  value={filterTool}
-                  onChange={(e) => {
-                    setFilterTool(e.target.value);
-                                  }}
-                  className="h-8 px-2 rounded-md bg-background border border-muted/40"
-                >
-                  <option value="">All tools ({(statsQ.data?.total ?? serverTotal).toLocaleString()})</option>
-                  {toolCounts.map(([name, count]) => (
-                    <option key={name} value={name}>
-                      {name} ({count})
-                    </option>
-                  ))}
-                </select>
+                <Select value={filterTool || "_all"} onValueChange={(value) => setFilterTool(value === "_all" ? "" : value)}>
+                  <SelectTrigger aria-label="Filter findings by tool" className="h-8 w-48 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectItem value="_all">All tools ({(statsQ.data?.total ?? serverTotal).toLocaleString()})</SelectItem>{toolCounts.map(([name, count]) => <SelectItem key={name} value={name}>{name} ({count})</SelectItem>)}</SelectContent>
+                </Select>
                 {(filterTool ||
                   excludedSeverities.size > 0 ||
                   excludedCategories.size > 0 ||
@@ -681,9 +622,12 @@ function ScanDetailPage() {
                   </button>
                 )}
                 <div className="ml-auto text-muted-foreground tabular-nums">
-                  {visible.length.toLocaleString()} of {serverTotal.toLocaleString()} shown
+                  {findings.length.toLocaleString()} of {serverTotal.toLocaleString()} shown
                 </div>
               </div>
+              <details>
+                <summary className="cursor-pointer text-muted-foreground">Severity and category filters{excludedSeverities.size + excludedCategories.size > 0 ? ` · ${excludedSeverities.size + excludedCategories.size} excluded` : ""}</summary>
+                <div className="mt-2 space-y-2">
               <CheckboxFilterRow
                 label="Severity"
                 options={SEVERITY_ORDER.filter((s) => severityCounts.has(s))}
@@ -699,66 +643,73 @@ function ScanDetailPage() {
                   onToggle={(v) => toggleExcluded(setExcludedCategories, v)}
                   counts={categoryCounts}
                 />
-              )}
+              )}                </div>
+              </details>
             </div>
 
             <DataTable
-              data={visible}
+              data={findings}
               columns={findingColumns}
               keyExtractor={(f) => f.id}
               persistKey="scan-findings"
               density="compact"
               pageSize={PAGE_SIZE}
               searchable={false}
+              loading={findingsQ.isPlaceholderData}
               emptyMessage="No findings match these filters"
               serverSide={{
                 rowCount: serverTotal,
                 pagination,
                 onPaginationChange: setPagination,
+                sorting,
+                onSortingChange: (next) => { setSorting(next); setPagination((p) => ({ ...p, pageIndex: 0 })); },
               }}
             />
 
           </>
         )}
       </section>
+      {(scan.failure_message || scan.failure_code) && <details className="rounded-md border border-border p-3 text-sm"><summary className="cursor-pointer font-medium">Failure details</summary><p className="mt-2 whitespace-pre-wrap break-words text-muted-foreground">{scan.failure_message || scan.failure_code}</p></details>}
+      {output.scanId === scanId && output.lines.length > 0 && (
+        <details className="rounded-md border border-border p-3"><summary className="cursor-pointer text-sm font-medium">Tool output · latest 200 lines</summary><pre aria-label="Live tool output" tabIndex={0} className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap break-all text-xs">{output.lines.join("\n")}</pre></details>
+      )}
+      {!!scan.scanner_scopes?.length && (
+        <details className="rounded-md border border-border p-3 text-sm">
+          <summary className="cursor-pointer font-medium">Requested and effective scan scope</summary>
+          <ul className="mt-2 space-y-3">
+            {scan.scanner_scopes.map((scope) => <li key={scope.tool_name} className="break-words">
+              <strong>{scope.tool_name}</strong>
+              <p>Requested: {scopeLabel(scope.requested_scope)}</p>
+              <p>Effective: {scopeLabel(scope.effective_scope)}</p>
+              {scope.scope_message && <p className="text-status-warning">{scope.scope_message}</p>}
+            </li>)}
+          </ul>
+        </details>
+      )}
+
+      {autofixEnabled && !scanLive && <ScanAgentsPanel scanId={scan.origin_scan_id || scanId} repoId={scan.repo_id} originFindings={scan.origin_scan_id ? undefined : scan.finding_count} github={scan.source_type === "github" || scan.repo?.source_type === "github"} sourcePath={scan.source_path || scan.repo?.source_path} />}
+
     </div>
   );
 }
 
-function scanWorkersOffline(
-  workers: { heartbeat_at?: string }[] | undefined,
-): boolean {
-  if (!workers || workers.length === 0) return true;
-  const cutoff = Date.now() - 60_000;
-  return workers.every((w) => {
-    const t = Date.parse(w.heartbeat_at ?? "");
-    return !Number.isFinite(t) || t < cutoff;
-  });
-}
+
 
 type ScanGate = {
-  evaluation?: { status?: string };
+  evaluation?: { status?: string; reason?: string; matched_rules?: { action: string; finding_ids: string[] }[] };
   result?: { status?: string };
   finding_count?: number;
 };
 
-function GateLine({ gate }: { gate?: ScanGate }) {
-  const status = gate?.evaluation?.status ?? gate?.result?.status;
-  if (!status) return null;
-  const tone =
-    status === "fail" || status === "failed"
-      ? "text-status-error"
-      : status === "warn" || status === "warning"
-        ? "text-status-warning"
-        : "text-status-success";
-  return (
-    <>
-      Gate <span className={`${tone} font-medium`}>{status}</span>
-      {gate?.finding_count != null
-        ? ` · ${gate.finding_count.toLocaleString()} findings`
-        : ""}
-    </>
-  );
+function gateVerdict(gate: ScanGate | undefined, error: boolean) {
+  if (error) return "Scan completed: quality gate could not be checked";
+  if (!gate) return "Scan completed: checking quality gate…";
+  const status = gate.evaluation?.status ?? gate.result?.status;
+  const failures = new Set(gate.evaluation?.matched_rules?.filter((rule) => rule.action === "fail").flatMap((rule) => rule.finding_ids ?? []) ?? []).size;
+  if (status === "fail" || status === "failed") return `Gate failed: ${gate.evaluation?.reason || (failures ? `${failures} findings violate the quality policy` : "quality policy requirements were not met")}`;
+  if (status === "warn" || status === "warning") return `Gate warning: ${gate.evaluation?.reason || "findings need review under the quality policy"}`;
+  if (status === "pass") return "Passed: no issues violate the quality policy";
+  return `Gate incomplete: ${gate.evaluation?.reason || "quality policy could not be fully evaluated"}`;
 }
 
 function toolSkipReason(error?: string) {
@@ -807,7 +758,7 @@ function CancelScanButton({ scanId }: { scanId: string }) {
     mutationFn: () => api.delete(`/scans/${scanId}`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["scan", scanId] });
-      qc.invalidateQueries({ queryKey: ["scan-tools", scanId] });
+      qc.invalidateQueries({ queryKey: ["scan", scanId, "tools"] });
     },
   });
   useEffect(() => {
@@ -848,99 +799,35 @@ function CancelScanButton({ scanId }: { scanId: string }) {
   );
 }
 
-// ToolsPanel — compact card grid of per-tool status. Names are short;
-// keep status/count next to the name instead of stretching a one-column
-// row across the page.
-function ToolsPanel({
-  tools,
-  loading,
-  scanId,
-  scanStatus,
-}: {
+function ToolsPanel({ tools, loading, error, onRefresh, scanId, scanStatus }: {
   tools: ToolStatusEntry[] | undefined;
   loading: boolean;
+  error: boolean;
+  onRefresh: () => void;
   scanId: string;
   scanStatus: string;
 }) {
-  // Auto-expand while the scan is in flight so the user can watch
-  // tools tick through running → completed without an extra click.
-  // Once the scan terminates, default to collapsed — at that point
-  // the findings table is the headline and tools are drill-down.
+  if (loading) return <p className="text-sm text-muted-foreground">Loading scanner coverage…</p>;
+  if (error || !tools) return <p role="alert" className="text-sm text-status-warning">Scanner coverage unavailable. <button className="underline" onClick={onRefresh}>Retry coverage</button></p>;
+  const completed = tools.filter((tool) => tool.status === "completed");
+  const failed = tools.filter((tool) => tool.status === "failed" && !hasPartialResults(tool));
+  const partial = tools.filter(hasPartialResults);
+  const skipped = tools.filter((tool) => tool.status === "skipped");
+  const cancelled = tools.filter((tool) => tool.status === "cancelled");
+  const active = tools.filter((tool) => ["running", "pending", "queued"].includes(tool.status));
   const scanActive = scanStatus === "running" || scanStatus === "pending";
-  const [open, setOpen] = useState(scanActive);
-  const contentId = useId();
-  if (loading || !tools) {
-    return (
-      <section className="glass-card p-4">
-        <h2 className="text-base font-semibold mb-2">Tools</h2>
-        <div className="text-sm text-muted-foreground">Loading per-tool status…</div>
-      </section>
-    );
-  }
-  const completed = tools.filter((t) => t.status === "completed");
-  const failed = tools.filter((t) => t.status === "failed");
-  const skipped = tools.filter((t) => t.status === "skipped");
-  const cancelled = tools.filter((t) => t.status === "cancelled");
-  const active = tools.filter(
-    (t) => t.status === "running" || t.status === "queued" || t.status === "pending",
-  );
-  const rank = (s: ToolStatusEntry["status"]) =>
-    s === "running" || s === "pending" ? 0 : s === "queued" ? 1 : s === "failed" ? 2 : s === "skipped" ? 3 : s === "cancelled" ? 4 : 5;
-  const ordered = [...tools].sort((a, b) => {
-    const d = rank(a.status) - rank(b.status);
-    if (d !== 0) return d;
-    return b.finding_count - a.finding_count || a.name.localeCompare(b.name);
-  });
-
-  return (
-    <section className="glass-card p-4">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        aria-expanded={open}
-        aria-controls={contentId}
-        className="flex flex-wrap items-center gap-x-3 gap-y-1 w-full text-left"
-      >
-        {open ? (
-          <ChevronDownIcon className="size-4 text-muted-foreground" />
-        ) : (
-          <ChevronRightIcon className="size-4 text-muted-foreground" />
-        )}
-        <h2 className="text-base font-semibold">Tools ({tools.length})</h2>
-        <div className="text-xs text-muted-foreground tabular-nums flex flex-wrap gap-x-2">
-          <span className="text-status-success">{completed.length} done</span>
-          {failed.length > 0 && (
-            <span className="text-status-error">{failed.length} failed</span>
-          )}
-          {skipped.length > 0 && (
-            <span className="text-muted-foreground">{skipped.length} skipped</span>
-          )}
-          {cancelled.length > 0 && (
-            <span className="text-status-warning">{cancelled.length} cancelled</span>
-          )}
-          {active.length > 0 && (
-            <span className="text-status-info">{active.length} active</span>
-          )}
-        </div>
-      </button>
-
-      {open && (
-        <div
-          id={contentId}
-          className="mt-3 grid grid-cols-[repeat(auto-fill,minmax(10.5rem,1fr))] gap-1.5"
-        >
-          {ordered.map((t) => (
-            <ToolCard
-              key={t.name}
-              tool={t}
-              scanId={scanId}
-              cancellable={scanActive}
-            />
-          ))}
-        </div>
-      )}
-    </section>
-  );
+  return <details>
+    <summary className="cursor-pointer text-sm">
+      <span className="font-medium">Tools ({tools.length})</span>
+      <span className="ml-3 text-xs text-muted-foreground">{completed.length} completed · <span className={failed.length ? "text-status-error" : ""}>{failed.length} failed</span> · <span className={partial.length ? "text-status-warning" : ""}>{partial.length} partial</span> · {skipped.length} skipped{cancelled.length > 0 && ` · ${cancelled.length} stopped`}{active.length > 0 && ` · ${active.length} ${scanActive ? "active" : "not run"}`}</span>
+      {partial.map((tool) => <span key={tool.name} className="mt-1 block text-xs text-status-warning">{tool.name}: <span>{tool.raw_count ?? tool.finding_count} findings retained · incomplete coverage</span></span>)}
+    </summary>
+    {tools.length === 0 && <p className="mt-2 text-sm text-muted-foreground">{scanActive ? "Scanners are being selected." : "No scanner execution was recorded. This is not a clean result."}</p>}
+    <div className="mt-3 space-y-1">
+      {[...failed, ...partial, ...active, ...cancelled].map((tool) => <ToolCard key={tool.name} tool={tool} scanId={scanId} cancellable={scanActive} />)}
+      {[{ label: "Completed", tools: completed }, { label: "Skipped", tools: skipped }].filter((group) => group.tools.length > 0).map((group) => <details key={group.label} className="py-2 text-xs text-muted-foreground"><summary className="cursor-pointer">{group.label} tools ({group.tools.length})</summary><div className="mt-2 space-y-1">{group.tools.map((tool) => <ToolCard key={tool.name} tool={tool} scanId={scanId} />)}</div></details>)}
+    </div>
+  </details>;
 }
 
 function ToolCard({
@@ -958,12 +845,15 @@ function ToolCard({
     mutationFn: () =>
       api.delete(`/scans/${scanId}/tools/${encodeURIComponent(tool.name)}`),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["scan-tools", scanId] });
+      qc.invalidateQueries({ queryKey: ["scan", scanId, "tools"] });
       qc.invalidateQueries({ queryKey: ["scan", scanId] });
     },
   });
+  const partial = hasPartialResults(tool);
+  const notRun = !cancellable && ["queued", "pending", "running"].includes(tool.status);
   const icon =
-    tool.status === "completed" ? (
+    notRun ? <StopCircleIcon className="size-3.5 text-muted-foreground shrink-0" /> :
+    partial ? <AlertTriangleIcon className="size-3.5 text-status-warning shrink-0" /> : tool.status === "completed" ? (
       <CheckCircle2Icon className="size-3.5 text-status-success shrink-0" />
     ) : tool.status === "failed" ? (
       <XCircleIcon className="size-3.5 text-status-error shrink-0" />
@@ -977,7 +867,7 @@ function ToolCard({
       <LoaderIcon className="size-3.5 text-status-info animate-spin shrink-0" />
     );
   const tone =
-    tool.status === "failed"
+    partial ? "border-status-warning/30 bg-status-warning/5" : tool.status === "failed"
       ? "border-status-error/30 bg-status-error/5"
       : tool.status === "cancelled"
         ? "border-status-warning/25 bg-status-warning/5"
@@ -987,10 +877,10 @@ function ToolCard({
             ? "border-status-info/30 bg-status-info/5"
             : "border-border bg-muted/10";
   const meta =
-    tool.status === "completed"
+    notRun ? "not run" : partial ? "partial" : tool.status === "completed"
       ? tool.finding_count > 0
-        ? String(tool.finding_count)
-        : "0"
+        ? `${tool.finding_count} findings`
+        : "0 findings"
       : tool.status === "queued"
         ? "queued"
         : tool.status === "cancelled"
@@ -1005,6 +895,7 @@ function ToolCard({
   const reason = toolSkipReason(tool.error);
   const canShowErr =
     (tool.status === "failed" ||
+      tool.status === "partial" ||
       tool.status === "cancelled" ||
       tool.status === "skipped") &&
     !!tool.error;
@@ -1022,9 +913,10 @@ function ToolCard({
             type="button"
             onClick={() => setShowErr(!showErr)}
             aria-expanded={showErr}
+            aria-label={`${showErr ? "Hide" : "Show"} details for ${tool.name}`}
             className="text-[10px] underline text-muted-foreground hover:text-foreground shrink-0"
           >
-            {showErr ? "hide" : "err"}
+            {showErr ? "Hide" : "Details"}
           </button>
         )}
         {canCancel && (
@@ -1040,6 +932,7 @@ function ToolCard({
           </button>
         )}
       </div>
+      {partial && <p className="mt-1 text-xs text-status-warning">{(tool.raw_count ?? tool.finding_count).toLocaleString()} findings retained · incomplete coverage</p>}
       {reason && (
         <p
           className="mt-1 text-[10px] text-muted-foreground truncate"
@@ -1167,4 +1060,13 @@ function formatDuration(ms: number): string {
   const h = Math.floor(m / 60);
   const remM = m % 60;
   return remM === 0 ? `${h}h` : `${h}h ${remM}m`;
+}
+
+function scopeLabel(scope: ScanScope | null | undefined) {
+  if (!scope) return "No selectors recorded";
+  const parts = scope.profile ? [`Profile ${scope.profile}`] : [];
+  for (const [key, label] of [["tools", "Tools"], ["categories", "Categories"], ["include_paths", "Include"], ["exclude_paths", "Exclude"]] as const) {
+    if (scope[key]?.length) parts.push(`${label}: ${scope[key].join(", ")}`);
+  }
+  return parts.join(" · ") || "No selectors recorded";
 }

@@ -74,6 +74,18 @@ export function safeErrorMessage(
   if (candidate.code === "community_limit") {
     return COMMUNITY_LIMIT_COPY;
   }
+  const registryCopy: Record<string, string> = {
+    registry_rate_limited:
+      "The image registry is rate limiting downloads (Docker Hub allows a limited number of anonymous pulls). Wait and retry, sign the Docker host in to the registry, or configure a registry mirror.",
+    registry_auth_failed:
+      "The registry refused this image: it is private or the name is wrong. Sign the Docker host in to the registry, then retry.",
+    image_not_found: "The registry does not have this image version. Check the configured scanner image tag.",
+    registry_unreachable:
+      "The Docker host could not reach the registry (DNS, proxy, TLS or network). Check outbound access, then retry.",
+  };
+  if (typeof candidate.code === "string" && registryCopy[candidate.code]) {
+    return registryCopy[candidate.code];
+  }
   switch (candidate.status) {
     case 401:
       return "Your session expired. Sign in again to continue.";

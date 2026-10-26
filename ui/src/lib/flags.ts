@@ -29,5 +29,5 @@ export function useSettingsMap() {
 // confirmed on (no flash of an off-by-default feature).
 export function useFlag(key: string) {
   const q = useSettingsMap();
-  return { enabled: q.data?.[key] === "true", isLoading: q.isLoading };
+  return { enabled: !q.isError && q.data?.[key] === "true", isLoading: q.isLoading, isError: q.isError, refetch: q.refetch };
 }

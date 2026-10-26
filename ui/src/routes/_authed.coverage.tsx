@@ -1,10 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { LayersIcon } from "lucide-react";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import { PageHeader, PageShell } from "@/components/ui/page";
 import { DataTable, type Column } from "@/components/ui/data-table";
-import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState, PermissionState } from "@/components/ui/empty-state";
 
 type CoverageTool = {
   name: string;
@@ -80,18 +79,14 @@ function CoveragePage() {
   return (
     <PageShell>
       <PageHeader
-        title="Coverage"
+        title="Scanner coverage"
         description={
           q.data?.honesty ??
           "Honest scanner matrix from tools.yaml. Wolf does not claim CPG depth from federated tools."
         }
       />
-      {q.isError ? (
-        <EmptyState
-          icon={LayersIcon}
-          title="Coverage unavailable"
-          description="The scanner manifest could not be loaded."
-        />
+      {q.error instanceof ApiError && q.error.status === 403 ? <PermissionState description="You do not have access to scanner coverage." /> : q.isError ? (
+        <ErrorState title="Coverage unavailable" description="The scanner manifest could not be loaded." onRetry={() => void q.refetch()} />
       ) : (
         <DataTable
           data={tools}

@@ -44,7 +44,7 @@
   --secondary: 240 4.8% 95.9%;
   --secondary-foreground: 240 5.9% 10%;
   --muted: 240 4.8% 95.9%;
-  --muted-foreground: 240 3.8% 46.1%;
+  --muted-foreground: 240 3.8% 42%;
   --accent: 240 4.8% 95.9%;
   --accent-foreground: 240 5.9% 10%;
   --destructive: 0 84.2% 60.2%;
@@ -63,7 +63,7 @@
      `bg-elevated` / `text-faint` / `border-border-strong` call sites keep
      resolving instead of silently dropping to transparent. */
   --elevated: 240 4.8% 95.9%;
-  --faint: 240 3.8% 46.1%;
+  --faint: 240 3.8% 42%;
   --border-strong: 240 5.9% 80%;
   --destructive-text: 0 72% 45%;
   --brand: 240 5.9% 10%;
@@ -73,12 +73,12 @@
   /* Astronomer's fixed status scale. These are tuned for light surfaces —
      they are used as pill *text* over a 10%-alpha wash of themselves, which
      only reads on a light ground. See the dark overrides below. */
-  --status-success: #10b981;
-  --status-warning: #f59e0b;
-  --status-error: #ef4444;
-  --status-info: #3b82f6;
-  --status-pending: #6366f1;
-  --status-neutral: #6b7280;
+  --status-success: #047857;
+  --status-warning: #92400e;
+  --status-error: #b91c1c;
+  --status-info: #1d4ed8;
+  --status-pending: #4338ca;
+  --status-neutral: #4b5563;
 }
 
 .dark {
@@ -235,7 +235,7 @@
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
-    font-family: var(--font-sans);
+    font-family: var(--font-inter);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     font-feature-settings: "rlig" 1, "calt" 1;
@@ -316,6 +316,7 @@
   }
 
   .log-viewer {
+    --muted-foreground: 240 5% 64.9%;
     background: #0a0a0f;
     font-family: var(--font-mono);
     font-size: 13px;
@@ -685,4 +686,9 @@
 }
 @utility bg-gradient-radial {
   background-image: radial-gradient(var(--tw-gradient-stops));
+}
+
+/* Code must show exactly what was written: no "!=" → "≠" ligatures in security evidence. */
+code, pre, kbd, samp, .font-mono {
+  font-variant-ligatures: none;
 }

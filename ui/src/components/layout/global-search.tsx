@@ -31,13 +31,17 @@ export function GlobalSearch() {
         active?.getAttribute("contenteditable") === "true";
       if (!isTypingTarget) {
         e.preventDefault();
-        inputRef.current?.focus();
-        inputRef.current?.select();
+        if (inputRef.current?.getClientRects().length) {
+          inputRef.current.focus();
+          inputRef.current.select();
+        } else {
+          openPalette();
+        }
       }
     }
     document.addEventListener("keydown", onKeydown);
     return () => document.removeEventListener("keydown", onKeydown);
-  }, []);
+  }, [openPalette]);
 
   return (
     <div className="relative w-full max-w-xs">
@@ -50,7 +54,7 @@ export function GlobalSearch() {
         onKeyDown={(e) => {
           if (e.key === "Enter") {
             e.preventDefault();
-            openPalette();
+            openPalette(value);
           }
           if (e.key === "Escape") inputRef.current?.blur();
         }}

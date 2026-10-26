@@ -5,6 +5,7 @@
 import { useEffect } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { useDebouncedValue } from "@tanstack/react-pacer";
 import {
   PackageIcon,
   GaugeIcon,
@@ -16,7 +17,7 @@ import {
   LayoutDashboardIcon,
 } from "lucide-react";
 import { api } from "@/lib/api";
-import type { Collection, Repo, Scan } from "@/lib/types";
+import type { Collection, Finding, Repo, Scan } from "@/lib/types";
 import { useUIStore } from "@/lib/store-ui";
 import {
   CommandDialog,
@@ -30,6 +31,9 @@ import {
 
 export function CommandPalette() {
   const open = useUIStore((s) => s.paletteOpen);
+  const query = useUIStore((s) => s.paletteQuery);
+  const setQuery = useUIStore((s) => s.setPaletteQuery);
+  const [search] = useDebouncedValue(query.trim(), { wait: 200 });
   const close = useUIStore((s) => s.closePalette);
   const toggle = useUIStore((s) => s.togglePalette);
   const openShortcuts = useUIStore((s) => s.openShortcuts);
@@ -73,6 +77,11 @@ export function CommandPalette() {
     },
     enabled: open,
   });
+  const findings = useQuery({
+    queryKey: ["findings", "search", search],
+    queryFn: async () => (await api.get<Finding[]>(`/findings?q=${encodeURIComponent(search)}&per_page=10`)).data ?? [],
+    enabled: open && search.length >= 2,
+  });
 
   function go(to: string) {
     close();
@@ -81,9 +90,12 @@ export function CommandPalette() {
 
   return (
     <CommandDialog open={open} onOpenChange={(o) => (o ? toggle() : close())}>
-      <CommandInput placeholder="Search collections, scans, repos, or jump to a page…" />
+      <CommandInput value={query} onValueChange={setQuery} placeholder="Search repos, findings, recent scans, or pages…" />
       <CommandList>
-        <CommandEmpty>No matches.</CommandEmpty>
+        <CommandEmpty>{findings.isFetching ? "Searching…" : "No matches."}</CommandEmpty>
+        {(repos.isError || collections.isError || recentScans.isError || findings.isError) && (
+          <p role="alert" className="px-4 py-2 text-sm text-destructive">Some results could not load. Close and reopen search to retry.</p>
+        )}
 
         <CommandGroup heading="Navigate">
           <PaletteItem
@@ -142,7 +154,7 @@ export function CommandPalette() {
 
         {collections.data && collections.data.length > 0 && (
           <CommandGroup heading="Collections">
-            {collections.data.slice(0, 8).map((c) => (
+            {collections.data.map((c) => (
               <PaletteItem
                 key={c.id}
                 onSelect={() => go(`/collections/${c.id}`)}
@@ -170,14 +182,26 @@ export function CommandPalette() {
 
         {repos.data && repos.data.length > 0 && (
           <CommandGroup heading="Repositories">
-            {repos.data.slice(0, 8).map((r) => (
+            {repos.data.map((r) => (
               <PaletteItem
                 key={r.id}
-                onSelect={() => go(`/scans?repo=${r.id}`)}
+                onSelect={() => { close(); navigate({ to: "/repos/$repoId", params: { repoId: r.id } }); }}
                 icon={BugIcon}
                 label={r.name}
                 hint={r.default_branch}
               />
+            ))}
+          </CommandGroup>
+        )}
+        {findings.data && findings.data.length > 0 && (
+          <CommandGroup heading="Findings" forceMount>
+            {findings.data.map((finding) => (
+              <CommandItem key={finding.id} value={`finding ${finding.id}`} forceMount
+                onSelect={() => { close(); navigate({ to: "/findings/$findingId", params: { findingId: finding.id } }); }}>
+                <BugIcon className="size-4 text-muted-foreground" />
+                <span className="flex-1 truncate">{finding.title}</span>
+                <span className="text-xs text-muted-foreground">{finding.severity}</span>
+              </CommandItem>
             ))}
           </CommandGroup>
         )}

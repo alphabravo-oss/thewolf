@@ -4,7 +4,7 @@
 import { useState } from "react";
 import { ArrowRightIcon, EyeIcon, EyeOffIcon } from "lucide-react";
 import { WolfLogo } from "@/components/wolf-logo";
-import { shortRev, useVersion } from "@/lib/edition";
+import { useVersion } from "@/lib/edition";
 
 function Brand({ className = "" }: { className?: string }) {
   const v = useVersion();
@@ -12,9 +12,9 @@ function Brand({ className = "" }: { className?: string }) {
     <div className={"flex items-center gap-2.5 " + className}>
       <WolfLogo className="size-8" />
       <div className="leading-tight">
-        <div className="text-sm font-semibold">{v.data?.product ?? "The Wolf"}</div>
+        <div className="text-sm font-semibold">Wolf</div>
         <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-          {v.data?.edition === "enterprise" ? "Enterprise" : "Community"} · by AlphaBravo
+          {v.data?.edition === "enterprise" ? "Enterprise" : "Community"}
         </div>
       </div>
     </div>
@@ -31,9 +31,8 @@ function Feature({ dot, label }: { dot: string; label: string }) {
 }
 
 export function AuthShell({ children }: { children: React.ReactNode }) {
-  const v = useVersion();
   return (
-    <div className="min-h-screen grid lg:grid-cols-2 bg-background text-foreground">
+    <main className="min-h-dvh font-sans grid lg:grid-cols-2 bg-background text-foreground">
       {/* Hero (left) */}
       <div className="relative hidden lg:flex flex-col justify-between p-12 border-r border-border overflow-hidden">
         <div
@@ -43,14 +42,11 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
         <Brand />
 
         <div className="max-w-md space-y-4">
-          <h1 className="text-[2.5rem] font-bold leading-[1.08] tracking-tight">
-            Deterministic scanning for{" "}
-            <span className="text-muted-foreground">better code</span>
-          </h1>
+          <p className="text-[2.5rem] font-bold leading-[1.08] tracking-tight">
+            Find risks. Ship with confidence.
+          </p>
           <p className="text-sm leading-relaxed text-muted-foreground">
-            Improve human-written and AI-assisted software with reproducible tools.
-            Wolf runs version-pinned scanners, quality gates, and targeted rescans so
-            every change can be measured, improved, and trusted.
+            Scan your repositories, investigate findings, and verify fixes with repeatable evidence.
           </p>
         </div>
 
@@ -61,19 +57,12 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
             <Feature dot="bg-status-info" label="AI assistance under guardrails" />
           </div>
           <div className="text-xs text-muted-foreground space-y-1">
-            <p>
-              Community v{v.data?.community?.version ?? v.data?.version ?? ""}
-              {v.data?.community?.commit ? ` · ${shortRev(v.data.community.commit)}` : ""}
-            </p>
-            {v.data?.overlay ? (
-              <p>Enterprise overlay {shortRev(v.data.overlay.version || v.data.overlay.commit)}</p>
-            ) : null}
             Built by{" "}
             <a
               href="https://alphabravo.io"
               target="_blank"
               rel="noreferrer"
-              className="text-foreground hover:underline"
+              className="text-foreground underline underline-offset-2"
             >
               AlphaBravo
             </a>
@@ -88,7 +77,7 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
           {children}
         </div>
       </div>
-    </div>
+    </main>
   );
 }
 
@@ -143,6 +132,7 @@ export function PasswordInput({
     <div className="relative">
       <input
         {...props}
+        aria-invalid={invalid || undefined}
         type={show ? "text" : "password"}
         className={
           authInputCls +
@@ -152,10 +142,9 @@ export function PasswordInput({
       />
       <button
         type="button"
-        tabIndex={-1}
         onClick={() => setShow((s) => !s)}
         aria-label={show ? "Hide password" : "Show password"}
-        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+        className="absolute right-1 top-1/2 -translate-y-1/2 grid size-8 place-items-center rounded-md text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
       >
         {show ? <EyeOffIcon className="size-4" /> : <EyeIcon className="size-4" />}
       </button>

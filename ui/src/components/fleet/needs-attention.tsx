@@ -12,6 +12,7 @@ const reasonLabel: Record<NeedsAttentionRow["reason"], string> = {
   stale: "Stale scan",
   new_high: "New high",
   scan_failed: "Scan failed",
+  incomplete: "Incomplete coverage",
 };
 
 // Each reason maps onto the shared status vocabulary so its pill picks up the
@@ -20,6 +21,7 @@ const reasonStatus: Record<NeedsAttentionRow["reason"], string> = {
   gate_failing: "failed",
   scan_failed: "failed",
   new_high: "high",
+  incomplete: "incomplete",
   stale: "stale",
 };
 

@@ -193,6 +193,14 @@ export interface RepoMap {
   updated_at: string;
 }
 
+export interface ScanScope {
+  profile?: string;
+  tools?: string[];
+  categories?: string[];
+  include_paths?: string[];
+  exclude_paths?: string[];
+}
+
 export interface Scan {
   id: string;
   user_id: string;
@@ -216,6 +224,10 @@ export interface Scan {
   remediation_id?: string;
   fix_job_id?: string;
   status: ScanStatus;
+  completeness?: "pending" | "complete" | "incomplete";
+  completion_reason?: string;
+  terminal_reason?: string;
+  scanner_scopes?: { tool_name: string; status: string; requested_scope: ScanScope; effective_scope: ScanScope; scope_message?: string }[];
   failure_code?: string;
   failure_message?: string;
   attempt?: number;
@@ -274,6 +286,8 @@ export interface Vulnerability {
 }
 
 export interface Finding {
+  cluster_id?: string;
+  evidence?: Finding[];
   id: string;
   scan_id: string;
   repo_id: string;
@@ -295,6 +309,11 @@ export interface Finding {
   status: FindingStatus;
   cwe_id?: string;
   rule_id?: string;
+  package_name?: string;
+  package_version?: string;
+  package_ecosystem?: string;
+  package_url?: string;
+  advisory_id?: string;
   fine_category?: string;
   confidence?: string;
   corroborated_by?: string[];

@@ -16,7 +16,7 @@
 //   - resizing split out of sizing into its own feature
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   useTable,
@@ -122,6 +122,7 @@ interface DataTableProps<T> {
   keyExtractor: (row: T) => string;
   density?: "compact" | "comfortable";
   searchable?: boolean;
+  columnVisibilityControl?: boolean;
   searchPlaceholder?: string;
   selectable?: boolean;
   onRowClick?: (row: T) => void;
@@ -173,6 +174,10 @@ interface DataTableProps<T> {
    */
   serverSide?: {
     rowCount: number;
+    search?: string;
+    onSearchChange?: (value: string) => void;
+    sorting?: SortingState;
+    onSortingChange?: (value: SortingState) => void;
     pagination: PaginationState;
     onPaginationChange: (next: PaginationState) => void;
   };
@@ -267,6 +272,7 @@ export function DataTable<T>({
   errorMessage = "Failed to load — try again",
   onRetry,
   toolbar,
+  columnVisibilityControl = true,
   className,
   persistKey,
   resizable = false,
@@ -280,7 +286,7 @@ export function DataTable<T>({
   // The search input is controlled by `searchInput` (instant) while the filter
   // the table actually applies is the 200ms-debounced copy — typing doesn't
   // re-filter the row model on every keystroke.
-  const [searchInput, setSearchInput] = useState("");
+  const [searchInput, setSearchInput] = useState(serverSide?.search ?? "");
   const [globalFilter] = useDebouncedValue(searchInput, { wait: 200 });
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
@@ -318,7 +324,7 @@ export function DataTable<T>({
       columns.map((col) => ({
         id: col.key,
         accessorFn: (row: RowOf<T>) => sortValue(col, row),
-        enableSorting: col.sortable !== false,
+        enableSorting: col.sortable !== false && (!effectiveServerSide || !!effectiveServerSide.onSortingChange),
         enableHiding: true,
         enableColumnFilter: !!col.filter,
         // Faceted multi-select: keep the row when nothing is selected, else
@@ -339,7 +345,7 @@ export function DataTable<T>({
           return String(av).localeCompare(String(bv));
         },
       })),
-    [columns],
+    [columns, effectiveServerSide],
   );
 
   const table = useTable<Features, RowOf<T>>({
@@ -349,7 +355,7 @@ export function DataTable<T>({
     getRowId: keyExtractor,
     state: {
       globalFilter,
-      sorting,
+      sorting: effectiveServerSide?.sorting ?? sorting,
       columnFilters,
       rowSelection,
       columnVisibility,
@@ -371,6 +377,8 @@ export function DataTable<T>({
         return next;
       }),
     manualPagination: !!effectiveServerSide,
+    manualSorting: !!effectiveServerSide,
+    manualFiltering: !!effectiveServerSide,
     ...(effectiveServerSide ? { rowCount: effectiveServerSide.rowCount } : {}),
     onPaginationChange: (updater: Updater<PaginationState>) => {
       if (effectiveServerSide) {
@@ -402,7 +410,12 @@ export function DataTable<T>({
     // Programmatic setGlobalFilter routes through the same debounce as typing.
     onGlobalFilterChange: (updater: Updater<string>) =>
       setSearchInput((prev) => (typeof updater === "function" ? updater(prev) : updater)),
-    onSortingChange: setSorting,
+    onSortingChange: (updater: Updater<SortingState>) => {
+      if (effectiveServerSide?.onSortingChange) {
+        const previous = effectiveServerSide.sorting ?? [];
+        effectiveServerSide.onSortingChange(typeof updater === "function" ? updater(previous) : updater);
+      } else setSorting(updater);
+    },
     onColumnFiltersChange: setColumnFilters,
     onColumnVisibilityChange: (updater: Updater<ColumnVisibilityState>) =>
       setColumnVisibility((prev) => {
@@ -427,10 +440,16 @@ export function DataTable<T>({
       }),
   });
 
-  // Snap back to page 1 when the debounced search takes effect.
-  useEffect(() => {
-    if (table.state.pagination.pageIndex !== 0) table.setPageIndex(0);
-  }, [globalFilter, table]);
+  const serverSearch = effectiveServerSide?.search;
+  const onServerSearch = effectiveServerSide?.onSearchChange;
+  useEffect(() => { if (serverSearch !== undefined) setSearchInput(serverSearch); }, [serverSearch]);
+  const applySearch = useEffectEvent(() => {
+    if (onServerSearch) {
+      if (globalFilter !== (serverSearch ?? "")) onServerSearch(globalFilter);
+    } else if (!effectiveServerSide && table.state.pagination.pageIndex !== 0) table.setPageIndex(0);
+  });
+  // External URL changes must not be overwritten by the old debounced input.
+  useEffect(() => { applySearch(); }, [globalFilter]);
 
   // A column is visible unless explicitly toggled off. Derived from the
   // visibility state we own, so the memo deps are exactly what it reads.
@@ -439,7 +458,7 @@ export function DataTable<T>({
     [columns, columnVisibility],
   );
 
-  const facetColumns = activeColumns.filter((c) => c.filter);
+  const facetColumns = effectiveServerSide ? [] : activeColumns.filter((c) => c.filter);
 
   // Virtualized mode windows the full filtered+sorted model; paginated mode
   // takes the current page. (v8 achieved this by omitting the pagination row
@@ -486,10 +505,9 @@ export function DataTable<T>({
   return (
     <div className={cn("space-y-3", className)}>
       {/* Toolbar */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 flex-1">
-          {searchable && (
-            <div className="relative max-w-sm flex-1">
+      {(searchable || facetColumns.length > 0 || toolbar || columnVisibilityControl) && <div className="flex flex-wrap items-center gap-2">
+          {searchable && (!effectiveServerSide || !!onServerSearch) && (
+            <div className="relative basis-full sm:basis-48 sm:max-w-sm sm:flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <input
                 type="text"
@@ -525,9 +543,8 @@ export function DataTable<T>({
             );
           })}
           {toolbar}
-        </div>
 
-        <div className="relative">
+        {columnVisibilityControl && <div className="relative ml-auto">
           <button
             type="button"
             onClick={() => setShowColumnToggle(!showColumnToggle)}
@@ -560,8 +577,8 @@ export function DataTable<T>({
               })}
             </div>
           )}
-        </div>
-      </div>
+        </div>}
+      </div>}
 
       {selectable && selectedRows.length > 0 && bulkActions ? (
         <div
@@ -648,7 +665,15 @@ export function DataTable<T>({
                               ? { width: col.width }
                               : undefined
                         }
+                        tabIndex={col.sortable !== false ? 0 : undefined}
                         onClick={() => col.sortable !== false && column?.toggleSorting()}
+                        onKeyDown={(e) => {
+                          if (col.sortable !== false && (e.key === "Enter" || e.key === " ")) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            column?.toggleSorting();
+                          }
+                        }}
                       >
                         <div
                           className={cn(
@@ -794,7 +819,7 @@ export function DataTable<T>({
       {/* Pagination — hidden in virtualized mode (the virtualizer windows the
           full row model, so there are no pages). */}
       {!virtualized && totalPages > 1 && (
-        <div className="flex items-center justify-between text-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
           <span className="text-muted-foreground">
             Showing {totalRows === 0 ? 0 : page * effPageSize + 1}-{page * effPageSize + rows.length} of{" "}
             {totalRows.toLocaleString()}
@@ -989,7 +1014,15 @@ function VirtualizedGrid<T>({
                   alignClass(col),
                 )}
                 style={colStyle(col)}
+                tabIndex={col.sortable !== false ? 0 : undefined}
                 onClick={() => col.sortable !== false && column?.toggleSorting()}
+                onKeyDown={(e) => {
+                  if (col.sortable !== false && (e.key === "Enter" || e.key === " ")) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    column?.toggleSorting();
+                  }
+                }}
               >
                 {col.header}
                 {col.sortable !== false && (

@@ -1,8 +1,11 @@
+import { useState } from "react";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2Icon, UploadIcon } from "lucide-react";
 import { toast } from "sonner";
 import { StatusBadge } from "@/components/fixes/status-badge";
+import { FixerSetupBanner } from "@/components/fixes/fixer-setup-banner";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { RemediateScanButton } from "@/components/fixes/remediate-scan-button";
 import {
@@ -31,8 +34,9 @@ export function ScanAgentsPanel({
   sourcePath?: string;
 }) {
   const qc = useQueryClient();
-  const lineageQ = useScanLineage(scanId);
+  const [confirmPush, setConfirmPush] = useState(false);
   const { enabled } = useAutofixEnabled();
+  const lineageQ = useScanLineage(scanId, enabled);
   const fixableQ = useRepoFixable(repoId, enabled && !!repoId);
   const lin = lineageQ.data;
   const runs = lin?.runs ?? [];
@@ -44,10 +48,8 @@ export function ScanAgentsPanel({
     .reverse()
     .find(
       (r) =>
-        !r.pushed &&
-        (r.status === "awaiting_push" ||
-          r.status === "push_failed" ||
-          (r.status === "failed" && !!r.result_branch)),
+        r.status === "push_failed" ||
+        (!r.pushed && r.status === "awaiting_push"),
     );
   const canPush = Boolean(
     github && rem?.state === "open" && pushable && fixableQ.data?.can_push,
@@ -60,6 +62,7 @@ export function ScanAgentsPanel({
   const push = useMutation({
     mutationFn: () => resumeFix(pushable!.job_id, "push"),
     onSuccess: () => {
+      setConfirmPush(false);
       toast.message("Pushing branch to GitHub…");
       qc.invalidateQueries({ queryKey: ["scan-lineage", scanId] });
       qc.invalidateQueries({ queryKey: ["fix-jobs"] });
@@ -67,6 +70,8 @@ export function ScanAgentsPanel({
     onError: (e) =>
       toast.error(e instanceof Error ? e.message : "Push failed"),
   });
+
+  if (!enabled) return <FixerSetupBanner />;
 
   const show =
     (lin &&
@@ -82,6 +87,10 @@ export function ScanAgentsPanel({
 
   return (
     <section className="glass-card overflow-hidden">
+      <ConfirmDialog open={confirmPush} onOpenChange={setConfirmPush}
+        title="Push this fix branch?" variant="default" confirmLabel="Push branch"
+        description={<>Publish <code>{pushable?.result_branch || rem?.branch}</code> to GitHub and open a pull request for review.</>}
+        pending={push.isPending} confirmDisabled={!canPush || busy} onConfirm={() => push.mutate()} />
       <div className="px-5 py-3 flex items-center justify-between gap-3 border-b border-border">
         <div className="min-w-0">
           <h2 className="text-sm font-medium">Agents</h2>
@@ -102,7 +111,7 @@ export function ScanAgentsPanel({
             <button
               type="button"
               disabled={push.isPending || busy}
-              onClick={() => push.mutate()}
+              onClick={() => setConfirmPush(true)}
               className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-50"
             >
               {push.isPending ? (
@@ -110,8 +119,8 @@ export function ScanAgentsPanel({
               ) : (
                 <UploadIcon className="size-4" />
               )}
-              {pushable?.status === "failed" || pushable?.status === "push_failed"
-                ? "Retry push"
+              {pushable?.status === "push_failed"
+                ? (pushable.pushed ? "Retry PR creation" : "Retry push")
                 : "Push to GitHub"}
             </button>
           ) : null}
@@ -146,9 +155,10 @@ export function ScanAgentsPanel({
             <span className="font-mono"> @ {published.push_sha.slice(0, 7)}</span>
           ) : null}
         </div>
-      ) : lastFail?.error ? (
+      ) : null}
+      {lastFail?.error ? (
         <div className="px-5 py-3 text-sm border-b border-status-error/30 bg-status-error/10 text-status-error">
-          {pushFailureHint(lastFail.error)}
+          {lastFail.status === "push_failed" ? pushFailureHint(lastFail.error) : lastFail.error}
         </div>
       ) : null}
 

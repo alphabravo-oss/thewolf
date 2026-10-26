@@ -1,3 +1,4 @@
+import { findingRuleHint, findingTitle } from "@/lib/finding-title";
 // Fleet findings inbox. Three views:
 //   - By repo: current-open counts per product (the working default)
 //   - By rule: the same CVE/rule across many products
@@ -9,8 +10,9 @@ import type { PaginationState } from "@tanstack/react-table";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BugIcon, ChevronDownIcon } from "lucide-react";
 import { toast } from "sonner";
-import { api } from "@/lib/api";
-import { EmptyState } from "@/components/ui/empty-state";
+import { api, ApiError } from "@/lib/api";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { EmptyState, PermissionState } from "@/components/ui/empty-state";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { PageHeader, PageShell } from "@/components/ui/page";
 import { SeverityBadge } from "@/components/severity-badge";
@@ -36,7 +38,7 @@ type View = "repo" | "rule" | "list";
 
 // view is omitted for the default "by repo" inbox so /findings links
 // elsewhere do not have to pass search params.
-type Search = { view?: View; q?: string };
+type Search = { scope?: "new" | "all"; severity?: string; view?: View; q?: string; page?: number; sort?: string; order?: "asc" | "desc" };
 
 export const Route = createFileRoute("/_authed/findings/")({
   validateSearch: (s: Record<string, unknown>): Search => {
@@ -55,6 +57,11 @@ export const Route = createFileRoute("/_authed/findings/")({
     return {
       ...(view !== "repo" ? { view } : {}),
       ...(q ? { q } : {}),
+      scope: s.scope === "all" || s.scope === "new" ? s.scope : undefined,
+      severity: typeof s.severity === "string" && ["critical", "high", "medium", "low", "info"].includes(s.severity) ? s.severity : undefined,
+      page: Number.isSafeInteger(Number(s.page)) && Number(s.page) > 0 ? Number(s.page) : undefined,
+      sort: typeof s.sort === "string" && ["severity", "title", "file"].includes(s.sort) ? s.sort : undefined,
+      order: s.order === "asc" ? "asc" : "desc",
     };
   },
   component: FindingsPage,
@@ -70,8 +77,8 @@ function FindingsPage() {
   return (
     <PageShell>
       <PageHeader
-        title="Findings"
-        description="Current open issues across the fleet. Work a product from its repo or scan page — this list is the inbox, not a merge of every scan."
+        title="All findings"
+        description="Current open issues across all repositories you can access. Repeated scan observations are deduplicated. Open a repository to review its current findings."
         actions={
           <div className="flex items-center gap-1.5">
             {(
@@ -146,7 +153,8 @@ function ByRepo() {
     },
   ];
 
-  if (!q.isLoading && rows.length === 0) {
+  if (q.error instanceof ApiError && q.error.status === 403) return <PermissionState description="You do not have access to these findings." />;
+  if (!q.isLoading && !q.isError && rows.length === 0) {
     return (
       <EmptyState
         icon={BugIcon}
@@ -223,10 +231,8 @@ function ByRule() {
             aria-hidden="true"
           />
           <div className="min-w-0">
-            <div className="truncate font-mono text-xs">{r.key}</div>
-            {r.title && r.title !== r.key ? (
-              <div className="truncate text-[11px] text-muted-foreground">{r.title}</div>
-            ) : null}
+            <div className="truncate text-sm font-medium">{findingTitle({ title: r.title, rule_id: r.key })}</div>
+            <div className="mt-1 truncate font-mono text-xs text-muted-foreground">{r.key}</div>
             {open === r.key ? (
               <div className="mt-1.5 flex flex-wrap gap-2">
                 {(r.repo_ids ?? []).map((id, i) => (
@@ -237,7 +243,7 @@ function ByRule() {
                     className="text-xs font-medium hover:underline"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    {r.repo_names?.[i] || id.slice(0, 8)}
+                    {r.repo_names?.[i] || "Open repository"}
                   </Link>
                 ))}
               </div>
@@ -279,7 +285,8 @@ function ByRule() {
     },
   ];
 
-  if (!q.isLoading && rows.length === 0) {
+  if (q.error instanceof ApiError && q.error.status === 403) return <PermissionState description="You do not have access to these findings." />;
+  if (!q.isLoading && !q.isError && rows.length === 0) {
     return (
       <EmptyState
         icon={BugIcon}
@@ -309,20 +316,24 @@ function ByRule() {
 function FindingsList() {
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const [scope, setScope] = useState<"new" | "all">("new");
-  const [pagination, setPagination] = useState<PaginationState>({
-    pageIndex: 0,
-    pageSize: 50,
-  });
+  const search = Route.useSearch();
+  const scope = search.scope ?? "new";
+  const setScope = (scope: "new" | "all") => void navigate({ to: "/findings", search: { ...search, view: "list", scope, page: 1 } });
+  const pagination = { pageIndex: (search.page ?? 1) - 1, pageSize: 50 };
+  const setPagination = (next: PaginationState) => void navigate({ to: "/findings", search: { ...search, view: "list", page: next.pageIndex + 1 } });
 
   const q = useQuery({
-    queryKey: ["findings", "list", scope, pagination.pageIndex, pagination.pageSize],
+    queryKey: ["findings", "list", scope, search, pagination.pageIndex, pagination.pageSize],
     queryFn: async () => {
       const params = new URLSearchParams({
         page: String(pagination.pageIndex + 1),
         per_page: String(pagination.pageSize),
         status: "open",
       });
+      if (search.q) params.set("q", search.q);
+      if (search.severity) params.set("severity", search.severity);
+      if (search.sort) params.set("sort", search.sort === "file" ? "file_path" : search.sort);
+      params.set("order", search.order ?? "desc");
       if (scope === "new") params.set("baseline_state", "new,resurfaced");
       const r = await api.get<Finding[]>(`/findings?${params.toString()}`);
       const items = r.data ?? [];
@@ -331,18 +342,23 @@ function FindingsList() {
   });
   const rows = q.data?.items ?? EMPTY_FINDINGS;
 
+  // The bulk endpoint stops at the first error without a per-item receipt.
+  // Individual requests let the operator see exactly which selections failed.
   const bulk = useMutation({
     mutationFn: async (vars: { ids: string[]; status: FindingStatus }) => {
-      await api.post("/findings/bulk", vars);
+      const failed: { id: string; message: string }[] = [];
+      for (const id of vars.ids) {
+        try { await api.put(`/findings/${id}/status`, { status: vars.status }); }
+        catch (error) { failed.push({ id, message: error instanceof Error ? error.message : "Update failed" }); }
+      }
+      return { updated: vars.ids.length - failed.length, failed };
     },
-    onSuccess: (_d, vars) => {
+    onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ["findings"] });
-      toast.success(
-        `Marked ${vars.ids.length} finding${vars.ids.length === 1 ? "" : "s"} as ${vars.status.replace("_", " ")}`,
-      );
+      qc.invalidateQueries({ queryKey: ["finding"] });
+      if (result.failed.length) toast.error(`${result.updated} updated; ${result.failed.length} could not be updated`);
+      else toast.success(`Updated ${result.updated} findings`);
     },
-    onError: (e) =>
-      toast.error(e instanceof Error ? e.message : "Bulk update failed"),
   });
 
   const columns: Column<Finding>[] = [
@@ -356,20 +372,21 @@ function FindingsList() {
     {
       key: "title",
       header: "Title",
-      sortAccessor: (f) => f.title,
+      sortAccessor: (f) => findingTitle(f),
       accessor: (f) => (
         <Link
           to="/findings/$findingId"
           params={{ findingId: f.id }}
-          className="hover:underline"
+          className="block w-44 whitespace-normal font-medium hover:underline sm:w-auto sm:min-w-56 sm:max-w-md"
           onClick={(e) => e.stopPropagation()}
         >
-          {f.title}
+          {findingTitle(f)}{findingRuleHint(f) && <span className="mt-1 block max-w-44 truncate font-mono text-xs font-normal text-muted-foreground sm:max-w-sm" title={f.rule_id}>{findingRuleHint(f)}</span>}
         </Link>
       ),
     },
     {
       key: "repo",
+      sortable: false,
       header: "Repo",
       sortAccessor: (f) => f.repo?.name ?? f.repo_id,
       accessor: (f) =>
@@ -380,7 +397,7 @@ function FindingsList() {
             className="text-xs hover:underline"
             onClick={(e) => e.stopPropagation()}
           >
-            {f.repo?.name || f.repo_id.slice(0, 8)}
+            {f.repo?.name || "Open repository"}
           </Link>
         ) : (
           "—"
@@ -398,6 +415,7 @@ function FindingsList() {
     },
     {
       key: "baseline",
+      sortable: false,
       header: "Baseline",
       sortAccessor: (f) => f.baseline_state ?? "",
       accessor: (f) => (
@@ -410,7 +428,7 @@ function FindingsList() {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-1.5">
+      <div className="flex flex-wrap items-center gap-1.5">
         {(
           [
             ["new", "New since baseline"],
@@ -422,8 +440,8 @@ function FindingsList() {
             type="button"
             onClick={() => {
               setScope(id);
-              setPagination((p) => ({ ...p, pageIndex: 0 }));
             }}
+            aria-pressed={scope === id}
             className={
               "h-8 px-3 rounded-md text-xs border transition-colors " +
               (scope === id
@@ -436,7 +454,9 @@ function FindingsList() {
         ))}
       </div>
 
-      {!q.isLoading && (q.data?.total ?? 0) === 0 ? (
+      <Select value={search.severity ?? "all"} onValueChange={(severity) => void navigate({ to: "/findings", search: { ...search, view: "list", severity: severity === "all" ? undefined : severity, page: 1 } })}><SelectTrigger className="h-8 w-44" aria-label="Filter by severity"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All severities</SelectItem>{["critical", "high", "medium", "low", "info"].map((severity) => <SelectItem key={severity} value={severity}>{severity}</SelectItem>)}</SelectContent></Select>
+      {bulk.data && <div role={bulk.data.failed.length ? "alert" : "status"} className="rounded-md border border-border p-3 text-sm"><p>{bulk.data.updated} updated{bulk.data.failed.length ? ` · ${bulk.data.failed.length} failed` : ""}</p>{bulk.data.failed.length > 0 && <><ul className="mt-2 space-y-1">{bulk.data.failed.map(({ id, message }) => <li key={id}><Link to="/findings/$findingId" params={{ findingId: id }} className="underline">{findingTitle(rows.find((f) => f.id === id) ?? { title: "Open finding" })}</Link>: {message}</li>)}</ul><button type="button" disabled={bulk.isPending} className="mt-2 underline" onClick={() => bulk.mutate({ ids: bulk.data!.failed.map((f) => f.id), status: bulk.variables!.status })}>Retry failed updates</button></>}</div>}
+      {q.error instanceof ApiError && q.error.status === 403 ? <PermissionState description="You do not have access to these findings." /> : !q.isLoading && !q.isError && !search.q && !search.severity && (q.data?.total ?? 0) === 0 ? (
         scope === "new" ? (
           <EmptyState
             icon={BugIcon}
@@ -465,6 +485,10 @@ function FindingsList() {
             rowCount: q.data?.total ?? 0,
             pagination,
             onPaginationChange: setPagination,
+            search: search.q ?? "",
+            onSearchChange: (q) => void navigate({ to: "/findings", search: { ...search, view: "list", q: q || undefined, page: 1 }, replace: true }),
+            sorting: search.sort ? [{ id: search.sort, desc: search.order !== "asc" }] : [],
+            onSortingChange: ([sort]) => void navigate({ to: "/findings", search: { ...search, view: "list", sort: sort?.id, order: sort?.desc ? "desc" : "asc", page: 1 } }),
           }}
           loading={q.isLoading}
           isError={q.isError}

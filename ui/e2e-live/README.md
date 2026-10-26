@@ -1,0 +1,9 @@
+# Live acceptance journeys
+
+From `ui/`, run `ME=fp1 PORT=18801 npm run test:e2e:live`. Omit `PORT` to allocate a free loopback port. Docker and the local scanner image are required; override `WOLF_SCANNERS_IMAGE` if needed (default `wolf-scanners:plan-20261023`). No images are pulled by the harness.
+
+The script builds into a temporary directory and runs each spec on desktop and mobile against its own fresh SQLite database and HOME. This preserves a genuinely empty onboarding state regardless of order or earlier failures. Every server is stopped, including after failure. The printed artifact directory retains server logs, JSON/HTML step reports, screenshots, copied CI text, axe results, and failure traces. Open a trace with `npx playwright show-trace <trace.zip>`.
+
+The journeys use real UI interactions and real scans, with no intercepted APIs or seeded scan results. Soft assertions record independent product gaps while allowing subsequent steps to run; a failed navigation stops dependent steps. Neither skipped tests nor expected failures count as acceptance. CVE checks require the vulnerable sample dependencies to produce both CVE-2020-28500 and CVE-2021-23337 (or their official GHSA aliases) with distinct finding links. A missing scanner/database that prevents this stays red. The CI check inspects the actual copied enforcement rules and fail-exit behavior; it does not execute a hosted CI job. The zero-tool guard checks observed scan coverage; it does not fabricate a zero-tool result.
+
+For a focused diagnostic against an already isolated server, set `WOLF_LIVE_BASE_URL`, `WOLF_LIVE_RESULTS_DIR`, and optionally the admin credentials, then run `npx playwright test -c playwright.live.config.ts ease.spec.ts --project desktop`. Use a fresh server/database for each journey; running both specs directly against one database does not provide an empty onboarding state.

@@ -4,6 +4,12 @@ import { api } from "@/lib/api";
 export interface RuntimeCapabilities {
   scan_runtime: "docker" | "kubernetes" | string;
   queue_execution: boolean;
+  worker_readiness?: {
+    status: "ready" | "busy" | "unavailable";
+    active_workers: number;
+    available_slots: number;
+    last_active_heartbeat?: string;
+  } | null;
   docker_image_management: boolean;
   scanner_jobs: boolean;
   durable_events: boolean;

@@ -2,6 +2,7 @@
 // GET /repos/{id}/fixable. Only rendered when autofix_enabled is on (the whole
 // fix surface is dark otherwise). Green "fixable" when writable; muted
 // "not fixable" with the reason as a tooltip when not.
+import { StatusBadge } from "@/components/ui/status-badge";
 import { ShieldCheckIcon, ShieldXIcon } from "lucide-react";
 import { useAutofixEnabled, useRepoFixable } from "@/lib/fixes";
 
@@ -13,22 +14,14 @@ export function FixableBadge({ repoId }: { repoId: string }) {
   if (q.isLoading || !q.data) return null;
 
   const { writable, can_push, reason } = q.data;
-  if (writable) {
-    return (
-      <span
-        className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wide text-status-success bg-status-success/10 border border-status-success/30 rounded px-1.5 py-0.5"
-        title={reason}
-      >
-        <ShieldCheckIcon className="size-3" /> {can_push ? "fixable" : "fixable (no push)"}
-      </span>
-    );
-  }
   return (
-    <span
-      className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground bg-muted/20 border border-border rounded px-1.5 py-0.5"
-      title={reason}
-    >
-      <ShieldXIcon className="size-3" /> not fixable
+    <span title={reason}>
+      <StatusBadge
+        status={writable ? "success" : "neutral"}
+        label={writable ? (can_push ? "Fixable" : "Fixable (no push)") : "Not fixable"}
+        icon={writable ? <ShieldCheckIcon className="size-3" /> : <ShieldXIcon className="size-3" />}
+        size="sm"
+      />
     </span>
   );
 }

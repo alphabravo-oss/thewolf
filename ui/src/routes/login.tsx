@@ -2,6 +2,7 @@
 // to the original target (or /) on success. Two-step when the account has 2FA.
 import { createFileRoute, useNavigate, redirect } from "@tanstack/react-router";
 import { useForm } from "@tanstack/react-form";
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -31,9 +32,11 @@ export const Route = createFileRoute("/login")({
 
 function LoginPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const search = Route.useSearch();
   const version = useVersion();
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
 
   // Cookie is still valid after a restart; pull the user back when the API
   // comes up instead of making them type the password again.
@@ -69,6 +72,7 @@ function LoginPage() {
 
   // Route the user after a session is established, honoring forced enrollment.
   function afterLogin(res: AuthResponse) {
+    queryClient.clear();
     if (res.enrollment_required) {
       toast.message("Set up two-factor authentication to continue");
       navigate({ to: "/account", search: { section: "security" } });
@@ -81,6 +85,7 @@ function LoginPage() {
   const form = useForm({
     defaultValues: { email: "", password: "" },
     onSubmit: async ({ value }) => {
+      setError("");
       setSubmitting(true);
       try {
         const res = (await api.post<AuthResponse>("/auth/login", value)).data;
@@ -90,7 +95,7 @@ function LoginPage() {
         }
         afterLogin(res);
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Login failed");
+        setError(e instanceof Error ? e.message : "Login failed");
       } finally {
         setSubmitting(false);
       }
@@ -100,6 +105,7 @@ function LoginPage() {
   async function submitCode(e: React.FormEvent) {
     e.preventDefault();
     if (!mfaToken) return;
+    setError("");
     setSubmitting(true);
     try {
       const res = (
@@ -107,7 +113,7 @@ function LoginPage() {
       ).data;
       afterLogin(res);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "That code is not valid");
+      setError(err instanceof Error ? err.message : "That code is not valid");
     } finally {
       setSubmitting(false);
     }
@@ -115,10 +121,11 @@ function LoginPage() {
 
   return (
     <AuthShell>
+      {error && <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive-text">{error}</p>}
       {mfaToken ? (
         <>
           <div className="space-y-1.5">
-            <h2 className="text-2xl font-semibold tracking-tight">Two-factor authentication</h2>
+            <h1 className="text-2xl font-semibold tracking-tight">Two-factor authentication</h1>
             <p className="text-sm text-muted-foreground">
               Enter the 6-digit code from your authenticator app, or a recovery code.
             </p>
@@ -154,9 +161,9 @@ function LoginPage() {
       ) : (
         <>
           <div className="space-y-1.5">
-            <h2 className="text-2xl font-semibold tracking-tight">
+            <h1 className="text-2xl font-semibold tracking-tight">
               Sign in to {version.data?.product ?? "The Wolf"}
-            </h2>
+            </h1>
             <p className="text-sm text-muted-foreground">
               {version.data?.edition === "enterprise"
                 ? "Enterprise SSO is available when configured. Local break-glass stays on."
@@ -222,7 +229,7 @@ function LoginPage() {
           ) : null}
           <div className="text-center text-xs text-muted-foreground">
             Don't have an account?{" "}
-            <a href="/register" className="text-foreground hover:underline">
+            <a href="/register" className="text-foreground underline underline-offset-2">
               Register
             </a>
           </div>
