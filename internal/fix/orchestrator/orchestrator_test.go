@@ -113,7 +113,22 @@ func (w *stubWorkspace) Path() string {
 	if w.path != "" {
 		return w.path
 	}
-	return "/ws"
+	return defaultWorkspaceDir
+}
+
+// defaultWorkspaceDir backs stubs without an explicit path. It must be a real,
+// writable directory: the orchestrator writes review files into the workspace.
+var defaultWorkspaceDir string
+
+func TestMain(m *testing.M) {
+	dir, err := os.MkdirTemp("", "orchestrator-ws-")
+	if err != nil {
+		panic(err)
+	}
+	defaultWorkspaceDir = dir
+	code := m.Run()
+	_ = os.RemoveAll(dir)
+	os.Exit(code)
 }
 func (w *stubWorkspace) ChangedFiles(context.Context) ([]string, error) {
 	if w.commitCalls > 0 {

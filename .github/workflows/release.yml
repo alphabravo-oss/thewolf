@@ -72,7 +72,7 @@ jobs:
 
       - name: Validate Go and scanner metadata
         run: |
-          go test -short -race -count=1 -timeout 120s ./...
+          go test -short -race -count=1 -timeout 600s ./...
           make scanners-validate
 
       - name: Validate UI

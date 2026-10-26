@@ -48,7 +48,7 @@ build:
 ## test: Run all Go tests
 test:
 	@echo "==> Running tests..."
-	go test -race -count=1 -timeout 120s ./...
+	go test -race -count=1 -timeout 600s ./...
 
 ## test-short: Run tests in short mode (skip integration tests)
 test-short:

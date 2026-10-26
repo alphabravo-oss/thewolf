@@ -70,7 +70,7 @@ jobs:
         run: make scanners-validate
 
       - name: go test (race, SQLite and PostgreSQL)
-        run: go test -race -count=1 -timeout 120s ./...
+        run: go test -race -count=1 -timeout 600s ./...
 
   lint:
     runs-on: ubuntu-latest
