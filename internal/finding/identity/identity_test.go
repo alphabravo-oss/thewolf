@@ -14,6 +14,7 @@ func TestNormalizePath(t *testing.T) {
 		"file:///repo/ui/src/App.tsx": "ui/src/App.tsx",
 		"internal\\service\\auth.go":  "internal/service/auth.go",
 		" /src/terraform/main.tf ":    "terraform/main.tf",
+		"http://app.test/a//b [GET]":  "http://app.test/a//b [GET]",
 	}
 
 	for in, want := range cases {
