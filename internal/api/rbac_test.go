@@ -70,8 +70,8 @@ func TestRBACNonAdminIsRestricted(t *testing.T) {
 	}
 	mustJSON(t, rw.Body.Bytes(), &repoResp)
 
-	if dw := request(srv, http.MethodDelete, "/api/v1/repos/"+repoResp.Data.ID, userJWT, nil); dw.Code != http.StatusForbidden {
-		t.Errorf("non-admin deleting another user's repo: expected 403, got %d: %s", dw.Code, dw.Body.String())
+	if dw := request(srv, http.MethodDelete, "/api/v1/repos/"+repoResp.Data.ID, userJWT, nil); dw.Code != http.StatusNotFound {
+		t.Errorf("non-admin deleting another user's repo: expected 404, got %d: %s", dw.Code, dw.Body.String())
 	}
 
 	// The admin can delete its own repo.

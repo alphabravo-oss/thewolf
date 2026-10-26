@@ -31,8 +31,8 @@ func TestNoopProvider(t *testing.T) {
 		if resp == nil {
 			t.Fatal("expected non-nil response")
 		}
-		if resp.ContextScore != 5.0 {
-			t.Errorf("ContextScore = %f, want 5.0", resp.ContextScore)
+		if resp.ContextScore != 0 {
+			t.Errorf("ContextScore = %f, want 0 (no assessment)", resp.ContextScore)
 		}
 		if resp.FixSuggestion != "" {
 			t.Errorf("expected empty FixSuggestion, got %q", resp.FixSuggestion)
@@ -59,8 +59,8 @@ func TestNoopProvider(t *testing.T) {
 			if s.Index != i {
 				t.Errorf("Scores[%d].Index = %d, want %d", i, s.Index, i)
 			}
-			if s.ContextScore != 5.0 {
-				t.Errorf("Scores[%d].ContextScore = %f, want 5.0", i, s.ContextScore)
+			if s.ContextScore != 0 {
+				t.Errorf("Scores[%d].ContextScore = %f, want 0 (no assessment)", i, s.ContextScore)
 			}
 			if s.Explanation == "" {
 				t.Errorf("Scores[%d].Explanation is empty", i)

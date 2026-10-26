@@ -79,14 +79,25 @@ async function requestWithMetadata<T>(
       status: res.status,
     };
   }
-  const body = (await res.json()) as ApiResponse<T> | T;
+  let body: ApiResponse<T> | T;
+  try {
+    body = (await res.json()) as ApiResponse<T> | T;
+  } catch {
+    // Reverse proxies commonly return HTML on 502/503. Preserve HTTP status
+    // for callers without displaying that document or losing it to SyntaxError.
+    throw new ApiError(
+      res.status,
+      res.ok ? "INVALID_RESPONSE" : "HTTP_ERROR",
+      res.ok ? "The server returned invalid JSON" : res.statusText || "Request failed",
+    );
+  }
   if (!res.ok) {
     const errorBody = body as ApiResponse<T>;
     throw new ApiError(
       res.status,
-      errorBody.error?.code || "UNKNOWN",
-      errorBody.error?.message || res.statusText,
-      errorBody.error?.details,
+      errorBody?.error?.code || "UNKNOWN",
+      errorBody?.error?.message || res.statusText,
+      errorBody?.error?.details,
     );
   }
   // Durable command endpoints intentionally return their operation receipt at

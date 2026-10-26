@@ -1,0 +1,19 @@
+12:10PM INF scan starting branch=main component=scan repo_id=d47e1656-e1ec-44db-9f69-f4262f238919 scan_id=80a2c0d5-c19f-4b30-89c4-c7ffc62cd174
+12:10PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=80a2c0d5-c19f-4b30-89c4-c7ffc62cd174
+12:10PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+12:10PM INF tools selected for scan component=runner count=1 tools=["resume-pending"]
+12:10PM INF tools selected component=scan count=1 scan_id=80a2c0d5-c19f-4b30-89c4-c7ffc62cd174 tools=["resume-pending"]
+12:10PM INF tool starting component=runner resource_class=medium tool=resume-pending
+12:10PM INF tool completed component=runner elapsed=0.761614 findings=0 tool=resume-pending
+12:10PM INF tool completed component=scan findings=0 scan_id=80a2c0d5-c19f-4b30-89c4-c7ffc62cd174 tool=resume-pending
+12:10PM INF scan run complete component=runner elapsed=3.964173 findings=0 tools_failed=0 tools_run=1 tools_skipped=0
+12:10PM INF scan run finished component=scan scan_id=80a2c0d5-c19f-4b30-89c4-c7ffc62cd174 status=completed
+12:10PM INF Enrichment: completed in background findings=1
+12:10PM INF artifact bundle written component=scan findings_json=/tmp/wolf-scans/001_20261023-121008_80a2c0d5/findings.json manifest=/tmp/wolf-scans/001_20261023-121008_80a2c0d5/manifest.json scan_id=80a2c0d5-c19f-4b30-89c4-c7ffc62cd174
+12:10PM INF quality gate evaluated component=scan gate_status=fail scan_id=80a2c0d5-c19f-4b30-89c4-c7ffc62cd174
+12:10PM INF scan complete — all tools finished component=scan findings=1 scan_id=80a2c0d5-c19f-4b30-89c4-c7ffc62cd174 status=completed
+--- FAIL: TestExecuteQueuedScanRejectsChangedRecoverySourceBeforeEvidenceMutation (0.21s)
+    scan_source_recovery_test.go:118: changed source accepted: completed  
+FAIL
+FAIL	github.com/alphabravocompany/thewolf/internal/api/routes	0.221s
+FAIL

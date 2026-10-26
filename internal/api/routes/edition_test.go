@@ -17,7 +17,7 @@ func TestGetEditionIsPublicCommunity(t *testing.T) {
 	r.Get("/api/edition", routes.GetEdition)
 	r.Get("/api/license", routes.GetLicense)
 	r.Get("/api/mcp/status", routes.MCPStatus)
-	r.Post("/api/mcp", routes.HandleMCP)
+	r.Post("/api/mcp", routes.NewMCPHandler(r).ServeHTTP)
 
 	get := func(path string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodGet, path, nil)

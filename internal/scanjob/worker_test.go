@@ -3,6 +3,8 @@ package scanjob
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -10,6 +12,7 @@ import (
 
 	"github.com/alphabravocompany/thewolf/internal/db"
 	"github.com/alphabravocompany/thewolf/internal/models"
+	"github.com/alphabravocompany/thewolf/internal/scantarget"
 )
 
 func queuedTestScan(t *testing.T) (*db.SQLiteStore, *models.Scan) {
@@ -130,7 +133,7 @@ func TestWorkerCancelsExecutorBeforeUnrenewedLeaseExpires(t *testing.T) {
 	}
 }
 
-func TestWorkerCleansWorkspaceAfterStaleReclaim(t *testing.T) {
+func TestWorkerRetainsWorkspaceAfterRetryableStaleReclaim(t *testing.T) {
 	store, scan := queuedTestScan(t)
 	oldClaim, err := store.ClaimNextScan(
 		context.Background(), "lost-worker", "docker", time.Now().Add(-time.Minute),
@@ -170,8 +173,8 @@ func TestWorkerCleansWorkspaceAfterStaleReclaim(t *testing.T) {
 	if err := worker.Run(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if cleaned != oldClaim.PreparedWorkspace {
-		t.Fatalf("cleaned workspace = %q, want %q", cleaned, oldClaim.PreparedWorkspace)
+	if cleaned != "" {
+		t.Fatalf("retry source was scheduled for deletion: %q", cleaned)
 	}
 	got, err := store.GetScanByID(context.Background(), scan.ID)
 	if err != nil || got.Status != models.ScanStatusCompleted || got.Attempt != 2 ||
@@ -187,5 +190,97 @@ func TestWorkerRejectsMissingDependencies(t *testing.T) {
 	store, _ := queuedTestScan(t)
 	if _, err := New(Config{Store: store}); err == nil {
 		t.Fatal("expected missing executor error")
+	}
+}
+
+func TestWorkerReclaimRetainsWorkspaceHeldByPriorExecutor(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("WOLF_WORKSPACE_ROOT", root)
+	path := filepath.Join(root, "wolf-git-scan-retained")
+	if err := os.Mkdir(path, 0700); err != nil {
+		t.Fatal(err)
+	}
+	prepared, err := scantarget.PrepareExisting(t.Context(), path, models.SourceTypeGit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(prepared.Cleanup)
+	store, scan := queuedTestScan(t)
+	oldClaim, err := store.ClaimNextScan(t.Context(), "lost-worker", "docker", time.Now().Add(-time.Minute))
+	if err != nil || oldClaim == nil {
+		t.Fatalf("claim: %v", err)
+	}
+	oldClaim.PreparedWorkspace = path
+	if err := store.UpdateScan(t.Context(), oldClaim); err != nil {
+		t.Fatal(err)
+	}
+	worker, err := New(Config{
+		Store: store, Once: true, CleanupWorkspace: scantarget.CleanupWorkspace,
+		Executor: func(ctx context.Context, claimed *models.Scan) error {
+			if _, err := os.Stat(path); err != nil {
+				return errors.New("reclaim deleted the prior executor's live workspace")
+			}
+			now := time.Now().UTC()
+			claimed.Status, claimed.CompletedAt = models.ScanStatusCompleted, &now
+			ok, err := store.FinalizeScan(ctx, claimed, claimed.LeaseToken)
+			if err == nil && !ok {
+				return errors.New("claim was not finalized")
+			}
+			return err
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := worker.Run(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	got, err := store.GetScanByID(t.Context(), scan.ID)
+	if err != nil || got.Status != models.ScanStatusCompleted || got.Attempt != 2 {
+		t.Fatalf("retained-source retry did not complete: %+v, %v", got, err)
+	}
+	prepared.Cleanup()
+	if err := scantarget.CleanupWorkspace(path); err != nil {
+		t.Fatalf("released source could not be cleaned: %v", err)
+	}
+}
+
+func TestWorkerReclaimRetainsUnheldRetrySourceAndCleansExhaustedSource(t *testing.T) {
+	for _, exhausted := range []bool{false, true} {
+		t.Run(map[bool]string{false: "retryable", true: "exhausted"}[exhausted], func(t *testing.T) {
+			root := t.TempDir()
+			t.Setenv("WOLF_WORKSPACE_ROOT", root)
+			path := filepath.Join(root, "wolf-git-scan-unheld")
+			if err := os.Mkdir(path, 0700); err != nil {
+				t.Fatal(err)
+			}
+			store, _ := queuedTestScan(t)
+			claim, err := store.ClaimNextScan(t.Context(), "lost", "docker", time.Now().Add(-time.Minute))
+			if err != nil || claim == nil {
+				t.Fatalf("claim: %v", err)
+			}
+			claim.PreparedWorkspace = path
+			if exhausted {
+				claim.MaxAttempts = 1
+			}
+			if err := store.UpdateScan(t.Context(), claim); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := store.ReclaimStaleScans(t.Context(), time.Now()); err != nil {
+				t.Fatal(err)
+			}
+			worker, err := New(Config{Store: store, Once: true, CleanupWorkspace: scantarget.CleanupWorkspace, Executor: func(context.Context, *models.Scan) error { return nil }})
+			if err != nil {
+				t.Fatal(err)
+			}
+			worker.cleanupReclaimedWorkspaces(t.Context())
+			_, err = os.Stat(path)
+			if exhausted && !os.IsNotExist(err) {
+				t.Fatalf("exhausted source was not cleaned: %v", err)
+			}
+			if !exhausted && err != nil {
+				t.Fatalf("retry source was deleted: %v", err)
+			}
+		})
 	}
 }

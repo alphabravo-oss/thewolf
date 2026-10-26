@@ -1,0 +1,31 @@
+{
+  "Id": "4920db7bce1d51f6ea0dee0477a267b50acf56c9f916ee439922557f500aab21",
+  "Name": "/wolf-plan-suppression-pg-20261023",
+  "Image": "sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873",
+  "label": "suppression-lifecycle-20261023",
+  "ports": {
+    "5432/tcp": [
+      {
+        "HostIp": "127.0.0.1",
+        "HostPort": "32793"
+      }
+    ]
+  },
+  "mounts": [
+    {
+      "Type": "volume",
+      "Name": "9512f0a6d6ca2950894a0c8be5f3ad2e25d83425e9ead50ca2b008f3df647e83",
+      "Source": "/var/lib/docker/volumes/9512f0a6d6ca2950894a0c8be5f3ad2e25d83425e9ead50ca2b008f3df647e83/_data",
+      "Destination": "/var/lib/postgresql",
+      "Driver": "local",
+      "Mode": "",
+      "RW": true,
+      "Propagation": ""
+    }
+  ],
+  "removed": true,
+  "container_absent": true,
+  "volumes_absent": {
+    "9512f0a6d6ca2950894a0c8be5f3ad2e25d83425e9ead50ca2b008f3df647e83": true
+  }
+}

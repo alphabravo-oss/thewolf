@@ -2,7 +2,6 @@ package db
 
 import (
 	"context"
-	"database/sql"
 	"time"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
@@ -12,37 +11,7 @@ import (
 // encodeStrings/decodeStrings live in sqlite_fixjobs.go (same package).
 
 func (s *PostgresStore) EnqueueFixJob(ctx context.Context, j *models.FixJob) error {
-	now := time.Now().UTC()
-	if j.CreatedAt.IsZero() {
-		j.CreatedAt = now
-	}
-	j.UpdatedAt = now
-	if j.Status == "" {
-		j.Status = models.FixJobQueued
-	}
-	j.FindingIDs = encodeStrings(j.FindingIDList)
-	if j.PlannedRuns <= 0 {
-		j.PlannedRuns = 1
-	}
-	if j.RunIndex <= 0 {
-		j.RunIndex = 1
-	}
-	_, err := s.db.NamedExecContext(ctx,
-		`INSERT INTO fix_jobs
-		 (id, user_id, type, repo_id, scan_id, finding_ids, target_branch, engine, mode,
-		  severity_floor, max_attempts, max_loops, current_loop, human_in_the_loop,
-		  workspace_path, base_branch, pushed, push_sha, pause_reason, resume_action,
-		  model, effort, variant, remediation_id, planned_runs, run_index,
-		  status, claimed_by, result_branch, diff_artifact_id,
-		  summary, error, claimed_at, started_at, finished_at, heartbeat_at, created_at, updated_at)
-		 VALUES
-		 (:id, :user_id, :type, :repo_id, :scan_id, :finding_ids, :target_branch, :engine, :mode,
-		  :severity_floor, :max_attempts, :max_loops, :current_loop, :human_in_the_loop,
-		  :workspace_path, :base_branch, :pushed, :push_sha, :pause_reason, :resume_action,
-		  :model, :effort, :variant, :remediation_id, :planned_runs, :run_index,
-		  :status, :claimed_by, :result_branch, :diff_artifact_id,
-		  :summary, :error, :claimed_at, :started_at, :finished_at, :heartbeat_at, :created_at, :updated_at)`, j)
-	return err
+	return enqueueFixJob(ctx, s.db, j)
 }
 
 func (s *PostgresStore) GetFixJobByID(ctx context.Context, id string) (*models.FixJob, error) {
@@ -87,59 +56,21 @@ func (s *PostgresStore) ListFixJobsByUser(ctx context.Context, userID, repoID st
 	return jobs, err
 }
 
-// ClaimNextFixJob uses FOR UPDATE SKIP LOCKED — the canonical concurrent
-// queue claim. Multiple workers each grab a different job without blocking,
-// and a job is never double-claimed. Returns (nil, nil) when empty.
 func (s *PostgresStore) ClaimNextFixJob(ctx context.Context, workerID string) (*models.FixJob, error) {
-	var j models.FixJob
-	now := time.Now().UTC()
-	err := s.db.GetContext(ctx, &j,
-		`UPDATE fix_jobs SET status = $1, claimed_by = $2, claimed_at = $3, heartbeat_at = $3, updated_at = $3
-		 WHERE id = (
-		   SELECT id FROM fix_jobs WHERE status = $4 ORDER BY created_at LIMIT 1 FOR UPDATE SKIP LOCKED
-		 )
-		 RETURNING *`,
-		models.FixJobClaimed, workerID, now, models.FixJobQueued)
-	if err == sql.ErrNoRows {
-		return nil, nil // empty queue
-	}
-	if err != nil {
-		return nil, err
-	}
-	j.FindingIDList = decodeStrings(j.FindingIDs)
-	return &j, nil
+	return claimNextFixJob(ctx, s.db, workerID)
 }
 
 func (s *PostgresStore) UpdateFixJob(ctx context.Context, j *models.FixJob) error {
-	if j != nil && j.Status != models.FixJobCancelled {
-		var current string
-		if err := s.db.GetContext(ctx, &current, "SELECT status FROM fix_jobs WHERE id = $1", j.ID); err == nil && current == models.FixJobCancelled {
-			return nil
-		}
-	}
-	j.UpdatedAt = time.Now().UTC()
-	j.FindingIDs = encodeStrings(j.FindingIDList)
-	_, err := s.db.NamedExecContext(ctx,
-		`UPDATE fix_jobs SET
-		   type=:type, repo_id=:repo_id, scan_id=:scan_id, finding_ids=:finding_ids,
-		   target_branch=:target_branch, engine=:engine, mode=:mode, severity_floor=:severity_floor,
-		   max_attempts=:max_attempts, max_loops=:max_loops, current_loop=:current_loop,
-		   human_in_the_loop=:human_in_the_loop, workspace_path=:workspace_path,
-		   base_branch=:base_branch, pushed=:pushed, push_sha=:push_sha,
-		   pause_reason=:pause_reason, resume_action=:resume_action,
-		   model=:model, effort=:effort, variant=:variant, remediation_id=:remediation_id,
-		   planned_runs=:planned_runs, run_index=:run_index,
-		   status=:status, claimed_by=:claimed_by, result_branch=:result_branch,
-		   diff_artifact_id=:diff_artifact_id, summary=:summary, error=:error,
-		   claimed_at=:claimed_at, started_at=:started_at, finished_at=:finished_at,
-		   heartbeat_at=:heartbeat_at, updated_at=:updated_at
-		 WHERE id=:id`, j)
-	return err
+	return updateFixJob(ctx, s.db, j)
+}
+
+func (s *PostgresStore) HeartbeatFixJob(ctx context.Context, id, worker string, claimedAt time.Time) error {
+	return heartbeatFixJob(ctx, s.db, id, worker, claimedAt)
 }
 
 func (s *PostgresStore) ReclaimStaleJobs(ctx context.Context, cutoff time.Time) (int, error) {
 	res, err := s.db.ExecContext(ctx,
-		`UPDATE fix_jobs SET status = $1, claimed_by = '', updated_at = $2
+		`UPDATE fix_jobs SET revision = revision + 1, status = $1, claimed_by = '', updated_at = $2
 		 WHERE status IN ($3, $4) AND (heartbeat_at IS NULL OR heartbeat_at < $5)`,
 		models.FixJobQueued, time.Now().UTC(), models.FixJobClaimed, models.FixJobRunning, cutoff)
 	if err != nil {
@@ -159,7 +90,7 @@ func (s *PostgresStore) CreateFixAttempt(ctx context.Context, a *models.FixAttem
 		  new_findings, outcome, files_changed, diff_excerpt, duration_ms, cost_usd,
 		  input_tokens, output_tokens, created_at)
 		 VALUES
-		 (:id, :job_id, :finding_id, :attempt_no, :engine_used, :model, :built, :finding_cleared,
+		 (:id, :job_id, :finding_id, :attempt_no, :engine_used, :model, CAST(CAST(:built AS BOOLEAN) AS INTEGER), CAST(CAST(:finding_cleared AS BOOLEAN) AS INTEGER),
 		  :new_findings, :outcome, :files_changed, :diff_excerpt, :duration_ms, :cost_usd,
 		  :input_tokens, :output_tokens, :created_at)`, a)
 	return err

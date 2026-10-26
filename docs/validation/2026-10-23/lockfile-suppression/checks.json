@@ -1,0 +1,40 @@
+{
+  "tasks": 237,
+  "checked": 54,
+  "D03_complete": true,
+  "D05_complete": false,
+  "final_go_race_packages": 136,
+  "final_go_race_command": "WOLF_TEST_POSTGRES_DSN=<owned loopback fixture> make test",
+  "final_go_race_exit": 0,
+  "uncached": true,
+  "go_lint_exit": 0,
+  "scanner_sync_exit": 0,
+  "matcher_http_final_exit": 0,
+  "lockfile_category_cases": 288,
+  "native_lockfiles": [
+    "deps/package-lock.json",
+    "deps/Cargo.lock",
+    "deps/go.sum"
+  ],
+  "native_backends": [
+    "sqlite",
+    "postgres"
+  ],
+  "import_audit_findings": 12,
+  "import_visible_findings": 6,
+  "import_default_gate_sca_failures": 3,
+  "gosec_exit": 1,
+  "gosec_high_high_findings": 29,
+  "gosec_rules": {
+    "G704": 3,
+    "G703": 25,
+    "G702": 1
+  },
+  "gosec_analysis_errors": {},
+  "fixture_removed": true,
+  "source_files": 111,
+  "ui_changed": false,
+  "deployed": false,
+  "diff_check_exit": 0,
+  "documentation_links_valid": true
+}

@@ -1,0 +1,37 @@
+[WebServer] $ vite build
+[WebServer] (node:3535424) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:3535549) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 9 tests using 8 workers
+
+(node:3535610) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3535617) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3535635) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3535611) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3535623) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3535629) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3535649) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3535642) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  5 [mobile-chromium-linux] › e2e/audit.spec.ts:4:1 › audit uses full-history server pages and URL filters @browser-matrix (1.7s)
+  ✓  3 [desktop-chromium-linux] › e2e/audit.spec.ts:4:1 › audit uses full-history server pages and URL filters @browser-matrix (1.8s)
+(node:3536639) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  4 [desktop-chromium-linux] › e2e/audit.spec.ts:37:1 › audit distinguishes denied, failed and empty history @browser-matrix (3.8s)
+  ✓  8 [mobile-chromium-linux] › e2e/audit.spec.ts:37:1 › audit distinguishes denied, failed and empty history @browser-matrix (3.8s)
+  ✓  6 [desktop-firefox-linux] › e2e/audit.spec.ts:4:1 › audit uses full-history server pages and URL filters @browser-matrix (3.2s)
+  ✓  1 [desktop-chromium-linux] › e2e/agents-state.spec.ts:4:1 › agent failures stay distinct from disabled, unconfigured and empty states @browser-matrix (5.5s)
+  ✓  7 [mobile-chromium-linux] › e2e/agents-state.spec.ts:4:1 › agent failures stay distinct from disabled, unconfigured and empty states @browser-matrix (5.5s)
+  ✓  2 [desktop-firefox-linux] › e2e/agents-state.spec.ts:4:1 › agent failures stay distinct from disabled, unconfigured and empty states @browser-matrix (6.4s)
+  ✓  9 [desktop-firefox-linux] › e2e/audit.spec.ts:37:1 › audit distinguishes denied, failed and empty history @browser-matrix (4.5s)
+
+  9 passed (13.3s)

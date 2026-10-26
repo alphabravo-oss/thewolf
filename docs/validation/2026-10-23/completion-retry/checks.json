@@ -1,0 +1,42 @@
+{
+  "tasks": 237,
+  "checked": 53,
+  "D02_7_complete": true,
+  "D02_complete": false,
+  "D04_complete": false,
+  "final_go_race_packages": 136,
+  "final_go_race_command": "WOLF_TEST_POSTGRES_DSN=<owned loopback fixture> make test",
+  "final_go_race_exit": 0,
+  "uncached": true,
+  "go_lint_exit": 0,
+  "scanner_sync_exit": 0,
+  "sqlite_postgres_retry_contracts_exit": 0,
+  "http_import_conflict_retry_exit": 0,
+  "executor_process_kill_cases": 4,
+  "executor_process_kill_backends": [
+    "sqlite",
+    "postgres"
+  ],
+  "executor_process_kill_boundaries": [
+    "before_terminal_commit",
+    "after_terminal_commit"
+  ],
+  "recovery_scanner_execution_count": 2,
+  "original_finding_ids_history_and_triage_preserved": true,
+  "max_conflict_attempts": 3,
+  "cancellation_lease_loss_policy_publication_errors_stop_retry": true,
+  "gosec_exit": 1,
+  "gosec_high_high_findings": 29,
+  "gosec_rules": {
+    "G704": 3,
+    "G703": 25,
+    "G702": 1
+  },
+  "gosec_analysis_errors": {},
+  "fixture_removed": true,
+  "source_files": 106,
+  "ui_changed": false,
+  "deployed": false,
+  "diff_check_exit": 0,
+  "documentation_links_valid": true
+}

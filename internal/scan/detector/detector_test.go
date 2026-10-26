@@ -19,6 +19,9 @@ func TestDetectLanguage_Extensions(t *testing.T) {
 		want models.Language
 	}{
 		{"main.py", models.LangPython},
+		{"SCRIPT.PY", models.LangPython},
+		{"component.TSX", models.LangTypeScript},
+		{"main.C", models.LangCPP},
 		{"app.pyw", models.LangPython},
 		{"index.js", models.LangJavaScript},
 		{"index.mjs", models.LangJavaScript},

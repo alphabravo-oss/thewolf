@@ -1,0 +1,24 @@
+9:21PM INF static-ui: no dist dir found; UI routes disabled (run `npm run dev` separately)
+2026/10/23 21:21:20 [thewolf-dev-1-mj/2o6bQTUT4R-000001] "POST http://example.com/api/v1/auth/register HTTP/1.1" from 192.0.2.1:1234 - 201 961B in 64.366514ms
+2026/10/23 21:21:20 [thewolf-dev-1-mj/2o6bQTUT4R-000002] "GET http://example.com/api/v1/repos HTTP/1.1" from 192.0.2.1:1234 - 200 55B in 352.384µs
+2026/10/23 21:21:20 [thewolf-dev-1-mj/2o6bQTUT4R-000003] "GET http://example.com/api/v1/auth/mfa/status HTTP/1.1" from 192.0.2.1:1234 - 200 44B in 234.442µs
+--- FAIL: TestMFAPolicyFailureDeniesProtectedAccess (0.29s)
+    mfa_policy_test.go:35: /api/v1/repos policy failure: 200
+    mfa_policy_test.go:35: /api/v1/auth/mfa/status policy failure: 200
+9:21PM INF static-ui: no dist dir found; UI routes disabled (run `npm run dev` separately)
+2026/10/23 21:21:20 [thewolf-dev-1-mj/2o6bQTUT4R-000004] "POST http://example.com/api/v1/auth/register HTTP/1.1" from 192.0.2.1:1234 - 201 957B in 85.070208ms
+2026/10/23 21:21:20 [thewolf-dev-1-mj/2o6bQTUT4R-000005] "POST http://example.com/api/v1/auth/login HTTP/1.1" from 10.54.0.1:1234 - 200 985B in 18.472179ms
+9:21PM WRN audit log append failed error="sql: database is closed"
+--- FAIL: TestMFAPolicyFailureDoesNotIssueUnenrolledSession (0.33s)
+    mfa_policy_test.go:50: policy failure during login: 200
+9:21PM INF static-ui: no dist dir found; UI routes disabled (run `npm run dev` separately)
+2026/10/23 21:21:21 [thewolf-dev-1-mj/2o6bQTUT4R-000006] "POST http://example.com/api/v1/auth/register HTTP/1.1" from 192.0.2.1:1234 - 201 961B in 21.695483ms
+2026/10/23 21:21:21 [thewolf-dev-1-mj/2o6bQTUT4R-000007] "POST http://example.com/api/v1/auth/tokens HTTP/1.1" from 192.0.2.1:1234 - 201 325B in 427.978µs
+2026/10/23 21:21:21 [thewolf-dev-1-mj/2o6bQTUT4R-000008] "POST http://example.com/api/v1/auth/mfa/setup HTTP/1.1" from 192.0.2.1:1234 - 200 3051B in 9.491325ms
+--- FAIL: TestMFAReadOnlyKeyCannotEnroll (0.25s)
+    mfa_policy_test.go:66: read-only key enrolled owner: 200
+    mfa_policy_test.go:69: API key obtained enrollment secret
+    mfa_policy_test.go:76: API key changed MFA enrollment
+FAIL
+FAIL	github.com/alphabravocompany/thewolf/internal/api	0.889s
+FAIL

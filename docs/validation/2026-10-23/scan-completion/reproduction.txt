@@ -1,0 +1,23 @@
+4:29PM INF scan starting branch=main component=scan repo_id=ea570dd3-b89e-4677-85a1-79b6cf96b4ef scan_id=bb52d66c-b045-4107-834b-0abe840886a5
+4:29PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=bb52d66c-b045-4107-834b-0abe840886a5
+4:29PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+4:29PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+4:29PM INF tools selected component=scan count=2 scan_id=bb52d66c-b045-4107-834b-0abe840886a5 tools=["cluster-a","cluster-b"]
+4:29PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+4:29PM INF tool completed component=runner elapsed=0.867104 findings=1 tool=cluster-b
+4:29PM INF tool completed component=scan findings=1 scan_id=bb52d66c-b045-4107-834b-0abe840886a5 tool=cluster-b
+4:29PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+4:29PM INF tool completed component=runner elapsed=0.776172 findings=1 tool=cluster-a
+4:29PM INF tool completed component=scan findings=1 scan_id=bb52d66c-b045-4107-834b-0abe840886a5 tool=cluster-a
+4:29PM INF scan run complete component=runner elapsed=5.548851 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+4:29PM INF scan run finished component=scan scan_id=bb52d66c-b045-4107-834b-0abe840886a5 status=completed
+4:29PM INF artifact bundle published component=scan findings_json=/tmp/TestScanFinalizationKeepsPersistedIdentityAndEnrichmentsqliteg3353470624/001/002_20261023-162908_bb52d66c/findings.json manifest=/tmp/TestScanFinalizationKeepsPersistedIdentityAndEnrichmentsqliteg3353470624/001/002_20261023-162908_bb52d66c/manifest.json scan_id=bb52d66c-b045-4107-834b-0abe840886a5
+4:29PM WRN quality gate evaluation failed error="fixture gate policy read failure" component=scan scan_id=bb52d66c-b045-4107-834b-0abe840886a5
+4:29PM INF scan complete — all tools finished component=scan findings=1 scan_id=bb52d66c-b045-4107-834b-0abe840886a5 status=completed
+--- FAIL: TestScanFinalizationKeepsPersistedIdentityAndEnrichment (0.23s)
+    --- FAIL: TestScanFinalizationKeepsPersistedIdentityAndEnrichment/sqlite (0.23s)
+        --- FAIL: TestScanFinalizationKeepsPersistedIdentityAndEnrichment/sqlite/gate-error (0.23s)
+            scan_cluster_finalization_test.go:120: gate failure reported success: &{BaselineScanID: BaselineResolvedAt:2026-10-23 16:29:08.78029138 +0000 UTC FindingsRevision:4 ID:bb52d66c-b045-4107-834b-0abe840886a5 UserID:1ce9ca4a-6b38-49b1-9ffb-14f8c7f3ae60 RepoID:ea570dd3-b89e-4677-85a1-79b6cf96b4ef CollectionID:<nil> LoopID:<nil> Iteration:<nil> Branch:main SourceType:local RemoteNodeID:<nil> SourcePath:/tmp/TestScanFinalizationKeepsPersistedIdentityAndEnrichmentsqliteg3353470624/002 CommitSHA: TreeDigest:sha256-v2:fc5f3cedf8620ac985f4eb30e6bcb44f5a8e7379862d65d35a59658ae380f20d DirtyState:unknown PreparedWorkspace:/tmp/TestScanFinalizationKeepsPersistedIdentityAndEnrichmentsqliteg3353470624/002 RequestJSON:{"tools":["cluster-a","cluster-b"]} RequestDigest: ClientReference: IdempotencyKey: Phase:completed ClaimedBy: LeaseToken: LeaseExpiresAt:<nil> HeartbeatAt:<nil> Attempt:0 MaxAttempts:2 CancelRequestedAt:<nil> FailureCode: FailureMessage: ExecutionBackend: ScannerReleaseID: ReleaseManifestDigest: RescanOfScanID: ReleaseSelectionReason: OriginScanID: PreviousScanID: RemediationID: FixJobID: SourceFingerprint: Profile: Categories:[] IncludePaths:[] ExcludePaths:[] Status:completed ToolsSelected:["cluster-a","cluster-b"] ToolsCompleted:["cluster-a","cluster-b"] ToolsFailed:[] ToolsErrors:{} FindingCount:1 CoverageSummary: AIEnabled:false AISummary: StartedAt:2026-10-23 16:29:08.765937596 +0000 UTC CompletedAt:2026-10-23 16:29:08.78029138 +0000 UTC CreatedAt:2026-10-23 16:29:08.765507316 +0000 UTC UpdatedAt:2026-10-23 16:29:08.790724691 +0000 UTC Repo:<nil>}
+FAIL
+FAIL	github.com/alphabravocompany/thewolf/internal/api/routes	0.235s
+FAIL

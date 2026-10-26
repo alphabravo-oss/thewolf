@@ -11,11 +11,13 @@ import (
 )
 
 func TestQueryAuditLog(t *testing.T) {
-	store, err := NewSQLite(":memory:")
-	if err != nil {
-		t.Fatalf("NewSQLite: %v", err)
-	}
-	defer store.Close()
+	testQueryAuditLog(t, newTestStore(t))
+}
+func TestQueryAuditLogPostgres(t *testing.T) {
+	testQueryAuditLog(t, newClusterPostgresStore(t))
+}
+func testQueryAuditLog(t *testing.T, store Store) {
+	t.Helper()
 	ctx := context.Background()
 
 	// Seed: 3 GETs on /repos, 2 POSTs on /scans, with ascending status + time.
@@ -39,7 +41,7 @@ func TestQueryAuditLog(t *testing.T) {
 		if err := store.AppendAuditLog(ctx, &models.AuditLogEntry{
 			ID: uuid.New().String(), UserID: "u", Action: "x",
 			Method: e.method, Path: e.path, StatusCode: e.status,
-			Category: cat, Severity: sev,
+			Category: cat, Severity: sev, EventType: "scan." + e.method, IP: "192.0.2.1",
 			CreatedAt: base.Add(time.Duration(i) * time.Minute),
 		}); err != nil {
 			t.Fatalf("append %d: %v", i, err)
@@ -83,5 +85,54 @@ func TestQueryAuditLog(t *testing.T) {
 	es, _, _ = store.QueryAuditLog(ctx, AuditQuery{SortBy: "status", Desc: true, Limit: 1})
 	if len(es) != 1 || es[0].StatusCode != 500 {
 		t.Errorf("sort status desc: got %+v, want first=500", es)
+	}
+}
+
+func TestAuditFiltersAndStablePages(t *testing.T) {
+	for _, kind := range []string{"sqlite", "postgres"} {
+		t.Run(kind, func(t *testing.T) {
+			var store Store
+			if kind == "sqlite" {
+				store = newTestStore(t)
+			} else {
+				store = newClusterPostgresStore(t)
+			}
+			at := time.Date(2026, 10, 23, 12, 0, 0, 0, time.UTC)
+			token := "token-searchable"
+			for _, id := range []string{"b", "a"} {
+				if err := store.AppendAuditLog(t.Context(), &models.AuditLogEntry{ID: id, UserID: "actor-searchable", TokenID: &token, EventType: "scan.created", Category: "data", Severity: "info", IP: "192.0.2.1", CreatedAt: at}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			before := at.Add(time.Second)
+			q := AuditQuery{Event: "scan.created", Actor: token, IP: "192.0.2.1", From: &at, Before: &before, Limit: 1, Desc: true}
+			rows, total, err := store.QueryAuditLog(t.Context(), q)
+			if err != nil || total != 2 || len(rows) != 1 || rows[0].ID != "b" {
+				t.Fatalf("first page: %+v %d %v", rows, total, err)
+			}
+			q.Offset = 1
+			rows, _, err = store.QueryAuditLog(t.Context(), q)
+			if err != nil || len(rows) != 1 || rows[0].ID != "a" {
+				t.Fatalf("second page: %+v %v", rows, err)
+			}
+			for _, search := range []string{"ACTOR-SEARCHABLE", "token-searchable", "192.0.2", "scan.created"} {
+				_, total, err = store.QueryAuditLog(t.Context(), AuditQuery{Search: search})
+				if err != nil || total != 2 {
+					t.Fatalf("search %s: %d %v", search, total, err)
+				}
+			}
+			q.Offset = 0
+			q.Before = &at
+			_, total, err = store.QueryAuditLog(t.Context(), q)
+			if err != nil || total != 0 {
+				t.Fatalf("exclusive date: %d %v", total, err)
+			}
+			q.Before = &before
+			q.Actor = "other"
+			_, total, err = store.QueryAuditLog(t.Context(), q)
+			if err != nil || total != 0 {
+				t.Fatalf("foreign actor: %d %v", total, err)
+			}
+		})
 	}
 }

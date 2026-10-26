@@ -52,6 +52,61 @@ func TestEnvDefaults(t *testing.T) {
 	}
 }
 
+func TestLoadAndInstallUsesSelectedRuntime(t *testing.T) {
+	previous := container.Default()
+	t.Cleanup(func() { container.SetDefault(previous) })
+	dir := t.TempDir()
+	calls := filepath.Join(dir, "docker-calls")
+	if err := os.WriteFile(filepath.Join(dir, "docker"), []byte("#!/bin/sh\necho called >> \"$WOLF_TEST_DOCKER_CALLS\"\necho 'Cannot connect to Docker' >&2\nexit 1\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+	t.Setenv("HOME", dir)
+	t.Setenv("WOLF_TEST_DOCKER_CALLS", calls)
+	t.Setenv("WOLF_SCANNERS_IMAGE", "startup-runtime-test:1")
+	t.Setenv("WOLF_SCANNERS_IMAGE_JVM", "startup-runtime-jvm:1")
+	for _, runtime := range []string{"kubernetes", "docker", "unknown"} {
+		t.Run(runtime, func(t *testing.T) {
+			if err := os.Remove(calls); err != nil && !errors.Is(err, os.ErrNotExist) {
+				t.Fatal(err)
+			}
+			container.SetDefault(nil)
+			cfg, err := LoadAndInstall(context.Background(), runtime)
+			switch runtime {
+			case "kubernetes":
+				if err != nil || cfg == nil || container.Default() != cfg {
+					t.Fatalf("Kubernetes config not installed: %v", err)
+				}
+				if cfg.Image != "startup-runtime-test:1" || cfg.ImageOverrides["pmd"] != "startup-runtime-jvm:1" {
+					t.Fatalf("image configuration lost: %+v", cfg)
+				}
+				if container.IsScannersReady() {
+					t.Fatal("configuration alone must not mark the runtime ready")
+				}
+			case "docker":
+				if !errors.Is(err, container.ErrDockerUnavailable) || cfg == nil || container.Default() != cfg {
+					t.Fatalf("Docker failure/configuration not retained: %v", err)
+				}
+				if _, err := os.Stat(calls); err != nil {
+					t.Fatalf("Docker was not probed: %v", err)
+				}
+				return
+			default:
+				if err == nil || cfg != nil || container.Default() != nil {
+					t.Fatalf("unsupported runtime must fail before installation: %v", err)
+				}
+			}
+			if _, err := os.Stat(calls); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("non-Docker startup contacted Docker: %v", err)
+			}
+		})
+	}
+	t.Setenv("WOLF_SCANNERS_PULL_POLICY", "invalid")
+	if _, err := LoadAndInstall(context.Background(), "kubernetes"); err == nil {
+		t.Fatal("Kubernetes must still validate scanner configuration")
+	}
+}
+
 func TestProductionScannerDefaultsAvoidLatest(t *testing.T) {
 	for _, key := range []string{
 		"WOLF_SCANNERS_TAG",
@@ -301,7 +356,7 @@ func TestApplyDockerHubMirror(t *testing.T) {
 }
 
 func TestActiveImageRefsDefaults(t *testing.T) {
-	// No overrides: the default tag (stable) drives every ref, with bucket
+	// No overrides: the default tag (DefaultScannersTag) drives every ref, with bucket
 	// variants derived from the default repo base + suffix.
 	for _, k := range []string{
 		"WOLF_SCANNERS_TAG", "WOLF_SCANNERS_IMAGE",
@@ -312,10 +367,10 @@ func TestActiveImageRefsDefaults(t *testing.T) {
 
 	refs := ActiveImageRefs()
 	want := map[string]string{
-		"default": "ghcr.io/alphabravo-oss/wolf-scanners:stable",
-		"jvm":     "ghcr.io/alphabravo-oss/wolf-scanners-jvm:stable",
-		"rust":    "ghcr.io/alphabravo-oss/wolf-scanners-rust:stable",
-		"codeql":  "ghcr.io/alphabravo-oss/wolf-scanners-codeql:stable",
+		"default": "ghcr.io/alphabravo-oss/wolf-scanners:" + DefaultScannersTag,
+		"jvm":     "ghcr.io/alphabravo-oss/wolf-scanners-jvm:" + DefaultScannersTag,
+		"rust":    "ghcr.io/alphabravo-oss/wolf-scanners-rust:" + DefaultScannersTag,
+		"codeql":  "ghcr.io/alphabravo-oss/wolf-scanners-codeql:" + DefaultScannersTag,
 	}
 	for variant, w := range want {
 		if refs[variant] != w {
@@ -376,7 +431,7 @@ func TestActiveImageRefsHonorsBucketOverride(t *testing.T) {
 		t.Errorf("jvm = %q, want the explicit WOLF_SCANNERS_IMAGE_JVM override", refs["jvm"])
 	}
 	// Non-overridden buckets still derive from the default.
-	if refs["rust"] != "ghcr.io/alphabravo-oss/wolf-scanners-rust:stable" {
+	if refs["rust"] != "ghcr.io/alphabravo-oss/wolf-scanners-rust:"+DefaultScannersTag {
 		t.Errorf("rust = %q, want derived default", refs["rust"])
 	}
 }

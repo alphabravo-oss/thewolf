@@ -1,0 +1,14 @@
+ok  	github.com/alphabravocompany/thewolf/internal/finding/diff	0.002s
+ok  	github.com/alphabravocompany/thewolf/internal/finding/gates	0.003s
+ok  	github.com/alphabravocompany/thewolf/internal/finding/identity	0.004s
+ok  	github.com/alphabravocompany/thewolf/internal/finding/knowledge	0.003s
+ok  	github.com/alphabravocompany/thewolf/internal/finding/sarifio	0.115s
+ok  	github.com/alphabravocompany/thewolf/internal/finding/suppression	0.002s
+ok  	github.com/alphabravocompany/thewolf/internal/scan/runner	0.177s
+ok  	github.com/alphabravocompany/thewolf/internal/scan/report	0.011s
+ok  	github.com/alphabravocompany/thewolf/plugins/general	0.046s
+ok  	github.com/alphabravocompany/thewolf/plugins/security	0.057s
+ok  	github.com/alphabravocompany/thewolf/plugins/python	0.034s
+ok  	github.com/alphabravocompany/thewolf/plugins/javascript	0.013s
+ok  	github.com/alphabravocompany/thewolf/plugins/rust	0.020s
+ok  	github.com/alphabravocompany/thewolf/internal/db	16.055s

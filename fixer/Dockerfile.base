@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7
 # ============================================================
 # checkov:skip=CKV_DOCKER_2 — fixer images are worker containers driven by
 # `wolf fixer`, not network services.
@@ -10,20 +11,18 @@
 
 FROM debian:trixie-slim@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a0c3ccd26f436a0e AS build
 
-ARG WOLF_VERSION=dev
-ARG GO_VERSION=1.26.6
-ARG GO_LINUX_AMD64_SHA256=708effb774be8237570d0add163225abbdfaf4fca28b2611df167beba4feef89
-ARG GO_LINUX_ARM64_SHA256=d0507e9e9d7fe012aae570108cbd76c15de879e17130ab8cb90d4d7445cb1f2e
-ARG TYPESCRIPT_VERSION=6.0.3
-ARG TYPESCRIPT_INTEGRITY=sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw==
-ARG GH_VERSION=2.97.0
-ARG GLAB_VERSION=1.113.0
+ARG GO_VERSION=1.27.3
+ARG GO_LINUX_AMD64_SHA256=65efbc80fdc1fa2cd2631cad5b481777a68e8725f34e89f50fc6ac714e379b40
+ARG GO_LINUX_ARM64_SHA256=a06e99309dbcbdca1a8ccd2282c3ee146e55930886e26b4f1193269587165f49
+ARG TYPESCRIPT_VERSION=7.0.2
+ARG TYPESCRIPT_INTEGRITY=sha512-8FYau96o3NKOhbjKi/qNvG/W5jhzxkbdm5sj9AbZ/5T5sWqn3hJgLfGx27sRKZWTvyzCP8dLRBTf5tBTSRVUNA==
+ARG GH_VERSION=2.102.0
+ARG GLAB_VERSION=1.122.0
 
 LABEL org.opencontainers.image.title="wolf-fixer" \
       org.opencontainers.image.description="Autonomous remediation worker base for The Wolf" \
       org.opencontainers.image.source="https://github.com/alphabravo-oss/thewolf" \
       org.opencontainers.image.vendor="AlphaBravo" \
-      org.opencontainers.image.version="${WOLF_VERSION}" \
       dev.wolf.fixer.variant="base" \
       dev.wolf.fixer.auth-mode="none"
 
@@ -56,12 +55,13 @@ RUN set -eux; \
 COPY fixer/versions.env /tmp/fixer-versions.env
 COPY fixer/install-node-tools.sh /tmp/install-node-tools.sh
 COPY fixer/install-fix-tools.sh /tmp/install-fix-tools.sh
-RUN chmod 0755 /tmp/install-node-tools.sh /tmp/install-fix-tools.sh \
+RUN --mount=type=cache,target=/root/.npm --mount=type=cache,target=/tmp/npm-cache chmod 0755 /tmp/install-node-tools.sh /tmp/install-fix-tools.sh \
     && /tmp/install-node-tools.sh /tmp/fixer-versions.env \
     && /tmp/install-fix-tools.sh /tmp/fixer-versions.env
 
 COPY fixer/go-tools /tmp/fixer-go-tools
-RUN cd /tmp/fixer-go-tools \
+ARG TARGETARCH
+RUN --mount=type=cache,target=/root/go/pkg/mod --mount=type=cache,id=fixer-go-build-${TARGETARCH},target=/root/.cache/go-build cd /tmp/fixer-go-tools \
     && go mod download all \
     && test "$(go list -m -f '{{.Version}}' github.com/cli/cli/v2)" = "v${GH_VERSION}" \
     && test "$(go list -m -f '{{.Version}}' gitlab.com/gitlab-org/cli)" = "v${GLAB_VERSION}" \
@@ -81,18 +81,20 @@ RUN cd /tmp/fixer-go-tools \
 
 WORKDIR /src
 COPY go.mod go.sum ./
-RUN go mod download && go mod verify
+RUN --mount=type=cache,target=/root/go/pkg/mod go mod download && go mod verify
 COPY cmd ./cmd
 COPY internal ./internal
 COPY plugins ./plugins
+COPY pkg ./pkg
 COPY scanners ./scanners
-RUN CGO_ENABLED=1 go build \
+ARG WOLF_VERSION=dev
+RUN --mount=type=cache,target=/root/go/pkg/mod --mount=type=cache,id=fixer-go-build-${TARGETARCH},target=/root/.cache/go-build CGO_ENABLED=1 go build \
       -trimpath \
       -ldflags "-s -w -X main.version=${WOLF_VERSION}" \
       -tags "fixer_runtime sqlite_omit_load_extension netgo osusergo" \
       -o /usr/local/bin/wolf ./cmd/wolf \
     && /usr/local/bin/wolf version \
-    && rm -rf /src /root/.cache/go-build /root/go \
+    && rm -rf /src \
     && rm -f /usr/local/go/src/crypto/x509/platform_root_key.pem
 
 # Start the distributable runtime from a clean layer history. Removing build
@@ -100,12 +102,10 @@ RUN CGO_ENABLED=1 go build \
 # stage deliberately copies only runtime artifacts from the build stage.
 FROM debian:trixie-slim@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a0c3ccd26f436a0e AS runtime
 
-ARG WOLF_VERSION=dev
 LABEL org.opencontainers.image.title="wolf-fixer" \
       org.opencontainers.image.description="Autonomous remediation worker base for The Wolf" \
       org.opencontainers.image.source="https://github.com/alphabravo-oss/thewolf" \
       org.opencontainers.image.vendor="AlphaBravo" \
-      org.opencontainers.image.version="${WOLF_VERSION}" \
       dev.wolf.fixer.variant="base" \
       dev.wolf.fixer.auth-mode="none"
 
@@ -131,17 +131,15 @@ COPY --from=build /opt/wolf/fix-tools /opt/wolf/fix-tools
 RUN ln -sfn ../lib/node_modules/npm/bin/npm-cli.js /usr/bin/npm \
     && ln -sfn ../lib/node_modules/npm/bin/npx-cli.js /usr/bin/npx \
     && ln -sfn ../lib/node_modules/typescript/bin/tsc /usr/bin/tsc \
-    && ln -sfn ../lib/node_modules/typescript/bin/tsserver /usr/bin/tsserver \
     && for b in /opt/wolf/fix-tools/bin/*; do ln -sfn "$b" "/usr/local/bin/$(basename "$b")"; done
 
-RUN wolf version \
+COPY fixer/versions.env /usr/share/wolf/fixer/versions.env
+RUN . /usr/share/wolf/fixer/versions.env \
+    && wolf version \
     && gh --version \
     && glab --version \
-    && test "$(tsc --version | awk '{print $2}')" = "6.0.3" \
-    && node -e "if (require('/usr/lib/node_modules/npm/package.json').version !== '12.0.2') process.exit(1)" \
-    && node -e "if (require('/usr/lib/node_modules/npm/node_modules/brace-expansion/package.json').version !== '5.0.9') process.exit(1)" \
-    && node -e "if (require('/usr/lib/node_modules/npm/node_modules/picomatch/package.json').version !== '4.0.5') process.exit(1)" \
-    && node -e "if (require('/usr/lib/node_modules/npm/node_modules/ip-address/package.json').version !== '10.3.1') process.exit(1)" \
+    && test "$(tsc --version | awk '{print $2}')" = "$TYPESCRIPT_VERSION" \
+    && test "$(npm --version)" = "$NPM_VERSION" \
     && command -v prettier \
     && command -v markdownlint \
     && command -v eslint \
@@ -155,13 +153,14 @@ RUN wolf version \
     && command -v taplo \
     && command -v goimports
 
-COPY fixer/versions.env /usr/share/wolf/fixer/versions.env
-
 RUN /usr/sbin/addgroup --gid 1000 wolf \
     && /usr/sbin/adduser --uid 1000 --gid 1000 --home /home/wolf --shell /bin/bash \
          --disabled-password --gecos '' wolf \
     && mkdir -p /home/wolf/.config /workspace \
     && chown -R wolf:wolf /home/wolf /workspace
+
+ARG WOLF_VERSION=dev
+LABEL org.opencontainers.image.version="${WOLF_VERSION}"
 
 USER wolf
 WORKDIR /workspace

@@ -2,7 +2,9 @@ package db
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -86,35 +88,37 @@ func (s *SQLiteStore) FleetInventory(ctx context.Context, userID string, fleetMo
 	return out, nil
 }
 
-// parseLanguageList decodes detected_languages, which may be a JSON array
-// (`["go","ts"]`), a comma-separated list, or empty.
+// parseLanguageList accepts detector counts and legacy array/CSV metadata.
 func parseLanguageList(raw string) []string {
 	raw = strings.TrimSpace(raw)
-	if raw == "" || raw == "[]" || raw == "null" {
+	if raw == "" || raw == "null" {
 		return nil
 	}
-	// JSON array form.
-	if strings.HasPrefix(raw, "[") {
-		trimmed := strings.TrimPrefix(strings.TrimSuffix(raw, "]"), "[")
-		parts := strings.Split(trimmed, ",")
-		out := make([]string, 0, len(parts))
-		for _, p := range parts {
-			p = strings.TrimSpace(p)
-			p = strings.Trim(p, `"`)
-			if p != "" {
-				out = append(out, p)
+	var out []string
+	switch raw[0] {
+	case '{':
+		var counts map[string]int
+		if json.Unmarshal([]byte(raw), &counts) != nil {
+			return nil
+		}
+		for language, count := range counts {
+			if count > 0 {
+				out = append(out, language)
 			}
 		}
-		return out
+	case '[':
+		if json.Unmarshal([]byte(raw), &out) != nil {
+			return nil
+		}
+	default:
+		out = strings.Split(raw, ",")
 	}
-	// Fallback: comma-separated.
-	parts := strings.Split(raw, ",")
-	out := make([]string, 0, len(parts))
-	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if p != "" {
-			out = append(out, p)
+	clean := out[:0]
+	for _, language := range out {
+		if language = strings.TrimSpace(language); language != "" {
+			clean = append(clean, language)
 		}
 	}
-	return out
+	slices.Sort(clean)
+	return slices.Compact(clean)
 }

@@ -1,0 +1,26 @@
+{
+  "tasks": 231,
+  "checked": 47,
+  "D02_1_complete": true,
+  "D02_complete": false,
+  "final_go_race_packages": 135,
+  "final_go_race_exit": 0,
+  "go_lint_exit": 0,
+  "scanner_sync_exit": 0,
+  "sqlite_postgres_manual_contracts_exit": 0,
+  "sqlite_postgres_scan_executor_and_http_exit": 0,
+  "gosec_exit": 1,
+  "gosec_high_high_findings": 33,
+  "gosec_rules": {
+    "G704": 3,
+    "G703": 29,
+    "G702": 1
+  },
+  "gosec_analysis_errors": {},
+  "diff_check_exit": 0,
+  "missing_document_links": [],
+  "fixture_removed": true,
+  "source_files": 58,
+  "ui_changed": false,
+  "deployed": false
+}

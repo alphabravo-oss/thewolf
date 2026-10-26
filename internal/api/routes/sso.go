@@ -14,6 +14,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
+	"github.com/alphabravocompany/thewolf/internal/api/middleware"
 	"github.com/alphabravocompany/thewolf/internal/api/response"
 	"github.com/alphabravocompany/thewolf/internal/auth"
 	"github.com/alphabravocompany/thewolf/internal/models"
@@ -153,7 +154,7 @@ func firstForm(r *http.Request, keys ...string) string {
 
 func ssoRedirectURI(r *http.Request, name string) string {
 	scheme := "http"
-	if r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") {
+	if middleware.IsHTTPS(r) {
 		scheme = "https"
 	}
 	return scheme + "://" + r.Host + "/api/v1/auth/sso/" + name + "/callback"

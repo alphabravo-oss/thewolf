@@ -1,0 +1,23 @@
+4:56PM INF scan starting branch=main component=scan repo_id=d4c8043f-1acd-4411-9957-29b578905ace scan_id=41477a91-6ad4-4d24-b30d-74b3368bcf46
+4:56PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=41477a91-6ad4-4d24-b30d-74b3368bcf46
+4:56PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+4:56PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+4:56PM INF tools selected component=scan count=2 scan_id=41477a91-6ad4-4d24-b30d-74b3368bcf46 tools=["cluster-a","cluster-b"]
+4:56PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+4:56PM INF tool completed component=runner elapsed=0.657689 findings=1 tool=cluster-b
+4:56PM INF tool completed component=scan findings=1 scan_id=41477a91-6ad4-4d24-b30d-74b3368bcf46 tool=cluster-b
+4:56PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+4:56PM INF tool completed component=runner elapsed=0.617695 findings=1 tool=cluster-a
+4:56PM INF tool completed component=scan findings=1 scan_id=41477a91-6ad4-4d24-b30d-74b3368bcf46 tool=cluster-a
+4:56PM INF scan run complete component=runner elapsed=4.160478 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+4:56PM INF scan run finished component=scan scan_id=41477a91-6ad4-4d24-b30d-74b3368bcf46 status=completed
+4:56PM INF artifact bundle published component=scan findings_json=/tmp/TestScanFinalizationKeepsPersistedIdentityAndEnrichmentsqlitef2563337386/001/002_20261023-165656_41477a91/findings.json manifest=/tmp/TestScanFinalizationKeepsPersistedIdentityAndEnrichmentsqlitef2563337386/001/002_20261023-165656_41477a91/manifest.json scan_id=41477a91-6ad4-4d24-b30d-74b3368bcf46
+4:56PM ERR scan completion failed error="commit scan completion: scan or findings changed during evaluation; retry with a fresh snapshot" component=scan scan_id=41477a91-6ad4-4d24-b30d-74b3368bcf46
+4:56PM INF scan complete — all tools finished component=scan findings=1 scan_id=41477a91-6ad4-4d24-b30d-74b3368bcf46 status=failed
+--- FAIL: TestScanFinalizationKeepsPersistedIdentityAndEnrichment (0.26s)
+    --- FAIL: TestScanFinalizationKeepsPersistedIdentityAndEnrichment/sqlite (0.26s)
+        --- FAIL: TestScanFinalizationKeepsPersistedIdentityAndEnrichment/sqlite/finalization-conflict (0.26s)
+            scan_cluster_finalization_test.go:161: scan failed: &{BaselineScanID: BaselineResolvedAt:2026-10-23 16:56:56.247016247 +0000 UTC FindingsRevision:5 ID:41477a91-6ad4-4d24-b30d-74b3368bcf46 UserID:0c21eabc-83bd-4d52-95f5-281371c02eff RepoID:d4c8043f-1acd-4411-9957-29b578905ace CollectionID:<nil> LoopID:<nil> Iteration:<nil> Branch:main SourceType:local RemoteNodeID:<nil> SourcePath:/tmp/TestScanFinalizationKeepsPersistedIdentityAndEnrichmentsqlitef2563337386/002 CommitSHA: TreeDigest:sha256-v2:fc5f3cedf8620ac985f4eb30e6bcb44f5a8e7379862d65d35a59658ae380f20d DirtyState:unknown PreparedWorkspace:/tmp/TestScanFinalizationKeepsPersistedIdentityAndEnrichmentsqlitef2563337386/002 RequestJSON:{"tools":["cluster-a","cluster-b"]} RequestDigest: ClientReference: IdempotencyKey: Phase:failed ClaimedBy: LeaseToken: LeaseExpiresAt:<nil> HeartbeatAt:<nil> Attempt:0 MaxAttempts:2 CancelRequestedAt:<nil> FailureCode:scan_completion_failed FailureMessage:commit scan completion: scan or findings changed during evaluation; retry with a fresh snapshot ExecutionBackend: ScannerReleaseID: ReleaseManifestDigest: RescanOfScanID: ReleaseSelectionReason: OriginScanID: PreviousScanID: RemediationID: FixJobID: SourceFingerprint: Profile: Categories:[] IncludePaths:[] ExcludePaths:[] Status:failed ToolsSelected:["cluster-a","cluster-b"] ToolsCompleted:["cluster-a","cluster-b"] ToolsFailed:[] ToolsErrors:{} FindingCount:1 CoverageSummary: AIEnabled:false AISummary: StartedAt:2026-10-23 16:56:56.236419195 +0000 UTC CompletedAt:2026-10-23 16:56:56.247016247 +0000 UTC CreatedAt:2026-10-23 16:56:56.235994074 +0000 UTC UpdatedAt:2026-10-23 16:56:56.260628528 +0000 UTC Repo:<nil>}
+FAIL
+FAIL	github.com/alphabravocompany/thewolf/internal/api/routes	0.271s
+FAIL

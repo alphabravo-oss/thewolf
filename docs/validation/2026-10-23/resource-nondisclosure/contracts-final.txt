@@ -1,0 +1,12 @@
+ok  	github.com/alphabravocompany/thewolf/internal/api	2.822s
+7:55PM ERR API error code=server_error status=500
+7:55PM ERR API error code=server_error status=500
+7:55PM ERR API error code=server_error status=500
+7:55PM ERR API error code=server_error status=500
+7:55PM ERR API error code=server_error status=500
+7:55PM ERR API error code=readiness_unavailable status=503
+--- FAIL: TestMeasuredCoverageOwnership (0.29s)
+    test_coverage_test.go:144: foreign scan GET : 404
+FAIL
+FAIL	github.com/alphabravocompany/thewolf/internal/api/routes	7.423s
+FAIL

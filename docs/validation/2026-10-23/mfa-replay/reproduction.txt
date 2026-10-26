@@ -1,0 +1,43 @@
+8:53PM INF static-ui: no dist dir found; UI routes disabled (run `npm run dev` separately)
+2026/10/23 20:53:38 [thewolf-dev-1-mj/ZWAH3lUhW4-000001] "POST http://example.com/api/v1/auth/register HTTP/1.1" from 192.0.2.1:1234 - 201 961B in 91.298889ms
+2026/10/23 20:53:38 [thewolf-dev-1-mj/ZWAH3lUhW4-000002] "POST http://example.com/api/v1/auth/mfa/setup HTTP/1.1" from 192.0.2.1:1234 - 200 3027B in 6.324073ms
+2026/10/23 20:53:38 [thewolf-dev-1-mj/ZWAH3lUhW4-000003] "POST http://example.com/api/v1/auth/mfa/activate HTTP/1.1" from 192.0.2.1:1234 - 200 165B in 382.03µs
+2026/10/23 20:53:38 [thewolf-dev-1-mj/ZWAH3lUhW4-000004] "POST http://example.com/api/v1/auth/login HTTP/1.1" from 10.53.0.1:1234 - 200 415B in 75.406538ms
+2026/10/23 20:53:38 [thewolf-dev-1-mj/ZWAH3lUhW4-000005] "POST http://example.com/api/v1/auth/mfa/login HTTP/1.1" from 10.53.0.2:1234 - 200 960B in 419.721µs
+8:53PM WRN audit log append failed error="sql: database is closed"
+--- FAIL: TestMFAActivationCodeCannotLogin (0.39s)
+    mfa_replay_test.go:29: activation code reused for login: 200
+8:53PM INF static-ui: no dist dir found; UI routes disabled (run `npm run dev` separately)
+2026/10/23 20:53:39 [thewolf-dev-1-mj/ZWAH3lUhW4-000006] "POST http://example.com/api/v1/auth/register HTTP/1.1" from 192.0.2.1:1234 - 201 961B in 73.320386ms
+2026/10/23 20:53:39 [thewolf-dev-1-mj/ZWAH3lUhW4-000007] "POST http://example.com/api/v1/auth/mfa/setup HTTP/1.1" from 192.0.2.1:1234 - 200 3087B in 5.353973ms
+2026/10/23 20:53:39 [thewolf-dev-1-mj/ZWAH3lUhW4-000008] "POST http://example.com/api/v1/auth/mfa/activate HTTP/1.1" from 192.0.2.1:1234 - 200 165B in 375.879µs
+2026/10/23 20:53:39 [thewolf-dev-1-mj/ZWAH3lUhW4-000009] "POST http://example.com/api/v1/auth/login HTTP/1.1" from 10.53.1.1:1234 - 200 415B in 31.590855ms
+2026/10/23 20:53:39 [thewolf-dev-1-mj/ZWAH3lUhW4-000010] "POST http://example.com/api/v1/auth/mfa/login HTTP/1.1" from 10.53.1.2:1234 - 200 960B in 597.206µs
+2026/10/23 20:53:39 [thewolf-dev-1-mj/ZWAH3lUhW4-000011] "POST http://example.com/api/v1/auth/login HTTP/1.1" from 10.53.1.3:1234 - 200 415B in 22.386624ms
+2026/10/23 20:53:39 [thewolf-dev-1-mj/ZWAH3lUhW4-000012] "POST http://example.com/api/v1/auth/mfa/login HTTP/1.1" from 10.53.1.4:1234 - 200 960B in 485.475µs
+8:53PM WRN audit log append failed error="sql: database is closed"
+--- FAIL: TestMFATOTPCannotReplayWithFreshChallenge (0.33s)
+    mfa_replay_test.go:49: TOTP reused with fresh challenge: 200
+8:53PM INF static-ui: no dist dir found; UI routes disabled (run `npm run dev` separately)
+2026/10/23 20:53:39 [thewolf-dev-1-mj/ZWAH3lUhW4-000013] "POST http://example.com/api/v1/auth/register HTTP/1.1" from 192.0.2.1:1234 - 201 961B in 47.536176ms
+2026/10/23 20:53:39 [thewolf-dev-1-mj/ZWAH3lUhW4-000014] "POST http://example.com/api/v1/auth/mfa/setup HTTP/1.1" from 192.0.2.1:1234 - 200 3047B in 11.698715ms
+2026/10/23 20:53:39 [thewolf-dev-1-mj/ZWAH3lUhW4-000015] "POST http://example.com/api/v1/auth/mfa/activate HTTP/1.1" from 192.0.2.1:1234 - 200 165B in 677.287µs
+2026/10/23 20:53:39 [thewolf-dev-1-mj/ZWAH3lUhW4-000016] "POST http://example.com/api/v1/auth/login HTTP/1.1" from 10.53.2.1:1234 - 200 415B in 42.785059ms
+2026/10/23 20:53:39 [thewolf-dev-1-mj/ZWAH3lUhW4-000017] "POST http://example.com/api/v1/users/a97d3d27-f770-439f-b3ab-9e55122b1b5b/mfa/reset HTTP/1.1" from 192.0.2.1:1234 - 200 24B in 382.562µs
+2026/10/23 20:53:39 [thewolf-dev-1-mj/ZWAH3lUhW4-000018] "POST http://example.com/api/v1/auth/mfa/setup HTTP/1.1" from 192.0.2.1:1234 - 200 2987B in 7.562888ms
+2026/10/23 20:53:39 [thewolf-dev-1-mj/ZWAH3lUhW4-000019] "POST http://example.com/api/v1/auth/mfa/activate HTTP/1.1" from 192.0.2.1:1234 - 200 165B in 541.12µs
+2026/10/23 20:53:39 [thewolf-dev-1-mj/ZWAH3lUhW4-000020] "POST http://example.com/api/v1/auth/mfa/login HTTP/1.1" from 10.53.2.2:1234 - 200 960B in 581.055µs
+--- FAIL: TestMFAChallengeInvalidAfterReenrollment (0.33s)
+    mfa_replay_test.go:76: old enrollment challenge: 200
+8:53PM INF static-ui: no dist dir found; UI routes disabled (run `npm run dev` separately)
+2026/10/23 20:53:39 [thewolf-dev-1-mj/ZWAH3lUhW4-000021] "POST http://example.com/api/v1/auth/register HTTP/1.1" from 192.0.2.1:1234 - 201 961B in 53.923517ms
+2026/10/23 20:53:39 [thewolf-dev-1-mj/ZWAH3lUhW4-000022] "POST http://example.com/api/v1/auth/mfa/setup HTTP/1.1" from 192.0.2.1:1234 - 200 3027B in 11.578567ms
+2026/10/23 20:53:39 [thewolf-dev-1-mj/ZWAH3lUhW4-000023] "POST http://example.com/api/v1/auth/mfa/activate HTTP/1.1" from 192.0.2.1:1234 - 200 165B in 595.843µs
+2026/10/23 20:53:39 [thewolf-dev-1-mj/ZWAH3lUhW4-000024] "POST http://example.com/api/v1/auth/login HTTP/1.1" from 10.53.3.1:1234 - 200 415B in 53.17646ms
+2026/10/23 20:53:39 [thewolf-dev-1-mj/ZWAH3lUhW4-000025] "POST http://example.com/api/v1/auth/mfa/login HTTP/1.1" from 10.53.3.2:1234 - 200 960B in 822.791µs
+8:53PM WRN audit log append failed error="sql: database is closed"
+--- FAIL: TestMFAChallengeIssuedAcrossPasswordChange (0.33s)
+    mfa_replay_test.go:121: stale password challenge: 200
+FAIL
+FAIL	github.com/alphabravocompany/thewolf/internal/api	1.420s
+FAIL

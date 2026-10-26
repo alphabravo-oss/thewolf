@@ -1,0 +1,4 @@
+ok  	github.com/alphabravocompany/thewolf/internal/auth	1.017s
+ok  	github.com/alphabravocompany/thewolf/internal/api	15.934s
+ok  	github.com/alphabravocompany/thewolf/internal/api/routes	1.053s [no tests to run]
+ok  	github.com/alphabravocompany/thewolf/internal/api/openapi	1.014s [no tests to run]

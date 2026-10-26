@@ -1,0 +1,9 @@
+{
+  "compile_exit": 0,
+  "binary_format": "PE32+",
+  "architecture": "amd64",
+  "bytes": 6511104,
+  "sha256": "0929e9574b6bbf81e082a30490178dac60bedada9d4f9b26988a30e9c5591e7c",
+  "runtime_tested": false,
+  "metadata_verifier": "Python standard-library executable header parsing; file utility unavailable."
+}

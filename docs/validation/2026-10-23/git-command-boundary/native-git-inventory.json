@@ -1,0 +1,168 @@
+{
+  "scope": "Search inventory, not completed audit. Shared wrapper still executes native Git and is not an OS sandbox. Generic dispatch/SSH require further tracing.",
+  "literal_and_gitpath_sites": [
+    {
+      "file": "cmd/scannertools/propose.go",
+      "line": 301,
+      "code": "command := exec.CommandContext(ctx, \"git\", args...)",
+      "status": "Remaining native Git boundary; shared defaults where command.go, still needs filesystem/filter/resource qualification"
+    },
+    {
+      "file": "internal/scannerproposal/checkout.go",
+      "line": 495,
+      "code": "command := exec.CommandContext(ctx, gitPath, fixed...) // #nosec G204 -- no shell; commit is strict-validated and paths are administrator/temp configuration.",
+      "status": "Remaining native Git boundary; shared defaults where command.go, still needs filesystem/filter/resource qualification"
+    },
+    {
+      "file": "internal/scan/suppress/gitignore.go",
+      "line": 53,
+      "code": "cmd := exec.Command(\"git\", \"-C\", repoPath, \"check-ignore\", \"--stdin\")",
+      "status": "Remaining native Git boundary; shared defaults where command.go, still needs filesystem/filter/resource qualification"
+    },
+    {
+      "file": "internal/fix/git/command.go",
+      "line": 19,
+      "code": "cmd := exec.CommandContext(ctx, \"git\", append(fixed, args...)...)",
+      "status": "Remaining native Git boundary; shared defaults where command.go, still needs filesystem/filter/resource qualification"
+    }
+  ],
+  "shared_command_calls": [
+    {
+      "file": "internal/scantarget/resolver.go",
+      "line": 327,
+      "code": "cmd := gitpkg.Command(ctx, nil, args...)"
+    },
+    {
+      "file": "internal/scantarget/git.go",
+      "line": 140,
+      "code": "cmd := gitpkg.Command(ctx, env, args...)"
+    },
+    {
+      "file": "internal/api/routes/fix_diff.go",
+      "line": 101,
+      "code": "out, err := gitpkg.Command(context.Background(), nil, \"-C\", repoPath, \"diff\", \"--no-ext-diff\", \"--no-textconv\", \"--find-renames\", base, \"--\").Output() // #nosec G204"
+    },
+    {
+      "file": "internal/api/routes/fix_diff.go",
+      "line": 110,
+      "code": "out, err := gitpkg.Command(context.Background(), nil, \"-C\", repoPath, \"merge-base\", \"HEAD\", ref).Output() // #nosec G204"
+    },
+    {
+      "file": "internal/api/routes/fix_diff.go",
+      "line": 130,
+      "code": "out, err := gitpkg.Command(context.Background(), nil, \"-C\", repoPath, \"log\", \"-50\", \"--format=%H\\t%s\\t%cI\").Output() // #nosec G204"
+    },
+    {
+      "file": "internal/fix/wiring/wiring.go",
+      "line": 236,
+      "code": "cmd := gitpkg.Command(ctx, nil, \"-C\", repoPath, \"apply\", \"--whitespace=nowarn\", \"-\")"
+    },
+    {
+      "file": "internal/fix/workspace/workspace.go",
+      "line": 102,
+      "code": "cmd := gitpkg.Command(ctx, nil, args...)"
+    },
+    {
+      "file": "internal/fix/workspace/workspace.go",
+      "line": 120,
+      "code": "cmd := gitpkg.Command(ctx, env, args...)"
+    },
+    {
+      "file": "internal/fix/git/git.go",
+      "line": 29,
+      "code": "cmd := Command(context.Background(), nil, \"checkout\", \"-b\", branchName)"
+    },
+    {
+      "file": "internal/fix/git/git.go",
+      "line": 47,
+      "code": "cmd := Command(context.Background(), nil, \"branch\", branchName)"
+    },
+    {
+      "file": "internal/fix/git/git.go",
+      "line": 53,
+      "code": "cmd = Command(context.Background(), nil, \"worktree\", \"add\", worktreePath, branchName)"
+    },
+    {
+      "file": "internal/fix/git/git.go",
+      "line": 65,
+      "code": "cmd := Command(context.Background(), nil, \"worktree\", \"remove\", worktreePath, \"--force\")"
+    },
+    {
+      "file": "internal/fix/git/git.go",
+      "line": 79,
+      "code": "cmd := Command(context.Background(), nil, \"diff\", \"--no-ext-diff\", \"--no-textconv\", \"HEAD\", \"--\")"
+    },
+    {
+      "file": "internal/fix/git/git.go",
+      "line": 90,
+      "code": "cmd := Command(context.Background(), nil, \"diff\", \"--no-ext-diff\", \"--no-textconv\", \"--name-only\", \"-z\", \"HEAD\", \"--\")"
+    },
+    {
+      "file": "internal/fix/git/git.go",
+      "line": 108,
+      "code": "addCmd := Command(context.Background(), nil, \"add\", \"-A\")"
+    },
+    {
+      "file": "internal/fix/git/git.go",
+      "line": 114,
+      "code": "commitCmd := Command(context.Background(), nil, \"commit\", \"-m\", message)"
+    },
+    {
+      "file": "internal/fix/git/git.go",
+      "line": 124,
+      "code": "cmd := Command(context.Background(), nil, \"checkout\", \"--\", \".\")"
+    },
+    {
+      "file": "internal/fix/git/git.go",
+      "line": 131,
+      "code": "cleanCmd := Command(context.Background(), nil, \"clean\", \"-fd\")"
+    },
+    {
+      "file": "internal/fix/lineage/lineage.go",
+      "line": 121,
+      "code": "cmd := gitpkg.Command(context.Background(), nil, \"-C\", dir, \"rev-parse\", \"HEAD\")"
+    },
+    {
+      "file": "internal/fix/hygiene/protect.go",
+      "line": 43,
+      "code": "out, err := gitpkg.Command(ctx, nil, \"-C\", repoPath, \"status\", \"--porcelain\").Output() // #nosec G204"
+    },
+    {
+      "file": "internal/fix/hygiene/protect.go",
+      "line": 52,
+      "code": "_ = gitpkg.Command(ctx, nil, \"-C\", repoPath, \"checkout\", \"--\", rel).Run() // #nosec G204"
+    },
+    {
+      "file": "internal/fix/pr/pr.go",
+      "line": 79,
+      "code": "cmd := gitpkg.Command(ctx, nil, \"push\", \"-u\", \"origin\", branchName) // #nosec G204 -- command is a configured tool name; args sourced from internal config"
+    },
+    {
+      "file": "internal/fix/engine/apipatch.go",
+      "line": 120,
+      "code": "cmd := gitpkg.Command(ctx, nil, \"-C\", repoPath, \"apply\", \"--whitespace=nowarn\", \"-\")"
+    },
+    {
+      "file": "internal/fix/engine/registry.go",
+      "line": 157,
+      "code": "cmd := gitpkg.Command(ctx, nil, \"-C\", repoPath, \"status\", \"--porcelain\")"
+    }
+  ],
+  "known_indirect_paths": [
+    {
+      "file": "internal/scannerreleasebackend/source.go",
+      "mechanism": "backend executor request with Command and Environment; clone/fetch/checkout/verification",
+      "status": "isolated executor and fixed environment exist; repository-config and full sandbox qualification pending"
+    },
+    {
+      "file": "internal/scannerreleaseadapter/actions.go",
+      "mechanism": "release adapter command runner; Git binary selected dynamically",
+      "status": "review alongside generic proposal/release command runners"
+    },
+    {
+      "file": "internal/remote/service.go",
+      "mechanism": "SSH Git commands via remote service",
+      "status": "remote node base-path checks exist; GitInfo/discovery/archive shell commands still need repository-config and subprocess isolation review"
+    }
+  ]
+}

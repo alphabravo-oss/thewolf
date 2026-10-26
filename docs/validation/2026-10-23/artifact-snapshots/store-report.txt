@@ -1,0 +1,5 @@
+# github.com/alphabravocompany/thewolf/internal/scan/report [github.com/alphabravocompany/thewolf/internal/scan/report.test]
+internal/scan/report/artifacts_test.go:281:73: unknown field SuppressionReason in struct literal of type models.Finding
+ok  	github.com/alphabravocompany/thewolf/internal/artifacts	1.025s
+FAIL	github.com/alphabravocompany/thewolf/internal/scan/report [build failed]
+FAIL

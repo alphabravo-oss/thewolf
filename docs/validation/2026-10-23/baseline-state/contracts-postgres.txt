@@ -1,0 +1,8 @@
+# github.com/alphabravocompany/thewolf/internal/scan/report [github.com/alphabravocompany/thewolf/internal/scan/report.test]
+internal/scan/report/artifacts_test.go:330:92: report.Findings[0].FirstSeenAt undefined (type jsonFinding has no field or method FirstSeenAt)
+ok  	github.com/alphabravocompany/thewolf/internal/db	4.822s
+ok  	github.com/alphabravocompany/thewolf/internal/api/routes	20.829s
+FAIL	github.com/alphabravocompany/thewolf/internal/scan/report [build failed]
+ok  	github.com/alphabravocompany/thewolf/internal/finding/diff	1.014s
+ok  	github.com/alphabravocompany/thewolf/internal/finding/gates	1.015s
+FAIL

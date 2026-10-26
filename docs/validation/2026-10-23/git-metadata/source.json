@@ -1,0 +1,26 @@
+{
+  "head": "23b64ce09c569b7f49c465b53573e40c791b6fc5",
+  "state": "Uncommitted working tree; not deployed; newer than qualified images",
+  "go_version": "go version go1.27.3 linux/amd64",
+  "git_version": "git version 2.53.0",
+  "files": {
+    "go.mod": "54cdb75c5a1efa159929c6fb297a34b24327afe3d3f95e4382d46786f41fc725",
+    "go.sum": "13b5f2b63950d85741e78bf992804f482e8d052da9460aa0d13923b8a27dd845",
+    "internal/fix/git/git.go": "68abaa84738005200457e9491c8b282bfd77309103a85ce5f8c5e5edbe0869c6",
+    "internal/fix/git/refs.go": "a76e2f0ae73be42416bc491eb02f655a1d990bf0151a609abf5499a31138b1d0",
+    "internal/fix/git/refs_test.go": "724e2ffbcc071db94b9cd8fba40fba44d9c11070b46373ee2efe1d499ad2d3bb",
+    "internal/fix/git/refs_unix_test.go": "e408b207fc66c697ad57ff787291f3f50cb344bfb5dbd437a19ab1e361f7b046",
+    "internal/repo/local.go": "ff69650f1eb02878c8e3842148e386ad257f00584e93d16095602fdd83500112",
+    "internal/api/routes/browse.go": "66e6d9dede06a9681a26a0f61b5bc02008334dde2e96edc097b885f46277bba4",
+    "internal/api/routes/git_info.go": "7c7b1098f9a7dcc8a2ec24c059720f9781118ceae7bbdb1a611d61570dda1906",
+    "internal/api/routes/git_info_test.go": "82951a40013d1af86265b6a8d7d453fd5d8de13b28a89355ee851fe30cc04126",
+    "internal/api/routes/repos.go": "ca1b897ad5491713a990cd87476f495d6fb4f550ec4735a89e4c86feaf42d560",
+    "internal/api/routes/repo_branches_test.go": "94c27fc02d819bd72f4d268994a1bef69f1341a6d5dca7099fde1a4b5c181ba3",
+    "docs/scan-isolation.md": "cc39b6a32db14448ccbf3d634b7f9255293c20c8d97e75e84aaf004af63f1662",
+    "docs/PLAN.md": "32ab321de26c94ac0927460d1c08d82072d0b214abaafed7d850b9bcf0279d9e",
+    "CHANGELOG.md": "0a2dc632f6c008c86b6e99c9f4ed97c7d9de750b784de4e524e6211b12db0bf3",
+    "scanners/scanner-lock.yaml": "60def9402f218ba962a77324c3d91befb478ef55bf9c902b775f62cdd54207f3"
+  },
+  "scanner_lock": "sha256:60bae0435abc38a4ec15f87fd6dcb750ff91f02f4edbdaedf18753904095ed26",
+  "definition_digest": "sha256:cfc57cab32cdb3b57abaaa99dfc71810555d7908a91a250a3092efe758692e34"
+}

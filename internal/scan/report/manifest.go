@@ -2,12 +2,15 @@ package report
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
+	"github.com/alphabravocompany/thewolf/internal/scan/suppress"
 )
 
 // ScanDirName builds a human-readable, sortable, unique directory name for a
@@ -63,21 +66,24 @@ func sanitizeDirComponent(s string) string {
 // languages, scanners) and the headline outputs (counts) so a consumer can
 // understand the artifact directory without rescanning.
 type Manifest struct {
-	ScanID      string            `json:"scan_id"`
-	Source      *SourceProvenance `json:"source,omitempty"`
-	RepoName    string            `json:"repo_name,omitempty"`
-	RepoPath    string            `json:"repo_path"`
-	RepoCommit  string            `json:"repo_commit,omitempty"`
-	Branch      string            `json:"branch,omitempty"`
-	StartedAt   time.Time         `json:"started_at"`
-	FinishedAt  time.Time         `json:"finished_at"`
-	WolfVersion string            `json:"wolf_version,omitempty"`
-	Detection   DetectionSummary  `json:"detection"`
-	ScannersRun []string          `json:"scanners_run"`
-	Skipped     []ScannerSkip     `json:"scanners_skipped,omitempty"`
-	ScannerPlan *ScannerPlan      `json:"scanner_plan,omitempty"`
-	Failed      map[string]string `json:"scanners_failed,omitempty"`
-	Counts      Counts            `json:"counts"`
+	IgnorePolicy     *suppress.Snapshot `json:"ignore_policy,omitempty"`
+	BaselineScanID   string             `json:"baseline_scan_id,omitempty"`
+	FindingsRevision *int64             `json:"findings_revision,omitempty"`
+	ScanID           string             `json:"scan_id"`
+	Source           *SourceProvenance  `json:"source,omitempty"`
+	RepoName         string             `json:"repo_name,omitempty"`
+	RepoPath         string             `json:"repo_path"`
+	RepoCommit       string             `json:"repo_commit,omitempty"`
+	Branch           string             `json:"branch,omitempty"`
+	StartedAt        time.Time          `json:"started_at"`
+	FinishedAt       time.Time          `json:"finished_at"`
+	WolfVersion      string             `json:"wolf_version,omitempty"`
+	Detection        DetectionSummary   `json:"detection"`
+	ScannersRun      []string           `json:"scanners_run"`
+	Skipped          []ScannerSkip      `json:"scanners_skipped,omitempty"`
+	ScannerPlan      *ScannerPlan       `json:"scanner_plan,omitempty"`
+	Failed           map[string]string  `json:"scanners_failed,omitempty"`
+	Counts           Counts             `json:"counts"`
 }
 
 // SourceProvenance captures where the scan input came from without including
@@ -171,6 +177,11 @@ func CountFindings(rawTotal int, deduped []models.Finding) Counts {
 		c.RawFindings = c.AfterDedupe
 	}
 	for _, f := range deduped {
+		if f.Suppressed {
+			c.Suppressed++
+			continue
+		}
+		c.Visible++
 		if f.Severity == models.SeverityCritical || f.Severity == models.SeverityHigh {
 			c.HighSeverity++
 		}
@@ -193,4 +204,43 @@ func WriteManifest(dir string, m Manifest) (string, error) {
 		return "", err
 	}
 	return path, nil
+}
+
+// RefreshManifestCounts preserves recorded producer metadata while deriving the
+// live count/revision fields from a single already-projected finding snapshot.
+// The caller retains the original artifact as the historical download.
+func RefreshManifestCounts(data []byte, scanID string, revision int64, baselineID string, findings []models.Finding) ([]byte, error) {
+	var saved Manifest
+	if err := json.Unmarshal(data, &saved); err != nil {
+		return nil, err
+	}
+	if saved.Counts.RawFindings < 0 {
+		return nil, fmt.Errorf("manifest raw finding count is negative")
+	}
+	if saved.ScanID != scanID {
+		return nil, fmt.Errorf("manifest scan identity does not match")
+	}
+	counts := CountFindings(saved.Counts.RawFindings, findings)
+	if counts == saved.Counts && saved.FindingsRevision != nil && *saved.FindingsRevision == revision && saved.BaselineScanID == baselineID {
+		return data, nil
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return nil, err
+	}
+	var err error
+	fields["counts"], err = json.Marshal(counts)
+	if err != nil {
+		return nil, err
+	}
+	fields["findings_revision"] = json.RawMessage(strconv.FormatInt(revision, 10))
+	if baselineID == "" {
+		delete(fields, "baseline_scan_id")
+	} else {
+		fields["baseline_scan_id"], err = json.Marshal(baselineID)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return json.MarshalIndent(fields, "", "  ")
 }

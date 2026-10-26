@@ -111,7 +111,7 @@ func NewServer(store db.Store, addr string) *Server {
 	// Middleware chain
 	r.Use(chimw.RequestID)
 	r.Use(middleware.ScannerOperationTrace)
-	r.Use(chimw.RealIP)
+	r.Use(middleware.ForwardedHeaders(os.Getenv("WOLF_TRUSTED_PROXIES")))
 	r.Use(chimw.Logger)
 	r.Use(chimw.Recoverer)
 	// 15-minute global timeout. Long enough for the legitimate slow
@@ -121,6 +121,10 @@ func NewServer(store db.Store, addr string) *Server {
 	// way; this is the safety-net upper bound, not the expected case.
 	r.Use(chimw.Timeout(15 * time.Minute))
 	r.Use(middleware.MaxBodySizeForRequest(1<<20, func(r *http.Request) int64 {
+		if (r.Method == http.MethodPut && strings.HasPrefix(r.URL.Path, "/api/v1/scans/") && strings.HasSuffix(r.URL.Path, "/test-coverage")) ||
+			(r.Method == http.MethodPost && r.URL.Path == "/api/v1/mcp") {
+			return routes.MaxTestCoverageRequestBytes
+		}
 		if r.Method == http.MethodPost &&
 			r.URL.Path == "/api/v1/scanner-supply-chain/release-imports" {
 			return routes.ScannerReleaseBundleMaxUploadBytes
@@ -134,6 +138,7 @@ func NewServer(store db.Store, addr string) *Server {
 			"Accept", "Authorization", "Content-Type", "Idempotency-Key",
 			"If-Match", "Last-Event-ID", "Traceparent", "X-Wolf-Import-Reason",
 			"X-Wolf-Operation-ID",
+			"Mcp-Protocol-Version", "Mcp-Method", "Mcp-Name",
 		},
 		ExposedHeaders: []string{
 			"Deprecation", "ETag", "Link", "Retry-After",
@@ -173,6 +178,7 @@ func NewServer(store db.Store, addr string) *Server {
 
 	// Mount the versioned API. All routes live under /api/v1; /api/* is a
 	// deprecating redirect alias kept for one release.
+	mcpHandler := routes.NewMCPHandler(r)
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(generalLimiter.Handler)
 		r.Use(jsonContentType)
@@ -221,6 +227,7 @@ func NewServer(store db.Store, addr string) *Server {
 			r.Post("/auth/sso/{name}/callback", routes.SSOCallback)
 			r.Post("/auth/register", routes.Register)
 			r.Post("/auth/login", routes.Login)
+			r.Post("/auth/refresh", routes.RefreshSession)
 			// Step two of a 2FA login: exchange the challenge token + code for
 			// a session. Public — the user has no session yet.
 			r.Post("/auth/mfa/login", routes.MFALogin)
@@ -236,7 +243,7 @@ func NewServer(store db.Store, addr string) *Server {
 			// the enrollment endpoints. No-op when MFA isn't required.
 			r.Use(routes.MFAEnrollmentGuard)
 
-			r.With(auth.RequireScope(apikey.ScopeReadRepos)).Post("/mcp", routes.HandleMCP)
+			r.Post("/mcp", mcpHandler.ServeHTTP)
 
 			rRepos := auth.RequireScope(apikey.ScopeReadRepos)
 			wRepos := auth.RequireScope(apikey.ScopeWriteRepos)
@@ -277,11 +284,11 @@ func NewServer(store db.Store, addr string) *Server {
 				r.Get("/tokens", routes.ListAPITokens)
 				r.Post("/tokens", routes.CreateAPIToken)
 				r.Delete("/tokens/{id}", routes.RevokeAPIToken)
-				// Self-service second factor (any authenticated principal).
-				r.Get("/mfa/status", routes.MFAStatus)
-				r.Post("/mfa/setup", routes.MFASetup)
-				r.Post("/mfa/activate", routes.MFAActivate)
-				r.Post("/mfa/disable", routes.MFADisable)
+				// Second-factor management belongs to human sessions, not machine keys.
+				r.With(auth.RequireHumanSession).Get("/mfa/status", routes.MFAStatus)
+				r.With(auth.RequireHumanSession).Post("/mfa/setup", routes.MFASetup)
+				r.With(auth.RequireHumanSession).Post("/mfa/activate", routes.MFAActivate)
+				r.With(auth.RequireHumanSession).Post("/mfa/disable", routes.MFADisable)
 			})
 
 			r.With(adminScope).With(adminOnly).Get("/audit-log", routes.ListAuditLog)
@@ -295,6 +302,9 @@ func NewServer(store db.Store, addr string) *Server {
 				r.Get("/tokens", routes.AdminListTokens)
 				r.Get("/secrets", routes.AdminListSecrets)
 				r.Get("/disk", routes.AdminDisk)
+				r.Get("/database", routes.AdminGetDatabase)
+				r.Post("/database/test", routes.AdminTestDatabase)
+				r.Put("/database", routes.AdminSaveDatabase)
 				r.Post("/workspaces/reap", routes.AdminReapWorkspaces)
 			})
 
@@ -393,6 +403,9 @@ func NewServer(store db.Store, addr string) *Server {
 				r.With(rScans).Get("/{id}/manifest", routes.GetScanManifest)
 				r.With(rScans).Get("/{id}/sarif", routes.GetScanSARIF)
 				r.With(rScans).Get("/{id}/coverage", routes.GetScanCoverage)
+				r.With(rScans).Get("/{id}/test-coverage", routes.GetTestCoverage)
+				r.With(wScans).Put("/{id}/test-coverage", routes.ImportTestCoverage)
+				r.With(rScans).Get("/{id}/test-coverage/files", routes.ListTestCoverageFiles)
 				r.With(rScans).Get("/{id}/gate", routes.GetScanGate)
 				r.With(rScans).Get("/{id}/diff", routes.GetScanDiff)
 				r.With(rScans).Post("/{id}/compare", routes.CompareScanToBaseline)
@@ -492,7 +505,7 @@ func NewServer(store db.Store, addr string) *Server {
 				r.With(rConfig).Get("/setup", routes.SetupStatus)
 			})
 
-			// Scanner backend (docs/PLAN-containerized-scanner-execution.md §5).
+			// Scanner backend (docs/archive/2026-10-23/PLAN-containerized-scanner-execution.md §5).
 			r.Route("/scanners", func(r chi.Router) {
 				// Scanner-image builds/pulls/updates are admin-only (system
 				// maintenance); reads stay open for the scan flow.
@@ -604,6 +617,7 @@ func NewServer(store db.Store, addr string) *Server {
 			// GET stays open (the UI reads feature flags to gate nav); writes
 			// are admin-only.
 			r.With(rConfig).Get("/settings", routes.ListSettings)
+			r.With(rConfig).Get("/settings/scheduling", routes.GetScheduling)
 			r.With(wConfig).With(adminOnly).Put("/settings", routes.UpdateSettings)
 
 			r.Route("/ai-prompts", func(r chi.Router) {

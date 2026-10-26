@@ -1,0 +1,13 @@
+{
+  "captured_at": "2026-10-23T09:08:18.843461+00:00",
+  "head": "23b64ce09c569b7f49c465b53573e40c791b6fc5",
+  "state": "uncommitted; previous image qualifications do not include these changes",
+  "files": {
+    "internal/fix/git/git.go": "d03a258b68034f5906697020ac8e3d58d3cd918a0ee78a55cc77ef49e1831340",
+    "internal/fix/git/git_test.go": "eadb8b3e858c954cf81ec78d44c4291ece5c1561c21eacb5914cd60dd9db1a3b",
+    "internal/api/routes/repos.go": "ee8d59488fec46c76b77dedf98b3da72a59fe32f528c4461283fdd3f5e7a8ecd",
+    "internal/api/routes/repo_branches_test.go": "88982c702db554b90fc5a4385a4dc6b69eccc022f2af69d1871a3f2c6d9c3cf0",
+    "internal/fix/install/install.go": "13fc6b6457292bbc39293b00390e1372783f107983fa451f41e5cd9fdd46e500",
+    "internal/fix/install/install_test.go": "748da5c25e91397dbe0929dc39a2320c1d8ef402425c2e263775cfa41472d075"
+  }
+}

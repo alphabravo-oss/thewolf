@@ -1,6 +1,9 @@
 package pr
 
 import (
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -30,7 +33,7 @@ func TestBuildPRBody(t *testing.T) {
 			contains: []string{
 				"Wolf Automated Fix",
 				"sast",
-				"Findings Fixed:** 1",
+				"Findings Addressed:** 1",
 				"Validation:** all pass",
 				"[HIGH]",
 				"SQL Injection",
@@ -49,7 +52,7 @@ func TestBuildPRBody(t *testing.T) {
 			},
 			contains: []string{
 				"secrets",
-				"Findings Fixed:** 2",
+				"Findings Addressed:** 2",
 				"[CRITICAL]",
 				"[HIGH]",
 				"Exposed API key",
@@ -65,7 +68,7 @@ func TestBuildPRBody(t *testing.T) {
 			},
 			contains: []string{
 				"quality",
-				"Findings Fixed:** 0",
+				"Findings Addressed:** 0",
 			},
 		},
 		{
@@ -158,5 +161,85 @@ func TestParseSeverities(t *testing.T) {
 	body := buildPRBody(req)
 	if !strings.Contains(body, "[INFO]") {
 		t.Error("expected [INFO] in PR body")
+	}
+}
+
+func TestGitHubPublicationUsesScopedCredentialsAndReusesPR(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell fixture")
+	}
+	dir := t.TempDir()
+	script := `#!/bin/sh
+[ "$GH_TOKEN" = "repo-owned-test-token" ] || exit 31
+[ -z "$GITHUB_TOKEN" ] && [ -z "$GH_HOST" ] && [ -z "$GIT_DIR" ] || exit 32
+[ "$PWD" = "$GH_CONFIG_DIR" ] || exit 33
+case "$*" in *repo-owned-test-token*) exit 34;; esac
+case "$*" in *https://github.com/example/repo*) ;; *) exit 35;; esac
+if [ "$2" = "list" ]; then
+ if [ "$WOLF_PR_TEST_MODE" = "existing" ]; then
+  echo '[{"url":"https://github.com/example/repo/pull/1"}]'
+ elif [ "$WOLF_PR_TEST_MODE" = "fork" ]; then
+  echo '[{"url":"https://github.com/example/repo/pull/999","isCrossRepository":true}]'
+ else
+  echo '[]'
+ fi
+else
+ [ "$WOLF_PR_TEST_MODE" != "existing" ] || exit 36
+ if [ "$WOLF_PR_TEST_MODE" = "fail" ]; then
+  echo "authorization failed for $GH_TOKEN"; exit 1
+ fi
+ echo 'https://github.com/example/repo/pull/1'
+fi
+`
+	if err := os.WriteFile(filepath.Join(dir, "gh"), []byte(script), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("GH_TOKEN", "ambient-other-account")
+	t.Setenv("GITHUB_TOKEN", "ambient-other-account")
+	t.Setenv("GH_HOST", "other.invalid")
+	t.Setenv("GIT_DIR", "/outside")
+	req := PRRequest{Source: "example/repo", Token: "repo-owned-test-token", BranchName: "wolf-fix/review", BaseBranch: "main", Findings: []models.Finding{{Title: "token=repo-owned-test-token"}}}
+	for _, mode := range []string{"new", "existing", "fork", "fail"} {
+		t.Setenv("WOLF_PR_TEST_MODE", mode)
+		result, err := CreateGitHubPR(t.Context(), req)
+		if mode == "fail" {
+			if err == nil || strings.Contains(err.Error(), req.Token) || !strings.Contains(err.Error(), "[REDACTED]") {
+				t.Fatalf("unsafe/lost publication error: %v", err)
+			}
+		} else if err != nil || result.URL != "https://github.com/example/repo/pull/1" {
+			t.Fatalf("%s: %+v %v", mode, result, err)
+		}
+	}
+	req.Token = ""
+	if _, err := CreateGitHubPR(t.Context(), req); err == nil {
+		t.Fatal("ambient credentials accepted")
+	}
+}
+
+func TestPREvidenceIsSpecificAndRedacted(t *testing.T) {
+	body := buildPRBody(PRRequest{JobID: "job-1", ScanID: "scan-1", Category: models.CategorySAST, Validation: "1 kept, 2 remaining", Findings: []models.Finding{{ID: "finding-1", ToolName: "gosec", RuleID: "G201", Title: "SQL injection password=secret-value", FilePath: "db.go", LineStart: 42, Severity: models.SeverityHigh}}, Evidence: map[string]string{"finding-1": "build: passed; finding_cleared: passed; tests: skipped"}})
+	for _, want := range []string{"job-1", "scan-1", "finding-1", "gosec / G201", "db.go:42", "build: passed", "tests: skipped", "1 kept, 2 remaining", "does not imply a full repository test run"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("missing %q: %s", want, body)
+		}
+	}
+	if strings.Contains(body, "secret-value") {
+		t.Fatal("PR includes secret assignment")
+	}
+	old := buildPRBody(PRRequest{Findings: []models.Finding{{ID: "legacy"}}})
+	if !strings.Contains(old, "targeted verification evidence not recorded") {
+		t.Fatal("legacy record invents verification")
+	}
+}
+
+func TestPRBodyBoundsLargeFindingSets(t *testing.T) {
+	findings := make([]models.Finding, 500)
+	for i := range findings {
+		findings[i] = models.Finding{Title: strings.Repeat("x", 1000), FilePath: strings.Repeat("y", 1000)}
+	}
+	body := buildPRBody(PRRequest{Findings: findings})
+	if len(body) > 61000 || !strings.Contains(body, "additional finding(s) are recorded in the Wolf fix job report") || !strings.Contains(body, "**Findings Addressed:** 500") {
+		t.Fatalf("large PR is oversized or hides omitted evidence: %d bytes", len(body))
 	}
 }

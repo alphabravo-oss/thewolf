@@ -227,8 +227,14 @@ func (c Client) FetchReferrers(ctx context.Context, reference Reference) ([]Desc
 	var index struct {
 		Manifests []Descriptor `json:"manifests"`
 	}
-	decoder := json.NewDecoder(io.LimitReader(response.Body, maximum+1))
-	if err := decoder.Decode(&index); err != nil {
+	content, err := io.ReadAll(io.LimitReader(response.Body, maximum+1))
+	if err != nil {
+		return nil, fmt.Errorf("read OCI referrers: %w", err)
+	}
+	if int64(len(content)) > maximum {
+		return nil, fmt.Errorf("OCI referrers exceed maximum size %d", maximum)
+	}
+	if err := json.Unmarshal(content, &index); err != nil {
 		return nil, fmt.Errorf("decode OCI referrers %s: %w", reference.String(), err)
 	}
 	for _, descriptor := range index.Manifests {
@@ -988,10 +994,29 @@ func (c Client) doAuthorized(
 	request *http.Request,
 	registry string,
 ) (*http.Response, error) {
+	// A registry response cannot expand the configured network/credential scope.
+	// Copy the client: callers can share transports and redirect policies.
+	client := *c.httpClient()
+	previousRedirect := client.CheckRedirect
+	client.CheckRedirect = func(next *http.Request, via []*http.Request) error {
+		if len(via) >= 10 {
+			return errors.New("OCI registry exceeded redirect limit")
+		}
+		if next.URL.Scheme != request.URL.Scheme || !strings.EqualFold(next.URL.Host, request.URL.Host) || next.URL.User != nil {
+			return errors.New("OCI registry redirect escaped configured origin")
+		}
+		if next.Method != request.Method {
+			return errors.New("OCI registry redirect changed request method")
+		}
+		if previousRedirect != nil {
+			return previousRedirect(next, via)
+		}
+		return nil
+	}
 	if err := c.authorize(ctx, request, registry); err != nil {
 		return nil, err
 	}
-	response, err := c.httpClient().Do(request)
+	response, err := client.Do(request) // #nosec G704 -- endpoint requires an explicitly configured registry; redirects above cannot change its origin or method.
 	if err != nil || response.StatusCode != http.StatusUnauthorized {
 		return response, err
 	}
@@ -1015,7 +1040,7 @@ func (c Client) doAuthorized(
 		retry.Body = body
 	}
 	retry.Header.Set("Authorization", "Bearer "+token)
-	return c.httpClient().Do(retry)
+	return client.Do(retry) // #nosec G704 -- retry retains the configured registry URL and the origin/method redirect guard above.
 }
 
 func (c Client) exchangeBearerChallenge(
@@ -1074,8 +1099,15 @@ func (c Client) exchangeBearerChallenge(
 		Token       string `json:"token"`
 		AccessToken string `json:"access_token"`
 	}
-	decoder := json.NewDecoder(io.LimitReader(response.Body, 1<<20))
-	if err := decoder.Decode(&payload); err != nil {
+	const maxTokenBytes = 1 << 20
+	content, err := io.ReadAll(io.LimitReader(response.Body, maxTokenBytes+1))
+	if err != nil {
+		return "", fmt.Errorf("read OCI registry Bearer token: %w", err)
+	}
+	if len(content) > maxTokenBytes {
+		return "", errors.New("OCI registry Bearer token response exceeds size limit")
+	}
+	if err := json.Unmarshal(content, &payload); err != nil {
 		return "", fmt.Errorf("decode OCI registry Bearer token: %w", err)
 	}
 	token := strings.TrimSpace(payload.Token)

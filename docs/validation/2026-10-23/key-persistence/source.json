@@ -1,0 +1,21 @@
+{
+  "head": "23b64ce09c569b7f49c465b53573e40c791b6fc5",
+  "state": "uncommitted working tree; not deployed; newer than previously qualified images",
+  "binary_sha256": "8242d7845a6ff6097e6b8614407e55daf995c9ab940a172bc252c6a37d3739df",
+  "files": {
+    "internal/secrets/keyfile.go": "7bdd9da6f81950f0848103676e0f93482b9ad5c9ffe87095860eafd36588c4d6",
+    "internal/secrets/keyfile_test.go": "64267857e2d4a64722c2e7fea7d0397138438227afc653e41d4dff496ca7c6bf",
+    "internal/secrets/keyfile_linux_test.go": "a74a8060b137ddfbd68157a09cf7139e4720ddfac31bc2f60e1fe822d2e88dfb",
+    "internal/secrets/secrets.go": "066815c488158fc91f2cd76f00f5e03674c2c98edb9e6b9545fb7874f4ba406e",
+    "internal/secrets/secrets_test.go": "b97dc6341aafbe7b1974a81d4baeeebbae13e641c2ddc246537f63a2a8e21065",
+    "internal/serve/serve.go": "1dbec844d8f0d795ed5701297775fce664c7ee7868e20dd2bc2c799b9327e5d6",
+    "internal/serve/serve_test.go": "6773b1b9f9cce88cce23af6924707b50b3ec614c9e9f7012332c4e918c9c4063",
+    "cmd/wolf/fixer.go": "24eaed6a71e3a61b61bd7c824a07e144432bdc93264f782d024cba9792a573c1",
+    "cmd/wolf/scan_worker.go": "77c0de49639ccf9be4fdfc8c4da9e96322710285fdca8e7213b84c86cbdb50eb",
+    "cmd/wolf/scan_worker_test.go": "85bc54602830a645afc71a2c24d0514aa70f423fc940778786fd363752ed89ee",
+    "docs/deployment.md": "851e8717a94f1e7b3c00a0a8b776826d48f32721e478cdeb353de6386181424e",
+    "scanners/scanner-lock.yaml": "aac0ec0523e26e91827c65982d235240d2ac43fcdc9912c84a07543b2baa940a"
+  },
+  "scanner_lock": "sha256:cb561b7b5330da633201bb75e7bf98acda13b3e2a282f276866516ab0764765c",
+  "definition_digest": "sha256:42ed734b7db014047e51a7e625211210a104617c2ee86707c7c6c85a5a3efa91"
+}

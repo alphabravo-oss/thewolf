@@ -23,6 +23,7 @@ import (
 // stubStore implements the orchestrator's Store interface in memory and records
 // every FixAttempt + job update so tests can assert the audit trail.
 type stubStore struct {
+	scan         *models.Scan
 	repo         *models.Repo
 	findings     map[string]*models.Finding
 	attempts     []models.FixAttempt
@@ -33,6 +34,7 @@ type stubStore struct {
 func (s *stubStore) GetRepoByID(_ context.Context, _ string) (*models.Repo, error) {
 	return s.repo, nil
 }
+func (s *stubStore) GetSetting(context.Context, string) (string, error) { return "true", nil }
 func (s *stubStore) GetFixJobByID(_ context.Context, id string) (*models.FixJob, error) {
 	for i := len(s.jobs) - 1; i >= 0; i-- {
 		if s.jobs[i].ID == id {
@@ -45,6 +47,12 @@ func (s *stubStore) GetFixJobByID(_ context.Context, id string) (*models.FixJob,
 func (s *stubStore) GetFindingByID(_ context.Context, id string) (*models.Finding, error) {
 	return s.findings[id], nil
 }
+func (s *stubStore) GetScanByID(_ context.Context, id string) (*models.Scan, error) {
+	if s.scan != nil {
+		return s.scan, nil
+	}
+	return &models.Scan{ID: id, RepoID: s.repo.ID}, nil
+}
 func (s *stubStore) UpdateFixJob(_ context.Context, job *models.FixJob) error {
 	s.jobs = append(s.jobs, *job)
 	return nil
@@ -53,8 +61,24 @@ func (s *stubStore) CreateFixAttempt(_ context.Context, att *models.FixAttempt) 
 	s.attempts = append(s.attempts, *att)
 	return nil
 }
+func (s *stubStore) ListFixAttempts(context.Context, string) ([]models.FixAttempt, error) {
+	return append([]models.FixAttempt(nil), s.attempts...), nil
+}
+func (s *stubStore) UpdateFixAttempt(_ context.Context, att *models.FixAttempt) error {
+	for i, prior := range s.attempts {
+		if prior.ID == att.ID && prior.Outcome == models.FixOutcomeRunning {
+			s.attempts[i] = *att
+			return nil
+		}
+	}
+	return errors.New("attempt is missing or final")
+}
 func (s *stubStore) ListFindingsByScan(context.Context, string) ([]models.Finding, error) {
-	return nil, nil
+	var findings []models.Finding
+	for _, f := range s.findings {
+		findings = append(findings, *f)
+	}
+	return findings, nil
 }
 func (s *stubStore) GetRemediationByID(context.Context, string) (*models.Remediation, error) {
 	return nil, nil
@@ -71,37 +95,69 @@ func (s *stubStore) CreateFindingSuppression(_ context.Context, sup *models.Find
 // stubWorkspace is a fake working tree. It tracks rollbacks and pushes; the
 // orchestrator must NEVER push (v1 is branch-only), so pushes is asserted zero.
 type stubWorkspace struct {
+	head         string
 	branch       string
 	path         string
 	changed      []string
 	rolledBack   []string
 	cleanupCalls int
+	cleanupErr   error
 	pushCalls    int
 	pushErr      error
 	commitCalls  int
+	commitErr    error
+	rollbackErr  error
 }
 
 func (w *stubWorkspace) Path() string {
 	if w.path != "" {
 		return w.path
 	}
-	return "/ws"
+	return defaultWorkspaceDir
+}
+
+// defaultWorkspaceDir backs stubs without an explicit path. It must be a real,
+// writable directory: the orchestrator writes review files into the workspace.
+var defaultWorkspaceDir string
+
+func TestMain(m *testing.M) {
+	dir, err := os.MkdirTemp("", "orchestrator-ws-")
+	if err != nil {
+		panic(err)
+	}
+	defaultWorkspaceDir = dir
+	code := m.Run()
+	_ = os.RemoveAll(dir)
+	os.Exit(code)
 }
 func (w *stubWorkspace) ChangedFiles(context.Context) ([]string, error) {
+	if w.commitCalls > 0 {
+		return nil, nil
+	}
 	return w.changed, nil
+}
+func (w *stubWorkspace) BranchChangedFiles(ctx context.Context) ([]string, error) {
+	return w.changed, nil
+}
+func (w *stubWorkspace) Checkpoint(context.Context) error { return nil }
+func (w *stubWorkspace) Head(context.Context) (string, error) {
+	if w.head != "" {
+		return w.head, nil
+	}
+	return "abc123", nil
 }
 func (w *stubWorkspace) Rollback(_ context.Context, file string) error {
 	w.rolledBack = append(w.rolledBack, file)
-	return nil
+	return w.rollbackErr
 }
 func (w *stubWorkspace) Branch() string { return w.branch }
 func (w *stubWorkspace) Diff(context.Context) (string, error) {
 	return "diff --git a/main.go b/main.go\n@@ fix @@\n", nil
 }
-func (w *stubWorkspace) Cleanup(context.Context) error { w.cleanupCalls++; return nil }
+func (w *stubWorkspace) Cleanup(context.Context) error { w.cleanupCalls++; return w.cleanupErr }
 func (w *stubWorkspace) Commit(context.Context, string) error {
 	w.commitCalls++
-	return nil
+	return w.commitErr
 }
 func (w *stubWorkspace) Push(context.Context) (string, error) {
 	w.pushCalls++
@@ -112,14 +168,16 @@ func (w *stubWorkspace) Push(context.Context) (string, error) {
 }
 
 type stubPreparer struct {
-	ws  *stubWorkspace
-	err error
+	baseBranch string
+	ws         *stubWorkspace
+	err        error
 }
 
-func (p *stubPreparer) Prepare(_ context.Context, _ *models.Repo, branch string) (Workspace, error) {
+func (p *stubPreparer) Prepare(_ context.Context, _ *models.Repo, branch, baseBranch string) (Workspace, error) {
 	if p.err != nil {
 		return nil, p.err
 	}
+	p.baseBranch = baseBranch
 	p.ws.branch = branch
 	return p.ws, nil
 }
@@ -182,12 +240,18 @@ func (s *chainSelector) Select(context.Context, *models.FixJob) (EngineChain, er
 // finding's verdict can be a list consumed per attempt so the same finding fails
 // then... (we keep it simple: a single verdict per finding ID).
 type stubVerifier struct {
-	pass map[string]bool
+	stages []verify.StageResult
+	pass   map[string]bool
+}
+
+func (v *stubVerifier) VerifyBranch(context.Context, verify.Workspace, []models.Finding, []models.Finding, []string) ([]verify.StageResult, error) {
+	return nil, nil
 }
 
 func (v *stubVerifier) Verify(_ context.Context, _ verify.Workspace, f models.Finding) (*verify.VerifyResult, error) {
 	ok := v.pass[f.ID]
 	return &verify.VerifyResult{
+		Stages:         v.stages,
 		Passed:         ok,
 		Built:          true,
 		FindingCleared: ok,
@@ -248,7 +312,10 @@ func baseStore() *stubStore {
 // happens (v1 is branch-only).
 func TestRun_KeepAndEscalateThenUnfixable(t *testing.T) {
 	store := baseStore()
-	ws := &stubWorkspace{changed: []string{"main.go"}}
+	// Independent files can be accepted separately; a same-file rollback
+	// must invalidate both repairs (covered by the real-workspace tests).
+	store.findings["escalate-me"].FilePath = "other.go"
+	ws := &stubWorkspace{changed: []string{"main.go", "other.go"}}
 	diffs := &stubDiffs{}
 
 	deps := Deps{
@@ -258,7 +325,7 @@ func TestRun_KeepAndEscalateThenUnfixable(t *testing.T) {
 		Engines: &chainSelector{build: func() EngineChain {
 			// Two tiers so an escalating finding gets a second engine attempt.
 			return &stubChain{tiers: []engine.SubprocessEngine{
-				&fixEngine{name: "claude-code"},
+				&recordingEngine{fixAll: true},
 				&fixEngine{name: "api"},
 			}}
 		}},
@@ -268,7 +335,12 @@ func TestRun_KeepAndEscalateThenUnfixable(t *testing.T) {
 		Diffs:    diffs,
 	}
 
-	res, err := Run(context.Background(), twoFindingJob(), deps)
+	job := twoFindingJob()
+	job.BaseBranch = "release"
+	res, err := Run(context.Background(), job, deps)
+	if deps.Workspaces.(*stubPreparer).baseBranch != "release" {
+		t.Fatal("source base branch was not passed to workspace preparation")
+	}
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -290,6 +362,9 @@ func TestRun_KeepAndEscalateThenUnfixable(t *testing.T) {
 	}
 	if res.Summary.Unfixable != 1 {
 		t.Fatalf("expected 1 unfixable, got %d", res.Summary.Unfixable)
+	}
+	if len(res.Summary.Tools) != 1 || res.Summary.Tools[0].Kept != 1 || res.Summary.Tools[0].Unfixable != 1 || res.Summary.Tools[0].Open != 0 {
+		t.Fatalf("report disagrees with final outcomes: %+v", res.Summary.Tools)
 	}
 	if res.Summary.Considered != 2 {
 		t.Fatalf("expected 2 considered, got %d", res.Summary.Considered)
@@ -728,12 +803,12 @@ func TestRun_UntouchedFindingsStayOpen(t *testing.T) {
 		t.Fatalf("kept=%d want 1", res.Summary.Kept)
 	}
 	for _, a := range store.attempts {
-		if a.FindingID == "other" {
-			t.Fatalf("untouched finding should not get an attempt, got %+v", a)
+		if a.FindingID == "other" && a.Outcome != models.FixOutcomeUnverified {
+			t.Fatalf("untouched finding should retain an unverified attempt, got %+v", a)
 		}
 	}
-	if len(verified) != 1 || verified[0] != "keep-me" {
-		t.Fatalf("verified %v, want only keep-me", verified)
+	if len(verified) != 2 || verified[0] != "keep-me" || verified[1] != "keep-me" {
+		t.Fatalf("verified %v, want keep-me rechecked after the later turn", verified)
 	}
 	if ws.commitCalls != 1 {
 		t.Fatalf("commit once per scanner turn, got %d", ws.commitCalls)
@@ -746,11 +821,11 @@ func TestRun_PartialTurnSendsLeftoversBack(t *testing.T) {
 		ID: "other", FilePath: "other.go", Severity: models.SeverityHigh,
 		ToolName: "gosec", RuleID: "Gx",
 	}
-	ws := &stubWorkspace{changed: []string{"main.go", "other.go"}}
+	ws := &stubWorkspace{}
 	job := twoFindingJob()
 	job.FindingIDList = []string{"keep-me", "other"}
 	job.MaxAttempts = 1
-	eng := &firstFileEngine{}
+	eng := &firstFileEngine{workspace: ws}
 	var verified []string
 	deps := Deps{
 		Store:       store,
@@ -775,8 +850,8 @@ func TestRun_PartialTurnSendsLeftoversBack(t *testing.T) {
 	if eng.batches[0] != 2 || eng.batches[1] != 1 {
 		t.Fatalf("batch sizes %v, want [2, 1, …]", eng.batches)
 	}
-	if len(verified) != 2 {
-		t.Fatalf("verified %v, want both findings", verified)
+	if len(verified) != 3 || verified[0] != "keep-me" || verified[1] != "other" || verified[2] != "keep-me" {
+		t.Fatalf("verified %v, want both findings and the earlier keep rechecked", verified)
 	}
 }
 
@@ -792,7 +867,8 @@ func (e *stickyFileEngine) Fix(_ context.Context, _ engine.FixRequest) (*engine.
 }
 
 type firstFileEngine struct {
-	batches []int
+	batches   []int
+	workspace *stubWorkspace
 }
 
 func (e *firstFileEngine) Name() string    { return "opencode" }
@@ -803,6 +879,9 @@ func (e *firstFileEngine) Fix(_ context.Context, req engine.FixRequest) (*engine
 	if len(batch) == 0 || batch[0].FilePath == "" {
 		return &engine.FixResult{Success: true, EditsInPlace: true}, nil
 	}
+	if e.workspace != nil {
+		e.workspace.changed = append(e.workspace.changed, batch[0].FilePath)
+	}
 	return &engine.FixResult{Success: true, EditsInPlace: true, FilesChanged: []string{batch[0].FilePath}}, nil
 }
 
@@ -810,6 +889,10 @@ type verifyRecorder struct {
 	pass       map[string]bool
 	seen       *[]string
 	batchCalls int
+}
+
+func (v *verifyRecorder) VerifyBranch(context.Context, verify.Workspace, []models.Finding, []models.Finding, []string) ([]verify.StageResult, error) {
+	return nil, nil
 }
 
 func (v *verifyRecorder) Verify(_ context.Context, _ verify.Workspace, f models.Finding) (*verify.VerifyResult, error) {
@@ -876,9 +959,10 @@ func TestRun_PushModeGitHubAttemptsPRWithoutFailingJob(t *testing.T) {
 	job.FindingIDList = []string{"keep-me"}
 	var logs []string
 	deps := Deps{
-		Store:       store,
-		Writability: passWritability{},
-		Workspaces:  &stubPreparer{ws: ws},
+		Store:            store,
+		PublicationReady: func(context.Context, *models.Repo) (bool, string) { return true, "ready" },
+		Writability:      passWritability{},
+		Workspaces:       &stubPreparer{ws: ws},
 		Engines: &chainSelector{build: func() EngineChain {
 			return &stubChain{tiers: []engine.SubprocessEngine{&fixEngine{name: "claude-code"}}}
 		}},
@@ -918,9 +1002,10 @@ func TestRun_PushModeGitHubPRFailurePauses(t *testing.T) {
 	job.MaxAttempts = 1
 	job.FindingIDList = []string{"keep-me"}
 	res, err := Run(context.Background(), job, Deps{
-		Store:       store,
-		Writability: passWritability{},
-		Workspaces:  &stubPreparer{ws: ws},
+		Store:            store,
+		PublicationReady: func(context.Context, *models.Repo) (bool, string) { return true, "ready" },
+		Writability:      passWritability{},
+		Workspaces:       &stubPreparer{ws: ws},
 		Engines: &chainSelector{build: func() EngineChain {
 			return &stubChain{tiers: []engine.SubprocessEngine{&fixEngine{name: "claude-code"}}}
 		}},
@@ -995,9 +1080,12 @@ func (r remainingRescanner) Rescan(context.Context, string, []string) ([]models.
 
 func TestRun_SkipNoiseMutes(t *testing.T) {
 	store := baseStore()
-	ws := &stubWorkspace{changed: []string{"main.go"}}
+	store.findings["keep-me"].ID = "abcdef01"
+	store.findings["abcdef01"] = store.findings["keep-me"]
+	delete(store.findings, "keep-me")
+	ws := &stubWorkspace{}
 	job := twoFindingJob()
-	job.FindingIDList = []string{"keep-me"}
+	job.FindingIDList = []string{"abcdef01"}
 	job.MaxAttempts = 1
 	deps := Deps{
 		Store:       store,
@@ -1297,7 +1385,7 @@ func TestRun_HygieneMutedNotRetried(t *testing.T) {
 	}
 }
 
-func TestRun_UnableToVerifyKeepsEdits(t *testing.T) {
+func TestRun_UnableToVerifyFailsAndRetainsEdits(t *testing.T) {
 	store := baseStore()
 	ws := &stubWorkspace{changed: []string{"main.go"}}
 	job := twoFindingJob()
@@ -1313,19 +1401,31 @@ func TestRun_UnableToVerifyKeepsEdits(t *testing.T) {
 		Verifier: &unverifiedVerifier{},
 		Diffs:    &stubDiffs{},
 	}
-	res, err := Run(context.Background(), job, deps)
-	if err != nil {
-		t.Fatalf("Run: %v", err)
+	_, err := Run(context.Background(), job, deps)
+	if err == nil || !strings.Contains(err.Error(), "verification incomplete") {
+		t.Fatalf("expected incomplete verification failure: %v", err)
 	}
 	if len(ws.rolledBack) != 0 {
 		t.Fatalf("missing scanner must not roll back, rolled=%v", ws.rolledBack)
 	}
-	if res.Summary.Kept != 1 {
-		t.Fatalf("kept=%d want 1 (unverified keep)", res.Summary.Kept)
+	if ws.cleanupCalls != 0 || ws.commitCalls != 0 || ws.pushCalls != 0 {
+		t.Fatalf("unverified workspace cleaned, committed, or pushed: %+v", ws)
+	}
+	if store.jobs[len(store.jobs)-1].Status != models.FixJobFailed {
+		t.Fatal("unavailable scanner reported a successful job")
+	}
+	for _, att := range store.attempts {
+		if att.Outcome == models.FixOutcomeKept {
+			t.Fatal("unverified attempt reported as kept")
+		}
 	}
 }
 
 type unverifiedVerifier struct{}
+
+func (unverifiedVerifier) VerifyBranch(context.Context, verify.Workspace, []models.Finding, []models.Finding, []string) ([]verify.StageResult, error) {
+	return nil, errors.New("verification unavailable")
+}
 
 func (unverifiedVerifier) Verify(context.Context, verify.Workspace, models.Finding) (*verify.VerifyResult, error) {
 	return &verify.VerifyResult{

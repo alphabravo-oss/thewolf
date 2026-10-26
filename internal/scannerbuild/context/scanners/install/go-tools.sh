@@ -10,9 +10,9 @@ source /etc/wolf-scanners/versions.env
 
 # Debian 12 ships an older golang-go; modern gosec/staticcheck/govulncheck
 # need Go 1.22+. Install a current Go toolchain from go.dev.
-GOTC_VERSION=1.26.5
-GOTC_LINUX_AMD64_SHA256=5c2c3b16caefa1d968a94c1daca04a7ca301a496d9b086e17ad77bb81393f053
-GOTC_LINUX_ARM64_SHA256=fe4789e92b1f33358680864bbe8704289e7bb5fc207d80623c308935bd696d49
+GOTC_VERSION=1.27.3
+GOTC_LINUX_AMD64_SHA256=65efbc80fdc1fa2cd2631cad5b481777a68e8725f34e89f50fc6ac714e379b40
+GOTC_LINUX_ARM64_SHA256=a06e99309dbcbdca1a8ccd2282c3ee146e55930886e26b4f1193269587165f49
 ARCH="$(uname -m)"
 case "$ARCH" in
     x86_64)
@@ -40,15 +40,12 @@ trap - EXIT
 
 export GOPATH=/opt/wolf-scanners/gopath
 export GOBIN=/opt/wolf-scanners/gopath/bin
-export GOCACHE=/tmp/gocache
+export GOCACHE="${GOCACHE:-/tmp/gocache}"
 mkdir -p "$GOPATH" "$GOBIN" "$GOCACHE"
 
 install_go_tool() {
     local pkg="$1" binname="$2"
-    if ! go build -mod=readonly -trimpath -o "${GOBIN}/${binname}" "$pkg"; then
-        echo "WARNING: go build $pkg failed; skipping $binname"
-        return 0
-    fi
+    go build -mod=readonly -trimpath -o "${GOBIN}/${binname}" "$pkg"
 }
 
 # Build every Go scanner from one committed module graph. This keeps the direct
@@ -64,7 +61,7 @@ go mod download
 install_go_tool "github.com/securego/gosec/v2/cmd/gosec" gosec
 install_go_tool "honnef.co/go/tools/cmd/staticcheck" staticcheck
 install_go_tool "golang.org/x/vuln/cmd/govulncheck" govulncheck
-install_go_tool "github.com/praetorian-inc/gokart" gokart
+bash ./build-gokart.sh "${GOBIN}/gokart"
 cd /
 rm -rf "${module_tmp}"
 trap - EXIT
@@ -83,7 +80,7 @@ done
 # Cleanup: drop go build cache, but keep the Go toolchain because
 # govulncheck/gosec invoke `go list` / `go env` at runtime on scanned
 # repos that need module resolution. (See plugins/go/*.go for usage.)
-rm -rf "$GOCACHE"
+# BuildKit retains GOCACHE outside the resulting image.
 
 # Drop the module + build cache used only to compile the tools — not
 # needed at runtime. gosec/govulncheck use `go list`/`go env`, which

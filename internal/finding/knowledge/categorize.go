@@ -19,7 +19,11 @@ func Categorize(tool, ruleID string) (fineCategory, fixStrategy string) {
 	}
 
 	switch tool {
-	case "trivy", "grype", "osv-scanner", "govulncheck", "pip-audit", "npm-audit", "cargo-audit":
+	case "grype", "osv-scanner", "govulncheck", "pip-audit", "npm-audit", "cargo-audit":
+		if strings.TrimSpace(ruleID) != "" {
+			return "vulnerable-dependency", "update-vulnerable-dependency"
+		}
+	case "trivy":
 		if isAdvisoryID(ruleID) {
 			return "vulnerable-dependency", "update-vulnerable-dependency"
 		}

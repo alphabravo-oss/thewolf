@@ -1,0 +1,2 @@
+$ tsc --noEmit
+$ eslint src --max-warnings 0

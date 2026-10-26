@@ -58,7 +58,7 @@ func TestResolverPrepareSSHExtractsArchive(t *testing.T) {
 	if prepared.CommitSHA != "abc123" || prepared.DirtyState != "clean" {
 		t.Fatalf("unexpected provenance: commit=%q dirty=%q", prepared.CommitSHA, prepared.DirtyState)
 	}
-	if !strings.HasPrefix(prepared.TreeDigest, "sha256:") {
+	if !strings.HasPrefix(prepared.TreeDigest, "sha256-v2:") {
 		t.Fatalf("TreeDigest = %q", prepared.TreeDigest)
 	}
 	if prepared.PreparedWorkspace == "" {
@@ -100,6 +100,60 @@ func TestWorkspaceTreeDigestIsStableAndIgnoresGitMetadata(t *testing.T) {
 	}
 	if third == second {
 		t.Fatal("working-tree content change did not change digest")
+	}
+}
+
+func TestWorkspaceDigestPinsRootAndHashesSymlinkText(t *testing.T) {
+	parent, outside := t.TempDir(), t.TempDir()
+	root := filepath.Join(parent, "repo")
+	if err := os.Mkdir(root, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "inside"), []byte("public"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(outside, "inside"), []byte("secret"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(outside, "inside")
+	if err := os.Symlink(link, filepath.Join(root, "link")); err != nil {
+		t.Fatal(err)
+	}
+	dir, err := os.OpenRoot(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dir.Close()
+	want, err := digestOpenedWorkspace(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(link, []byte("outside changed"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(root, root+"-original"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, root); err != nil {
+		t.Fatal(err)
+	}
+	got, err := digestOpenedWorkspace(dir)
+	if err != nil || got != want {
+		t.Fatalf("digest escaped opened root or followed link: %s, %v; want %s", got, err, want)
+	}
+}
+
+func TestPrepareLocalRejectsMissingTreeDigest(t *testing.T) {
+	root := t.TempDir()
+	file := filepath.Join(root, "file")
+	if err := os.WriteFile(file, nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{filepath.Join(root, "missing"), file} {
+		prepared, err := (Resolver{}).Prepare(t.Context(), &models.Repo{SourceType: models.SourceTypeLocal, SourcePath: path}, "")
+		if err == nil || prepared.TreeDigest != "" {
+			t.Fatalf("invalid source reported prepared: %+v %v", prepared, err)
+		}
 	}
 }
 

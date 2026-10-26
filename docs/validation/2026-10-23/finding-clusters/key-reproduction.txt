@@ -1,0 +1,5 @@
+--- FAIL: TestClusterKeyPreservesComponentBoundariesAndCategory (0.00s)
+    identity_test.go:172: path/line/rule boundaries collapsed
+FAIL
+FAIL	github.com/alphabravocompany/thewolf/internal/finding/identity	0.003s
+FAIL

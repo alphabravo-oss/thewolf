@@ -2,6 +2,10 @@ package scantarget
 
 import (
 	"context"
+	"github.com/alphabravocompany/thewolf/internal/models"
+	"github.com/alphabravocompany/thewolf/internal/secrets"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -44,5 +48,46 @@ func TestValidateGitDestinationBlocksLocalhost(t *testing.T) {
 	}
 	if err := ValidateRemoteDestination(context.Background(), "127.0.0.1"); err == nil {
 		t.Fatal("expected loopback IP to be blocked")
+	}
+}
+
+func TestGitPreparationAndRetainedWorkspaceHaveSameContentIdentity(t *testing.T) {
+	source, _ := gitStateFixture(t)
+	store, owner := setupSSHRepo(t)
+	encrypted, err := secrets.Encrypt("fixture-private-key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.CreateSecret(t.Context(), &models.Secret{ID: "git-fixture-key", UserID: owner.UserID, KeyType: models.KeyTypeSSHPrivate, KeyName: "fixture", EncryptedValue: encrypted, AllowedHosts: `["192.0.2.1"]`, MetadataJSON: `{"known_hosts":"fixture-host-key"}`}); err != nil {
+		t.Fatal(err)
+	}
+	bin := t.TempDir()
+	// Real Git fetch/checkout over a local upload-pack. The transport executable
+	// replaces SSH so this test never contacts the documentation-only IP.
+	script := "#!/bin/sh\nfor arg do [ \"$arg\" = -G ] && exit 1; done\nexec git upload-pack \"$WOLF_TEST_GIT_SOURCE\"\n"
+	if err := os.WriteFile(filepath.Join(bin, "ssh"), []byte(script), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("WOLF_TEST_GIT_SOURCE", source)
+	t.Setenv("WOLF_WORKSPACE_ROOT", t.TempDir())
+	repo := &models.Repo{SourceType: models.SourceTypeGit, SourcePath: "ssh://git@192.0.2.1/repo", UserID: owner.UserID, CredentialSecretID: "git-fixture-key", DefaultBranch: "main"}
+	prepared, err := (Resolver{Store: store}).Prepare(t.Context(), repo, "main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prepared.Cleanup()
+	for _, name := range []string{".wolf-git-key", ".wolf-known-hosts"} {
+		if _, err := os.Stat(filepath.Join(prepared.Path, name)); !os.IsNotExist(err) {
+			t.Fatalf("preparation credential remained: %v", err)
+		}
+	}
+	retained, err := PrepareExisting(t.Context(), prepared.Path, prepared.SourceType)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer retained.Cleanup()
+	if prepared.TreeDigest == "" || prepared.TreeDigest != retained.TreeDigest || prepared.CommitSHA != retained.CommitSHA {
+		t.Fatalf("source identity changed on reuse: %q -> %q", prepared.TreeDigest, retained.TreeDigest)
 	}
 }

@@ -1,0 +1,50 @@
+[
+  {
+    "os": "linux",
+    "arch": "arm64",
+    "cgo_enabled": false,
+    "command": [
+      "go",
+      "test",
+      "-c",
+      "-o",
+      "/tmp/wolf-workspace-linux-arm64.test",
+      "./internal/scantarget"
+    ],
+    "exit_code": 0,
+    "output": "",
+    "binary_sha256": "e9a8cf912aa59f078e0406bfa2d9471164b51521c011ed2abc616acf2e2e6188"
+  },
+  {
+    "os": "windows",
+    "arch": "amd64",
+    "cgo_enabled": false,
+    "command": [
+      "go",
+      "test",
+      "-c",
+      "-o",
+      "/tmp/wolf-workspace-windows-amd64.test",
+      "./internal/scantarget"
+    ],
+    "exit_code": 0,
+    "output": "",
+    "binary_sha256": "d2d19e41e39ad1d6e40339ed19cf92276ee9a8c568d41af147a0de18a74d7e11"
+  },
+  {
+    "os": "darwin",
+    "arch": "arm64",
+    "cgo_enabled": false,
+    "command": [
+      "go",
+      "test",
+      "-c",
+      "-o",
+      "/tmp/wolf-workspace-darwin-arm64.test",
+      "./internal/scantarget"
+    ],
+    "exit_code": 0,
+    "output": "",
+    "binary_sha256": "9e7c9109505c9c8b1820300635b44aac25cefe3c6efca4422b62d6a8f8288299"
+  }
+]

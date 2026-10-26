@@ -119,7 +119,10 @@ func loadVulnForIntel(w http.ResponseWriter, r *http.Request, cap string) (*mode
 	if !vulnerabilityVisibleToCaller(w, r, h, v, claims) {
 		return nil, false
 	}
-	attachVulnerabilityEvidence(r.Context(), h, v)
+	if err := attachVulnerabilityEvidence(r.Context(), h, v); err != nil {
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to load evidence")
+		return nil, false
+	}
 	return v, true
 }
 

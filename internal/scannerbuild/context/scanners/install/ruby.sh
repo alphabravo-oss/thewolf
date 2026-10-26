@@ -12,5 +12,5 @@ gem install --no-document \
     "brakeman:${BRAKEMAN_VERSION}" \
     "rubocop:${RUBOCOP_VERSION}"
 
-# Wrappers land in /usr/local/bin/<gem> already via gem's default.
+# GEM_HOME and its bin directory are shared by the build and runtime stages.
 echo "Ruby scanners installed."

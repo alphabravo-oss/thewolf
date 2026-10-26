@@ -7,6 +7,11 @@ import { Loader2Icon, XIcon } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Link } from "@tanstack/react-router";
+import { useScanWithPreflight } from "@/components/scan-preflight";
+import { BrowsePathModal } from "@/components/browse-path-modal";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import { isCommunityLimit, COMMUNITY_LIMIT_COPY } from "@/lib/safe-display";
 import type { Repo } from "@/lib/types";
@@ -57,6 +62,9 @@ export function AddRepoForm({ collectionId, onDone }: AddRepoFormProps) {
   const [remoteNodeId, setRemoteNodeId] = useState("");
   const [githubSecretId, setGithubSecretId] = useState("");
   const [scanNow, setScanNow] = useState(true);
+  const [browse, setBrowse] = useState(false);
+  const [createdRepoId, setCreatedRepoId] = useState<string | null>(null);
+  const scan = useScanWithPreflight();
   const qc = useQueryClient();
   const secretsQ = useQuery({
     queryKey: ["config", "secrets", "github-token"],
@@ -103,13 +111,6 @@ export function AddRepoForm({ collectionId, onDone }: AddRepoFormProps) {
       if (collectionId) {
         await api.post(`/collections/${collectionId}/repos`, { repo_id: repoId });
       }
-      if (scanNow) {
-        try {
-          await api.post("/scans", { repo_id: repoId, profile: "standard" });
-        } catch (e) {
-          toast.error(e instanceof Error ? e.message : "Scan failed to start");
-        }
-      }
       return repoId;
     },
     onSuccess: (repoId) => {
@@ -119,7 +120,9 @@ export function AddRepoForm({ collectionId, onDone }: AddRepoFormProps) {
       }
       qc.invalidateQueries({ queryKey: ["scans"] });
       toast.success("Repository created");
-      onDone(repoId);
+      setCreatedRepoId(repoId);
+      if (scanNow) scan.configure({ repo_id: repoId, profile: "standard" });
+      else onDone(repoId);
     },
     onError: (e) => {
       toast.error(isCommunityLimit(e) ? COMMUNITY_LIMIT_COPY : e instanceof Error ? e.message : "Create failed");
@@ -131,10 +134,12 @@ export function AddRepoForm({ collectionId, onDone }: AddRepoFormProps) {
     !sourcePath.trim() ||
     (mode === "github" && !isLikelyGitHubSource(sourcePath)) ||
     (mode === "ssh" && !remoteNodeId) ||
-    create.isPending;
+    create.isPending || scan.busy;
 
   return (
     <div className="border border-border rounded-lg p-3 mb-4 space-y-3 bg-muted/10">
+      {scan.dialog}
+      {browse && <BrowsePathModal initialPath={sourcePath} onClose={() => setBrowse(false)} onSelect={(path) => { setSourcePath(path); if (!name.trim()) setName(path.split("/").filter(Boolean).at(-1) || "repository"); setBrowse(false); }} />}
       <div className="flex items-center justify-between">
         <div className="text-xs text-muted-foreground">
           {collectionId ? "Add a repo to this collection" : "Add a repository"}
@@ -149,7 +154,7 @@ export function AddRepoForm({ collectionId, onDone }: AddRepoFormProps) {
         </button>
       </div>
 
-      <div className="flex gap-1 text-xs">
+      <div className="flex flex-wrap gap-1 text-xs">
         {(
           [
             ["local", "Local path"],
@@ -174,7 +179,7 @@ export function AddRepoForm({ collectionId, onDone }: AddRepoFormProps) {
         ))}
       </div>
 
-      <form
+      {createdRepoId ? <div className="space-y-3 text-sm"><p>Repository added. Start its first scan when you are ready.</p><div className="flex flex-wrap gap-2"><Button disabled={scan.busy} onClick={() => scan.configure({ repo_id: createdRepoId, profile: "standard" })}>Scan repository</Button><Button variant="outline" onClick={() => onDone(createdRepoId)}>View repository</Button></div></div> : <form
         onSubmit={(e) => {
           e.preventDefault();
           if (!submitDisabled) create.mutate();
@@ -194,54 +199,38 @@ export function AddRepoForm({ collectionId, onDone }: AddRepoFormProps) {
         {mode === "local" && (
           <Field
             label="Absolute path on host"
-            hint="Must be under a path Docker can bind-mount (typically anywhere under /Users on macOS)."
+            hint="A folder on the Wolf server, under an allowed repository root. Docker must be able to read it."
           >
-            <input
+            <div className="flex gap-2"><input
               value={sourcePath}
               onChange={(e) => setSourcePath(e.target.value)}
               required
-              placeholder="/Users/me/code/my-project"
-              className="w-full h-9 px-2 rounded-md bg-background border border-muted/40 text-sm font-mono"
-            />
+              placeholder="/srv/repos/my-project"
+              className="min-w-0 w-full h-9 px-2 rounded-md bg-background border border-muted/40 text-sm font-mono"
+            /><Button variant="outline" type="button" size="sm" onClick={() => setBrowse(true)}>Browse</Button></div>
           </Field>
         )}
 
         {mode === "github" && (
           <>
             <Field label="Use credential">
-              <select
-                value={githubSecretId}
-                onChange={(e) => {
-                  setGithubSecretId(e.target.value);
-                  setSourcePath("");
-                }}
-                className="w-full h-9 px-2 rounded-md bg-background border border-muted/40 text-sm"
-                disabled={secretsQ.isLoading}
-              >
-                <option value="">
-                  {secretsQ.isLoading
-                    ? "Loading GitHub tokens..."
-                    : "No credential (type a public repo)"}
-                </option>
-                {githubTokens.map((secret) => (
-                  <option key={secret.id} value={secret.id}>
-                    {secret.key_name}
-                    {secret.value ? ` (${secret.value})` : ""}
-                  </option>
-                ))}
-              </select>
+              <Select value={githubSecretId || "__public__"} onValueChange={(value) => { setGithubSecretId(value === "__public__" ? "" : value); setSourcePath(""); }} disabled={secretsQ.isLoading}>
+                <SelectTrigger aria-label="Use credential"><SelectValue placeholder="Choose credential" /></SelectTrigger>
+                <SelectContent><SelectItem value="__public__">{secretsQ.isLoading ? "Loading credentials…" : "Public repository · no credential"}</SelectItem>{githubTokens.map((secret) => <SelectItem key={secret.id} value={secret.id}>{secret.key_name}</SelectItem>)}</SelectContent>
+              </Select>
+              {secretsQ.isError && <p role="alert" className="text-xs text-destructive">Credentials could not be loaded. <button type="button" className="underline" onClick={() => void secretsQ.refetch()}>Retry credentials</button></p>}
             </Field>
             {githubTokens.length === 0 && (
               <div className="text-xs text-muted-foreground">
                 Add a{" "}
                 <Link
-                  to="/settings"
-                  search={{ tab: "secrets" }}
+                  to="/account"
+                  search={{ section: "secrets" }}
                   className="underline underline-offset-2"
                 >
-                  github_token
+                  GitHub credential
                 </Link>{" "}
-                with repo read access to pick from a dropdown.
+                with repository read access to browse private projects.
               </div>
             )}
             {githubSecretId ? (
@@ -261,30 +250,14 @@ export function AddRepoForm({ collectionId, onDone }: AddRepoFormProps) {
                       : "Could not list repos for this token"}
                   </div>
                 ) : (
-                  <select
-                    value={sourcePath}
-                    onChange={(e) => {
-                      const full = e.target.value;
-                      setSourcePath(full);
-                      const picked = (githubReposQ.data ?? []).find(
-                        (repo) => repo.full_name === full,
-                      );
-                      if (picked) {
-                        if (!name.trim()) setName(picked.name);
-                        if (picked.default_branch) setBranch(picked.default_branch);
-                      }
-                    }}
-                    required
-                    className="w-full h-9 px-2 rounded-md bg-background border border-muted/40 text-sm font-mono"
-                  >
-                    <option value="">Select a project…</option>
-                    {(githubReposQ.data ?? []).map((repo) => (
-                      <option key={repo.full_name} value={repo.full_name}>
-                        {repo.full_name}
-                        {repo.private ? " (private)" : ""}
-                      </option>
-                    ))}
-                  </select>
+                  <Select value={sourcePath} onValueChange={(full) => {
+                    setSourcePath(full);
+                    const picked = githubReposQ.data?.find((repo) => repo.full_name === full);
+                    if (picked) { if (!name.trim()) setName(picked.name); if (picked.default_branch) setBranch(picked.default_branch); }
+                  }} required>
+                    <SelectTrigger aria-label="GitHub project"><SelectValue placeholder="Select a project…" /></SelectTrigger>
+                    <SelectContent>{(githubReposQ.data ?? []).map((repo) => <SelectItem key={repo.full_name} value={repo.full_name}>{repo.full_name}{repo.private ? " (private)" : ""}</SelectItem>)}</SelectContent>
+                  </Select>
                 )}
               </Field>
             ) : (
@@ -344,11 +317,7 @@ export function AddRepoForm({ collectionId, onDone }: AddRepoFormProps) {
 
         <div className="flex items-center justify-between gap-3">
           <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={scanNow}
-              onChange={(e) => setScanNow(e.target.checked)}
-            />
+            <Checkbox checked={scanNow} onCheckedChange={(checked) => setScanNow(checked === true)} />
             Scan now
           </label>
           <button
@@ -359,7 +328,7 @@ export function AddRepoForm({ collectionId, onDone }: AddRepoFormProps) {
             {create.isPending ? "Creating…" : collectionId ? "Create + add" : "Create"}
           </button>
         </div>
-      </form>
+      </form>}
     </div>
   );
 }
@@ -393,46 +362,29 @@ function NodePicker({
   const nodes = useQuery({
     queryKey: ["nodes"],
     queryFn: async () => {
-      const { data } = await api.get<{ data: Array<{ id: string; name: string; host: string }> }>(
+      const { data } = await api.get<Array<{ id: string; name: string; host: string }>>(
         "/nodes",
       );
-      return data.data ?? [];
+      return data ?? [];
     },
   });
-  if (nodes.isLoading) {
-    return (
-      <select
-        disabled
-        className="w-full h-9 px-2 rounded-md bg-background border border-muted/40 text-sm opacity-60"
-      >
-        <option>Loading nodes…</option>
-      </select>
-    );
-  }
+  if (nodes.isLoading) return <p className="text-xs text-muted-foreground" role="status">Loading nodes…</p>;
+  if (nodes.isError) return <p role="alert" className="text-xs text-destructive">SSH nodes could not be loaded. <button type="button" onClick={() => void nodes.refetch()} className="underline">Retry nodes</button></p>;
   if ((nodes.data ?? []).length === 0) {
     return (
       <div className="text-xs text-muted-foreground">
         No SSH nodes configured.{" "}
-        <Link to="/settings" search={{ tab: "nodes" }} className="underline underline-offset-2">
-          Add one in Settings → Nodes
+        <Link to="/account" search={{ section: "nodes" }} className="underline underline-offset-2">
+          Add one in Account → Nodes
         </Link>
         .
       </div>
     );
   }
   return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      required
-      className="w-full h-9 px-2 rounded-md bg-background border border-muted/40 text-sm"
-    >
-      <option value="">Pick a node…</option>
-      {nodes.data!.map((n) => (
-        <option key={n.id} value={n.id}>
-          {n.name} ({n.host})
-        </option>
-      ))}
-    </select>
+    <Select value={value} onValueChange={onChange} required>
+      <SelectTrigger aria-label="SSH node"><SelectValue placeholder="Pick a node…" /></SelectTrigger>
+      <SelectContent>{nodes.data!.map((n) => <SelectItem key={n.id} value={n.id}>{n.name} ({n.host})</SelectItem>)}</SelectContent>
+    </Select>
   );
 }

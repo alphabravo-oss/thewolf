@@ -1,0 +1,17 @@
+ok  	github.com/alphabravocompany/thewolf/internal/auth	0.008s
+ok  	github.com/alphabravocompany/thewolf/internal/api	5.124s
+--- FAIL: TestMFAExchangeSQLite (0.30s)
+    --- FAIL: TestMFAExchangeSQLite/browser_insert (0.00s)
+        mfa_exchange_test.go:117: MFA state changed
+    --- FAIL: TestMFAExchangeSQLite/expired (0.00s)
+        mfa_exchange_test.go:85: challenge rejection: MFA state changed
+    --- FAIL: TestMFAExchangeSQLite/revoked (0.00s)
+        mfa_exchange_test.go:85: challenge rejection: MFA state changed
+    --- FAIL: TestMFAExchangeSQLite/wrong_purpose (0.00s)
+        mfa_exchange_test.go:85: challenge rejection: MFA state changed
+    --- FAIL: TestMFAExchangeSQLite/absent (0.00s)
+        mfa_exchange_test.go:85: challenge rejection: MFA state changed
+    mfa_exchange_test.go:163: concurrent exchanges: successes=0 replays=16
+FAIL
+FAIL	github.com/alphabravocompany/thewolf/internal/db	0.801s
+FAIL

@@ -1,0 +1,7 @@
+# github.com/alphabravocompany/thewolf/internal/api/routes
+internal/api/routes/scans.go:1840:2: declared and not used: scan
+internal/api/routes/scans.go:3001:2: declared and not used: scan
+internal/api/routes/scans.go:3923:2: declared and not used: scan
+internal/api/routes/scans.go:4300:2: declared and not used: scan
+FAIL	github.com/alphabravocompany/thewolf/internal/api [build failed]
+FAIL

@@ -3,7 +3,9 @@ package container
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -53,6 +55,7 @@ func (p *HadolintPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) (
 	}
 
 	var allFindings []models.Finding
+	var failures []error
 	cfg := container.ConfigFromOpts(opts.ContainerCfg)
 	for _, df := range unique {
 		// Translate host path to /scan-relative container path.
@@ -63,11 +66,15 @@ func (p *HadolintPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) (
 			container.Options{RepoDir: opts.RepoPath},
 			"hadolint", "--format", "json", containerDF)
 		out, err := cmd.Output()
-		if err != nil && len(out) == 0 {
-			continue
+		// Exit 1 reports lint findings; other exits are execution failures.
+		var exitErr *exec.ExitError
+		if err != nil && !(errors.As(err, &exitErr) && exitErr.ExitCode() == 1 && len(out) > 0) {
+			failures = append(failures, plugin.WrapExecError("hadolint", err))
 		}
+		plugin.SaveRaw(opts, out, "json")
 		findings, err := parseHadolintOutput(out)
 		if err != nil {
+			failures = append(failures, err)
 			continue
 		}
 		for i := range findings {
@@ -75,7 +82,7 @@ func (p *HadolintPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) (
 		}
 		allFindings = append(allFindings, findings...)
 	}
-	return allFindings, nil
+	return allFindings, errors.Join(failures...)
 }
 
 type hadolintResult struct {

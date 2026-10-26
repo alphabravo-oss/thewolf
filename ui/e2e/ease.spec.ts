@@ -18,17 +18,21 @@ test("ease path: home, findings, scanners, scanner updates", async ({
   await expect(
     page.getByRole("heading", { level: 1, name: "Settings" }),
   ).toBeVisible();
+  if (page.viewportSize()!.width < 1024) {
+    await expect(page.getByRole("combobox", { name: "Administration section" })).toHaveText("Scanners");
+  } else {
+    await expect(page.getByRole("button", { name: "Scanners", exact: true })).toHaveAttribute("aria-current", "page");
+  }
   await expect(
-    page.getByRole("button", { name: "Scanners", exact: true }),
-  ).toHaveAttribute("aria-current", "page");
-  await expect(
-    page.getByRole("button", { name: "Set up scanners (pull images)" }),
+    page.getByRole("button", { name: "Update Wolf images" }),
   ).toBeVisible();
 
   await page.goto("/settings?tab=scanner-updates");
-  await expect(
-    page.getByRole("button", { name: "Scanner updates" }),
-  ).toHaveAttribute("aria-current", "page");
+  if (page.viewportSize()!.width < 1024) {
+    await expect(page.getByRole("combobox", { name: "Administration section" })).toHaveText("Advanced");
+  } else {
+    await expect(page.getByRole("button", { name: "Advanced", exact: true })).toHaveAttribute("aria-current", "page");
+  }
   await expect(
     page.getByText("Notify only (do not auto-promote scanner releases)"),
   ).toBeVisible();

@@ -1,0 +1,20 @@
+$ playwright test agents-state.spec.ts --grep 'disabled autofix keeps' --workers=3
+[WebServer] $ vite build
+[WebServer] (node:3671092) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:3671216) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 3 tests using 3 workers
+
+(node:3671312) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3671313) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3671314) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  3 [mobile-chromium-linux] › e2e/agents-state.spec.ts:4:1 › disabled autofix keeps review and cleanup accessible with role-aware setup @browser-matrix (1.3s)
+  ✓  1 [desktop-chromium-linux] › e2e/agents-state.spec.ts:4:1 › disabled autofix keeps review and cleanup accessible with role-aware setup @browser-matrix (1.5s)
+  ✓  2 [desktop-firefox-linux] › e2e/agents-state.spec.ts:4:1 › disabled autofix keeps review and cleanup accessible with role-aware setup @browser-matrix (3.6s)
+
+  3 passed (9.9s)

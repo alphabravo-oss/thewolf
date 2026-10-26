@@ -1,0 +1,21 @@
+$ tsc --noEmit -p tsconfig.playwright.json
+$ playwright test e2e/agents-state.spec.ts --grep 'published agents retry'
+[WebServer] $ vite build
+[WebServer] (node:3612024) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:3612149) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 3 tests using 3 workers
+
+(node:3612210) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3612217) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3612211) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  3 [mobile-chromium-linux] › e2e/agents-state.spec.ts:116:1 › published agents retry workspace cleanup without republishing @browser-matrix (600ms)
+  ✓  1 [desktop-chromium-linux] › e2e/agents-state.spec.ts:116:1 › published agents retry workspace cleanup without republishing @browser-matrix (781ms)
+  ✓  2 [desktop-firefox-linux] › e2e/agents-state.spec.ts:116:1 › published agents retry workspace cleanup without republishing @browser-matrix (1.8s)
+
+  3 passed (8.2s)

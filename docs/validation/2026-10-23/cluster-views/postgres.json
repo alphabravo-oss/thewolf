@@ -1,0 +1,20 @@
+{
+  "name": "wolf-plan-cluster-views-pg-20261023",
+  "id": "3223f2d6db3c1eb731ee0b20172d19be344b802cf6f781ebb2e758f8e932172e",
+  "image_reference": "postgres@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873",
+  "image_id": "sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873",
+  "ports": {
+    "5432/tcp": [
+      {
+        "HostIp": "127.0.0.1",
+        "HostPort": "32786"
+      }
+    ]
+  },
+  "created": "2026-10-23T14:33:56.875135192Z",
+  "purpose": "Owned isolated PostgreSQL test fixture; production containers untouched",
+  "removed": true,
+  "anonymous_volumes_removed": true,
+  "absence_verified": true,
+  "removed_at": "2026-10-23T14:50:12.214373+00:00"
+}

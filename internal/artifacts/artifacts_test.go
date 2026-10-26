@@ -78,3 +78,43 @@ func TestKeyReturnsPortableRelativePathAndRejectsEscape(t *testing.T) {
 		t.Fatal("expected path outside root to be rejected")
 	}
 }
+
+func TestReadFileConfinesStoredPaths(t *testing.T) {
+	previous := Global
+	t.Cleanup(func() { Global = previous })
+	root := t.TempDir()
+	outside := t.TempDir()
+	for _, dir := range []string{root, outside} {
+		if err := os.WriteFile(filepath.Join(dir, "output.json"), []byte(dir), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := Init(root); err != nil {
+		t.Fatal(err)
+	}
+	for name, target := range map[string]string{
+		"safe.json": "output.json", "escape.json": filepath.Join(outside, "output.json"), "escape-dir": outside,
+	} {
+		if err := os.Symlink(target, filepath.Join(root, name)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, path := range []string{"output.json", "safe.json"} {
+		got, err := ReadFile(filepath.Join(root, path))
+		if err != nil || string(got) != root {
+			t.Fatalf("valid artifact %s: %q, %v", path, got, err)
+		}
+	}
+	for _, path := range []string{
+		filepath.Join(outside, "output.json"), filepath.Join(root, "escape.json"),
+		filepath.Join(root, "escape-dir", "output.json"), filepath.Join(root, "missing.json"), root,
+	} {
+		if data, err := ReadFile(path); err == nil || len(data) != 0 {
+			t.Fatalf("unsafe/missing artifact %s returned %q, %v", path, data, err)
+		}
+	}
+	Global = nil
+	if data, err := ReadFile(filepath.Join(outside, "output.json")); err == nil || len(data) != 0 {
+		t.Fatalf("uninitialized store allowed a host read: %q, %v", data, err)
+	}
+}

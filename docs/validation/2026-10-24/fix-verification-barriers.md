@@ -1,0 +1,9 @@
+# F07.6 — verification and history failure barriers
+
+Attempt persistence now propagates errors through every agent and hygiene caller. A failed history write stops further commits/publication and retains the workspace. Branch-rescan failures now fail both resumed and newly edited runs instead of allowing publication with an unverified result. A batch transport error takes precedence over individual build verdicts, so incomplete verification cannot authorize rollback.
+
+Selective rollback now runs and records rejected-file outcomes first, then independently verifies the surviving edits before recording keeps. Later turns recheck earlier accepted findings from the same tool, including other files. A failed or unavailable combined check stops the job with recovery work retained.
+
+Verification: `go test -race ./internal/fix/... -count=1` ([receipt](fix-verification-barriers.txt)) and scoped Go lint ([receipt](fix-verification-barriers-lint.txt)). Regressions cover failed kept/rollback/mute/hygiene history writes; rescan failure before resumed engines and after new edits; and a real two-file Go build that succeeds before selective rollback but fails afterward. The last case checks that no keep is recorded from the obsolete build, the job fails, and the surviving edit remains uncommitted in the retained workspace. Existing partial-turn tests now require earlier keeps to be rechecked. `make scanners-sync` ([receipt](fix-verification-barriers-sync.txt)) updates and verifies generated scanner sources.
+
+Actual edit discovery is subsequently covered by [the persisted-baseline follow-up](fix-actual-edits.md). F07.6 remains open for extra-file and cross-tool/committed-round final acceptance, rejected agent commits and the full cancellation/restart history matrix. These checks do not qualify a whole published branch or complete F06/F07. No deployment or remote publication occurred.

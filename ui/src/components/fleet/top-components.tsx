@@ -40,17 +40,17 @@ const columns: Column<AggregateRow>[] = [
 ];
 
 export function TopComponents() {
-  const q = useTopVulnerableRules(10);
+  const q = useTopVulnerableRules(10, true);
   const rows = q.data ?? EMPTY_ROWS;
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Top vulnerable components</CardTitle>
+        <CardTitle className="text-base">Priority security findings</CardTitle>
       </CardHeader>
       <CardContent>
         {!q.isLoading && !q.isError && rows.length === 0 ? (
-          <div className="text-sm text-muted-foreground">No findings yet.</div>
+          <div className="text-sm text-muted-foreground">No open security findings.</div>
         ) : (
           <DataTable
             data={rows}
@@ -62,7 +62,7 @@ export function TopComponents() {
             loading={q.isLoading}
             isError={q.isError}
             onRetry={() => void q.refetch()}
-            emptyMessage="No findings yet"
+            emptyMessage="No open security findings"
           />
         )}
       </CardContent>

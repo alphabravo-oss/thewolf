@@ -1,0 +1,2 @@
+ok  	github.com/alphabravocompany/thewolf/internal/db	6.799s
+ok  	github.com/alphabravocompany/thewolf/internal/api/routes	7.672s

@@ -1,0 +1,5 @@
+--- FAIL: TestUserRoleMigrationPostgres (1.70s)
+    user_role_migration_test.go:17: legacy owner not migrated: <nil> ERROR: cached plan must not change result type (SQLSTATE 0A000)
+FAIL
+FAIL	github.com/alphabravocompany/thewolf/internal/db	87.035s
+FAIL

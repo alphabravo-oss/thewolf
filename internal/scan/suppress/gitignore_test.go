@@ -10,13 +10,11 @@ import (
 )
 
 // initRepo creates a tmp git repo with a .gitignore containing the
-// given lines. Skips the test if `git` isn't on PATH — the gitignore
-// filter degrades gracefully in that case, so there's nothing to
-// assert without git.
+// given lines. Git must be installed for native semantic checks.
 func initRepo(t *testing.T, gitignore string) string {
 	t.Helper()
 	if _, err := exec.LookPath("git"); err != nil {
-		t.Skip("git not on PATH; gitignore filter degrades to a no-op")
+		t.Fatal("git is required for native ignore qualification")
 	}
 	dir := t.TempDir()
 	mustRun := func(args ...string) {
@@ -61,7 +59,10 @@ build/
 		{FilePath: "keep.log"},                // negated → NOT ignored
 	}
 
-	n := ApplyGitignore(findings, repo)
+	n, err := ApplyGitignore(t.Context(), findings, repo)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if n != 3 {
 		t.Fatalf("expected 3 suppressions, got %d", n)
 	}
@@ -93,7 +94,10 @@ func TestApplyGitignore_RespectsExistingSuppression(t *testing.T) {
 	findings := []models.Finding{
 		{FilePath: "app.log", Suppressed: true, SuppressedReason: "default:testdata"},
 	}
-	n := ApplyGitignore(findings, repo)
+	n, err := ApplyGitignore(t.Context(), findings, repo)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if n != 0 {
 		t.Fatalf("should have skipped pre-suppressed finding, got n=%d", n)
 	}
@@ -107,7 +111,10 @@ func TestApplyGitignore_RespectsExistingSuppression(t *testing.T) {
 func TestApplyGitignore_NotAGitRepo(t *testing.T) {
 	dir := t.TempDir() // no `git init`
 	findings := []models.Finding{{FilePath: "app.log"}}
-	n := ApplyGitignore(findings, dir)
+	n, err := ApplyGitignore(t.Context(), findings, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if n != 0 {
 		t.Errorf("non-git dir should be a no-op, got n=%d", n)
 	}
@@ -129,7 +136,10 @@ func TestApplyGitignore_BadPathsDontPoisonGoodOnes(t *testing.T) {
 		{FilePath: "../escape/secret.log"}, // traversal — git would barf
 		{FilePath: "subdir/other.log"},     // should be suppressed
 	}
-	n := ApplyGitignore(findings, repo)
+	n, err := ApplyGitignore(t.Context(), findings, repo)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if n != 2 {
 		t.Fatalf("expected 2 suppressions (good paths only), got %d", n)
 	}
@@ -149,10 +159,30 @@ func TestApplyGitignore_BadPathsDontPoisonGoodOnes(t *testing.T) {
 
 // TestApplyGitignore_EmptyInputs covers the trivial nil/empty branches.
 func TestApplyGitignore_EmptyInputs(t *testing.T) {
-	if n := ApplyGitignore(nil, "/tmp"); n != 0 {
+	if n, err := ApplyGitignore(t.Context(), nil, "/tmp"); n != 0 || err != nil {
 		t.Errorf("nil findings: n=%d", n)
 	}
-	if n := ApplyGitignore([]models.Finding{{FilePath: "x"}}, ""); n != 0 {
+	if n, err := ApplyGitignore(t.Context(), []models.Finding{{FilePath: "x"}}, ""); n != 0 || err != nil {
 		t.Errorf("empty repoPath: n=%d", n)
+	}
+}
+
+func TestGitignoreLiteralFilenames(t *testing.T) {
+	repo := initRepo(t, "*.log\n")
+	findings := []models.Finding{{FilePath: "a\nb.log"}, {FilePath: "quote\".log"}, {FilePath: "space name.log"}, {FilePath: "café.log"}, {FilePath: "name..log"}, {FilePath: "tab\t.log"}, {FilePath: "safe.go\nphantom.log"}, {FilePath: "safe.go"}}
+	n, err := ApplyGitignore(t.Context(), findings, repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 7 {
+		t.Fatalf("literal paths matched %d, want 7: %+v", n, findings)
+	}
+	for i := 0; i < 7; i++ {
+		if !findings[i].Suppressed {
+			t.Errorf("literal path not matched: %q", findings[i].FilePath)
+		}
+	}
+	if findings[7].Suppressed {
+		t.Fatal("newline input injected a separate finding path")
 	}
 }

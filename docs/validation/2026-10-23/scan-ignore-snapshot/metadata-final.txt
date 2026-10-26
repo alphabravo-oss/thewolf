@@ -1,0 +1,3 @@
+ok  	github.com/alphabravocompany/thewolf/internal/scannertools/lock	0.185s
+ok  	github.com/alphabravocompany/thewolf/internal/scannertools/manifest	0.108s
+ok  	github.com/alphabravocompany/thewolf/internal/api/openapi	0.807s

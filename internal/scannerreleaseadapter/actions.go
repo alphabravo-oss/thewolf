@@ -748,7 +748,7 @@ func runBoundedWithEnvironment(
 	if !filepath.IsAbs(path) {
 		return nil, errors.New("adapter executable path must be absolute")
 	}
-	command := exec.CommandContext(ctx, path, args...) // #nosec G204 -- path and argv come only from the compiled catalog above.
+	command := exec.CommandContext(ctx, path, args...) // #nosec G204 G702 -- executable comes from the compiled catalog; validated subjects are separate argv, never shell source.
 	command.Dir = directory
 	environment, err := safeEnvironment(path)
 	if err != nil {
@@ -971,10 +971,10 @@ func materializeLockedTrivyDatabases(
 		return "", trivyDatabaseEvidence{}, errors.New("Trivy database scratch root must be absolute")
 	}
 	cache := filepath.Join(scratch, "trivy-cache")
-	if err := os.RemoveAll(cache); err != nil {
+	if err := os.RemoveAll(cache); err != nil { // #nosec G703 -- cache is the fixed trivy-cache child of the operator scratch root; no request or archive path is used.
 		return "", trivyDatabaseEvidence{}, err
 	}
-	if err := os.MkdirAll(cache, 0o700); err != nil {
+	if err := os.MkdirAll(cache, 0o700); err != nil { // #nosec G703 -- cache is the fixed trivy-cache child of the operator scratch root after removing the old entry.
 		return "", trivyDatabaseEvidence{}, err
 	}
 	now := time.Now().UTC()
@@ -1002,10 +1002,10 @@ func materializeLockedTrivyDatabases(
 			return "", trivyDatabaseEvidence{}, fmt.Errorf("locked Trivy database %s readback mismatch", lock.Repository)
 		}
 		stage := filepath.Join(scratch, "trivy-oci-"+spec.cacheDirectory)
-		if err := os.RemoveAll(stage); err != nil {
+		if err := os.RemoveAll(stage); err != nil { // #nosec G703 -- stage is a fixed child of the operator scratch root; RemoveAll unlinks symlinks without following them.
 			return "", trivyDatabaseEvidence{}, err
 		}
-		if err := os.MkdirAll(stage, 0o700); err != nil {
+		if err := os.MkdirAll(stage, 0o700); err != nil { // #nosec G703 -- stage uses only the operator scratch root and compiled db/java-db names after removing the old entry.
 			return "", trivyDatabaseEvidence{}, err
 		}
 		if _, err := runBoundedWithEnvironment(
@@ -1062,7 +1062,7 @@ func readTrivyDatabaseLock(path string, now time.Time) (scannerquality.DBLock, e
 
 func findSingleGzipArchive(root string) (string, error) {
 	var archives []string
-	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
+	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error { // #nosec G703 -- root is a fixed private OCI staging directory; entries are checked for symlinks and regular-file type below.
 		if walkErr != nil {
 			return walkErr
 		}
@@ -1101,7 +1101,7 @@ func findSingleGzipArchive(root string) (string, error) {
 }
 
 func extractTrivyDatabaseArchive(archivePath, target, databaseName string) error {
-	archive, err := os.Open(archivePath)
+	archive, err := os.Open(archivePath) // #nosec G703 -- archivePath comes from findSingleGzipArchive, which rejects nonregular files and symlinks in the private OCI stage.
 	if err != nil {
 		return err
 	}
@@ -1111,7 +1111,7 @@ func extractTrivyDatabaseArchive(archivePath, target, databaseName string) error
 		return err
 	}
 	defer func() { _ = compressed.Close() }()
-	if err := os.MkdirAll(target, 0o700); err != nil {
+	if err := os.MkdirAll(target, 0o700); err != nil { // #nosec G703 -- target is a fixed db or java-db child of the worker-owned scratch cache, never an archive entry name.
 		return err
 	}
 	wanted := map[string]string{databaseName: databaseName, "metadata.json": "metadata.json"}
@@ -1139,7 +1139,7 @@ func extractTrivyDatabaseArchive(archivePath, target, databaseName string) error
 		if total > 1<<30 {
 			return errors.New("Trivy database archive exceeds its extraction bound")
 		}
-		destination, err := os.OpenFile(
+		destination, err := os.OpenFile( // #nosec G703 -- destinationName is one of two fixed basenames; O_EXCL rejects existing links in the private extraction directory.
 			filepath.Join(target, destinationName), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600,
 		)
 		if err != nil {

@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { BotIcon, BugIcon, GaugeIcon } from "lucide-react";
 import { useFlag } from "@/lib/flags";
 import { useFixJobs, type FixJob } from "@/lib/fixes";
-import { EmptyState } from "@/components/ui/empty-state";
+import { EmptyState, ErrorState } from "@/components/ui/empty-state";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { PageHeader, PageShell } from "@/components/ui/page";
 import { FixerSetupBanner } from "@/components/fixes/fixer-setup-banner";
@@ -18,7 +18,7 @@ const EMPTY_JOBS: FixJob[] = [];
 
 function AgentsPage() {
   const navigate = useNavigate();
-  const { enabled, isLoading: flagLoading } = useFlag("autofix_enabled");
+  const { enabled, isLoading: flagLoading, isError: flagError, refetch: retryFlag } = useFlag("autofix_enabled");
   const q = useFixJobs(enabled);
   const jobs = q.data ?? EMPTY_JOBS;
 
@@ -105,17 +105,14 @@ function AgentsPage() {
         }
       />
 
-      {!flagLoading && !enabled ? (
-        <EmptyState
-          icon={BotIcon}
-          title="Autonomous fixing is off"
-          description="Turn on Autonomous fixing in Settings → General, then queue a fix from a scan or finding."
-          cta={{ label: "Open Settings", to: "/settings" }}
-        />
+      {flagError ? (
+        <ErrorState title="Unable to load fixing settings" onRetry={() => void retryFlag()} />
+      ) : !flagLoading && !enabled ? (
+        <FixerSetupBanner />
       ) : (
         <>
           <FixerSetupBanner />
-          {!q.isLoading && jobs.length === 0 ? (
+          {!q.isLoading && !q.isError && jobs.length === 0 ? (
             <EmptyState
               icon={BotIcon}
               title="No agents yet"

@@ -1,0 +1,48 @@
+8:02PM INF static-ui: no dist dir found; UI routes disabled (run `npm run dev` separately)
+2026/10/23 20:02:57 [thewolf-dev-1-mj/aRyAAHozXm-000001] "POST http://example.com/api/v1/auth/register HTTP/1.1" from 192.0.2.1:1234 - 201 961B in 172.94314ms
+2026/10/23 20:02:57 [thewolf-dev-1-mj/aRyAAHozXm-000002] "POST http://example.com/api/v1/auth/tokens HTTP/1.1" from 192.0.2.1:1234 - 201 295B in 925.373µs
+2026/10/23 20:02:57 [thewolf-dev-1-mj/aRyAAHozXm-000003] "POST http://example.com/api/v1/auth/tokens HTTP/1.1" from 192.0.2.1:1234 - 201 319B in 1.110852ms
+2026/10/23 20:02:57 [thewolf-dev-1-mj/aRyAAHozXm-000004] "GET http://example.com/api/v1/scans/1fe9196f-1877-4fcb-92eb-49c191d1cb60/lineage HTTP/1.1" from 192.0.2.1:1234 - 200 2437B in 5.127108ms
+2026/10/23 20:02:57 [thewolf-dev-1-mj/aRyAAHozXm-000005] "GET http://example.com/api/v1/scans/fbe9428a-3655-44d5-b37e-35c90ee9271c/lineage HTTP/1.1" from 192.0.2.1:1234 - 200 2075B in 2.40504ms
+2026/10/23 20:02:57 [thewolf-dev-1-mj/aRyAAHozXm-000006] "GET http://example.com/api/v1/scans/b7e94dff-4355-40b9-bc27-58dae8418c77/lineage HTTP/1.1" from 192.0.2.1:1234 - 200 2075B in 2.891818ms
+2026/10/23 20:02:57 [thewolf-dev-1-mj/aRyAAHozXm-000007] "GET http://example.com/api/v1/scans/31d87449-7197-46bd-9e81-2300e5138e3f/lineage HTTP/1.1" from 192.0.2.1:1234 - 200 2437B in 3.449649ms
+2026/10/23 20:02:57 [thewolf-dev-1-mj/aRyAAHozXm-000008] "GET http://example.com/api/v1/scans/f49dfce3-84b9-4c7f-8b0e-90318f16559e/lineage HTTP/1.1" from 192.0.2.1:1234 - 200 2077B in 2.624464ms
+2026/10/23 20:02:57 [thewolf-dev-1-mj/aRyAAHozXm-000009] "GET http://example.com/api/v1/scans/a5fd6e7c-e07a-4846-9e5a-834f560588d0/lineage HTTP/1.1" from 192.0.2.1:1234 - 200 2077B in 2.23997ms
+2026/10/23 20:02:57 [thewolf-dev-1-mj/aRyAAHozXm-000010] "GET http://example.com/api/v1/scans/25c3dbef-2e6c-4cdf-9402-dcc7614f8e99/lineage HTTP/1.1" from 192.0.2.1:1234 - 200 4676B in 2.353734ms
+2026/10/23 20:02:57 [thewolf-dev-1-mj/aRyAAHozXm-000011] "GET http://example.com/api/v1/scans/5103072c-d4d5-4813-9c29-67e25e6e77fc/lineage HTTP/1.1" from 192.0.2.1:1234 - 200 3416B in 1.786005ms
+2026/10/23 20:02:57 [thewolf-dev-1-mj/aRyAAHozXm-000012] "GET http://example.com/api/v1/scans/035dcb5e-72f3-4221-b709-367aa39e50ce/lineage HTTP/1.1" from 192.0.2.1:1234 - 200 4642B in 2.265909ms
+2026/10/23 20:02:57 [thewolf-dev-1-mj/aRyAAHozXm-000013] "GET http://example.com/api/v1/scans/3c87de87-fe76-47ee-90e9-8594ed285439/lineage HTTP/1.1" from 192.0.2.1:1234 - 200 2557B in 3.802914ms
+2026/10/23 20:02:57 [thewolf-dev-1-mj/aRyAAHozXm-000014] "GET http://example.com/api/v1/scans/c11293c9-14b5-4d99-8ebb-7a87a432bb3b/lineage HTTP/1.1" from 192.0.2.1:1234 - 200 2167B in 2.242323ms
+2026/10/23 20:02:57 [thewolf-dev-1-mj/aRyAAHozXm-000015] "GET http://example.com/api/v1/scans/c2bbc931-bad3-4565-a1cf-74a7fbdac9a8/lineage HTTP/1.1" from 192.0.2.1:1234 - 200 2167B in 3.256014ms
+2026/10/23 20:02:57 [thewolf-dev-1-mj/aRyAAHozXm-000016] "GET http://example.com/api/v1/scans/f6400cb2-fcec-4d92-876c-592619fbf697/lineage HTTP/1.1" from 192.0.2.1:1234 - 200 629B in 2.559051ms
+2026/10/23 20:02:57 [thewolf-dev-1-mj/aRyAAHozXm-000017] "GET http://example.com/api/v1/scans/f6400cb2-fcec-4d92-876c-592619fbf697/lineage HTTP/1.1" from 192.0.2.1:1234 - 200 629B in 3.121239ms
+2026/10/23 20:02:57 [thewolf-dev-1-mj/aRyAAHozXm-000018] "GET http://example.com/api/v1/scans/f6400cb2-fcec-4d92-876c-592619fbf697/lineage HTTP/1.1" from 192.0.2.1:1234 - 200 1202B in 2.805917ms
+2026/10/23 20:02:57 [thewolf-dev-1-mj/aRyAAHozXm-000019] "GET http://example.com/api/v1/scans/f6400cb2-fcec-4d92-876c-592619fbf697/lineage HTTP/1.1" from 192.0.2.1:1234 - 200 629B in 2.195526ms
+2026/10/23 20:02:57 [thewolf-dev-1-mj/aRyAAHozXm-000020] "GET http://example.com/api/v1/scans/f6400cb2-fcec-4d92-876c-592619fbf697/lineage HTTP/1.1" from 192.0.2.1:1234 - 200 629B in 2.188533ms
+2026/10/23 20:02:57 [thewolf-dev-1-mj/aRyAAHozXm-000021] "GET http://example.com/api/v1/scans/f6400cb2-fcec-4d92-876c-592619fbf697/lineage HTTP/1.1" from 192.0.2.1:1234 - 200 1202B in 3.006264ms
+2026/10/23 20:02:57 [thewolf-dev-1-mj/aRyAAHozXm-000022] "GET http://example.com/api/v1/scans/9c34c198-652a-4d9f-bfdf-22316cbca1ee/lineage HTTP/1.1" from 192.0.2.1:1234 - 200 629B in 2.471145ms
+2026/10/23 20:02:57 [thewolf-dev-1-mj/aRyAAHozXm-000023] "GET http://example.com/api/v1/scans/9c34c198-652a-4d9f-bfdf-22316cbca1ee/lineage HTTP/1.1" from 192.0.2.1:1234 - 200 629B in 2.40973ms
+2026/10/23 20:02:57 [thewolf-dev-1-mj/aRyAAHozXm-000024] "GET http://example.com/api/v1/scans/9c34c198-652a-4d9f-bfdf-22316cbca1ee/lineage HTTP/1.1" from 192.0.2.1:1234 - 200 1193B in 2.049781ms
+2026/10/23 20:02:57 [thewolf-dev-1-mj/aRyAAHozXm-000025] "GET http://example.com/api/v1/scans/9c34c198-652a-4d9f-bfdf-22316cbca1ee/lineage HTTP/1.1" from 192.0.2.1:1234 - 200 629B in 2.013412ms
+2026/10/23 20:02:57 [thewolf-dev-1-mj/aRyAAHozXm-000026] "GET http://example.com/api/v1/scans/9c34c198-652a-4d9f-bfdf-22316cbca1ee/lineage HTTP/1.1" from 192.0.2.1:1234 - 200 629B in 2.591292ms
+2026/10/23 20:02:57 [thewolf-dev-1-mj/aRyAAHozXm-000027] "GET http://example.com/api/v1/scans/9c34c198-652a-4d9f-bfdf-22316cbca1ee/lineage HTTP/1.1" from 192.0.2.1:1234 - 200 1193B in 2.447279ms
+--- FAIL: TestScanLineageAuthorizesRelatedResources (0.54s)
+    lineage_authorization_test.go:155: origin visibility missing=true: {"data":{"agents":[],"children":[{"findings_revision":0,"id":"f6400cb2-fcec-4d92-876c-592619fbf697","user_id":"caller","repo_id":"eea8a010-2192-4547-9a46-fbcc3e4f97e7","branch":"","phase":"queued","origin_scan_id":"a1103340-7a09-4e42-9838-bb6e9b89d762","categories":"[]","include_paths":"[]","exclude_paths":"[]","status":"completed","tools_selected":"[]","tools_completed":"[]","tools_failed":"[]","tools_errors":"{}","finding_count":0,"coverage_summary":"","ai_enabled":false,"ai_summary":"","created_at":"2026-10-23T20:02:57.819527563Z","updated_at":"2026-10-23T20:02:57.829993608Z"}],"origin":{"findings_revision":0,"id":"a1103340-7a09-4e42-9838-bb6e9b89d762","user_id":"foreign","repo_id":"eea8a010-2192-4547-9a46-fbcc3e4f97e7","branch":"","prepared_workspace":"private-origin-1a56bbd1-37ce-4b18-803e-035fcfc60d66","phase":"queued","categories":"[]","include_paths":"[]","exclude_paths":"[]","status":"completed","tools_selected":"[]","tools_completed":"[]","tools_failed":"[]","tools_errors":"{}","finding_count":0,"coverage_summary":"","ai_enabled":false,"ai_summary":"","created_at":"2026-10-23T20:02:57.819078587Z","updated_at":"2026-10-23T20:02:57.819078587Z"},"remediation":null,"runs":[]}}
+    lineage_authorization_test.go:155: origin visibility missing=true: {"data":{"agents":[],"children":[{"findings_revision":0,"id":"9c34c198-652a-4d9f-bfdf-22316cbca1ee","user_id":"caller","repo_id":"25ae305a-32a0-462e-9aa7-842afb91e9d5","branch":"","phase":"queued","origin_scan_id":"0ad78dd8-31a3-4dda-922b-7567d452a88f","categories":"[]","include_paths":"[]","exclude_paths":"[]","status":"completed","tools_selected":"[]","tools_completed":"[]","tools_failed":"[]","tools_errors":"{}","finding_count":0,"coverage_summary":"","ai_enabled":false,"ai_summary":"","created_at":"2026-10-23T20:02:57.839885832Z","updated_at":"2026-10-23T20:02:57.848587865Z"}],"origin":{"findings_revision":0,"id":"0ad78dd8-31a3-4dda-922b-7567d452a88f","user_id":"","repo_id":"25ae305a-32a0-462e-9aa7-842afb91e9d5","branch":"","prepared_workspace":"private-origin-0eae80ea-5c1c-4d25-a288-69ee39031bd3","phase":"queued","categories":"[]","include_paths":"[]","exclude_paths":"[]","status":"completed","tools_selected":"[]","tools_completed":"[]","tools_failed":"[]","tools_errors":"{}","finding_count":0,"coverage_summary":"","ai_enabled":false,"ai_summary":"","created_at":"2026-10-23T20:02:57.83943335Z","updated_at":"2026-10-23T20:02:57.83943335Z"},"remediation":null,"runs":[]}}
+8:02PM INF static-ui: no dist dir found; UI routes disabled (run `npm run dev` separately)
+2026/10/23 20:02:58 [thewolf-dev-1-mj/aRyAAHozXm-000028] "POST http://example.com/api/v1/auth/register HTTP/1.1" from 192.0.2.1:1234 - 201 961B in 149.800195ms
+8:02PM ERR API error code=server_error status=500
+2026/10/23 20:02:58 [thewolf-dev-1-mj/aRyAAHozXm-000029] "GET http://example.com/api/v1/scans/aaeaf470-fe12-452c-a5ea-bc2f10c2e928/lineage HTTP/1.1" from 192.0.2.1:1234 - 500 170B in 1.052043ms
+8:02PM ERR API error code=server_error status=500
+2026/10/23 20:02:58 [thewolf-dev-1-mj/aRyAAHozXm-000030] "GET http://example.com/api/v1/scans/aaeaf470-fe12-452c-a5ea-bc2f10c2e928/lineage HTTP/1.1" from 192.0.2.1:1234 - 500 170B in 1.093691ms
+8:02PM ERR API error code=server_error status=500
+2026/10/23 20:02:58 [thewolf-dev-1-mj/aRyAAHozXm-000031] "GET http://example.com/api/v1/scans/aaeaf470-fe12-452c-a5ea-bc2f10c2e928/lineage HTTP/1.1" from 192.0.2.1:1234 - 500 170B in 1.521886ms
+8:02PM ERR API error code=server_error status=500
+2026/10/23 20:02:58 [thewolf-dev-1-mj/aRyAAHozXm-000032] "GET http://example.com/api/v1/scans/aaeaf470-fe12-452c-a5ea-bc2f10c2e928/lineage HTTP/1.1" from 192.0.2.1:1234 - 500 170B in 1.710542ms
+8:02PM ERR API error code=server_error status=500
+2026/10/23 20:02:58 [thewolf-dev-1-mj/aRyAAHozXm-000033] "GET http://example.com/api/v1/scans/aaeaf470-fe12-452c-a5ea-bc2f10c2e928/lineage HTTP/1.1" from 192.0.2.1:1234 - 500 170B in 2.009365ms
+FAIL
+FAIL	github.com/alphabravocompany/thewolf/internal/api	1.015s
+ok  	github.com/alphabravocompany/thewolf/internal/api/routes	4.716s
+ok  	github.com/alphabravocompany/thewolf/internal/fix/lineage	1.040s [no tests to run]
+FAIL

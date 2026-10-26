@@ -102,3 +102,24 @@ func suppression(scope models.SuppressionScopeType, value string) models.Finding
 		Reason:     "test",
 	}
 }
+
+func TestSuppressionScopeAndReevaluation(t *testing.T) {
+	now := time.Now().UTC()
+	rule := suppression(models.SuppressionScopeRule, "rule")
+	rule.RepoID, rule.Branch = "repo", "main"
+	f := models.Finding{RepoID: "repo", ScanID: "scan", RuleID: "rule"}
+	if Matches(rule, f, "", now) {
+		t.Fatal("unknown branch matched a branch-scoped suppression")
+	}
+	other := f
+	other.RepoID = "other"
+	if Matches(rule, other, "main", now) {
+		t.Fatal("cross-repository suppression matched")
+	}
+	f.Suppressed, f.SuppressionID, f.SuppressedReason = true, rule.ID, "old"
+	rule.Status = models.SuppressionStatusRevoked
+	out, _ := Apply([]models.Finding{f}, []models.FindingSuppression{rule}, map[string]string{"scan": "main"}, now)
+	if out[0].Suppressed || out[0].SuppressionID != "" {
+		t.Fatal("revoked suppression stayed attached")
+	}
+}

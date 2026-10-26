@@ -134,7 +134,7 @@ func TestAdditionalPluginMetadata(t *testing.T) {
 		hasLangs bool
 	}{
 		{&CodeQLPlugin{}, "codeql", models.CategorySAST, false},
-		{&PMDPlugin{}, "pmd", models.CategoryQuality, false},
+		{&PMDPlugin{}, "pmd", models.CategoryQuality, true},
 		{&ShellcheckPlugin{}, "shellcheck", models.CategoryQuality, true},
 	}
 

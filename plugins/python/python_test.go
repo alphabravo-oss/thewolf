@@ -280,6 +280,9 @@ func TestParsePipAuditOutput(t *testing.T) {
 	}
 
 	f := findings[0]
+	if !strings.Contains(f.Description, "not an upstream severity assessment") {
+		t.Fatal("missing explicit fallback provenance")
+	}
 	if f.Severity != models.SeverityMedium {
 		t.Errorf("finding[0] severity: got %q, want %q", f.Severity, models.SeverityMedium)
 	}
@@ -289,7 +292,24 @@ func TestParsePipAuditOutput(t *testing.T) {
 	if f.RuleID != "PYSEC-2023-1234" {
 		t.Errorf("finding[0] rule: got %q, want %q", f.RuleID, "PYSEC-2023-1234")
 	}
-	if f.CWEID != "CVE-2023-32681" {
-		t.Errorf("finding[0] CWE: got %q, want %q", f.CWEID, "CVE-2023-32681")
+	if f.AdvisoryID != "CVE-2023-32681" {
+		t.Errorf("finding[0] advisory: got %q, want %q", f.AdvisoryID, "CVE-2023-32681")
+	}
+}
+
+func TestPipAuditProvidedSeverity(t *testing.T) {
+	for _, tc := range []struct {
+		fields string
+		want   models.Severity
+	}{
+		{`"severity":"critical"`, models.SeverityCritical},
+		{`"severity":"low"`, models.SeverityLow},
+		{`"cvss":[{"type":"CVSS_V3","score":"9.8"}]`, models.SeverityCritical},
+		{`"severity":"invalid"`, models.SeverityMedium},
+	} {
+		fs, err := parsePipAuditOutput([]byte(`{"dependencies":[{"name":"package","version":"1","vulns":[{"id":"PYSEC-1",` + tc.fields + `}]}]}`))
+		if err != nil || len(fs) != 1 || fs[0].Severity != tc.want || !strings.Contains(fs[0].Description, "Severity") {
+			t.Fatalf("%s: %+v %v", tc.fields, fs, err)
+		}
 	}
 }

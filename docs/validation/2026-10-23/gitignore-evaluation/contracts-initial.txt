@@ -1,0 +1,1 @@
+ok  	github.com/alphabravocompany/thewolf/internal/scan/suppress	1.199s

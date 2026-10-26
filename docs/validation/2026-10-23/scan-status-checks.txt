@@ -1,0 +1,4 @@
+ok  	github.com/alphabravocompany/thewolf/internal/api/routes	1.916s
+ok  	github.com/alphabravocompany/thewolf/internal/finding/gates	1.019s
+ok  	github.com/alphabravocompany/thewolf/internal/scan/scorer	1.021s
+ok  	github.com/alphabravocompany/thewolf/internal/api/openapi	1.692s

@@ -6,15 +6,19 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/alphabravocompany/thewolf/internal/db"
+	gitpkg "github.com/alphabravocompany/thewolf/internal/fix/git"
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/remote"
 	"github.com/alphabravocompany/thewolf/internal/sshclient"
@@ -45,12 +49,22 @@ type Resolver struct {
 
 // PrepareExisting uses an already-materialised working tree (a fixer
 // workspace) so a child scan does not clone a remote wolf-fix ref that
-// has not been pushed yet. Cleanup is a no-op — the remediation owns the tree.
-func PrepareExisting(path string, sourceType models.SourceType) (Prepared, error) {
-	path = strings.TrimSpace(path)
+// has not been pushed yet. Cleanup releases any managed-workspace hold without
+// deleting the tree; the original source/remediation owns deletion.
+func PrepareExisting(ctx context.Context, path string, sourceType models.SourceType) (Prepared, error) {
 	if path == "" {
 		return Prepared{}, fmt.Errorf("existing workspace path is required")
 	}
+	release, err := RetainWorkspace(path)
+	if err != nil {
+		return Prepared{}, fmt.Errorf("retain existing workspace: %w", err)
+	}
+	prepared := false
+	defer func() {
+		if !prepared {
+			release()
+		}
+	}()
 	st, err := os.Stat(path)
 	if err != nil {
 		return Prepared{}, fmt.Errorf("existing workspace: %w", err)
@@ -58,11 +72,18 @@ func PrepareExisting(path string, sourceType models.SourceType) (Prepared, error
 	if !st.IsDir() {
 		return Prepared{}, fmt.Errorf("existing workspace is not a directory: %s", path)
 	}
-	sha, dirty := localGitState(path)
-	treeDigest, _ := workspaceTreeDigest(path)
+	sha, dirty, err := localGitState(ctx, path)
+	if err != nil {
+		return Prepared{}, fmt.Errorf("inspect existing workspace: %w", err)
+	}
+	treeDigest, err := workspaceTreeDigest(path)
+	if err != nil {
+		return Prepared{}, fmt.Errorf("digest existing workspace: %w", err)
+	}
 	if sourceType == "" {
 		sourceType = models.SourceTypeLocal
 	}
+	prepared = true
 	return Prepared{
 		Path:              path,
 		SourceType:        sourceType,
@@ -71,7 +92,7 @@ func PrepareExisting(path string, sourceType models.SourceType) (Prepared, error
 		TreeDigest:        treeDigest,
 		DirtyState:        dirty,
 		PreparedWorkspace: path,
-		Cleanup:           func() {},
+		Cleanup:           release,
 	}, nil
 }
 
@@ -81,17 +102,11 @@ func (r Resolver) Prepare(ctx context.Context, repo *models.Repo, branch string)
 	}
 	switch repo.SourceType {
 	case "", models.SourceTypeLocal:
-		sha, dirty := localGitState(repo.SourcePath)
-		treeDigest, _ := workspaceTreeDigest(repo.SourcePath)
-		return Prepared{
-			Path:       repo.SourcePath,
-			SourceType: models.SourceTypeLocal,
-			SourcePath: repo.SourcePath,
-			CommitSHA:  sha,
-			TreeDigest: treeDigest,
-			DirtyState: dirty,
-			Cleanup:    func() {},
-		}, nil
+		prepared, err := PrepareExisting(ctx, repo.SourcePath, models.SourceTypeLocal)
+		// Local source ownership remains with the operator, even if it lives
+		// under the managed workspace root. Hold it without scheduling deletion.
+		prepared.PreparedWorkspace = ""
+		return prepared, err
 	case models.SourceTypeSSH:
 		return r.prepareSSH(ctx, repo, branch)
 	case models.SourceTypeGitHub:
@@ -166,11 +181,10 @@ func (r Resolver) prepareSSH(ctx context.Context, repo *models.Repo, branch stri
 			return Prepared{}, fmt.Errorf("remote repo has uncommitted changes; commit or stash them, or set remote_scan_dirty_policy=allow")
 		}
 	}
-	dir, err := makeScanWorkspace("wolf-ssh-scan-*")
+	dir, cleanup, err := makeScanWorkspace("wolf-ssh-scan-*")
 	if err != nil {
 		return Prepared{}, fmt.Errorf("create remote scan workspace: %w", err)
 	}
-	cleanup := func() { _ = os.RemoveAll(dir) }
 	if err := extractTar(bytes.NewReader(tarData), dir); err != nil {
 		cleanup()
 		return Prepared{}, err
@@ -194,20 +208,30 @@ func (r Resolver) prepareSSH(ctx context.Context, repo *models.Repo, branch stri
 }
 
 func workspaceTreeDigest(root string) (string, error) {
+	dir, err := os.OpenRoot(root)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = dir.Close() }()
+	return digestOpenedWorkspace(dir)
+}
+
+func digestOpenedWorkspace(dir *os.Root) (string, error) {
 	var entries []string
-	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
+	err := fs.WalkDir(dir.FS(), ".", func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
-		if entry.IsDir() {
-			if path != root && entry.Name() == ".git" {
-				return filepath.SkipDir
+		if path == "." {
+			return nil
+		}
+		if entry.Name() == ".git" {
+			if entry.IsDir() {
+				return fs.SkipDir
 			}
 			return nil
 		}
-		if entry.Type().IsRegular() || entry.Type()&os.ModeSymlink != 0 {
-			entries = append(entries, path)
-		}
+		entries = append(entries, path)
 		return nil
 	})
 	if err != nil {
@@ -216,84 +240,59 @@ func workspaceTreeDigest(root string) (string, error) {
 	sort.Strings(entries)
 	hash := sha256.New()
 	for _, path := range entries {
-		relative, err := filepath.Rel(root, path)
+		info, err := dir.Lstat(filepath.FromSlash(path))
 		if err != nil {
 			return "", err
 		}
-		_, _ = io.WriteString(hash, filepath.ToSlash(relative))
-		_, _ = hash.Write([]byte{0})
-		info, err := os.Lstat(path)
-		if err != nil {
-			return "", err
-		}
-		if info.Mode()&os.ModeSymlink != 0 {
-			target, err := os.Readlink(path)
+		// Lengths, entry type and permissions make binary contents, symlink
+		// text and multiple file layouts unambiguous. v1 used NUL delimiters.
+		switch {
+		case info.Mode()&os.ModeSymlink != 0:
+			target, err := dir.Readlink(filepath.FromSlash(path))
 			if err != nil {
 				return "", err
 			}
-			_, _ = io.WriteString(hash, "symlink\x00"+target)
-		} else {
-			file, err := os.Open(path)
+			_, _ = fmt.Fprintf(hash, "%d:%s:%d:%d:", len(path), path, info.Mode(), len(target))
+			_, _ = io.WriteString(hash, target)
+		case info.IsDir():
+			_, _ = fmt.Fprintf(hash, "%d:%s:%d:0:", len(path), path, info.Mode())
+		case info.Mode().IsRegular():
+			// Reuse the metadata reader's nonblocking-open pattern: a swapped
+			// FIFO must fail the descriptor check rather than wait for a writer.
+			file, err := dir.OpenFile(filepath.FromSlash(path), os.O_RDONLY|syscall.O_NONBLOCK, 0)
 			if err != nil {
 				return "", err
 			}
-			_, copyErr := io.Copy(hash, file)
+			opened, err := file.Stat()
+			if err != nil {
+				_ = file.Close()
+				return "", err
+			}
+			if !opened.Mode().IsRegular() || !os.SameFile(info, opened) {
+				_ = file.Close()
+				return "", fmt.Errorf("source entry changed during digest: %s", path)
+			}
+			_, _ = fmt.Fprintf(hash, "%d:%s:%d:%d:", len(path), path, opened.Mode(), opened.Size())
+			_, copyErr := io.CopyN(hash, file, opened.Size())
+			after, statErr := file.Stat()
 			closeErr := file.Close()
 			if copyErr != nil {
 				return "", copyErr
 			}
+			if statErr != nil {
+				return "", statErr
+			}
 			if closeErr != nil {
 				return "", closeErr
 			}
+			if after.Size() != opened.Size() || after.Mode() != opened.Mode() || !after.ModTime().Equal(opened.ModTime()) {
+				return "", fmt.Errorf("source file changed during digest: %s", path)
+			}
+		default:
+			return "", fmt.Errorf("unsupported source entry type: %s", path)
 		}
-		_, _ = hash.Write([]byte{0})
 	}
-	return "sha256:" + hex.EncodeToString(hash.Sum(nil)), nil
-}
-
-func makeScanWorkspace(pattern string) (string, error) {
-	root := strings.TrimSpace(os.Getenv("WOLF_WORKSPACE_ROOT"))
-	if root == "" {
-		return os.MkdirTemp("", pattern)
-	}
-	if err := os.MkdirAll(root, 0o750); err != nil {
-		return "", err
-	}
-	return os.MkdirTemp(root, pattern)
-}
-
-// CleanupWorkspace removes only isolated workspaces created by this package.
-// Cached GitHub clones and arbitrary local paths are deliberately outside the
-// accepted boundary.
-func CleanupWorkspace(workspace string) error {
-	workspace = strings.TrimSpace(workspace)
-	if workspace == "" {
-		return nil
-	}
-	absoluteWorkspace, err := filepath.Abs(workspace)
-	if err != nil {
-		return err
-	}
-	name := filepath.Base(absoluteWorkspace)
-	if !strings.HasPrefix(name, "wolf-git-scan-") && !strings.HasPrefix(name, "wolf-ssh-scan-") {
-		return fmt.Errorf("refusing to clean unrecognized temporary workspace")
-	}
-	if configuredRoot := strings.TrimSpace(os.Getenv("WOLF_WORKSPACE_ROOT")); configuredRoot != "" {
-		absoluteRoot, rootErr := filepath.Abs(configuredRoot)
-		if rootErr != nil {
-			return rootErr
-		}
-		relative, relErr := filepath.Rel(absoluteRoot, absoluteWorkspace)
-		if relErr != nil || relative == "." || relative == ".." ||
-			strings.HasPrefix(relative, ".."+string(filepath.Separator)) || filepath.IsAbs(relative) {
-			return fmt.Errorf("refusing to clean workspace outside WOLF_WORKSPACE_ROOT")
-		}
-		return os.RemoveAll(absoluteWorkspace)
-	}
-	if filepath.Dir(absoluteWorkspace) != filepath.Clean(os.TempDir()) {
-		return fmt.Errorf("refusing to clean workspace outside the system temporary directory")
-	}
-	return os.RemoveAll(absoluteWorkspace)
+	return "sha256-v2:" + hex.EncodeToString(hash.Sum(nil)), nil
 }
 
 func extractTar(r io.Reader, dest string) error {
@@ -347,23 +346,44 @@ func extractTar(r io.Reader, dest string) error {
 	}
 }
 
-func localGitState(repoPath string) (string, string) {
-	sha := strings.TrimSpace(runGit(repoPath, "rev-parse", "HEAD"))
-	dirty := "unknown"
-	if out := runGit(repoPath, "status", "--porcelain"); out != "" {
-		dirty = "dirty"
-	} else if sha != "" {
-		dirty = "clean"
+func localGitState(ctx context.Context, repoPath string) (string, string, error) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	run := func(args ...string) (string, error) {
+		cmd := gitpkg.Command(ctx, nil, args...)
+		cmd.Dir = repoPath
+		out, err := cmd.Output()
+		if ctx.Err() != nil {
+			return "", ctx.Err()
+		}
+		return string(out), err
 	}
-	return sha, dirty
-}
-
-func runGit(dir string, args ...string) string {
-	cmd := exec.Command("git", args...)
-	cmd.Dir = dir
-	out, err := cmd.Output()
+	if _, err := run("rev-parse", "--is-inside-work-tree"); err != nil {
+		if ctx.Err() != nil {
+			return "", "unknown", ctx.Err()
+		}
+		// Non-Git local source remains supported. A present but broken .git
+		// must not be disguised as an ordinary directory or clean checkout.
+		if _, statErr := os.Lstat(filepath.Join(repoPath, ".git")); errors.Is(statErr, os.ErrNotExist) {
+			return "", "unknown", nil
+		}
+		return "", "unknown", fmt.Errorf("inspect Git working tree: %w", err)
+	}
+	sha, shaErr := run("rev-parse", "--verify", "HEAD")
+	if shaErr != nil {
+		// An unborn branch has no commit yet, but status still has to succeed.
+		if _, err := run("symbolic-ref", "--quiet", "HEAD"); err != nil {
+			return "", "unknown", fmt.Errorf("inspect Git HEAD: %w", shaErr)
+		}
+		sha = ""
+	}
+	status, err := run("status", "--porcelain")
 	if err != nil {
-		return ""
+		return "", "unknown", fmt.Errorf("inspect Git status: %w", err)
 	}
-	return string(out)
+	dirty := "clean"
+	if status != "" {
+		dirty = "dirty"
+	}
+	return strings.TrimSpace(sha), dirty, nil
 }

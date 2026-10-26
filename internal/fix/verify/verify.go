@@ -28,11 +28,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
+	"github.com/alphabravocompany/thewolf/internal/plugin"
 )
 
 // ErrMissingImage means the targeted scanner container is not present.
@@ -138,7 +140,7 @@ type VerifyResult struct {
 
 	// UnableToVerify means the targeted rescan could not run (missing
 	// image, no scanner, transport error). The gate did not judge the
-	// finding. The orchestrator should keep a build-clean edit.
+	// finding. The orchestrator must not count the edit as a verified fix.
 	UnableToVerify bool `json:"unable_to_verify,omitempty"`
 
 	// ChangedFiles is the set of repo-relative paths the engine touched.
@@ -164,7 +166,7 @@ func (r *VerifyResult) BuildFailed() bool {
 var runCommand = func(ctx context.Context, dir, name string, args ...string) (string, error) {
 	// #nosec G204 -- name is a fixed toolchain command (go / tsc / node / a
 	// configured test runner); args are internal, not raw user input.
-	cmd := exec.CommandContext(ctx, name, args...)
+	cmd := plugin.CommandContext(ctx, name, args...)
 	cmd.Dir = dir
 	out, err := cmd.CombinedOutput()
 	return string(out), err
@@ -456,7 +458,7 @@ func buildStage(ctx context.Context, repoPath string, finding models.Finding, ch
 		if !commandAvailable("go") {
 			return StageResult{Stage: StageBuild, Passed: true, Skipped: true, Detail: "go toolchain not available; build skipped"}
 		}
-		if out, err := runCommand(ctx, repoPath, "go", "build", "./..."); err != nil {
+		if out, err := runCommand(ctx, repoPath, "go", "build", "-buildvcs=false", "-o", os.DevNull, "./..."); err != nil {
 			return StageResult{Stage: StageBuild, Passed: false, Detail: truncate(out, 2000)}
 		}
 		return StageResult{Stage: StageBuild, Passed: true, Detail: "go build ./... ok"}
@@ -513,14 +515,14 @@ func nodeParseCheck(ctx context.Context, repoPath string, changed []string) Stag
 	return StageResult{Stage: StageBuild, Passed: true, Detail: fmt.Sprintf("node --check passed on %d file(s)", checked)}
 }
 
-// pyParseCheck runs `python -m py_compile` on each changed .py file.
+// pyParseCheck compiles Python syntax without writing __pycache__ into the patch.
 func pyParseCheck(ctx context.Context, repoPath, py string, changed []string) StageResult {
 	checked := 0
 	for _, f := range changed {
 		if !strings.HasSuffix(f, ".py") {
 			continue
 		}
-		if out, err := runCommand(ctx, repoPath, py, "-m", "py_compile", f); err != nil {
+		if out, err := runCommand(ctx, repoPath, py, "-c", "import sys; compile(open(sys.argv[1], 'rb').read(), sys.argv[1], 'exec')", f); err != nil {
 			return StageResult{Stage: StageBuild, Passed: false, Detail: truncate(f+": "+out, 2000)}
 		}
 		checked++
@@ -528,7 +530,7 @@ func pyParseCheck(ctx context.Context, repoPath, py string, changed []string) St
 	if checked == 0 {
 		return StageResult{Stage: StageBuild, Passed: true, Skipped: true, Detail: "no python files to parse-check"}
 	}
-	return StageResult{Stage: StageBuild, Passed: true, Detail: fmt.Sprintf("py_compile passed on %d file(s)", checked)}
+	return StageResult{Stage: StageBuild, Passed: true, Detail: fmt.Sprintf("Python syntax check passed on %d file(s)", checked)}
 }
 
 // inferLanguage picks a language for the build check from the finding's file

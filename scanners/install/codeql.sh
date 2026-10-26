@@ -28,6 +28,10 @@ printf '%s  %s\n' "$CODEQL_LINUX_AMD64_SHA256" "${tmp}/codeql.tgz" \
     | sha256sum --check --strict -
 mkdir -p /opt/codeql
 tar -xzf "${tmp}/codeql.tgz" -C /opt/codeql --strip-components=1
+# Upstream precompiled query blobs can be owner-only (0600, uid 1001).
+# Scanner containers use the worker's uid, so those blobs must be readable.
+# Otherwise every scan silently recompiles the entire query suite.
+chmod -R a+rX /opt/codeql
 ln -sf /opt/codeql/codeql /usr/local/bin/codeql
 rm -rf "${tmp}"
 

@@ -3,13 +3,13 @@ package hygiene
 import (
 	"context"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
+	"github.com/alphabravocompany/thewolf/internal/plugin"
 )
 
 var (
@@ -20,7 +20,7 @@ var (
 	npmName   = regexp.MustCompile(`^([@a-zA-Z0-9._\-/]+):`)
 	fixVer    = regexp.MustCompile(`(?i)fix(?: available)?:\s*([vV]?\d[^\s,)]*)`)
 	runInRepo = func(ctx context.Context, dir, name string, args ...string) error {
-		cmd := exec.CommandContext(ctx, name, args...) // #nosec G204
+		cmd := plugin.CommandContext(ctx, name, args...) // #nosec G204
 		cmd.Dir = dir
 		return cmd.Run()
 	}
@@ -486,8 +486,12 @@ func applyRenovateUpdate(ctx context.Context, repoPath string, u renovateUpdate)
 }
 
 func rewriteGoDirective(repoPath, next string) error {
-	path := filepath.Join(repoPath, "go.mod")
-	data, err := os.ReadFile(path)
+	root, rel, err := openRepoFile(repoPath, "go.mod")
+	if err != nil {
+		return err
+	}
+	defer func() { _ = root.Close() }()
+	data, err := root.ReadFile(rel)
 	if err != nil {
 		return err
 	}
@@ -505,18 +509,19 @@ func rewriteGoDirective(repoPath, next string) error {
 	if string(out) == string(data) {
 		return os.ErrInvalid
 	}
-	return os.WriteFile(path, out, 0o644)
+	return root.WriteFile(rel, out, 0o644)
 }
 
 func replaceInRepoFile(repoPath, rel, old, new string) error {
 	if old == "" || new == "" || old == new {
 		return os.ErrInvalid
 	}
-	path := rel
-	if !filepath.IsAbs(rel) {
-		path = filepath.Join(repoPath, rel)
+	root, rel, err := openRepoFile(repoPath, rel)
+	if err != nil {
+		return err
 	}
-	data, err := os.ReadFile(path)
+	defer func() { _ = root.Close() }()
+	data, err := root.ReadFile(rel)
 	if err != nil {
 		return err
 	}
@@ -524,5 +529,5 @@ func replaceInRepoFile(repoPath, rel, old, new string) error {
 		return os.ErrNotExist
 	}
 	out := strings.ReplaceAll(string(data), old, new)
-	return os.WriteFile(path, []byte(out), 0o644)
+	return root.WriteFile(rel, []byte(out), 0o644)
 }

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/alphabravocompany/thewolf/internal/finding/identity"
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
 	"github.com/alphabravocompany/thewolf/internal/plugin/container"
@@ -58,12 +59,13 @@ func (p *PipAuditPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) (
 		return nil, plugin.WrapExecError("pip-audit", err)
 	}
 
+	plugin.SaveRaw(opts, out, "json")
 	findings, perr := parsePipAuditOutput(out)
 	if perr != nil {
 		return nil, perr
 	}
 	for i := range findings {
-		findings[i].FilePath = container.NormalizePath(findings[i].FilePath)
+		findings[i].FilePath = filepath.ToSlash(reqFile)
 	}
 	return findings, nil
 }
@@ -79,10 +81,12 @@ type pipAuditDependency struct {
 }
 
 type pipAuditVuln struct {
-	ID          string   `json:"id"`
-	Description string   `json:"description"`
-	FixVersions []string `json:"fix_versions"`
-	Aliases     []string `json:"aliases"`
+	Severity    string        `json:"severity"`
+	CVSS        []plugin.CVSS `json:"cvss"`
+	ID          string        `json:"id"`
+	Description string        `json:"description"`
+	FixVersions []string      `json:"fix_versions"`
+	Aliases     []string      `json:"aliases"`
 }
 
 func parsePipAuditOutput(data []byte) ([]models.Finding, error) {
@@ -94,36 +98,27 @@ func parsePipAuditOutput(data []byte) ([]models.Finding, error) {
 	var findings []models.Finding
 	for _, dep := range output.Dependencies {
 		for _, vuln := range dep.Vulns {
-			cveID := extractCVEFromPipAudit(vuln)
+			severity, provenance := plugin.ResolveSeverity(vuln.Severity, vuln.CVSS, models.SeverityMedium)
 			fixInfo := ""
 			if len(vuln.FixVersions) > 0 {
 				fixInfo = fmt.Sprintf(" Fix available in version(s): %s.", strings.Join(vuln.FixVersions, ", "))
 			}
 
 			findings = append(findings, models.Finding{
-				ToolName:    "pip-audit",
-				Category:    models.CategorySCA,
-				Severity:    models.SeverityMedium,
-				Title:       fmt.Sprintf("Vulnerability %s in %s@%s", vuln.ID, dep.Name, dep.Version),
-				Description: fmt.Sprintf("%s%s", vuln.Description, fixInfo),
-				FilePath:    "requirements.txt",
-				RuleID:      vuln.ID,
-				CWEID:       cveID,
-				Status:      models.StatusOpen,
+				ToolName:         "pip-audit",
+				Category:         models.CategorySCA,
+				Severity:         severity,
+				Title:            fmt.Sprintf("Vulnerability %s in %s@%s", vuln.ID, dep.Name, dep.Version),
+				Description:      fmt.Sprintf("%s%s\n\n%s", vuln.Description, fixInfo, provenance),
+				FilePath:         "requirements.txt",
+				RuleID:           vuln.ID,
+				AdvisoryID:       identity.CanonicalAdvisory(vuln.ID, vuln.Aliases...),
+				PackageName:      dep.Name,
+				PackageVersion:   dep.Version,
+				PackageEcosystem: "pypi",
+				Status:           models.StatusOpen,
 			})
 		}
 	}
 	return findings, nil
-}
-
-func extractCVEFromPipAudit(vuln pipAuditVuln) string {
-	if strings.HasPrefix(vuln.ID, "CVE-") {
-		return vuln.ID
-	}
-	for _, alias := range vuln.Aliases {
-		if strings.HasPrefix(alias, "CVE-") {
-			return alias
-		}
-	}
-	return ""
 }

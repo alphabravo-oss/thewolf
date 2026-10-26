@@ -39,12 +39,20 @@ func (r Resolver) prepareGitHub(ctx context.Context, repo *models.Repo, branch s
 		return Prepared{}, fmt.Errorf("clone github.com/%s/%s: %w", owner, name, err)
 	}
 
-	sha, dirty := localGitState(path)
+	sha, dirty, err := localGitState(ctx, path)
+	if err != nil {
+		return Prepared{}, fmt.Errorf("inspect GitHub workspace: %w", err)
+	}
+	treeDigest, err := workspaceTreeDigest(path)
+	if err != nil {
+		return Prepared{}, fmt.Errorf("digest GitHub workspace: %w", err)
+	}
 	return Prepared{
 		Path:              path,
 		SourceType:        models.SourceTypeGitHub,
 		SourcePath:        repo.SourcePath,
 		CommitSHA:         sha,
+		TreeDigest:        treeDigest,
 		DirtyState:        dirty,
 		PreparedWorkspace: path,
 		// The clone lives in the configured workspace cache and is refreshed in
@@ -85,8 +93,8 @@ func ParseGitHubSource(raw string) (owner, name string, err error) {
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
 		return "", "", fmt.Errorf("github source %q must be owner/repo (or a github.com URL)", raw)
 	}
-	if strings.ContainsAny(parts[0]+parts[1], " \t\n@:") {
-		return "", "", fmt.Errorf("github source %q contains invalid characters", raw)
+	if err := repocache.ValidateGitHubCoordinate(parts[0], parts[1]); err != nil {
+		return "", "", err
 	}
 	return parts[0], parts[1], nil
 }

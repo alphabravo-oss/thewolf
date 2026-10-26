@@ -1,4 +1,4 @@
-// Settings page — General / Users / Scanners / License (primary).
+// Administration settings; personal controls live under /account.
 //
 // Tab state lives in the URL (?tab=…) so deep links work and refresh
 // preserves which section the user was on. Scan presets were deliberately
@@ -17,7 +17,6 @@ import {
   LockIcon,
   PlusIcon,
   RefreshCwIcon,
-  ScrollTextIcon,
   ServerIcon,
   SettingsIcon,
   ShieldIcon,
@@ -25,12 +24,13 @@ import {
   WrenchIcon,
   UsersIcon,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { toast } from "sonner";
 import { api, isNotFound } from "@/lib/api";
 import { GitHubTokenHelp } from "@/components/github-token-help";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { useMe } from "@/lib/me";
+import { ErrorState } from "@/components/ui/empty-state";
+import { useIsAdmin, useMe } from "@/lib/me";
 import type {
   AdminSecret,
   ApiToken,
@@ -46,6 +46,10 @@ import { COMMUNITY_LIMIT_COPY, isCommunityLimit, safeErrorMessage } from "@/lib/
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PageHeader } from "@/components/ui/page";
 import { LicenseTab } from "@/components/license-settings";
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DataTable, type Column } from "@/components/ui/data-table";
 
 // Legacy personal ?tab= values that have NO admin tab of the same name now
@@ -80,7 +84,8 @@ export const Route = createFileRoute("/_authed/settings")({
       .then((r) => r.data)
       .catch(() => null);
     if (me?.role !== "admin") {
-      throw redirect({ to: "/account", search: { section: "profile" } });
+      const section = tab === "apikeys" || tab === "secrets" || tab === "nodes" ? tab : "profile";
+      throw redirect({ to: "/account", search: { section } });
     }
   },
   component: SettingsPage,
@@ -95,46 +100,31 @@ type TabKey =
   | "nodes"
   | "scanners"
   | "scanner-updates"
-  | "license"
-  | "audit";
-
-type TabGroup = "primary" | "more" | "advanced";
+  | "license";
 
 // Settings is the admin surface: system config + a global, cross-user
-// oversight view of API keys / secrets / nodes, plus the audit log. Personal
+// oversight view of API keys / secrets / nodes. Audit lives at /audit. Personal
 // (per-user) management lives under /account.
-const TABS: { key: TabKey; label: string; Icon: typeof SettingsIcon; group: TabGroup }[] = [
-  { key: "general", label: "General", Icon: SettingsIcon, group: "primary" },
-  { key: "users", label: "Users", Icon: UsersIcon, group: "primary" },
-  { key: "scanners", label: "Scanners", Icon: ShieldIcon, group: "primary" },
-  { key: "license", label: "License", Icon: BadgeCheckIcon, group: "primary" },
-  { key: "fixer", label: "Fixer", Icon: WrenchIcon, group: "more" },
-  { key: "apikeys", label: "API Keys", Icon: KeyRoundIcon, group: "more" },
-  { key: "secrets", label: "Secrets", Icon: KeyIcon, group: "more" },
-  { key: "nodes", label: "Nodes", Icon: ServerIcon, group: "more" },
-  { key: "audit", label: "Audit", Icon: ScrollTextIcon, group: "more" },
-  { key: "scanner-updates", label: "Scanner updates", Icon: RefreshCwIcon, group: "advanced" },
+const TABS: { key: TabKey; label: string; Icon: typeof SettingsIcon }[] = [
+  { key: "general", label: "General", Icon: SettingsIcon },
+  { key: "users", label: "Users", Icon: UsersIcon },
+  { key: "scanners", label: "Scanners", Icon: ShieldIcon },
+  { key: "license", label: "License", Icon: BadgeCheckIcon },
+  { key: "fixer", label: "Fixer", Icon: WrenchIcon },
+  { key: "apikeys", label: "All API keys", Icon: KeyRoundIcon },
+  { key: "secrets", label: "All secrets", Icon: KeyIcon },
+  { key: "nodes", label: "All nodes", Icon: ServerIcon },
+  { key: "scanner-updates", label: "Advanced", Icon: RefreshCwIcon },
 ];
 
 function SettingsPage() {
-  const { tab, advanced } = Route.useSearch();
+  const { tab } = Route.useSearch();
   const navigate = useNavigate();
-  const activeTabRef = useRef<HTMLButtonElement>(null);
-  const showAdvanced = advanced || tab === "scanner-updates";
-  const visibleTabs = TABS.filter((t) => t.group !== "advanced" || showAdvanced);
-  const activeTab: TabKey = visibleTabs.some((t) => t.key === tab)
-    ? (tab as TabKey)
-    : "general";
-
-  useEffect(() => {
-    activeTabRef.current?.scrollIntoView({
-      block: "nearest",
-      inline: "nearest",
-    });
-  }, [activeTab]);
+  const activeTab = TABS.some((t) => t.key === tab) ? tab as TabKey : "general";
+  const changeTab = (tab: string) => navigate({ to: "/settings", search: { tab } });
 
   return (
-    <div className="page stack page--narrow min-w-0">
+    <div className="page stack min-w-0">
       {/* PageHeader owns the title/description pair. The previous hand-rolled
           version pulled the description up with `-mt-2` to close the gap that
           `.stack` opens between siblings — but a utility replaces that margin
@@ -151,7 +141,7 @@ function SettingsPage() {
               onClick={() =>
                 navigate({ to: "/account", search: { section: "profile" } })
               }
-              className="text-foreground hover:underline"
+              className="text-foreground underline underline-offset-2"
             >
               Account
             </button>
@@ -159,82 +149,24 @@ function SettingsPage() {
           </>
         }
       />
-      <nav
-        aria-label="Administration settings"
-        className="max-w-full overflow-x-auto overscroll-x-contain border-b border-border"
-      >
-        <div className="flex min-w-max gap-1">
-          {visibleTabs
-            .filter((t) => t.group === "primary")
-            .map(({ key, label, Icon }) => {
-              const active = activeTab === key;
-              return (
-                <button
-                  key={key}
-                  ref={active ? activeTabRef : undefined}
-                  type="button"
-                  aria-current={active ? "page" : undefined}
-                  onClick={() =>
-                    navigate({
-                      to: "/settings",
-                      search: { tab: key, ...(showAdvanced ? { advanced: true } : {}) },
-                    })
-                  }
-                  className={
-                    "-mb-px inline-flex h-9 items-center gap-1.5 border-b-2 px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring " +
-                    (active
-                      ? "border-primary text-foreground"
-                      : "border-transparent text-muted-foreground hover:text-foreground")
-                  }
-                >
-                  <Icon className="size-4" aria-hidden="true" /> {label}
-                </button>
-              );
-            })}
+      <div className="grid gap-6 lg:grid-cols-[180px_minmax(0,1fr)]">
+        <div className="lg:hidden">
+          <Select value={activeTab} onValueChange={changeTab}>
+            <SelectTrigger aria-label="Administration section"><SelectValue /></SelectTrigger>
+            <SelectContent>{TABS.map(({ key, label }) => <SelectItem key={key} value={key}>{label}</SelectItem>)}</SelectContent>
+          </Select>
         </div>
-        <div className="flex min-w-max gap-1">
-          {visibleTabs
-            .filter((t) => t.group !== "primary")
-            .map(({ key, label, Icon }) => {
-              const active = activeTab === key;
-              return (
-                <button
-                  key={key}
-                  ref={active ? activeTabRef : undefined}
-                  type="button"
-                  aria-current={active ? "page" : undefined}
-                  onClick={() =>
-                    navigate({
-                      to: "/settings",
-                      search: { tab: key, ...(showAdvanced ? { advanced: true } : {}) },
-                    })
-                  }
-                  className={
-                    "-mb-px inline-flex h-8 items-center gap-1.5 border-b-2 px-3 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring " +
-                    (active
-                      ? "border-primary text-foreground"
-                      : "border-transparent text-muted-foreground hover:text-foreground")
-                  }
-                >
-                  <Icon className="size-3.5" aria-hidden="true" /> {label}
-                </button>
-              );
-            })}
-          {!showAdvanced ? (
-            <button
-              type="button"
-              onClick={() =>
-                navigate({ to: "/settings", search: { tab: "scanner-updates", advanced: true } })
-              }
-              className="-mb-px inline-flex h-8 items-center px-3 text-xs text-muted-foreground hover:text-foreground"
-            >
-              Advanced
+        <nav aria-label="Administration settings" className="hidden lg:block space-y-1">
+          {TABS.map(({ key, label, Icon }) => (
+            <button key={key} type="button" aria-current={activeTab === key ? "page" : undefined}
+              onClick={() => changeTab(key)}
+              className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-left ${activeTab === key ? "bg-accent text-foreground font-medium" : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"}`}>
+              <Icon className="size-4" aria-hidden="true" />{label}
             </button>
-          ) : null}
-        </div>
-      </nav>
+          ))}
+        </nav>
 
-      <section aria-labelledby="active-settings-section" className="min-w-0">
+      <section aria-labelledby="active-settings-section" className="min-w-0 max-w-4xl">
         <h2 id="active-settings-section" className="sr-only">
           {TABS.find((item) => item.key === activeTab)?.label} settings
         </h2>
@@ -248,6 +180,7 @@ function SettingsPage() {
         {activeTab === "scanner-updates" && <ScannerUpdatesTab />}
         {activeTab === "license" && <LicenseTab />}
       </section>
+      </div>
     </div>
   );
 }
@@ -532,19 +465,14 @@ function AdminNodesTab() {
 
 export function AccountTab() {
   const qc = useQueryClient();
-  const navigate = useNavigate();
   const me = useMe();
 
-  const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [currentPw, setCurrentPw] = useState("");
   // Seed the form from the loaded user (and re-sync after a saved change).
   useEffect(() => {
-    if (me.data) {
-      setDisplayName(me.data.display_name ?? "");
-      setEmail(me.data.email);
-    }
-  }, [me.data]);
+    if (me.data?.email) setEmail(me.data.email);
+  }, [me.data?.email]);
   const emailChanged =
     !!me.data && email.trim().toLowerCase() !== me.data.email;
 
@@ -553,16 +481,12 @@ export function AccountTab() {
   const [confirmPw, setConfirmPw] = useState("");
 
   const profile = useMutation({
-    mutationFn: () =>
-      api.put("/auth/profile", {
-        display_name: displayName,
-        email,
-        current_password: currentPw,
-      }),
+    mutationFn: (updates: { display_name?: string; email?: string; current_password?: string }) =>
+      api.put("/auth/profile", updates),
     onSuccess: () => {
       toast.success("Profile saved");
       setCurrentPw("");
-      qc.invalidateQueries({ queryKey: ["me"] });
+      return qc.invalidateQueries({ queryKey: ["me"] });
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Save failed"),
   });
@@ -591,20 +515,15 @@ export function AccountTab() {
       {/* Profile */}
       <div className="glass-card p-5 space-y-4">
         <h3 className="text-sm font-medium">Profile</h3>
-        <label className="block space-y-1">
-          <span className="text-xs text-muted-foreground">Display name</span>
-          <input
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            placeholder="Shown in the UI instead of your email"
-            className="w-full h-9 px-3 rounded-md bg-muted/40 border border-border text-sm"
-          />
-        </label>
+        <TextSetting label="Display name" value={me.data?.display_name ?? ""} disabled={profile.isPending}
+          onCommit={(display_name) => profile.mutate({ display_name })} />
+        <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); if (emailChanged && currentPw && !profile.isPending) profile.mutate({ email, current_password: currentPw }); }}>
         <label className="block space-y-1">
           <span className="text-xs text-muted-foreground">Email</span>
           <input
             type="email"
             value={email}
+            disabled={profile.isPending}
             onChange={(e) => setEmail(e.target.value)}
             className="w-full h-9 px-3 rounded-md bg-muted/40 border border-border text-sm"
           />
@@ -618,29 +537,21 @@ export function AccountTab() {
             <input
               type="password"
               value={currentPw}
+              disabled={profile.isPending}
               onChange={(e) => setCurrentPw(e.target.value)}
               autoComplete="current-password"
               className="w-full h-9 px-3 rounded-md bg-muted/40 border border-border text-sm"
             />
           </label>
         )}
-        <button
-          type="button"
-          onClick={() => profile.mutate()}
-          disabled={
-            profile.isPending ||
-            email.trim() === "" ||
-            (emailChanged && currentPw.length === 0)
-          }
-          className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
-        >
-          <CheckIcon className="size-4" />
-          {profile.isPending ? "Saving…" : "Save profile"}
-        </button>
+        {emailChanged && <Button type="submit" size="sm" disabled={profile.isPending || !email.trim() || !currentPw}>
+          {profile.isPending ? "Saving…" : "Save"}
+        </Button>}
+        </form>
       </div>
 
       {/* Password */}
-      <div className="glass-card p-5 space-y-4">
+      <form className="glass-card p-5 space-y-4" onSubmit={(e) => { e.preventDefault(); if (!password.isPending && curPw && newPw.length >= 12 && newPw === confirmPw) password.mutate(); }}>
         <h3 className="text-sm font-medium">Password</h3>
         <div className="grid sm:grid-cols-3 gap-3">
           <label className="block space-y-1">
@@ -680,46 +591,13 @@ export function AccountTab() {
           </label>
         </div>
         <p className="text-xs text-muted-foreground">At least 12 characters.</p>
-        <button
-          type="button"
-          onClick={() => password.mutate()}
-          disabled={
-            password.isPending ||
-            curPw.length === 0 ||
-            newPw.length < 12 ||
-            newPw !== confirmPw
-          }
-          className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
-        >
-          <CheckIcon className="size-4" />
-          {password.isPending ? "Updating…" : "Update password"}
-        </button>
-      </div>
+        {(curPw || newPw || confirmPw) && <Button type="submit" size="sm"
+          disabled={password.isPending || !curPw || newPw.length < 12 || newPw !== confirmPw}>
+          {password.isPending ? "Saving…" : "Save"}
+        </Button>}
+      </form>
 
-      {/* Links to the other personal surfaces. */}
-      <div className="glass-card p-5 space-y-2">
-        <h3 className="text-sm font-medium">More</h3>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() =>
-              navigate({ to: "/account", search: { section: "apikeys" } })
-            }
-            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border text-sm hover:bg-muted/40"
-          >
-            <KeyRoundIcon className="size-4" /> API Keys
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              navigate({ to: "/account", search: { section: "security" } })
-            }
-            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border text-sm hover:bg-muted/40"
-          >
-            <LockIcon className="size-4" /> Two-factor auth
-          </button>
-        </div>
-      </div>
+
     </section>
   );
 }
@@ -759,9 +637,25 @@ const GENERAL_KNOBS = [
   {
     key: "scan_concurrency",
     label: "Scan concurrency",
-    help: "Maximum number of scanner containers run in parallel per scan. Lower this if your host is under-provisioned for memory or CPU.",
+    help: "0 = automatic sizing from the scanner host. Set a number to cap tools per scan; the shared CPU and memory budget still applies.",
     type: "int" as const,
-    min: 1,
+    min: 0,
+    max: 32,
+  },
+  {
+    key: "heavy_scanner_concurrency",
+    label: "Heavy tool concurrency",
+    help: "0 = automatic. Caps demanding tools such as Semgrep, Bearer, and Grype while leaving room for lighter checks.",
+    type: "int" as const,
+    min: 0,
+    max: 32,
+  },
+  {
+    key: "network_scanner_concurrency",
+    label: "Network tool concurrency",
+    help: "0 = automatic. Caps tools downloading rules, dependencies, or vulnerability databases at the same time.",
+    type: "int" as const,
+    min: 0,
     max: 32,
   },
   {
@@ -788,15 +682,20 @@ function GeneralTab() {
   const m = useMutation({
     mutationFn: (updates: Record<string, string>) =>
       api.put("/settings", updates),
-    onSuccess: () => {
+    onSuccess: async (_, updates) => {
+      qc.setQueryData<Record<string, string>>(["settings"], (previous) => ({ ...previous, ...updates }));
       toast.success("Settings saved");
-      qc.invalidateQueries({ queryKey: ["settings"] });
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["settings"] }),
+        qc.invalidateQueries({ queryKey: ["scanner-scheduling"] }),
+      ]);
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Save failed"),
   });
 
   if (q.isLoading)
-    return <p className="text-sm text-muted-foreground">Loading…</p>;
+    return <p role="status" className="text-sm text-muted-foreground">Loading…</p>;
+  if (q.isError) return <ErrorState title="Could not load settings" onRetry={() => q.refetch()} />;
   const settings = q.data ?? {};
   const product = editionQ.data?.product ?? "Wolf Community";
   const editionName = editionQ.data?.edition ?? "community";
@@ -810,12 +709,12 @@ function GeneralTab() {
         {editionQ.data?.licensed
           ? "A commercial license is active."
           : "No commercial license is installed in this binary."}{" "}
-        See the License tab for entitlements and install.
+        See the License section for entitlements and install.
       </p>
     </section>
     <section className="glass-card p-5 space-y-5">
       {GENERAL_KNOBS.map((knob) => {
-        const current = settings[knob.key] ?? "";
+        const current = settings[knob.key] ?? (knob.type === "int" ? "0" : "");
         return (
           <div
             key={knob.key}
@@ -836,25 +735,17 @@ function GeneralTab() {
             </div>
             {knob.type === "bool" ? (
               <BoolToggle
+                label={knob.label}
                 value={current === "true"}
-                onChange={(v) => m.mutate({ [knob.key]: v ? "true" : "false" })}
+                onChange={(v) => m.mutateAsync({ [knob.key]: v ? "true" : "false" })}
                 disabled={m.isPending}
               />
             ) : knob.type === "choice" ? (
-              <select
-                value={current || knob.options[0]}
-                onChange={(e) => m.mutate({ [knob.key]: e.target.value })}
-                disabled={m.isPending}
-                className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border text-sm"
-              >
-                {knob.options.map((opt) => (
-                  <option key={opt} value={opt}>
-                    {opt}
-                  </option>
-                ))}
-              </select>
+              <ChoiceSetting label={knob.label} value={current || knob.options[0]} options={knob.options}
+                onCommit={(value) => m.mutate({ [knob.key]: value })} disabled={m.isPending} />
             ) : (
               <IntInput
+                label={knob.label}
                 value={current}
                 min={knob.min}
                 max={knob.max}
@@ -866,83 +757,202 @@ function GeneralTab() {
         );
       })}
     </section>
+    <SchedulingCard />
+    <DatabaseCard />
     <DiskCard />
     </div>
   );
 }
 
-function BoolToggle({
-  value,
-  onChange,
-  disabled,
-}: {
-  value: boolean;
-  onChange: (v: boolean) => void;
-  disabled?: boolean;
-}) {
+function SchedulingCard() {
+  const q = useQuery({
+    queryKey: ["scanner-scheduling"],
+    queryFn: async () => (await api.get<{
+      concurrency: number; heavy_concurrency: number; network_concurrency: number;
+      host_cpus: number; host_memory_bytes: number; cpu_budget: number;
+      memory_budget_bytes: number; workers: number; source: string; warning?: string;
+    }>("/settings/scheduling")).data,
+    staleTime: 60_000,
+  });
+  const plan = q.data;
   return (
-    <button
-      type="button"
-      onClick={() => onChange(!value)}
-      disabled={disabled}
-      className={
-        "inline-flex items-center gap-2 px-3 h-9 rounded-md text-sm border " +
-        (value
-          ? "bg-status-success/10 border-status-success/40 text-status-success"
-          : "bg-muted/40 border-border text-muted-foreground hover:text-foreground") +
-        " disabled:opacity-50"
-      }
-    >
-      <span
-        className={
-          "size-2 rounded-full " +
-          (value ? "bg-status-success" : "bg-muted-foreground/50")
-        }
-      />
-      {value ? "Enabled" : "Disabled"}
-    </button>
+    <section className="glass-card p-5 space-y-2" aria-label="Scanner scheduling">
+      <h3 className="text-sm font-medium">Scanner scheduling</h3>
+      {q.isPending ? <p className="text-sm text-muted-foreground">Detecting scanner host…</p> :
+       q.isError || !plan ? <p className="text-sm text-destructive">Could not load scheduling capacity.</p> : <>
+        <p className="text-sm">Up to {plan.concurrency} tools per scan · {plan.heavy_concurrency} heavy · {plan.network_concurrency} network</p>
+        {plan.host_cpus > 0 && <p className="text-xs text-muted-foreground">
+          {plan.host_cpus} CPUs · {(plan.host_memory_bytes / 2 ** 30).toFixed(1)} GiB detected.
+          {plan.workers} {plan.workers === 1 ? "worker" : "workers"}, with a shared budget of {plan.cpu_budget.toFixed(1)} CPUs and {(plan.memory_budget_bytes / 2 ** 30).toFixed(1)} GiB per worker.
+          Capacity is reserved for Wolf and the operating system. Tools start only when their resource limits fit.
+        </p>}
+        <p className="text-xs text-muted-foreground">Recalculated for each new scan using its worker’s Docker host. Existing scans keep their limits.</p>
+        {plan.warning && <p className="text-xs text-status-warning">{plan.warning}. Conservative fallback: {plan.concurrency} tools.</p>}
+      </>}
+    </section>
   );
 }
 
-function IntInput({
-  value,
-  min,
-  max,
-  onCommit,
-  disabled,
-}: {
-  value: string;
-  min?: number;
-  max?: number;
-  onCommit: (v: string) => void;
-  disabled?: boolean;
+type DatabaseInfo = {
+  driver: string;
+  user?: string;
+  host?: string;
+  database?: string;
+  sslmode?: string;
+  env_managed?: boolean;
+  file_set?: boolean;
+};
+
+function DatabaseCard() {
+  const q = useQuery({
+    queryKey: ["admin-database"],
+    queryFn: async () => (await api.get<DatabaseInfo>("/admin/database")).data,
+  });
+  const [dsn, setDsn] = useState("");
+  const test = useMutation({
+    mutationFn: () => api.post("/admin/database/test", { dsn }),
+    onSuccess: () => toast.success("Connected"),
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Unreachable"),
+  });
+  const save = useMutation({
+    mutationFn: () => api.put("/admin/database", { dsn }),
+    onSuccess: () => {
+      setDsn("");
+      toast.success("Saved. Restart Wolf to use this database.");
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Save failed"),
+  });
+  const info = q.data;
+  const helmLocked = !!info?.env_managed;
+  return (
+    <section className="glass-card p-5 space-y-3">
+      <h3 className="text-sm font-medium">Database</h3>
+      <p className="text-xs text-muted-foreground">
+        {info?.driver === "postgres" ? (
+          <>
+            Postgres {info.user ? `${info.user}@` : ""}
+            {info.host || "—"}/{info.database || "—"}
+            {info.sslmode ? ` · sslmode=${info.sslmode}` : ""}
+          </>
+        ) : (
+          <>SQLite {info?.database ? `(${info.database})` : ""}</>
+        )}
+      </p>
+      {helmLocked ? (
+        <p className="text-xs text-muted-foreground">
+          DSN comes from Helm (<code className="font-mono">postgres.mode</code>
+          : bundled, cnpg, or external). Change values and helm upgrade.
+        </p>
+      ) : (
+        <>
+          <p className="text-xs text-muted-foreground">
+            Point this instance at a remote Postgres. Restart Wolf after save.
+            Helm installs should use <code className="font-mono">postgres.mode=external</code> instead.
+          </p>
+          <input
+            type="password"
+            autoComplete="off"
+            value={dsn}
+            aria-label="Postgres connection string"
+            disabled={save.isPending}
+            onChange={(e) => setDsn(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && dsn.trim() && !save.isPending) { e.preventDefault(); save.mutate(); } }}
+            placeholder="postgres://user:pass@host:5432/wolf?sslmode=require"
+            className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border text-sm font-mono"
+          />
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={!dsn.trim() || test.isPending}
+              onClick={() => test.mutate()}
+              className="h-9 px-3 rounded-md border border-border text-sm hover:bg-muted/40 disabled:opacity-50"
+            >
+              Test
+            </button>
+            {dsn.trim() && <Button type="button" size="sm" disabled={save.isPending} onClick={() => save.mutate()}>
+              Save
+            </Button>}
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+function TextSetting({ label, value, type = "text", onCommit, disabled }: {
+  label: string; value: string; type?: string; onCommit: (value: string) => void; disabled?: boolean;
+}) {
+  const id = useId();
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
+  const dirty = draft !== value;
+  return <form className="space-y-1" onSubmit={(e) => { e.preventDefault(); if (dirty && !disabled) onCommit(draft); }}>
+    <label htmlFor={id} className="block text-xs text-muted-foreground">{label}</label>
+    <div className="flex items-center gap-2">
+      <input id={id} type={type} autoComplete={type === "password" ? "off" : undefined}
+        value={draft} disabled={disabled} onChange={(e) => setDraft(e.target.value)}
+        className="min-w-0 w-full h-9 px-3 rounded-md bg-muted/40 border border-border text-sm" />
+      {dirty && <Button type="submit" size="sm" disabled={disabled}>Save</Button>}
+    </div>
+  </form>;
+}
+
+function BoolToggle({ label, value, onChange, disabled }: {
+  label: string; value: boolean; onChange: (value: boolean) => Promise<unknown>; disabled?: boolean;
 }) {
   const [draft, setDraft] = useState(value);
-  // Keep draft in sync with server-confirmed value when it changes externally.
-  if (value !== draft && document.activeElement?.tagName !== "INPUT") {
-    setDraft(value);
+  const [pending, setPending] = useState(false);
+  useEffect(() => setDraft(value), [value]);
+  async function toggle(next: boolean) {
+    setDraft(next);
+    setPending(true);
+    try {
+      await onChange(next);
+    } catch {
+      // The mutation owns the error toast; restore the last confirmed value.
+      setDraft(value);
+    } finally {
+      setPending(false);
+    }
   }
+  return <div className="flex min-h-9 items-center gap-3">
+    <Switch aria-label={label} checked={draft} onCheckedChange={toggle} disabled={disabled || pending} />
+    <span className="text-xs text-muted-foreground">{draft ? "On" : "Off"}</span>
+  </div>;
+}
+
+function ChoiceSetting({ label, value, options, onCommit, disabled }: {
+  label: string; value: string; options: string[]; onCommit: (value: string) => void; disabled?: boolean;
+}) {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
+  const dirty = draft !== value;
+  return <form className="flex items-center gap-2" onSubmit={(e) => { e.preventDefault(); if (dirty && !disabled) onCommit(draft); }}>
+    <Select value={draft} onValueChange={setDraft} disabled={disabled}>
+      <SelectTrigger aria-label={label} className="h-9 min-w-0"><SelectValue /></SelectTrigger>
+      <SelectContent>{options.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent>
+    </Select>
+    {dirty && <Button type="submit" size="sm" disabled={disabled}>Save</Button>}
+  </form>;
+}
+
+function IntInput({ label, value, min, max, onCommit, disabled }: {
+  label: string; value: string; min?: number; max?: number;
+  onCommit: (v: string) => void; disabled?: boolean;
+}) {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
+  const dirty = draft !== value;
+  const valid = draft.trim() !== "" && Number.isInteger(Number(draft)) &&
+    (min === undefined || Number(draft) >= min) && (max === undefined || Number(draft) <= max);
   return (
-    <div className="flex items-center gap-2">
-      <input
-        type="number"
-        value={draft}
-        min={min}
-        max={max}
+    <form className="flex items-center gap-2" onSubmit={(e) => { e.preventDefault(); if (dirty && valid && !disabled) onCommit(draft); }}>
+      <input type="number" aria-label={label} value={draft} min={min} max={max} step={1}
         onChange={(e) => setDraft(e.target.value)}
         className="w-24 h-9 px-2 rounded-md bg-muted/40 border border-border text-sm tabular-nums"
-        disabled={disabled}
-      />
-      <button
-        type="button"
-        onClick={() => onCommit(draft)}
-        disabled={disabled || draft === value}
-        className="inline-flex items-center gap-1 h-9 px-3 rounded-md bg-primary text-primary-foreground text-sm disabled:opacity-30"
-      >
-        <CheckIcon className="size-3.5" />
-        Save
-      </button>
-    </div>
+        disabled={disabled} />
+      {dirty && <Button type="submit" size="sm" disabled={disabled || !valid}>Save</Button>}
+    </form>
   );
 }
 
@@ -961,9 +971,9 @@ function DiskCard() {
   });
   const reap = useMutation({
     mutationFn: () =>
-      api.post("/admin/workspaces/reap", { max_age_hours: 72 }),
-    onSuccess: () => {
-      toast.success("Reaped workspaces older than 72 hours");
+      api.post<{ removed: number; retained_in_use?: number }>("/admin/workspaces/reap", { max_age_hours: 72 }),
+    onSuccess: ({ data }) => {
+      toast.success(`Removed ${data.removed} old workspaces${data.retained_in_use ? `; retained ${data.retained_in_use} in use` : ""}`);
       qc.invalidateQueries({ queryKey: ["admin", "disk"] });
     },
     onError: (e) =>
@@ -1007,9 +1017,13 @@ function ScannerUpdatesTab() {
   const save = useMutation({
     mutationFn: (updates: Record<string, string>) =>
       api.put("/settings", updates),
-    onSuccess: () => {
+    onSuccess: async (_, updates) => {
+      qc.setQueryData<Record<string, string>>(["settings"], (previous) => ({ ...previous, ...updates }));
       toast.success("Settings saved");
-      qc.invalidateQueries({ queryKey: ["settings"] });
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["settings"] }),
+        qc.invalidateQueries({ queryKey: ["scanner-scheduling"] }),
+      ]);
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Save failed"),
   });
@@ -1022,19 +1036,10 @@ function ScannerUpdatesTab() {
 
   const settings = q.data ?? {};
   const notifyOnly = settings.scanner_notify_only !== "false";
-  const [githubSecret, setGithubSecret] = useState("");
-  const [outboundUrl, setOutboundUrl] = useState("");
-  const [outboundSecret, setOutboundSecret] = useState("");
-
-  useEffect(() => {
-    if (!q.data) return;
-    setGithubSecret(q.data.github_webhook_secret ?? "");
-    setOutboundUrl(q.data.outbound_webhook_url ?? "");
-    setOutboundSecret(q.data.outbound_webhook_secret ?? "");
-  }, [q.data]);
 
   if (q.isLoading)
     return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (q.isError) return <ErrorState title="Could not load settings" onRetry={() => q.refetch()} />;
 
   return (
     <section className="glass-card p-5 space-y-5">
@@ -1046,80 +1051,22 @@ function ScannerUpdatesTab() {
           default.
         </p>
       </div>
-      <label className="flex items-start gap-2 text-sm">
-        <input
-          type="checkbox"
-          className="mt-0.5"
-          checked={notifyOnly}
-          disabled={save.isPending}
-          onChange={(e) =>
-            save.mutate({
-              scanner_notify_only: e.target.checked ? "true" : "false",
-            })
-          }
-        />
-        <span>Notify only (do not auto-promote scanner releases)</span>
-      </label>
-      <div className="space-y-3">
-        <label className="block space-y-1">
-          <span className="text-xs text-muted-foreground">
-            GitHub webhook secret
-          </span>
-          <input
-            type="password"
-            autoComplete="off"
-            value={githubSecret}
-            onChange={(e) => setGithubSecret(e.target.value)}
-            className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border text-sm font-mono"
-          />
-        </label>
-        <label className="block space-y-1">
-          <span className="text-xs text-muted-foreground">
-            Outbound webhook URL
-          </span>
-          <input
-            type="url"
-            value={outboundUrl}
-            onChange={(e) => setOutboundUrl(e.target.value)}
-            className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border text-sm font-mono"
-          />
-        </label>
-        <label className="block space-y-1">
-          <span className="text-xs text-muted-foreground">
-            Outbound webhook secret
-          </span>
-          <input
-            type="password"
-            autoComplete="off"
-            value={outboundSecret}
-            onChange={(e) => setOutboundSecret(e.target.value)}
-            className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border text-sm font-mono"
-          />
-        </label>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            disabled={save.isPending}
-            onClick={() =>
-              save.mutate({
-                github_webhook_secret: githubSecret,
-                outbound_webhook_url: outboundUrl,
-                outbound_webhook_secret: outboundSecret,
-              })
-            }
-            className="inline-flex items-center h-9 px-3 rounded-md bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
-          >
-            Save webhooks
-          </button>
-          <button
-            type="button"
-            disabled={testHook.isPending}
-            onClick={() => testHook.mutate()}
-            className="inline-flex items-center h-9 px-3 rounded-md border border-border text-sm hover:bg-muted/30 disabled:opacity-50"
-          >
-            {testHook.isPending ? "Sending…" : "Test delivery"}
-          </button>
-        </div>
+      <div className="grid gap-3 sm:grid-cols-[1fr_240px] items-center">
+        <span className="text-sm">Notify only (do not auto-promote scanner releases)</span>
+        <BoolToggle label="Notify only" value={notifyOnly} disabled={save.isPending}
+          onChange={(value) => save.mutateAsync({ scanner_notify_only: value ? "true" : "false" })} />
+      </div>
+      <div className="space-y-4">
+        {[
+          ["github_webhook_secret", "GitHub webhook secret", "password"],
+          ["outbound_webhook_url", "Outbound webhook URL", "url"],
+          ["outbound_webhook_secret", "Outbound webhook secret", "password"],
+        ].map(([key, label, type]) => <TextSetting key={key} label={label} type={type}
+          value={settings[key] ?? ""} disabled={save.isPending}
+          onCommit={(value) => save.mutate({ [key]: value })} />)}
+        <Button type="button" size="sm" variant="outline" disabled={testHook.isPending} onClick={() => testHook.mutate()}>
+          {testHook.isPending ? "Sending…" : "Test delivery"}
+        </Button>
       </div>
     </section>
   );
@@ -1192,8 +1139,9 @@ export function SecurityTab() {
 
   if (status.isLoading)
     return <p className="text-sm text-muted-foreground">Loading…</p>;
-  const enabled = status.data?.enabled ?? false;
-  const required = status.data?.required ?? false;
+  const current = status.isError ? undefined : status.data;
+  const enabled = current?.enabled;
+  const required = current?.required;
 
   return (
     <section className="glass-card p-5 space-y-5 max-w-xl">
@@ -1215,9 +1163,17 @@ export function SecurityTab() {
               : "bg-muted/40 border-border text-muted-foreground")
           }
         >
-          {enabled ? "On" : "Off"}
+          {current ? (enabled ? "On" : "Off") : "Unavailable"}
         </span>
       </div>
+
+      {!current && (
+        <ErrorState
+          title="Two-factor status unavailable"
+          description="Your two-factor settings could not be checked. Retry to load them."
+          onRetry={() => void status.refetch()}
+        />
+      )}
 
       {/* One-time recovery codes, shown right after activation. */}
       {recovery && (
@@ -1313,7 +1269,7 @@ export function SecurityTab() {
       )}
 
       {/* Idle states: offer enable, or disable when already on. */}
-      {!setup && !enabled && (
+      {current && !setup && !enabled && (
         <button
           type="button"
           onClick={() => begin.mutate()}
@@ -1324,7 +1280,7 @@ export function SecurityTab() {
         </button>
       )}
 
-      {!setup && enabled && (
+      {current && !setup && enabled && (
         <div className="space-y-2">
           {required ? (
             <p className="text-xs text-muted-foreground">
@@ -1407,6 +1363,7 @@ const EXPIRY_OPTIONS = [
 ];
 
 export function ApiKeysTab() {
+  const isAdmin = useIsAdmin();
   const qc = useQueryClient();
   const q = useQuery({
     queryKey: ["api-tokens"],
@@ -1460,6 +1417,7 @@ export function ApiKeysTab() {
 
   const canCreate =
     name.trim().length > 0 &&
+    (isAdmin || (role !== "admin" && !customScopes.includes("admin"))) &&
     (role !== "custom" || customScopes.length > 0) &&
     !create.isPending;
 
@@ -1479,7 +1437,7 @@ export function ApiKeysTab() {
           href="/api/v1/docs"
           target="_blank"
           rel="noreferrer"
-          className="text-foreground hover:underline"
+          className="text-foreground underline underline-offset-2"
         >
           /api/v1/docs
         </a>
@@ -1540,28 +1498,31 @@ export function ApiKeysTab() {
           </label>
           <label className="block space-y-1">
             <span className="text-xs text-muted-foreground">Expires</span>
-            <select
-              value={expiryDays}
-              onChange={(e) => setExpiryDays(Number(e.target.value))}
-              className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border text-sm"
+            <Select
+              value={String(expiryDays)}
+              onValueChange={(value) => setExpiryDays(Number(value))}
             >
+              <SelectTrigger aria-label="Expires" className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border text-sm"><SelectValue /></SelectTrigger>
+              <SelectContent>
               {EXPIRY_OPTIONS.map((o) => (
-                <option key={o.days} value={o.days}>
+                <SelectItem key={o.days} value={String(o.days)}>
                   {o.label}
-                </option>
+                </SelectItem>
               ))}
-            </select>
+              </SelectContent>
+            </Select>
           </label>
         </div>
 
         <div className="space-y-1.5">
           <span className="text-xs text-muted-foreground">Access</span>
           <div className="grid sm:grid-cols-2 gap-1.5">
-            {ROLE_PRESETS.map((p) => (
+            {ROLE_PRESETS.filter((p) => p.key !== "admin" || isAdmin).map((p) => (
               <button
                 key={p.key}
                 type="button"
                 onClick={() => setRole(p.key)}
+                aria-pressed={role === p.key}
                 className={
                   "text-left rounded-md border px-3 py-2 text-sm " +
                   (role === p.key
@@ -1578,16 +1539,15 @@ export function ApiKeysTab() {
 
         {role === "custom" && (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-            {API_SCOPES.map((s) => (
+            {API_SCOPES.filter((s) => s !== "admin" || isAdmin).map((s) => (
               <label
                 key={s}
                 className="inline-flex items-center gap-1.5 text-xs cursor-pointer select-none"
               >
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={customScopes.includes(s)}
-                  onChange={() => toggleScope(s)}
-                  className="size-3.5 accent-primary"
+                  onCheckedChange={() => toggleScope(s)}
+                  aria-label={s}
                 />
                 <span
                   className={
@@ -1818,17 +1778,19 @@ function NewSecretForm({
       }}
     >
       <Field label="Type">
-        <select
+        <Select
           value={keyType}
-          onChange={(e) => setKeyType(e.target.value)}
-          className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border text-sm"
+          onValueChange={(value) => setKeyType(value)}
         >
+          <SelectTrigger aria-label="Type" className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border text-sm"><SelectValue /></SelectTrigger>
+          <SelectContent>
           {KEY_TYPES.map((k) => (
-            <option key={k.value} value={k.value}>
+            <SelectItem key={k.value} value={k.value}>
               {k.label}
-            </option>
+            </SelectItem>
           ))}
-        </select>
+          </SelectContent>
+        </Select>
       </Field>
       <Field label="Name">
         <input
@@ -1914,7 +1876,8 @@ export function NodesTab() {
     mutationFn: ({ id, body }: { id: string; body: Record<string, unknown> }) =>
       api.put(`/nodes/${id}`, body),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["remote-nodes"] });
+      toast.success("Node saved");
+      return qc.invalidateQueries({ queryKey: ["remote-nodes"] });
     },
     onError: (e) =>
       toast.error(e instanceof Error ? e.message : "Update failed"),
@@ -2019,19 +1982,8 @@ export function NodesTab() {
                       <CheckIcon className="size-4" />
                     )}
                   </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      update.mutate({
-                        id: n.id,
-                        body: { enabled: !n.enabled },
-                      })
-                    }
-                    disabled={update.isPending}
-                    className="h-8 px-2 rounded-md border border-border text-xs hover:bg-muted/40 disabled:opacity-50"
-                  >
-                    {n.enabled ? "Disable" : "Enable"}
-                  </button>
+                  <BoolToggle label={`Enable ${n.name}`} value={n.enabled} disabled={update.isPending}
+                    onChange={(enabled) => update.mutateAsync({ id: n.id, body: { enabled } })} />
                   <button
                     type="button"
                     onClick={() => setPending({ id: n.id, label: n.name })}
@@ -2158,31 +2110,34 @@ function NewNodeForm({
       </div>
       <div className="grid md:grid-cols-[180px_1fr_1fr_auto] gap-2 items-end">
         <Field label="Auth">
-          <select
+          <Select
             value={authType}
-            onChange={(e) => {
-              setAuthType(e.target.value as "private_key" | "password");
+            onValueChange={(value) => {
+              setAuthType(value as "private_key" | "password");
               setSecretId("");
             }}
-            className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border text-sm"
           >
-            <option value="private_key">Private key</option>
-            <option value="password">Password</option>
-          </select>
+            <SelectTrigger aria-label="Auth" className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border text-sm"><SelectValue /></SelectTrigger>
+            <SelectContent>
+            <SelectItem value="private_key">Private key</SelectItem>
+            <SelectItem value="password">Password</SelectItem>
+            </SelectContent>
+          </Select>
         </Field>
         <Field label="Credential secret">
-          <select
+          <Select
             value={secretId}
-            onChange={(e) => setSecretId(e.target.value)}
-            className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border text-sm"
+            onValueChange={(value) => setSecretId(value)}
           >
-            <option value="">Select secret…</option>
+            <SelectTrigger aria-label="Credential secret" className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border text-sm"><SelectValue placeholder="Select secret…" /></SelectTrigger>
+            <SelectContent>
             {allowedSecrets.map((s) => (
-              <option key={s.id} value={s.id}>
+              <SelectItem key={s.id} value={s.id}>
                 {s.key_name}
-              </option>
+              </SelectItem>
             ))}
-          </select>
+            </SelectContent>
+          </Select>
         </Field>
         <Field label="Base path">
           <input
@@ -2259,7 +2214,7 @@ function UsersTab() {
       api.put(`/users/${id}/role`, { role }),
     onSuccess: () => {
       toast.success("Role updated");
-      qc.invalidateQueries({ queryKey: ["users"] });
+      return qc.invalidateQueries({ queryKey: ["users"] });
     },
     onError: (e) =>
       toast.error(e instanceof Error ? e.message : "Role change failed"),
@@ -2314,22 +2269,9 @@ function UsersTab() {
                 const lockDemote = isMe || (isAdmin && adminCount <= 1);
                 if (isMe) return <RoleBadge role={u.role} />;
                 return (
-                  <select
-                    value={isAdmin ? "admin" : "user"}
-                    disabled={setRole.isPending || lockDemote}
-                    onChange={(e) =>
-                      setRole.mutate({ id: u.id, role: e.target.value })
-                    }
-                    className="h-7 px-1.5 rounded-md bg-muted/40 border border-border text-xs disabled:opacity-60"
-                    title={
-                      lockDemote
-                        ? "There must be at least one admin"
-                        : "Change role"
-                    }
-                  >
-                    <option value="user">User</option>
-                    <option value="admin">Admin</option>
-                  </select>
+                  <ChoiceSetting label={`Role for ${u.email}`} value={isAdmin ? "admin" : "user"}
+                    options={["user", "admin"]} disabled={setRole.isPending || lockDemote}
+                    onCommit={(role) => setRole.mutate({ id: u.id, role })} />
                 );
               },
             },
@@ -2471,14 +2413,16 @@ function NewUserForm({
           />
         </Field>
         <Field label="Role">
-          <select
+          <Select
             value={role}
-            onChange={(e) => setRole(e.target.value)}
-            className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border text-sm"
+            onValueChange={(value) => setRole(value)}
           >
-            <option value="user">User</option>
-            <option value="admin">Admin</option>
-          </select>
+            <SelectTrigger aria-label="Role" className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border text-sm"><SelectValue /></SelectTrigger>
+            <SelectContent>
+            <SelectItem value="user">User</SelectItem>
+            <SelectItem value="admin">Admin</SelectItem>
+            </SelectContent>
+          </Select>
         </Field>
       </div>
       <div className="flex items-center gap-2">
@@ -2605,6 +2549,7 @@ interface PullResult {
 
 interface ImageStatus {
   image: string;
+  local_present?: boolean;
   local_digest?: string;
   remote_digest?: string;
   updates_available: boolean;
@@ -2613,9 +2558,8 @@ interface ImageStatus {
 }
 
 function ScannersTab() {
-  const qc = useQueryClient();
   const runtimeQ = useRuntimeCapabilities();
-  const dockerImageManagement = runtimeQ.data?.docker_image_management ?? true;
+  const dockerImageManagement = runtimeQ.data?.docker_image_management === true;
   const cfgQ = useQuery({
     queryKey: ["scanners-config"],
     queryFn: async () =>
@@ -2623,7 +2567,6 @@ function ScannersTab() {
     enabled: dockerImageManagement,
   });
   const [doctor, setDoctor] = useState<DoctorResult | null>(null);
-  const [pull, setPull] = useState<PullResult | null>(null);
 
   const doctorMut = useMutation({
     mutationFn: async () =>
@@ -2637,25 +2580,6 @@ function ScannersTab() {
       toast.error(safeErrorMessage(e, "Scanner diagnostics could not run.")),
   });
 
-  const pullMut = useMutation({
-    mutationFn: async () => (await api.post<PullResult>("/scanners/pull")).data,
-    onSuccess: (p) => {
-      setPull(p);
-      if (p && (!p.errors || p.errors.length === 0)) {
-        toast.success(`Pulled ${p.pulled?.length ?? 0} image(s)`);
-      } else {
-        toast.error(
-          `Pulled ${p?.pulled?.length ?? 0}, ${p?.errors?.length ?? 0} failed`,
-        );
-      }
-      qc.invalidateQueries({ queryKey: ["scanners-config"] });
-      qc.invalidateQueries({ queryKey: ["scanner-images"] });
-      qc.invalidateQueries({ queryKey: ["scanners", "images"] });
-    },
-    onError: (e) =>
-      toast.error(safeErrorMessage(e, "Scanner images could not be pulled.")),
-  });
-
   if (runtimeQ.isLoading || (dockerImageManagement && cfgQ.isLoading)) {
     return (
       <p className="text-sm text-muted-foreground" role="status">
@@ -2663,7 +2587,10 @@ function ScannersTab() {
       </p>
     );
   }
-  if (runtimeQ.data && !runtimeQ.data.docker_image_management) {
+  if (runtimeQ.isError || typeof runtimeQ.data?.docker_image_management !== "boolean") {
+    return <p role="alert" className="text-sm text-destructive">Could not check the scanner runtime. <button type="button" className="underline" onClick={() => void runtimeQ.refetch()}>Retry runtime check</button></p>;
+  }
+  if (!runtimeQ.data.docker_image_management) {
     return (
       <section className="space-y-4">
         <div className="glass-card p-5">
@@ -2715,32 +2642,11 @@ function ScannersTab() {
     ],
   ];
 
-  // Heuristic for "set up needed": pull policy expects local image
-  // (Never / IfNotPresent) and the most recent pull / doctor surfaces
-  // an error. We can't probe "is the image present" from the client
-  // without a dedicated endpoint, so this is best-effort UX guidance.
-  const wolfBuiltMissing =
-    pull?.errors?.some((e) => e.image === cfg.image) ?? false;
-
   return (
     <section className="space-y-4">
-      {/* Operator actions row. Doctor + Set up are the two day-1 buttons. */}
+      {/* Readiness downloads are handled by the selected scan and image list. */}
       <div className="glass-card p-5">
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => pullMut.mutate()}
-            disabled={pullMut.isPending}
-            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
-            title="Pre-pull every image in the configured set so the first scan doesn't pay the pull latency"
-          >
-            {pullMut.isPending ? (
-              <Loader2Icon className="size-4 animate-spin" />
-            ) : (
-              <DownloadIcon className="size-4" />
-            )}
-            {pullMut.isPending ? "Pulling…" : "Set up scanners (pull images)"}
-          </button>
           <button
             type="button"
             onClick={() => doctorMut.mutate()}
@@ -2757,27 +2663,6 @@ function ScannersTab() {
           </button>
         </div>
 
-        {/* First-run hint: pull is the only setup step. The default
-            wolf-scanners* images are published to GHCR
-            (alphabravo-oss/*); first scan triggers an auto-pull
-            per the IfNotPresent policy, but pre-pulling saves the
-            wait on the first real scan. If pull errors out for the
-            default image, surface the registry hint as a banner. */}
-        {wolfBuiltMissing && (
-          <div className="mt-3 rounded-md border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-xs text-status-warning">
-            <strong>Couldn't pull {cfg.image}.</strong> Check your network /
-            registry credentials. The default registry is{" "}
-            <code>ghcr.io/alphabravo-oss</code>; override via{" "}
-            <code>WOLF_SCANNERS_IMAGE</code> to point at a mirror or a
-            locally-built image. If the tag itself is missing, set{" "}
-            <code>WOLF_SCANNERS_TAG</code> to another channel —{" "}
-            <code>stable</code> and <code>latest</code> track the approved
-            release set, <code>candidate</code> the newest gated build, and{" "}
-            <code>scanner-set-YYYY.WW.N</code> pins an exact set.
-          </div>
-        )}
-
-        {/* Doctor result panel. */}
         {doctor && (
           <div
             className="mt-4 rounded-md border border-border bg-muted/20 p-3 text-sm space-y-1"
@@ -2820,34 +2705,7 @@ function ScannersTab() {
           </div>
         )}
 
-        {/* Pull result panel. */}
-        {pull && (
-          <div
-            className="mt-4 rounded-md border border-border bg-muted/20 p-3 text-sm space-y-1"
-            role={pull.errors?.length ? "alert" : "status"}
-            aria-live="polite"
-          >
-            <div className="font-medium mb-1">
-              Pulled {pull.pulled?.length ?? 0} image
-              {(pull.pulled?.length ?? 0) === 1 ? "" : "s"}
-              {pull.errors && pull.errors.length > 0 && (
-                <span className="text-destructive ml-2">
-                  · {pull.errors.length} failed
-                </span>
-              )}
-            </div>
-            {pull.errors && pull.errors.length > 0 && (
-              <ul className="text-xs space-y-0.5 font-mono text-destructive">
-                {pull.errors.map((e, i) => (
-                  <li key={i}>
-                    {e.image}: Pull failed. Review registry access and server
-                    logs.
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        )}
+
       </div>
 
       <ImagesPanel />
@@ -2861,7 +2719,7 @@ function ScannersTab() {
           {rows.map(([k, v]) => (
             <div key={k} className="flex items-center justify-between gap-3">
               <dt className="text-muted-foreground">{k}</dt>
-              <dd className="text-right">{v}</dd>
+              <dd className="min-w-0 break-all text-right">{v}</dd>
             </div>
           ))}
         </dl>
@@ -2903,8 +2761,7 @@ function ScannersTab() {
  * see those under "built by Wolf", not lumped in with third-party tools.
  */
 export function isWolfBuiltImage(image: string): boolean {
-  const path = image.split("@")[0].split(":")[0];
-  const name = path.split("/").pop() ?? "";
+  const name = (image.split("@")[0].split("/").pop() ?? "").split(":")[0];
   return name.startsWith("wolf-scanners") || name.startsWith("wolf-fixer");
 }
 
@@ -2921,7 +2778,18 @@ function ImagesPanel() {
     refetchOnWindowFocus: false,
   });
   const pullAll = useMutation({
-    mutationFn: async () => (await api.post<PullResult>("/scanners/pull")).data,
+    mutationFn: async () => {
+      const result: PullResult = { pulled: [], errors: [] };
+      for (const image of wolfBuilt.filter((item) => item.updates_available)) {
+        try {
+          await api.post("/scanners/images/pull", { image: image.image });
+          result.pulled.push(image.image);
+        } catch (e) {
+          result.errors!.push({ image: image.image, error: safeErrorMessage(e) });
+        }
+      }
+      return result;
+    },
     onSuccess: (result) => {
       const failed = result.errors?.length ?? 0;
       if (failed > 0) {
@@ -2990,8 +2858,8 @@ function ImagesPanel() {
         description="Built and released by the Wolf scanner factory. These move with the configured release channel."
         items={wolfBuilt}
         probe={probeState}
-        pullOne={pullOne}
-        pullAll={pullAll}
+        pullOne={{ ...pullOne, isPending: pullOne.isPending || pullAll.isPending }}
+        pullAll={{ ...pullAll, isPending: pullAll.isPending || pullOne.isPending }}
         onRefresh={() => q.refetch()}
         refreshing={q.isFetching}
         emptyLabel="No Wolf-built scanner images configured."
@@ -3001,7 +2869,7 @@ function ImagesPanel() {
         description="Third-party scanners pinned to an exact version in scanner-lock.yaml. They change only when that lock is bumped."
         items={upstream}
         probe={probeState}
-        pullOne={pullOne}
+        pullOne={{ ...pullOne, isPending: pullOne.isPending || pullAll.isPending }}
         onRefresh={() => q.refetch()}
         refreshing={q.isFetching}
         emptyLabel="No upstream tool images configured."
@@ -3036,8 +2904,7 @@ function ImagesCard({
     isPending: boolean;
     variables?: string;
   };
-  /** Only the Wolf card gets a bulk action; `POST /scanners/pull` pulls the
-   *  configured channel, which is exactly the Wolf-built set. */
+  /** Only the Wolf card gets a bulk action, scoped to its outdated images. */
   pullAll?: { mutate: () => void; isPending: boolean };
   onRefresh: () => void;
   refreshing: boolean;
@@ -3061,14 +2928,14 @@ function ImagesCard({
               onClick={() => pullAll.mutate()}
               disabled={pullAll.isPending}
               className="inline-flex items-center gap-1 h-8 px-2.5 rounded-md bg-primary text-primary-foreground text-xs font-medium disabled:opacity-50"
-              title="Pull every configured scanner image from the current registry channel"
+              title="Update only the outdated Wolf scanner images shown in this card"
             >
               {pullAll.isPending ? (
                 <Loader2Icon className="size-3.5 animate-spin" />
               ) : (
                 <DownloadIcon className="size-3.5" />
               )}
-              Update all
+              Update Wolf images
             </button>
           )}
           <button
@@ -3115,14 +2982,12 @@ function ImagesCard({
               key={img.image}
               className="flex flex-wrap items-center gap-3 border-b border-border pb-2 last:border-0 last:pb-0"
             >
-              <div className="font-mono text-xs flex-1 min-w-0 break-all">
+              <div className="w-full min-w-0 break-all font-mono text-xs sm:w-auto sm:flex-1 sm:min-w-48">
                 {img.image}
               </div>
-              <DigestPill
-                label="local"
-                value={img.local_digest}
-                err={img.local_error}
-              />
+              {img.local_present && !img.local_digest ? (
+                <span className="text-xs text-muted-foreground">Present (local build)</span>
+              ) : <DigestPill label="local" value={img.local_digest} err={img.local_error} />}
               <DigestPill
                 label="remote"
                 value={img.remote_digest}
@@ -3134,7 +2999,7 @@ function ImagesCard({
                 </span>
               )}
               {(img.updates_available ||
-                (!img.local_digest && !img.local_error)) && (
+                (!(img.local_present ?? Boolean(img.local_digest)) && !img.local_error)) && (
                 <button
                   type="button"
                   onClick={() => pullOne.mutate(img.image)}
@@ -3184,7 +3049,7 @@ function DigestPill({
         className="text-[10px] uppercase tracking-wide text-muted-foreground bg-muted/20 border border-border rounded px-1.5 py-0.5"
         title={
           label === "local"
-            ? "image not pulled yet — use 'Set up scanners' or the per-image Update"
+            ? "Image not pulled yet. Use this image's Pull or Update action."
             : "no manifest available"
         }
       >

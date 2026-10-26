@@ -51,6 +51,7 @@ const statusTones: Record<string, Tone> = {
 
   // Wolf: ScanStatus / FixStatus
   running: "info",
+  redirected: "info",
   completed: "success",
   failed: "error",
   cancelled: "neutral",
@@ -61,6 +62,14 @@ const statusTones: Record<string, Tone> = {
   fixed: "success",
   wontfix: "neutral",
   falsepositive: "neutral",
+
+  // Wolf: fixer queue and review states
+  queued: "neutral",
+  claimed: "info",
+  awaitingreview: "warning",
+  awaitingpush: "warning",
+  pushfailed: "warning",
+  superseded: "neutral",
 
   // Wolf: FixItemStatus
   inprogress: "info",

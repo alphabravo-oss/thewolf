@@ -18,6 +18,9 @@ ui/dist
 # Local runtime data, caches, and scan output (never belongs in the image)
 .wolf/
 .wolf-*
+.env
+.env.*
+!.env.example
 .codex-security/
 /artifacts
 FINDINGS/
@@ -30,3 +33,10 @@ FINDINGS/
 
 # Session/agent scratch
 .claude
+
+# Local scan checkouts and browser artifacts are runtime data, not source.
+/workspaces
+/repos
+.grok
+ui/playwright-report
+ui/test-results

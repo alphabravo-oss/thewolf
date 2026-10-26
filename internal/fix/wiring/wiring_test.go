@@ -1,14 +1,72 @@
 package wiring
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/alphabravocompany/thewolf/internal/db"
 	"github.com/alphabravocompany/thewolf/internal/fix/verify"
+	"github.com/alphabravocompany/thewolf/internal/github"
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/scan/runner"
+	"github.com/alphabravocompany/thewolf/internal/secrets"
 )
+
+func TestVerificationPropagatesScannerFailure(t *testing.T) {
+	orig := runScan
+	t.Cleanup(func() { runScan = orig })
+	want := errors.New("analysis incomplete")
+	runScan = func(context.Context, runner.RunConfig) (*runner.RunResult, error) {
+		return &runner.RunResult{
+			ToolsFailed: map[string]error{"semgrep": want},
+			Findings:    []models.Finding{{ToolName: "semgrep", FilePath: "app.py"}},
+		}, nil
+	}
+	findings, err := (Scanner{}).RescanFiles(t.Context(), "/repo", []string{"app.py"}, "semgrep", "rule")
+	if !errors.Is(err, want) || len(findings) != 1 {
+		t.Fatalf("file verification hid failure: %v, %v", findings, err)
+	}
+	findings, err = (branchRescanner{}).Rescan(t.Context(), "/repo", []string{"semgrep"})
+	if !errors.Is(err, want) || len(findings) != 1 {
+		t.Fatalf("branch verification hid failure: %v, %v", findings, err)
+	}
+	runScan = func(context.Context, runner.RunConfig) (*runner.RunResult, error) {
+		return &runner.RunResult{ToolsSkipped: []string{"semgrep"}}, nil
+	}
+	if _, err := (branchRescanner{}).Rescan(t.Context(), "/repo", []string{"semgrep"}); !errors.Is(err, verify.ErrMissingImage) {
+		t.Fatalf("unavailable tool passed verification: %v", err)
+	}
+}
+
+func TestBranchRescanRequiresEveryRequestedTool(t *testing.T) {
+	original := runScan
+	t.Cleanup(func() { runScan = original })
+	for _, result := range []*runner.RunResult{nil, {}, {ToolsRun: []string{"gosec"}}} {
+		runScan = func(_ context.Context, cfg runner.RunConfig) (*runner.RunResult, error) {
+			if !cfg.ToolsExplicit || len(cfg.IncludePaths) != 0 {
+				t.Fatal("final scanner scope was narrowed or auto-selected")
+			}
+			return result, nil
+		}
+		if _, err := (branchRescanner{}).Rescan(t.Context(), "/repo", []string{"gosec", "semgrep"}); err == nil {
+			t.Fatalf("incomplete tool execution accepted: %+v", result)
+		}
+	}
+	runScan = func(context.Context, runner.RunConfig) (*runner.RunResult, error) {
+		return &runner.RunResult{ToolsRun: []string{"gosec", "semgrep"}}, nil
+	}
+	if _, err := (branchRescanner{}).Rescan(t.Context(), "/repo", []string{"gosec", "semgrep"}); err != nil {
+		t.Fatal(err)
+	}
+}
 
 // TestDepsArePopulated is the regression guard for the worker-had-nil-deps bug:
 // orchestrator.Run fails fast unless Workspaces, Engines, and Verifier (plus the
@@ -16,6 +74,9 @@ import (
 // a real job ever would.
 func TestDepsArePopulated(t *testing.T) {
 	d := Deps(nil)
+	if d.PublicationReady == nil || d.GitHubToken == nil {
+		t.Fatal("publication credentials/readiness not wired")
+	}
 	if d.Writability == nil {
 		t.Error("Writability dep is nil")
 	}
@@ -116,5 +177,66 @@ func TestScannerMissingImage(t *testing.T) {
 	_, err = Scanner{}.RescanFiles(context.Background(), "/repo", []string{"a.go", "b.go"}, "bearer", "")
 	if !verify.IsMissingImage(err) {
 		t.Fatalf("memoized missing image: %v", err)
+	}
+}
+
+type publicationSecrets struct {
+	db.Store
+	secret models.Secret
+}
+
+func (s publicationSecrets) GetSecretByID(context.Context, string) (*models.Secret, error) {
+	return &s.secret, nil
+}
+func (s publicationSecrets) ListSecretsByUser(context.Context, string) ([]models.Secret, error) {
+	return nil, nil
+}
+
+func TestPublicationReadinessUsesOwnerTokenAndPermissions(t *testing.T) {
+	secrets.SetMasterKey(bytes.Repeat([]byte{0x53}, 32))
+	t.Cleanup(func() { secrets.SetMasterKey(nil) })
+	const token = "owner-test-credential"
+	encrypted, err := secrets.Encrypt(token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := publicationSecrets{secret: models.Secret{ID: "selected", UserID: "owner", KeyType: models.KeyTypeGitHubToken, EncryptedValue: encrypted}}
+	repo := &models.Repo{SourceType: models.SourceTypeGitHub, SourcePath: "example/repo", UserID: "owner", CredentialSecretID: "selected"}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "gh"), []byte("fixture"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+	var canPush, archived, rejected bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/repos/example/repo" || r.Header.Get("Authorization") != "Bearer "+token {
+			t.Errorf("wrong repository/token boundary")
+			w.WriteHeader(403)
+			return
+		}
+		if rejected {
+			w.WriteHeader(403)
+			fmt.Fprint(w, token)
+			return
+		}
+		fmt.Fprintf(w, `{"permissions":{"push":%t},"archived":%t}`, canPush, archived)
+	}))
+	defer server.Close()
+	old := github.DefaultBaseURL
+	github.DefaultBaseURL = server.URL
+	t.Cleanup(func() { github.DefaultBaseURL = old })
+	for _, state := range []string{"ready", "read-only", "archived", "rejected", "wrong-owner", "missing-cli"} {
+		canPush, archived, rejected = state != "read-only", state == "archived", state == "rejected"
+		store.secret.UserID = "owner"
+		if state == "wrong-owner" {
+			store.secret.UserID = "another-owner"
+		}
+		if state == "missing-cli" {
+			t.Setenv("PATH", t.TempDir())
+		}
+		ready, reason := Deps(store).PublicationReady(t.Context(), repo)
+		if ready != (state == "ready") || (!ready && reason == "") || strings.Contains(reason, token) {
+			t.Fatalf("%s: ready=%v reason=%q", state, ready, reason)
+		}
 	}
 }

@@ -2,6 +2,7 @@ package routes
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/alphabravocompany/thewolf/internal/api/response"
 	"github.com/alphabravocompany/thewolf/internal/auth"
+	"github.com/alphabravocompany/thewolf/internal/db"
 	"github.com/alphabravocompany/thewolf/internal/fix/console"
 	"github.com/alphabravocompany/thewolf/internal/fix/install"
 	"github.com/alphabravocompany/thewolf/internal/models"
@@ -204,6 +206,10 @@ func CancelFixerConsole(w http.ResponseWriter, r *http.Request) {
 	cons.Status = models.FixerConsoleCancelled
 	cons.FinishedAt = &now
 	if err := DefaultHandler.Store.UpdateFixerConsole(r.Context(), cons); err != nil {
+		if errors.Is(err, db.ErrFixerConsoleConflict) {
+			response.WriteError(w, http.StatusConflict, "conflict", "console changed; refresh and retry")
+			return
+		}
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to cancel console")
 		return
 	}
@@ -227,15 +233,11 @@ func loadOwnedConsole(w http.ResponseWriter, r *http.Request) (*models.FixerCons
 	}
 	id := chi.URLParam(r, "id")
 	cons, err := h.Store.GetFixerConsoleByID(r.Context(), id)
-	if err != nil || cons == nil || !ownsFixerConsole(cons, claims) {
+	if err != nil || cons == nil || !ownsFixResource(cons.UserID, claims) {
 		response.WriteError(w, http.StatusNotFound, "not_found", fmt.Sprintf("console %s not found", id))
 		return nil, false
 	}
 	return cons, true
-}
-
-func ownsFixerConsole(cons *models.FixerConsole, claims *auth.Claims) bool {
-	return cons.UserID == "" || cons.UserID == claims.UserID
 }
 
 func fixerConsoleShellEnabled(r *http.Request, h *Handler) bool {

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/alphabravocompany/thewolf/internal/finding/identity"
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
 	"github.com/alphabravocompany/thewolf/internal/plugin/container"
@@ -115,14 +116,18 @@ func parseCargoAuditOutput(data []byte) ([]models.Finding, error) {
 			}
 		}
 		findings = append(findings, models.Finding{
-			ToolName:    "cargo-audit",
-			Category:    models.CategorySCA,
-			Severity:    models.SeverityHigh,
-			Title:       title,
-			Description: desc,
-			FilePath:    "Cargo.lock",
-			RuleID:      vuln.Advisory.ID,
-			Status:      models.StatusOpen,
+			ToolName:         "cargo-audit",
+			Category:         models.CategorySCA,
+			Severity:         models.SeverityHigh,
+			Title:            title,
+			Description:      desc,
+			FilePath:         "Cargo.lock",
+			RuleID:           vuln.Advisory.ID,
+			AdvisoryID:       identity.CanonicalAdvisory(vuln.Advisory.ID, vuln.Advisory.Aliases...),
+			PackageName:      pkg,
+			PackageVersion:   vuln.Package.Version,
+			PackageEcosystem: "cargo",
+			Status:           models.StatusOpen,
 		})
 	}
 	return findings, nil

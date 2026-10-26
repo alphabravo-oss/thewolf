@@ -4,14 +4,14 @@ The new Wolf UI. Replaces the Next.js-based `ui/` directory.
 
 ## Stack
 
-- **Vite 6** — SPA build, dev-server with HMR
+- **Vite 8** — SPA build, dev-server with HMR
 - **React 19**
 - **TanStack Router** (file-based, type-safe routes, generated tree at build)
 - **TanStack Query** (server state)
 - **TanStack Form** (login/register/settings forms)
 - **TanStack Table** (findings/scans/collections)
 - **TanStack Virtual** (large lists)
-- **Tailwind CSS 3** + custom CSS variable theme (astronomer-inspired)
+- **Tailwind CSS 4** + custom CSS variable theme (astronomer-inspired)
 - **cmdk** for the command palette
 - **sonner** for toasts
 - **lucide-react** for icons
@@ -83,3 +83,18 @@ Astronomer-inspired primitives:
 - `.text-gradient` — blue→violet headline accent
 - `.nav-item` — sidebar row
 - `.badge-{critical,high,medium,low,info}` — severity badges
+
+## Toolchain policy
+
+Use Node 26.11.1 and pnpm 12.11.2 (`.node-version` and `packageManager`). The
+production compiler is TypeScript 7.0.2 via the `@typescript/native` npm alias.
+ESLint still needs the stable TypeScript JavaScript API, so `typescript` points
+to Microsoft's `@typescript/typescript6` compatibility package. Do not replace
+that alias until typescript-eslint supports the native compiler API.
+
+TanStack Query owns server state; Zustand holds ephemeral interface state.
+Router search parameters own scan/finding filters and paging. Table uses server
+filtering and sorting for paginated endpoints, Form validates scan creation,
+and Pacer debounces global finding search. Existing Virtual use remains for
+large local lists. Pin changes through pnpm's lockfile and run typecheck, lint,
+unit tests, browser-harness typecheck, production build and browser tests.

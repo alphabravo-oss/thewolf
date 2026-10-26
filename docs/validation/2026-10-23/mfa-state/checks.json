@@ -1,0 +1,50 @@
+{
+  "tasks": 250,
+  "checked": 68,
+  "D07_2_complete": true,
+  "D07_complete": false,
+  "initial_router_reproduction_exit": 1,
+  "focused_contracts_exit": 0,
+  "expanded_focused_race_exit": 0,
+  "database_contracts_exit": 0,
+  "database_backends": [
+    "sqlite",
+    "postgres"
+  ],
+  "sqlite_independent_pools": 2,
+  "competing_writes_per_backend": 16,
+  "successful_writes_per_snapshot": 1,
+  "stale_write_conflicts_per_backend": 15,
+  "recovery_code_retry_and_no_resurrection_verified": true,
+  "active_reenrollment_rejected": true,
+  "http_write_failure_paths": 6,
+  "http_failure_requests": 12,
+  "full_go_race_exit": 0,
+  "full_go_race_packages": 136,
+  "uncached": true,
+  "full_suite_backends": [
+    "sqlite",
+    "postgres"
+  ],
+  "new_http_tests_backend": "sqlite",
+  "go_lint_exit": 0,
+  "scanner_sync_exit": 0,
+  "schema_migration_added": false,
+  "challenge_replay_protection_complete": false,
+  "totp_step_replay_protection_complete": false,
+  "session_issuance_atomic_with_consumption": false,
+  "gosec_exit": 1,
+  "gosec_high_high_findings": 29,
+  "gosec_rules": {
+    "G704": 3,
+    "G703": 25,
+    "G702": 1
+  },
+  "gosec_analysis_errors": {},
+  "fixture_removed": true,
+  "source_files": 205,
+  "ui_changed": false,
+  "deployed": false,
+  "diff_check_exit": 0,
+  "documentation_links_valid": true
+}

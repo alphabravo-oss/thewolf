@@ -4,10 +4,10 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PackageIcon, PlusIcon, XIcon } from "lucide-react";
 import { useState } from "react";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import type { Collection } from "@/lib/types";
 import { ListSkeleton } from "@/components/skeleton";
-import { EmptyState } from "@/components/ui/empty-state";
+import { EmptyState, ErrorState, PermissionState } from "@/components/ui/empty-state";
 import { PageHeader, PageShell } from "@/components/ui/page";
 
 export const Route = createFileRoute("/_authed/collections/")({
@@ -70,7 +70,7 @@ function CollectionsPage() {
         />
       )}
 
-      {q.isLoading ? (
+      {q.error instanceof ApiError && q.error.status === 403 ? <PermissionState description="You do not have access to these collections." /> : q.isError ? <ErrorState title="Could not load collections" onRetry={() => void q.refetch()} /> : q.isLoading ? (
         <ListSkeleton rows={5} />
       ) : !q.data || q.data.length === 0 ? (
         !creating && (

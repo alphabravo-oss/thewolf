@@ -1,0 +1,22 @@
+12:56PM INF scan starting branch=main component=scan repo_id=20d2deb0-6946-417e-a7fd-aa621c6c76e0 scan_id=f042b4c1-e478-4ebf-9589-b0bced246f9d
+12:56PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=f042b4c1-e478-4ebf-9589-b0bced246f9d
+12:56PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+12:56PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+12:56PM INF tools selected component=scan count=2 scan_id=f042b4c1-e478-4ebf-9589-b0bced246f9d tools=["cluster-a","cluster-b"]
+12:56PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+12:56PM INF tool completed component=runner elapsed=0.3341 findings=1 tool=cluster-b
+12:56PM INF tool completed component=scan findings=1 scan_id=f042b4c1-e478-4ebf-9589-b0bced246f9d tool=cluster-b
+12:56PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+12:56PM INF tool completed component=runner elapsed=0.313821 findings=1 tool=cluster-a
+12:56PM INF tool completed component=scan findings=1 scan_id=f042b4c1-e478-4ebf-9589-b0bced246f9d tool=cluster-a
+12:56PM INF scan run complete component=runner elapsed=3.141094 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+12:56PM INF scan run finished component=scan scan_id=f042b4c1-e478-4ebf-9589-b0bced246f9d status=completed
+12:56PM INF Enrichment: completed in background findings=1
+12:56PM INF artifact bundle written component=scan findings_json=/tmp/TestScanFinalizationKeepsPersistedIdentityAndEnrichment1584994101/001/002_20261023-125630_f042b4c1/findings.json manifest=/tmp/TestScanFinalizationKeepsPersistedIdentityAndEnrichment1584994101/001/002_20261023-125630_f042b4c1/manifest.json scan_id=f042b4c1-e478-4ebf-9589-b0bced246f9d
+12:56PM INF quality gate evaluated component=scan gate_status=fail scan_id=f042b4c1-e478-4ebf-9589-b0bced246f9d
+12:56PM INF scan complete — all tools finished component=scan findings=2 scan_id=f042b4c1-e478-4ebf-9589-b0bced246f9d status=completed
+--- FAIL: TestScanFinalizationKeepsPersistedIdentityAndEnrichment (0.21s)
+    scan_cluster_finalization_test.go:90: report finding has no persisted identity: {ID: ScanID: RepoID: Fingerprint: StableFingerprint: LocationFingerprint: SemanticFingerprint: EvidenceFingerprint: IdentityVersion:0 ToolName:cluster-b Category:sca Severity:high Title:dependency Description: FilePath:deps/package-lock.json LineStart:0 LineEnd:0 CodeSnippet: CWEID: RuleID:CVE-2026-1001 PackageName:alpha PackageVersion:1 PackageEcosystem:npm PackageURL: AdvisoryID:CVE-2026-1001 ToolSeverityScore:0 LocationWeight:0 AIContextScore:0 CompositeScore:2.666666666666667 AIFixSuggestion: ModuleName:deps FunctionName: SymbolKind: FilePurpose: DependentsJSON: Status:open SARIFData: CreatedAt:0001-01-01 00:00:00 +0000 UTC UpdatedAt:0001-01-01 00:00:00 +0000 UTC FineCategory: FixStrategyID: Confidence:medium CorroboratedByJSON: CorroboratedBy:[cluster-b cluster-a] Suppressed:false SuppressionID: SuppressedReason: BaselineState: IntroducedInScanID: ResolvedInScanID: SourceKind: SourceRef: AIFixPrompt: TriagedBy: AIUnfixable:false}
+FAIL
+FAIL	github.com/alphabravocompany/thewolf/internal/api/routes	0.221s
+FAIL

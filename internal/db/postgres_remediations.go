@@ -64,13 +64,7 @@ func (s *PostgresStore) GetLatestRemediationByOrigin(ctx context.Context, origin
 }
 
 func (s *PostgresStore) UpdateRemediation(ctx context.Context, rem *models.Remediation) error {
-	rem.UpdatedAt = time.Now().UTC()
-	_, err := s.db.NamedExecContext(ctx,
-		`UPDATE remediations SET
-		   repo_id=:repo_id, branch=:branch, workspace_path=:workspace_path, state=:state,
-		   published_sha=:published_sha, published_at=:published_at, updated_at=:updated_at
-		 WHERE id=:id`, rem)
-	return err
+	return updateRemediation(ctx, s.db, rem)
 }
 
 func (s *PostgresStore) ListScansByOrigin(ctx context.Context, originScanID string) ([]models.Scan, error) {

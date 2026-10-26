@@ -23,10 +23,16 @@ func (p *TFLintPlugin) Languages() []models.Language { return nil }
 
 func (p *TFLintPlugin) CheckAvailable() bool { return container.IsScannersReady() }
 
+func (p *TFLintPlugin) Applicability(repoPath, _ string) error {
+	if !plugin.HasFilesWithExtension(repoPath, "tf") {
+		return &plugin.NotApplicableError{Reason: "no Terraform files (*.tf) found"}
+	}
+	return nil
+}
+
 func (p *TFLintPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
-	if !plugin.HasFilesWithExtension(opts.RepoPath, "tf") {
-		plugin.Skipf(opts.OnOutput, "tflint", "no Terraform files (*.tf) found. Add .tf files to enable infrastructure linting.")
-		return nil, nil
+	if err := p.Applicability(opts.RepoPath, opts.Target); err != nil {
+		return nil, err
 	}
 
 	if opts.Timeout > 0 {

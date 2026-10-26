@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 )
 
 var jwtSecret []byte
@@ -27,11 +28,11 @@ type Claims struct {
 	UserID string `json:"user_id"`
 	Email  string `json:"email"`
 	Role   string `json:"-"`
-	// Purpose distinguishes special-purpose tokens from normal session/access
-	// tokens. Empty for session tokens; "mfa" for the short-lived challenge
-	// issued between password and TOTP verification. ValidateToken rejects any
-	// non-empty purpose so a challenge can never be used as a session.
+	// Purpose separates access, refresh, and MFA credentials. Legacy tokens
+	// without a purpose cannot be distinguished safely and require a new login.
 	Purpose string `json:"purpose,omitempty"`
+	// CredentialVersion binds MFA challenges to the password/enrollment snapshot.
+	CredentialVersion *int64 `json:"credential_version,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -52,10 +53,11 @@ func GenerateToken(userID, email string) (*TokenPair, error) {
 	}
 
 	accessClaims := Claims{
-		UserID: userID,
-		Email:  email,
+		UserID:  userID,
+		Email:   email,
+		Purpose: "access",
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(15 * time.Minute)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			Subject:   userID,
 		},
@@ -67,9 +69,11 @@ func GenerateToken(userID, email string) (*TokenPair, error) {
 	}
 
 	refreshClaims := Claims{
-		UserID: userID,
-		Email:  email,
+		UserID:  userID,
+		Email:   email,
+		Purpose: "refresh",
 		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        uuid.NewString(),
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(7 * 24 * time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			Subject:   userID,
@@ -89,16 +93,17 @@ func GenerateToken(userID, email string) (*TokenPair, error) {
 
 // ValidateToken validates a JWT token and returns the claims.
 func ValidateToken(tokenStr string) (*Claims, error) {
+	return validateTokenPurpose(tokenStr, "access")
+}
+
+func validateTokenPurpose(tokenStr, purpose string) (*Claims, error) {
 	if len(jwtSecret) == 0 {
 		return nil, fmt.Errorf("jwt secret not set")
 	}
 
 	token, err := jwt.ParseWithClaims(tokenStr, &Claims{}, func(t *jwt.Token) (interface{}, error) {
-		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
-		}
 		return jwtSecret, nil
-	})
+	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}), jwt.WithExpirationRequired())
 	if err != nil {
 		return nil, fmt.Errorf("parse token: %w", err)
 	}
@@ -107,10 +112,8 @@ func ValidateToken(tokenStr string) (*Claims, error) {
 	if !ok || !token.Valid {
 		return nil, fmt.Errorf("invalid token claims")
 	}
-	// Special-purpose tokens (e.g. the MFA challenge) are not sessions and must
-	// never authenticate a request.
-	if claims.Purpose != "" {
-		return nil, fmt.Errorf("token is not a session token")
+	if claims.Purpose != purpose || claims.UserID == "" || claims.Subject != claims.UserID {
+		return nil, fmt.Errorf("invalid token purpose or subject")
 	}
 
 	return claims, nil
@@ -119,15 +122,17 @@ func ValidateToken(tokenStr string) (*Claims, error) {
 // GenerateMFAChallenge mints a short-lived token proving the password step
 // passed for userID. It is exchanged (with a valid TOTP/recovery code) for a
 // real session via the MFA login endpoint; it carries no session privileges.
-func GenerateMFAChallenge(userID, email string) (string, error) {
+func GenerateMFAChallenge(userID, email string, version int64) (string, error) {
 	if len(jwtSecret) == 0 {
 		return "", fmt.Errorf("jwt secret not set")
 	}
 	claims := Claims{
-		UserID:  userID,
-		Email:   email,
-		Purpose: mfaChallengePurpose,
+		UserID:            userID,
+		Email:             email,
+		Purpose:           mfaChallengePurpose,
+		CredentialVersion: &version,
 		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        uuid.NewString(),
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(mfaChallengeTTL)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			Subject:   userID,
@@ -140,30 +145,25 @@ func GenerateMFAChallenge(userID, email string) (string, error) {
 // rejects ordinary session tokens (wrong purpose), so the challenge endpoint
 // can't be driven with a stolen session.
 func ValidateMFAChallenge(tokenStr string) (*Claims, error) {
-	if len(jwtSecret) == 0 {
-		return nil, fmt.Errorf("jwt secret not set")
-	}
-	token, err := jwt.ParseWithClaims(tokenStr, &Claims{}, func(t *jwt.Token) (interface{}, error) {
-		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
-		}
-		return jwtSecret, nil
-	})
+	claims, err := validateTokenPurpose(tokenStr, mfaChallengePurpose)
 	if err != nil {
-		return nil, fmt.Errorf("parse challenge: %w", err)
+		return nil, err
 	}
-	claims, ok := token.Claims.(*Claims)
-	if !ok || !token.Valid || claims.Purpose != mfaChallengePurpose {
-		return nil, fmt.Errorf("invalid mfa challenge")
+	if claims.ID == "" || claims.CredentialVersion == nil || *claims.CredentialVersion < 0 {
+		return nil, fmt.Errorf("MFA challenge has no identifier or credential version")
 	}
 	return claims, nil
 }
 
-// RefreshToken takes a valid refresh token and returns a new token pair.
-func RefreshToken(refreshTokenStr string) (*TokenPair, error) {
-	claims, err := ValidateToken(refreshTokenStr)
+// ValidateRefreshToken checks signature and purpose; the API must atomically
+// rotate its persisted session before issuing replacement credentials.
+func ValidateRefreshToken(token string) (*Claims, error) {
+	claims, err := validateTokenPurpose(token, "refresh")
 	if err != nil {
-		return nil, fmt.Errorf("invalid refresh token: %w", err)
+		return nil, err
 	}
-	return GenerateToken(claims.UserID, claims.Email)
+	if claims.ID == "" {
+		return nil, fmt.Errorf("refresh token has no identifier")
+	}
+	return claims, nil
 }

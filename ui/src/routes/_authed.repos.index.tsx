@@ -5,10 +5,10 @@ import { useMemo, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { GitBranchIcon, GitForkIcon, HardDriveIcon, PlusIcon, ServerIcon } from "lucide-react";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import type { Collection, Repo, Scan } from "@/lib/types";
 import { ListSkeleton } from "@/components/skeleton";
-import { EmptyState } from "@/components/ui/empty-state";
+import { EmptyState, ErrorState, PermissionState } from "@/components/ui/empty-state";
 import { PageHeader, PageShell } from "@/components/ui/page";
 import { AddRepoForm } from "@/components/add-repo-form";
 import { ImportGitHubModal } from "@/components/repos/import-github-modal";
@@ -116,7 +116,7 @@ function ReposPage() {
   const updateSearch = (patch: Partial<ReposSearch>) => {
     navigate({
       to: "/repos",
-      search: (prev) => ({ ...prev, ...patch }),
+      search: { ...search, ...patch },
     });
   };
 
@@ -269,7 +269,7 @@ function ReposPage() {
         />
       </div>
 
-      {reposQ.isLoading ? (
+      {reposQ.error instanceof ApiError && reposQ.error.status === 403 ? <PermissionState description="You do not have access to these repositories." /> : reposQ.isError ? <ErrorState title="Could not load repositories" onRetry={() => void reposQ.refetch()} /> : reposQ.isLoading ? (
         <ListSkeleton rows={5} />
       ) : !reposQ.data || reposQ.data.length === 0 ? (
         <EmptyState

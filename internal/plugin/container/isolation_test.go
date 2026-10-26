@@ -6,9 +6,6 @@ import (
 )
 
 func TestResolveNetworkDenyByDefault(t *testing.T) {
-	SetNetworkRequirements(map[string]bool{"trivy": true})
-	t.Cleanup(func() { SetNetworkRequirements(nil) })
-
 	cfg := &Config{Network: "none", Isolation: IsolationStandard}
 	if got := ResolveNetwork(cfg, "bandit"); got != "none" {
 		t.Fatalf("offline tool network = %q", got)
@@ -23,9 +20,25 @@ func TestResolveNetworkDenyByDefault(t *testing.T) {
 	}
 }
 
+func TestNetworkPolicyIsPerScan(t *testing.T) {
+	online := &Config{Network: "none", AllowNetwork: "scanner-egress", NetworkRequirements: map[string]bool{"semgrep": true}}
+	offline := &Config{Network: "none", NetworkRequirements: map[string]bool{}}
+	for _, cfg := range []*Config{online, offline, online} {
+		want := "none"
+		if cfg == online {
+			want = "scanner-egress"
+		}
+		if got := ResolveNetwork(cfg, "semgrep"); got != want {
+			t.Fatalf("scan policies interfered: %s", got)
+		}
+	}
+	if got := ResolveNetwork(&Config{Network: "none"}, "semgrep"); got != "bridge" {
+		t.Fatalf("direct verification ignored manifest: %s", got)
+	}
+}
+
 func TestAppendIsolationFlags(t *testing.T) {
-	SetNetworkRequirements(nil)
-	args := appendIsolationFlags(nil, &Config{Network: "none"}, "gosec")
+	args := appendIsolationFlags(nil, &Config{Network: "none"}, "bandit")
 	joined := argList(args).String()
 	for _, want := range []string{"--network none", "--cap-drop ALL", "--security-opt no-new-privileges"} {
 		if !strings.Contains(joined, want) {

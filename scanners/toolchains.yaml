@@ -10,14 +10,14 @@ base_images:
 
 toolchains:
   go:
-    version: "1.26.5"
-    linux_amd64_sha256: 5c2c3b16caefa1d968a94c1daca04a7ca301a496d9b086e17ad77bb81393f053
-    linux_arm64_sha256: fe4789e92b1f33358680864bbe8704289e7bb5fc207d80623c308935bd696d49
+    version: "1.27.3"
+    linux_amd64_sha256: 65efbc80fdc1fa2cd2631cad5b481777a68e8725f34e89f50fc6ac714e379b40
+    linux_arm64_sha256: a06e99309dbcbdca1a8ccd2282c3ee146e55930886e26b4f1193269587165f49
     source: https://go.dev/dl/
     install_script: scanners/install/go-tools.sh
   nodejs:
-    major: "22"
-    source: https://deb.nodesource.com/setup_22.x
+    major: "26"
+    source: https://deb.nodesource.com/setup_26.x
     dockerfile: scanners/Dockerfile
   python:
     package: python3

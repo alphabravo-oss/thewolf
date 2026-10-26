@@ -1,0 +1,5 @@
+--- FAIL: TestScanCompletionSQLite (0.24s)
+    scan_completion_test.go:109: running gate overwrote terminal evaluation: <nil>
+FAIL
+FAIL	github.com/alphabravocompany/thewolf/internal/db	0.247s
+FAIL

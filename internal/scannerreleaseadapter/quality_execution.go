@@ -798,7 +798,7 @@ func qualityBuildContext(source, target, operationID string) ([]byte, error) {
 		return nil, err
 	}
 	var paths []string
-	err := filepath.WalkDir(source, func(path string, entry os.DirEntry, walkErr error) error {
+	err := filepath.WalkDir(source, func(path string, entry os.DirEntry, walkErr error) error { // #nosec G703 -- source is a worker-created corpus or fixed DB staging directory; the walk rejects symlinks and never follows them.
 		if walkErr != nil {
 			return walkErr
 		}

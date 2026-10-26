@@ -15,8 +15,11 @@
 package suppress
 
 import (
+	"context"
+	"fmt"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
@@ -34,6 +37,10 @@ type Rule struct {
 	// Categories restricts the rule to specific FineCategory values
 	// (e.g. ["hardcoded-secret"]). Empty means all categories.
 	Categories []string
+
+	// ToolCategories restricts the analysis categories (SAST, SCA, secrets, etc.).
+	// Empty means all; this is distinct from the fine-category filter above.
+	ToolCategories []models.Category
 
 	// RuleIDs restricts the rule to specific RuleID values. Empty means
 	// all rule IDs.
@@ -63,24 +70,39 @@ func (rs RuleSet) Match(f models.Finding) (Rule, bool) {
 // that matches a rule. Returns the number of newly-suppressed findings.
 // Findings already marked Suppressed are left alone.
 func Apply(findings []models.Finding, rs RuleSet) ([]models.Finding, int) {
+	// Scanner observations frequently share a file. Match its path only once
+	// per batch, then evaluate category/rule predicates for each observation.
+	// This local cache cannot outlive rule edits or grow across requests.
+	byPath := make(map[string]RuleSet)
 	count := 0
 	for i := range findings {
-		if findings[i].Suppressed {
+		f := &findings[i]
+		if f.Suppressed {
 			continue
 		}
-		if r, ok := rs.Match(findings[i]); ok {
-			findings[i].Suppressed = true
-			findings[i].SuppressedReason = r.Reason
+		candidates, cached := byPath[f.FilePath]
+		if !cached {
+			for _, r := range rs.Rules {
+				if r.PathGlob == "" || pathMatch(r.PathGlob, f.FilePath) {
+					r.PathGlob = "" // Already checked; preserve the other predicates and ordering.
+					candidates.Rules = append(candidates.Rules, r)
+				}
+			}
+			byPath[f.FilePath] = candidates
+		}
+		if r, matched := candidates.Match(*f); matched {
+			f.Suppressed = true
+			f.SuppressedReason = r.Reason
 			count++
 		}
 	}
 	return findings, count
 }
 
-// matches checks whether r applies to f. All three predicates (path,
-// category, rule_id) must hold; an empty predicate is "any".
+// matches checks whether all path, analysis/fine-category and rule-ID
+// predicates hold; an empty predicate is "any".
 func matches(r Rule, f models.Finding) bool {
-	if strings.HasPrefix(r.Reason, "default:lockfile") && f.Category == models.CategorySCA {
+	if len(r.ToolCategories) > 0 && !slices.Contains(r.ToolCategories, f.Category) {
 		return false
 	}
 	if r.PathGlob != "" && !pathMatch(r.PathGlob, f.FilePath) {
@@ -190,14 +212,25 @@ func contains(haystack []string, needle string) bool {
 
 // ApplyRepo is the one matcher for UI, artifacts, and gates: built-in
 // defaults, repo `.wolfignore`, then gitignore. repoPath may be empty.
-func ApplyRepo(findings []models.Finding, repoPath string) ([]models.Finding, int) {
+func ApplyRepo(ctx context.Context, findings []models.Finding, repoPath string) ([]models.Finding, int, error) {
+	if err := ctx.Err(); err != nil {
+		return findings, 0, err
+	}
 	var wolf RuleSet
 	if repoPath != "" {
-		wolf, _ = ParseWolfIgnoreFile(filepath.Join(repoPath, ".wolfignore"))
+		var err error
+		wolf, err = ParseWolfIgnoreFile(filepath.Join(repoPath, ".wolfignore"))
+		if err != nil {
+			return findings, 0, fmt.Errorf("load suppression rules: %w", err)
+		}
 	}
-	findings, n := Apply(findings, Combine(DefaultRules(), wolf))
-	n += ApplyGitignore(findings, repoPath)
-	return findings, n
+	projected, n := Apply(slices.Clone(findings), Combine(DefaultRules(), wolf))
+	gitCount, err := ApplyGitignore(ctx, projected, repoPath)
+	if err != nil {
+		return findings, 0, err
+	}
+	copy(findings, projected)
+	return findings, n + gitCount, nil
 }
 
 // Combine merges multiple RuleSets in order. Later sets are appended after

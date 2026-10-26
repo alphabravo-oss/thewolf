@@ -44,7 +44,7 @@ func Endpoints() []Endpoint {
 		{"POST", "/license/validate", "system", "Validate a commercial license blob (Community always reports invalid)", "admin", "LicenseBlobRequest", false},
 		{"POST", "/license/install", "system", "Install a commercial license (admin; Community rejects)", "admin", "LicenseBlobRequest", false},
 		{"GET", "/mcp/status", "system", "Whether MCP is enabled", "", "", false},
-		{"POST", "/mcp", "mcp", "JSON-RPC MCP over application services (default off)", "read:repos", "", false},
+		{"POST", "/mcp", "mcp", "Streamable HTTP MCP; each operation enforces its REST scopes (default off)", "self", "", false},
 
 		// Auth (public).
 		{"GET", "/auth/settings", "auth", "Get public authentication settings", "", "", false},
@@ -52,16 +52,17 @@ func Endpoints() []Endpoint {
 		{"GET", "/auth/sso/{name}/start", "auth", "Start SSO for a registered redirect provider", "", "", false},
 		{"GET", "/auth/sso/{name}/callback", "auth", "SSO callback; issues a local session", "", "", false},
 		{"POST", "/auth/register", "auth", "Register a new user", "", "RegisterRequest", false},
+		{"POST", "/auth/refresh", "auth", "Rotate a single-use refresh token", "", "RefreshRequest", false},
 		{"POST", "/auth/login", "auth", "Log in and receive a JWT", "", "LoginRequest", false},
 		{"POST", "/auth/mfa/login", "auth", "Complete two-factor login (exchange challenge + code for a session)", "", "", false},
 
 		// Auth / session (authenticated).
-		{"POST", "/auth/logout", "auth", "Log out the current session", "self", "", false},
+		{"POST", "/auth/logout", "auth", "Log out the current session", "self", "LogoutRequest", false},
 		{"GET", "/auth/me", "auth", "Get the current identity", "self", "", false},
 		{"PUT", "/auth/profile", "auth", "Update the current user's display name / email", "self", "", false},
 		{"PUT", "/auth/password", "auth", "Change the current user's password", "self", "ChangePasswordRequest", false},
 
-		// Two-factor auth (authenticated, self-managed).
+		// Two-factor auth (human access token/browser session, self-managed).
 		{"GET", "/auth/mfa/status", "auth", "Get the caller's MFA status", "self", "", false},
 		{"POST", "/auth/mfa/setup", "auth", "Begin MFA enrollment (returns a QR code + secret)", "self", "", false},
 		{"POST", "/auth/mfa/activate", "auth", "Activate MFA by confirming a code (returns one-time recovery codes)", "self", "", false},
@@ -79,6 +80,9 @@ func Endpoints() []Endpoint {
 		{"GET", "/admin/tokens", "admin", "List all users' API tokens (metadata only)", "admin", "", true},
 		{"GET", "/admin/secrets", "admin", "List all users' secrets, masked (existence only)", "admin", "", true},
 		{"GET", "/admin/disk", "admin", "Disk usage for artifacts, workspaces, and the database", "admin", "", false},
+		{"GET", "/admin/database", "admin", "Read masked database configuration", "admin", "", false},
+		{"PUT", "/admin/database", "admin", "Save a validated PostgreSQL DSN; restart required", "admin", "DatabaseRequest", false},
+		{"POST", "/admin/database/test", "admin", "Test PostgreSQL connectivity", "admin", "DatabaseRequest", false},
 		{"POST", "/admin/workspaces/reap", "admin", "Remove stale scan workspaces older than a TTL", "admin", "", false},
 
 		// Users (admin).
@@ -163,7 +167,10 @@ func Endpoints() []Endpoint {
 		{"GET", "/scans/{id}/report", "scans", "Get a scan's report", "read:scans", "", false},
 		{"GET", "/scans/{id}/manifest", "scans", "Get a scan's manifest", "read:scans", "", false},
 		{"GET", "/scans/{id}/sarif", "scans", "Get a scan's SARIF output", "read:scans", "", false},
-		{"GET", "/scans/{id}/coverage", "scans", "Get a scan's coverage", "read:scans", "", false},
+		{"GET", "/scans/{id}/coverage", "scans", "Legacy test-file presence estimate; not measured test coverage", "read:scans", "", false},
+		{"GET", "/scans/{id}/test-coverage", "scans", "Measured test coverage, supported report formats, and policy checks; missing reports return not_measured", "read:scans", "", false},
+		{"PUT", "/scans/{id}/test-coverage", "scans", "Replace the complete measured coverage bundle for the exact scanned commit (20 MiB reports, 40 MiB JSON request)", "write:scans", "TestCoverageRequest", false},
+		{"GET", "/scans/{id}/test-coverage/files", "scans", "Paginated measured file coverage; q, metric, sort=path|coverage, order=asc|desc; at most 100 uncovered line numbers per file", "read:scans", "", true},
 		{"GET", "/scans/{id}/gate", "scans", "Get a scan's quality gate result", "read:scans", "", false},
 		{"GET", "/scans/{id}/diff", "scans", "Get a scan's baseline diff", "read:scans", "", false},
 		{"POST", "/scans/{id}/compare", "scans", "Compare a scan to a baseline scan", "read:scans", "CompareScanRequest", false},
@@ -225,7 +232,7 @@ func Endpoints() []Endpoint {
 		// Fixes (autonomous fix engine — gated by the autofix_enabled setting).
 		{"POST", "/remediations/{id}/accept", "fixes", "Accept a local remediation and freeze the origin scan", "write:fixes", "", false},
 		{"GET", "/fixes", "fixes", "List fix jobs", "read:fixes", "", true},
-		{"POST", "/fixes", "fixes", "Enqueue an autonomous fix job (multi-turn on a branch, optional push)", "write:fixes", "CreateFixRequest", false},
+		{"POST", "/fixes", "fixes", "Enqueue a fix job; optional push publishes the branch and opens a GitHub PR", "write:fixes", "CreateFixRequest", false},
 		{"GET", "/fixes/engines", "fixes", "List fixer engine auth status (OAuth session + API keys)", "read:fixes", "", false},
 		{"POST", "/fixes/consoles", "fixes", "Start a fixer-worker login or operator console", "write:fixes", "CreateFixerConsoleRequest", false},
 		{"GET", "/fixes/consoles/{id}", "fixes", "Get a fixer console session", "read:fixes", "", false},
@@ -236,8 +243,8 @@ func Endpoints() []Endpoint {
 		{"GET", "/fixes/{id}/diff", "fixes", "Get the proposed diff for a fix job", "read:fixes", "", false},
 		{"GET", "/fixes/{id}/commits", "fixes", "List commits on a fix job's workspace branch", "read:fixes", "", false},
 		{"GET", "/fixes/{id}/stream", "fixes", "Stream fix worker logs (SSE)", "read:fixes", "", false},
-		{"POST", "/fixes/{id}/resume", "fixes", "Continue a paused fix job or push its branch", "write:fixes", "ResumeFixRequest", false},
-		{"DELETE", "/fixes/{id}", "fixes", "Cancel a fix job", "write:fixes", "", false},
+		{"POST", "/fixes/{id}/resume", "fixes", "Continue a paused fix job or publish its branch and open a GitHub PR", "write:fixes", "ResumeFixRequest", false},
+		{"DELETE", "/fixes/{id}", "fixes", "Cancel a fix job or retry pending cancellation cleanup", "write:fixes", "", false},
 
 		// Filesystem helpers.
 		{"GET", "/browse", "system", "Browse a local filesystem path", "read:repos", "", false},
@@ -346,6 +353,7 @@ func Endpoints() []Endpoint {
 
 		// Settings.
 		{"GET", "/settings", "config", "Get settings", "read:config", "", false},
+		{"GET", "/settings/scheduling", "config", "Get automatic scanner scheduling capacity", "read:config", "", false},
 		{"PUT", "/settings", "config", "Update settings", "write:config", "", false},
 
 		// AI prompts & providers.
@@ -445,6 +453,9 @@ func buildOperation(ep Endpoint) map[string]any {
 		if ep.Scope != "self" {
 			desc = "Required scope: `" + ep.Scope + "`."
 		}
+		if ep.Scope == "self" && strings.HasPrefix(ep.Path, "/auth/mfa/") {
+			desc = "Requires a human access token or browser session. Machine API keys cannot manage MFA."
+		}
 		op["description"] = desc
 	}
 	if legacyScannerBuildEndpoint(ep) {
@@ -458,7 +469,7 @@ func buildOperation(ep Endpoint) map[string]any {
 	}
 	if ep.Body != "" {
 		op["requestBody"] = map[string]any{
-			"required": true,
+			"required": ep.Path != "/auth/logout",
 			"content": map[string]any{
 				"application/json": map[string]any{
 					"schema": map[string]any{"$ref": "#/components/schemas/" + ep.Body},
@@ -506,10 +517,10 @@ func buildOperation(ep Endpoint) map[string]any {
 			"429": errRef("Rate limited"),
 		}
 	}
-	if ep.Method == "POST" && ep.Path == "/scans" {
+	if ep.Method == "POST" && (ep.Path == "/scans" || ep.Path == "/fixes") {
 		op["parameters"] = []any{map[string]any{
 			"name": "Idempotency-Key", "in": "header", "required": false,
-			"description": "Returns the original scan for the same caller and normalized request; conflicting reuse returns 409.",
+			"description": "Returns the original job for the same caller and normalized request; conflicting reuse returns 409.",
 			"schema":      map[string]any{"type": "string", "maxLength": 255},
 		}}
 	}
@@ -519,6 +530,72 @@ func buildOperation(ep Endpoint) map[string]any {
 			"description": "Stable identity for this source scan and selected release. Conflicting reuse returns 409.",
 			"schema":      map[string]any{"type": "string", "maxLength": 255},
 		}}
+	}
+	if ep.Method == "GET" && ep.Path == "/audit-log" {
+		op["description"] = "Administrator audit history, filtered and sorted before pagination. Search includes paths, actions, methods, events, user/token IDs and trusted client IPs. Dates accept YYYY-MM-DD (UTC) or RFC3339; from is inclusive and before is exclusive."
+		parameters := []any{
+			map[string]any{"name": "page", "in": "query", "schema": map[string]any{"type": "integer", "minimum": 1, "default": 1}},
+			map[string]any{"name": "per_page", "in": "query", "schema": map[string]any{"type": "integer", "minimum": 1, "maximum": 1000, "default": 25}},
+			map[string]any{"name": "sort", "in": "query", "schema": map[string]any{"type": "string", "enum": []string{"time", "status"}, "default": "time"}},
+			map[string]any{"name": "order", "in": "query", "schema": map[string]any{"type": "string", "enum": []string{"asc", "desc"}, "default": "desc"}},
+		}
+		for _, name := range []string{"q", "method", "category", "severity", "event", "actor", "ip", "from", "before"} {
+			parameters = append(parameters, map[string]any{"name": name, "in": "query", "schema": map[string]any{"type": "string"}})
+		}
+		op["parameters"] = parameters
+	}
+	if ep.Method == "GET" && (ep.Path == "/scans/{id}/findings" || ep.Path == "/findings") {
+		defaultSort := "severity"
+		if ep.Path == "/findings" {
+			defaultSort = "composite_score"
+		}
+		op["description"] = "Filters the full authorized result set before pagination, with stable ID tie-breaks. Scan-time ignore decisions are retained; durable suppressions remain editable. Native SARIF is omitted unless explicitly requested."
+		op["parameters"] = []any{
+			map[string]any{"name": "q", "in": "query", "schema": map[string]any{"type": "string"}, "description": "Search title, rule, file, tool, and description."},
+			map[string]any{"name": "sort", "in": "query", "schema": map[string]any{"type": "string", "default": defaultSort, "enum": []string{"severity", "title", "tool_name", "file_path", "line_start", "composite_score", "created_at"}}},
+			map[string]any{"name": "order", "in": "query", "schema": map[string]any{"type": "string", "default": "desc", "enum": []string{"asc", "desc"}}},
+			map[string]any{"name": "page", "in": "query", "schema": map[string]any{"type": "integer", "minimum": 1, "default": 1}},
+			map[string]any{"name": "per_page", "in": "query", "schema": map[string]any{"type": "integer", "minimum": 1, "maximum": 200, "default": 50}},
+			map[string]any{"name": "include_sarif", "in": "query", "schema": map[string]any{"type": "boolean", "default": false}},
+			map[string]any{"name": "include_suppressed", "in": "query", "schema": map[string]any{"type": "boolean", "default": false}},
+		}
+		for _, name := range []string{"severity", "category", "tool", "status", "baseline_state"} {
+			op["parameters"] = append(op["parameters"].([]any), map[string]any{"name": name, "in": "query", "schema": map[string]any{"type": "string"}, "description": "Comma-separated filter values."})
+		}
+		if ep.Path == "/findings" {
+			for _, name := range []string{"repo_id", "collection_id"} {
+				op["parameters"] = append(op["parameters"].([]any), map[string]any{"name": name, "in": "query", "schema": map[string]any{"type": "string"}})
+			}
+		}
+	}
+
+	if ep.Method == "GET" && ep.Path == "/vulnerabilities" {
+		op["parameters"] = []any{
+			map[string]any{"name": "page", "in": "query", "schema": map[string]any{"type": "integer", "minimum": 1, "default": 1}},
+			map[string]any{"name": "per_page", "in": "query", "schema": map[string]any{"type": "integer", "minimum": 1, "maximum": 200, "default": 50}},
+			map[string]any{"name": "sort", "in": "query", "schema": map[string]any{"type": "string", "default": "composite_score", "enum": []string{"composite_score", "severity", "title", "evidence", "baseline"}}},
+			map[string]any{"name": "order", "in": "query", "schema": map[string]any{"type": "string", "default": "desc", "enum": []string{"asc", "desc"}}},
+		}
+		for _, name := range []string{"q", "repo_id", "scan_id"} {
+			op["parameters"] = append(op["parameters"].([]any), map[string]any{"name": name, "in": "query", "schema": map[string]any{"type": "string"}})
+		}
+	}
+	if ep.Method == "GET" && ep.Path == "/scans/{id}/test-coverage/files" {
+		op["parameters"] = []any{
+			map[string]any{"name": "q", "in": "query", "schema": map[string]any{"type": "string"}},
+			map[string]any{"name": "scope", "in": "query", "schema": map[string]any{"type": "string", "default": "overall", "enum": []string{"overall", "changed"}}},
+			map[string]any{"name": "metric", "in": "query", "schema": map[string]any{"type": "string", "default": "lines", "enum": []string{"lines", "branches", "statements", "functions"}}},
+			map[string]any{"name": "sort", "in": "query", "schema": map[string]any{"type": "string", "default": "coverage", "enum": []string{"path", "coverage"}}},
+			map[string]any{"name": "order", "in": "query", "schema": map[string]any{"type": "string", "default": "asc", "enum": []string{"asc", "desc"}}},
+			map[string]any{"name": "page", "in": "query", "schema": map[string]any{"type": "integer", "minimum": 1, "default": 1}},
+			map[string]any{"name": "per_page", "in": "query", "schema": map[string]any{"type": "integer", "minimum": 1, "maximum": 200, "default": 50}},
+		}
+	}
+	if ep.Method == "GET" && (ep.Path == "/scans/{id}" || ep.Path == "/scans/{id}/result") {
+		op["description"] = "Includes attempt, failure_code/failure_message, completeness (pending/complete/incomplete), completion_reason, terminal_reason (empty until terminal), and scanner_scopes with per-tool requested_scope, effective_scope and scope_message. Execution completeness is independent of the security verdict; zero successful scanners is incomplete."
+	}
+	if ep.Method == "GET" && ep.Path == "/scanners/runtime-capabilities" {
+		op["description"] = "Queued execution includes worker_readiness: status (ready/busy/unavailable), active_workers, available_slots and last_active_heartbeat for the selected backend. Active means a ready/busy heartbeat within one minute. This is worker availability, not source/image/storage qualification. Unknown worker health returns 503; inline execution has no worker requirement."
 	}
 	if ep.Method == "GET" && ep.Path == "/scans/{id}/stream" {
 		op["parameters"] = []any{map[string]any{
@@ -1044,10 +1121,13 @@ func buildResponses(ep Endpoint) map[string]any {
 			},
 		}
 	}
+	if ep.Method == "POST" && ep.Path == "/fixes" {
+		resp["200"] = resp["201"]
+	}
 	if ep.Body != "" {
 		resp["400"] = errRef("Invalid request")
 	}
-	if ep.Method == "POST" && ep.Path == "/scans" {
+	if ep.Method == "POST" && (ep.Path == "/scans" || ep.Path == "/fixes") {
 		resp["409"] = errRef("Idempotency key was reused for a different request")
 	}
 	if ep.Scope != "" {
@@ -1055,6 +1135,12 @@ func buildResponses(ep Endpoint) map[string]any {
 		if ep.Scope != "self" {
 			resp["403"] = errRef("Insufficient scope")
 		}
+	}
+	if ep.Scope == "self" && strings.HasPrefix(ep.Path, "/auth/mfa/") {
+		resp["403"] = errRef("Human session required or MFA policy forbids this action")
+	}
+	if ep.Scope != "" || ep.Path == "/auth/login" {
+		resp["503"] = errRef("Service or required authorization policy unavailable")
 	}
 	if strings.Contains(ep.Path, "{") {
 		resp["404"] = errRef("Resource not found")
@@ -1145,6 +1231,16 @@ func buildComponents() map[string]any {
 			},
 		},
 		"schemas": map[string]any{
+			"TestCoverageRequest": objSchema(map[string]any{
+				"base_commit_sha": map[string]any{"type": "string", "description": "Full base commit SHA used by the CI diff-cover comparison; required with diff_cover."},
+				"diff_cover":      map[string]any{"type": "object", "description": "Optional diff-cover JSON report. Source line details must match the full report bundle. Base/head metadata is asserted by the authenticated CI uploader."},
+				"commit_sha":      map[string]any{"type": "string", "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"},
+				"excluded_paths":  map[string]any{"type": "array", "maxItems": 200, "items": map[string]any{"type": "string", "maxLength": 1024}, "description": "Exclusions used by the coverage producer, recorded for review; Wolf does not remove source files using this field."},
+				"reports": map[string]any{"type": "array", "minItems": 1, "maxItems": 64, "items": objSchema(map[string]any{
+					"format":  map[string]any{"type": "string", "enum": []string{"lcov", "cobertura", "jacoco", "clover", "opencover", "go", "istanbul", "simplecov", "sonar"}},
+					"content": str, "strip_prefix": str, "path_prefix": str,
+				}, "format", "content")},
+			}, "commit_sha", "reports"),
 			"SuccessResponse": map[string]any{
 				"type":       "object",
 				"properties": map[string]any{"data": map[string]any{"type": "object"}},
@@ -1536,6 +1632,8 @@ func buildComponents() map[string]any {
 				},
 			},
 			"RegisterRequest": objSchema(map[string]any{"email": str, "password": str}, "email", "password"),
+			"LogoutRequest":   objSchema(map[string]any{"refresh_token": map[string]any{"type": "string", "writeOnly": true}}),
+			"RefreshRequest":  objSchema(map[string]any{"refresh_token": map[string]any{"type": "string", "writeOnly": true}}, "refresh_token"),
 			"LoginRequest":    objSchema(map[string]any{"email": str, "password": str}, "email", "password"),
 			"ChangePasswordRequest": objSchema(map[string]any{
 				"current_password": str, "new_password": str,
@@ -1572,6 +1670,7 @@ func buildComponents() map[string]any {
 			}, "name", "host", "username"),
 			"CreateCollectionRequest": objSchema(map[string]any{"name": str}, "name"),
 			"CollectionRepoRequest":   objSchema(map[string]any{"repo_id": str}, "repo_id"),
+			"DatabaseRequest":         objSchema(map[string]any{"dsn": map[string]any{"type": "string", "format": "password", "writeOnly": true}}, "dsn"),
 			"CreateScanRequest": objSchema(map[string]any{
 				"repo_id": str,
 				"source": objSchema(map[string]any{
@@ -1613,7 +1712,7 @@ func buildComponents() map[string]any {
 			"VerifyRequest":             objSchema(map[string]any{"environment": str, "class": str}),
 			"CreateFixRequest": objSchema(map[string]any{
 				"repo_id": str, "scan_id": str, "finding_ids": strArr,
-				"target_branch": str, "engine": str, "mode": str,
+				"target_branch": str, "engine": str, "mode": map[string]any{"type": "string", "enum": []string{"dry_run", "push"}, "default": "dry_run", "description": "dry_run retains a branch for review; push authorizes publication and GitHub PR creation"},
 				"severity_floor":    str,
 				"max_attempts":      map[string]any{"type": "integer"},
 				"max_loops":         map[string]any{"type": "integer"},
@@ -1622,7 +1721,7 @@ func buildComponents() map[string]any {
 				"effort":            str,
 				"variant":           str,
 			}, "repo_id"),
-			"ResumeFixRequest": objSchema(map[string]any{"action": str}),
+			"ResumeFixRequest": objSchema(map[string]any{"action": map[string]any{"type": "string", "enum": []string{"continue", "push"}, "description": "push publishes the reviewed branch and opens or recovers its GitHub PR; omitted action depends on the paused state"}}),
 			"CreateFixerConsoleRequest": objSchema(map[string]any{
 				"kind": str, "engine": str,
 			}),

@@ -358,6 +358,32 @@ export async function installScannerApiMock(
       });
       return;
     }
+    if (method === "GET" && path === "/scan-profiles") {
+      return json(route, [
+        { id: "fast", label: "Fast PR", summary: "Secrets, source analysis, and dependency lockfiles, including the first scan." },
+        { id: "pr", label: "PR", summary: "Same as Fast; used by inbound GitHub webhooks." },
+        { id: "standard", label: "Standard", summary: "Default planned tool set for the repo." },
+        { id: "release", label: "Release", summary: "Standard plus release-oriented completeness." },
+        { id: "full", label: "Full", summary: "Every applicable non-DAST scanner." },
+        { id: "targeted", label: "Targeted", summary: "Requires tools, categories, or include_paths." },
+      ]);
+    }
+    if (method === "GET" && path === "/repos/repo-api-created") {
+      return json(route, apiCreatedRepository);
+    }
+    if (method === "GET" && /^\/repos\/[^/]+\/baselines$/.test(path)) {
+      return json(route, []);
+    }
+    if (method === "GET" && path === "/fleet/posture") {
+      return json(route, {
+        generated_at: now, repo_count: 1, gates_failing: 0,
+        open_findings_by_severity: { high: 1 }, week_over_week_delta: {},
+        priorities: [{ finding_id: apiCreatedFinding.id, repo_id: apiCreatedRepository.id, name: apiCreatedRepository.name, title: apiCreatedFinding.title, severity: "high", tool: "semgrep", file_path: apiCreatedFinding.file_path, line: apiCreatedFinding.line_start, state: "new", confidence: "high" }],
+        coverage: { fresh_days: 7, fresh_repos: 0, rows: [{ repo_id: apiCreatedRepository.id, name: apiCreatedRepository.name, branch: "main", scan_id: apiCreatedScan.id, status: "running", detail: "Scan in progress; complete coverage has not been established.", gate_failing: false }] },
+        work: [{ scan_id: apiCreatedScan.id, repo_id: apiCreatedRepository.id, name: apiCreatedRepository.name, branch: "main", status: "running", phase: "scanning", stalled: false }],
+        changes: { window_days: 7, compared_branches: 0, excluded_branches: 1, new: 0, resurfaced: 0, resolved: 0, suppressed: 0, rows: [] },
+      });
+    }
     if (method === "GET" && path === "/repos") {
       return json(route, [apiCreatedRepository]);
     }
@@ -480,6 +506,7 @@ export async function installScannerApiMock(
       return json(route, {
         scan_runtime: scanRuntime,
         queue_execution: true,
+        worker_readiness: { status: "ready", active_workers: 1, available_slots: 1 },
         docker_image_management: scanRuntime === "docker",
         scanner_jobs: true,
         durable_events: true,

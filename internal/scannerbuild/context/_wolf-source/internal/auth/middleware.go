@@ -168,6 +168,23 @@ type HumanAuthorization struct {
 // existing browser sessions without token rotation or re-login.
 var HumanAuthorizationResolver func(ctx context.Context, userID string) (HumanAuthorization, error)
 
+// RequireHumanSession excludes machine API keys from interactive account actions.
+// Run it after Middleware has resolved the credential class.
+func RequireHumanSession(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		info := GetAuthInfo(r.Context())
+		if info == nil || info.Claims == nil {
+			writeAuthError(w, http.StatusUnauthorized, "unauthorized", "not authenticated")
+			return
+		}
+		if info.TokenID != "" {
+			writeAuthError(w, http.StatusForbidden, "human_session_required", "this action requires a human session")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 // RequireAdmin returns middleware that rejects the request with 403 unless the
 // authenticated principal has the admin role. Used for the settings/admin
 // surface (settings writes, user + node management, scanner image builds).

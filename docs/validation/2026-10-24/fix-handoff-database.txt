@@ -1,0 +1,5 @@
+SQLite/PostgreSQL package result from the focused race invocation. The API test fixture helper was corrected separately; its final result is in fix-handoff-api.txt.
+
+Command: WOLF_TEST_POSTGRES_DSN=<disposable PostgreSQL 18.6 DSN> go test -race ./internal/db ./internal/api/routes -run Test(Remediation|Accept|Fix|CreateFix|CancelFix|ResumeFix) -count=1
+
+ok  	github.com/alphabravocompany/thewolf/internal/db	7.557s

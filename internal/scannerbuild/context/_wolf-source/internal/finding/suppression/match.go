@@ -27,13 +27,13 @@ func FirstMatch(suppressions []models.FindingSuppression, f models.Finding, bran
 }
 
 func Matches(s models.FindingSuppression, f models.Finding, branch string, now time.Time) bool {
-	if s.Status != models.SuppressionStatusActive {
+	if s.RepoID != f.RepoID || s.ScopeValue == "" || s.Status != models.SuppressionStatusActive {
 		return false
 	}
 	if s.ExpiresAt != nil && !s.ExpiresAt.After(now) {
 		return false
 	}
-	if s.Branch != "" && branch != "" && s.Branch != branch {
+	if s.Branch != "" && s.Branch != branch {
 		return false
 	}
 
@@ -56,8 +56,17 @@ func Matches(s models.FindingSuppression, f models.Finding, branch string, now t
 }
 
 func Apply(findings []models.Finding, suppressions []models.FindingSuppression, branches map[string]string, now time.Time) ([]models.Finding, int) {
+	// Reevaluate only flags owned by a known rule in this repository. Imported
+	// or independently suppressed evidence must not lose its audit decision.
+	known := make(map[string]string, len(suppressions))
+	for _, s := range suppressions {
+		known[s.ID] = s.RepoID
+	}
 	count := 0
 	for i := range findings {
+		if repo, ok := known[findings[i].SuppressionID]; ok && repo == findings[i].RepoID {
+			findings[i].Suppressed, findings[i].SuppressionID, findings[i].SuppressedReason = false, "", ""
+		}
 		if findings[i].Suppressed {
 			continue
 		}

@@ -1,0 +1,29 @@
+{
+  "Id": "3ea4d6fce81c2032d4a2089a7b47bceb3e5fbfa64d8b341e8e51953114c38e22",
+  "Name": "/wolf-plan-export-pg-20261023",
+  "Image": "sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873",
+  "label": "export-authorization-20261023",
+  "ports": {
+    "5432/tcp": [
+      {
+        "HostIp": "127.0.0.1",
+        "HostPort": "32798"
+      }
+    ]
+  },
+  "mounts": [
+    {
+      "Type": "volume",
+      "Name": "bbf41f28cf7d77bb60ac9a5caaa60b0d2d380749001b2cf4bbd59cb4bf754586",
+      "Source": "/var/lib/docker/volumes/bbf41f28cf7d77bb60ac9a5caaa60b0d2d380749001b2cf4bbd59cb4bf754586/_data",
+      "Destination": "/var/lib/postgresql",
+      "Driver": "local",
+      "Mode": "",
+      "RW": true,
+      "Propagation": ""
+    }
+  ],
+  "removed": true,
+  "container_absence_verified": true,
+  "anonymous_volume_absence_verified": true
+}

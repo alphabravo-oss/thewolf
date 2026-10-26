@@ -137,7 +137,7 @@ install_npm prettier "$PRETTIER_VERSION" "$PRETTIER_INTEGRITY" prettier
 install_npm markdownlint-cli "$MARKDOWNLINT_CLI_VERSION" "$MARKDOWNLINT_CLI_INTEGRITY" markdownlint
 install_npm eslint "$ESLINT_VERSION" "$ESLINT_INTEGRITY" eslint
 
-rm -rf /tmp/npm-cache
+
 
 # --- smoke ------------------------------------------------------------------
 test "$(prettier --version)" = "$PRETTIER_VERSION"

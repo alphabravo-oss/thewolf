@@ -1,14 +1,5 @@
-// Topbar — ported from astronomer/frontend/src/components/layout/topbar.tsx.
-//
-// Astronomer's layout is reproduced exactly: a sticky 14-unit header with a
-// blurred translucent background, breadcrumbs on the left, the global search
-// centred, then the ⌘K trigger, the three-way theme cycle, a notification bell
-// with a count badge and dropdown, and the account menu.
-//
-// The bell's contents are Wolf's: running scans and recently failed scans stand
-// in for Astronomer's firing alerts and Charlie findings.
 import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Activity,
@@ -21,7 +12,9 @@ import {
   Sun,
 } from "lucide-react";
 import { api, isNotFound } from "@/lib/api";
-import type { InboxNotification, Scan } from "@/lib/types";
+import type { Collection, InboxNotification, Repo, Scan } from "@/lib/types";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuLabel } from "@/components/ui/dropdown-menu";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { useTheme } from "@/lib/theme";
 import { useUIStore } from "@/lib/store-ui";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -39,7 +32,8 @@ const routeLabels: Record<string, string> = {
   findings: "Findings",
   vulnerabilities: "Vulnerabilities",
   fixes: "Fixes",
-  agents: "Agents",
+  agents: "Fix agents",
+  coverage: "Scanner coverage",
   audit: "Audit Log",
   settings: "Settings",
   account: "Account",
@@ -64,7 +58,7 @@ const routeLabels: Record<string, string> = {
   "customer-keys": "Customer keys",
 };
 
-function generateBreadcrumbs(pathname: string): { label: string; href: string }[] {
+function generateBreadcrumbs(pathname: string, resourceName?: string): { label: string; href: string }[] {
   const segments = pathname.split("/").filter(Boolean);
   if (segments.length === 0) return [{ label: "Home", href: "/" }];
 
@@ -72,9 +66,11 @@ function generateBreadcrumbs(pathname: string): { label: string; href: string }[
   let path = "";
   for (const segment of segments) {
     path += `/${segment}`;
-    // Opaque ids (UUIDs and the like) are truncated rather than title-cased.
-    const label = /^[0-9a-f-]{20,}$/i.test(segment)
-      ? segment.slice(0, 8)
+    // Reuse the resource name; never expose an opaque identifier as a label.
+    const resource = segment === segments[1] && (segments[0] === "repos" || segments[0] === "collections");
+    const label = resource
+      ? (resourceName || (segments[0] === "repos" ? "Repository" : "Collection"))
+      : /^[0-9a-f-]{20,}$/i.test(segment) ? "Details"
       : (routeLabels[segment] ??
         decodeURIComponent(segment).charAt(0).toUpperCase() + decodeURIComponent(segment).slice(1));
     crumbs.push({ label, href: path });
@@ -107,7 +103,13 @@ export function Topbar() {
   const navigate = useNavigate();
   const openPalette = useUIStore((s) => s.openPalette);
   const [notificationOpen, setNotificationOpen] = useState(false);
-  const notificationRef = useRef<HTMLDivElement>(null);
+  const segments = pathname.split("/").filter(Boolean);
+  const repoId = segments[0] === "repos" ? segments[1] : undefined;
+  const collectionId = segments[0] === "collections" ? segments[1] : undefined;
+  const repo = useQuery({ queryKey: ["repo", repoId], enabled: !!repoId,
+    queryFn: async () => (await api.get<Repo>(`/repos/${encodeURIComponent(repoId!)}`)).data });
+  const collection = useQuery({ queryKey: ["collection", collectionId], enabled: !!collectionId,
+    queryFn: async () => (await api.get<Collection>(`/collections/${encodeURIComponent(collectionId!)}`)).data });
 
   // Running scans drive both the live activity pill and the bell. Polls every
   // 5s; cheap, and clearly signals when Wolf is busy.
@@ -149,11 +151,9 @@ export function Topbar() {
     staleTime: 15_000,
   });
 
-  const { theme, resolvedTheme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-
-  const breadcrumbs = useMemo(() => generateBreadcrumbs(pathname), [pathname]);
+  const { theme, setTheme } = useTheme();
+  const resourceName = repo.data?.name || collection.data?.name;
+  const breadcrumbs = useMemo(() => generateBreadcrumbs(pathname, resourceName), [pathname, resourceName]);
 
   const runningScans = running ?? [];
   const failedScans = failed ?? [];
@@ -167,41 +167,17 @@ export function Topbar() {
   const notificationCount =
     runningScans.length + failedScans.length + extraNotes.length;
 
-  // Close the notification dropdown on outside click.
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (notificationRef.current && !notificationRef.current.contains(e.target as Node)) {
-        setNotificationOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, []);
-
-  const cycleTheme = () => {
-    if (theme === "light") setTheme("dark");
-    else if (theme === "dark") setTheme("system");
-    else setTheme("light");
-  };
-
-  const visibleTheme = mounted ? theme : "dark";
-  const ThemeIcon = !mounted
-    ? Moon
-    : visibleTheme === "dark"
-      ? Moon
-      : visibleTheme === "light"
-        ? Sun
-        : Monitor;
+  const ThemeIcon = theme === "dark" ? Moon : theme === "light" ? Sun : Monitor;
 
   return (
-    <header className="sticky top-0 z-30 flex items-center justify-between h-14 px-6 border-b border-border bg-background/80 backdrop-blur-lg">
+    <header className="sticky top-0 z-30 flex items-center justify-between h-14 shrink-0 gap-2 px-3 sm:px-6 border-b border-border bg-background/80 backdrop-blur-lg">
       {/* Left: breadcrumbs. Padded on mobile to clear the hamburger. */}
       <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-sm min-w-0 pl-10 md:pl-0">
         {breadcrumbs.map((crumb, i) => (
-          <div key={crumb.href} className="flex items-center gap-1.5 min-w-0">
-            {i > 0 && <ChevronRight className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />}
-            {i === breadcrumbs.length - 1 ? (
-              <span aria-current="page" className="text-foreground font-medium truncate">
+          <div key={crumb.href} className={i === breadcrumbs.length - 1 ? "flex items-center gap-1.5 min-w-0" : "hidden sm:flex items-center gap-1.5 min-w-0"}>
+            {i > 0 && <ChevronRight className="hidden sm:block h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />}
+            {i === breadcrumbs.length - 1 || crumb.href === "/enterprise" ? (
+              <span aria-current={i === breadcrumbs.length - 1 ? "page" : undefined} className="text-foreground font-medium truncate">
                 {crumb.label}
               </span>
             ) : (
@@ -218,12 +194,12 @@ export function Topbar() {
       </nav>
 
       {/* Centre: global search */}
-      <div className="hidden md:flex flex-1 justify-center px-6">
+      <div className="hidden lg:flex flex-1 justify-center px-4">
         <GlobalSearch />
       </div>
 
       {/* Right: actions */}
-      <div className="flex items-center gap-2">
+      <div className="flex shrink-0 items-center gap-1 sm:gap-2">
         {runningScans.length > 0 && (
           <Link
             to="/scans"
@@ -237,8 +213,10 @@ export function Topbar() {
         {/* Command palette trigger */}
         <button
           type="button"
-          onClick={openPalette}
-          aria-label="Open command palette"
+          onClick={() => openPalette()}
+          aria-label="Search and commands"
+          aria-keyshortcuts="Meta+K Control+K"
+          title="Search and commands (⌘K / Ctrl+K)"
           className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md border border-border text-xs
             text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
         >
@@ -246,22 +224,28 @@ export function Topbar() {
           <kbd className="font-mono text-[10px]">K</kbd>
         </button>
 
-        <button
-          type="button"
-          onClick={cycleTheme}
-          className="relative inline-flex items-center justify-center h-8 w-8 rounded-md
-            text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-          title={`Theme: ${visibleTheme}${theme === "system" ? ` (${resolvedTheme})` : ""}`}
-          aria-label={`Theme: ${visibleTheme}. Click to change.`}
-        >
-          <ThemeIcon className="h-4 w-4" />
-        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button type="button" aria-label={`Theme: ${theme}`} title="Choose theme"
+              className="inline-flex size-9 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent">
+              <ThemeIcon className="size-4" aria-hidden="true" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuLabel>Appearance</DropdownMenuLabel>
+            <DropdownMenuRadioGroup value={theme} onValueChange={(value) => setTheme(value as "light" | "dark" | "system")}>
+              <DropdownMenuRadioItem value="light"><Sun className="mr-2 size-4" />Light</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="dark"><Moon className="mr-2 size-4" />Dark</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="system"><Monitor className="mr-2 size-4" />System</DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         {/* Notifications */}
-        <div ref={notificationRef} className="relative">
+        <Popover open={notificationOpen} onOpenChange={setNotificationOpen}>
+          <PopoverTrigger asChild>
           <button
             type="button"
-            onClick={() => setNotificationOpen(!notificationOpen)}
             aria-label={`Notifications${notificationCount ? ` (${notificationCount})` : ""}`}
             aria-expanded={notificationOpen}
             className="relative inline-flex items-center justify-center h-8 w-8 rounded-md
@@ -275,8 +259,8 @@ export function Topbar() {
             )}
           </button>
 
-          {notificationOpen && (
-            <div className="absolute right-0 top-full mt-1 w-80 rounded-lg border border-border bg-popover shadow-xl z-50 overflow-hidden">
+          </PopoverTrigger>
+            <PopoverContent align="end" aria-label="Notifications" className="w-80 max-w-[calc(100vw-2rem)] p-0 overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b border-border">
                 <h4 className="text-sm font-medium text-foreground">Activity</h4>
                 {failedScans.length > 0 && (
@@ -380,9 +364,8 @@ export function Topbar() {
                   View all scans
                 </button>
               </div>
-            </div>
-          )}
-        </div>
+            </PopoverContent>
+        </Popover>
 
         <UserMenu />
       </div>

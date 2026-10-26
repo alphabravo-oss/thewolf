@@ -42,10 +42,10 @@ fixerVariants:
     platforms: [linux/amd64]
     authMode: none
     buildArgs:
-      GO_VERSION: 1.26.6
-      TYPESCRIPT_VERSION: 6.0.3
-      GH_VERSION: 2.97.0
-      GLAB_VERSION: 1.113.0
+      GO_VERSION: 1.27.3
+      TYPESCRIPT_VERSION: 7.0.2
+      GH_VERSION: 2.102.0
+      GLAB_VERSION: 1.122.0
     smokeCommand: ["/usr/local/bin/wolf", "version"]
   api:
     dockerfile: fixer/Dockerfile.api
@@ -63,7 +63,7 @@ fixerVariants:
     dependsOn: [base]
     authMode: interactive-session
     buildArgs:
-      CLAUDE_CODE_VERSION: 2.1.220
+      CLAUDE_CODE_VERSION: 2.1.296
     smokeCommand: ["claude", "--version"]
   codex:
     dockerfile: fixer/Dockerfile.codex
@@ -73,5 +73,5 @@ fixerVariants:
     dependsOn: [base]
     authMode: interactive-session
     buildArgs:
-      CODEX_VERSION: 0.146.0
+      CODEX_VERSION: 0.162.1
     smokeCommand: ["codex", "--version"]

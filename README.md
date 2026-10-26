@@ -25,6 +25,8 @@
 
 ## Why teams choose The Wolf
 
+Development status and remaining work: [current execution plan](docs/PLAN.md). Superseded implementation plans are retained in the [plan archive](docs/archive/2026-10-23/README.md).
+
 Every team wants code to get safer, cleaner, and easier to ship, but improvement is hard to prove without repeatable checks. Human-written code, AI-assisted code, and automated fixes all need deterministic scanners, reproducible evidence, and policy gates that do not depend on confidence or guesswork. At the same time, security tooling sprawl is still the problem: every team ends up juggling a dozen scanners, each with its own CLI, output format, container, update cadence, and dashboard — and *none* of them tell you which of the 4,000 findings to fix first, or prove that a change actually made the code better.
 
 The Wolf collapses that sprawl into one platform:
@@ -266,7 +268,7 @@ The Wolf also maps source to tests across **13 languages** for coverage-aware sc
 
 ## Autonomous remediation
 
-The Wolf can go past *finding* a problem to *proposing the fix* — autonomously, but on a short leash. The autonomous fix engine takes a single finding, has an AI coding agent write a patch, **proves the patch is good**, and hands you a review-ready branch and diff. It never trusts the agent's word for it. Architecture and rationale: [`docs/superpowers/specs/2026-06-15-autonomous-fix-engine-design.md`](docs/superpowers/specs/2026-06-15-autonomous-fix-engine-design.md).
+The Wolf can go past *finding* a problem to *proposing the fix* — autonomously, but on a short leash. The autonomous fix engine takes a single finding, has an AI coding agent write a patch, **proves the patch is good**, and hands you a review-ready branch and diff. It never trusts the agent's word for it. Architecture and rationale: [`docs/archive/2026-10-23/superpowers/specs/2026-06-15-autonomous-fix-engine-design.md`](docs/archive/2026-10-23/superpowers/specs/2026-06-15-autonomous-fix-engine-design.md).
 
 **Off by default.** The entire surface is gated behind one master setting, `autofix_enabled` (default **`false`**). With it off, the execute path returns `403 autofix_disabled`, the worker processes nothing, and the UI surface is dark. Flip it on in **Settings > General** or with `wolf settings set autofix_enabled true`.
 

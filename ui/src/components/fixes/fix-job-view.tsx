@@ -4,6 +4,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeftIcon, ChevronDownIcon, Loader2Icon, XIcon } from "lucide-react";
 import { toast } from "sonner";
 import { CardSkeleton } from "@/components/skeleton";
+import { ErrorState } from "@/components/ui/empty-state";
+import { FixerSetupBanner } from "@/components/fixes/fixer-setup-banner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { AttemptsTable } from "@/components/fixes/attempts-table";
 import { FixLogConsole } from "@/components/fixes/fix-log-console";
@@ -11,6 +13,7 @@ import { StatusBadge } from "@/components/fixes/status-badge";
 import {
   acceptRemediation,
   cancelFix,
+  isFixCleanupPending,
   githubBranchUrl,
   githubCommitUrl,
   isFixPaused,
@@ -34,7 +37,7 @@ export function FixJobView({
 }) {
   const qc = useQueryClient();
   const { enabled, isLoading: flagLoading } = useAutofixEnabled();
-  const q = useFixJob(fixId, enabled);
+  const q = useFixJob(fixId, true);
   const repoQ = useRepoName(q.data?.repo_id);
   const scanQ = useScanSummary(q.data?.scan_id);
   const lineageQ = useScanLineage(q.data?.scan_id);
@@ -44,9 +47,11 @@ export function FixJobView({
 
   const cancel = useMutation({
     mutationFn: () => cancelFix(fixId),
-    onSuccess: () => {
+    onSuccess: (job) => {
+      toast.success(isFixCleanupPending(job) ? "Agent cancelled; workspace cleanup pending" : "Branch work discarded");
+    },
+    onSettled: () => {
       setConfirmCancel(false);
-      toast.success("Agent cancelled — branch work discarded");
       qc.invalidateQueries({ queryKey: ["fix-job", fixId] });
       qc.invalidateQueries({ queryKey: ["fix-jobs"] });
     },
@@ -69,7 +74,9 @@ export function FixJobView({
   const accept = useMutation({
     mutationFn: () => acceptRemediation(q.data?.remediation_id || ""),
     onSuccess: () => {
-      toast.success("Branch handed off — this scan is frozen");
+      toast.success(q.data?.pushed && q.data?.status === "succeeded"
+        ? "Workspace cleaned up"
+        : "Branch handed off — this scan is frozen");
       qc.invalidateQueries({ queryKey: ["fix-job", fixId] });
       qc.invalidateQueries({ queryKey: ["scan-lineage"] });
     },
@@ -79,22 +86,18 @@ export function FixJobView({
   useEffect(() => {
     const job = q.data;
     if (!job || !waitingPush.current) return;
-    if (job.pushed) {
+    if (job.status === "failed" || job.status === "push_failed") {
       waitingPush.current = false;
-      toast.success(
-        job.push_sha
-          ? `Pushed ${job.result_branch || "branch"} @ ${job.push_sha.slice(0, 7)}`
-          : "Pushed to GitHub",
-      );
+      toast.error(job.status === "push_failed" ? pushFailureHint(job.error) : job.error || "Agent failed");
       return;
     }
-    if (job.status === "failed") {
+    if (job.pushed && job.status === "succeeded") {
       waitingPush.current = false;
-      toast.error(pushFailureHint(job.error) || "Push failed");
+      toast.success("Branch published for review");
     }
   }, [q.data]);
 
-  if (flagLoading || (enabled && (q.isLoading || !q.data))) {
+  if (flagLoading || q.isLoading) {
     return (
       <div className="page stack page--mid">
         <CardSkeleton />
@@ -103,24 +106,7 @@ export function FixJobView({
     );
   }
 
-  if (!enabled) {
-    return (
-      <div className="page stack page--mid">
-        <BackLink to={backTo} />
-        <div className="glass-card p-6 text-sm text-muted-foreground">
-          Autonomous fixing is disabled. Enable it in{" "}
-          <Link
-            to="/settings"
-            search={{ tab: "general" }}
-            className="text-primary hover:underline"
-          >
-            Settings → General
-          </Link>
-          .
-        </div>
-      </div>
-    );
-  }
+  if (q.isError || !q.data) return <ErrorState title="Unable to load fix job" onRetry={() => void q.refetch()} />;
 
   const f = q.data!;
   const repoName =
@@ -132,12 +118,15 @@ export function FixJobView({
   const scanBranch = scanQ.data?.branch;
   const scanFindings = scanQ.data?.finding_count;
   const terminal = isFixTerminal(f.status);
+  const cleanupPending = isFixCleanupPending(f);
   const paused = isFixPaused(f.status);
   const summary: {
     rounds?: { round: number; kept: number; remaining: number }[];
     tools?: ToolRow[];
     open?: OpenNote[];
     report_markdown?: string;
+    pr_url?: string;
+    publication_error?: string;
   } = (() => {
     try {
       return f.summary ? JSON.parse(f.summary) : {};
@@ -148,6 +137,7 @@ export function FixJobView({
 
   return (
     <div className="page stack page--mid">
+      {!enabled && <FixerSetupBanner />}
       <div className="flex items-center gap-3">
         <BackLink to={backTo} />
         <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -209,13 +199,13 @@ export function FixJobView({
             </p>
           </div>
         </div>
-        {(paused || (f.status === "failed" && !!f.result_branch && !f.pushed)) && (
+        {paused && (
           <div className="flex items-center gap-2">
             {f.status === "awaiting_review" && (
               <button
                 type="button"
                 onClick={() => resume.mutate("continue")}
-                disabled={resume.isPending}
+                disabled={!enabled || resume.isPending}
                 className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border text-sm hover:bg-muted/40 disabled:opacity-50"
               >
                 Continue
@@ -225,15 +215,15 @@ export function FixJobView({
               <button
                 type="button"
                 onClick={() => resume.mutate("push")}
-                disabled={resume.isPending}
+                disabled={!enabled || resume.isPending}
                 className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-50"
               >
                 {resume.isPending ? (
                   <Loader2Icon className="size-4 animate-spin" />
                 ) : null}
-                {f.status === "failed" || f.status === "push_failed"
-                  ? "Retry push"
-                  : "Push branch for review"}
+                {f.status === "push_failed"
+                  ? (f.pushed ? "Retry PR creation" : "Retry push")
+                  : "Push branch and open PR"}
               </button>
             ) : (
               <button
@@ -260,10 +250,21 @@ export function FixJobView({
               Accept branch
             </button>
           )}
-        {!terminal && (
+        {f.status === "succeeded" && f.pushed && f.workspace_path && f.remediation_id &&
+          lineageQ.data?.remediation?.state === "frozen" && (
+            <button
+              type="button"
+              onClick={() => accept.mutate()}
+              disabled={accept.isPending}
+              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border text-sm hover:bg-muted/40 disabled:opacity-50"
+            >
+              Retry cleanup
+            </button>
+          )}
+        {(!terminal || (cleanupPending && !f.claimed_by)) && (
           <button
             type="button"
-            onClick={() => setConfirmCancel(true)}
+            onClick={() => cleanupPending ? cancel.mutate() : setConfirmCancel(true)}
             disabled={cancel.isPending}
             className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border text-sm hover:bg-destructive/10 text-destructive disabled:opacity-50"
           >
@@ -272,7 +273,7 @@ export function FixJobView({
             ) : (
               <XIcon className="size-4" />
             )}
-            Cancel
+            {cleanupPending ? "Retry cleanup" : "Cancel"}
           </button>
         )}
       </div>
@@ -299,10 +300,23 @@ export function FixJobView({
         onConfirm={() => cancel.mutate()}
       />
 
-      {f.pause_reason && (
+      {cleanupPending && (
+        <div role="status" className="rounded-md border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-sm text-status-warning">
+          {f.claimed_by ? "Agent cancelled. Waiting for the worker to stop and clean up." : "Agent cancelled. Workspace cleanup is pending; new work will wait until cleanup succeeds."}
+        </div>
+      )}
+      {f.pause_reason && !cleanupPending && (
         <div className="rounded-md border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-sm text-status-warning">
           {f.pause_reason}
         </div>
+      )}
+      {(f.status === "failed" || cleanupPending) && f.error && (
+        <div role="alert" className="rounded-md border border-status-error/40 bg-status-error/10 px-4 py-3 text-sm text-status-error">
+          {f.error}
+        </div>
+      )}
+      {summary.pr_url && /^https:\/\//.test(summary.pr_url) && (
+        <a href={summary.pr_url} target="_blank" rel="noreferrer" className="text-sm underline">View pull request</a>
       )}
       <PushResult
         pushed={f.pushed}
@@ -310,6 +324,7 @@ export function FixJobView({
         branch={f.result_branch}
         status={f.status}
         error={f.error}
+        errorCode={summary.publication_error}
         sourcePath={repoQ.data?.source_path || scanQ.data?.source_path}
         pushing={
           waitingPush.current ||
@@ -385,6 +400,7 @@ function PushResult({
   branch,
   status,
   error,
+  errorCode,
   sourcePath,
   pushing,
 }: {
@@ -393,11 +409,22 @@ function PushResult({
   branch?: string;
   status: string;
   error?: string;
+  errorCode?: string;
   sourcePath?: string;
   pushing: boolean;
 }) {
   const branchUrl = githubBranchUrl(sourcePath, branch);
   const commitUrl = githubCommitUrl(sourcePath, sha);
+  if (status === "push_failed") {
+    return (
+      <div className="rounded-md border border-status-warning/40 bg-status-warning/10 px-4 py-3 text-sm">
+        <div className="font-medium text-status-warning">
+          {errorCode === "publication_not_ready" ? "Publication not ready; branch retained" : pushed ? "Branch pushed; pull request creation failed" : "GitHub push failed; branch retained"}
+        </div>
+        <p className="mt-1 text-status-warning/90">{pushFailureHint(error)}</p>
+      </div>
+    );
+  }
   if (pushed) {
     return (
       <div className="rounded-md border border-status-success/40 bg-status-success/10 px-4 py-3 text-sm">
@@ -449,16 +476,6 @@ function PushResult({
       <div className="rounded-md border border-status-info/40 bg-status-info/10 px-4 py-3 text-sm text-status-info">
         Pushing {branch ? <span className="font-mono">{branch}</span> : "the fix branch"}{" "}
         to GitHub…
-      </div>
-    );
-  }
-  if (status === "push_failed" || (status === "failed" && error)) {
-    return (
-      <div className="rounded-md border border-status-warning/40 bg-status-warning/10 px-4 py-3 text-sm">
-        <div className="font-medium text-status-warning">
-          Fixes are on the branch — GitHub push did not land
-        </div>
-        <p className="mt-1 text-status-warning/90">{pushFailureHint(error)}</p>
       </div>
     );
   }

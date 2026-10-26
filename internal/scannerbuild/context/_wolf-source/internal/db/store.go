@@ -23,9 +23,15 @@ type OrphanSummary struct {
 // Store.FleetPosture.
 type FleetPostureResult struct {
 	OpenFindingsBySeverity map[string]int `json:"open_findings_by_severity"`
-	WeekOverWeekDelta      map[string]int `json:"week_over_week_delta"`
-	RepoCount              int            `json:"repo_count"`
-	GatesFailing           int            `json:"gates_failing"`
+	// Deprecated: use Changes, which includes comparison coverage and exclusions.
+	WeekOverWeekDelta map[string]int  `json:"week_over_week_delta"`
+	RepoCount         int             `json:"repo_count"`
+	GatesFailing      int             `json:"gates_failing"`
+	Coverage          FleetCoverage   `json:"coverage"`
+	Changes           FleetChanges    `json:"changes"`
+	Priorities        []FleetPriority `json:"priorities"`
+	Work              []FleetScanWork `json:"work"`
+	GeneratedAt       time.Time       `json:"generated_at"`
 }
 
 // FleetInventoryResult is the inventory breakdown returned by
@@ -44,6 +50,8 @@ type NeedsAttentionRow struct {
 	Reason string `json:"reason"`
 	Detail string `json:"detail"`
 	Score  int    `json:"score"`
+	ScanID string `json:"scan_id,omitempty"`
+	Branch string `json:"branch,omitempty"`
 }
 
 // FindingsAggregateRow is a single (rule_id, repos, findings) tuple returned
@@ -73,14 +81,19 @@ type FindingsByRepoRow struct {
 
 // AuditQuery filters, sorts, and paginates the audit log.
 type AuditQuery struct {
-	Search   string // case-insensitive substring on path / action / method / event
-	Method   string // exact HTTP method filter (empty = all)
-	Category string // exact category filter (empty = all)
-	Severity string // exact severity filter (empty = all)
-	SortBy   string // "time" (default) | "status"
-	Desc     bool   // sort descending (newest / highest first)
-	Limit    int    // page size (1..1000; defaults applied in the store)
-	Offset   int    // rows to skip
+	Search   string     // case-insensitive substring on path / action / method / event
+	Method   string     // exact HTTP method filter (empty = all)
+	Category string     // exact category filter (empty = all)
+	Severity string     // exact severity filter (empty = all)
+	Event    string     // exact event type
+	Actor    string     // user or token ID
+	IP       string     // trusted client IP
+	From     *time.Time // inclusive
+	Before   *time.Time // exclusive
+	SortBy   string     // "time" (default) | "status"
+	Desc     bool       // sort descending (newest / highest first)
+	Limit    int        // page size (1..1000; defaults applied in the store)
+	Offset   int        // rows to skip
 }
 
 // ScanListQuery pages scans in SQL. Empty UserID with Fleet=true lists everyone.
@@ -92,16 +105,35 @@ type ScanListQuery struct {
 	RootsOnly bool
 	Limit     int
 	Offset    int
+	Search    string
+	SortBy    string
+	Desc      bool
 }
 
 // VulnListQuery pages canonical vulnerabilities in SQL.
 type VulnListQuery struct {
-	UserID string
-	Fleet  bool
-	RepoID string
-	ScanID string
-	Limit  int
-	Offset int
+	Search, SortBy string
+	Desc           bool
+	UserID         string
+	Fleet          bool
+	RepoID         string
+	ScanID         string
+	Limit          int
+	Offset         int
+}
+
+// FindingListQuery filters scan findings before applying a bounded page.
+type FindingListQuery struct {
+	Severities, Categories, Tools, Statuses, BaselineStates []string
+	Search, SortBy                                          string
+	Desc, IncludeSuppressed, IncludeSARIF, StatsOnly        bool
+	Limit, Offset                                           int
+}
+
+type FindingPage struct {
+	Findings          []models.Finding
+	Total, Suppressed int
+	Stats             ScanFindingStats
 }
 
 // ScanFindingStats is GROUP BY counts for one scan. Path-suppress is not
@@ -128,7 +160,8 @@ type Store interface {
 	GetUserByEmail(ctx context.Context, email string) (*models.User, error)
 	UpdateUser(ctx context.Context, user *models.User) error
 	UpdateUserScannerSupplyChainPersonas(ctx context.Context, userID, encodedPersonas string) error
-	UpdateUserMFA(ctx context.Context, user *models.User) error
+	UpdateUserMFA(ctx context.Context, user, previous *models.User) error
+	CompleteMFALogin(ctx context.Context, hash string, user, previous *models.User, refresh, browser *models.AuthSession) error
 	UpdateUserProfile(ctx context.Context, user *models.User) error
 	ListUsers(ctx context.Context) ([]models.User, error)
 	DeleteUser(ctx context.Context, id string) error
@@ -187,18 +220,24 @@ type Store interface {
 	ListScansPage(ctx context.Context, q ScanListQuery) ([]models.Scan, int, error)
 	ListScansByUser(ctx context.Context, userID string) ([]models.Scan, error)
 	ListScansByRepo(ctx context.Context, repoID string) ([]models.Scan, error)
+	// ListScansByCollection follows current repository membership, including scans
+	// started through the API/CLI or before a repository was moved.
 	ListScansByCollection(ctx context.Context, collectionID string) ([]models.Scan, error)
 	UpdateScan(ctx context.Context, scan *models.Scan) error
+	FailCompletedScan(ctx context.Context, scanID, code, message string) error
+	SaveTestCoverage(ctx context.Context, report *models.TestCoverage) error
+	GetTestCoverage(ctx context.Context, scanID string) (*models.TestCoverage, error)
 	DeleteScan(ctx context.Context, id string) error
 	FindScanByIdempotencyKey(ctx context.Context, userID, key string) (*models.Scan, error)
 	ClaimNextScan(ctx context.Context, workerID, backend string, leaseUntil time.Time) (*models.Scan, error)
 	StartScanExecution(ctx context.Context, scanID, leaseToken string, startedAt time.Time) (bool, error)
 	HeartbeatScanLease(ctx context.Context, scanID, leaseToken string, leaseUntil time.Time) (bool, error)
 	FinalizeScan(ctx context.Context, scan *models.Scan, leaseToken string) (bool, error)
+	CompleteScan(ctx context.Context, scan *models.Scan, completion ScanCompletion) (bool, error)
 	ReclaimStaleScans(ctx context.Context, now time.Time) (int, error)
 	RequestScanCancellation(ctx context.Context, scanID string, at time.Time) error
 	RequestScannerRunCancellation(ctx context.Context, scanID, toolName string, at time.Time) error
-	DeleteFindingsByScanTool(ctx context.Context, scanID, toolName string) error
+	DeleteFindingsByScanTool(ctx context.Context, scanID, toolName, leaseToken string) error
 	CreateFindingsForScanLease(ctx context.Context, findings []models.Finding, scanID, leaseToken string) (bool, error)
 
 	// Durable scan progress and worker capacity.
@@ -208,16 +247,27 @@ type Store interface {
 	ListScanWorkers(ctx context.Context, activeAfter time.Time) ([]models.ScanWorker, error)
 
 	// Findings
+	CaptureScanIgnorePolicy(ctx context.Context, scanID, leaseToken, repoPath string) error
+	PersistFindingBaseline(ctx context.Context, scanID, leaseToken string, observedAt time.Time) error
+	FinalizeFindingClusters(ctx context.Context, scanID, leaseToken string, clusters []models.Finding) error
+	GetScanFindingSnapshot(ctx context.Context, scanID string) (*models.Scan, []models.Finding, error)
+	ListFindingEvidenceByScan(ctx context.Context, scanID string) ([]models.Finding, error)
+	ListFindingClusterEvidence(ctx context.Context, findingID string) ([]models.Finding, error)
 	CreateFinding(ctx context.Context, f *models.Finding) error
 	CreateFindings(ctx context.Context, findings []models.Finding) error
 	GetFindingByID(ctx context.Context, id string) (*models.Finding, error)
 	ListFindingsByScan(ctx context.Context, scanID string) ([]models.Finding, error)
+	QueryScanFindings(ctx context.Context, scanID string, q FindingListQuery) (FindingPage, error)
+	QueryCurrentFindings(ctx context.Context, userID string, fleet bool, collectionID, repoID string, q FindingListQuery) (FindingPage, error)
 	ScanFindingStats(ctx context.Context, scanID string) (ScanFindingStats, error)
 	ListFindingsByRepo(ctx context.Context, repoID string) ([]models.Finding, error)
 	UpdateFinding(ctx context.Context, f *models.Finding) error
 	UpdateFindingStatus(ctx context.Context, id string, status models.Status) error
 
 	// Canonical vulnerabilities (Phase 7 dual-write of finding clusters)
+	ReconcileVulnerabilities(ctx context.Context, scanID string) error
+	SplitVulnerability(ctx context.Context, repoID, sourceID string, findingIDs []string) (*models.Vulnerability, error)
+	MergeVulnerabilities(ctx context.Context, repoID, sourceID, targetID string) (*models.Vulnerability, error)
 	UpsertVulnerability(ctx context.Context, v *models.Vulnerability) error
 	GetVulnerabilityByID(ctx context.Context, id string) (*models.Vulnerability, error)
 	GetVulnerabilityByRepoKey(ctx context.Context, repoID, canonicalKey string) (*models.Vulnerability, error)
@@ -227,8 +277,6 @@ type Store interface {
 	ListVulnerabilitiesPage(ctx context.Context, q VulnListQuery) ([]models.Vulnerability, int, error)
 	InsertVulnerabilityEvidence(ctx context.Context, e *models.VulnerabilityEvidence) error
 	ListEvidenceByVulnerability(ctx context.Context, vulnerabilityID string) ([]models.VulnerabilityEvidence, error)
-	MoveVulnerabilityEvidence(ctx context.Context, evidenceIDs []string, toVulnerabilityID string) error
-	DeleteVulnerability(ctx context.Context, id string) error
 	RefreshVulnerabilityEvidence(ctx context.Context, vulnerabilityID string) error
 
 	// Baselines and Comparisons
@@ -249,7 +297,8 @@ type Store interface {
 	CreateFindingSuppression(ctx context.Context, suppression *models.FindingSuppression) error
 	GetFindingSuppressionByID(ctx context.Context, id string) (*models.FindingSuppression, error)
 	ListFindingSuppressions(ctx context.Context, repoID string, includeInactive bool) ([]models.FindingSuppression, error)
-	RevokeFindingSuppression(ctx context.Context, id string) error
+	RevokeFindingSuppression(ctx context.Context, id, actorID string) error
+	ExpireFindingSuppressions(ctx context.Context, now time.Time) (int, error)
 	CreateFindingSuppressionAudit(ctx context.Context, entry *models.FindingSuppressionAudit) error
 
 	// Quality policies and gate results
@@ -332,6 +381,8 @@ type Store interface {
 
 	// Fix jobs (autonomous fix engine — gated by autofix_enabled)
 	EnqueueFixJob(ctx context.Context, job *models.FixJob) error
+	CreateFixJob(ctx context.Context, job *models.FixJob, allFindings bool) (*models.FixJob, bool, error)
+	FindFixJobByIdempotencyKey(ctx context.Context, userID, key string) (*models.FixJob, error)
 	GetFixJobByID(ctx context.Context, id string) (*models.FixJob, error)
 	ListFixJobs(ctx context.Context, repoID string) ([]models.FixJob, error)
 	// ListFixJobsByUser is the tenant-scoped list: only the caller's jobs,
@@ -340,13 +391,21 @@ type Store interface {
 	// ClaimNextFixJob atomically claims the oldest queued job for a worker.
 	// Returns (nil, nil) when the queue is empty — never double-claims.
 	ClaimNextFixJob(ctx context.Context, workerID string) (*models.FixJob, error)
+	// UpdateFixJob rejects stale revisions with ErrFixJobConflict.
 	UpdateFixJob(ctx context.Context, job *models.FixJob) error
+	// CompleteFixCancellation runs cleanup while excluding creation/claims, then
+	// atomically releases the cancelled job and discards its remediation.
+	CompleteFixCancellation(ctx context.Context, job *models.FixJob, cleanup func(context.Context, *models.FixJob, *models.Repo) error) error
+	// HeartbeatFixJob renews only the matching active claim, without rewriting job state.
+	HeartbeatFixJob(ctx context.Context, id, worker string, claimedAt time.Time) error
 	// ReclaimStaleJobs requeues claimed/running jobs whose worker stopped
 	// heartbeating before the cutoff (crashed/killed worker recovery).
 	ReclaimStaleJobs(ctx context.Context, cutoff time.Time) (int, error)
 	CreateFixAttempt(ctx context.Context, attempt *models.FixAttempt) error
+	UpdateFixAttempt(ctx context.Context, attempt *models.FixAttempt) error
 	ListFixAttempts(ctx context.Context, jobID string) ([]models.FixAttempt, error)
 
+	AcceptFixRemediation(ctx context.Context, rem *models.Remediation, cleanup func(context.Context, *models.Remediation, *models.Repo) (string, error)) error
 	CreateRemediation(ctx context.Context, rem *models.Remediation) error
 	GetRemediationByID(ctx context.Context, id string) (*models.Remediation, error)
 	GetOpenRemediationByOrigin(ctx context.Context, originScanID string) (*models.Remediation, error)
@@ -359,9 +418,10 @@ type Store interface {
 	GetFixerConsoleByID(ctx context.Context, id string) (*models.FixerConsole, error)
 	ClaimNextFixerConsole(ctx context.Context, workerID string) (*models.FixerConsole, error)
 	UpdateFixerConsole(ctx context.Context, cons *models.FixerConsole) error
+	HeartbeatFixerConsole(ctx context.Context, id, worker string, claimedAt time.Time) error
 	ReclaimStaleConsoles(ctx context.Context, cutoff time.Time) (int, error)
 	AppendFixerConsoleStdin(ctx context.Context, consoleID, data string) error
-	DrainFixerConsoleStdin(ctx context.Context, consoleID string) ([]string, error)
+	DrainFixerConsoleStdin(ctx context.Context, cons *models.FixerConsole) ([]string, error)
 	ListActiveFixerConsoles(ctx context.Context) ([]models.FixerConsole, error)
 
 	// API Tokens
@@ -376,6 +436,7 @@ type Store interface {
 
 	// Browser Sessions
 	CreateAuthSession(ctx context.Context, session *models.AuthSession) error
+	RotateAuthSession(ctx context.Context, hash string, next *models.AuthSession) (bool, error)
 	GetAuthSessionByHash(ctx context.Context, hash string) (*models.AuthSession, error)
 	RevokeAuthSessionByHash(ctx context.Context, hash string) error
 	RevokeAuthSessionsByUser(ctx context.Context, userID string, exceptSessionID string) error
@@ -391,9 +452,10 @@ type Store interface {
 	// Fleet aggregates
 	ListCurrentOpenFindings(ctx context.Context, userID string, fleetMode bool, collectionID string) ([]models.Finding, error)
 	FleetPosture(ctx context.Context, userID string, fleetMode bool, collectionID string) (*FleetPostureResult, error)
+	FleetFindingTrends(ctx context.Context, userID string, fleetMode bool, collectionID string) ([]FleetTrendEntry, error)
 	FleetInventory(ctx context.Context, userID string, fleetMode bool) (*FleetInventoryResult, error)
 	FleetNeedsAttention(ctx context.Context, userID string, fleetMode bool, limit int) ([]NeedsAttentionRow, error)
-	FindingsAggregateByRule(ctx context.Context, userID string, fleetMode bool, limit int) ([]FindingsAggregateRow, error)
+	FindingsAggregateByRule(ctx context.Context, userID string, fleetMode bool, limit int, securityOnly bool) ([]FindingsAggregateRow, error)
 	FindingsByRepo(ctx context.Context, userID string, fleetMode bool, collectionID string) ([]FindingsByRepoRow, error)
 
 	// AI Prompt Templates

@@ -8,12 +8,43 @@
 // Type the value type directly and read `.data` once.
 import { useQuery } from "@tanstack/react-query";
 import { api } from "./api";
+import type { Severity } from "./types";
+
+export type FleetCoverageRow = {
+  repo_id: string; name: string; branch: string; scan_id?: string;
+  status: "fresh" | "stale" | "never_scanned" | "failed" | "incomplete" | "pending" | "running";
+  detail: string; last_complete_at?: string; gate_failing: boolean;
+};
+
+export type FleetPriority = {
+  finding_id: string; repo_id: string; name: string; title: string;
+  severity: Severity; tool: string; file_path: string; line: number;
+  state: "new" | "resurfaced" | "existing"; confidence: string;
+};
+
+export type FleetChangeRow = {
+  repo_id: string; name: string; branch: string; scan_id?: string; baseline_scan_id?: string;
+  reason?: string; new: number; resurfaced: number; resolved: number; suppressed: number;
+};
+
+export type FleetScanWork = {
+  scan_id: string; repo_id: string; name: string; branch: string;
+  status: string; phase: string; stalled: boolean;
+};
 
 export type FleetPosture = {
   open_findings_by_severity: Record<string, number>;
   week_over_week_delta: Record<string, number>;
   repo_count: number;
   gates_failing: number;
+  generated_at: string;
+  coverage: { fresh_days: number; fresh_repos: number; rows: FleetCoverageRow[] };
+  changes: {
+    window_days: number; compared_branches: number; excluded_branches: number;
+    new: number; resurfaced: number; resolved: number; suppressed: number; rows: FleetChangeRow[];
+  };
+  priorities: FleetPriority[];
+  work: FleetScanWork[];
 };
 
 export function useFleetPosture(collectionId?: string) {
@@ -27,6 +58,7 @@ export function useFleetPosture(collectionId?: string) {
       return r.data;
     },
     staleTime: 30_000,
+    refetchInterval: 30_000,
   });
 }
 
@@ -50,7 +82,7 @@ export function useFleetInventory() {
 export type NeedsAttentionRow = {
   repo_id: string;
   name: string;
-  reason: "gate_failing" | "stale" | "new_high" | "scan_failed";
+  reason: "gate_failing" | "stale" | "new_high" | "scan_failed" | "incomplete";
   detail: string;
   score: number;
 };
@@ -99,12 +131,12 @@ export function useFindingsByRepo() {
   });
 }
 
-export function useTopVulnerableRules(limit = 10) {
+export function useTopVulnerableRules(limit = 10, securityOnly = false) {
   return useQuery({
-    queryKey: ["findings", "aggregate", "rule_id", limit],
+    queryKey: ["findings", "aggregate", "rule_id", securityOnly, limit],
     queryFn: async () => {
       const r = await api.get<AggregateRow[]>(
-        `/findings/aggregate?group_by=rule_id&limit=${limit}`,
+        `/findings/aggregate?group_by=rule_id&security_only=${securityOnly ? 1 : 0}&limit=${limit}`,
       );
       return r.data ?? [];
     },

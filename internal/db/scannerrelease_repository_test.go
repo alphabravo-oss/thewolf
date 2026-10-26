@@ -579,7 +579,7 @@ func runScannerReleaseRepositoryContract(t *testing.T, factory func(*testing.T) 
 			t.Fatalf("worker statuses = %#v err=%v", statuses, err)
 		}
 
-		assignedAt := time.Now().UTC()
+		assignedAt := time.Now().UTC().Truncate(time.Microsecond)
 		affected, err := repository.AssignWorkerReleaseStatuses(
 			ctx, "canary", releaseID, "new-assignment",
 			assignedAt.Add(-time.Minute), assignedAt,

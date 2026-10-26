@@ -1,0 +1,112 @@
+--- a/run/run.go
++++ b/run/run.go
+@@ -25,6 +25,7 @@
+ 
+ 	"github.com/praetorian-inc/gokart/util"
+ 	"golang.org/x/tools/go/analysis"
++	"golang.org/x/tools/go/analysis/checker"
+ 	"golang.org/x/tools/go/analysis/passes/buildssa"
+ 	"golang.org/x/tools/go/packages"
+ )
+@@ -54,7 +55,7 @@
+ func LoadPackages(packagesList ...string) ([]*packages.Package, bool, error) {
+ 	success := true
+ 	conf := packages.Config{
+-		Mode: packages.LoadSyntax,
++		Mode: packages.LoadAllSyntax,
+ 		//Disable loading tests. If we enable this, then packages will be loaded twice. Once with tests, once without.
+ 		//This causes us to report findings twice, even if there are no tests in the package
+ 		Tests: false,
+@@ -109,35 +110,21 @@
+ 
+ // Run analyzers on a package
+ func RunAnalyzers(analyzers []*analysis.Analyzer, pkg *packages.Package) ([]util.Finding, error) {
+-	//run ssa first since the other analyzers require it
+-
+-	ssaPass := &analysis.Pass{
+-		Analyzer:          buildssa.Analyzer,
+-		Fset:              pkg.Fset,
+-		Files:             pkg.Syntax,
+-		OtherFiles:        pkg.OtherFiles,
+-		IgnoredFiles:      pkg.IgnoredFiles,
+-		Pkg:               pkg.Types,
+-		TypesInfo:         pkg.TypesInfo,
+-		TypesSizes:        pkg.TypesSizes,
+-		ResultOf:          nil,
+-		Report:            nil,
+-		ImportObjectFact:  nil,
+-		ExportObjectFact:  nil,
+-		ImportPackageFact: nil,
+-		ExportPackageFact: nil,
+-		AllObjectFacts:    nil,
+-		AllPackageFacts:   nil,
+-	}
+-
+-	ssaResult, err := ssaPass.Analyzer.Run(ssaPass)
++	// Use the x/tools driver to run SSA prerequisites and propagate facts.
++	// Newer buildssa needs ctrlflow, which in turn needs inspect and facts
++	// from imported packages; invoking Analyzer.Run directly skips that work.
++	graph, err := checker.Analyze([]*analysis.Analyzer{buildssa.Analyzer}, []*packages.Package{pkg}, &checker.Options{Sequential: true})
+ 	if err != nil {
+ 		return nil, err
++	}
++	ssaResult := graph.Roots[0]
++	if ssaResult.Err != nil {
++		return nil, ssaResult.Err
+ 	}
+ 
+ 	//feed the results of ssa into the other analyzers
+ 	resultMap := make(map[*analysis.Analyzer]interface{})
+-	resultMap[buildssa.Analyzer] = ssaResult
++	resultMap[buildssa.Analyzer] = ssaResult.Result
+ 
+ 	results := []util.Finding{}
+ 
+--- a/util/taint.go
++++ b/util/taint.go
+@@ -29,10 +29,11 @@
+ 	SourceCode     string
+ 	SourceFilename string
+ 	SourceLineNum  int
++	SourceColumn   int
+ 	ParentFunction string
+ }
+ 
+-//MapData is a struct that contains information about each hash
++// MapData is a struct that contains information about each hash
+ type MapData struct {
+ 	Mapped     bool // whether a hash has already been mapped
+ 	Vulnerable bool // whether a hash has been found vulnerable
+@@ -171,7 +172,7 @@
+ 		vulnerable = ta.ContainsTaintRecurse(startCall, &expr.Tuple, cg, depth+1, visitedMutable)
+ 	case *ssa.Call:
+ 		callFunc, ok := (expr.Call.Value).(*ssa.Function)
+-		if ok {
++		if ok && callFunc.Pkg != nil {
+ 			globalPkgName := callFunc.Pkg.Pkg.Name()
+ 			if val, ok := VulnGlobalFuncs[globalPkgName]; ok {
+ 				for _, funcName := range val {
+--- a/util/util.go
++++ b/util/util.go
+@@ -184,6 +184,7 @@
+ 		SourceCode:     vulnerable_source_code,
+ 		SourceFilename: vulnerable_code.Filename,
+ 		SourceLineNum:  vulnerable_code.Line,
++		SourceColumn:   vulnerable_code.Column,
+ 		ParentFunction: parent_function_name + " " + parent_function_args,
+ 	}
+ 	return tainted_code
+--- a/util/finding.go
++++ b/util/finding.go
+@@ -54,7 +54,10 @@
+ 	if len(finding.Untrusted_Source) == 0 {
+ 		return false
+ 	}
+-	if finding.Vulnerable_Function.SourceCode == finding.Untrusted_Source[0].SourceCode {
++	// Source text can contain distinct source and sink expressions on one line.
++	if finding.Vulnerable_Function.SourceFilename == finding.Untrusted_Source[0].SourceFilename &&
++		finding.Vulnerable_Function.SourceLineNum == finding.Untrusted_Source[0].SourceLineNum &&
++		finding.Vulnerable_Function.SourceColumn == finding.Untrusted_Source[0].SourceColumn {
+ 		// if the source and sink are the same, return false and do not print out the finding
+ 		return false
+ 	}

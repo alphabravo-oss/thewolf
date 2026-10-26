@@ -309,7 +309,7 @@ func TestSelectTools(t *testing.T) {
 		cfg := RunConfig{
 			Registry:  reg,
 			Languages: []models.Language{models.LangGo},
-			Tools:     []string{"bandit", "eslint"},
+			Tools:     []string{"bandit", "eslint", "bandit"},
 		}
 
 		selected := SelectTools(cfg)
@@ -626,7 +626,7 @@ func TestRun(t *testing.T) {
 			_, err := Run(context.Background(), RunConfig{
 				Registry:         reg,
 				Tools:            []string{"heavy-a", "heavy-b", "light"},
-				Concurrency:      3,
+				Concurrency:      2,
 				HeavyConcurrency: 1,
 				Timeout:          5 * time.Second,
 			})
@@ -762,4 +762,14 @@ func contains(ss []string, s string) bool {
 		}
 	}
 	return false
+}
+
+func TestNotApplicableIsSkippedWithoutCleanCoverage(t *testing.T) {
+	registry := plugin.NewRegistry()
+	registry.Register(&mockPlugin{name: "kubescape", available: true, execErr: &plugin.NotApplicableError{Reason: "no Kubernetes manifests"}})
+	var done error
+	result, err := Run(t.Context(), RunConfig{Registry: registry, Tools: []string{"kubescape"}, OnToolDone: func(_ string, _ []models.Finding, err error) { done = err }})
+	if err != nil || !plugin.IsNotApplicable(done) || len(result.ToolsRun) != 0 || len(result.ToolsFailed) != 0 || len(result.ToolsSkipped) != 1 || result.ToolSkipReasons["kubescape"] != "not applicable: no Kubernetes manifests" {
+		t.Fatalf("result=%+v done=%v err=%v", result, done, err)
+	}
 }

@@ -3,6 +3,7 @@ package general
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
@@ -31,34 +32,36 @@ func (p *TrivyPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]m
 		defer cancel()
 	}
 
-	// trivy caches its ~1GB vuln DB. Point its cache at the shared
-	// wolf-db Docker volume so we don't re-download every run; first
-	// run takes ~30s, subsequent runs are instant. HOME still goes to
-	// the tmpfs because trivy writes some non-cache files there.
-	cmd := container.CommandContext(ctx,
-		container.ConfigFromOpts(opts.ContainerCfg),
-		container.Options{
-			RepoDir: opts.RepoPath,
-			ExtraEnv: map[string]string{
-				"HOME":            "/tmp",
-				"TRIVY_CACHE_DIR": "/var/lib/wolf-db/trivy",
-			},
-		},
-		"trivy", "fs", "--format", "json", "--cache-dir", "/var/lib/wolf-db/trivy", "/scan")
+	cfg := container.ConfigFromOpts(opts.ContainerCfg)
+	cache := "/var/lib/wolf-db/trivy"
+	if cfg != nil && cfg.ExtraEnv["TRIVY_CACHE_DIR"] != "" {
+		cache = cfg.ExtraEnv["TRIVY_CACHE_DIR"]
+	}
+	args := []string{"fs", "--format", "json", "--scanners", "vuln", "--cache-dir", cache}
+	if container.ResolveNetwork(cfg, "trivy") == "none" {
+		args = append(args, "--skip-db-update", "--skip-java-db-update", "--offline-scan")
+	}
+	args = append(args, "/scan")
+	cmd := container.CommandContext(ctx, cfg, container.Options{
+		RepoDir: opts.RepoPath, ExtraEnv: map[string]string{"HOME": "/tmp", "TRIVY_CACHE_DIR": cache},
+	}, "trivy", args...)
 	out, err := cmd.Output()
-	if err != nil && len(out) == 0 {
-		return nil, plugin.WrapExecError("trivy", err)
+	if err != nil {
+		err = plugin.WrapExecError("trivy", err)
+		if len(out) == 0 {
+			return nil, err
+		}
 	}
 	plugin.SaveRaw(opts, out, "json")
 
 	findings, perr := parseTrivyOutput(out)
 	if perr != nil {
-		return nil, perr
+		return nil, errors.Join(err, perr)
 	}
 	for i := range findings {
 		findings[i].FilePath = container.NormalizePath(findings[i].FilePath)
 	}
-	return findings, nil
+	return findings, err
 }
 
 type trivyOutput struct {
@@ -66,11 +69,15 @@ type trivyOutput struct {
 }
 
 type trivyResult struct {
+	Type            string               `json:"Type"`
 	Target          string               `json:"Target"`
 	Vulnerabilities []trivyVulnerability `json:"Vulnerabilities"`
 }
 
 type trivyVulnerability struct {
+	PkgIdentifier struct {
+		PURL string `json:"PURL"`
+	} `json:"PkgIdentifier"`
 	VulnerabilityID  string `json:"VulnerabilityID"`
 	PkgName          string `json:"PkgName"`
 	InstalledVersion string `json:"InstalledVersion"`
@@ -94,14 +101,19 @@ func parseTrivyOutput(data []byte) ([]models.Finding, error) {
 				desc += fmt.Sprintf(" (fix available: %s)", vuln.FixedVersion)
 			}
 			findings = append(findings, models.Finding{
-				ToolName:    "trivy",
-				Category:    models.CategorySCA,
-				Severity:    mapTrivySeverity(vuln.Severity),
-				Title:       fmt.Sprintf("%s in %s@%s", vuln.VulnerabilityID, vuln.PkgName, vuln.InstalledVersion),
-				Description: desc,
-				FilePath:    result.Target,
-				RuleID:      vuln.VulnerabilityID,
-				Status:      models.StatusOpen,
+				ToolName:         "trivy",
+				Category:         models.CategorySCA,
+				Severity:         mapTrivySeverity(vuln.Severity),
+				Title:            fmt.Sprintf("%s in %s@%s", vuln.VulnerabilityID, vuln.PkgName, vuln.InstalledVersion),
+				Description:      desc,
+				FilePath:         result.Target,
+				RuleID:           vuln.VulnerabilityID,
+				AdvisoryID:       vuln.VulnerabilityID,
+				PackageName:      vuln.PkgName,
+				PackageVersion:   vuln.InstalledVersion,
+				PackageEcosystem: result.Type,
+				PackageURL:       vuln.PkgIdentifier.PURL,
+				Status:           models.StatusOpen,
 			})
 		}
 	}

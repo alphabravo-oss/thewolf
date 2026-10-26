@@ -5,4 +5,4 @@
 -- to any authenticated user with the right scope. Recommended for
 -- installs with multiple users sharing a fleet of >20 repos. Default
 -- off preserves single-user privacy.
-INSERT OR IGNORE INTO settings (key, value) VALUES ('fleet_mode', 'false');
+INSERT INTO settings (key, value) VALUES ('fleet_mode', 'false') ON CONFLICT(key) DO NOTHING;

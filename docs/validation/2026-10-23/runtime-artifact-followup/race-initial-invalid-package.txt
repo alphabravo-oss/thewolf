@@ -1,0 +1,12 @@
+# ./internal/runtime/kubernetes
+stat /root/wolf-all/thewolf/internal/runtime/kubernetes: directory not found
+FAIL	./internal/runtime/kubernetes [setup failed]
+ok  	github.com/alphabravocompany/thewolf/internal/setup/scanners	1.172s
+?   	github.com/alphabravocompany/thewolf/internal/serve	[no test files]
+ok  	github.com/alphabravocompany/thewolf/internal/api/routes	47.546s
+ok  	github.com/alphabravocompany/thewolf/cmd/wolf	11.818s
+ok  	github.com/alphabravocompany/thewolf/internal/plugin/container	1.204s
+ok  	github.com/alphabravocompany/thewolf/internal/scannerbuild	1.516s
+ok  	github.com/alphabravocompany/thewolf/internal/scannertools/manifest	1.712s
+ok  	github.com/alphabravocompany/thewolf/internal/scannertools/lock	1.959s
+FAIL

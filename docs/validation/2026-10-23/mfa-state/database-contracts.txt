@@ -1,0 +1,6 @@
+=== RUN   TestMFAStateSQLite
+--- PASS: TestMFAStateSQLite (0.30s)
+=== RUN   TestMFAStatePostgres
+--- PASS: TestMFAStatePostgres (2.24s)
+PASS
+ok  	github.com/alphabravocompany/thewolf/internal/db	3.578s

@@ -1,7 +1,9 @@
 package report
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,6 +11,7 @@ import (
 	"time"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
+	"github.com/alphabravocompany/thewolf/internal/scan/suppress"
 )
 
 func TestWriteAll_WritesEveryArtifact(t *testing.T) {
@@ -55,7 +58,7 @@ func TestWriteAll_WritesEveryArtifact(t *testing.T) {
 		Counts: CountFindings(0, findings),
 	}
 
-	res, err := WriteAll(dir, rcfg, m)
+	res, err := WriteAll(t.Context(), dir, rcfg, m)
 	if err != nil {
 		t.Fatalf("WriteAll: %v", err)
 	}
@@ -148,7 +151,7 @@ func TestWriteAll_SuppressionIntegration(t *testing.T) {
 		// SQL injection in a test file — also suppressed under the new
 		// 'all categories in test files' rule. A real bug in a test file
 		// indicates a test bug, not a production security issue; if you
-		// genuinely need to scan a test, negate via .wolfignore.
+		// need test findings, disable defaults; .wolfignore negation is unsupported.
 		{
 			ToolName: "gosec", Severity: models.SeverityHigh,
 			Title: "G201", FilePath: "internal/foo/bar_test.go", LineStart: 7,
@@ -169,7 +172,7 @@ func TestWriteAll_SuppressionIntegration(t *testing.T) {
 		Counts:      CountFindings(0, findings),
 	}
 
-	res, err := WriteAll(dir, rcfg, m)
+	res, err := WriteAll(t.Context(), dir, rcfg, m)
 	if err != nil {
 		t.Fatalf("WriteAll: %v", err)
 	}
@@ -255,5 +258,125 @@ func TestCountFindings(t *testing.T) {
 	c2 := CountFindings(10, findings)
 	if c2.RawFindings != 10 {
 		t.Errorf("explicit rawTotal not preserved: %d", c2.RawFindings)
+	}
+}
+
+func TestWriteAllPropagatesEveryWriteFailure(t *testing.T) {
+	for _, name := range []string{"findings.json", "RAW.md", "combined.sarif", "FIX-HIGH.md", "FIX-ALL.md", "manifest.json"} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.Mkdir(filepath.Join(dir, name), 0700); err != nil {
+				t.Fatal(err)
+			}
+			result, err := WriteAll(t.Context(), dir, ReportConfig{ScanID: "scan"}, Manifest{ScanID: "scan"})
+			if err == nil || !strings.Contains(err.Error(), name) {
+				t.Fatalf("write failure ignored: %+v %v", result, err)
+			}
+			if result.Manifest != "" {
+				t.Fatalf("incomplete bundle advertised a manifest: %+v", result)
+			}
+		})
+	}
+}
+
+func TestWriteAllCountsPersistedAndPathSuppressions(t *testing.T) {
+	findings := []models.Finding{
+		{Severity: models.SeverityHigh, FilePath: "app.go", Suppressed: true, SuppressedReason: "manual"},
+		{Severity: models.SeverityCritical, FilePath: "vendor/lib.go"},
+		{Severity: models.SeverityHigh, FilePath: "server.go"},
+	}
+	revision := int64(12)
+	cfg := ReportConfig{ScanID: "scan", Findings: findings, FindingsRevision: revision}
+	manifest := Manifest{ScanID: "scan", FindingsRevision: &revision, Counts: CountFindings(7, findings)}
+	for range 2 {
+		result, err := WriteAll(t.Context(), t.TempDir(), cfg, manifest)
+		if err != nil {
+			t.Fatal(err)
+		}
+		data, err := os.ReadFile(result.Manifest)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var actual Manifest
+		if err := json.Unmarshal(data, &actual); err != nil {
+			t.Fatal(err)
+		}
+		if actual.Counts.RawFindings != 7 || actual.Counts.Suppressed != 2 || actual.Counts.Visible != 1 || actual.Counts.HighSeverity != 1 || actual.FindingsRevision == nil || *actual.FindingsRevision != revision {
+			t.Fatalf("incorrect manifest: %s", data)
+		}
+		data, err = os.ReadFile(result.FindingsJSON)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var report jsonReport
+		if err := json.Unmarshal(data, &report); err != nil {
+			t.Fatal(err)
+		}
+		if report.FindingsRevision != revision {
+			t.Fatalf("report revision: %s", data)
+		}
+	}
+}
+
+func TestBaselineMetadataExport(t *testing.T) {
+	first := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	last := first.Add(time.Hour)
+	cfg := ReportConfig{ScanID: "current", BaselineScanID: "baseline", Findings: []models.Finding{{ID: "issue", ToolName: "a", Title: "issue", FilePath: "app.go", Severity: models.SeverityHigh, BaselineState: "resurfaced", IntroducedInScanID: "original", FirstSeenAt: &first, LastSeenAt: &last}}}
+	data, err := GenerateJSON(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var report jsonReport
+	if err := json.Unmarshal(data, &report); err != nil {
+		t.Fatal(err)
+	}
+	if report.BaselineScanID != "baseline" || len(report.Findings) != 1 || report.Findings[0].FirstSeenAt == nil || !report.Findings[0].FirstSeenAt.Equal(first) {
+		t.Fatalf("JSON lost history: %s", data)
+	}
+	data, err = GenerateSARIF(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sarif sarifLog
+	if err := json.Unmarshal(data, &sarif); err != nil {
+		t.Fatal(err)
+	}
+	p := sarif.Runs[0].Results[0].Properties
+	if p == nil || p.BaselineState != "resurfaced" || p.IntroducedInScanID != "original" || p.FirstSeenAt == nil || !p.FirstSeenAt.Equal(first) || p.LastSeenAt == nil || !p.LastSeenAt.Equal(last) {
+		t.Fatalf("SARIF lost history: %s", data)
+	}
+}
+
+func TestWriteAllRejectsInvalidIgnoreFile(t *testing.T) {
+	root, out := t.TempDir(), t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, ".wolfignore"), []byte("** rule=\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	findings := []models.Finding{{FilePath: "vendor/app.go"}}
+	result, err := WriteAll(t.Context(), out, ReportConfig{Findings: findings}, Manifest{RepoPath: root})
+	if err == nil || result != (WriteAllResult{}) || findings[0].Suppressed {
+		t.Fatalf("published partial suppression output: %+v %v", result, err)
+	}
+	files, err := os.ReadDir(out)
+	if err != nil || len(files) != 0 {
+		t.Fatalf("unexpected artifacts: %+v %v", files, err)
+	}
+}
+
+func TestWriteAllPropagatesCancellationBeforeOutput(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	out := t.TempDir()
+	result, err := WriteAll(ctx, out, ReportConfig{}, Manifest{})
+	if !errors.Is(err, context.Canceled) || result != (WriteAllResult{}) {
+		t.Fatalf("cancelled publication: %+v %v", result, err)
+	}
+	result, err = WriteAll(ctx, out, ReportConfig{}, Manifest{IgnorePolicy: &suppress.Snapshot{Version: 1, Paths: map[string]bool{}}})
+	if !errors.Is(err, context.Canceled) || result != (WriteAllResult{}) {
+		t.Fatalf("cancelled captured publication: %+v %v", result, err)
+	}
+	files, err := os.ReadDir(out)
+	if err != nil || len(files) != 0 {
+		t.Fatalf("cancelled artifacts: %+v %v", files, err)
 	}
 }

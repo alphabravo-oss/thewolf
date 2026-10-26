@@ -105,6 +105,19 @@ func TestParseDecisions(t *testing.T) {
 	}
 }
 
+func TestMatchDecisionIDRequiresExactOrUniquePrefix(t *testing.T) {
+	findings := []models.Finding{{ID: "short"}, {ID: "abcdef01-one"}, {ID: "abcdef01-two"}, {ID: "abcdef02-three"}}
+	for _, tt := range []struct{ raw, want string }{
+		{"short", "short"}, {"s", ""}, {"abcdef0", ""}, {"abcdef01", ""},
+		{"abcdef01-one", "abcdef01-one"}, {"abcdef02", "abcdef02-three"},
+		{"abcdef02-wrong", ""}, {"unknown-long-id", ""}, {"", ""},
+	} {
+		if got := MatchDecisionID(tt.raw, findings); got != tt.want {
+			t.Errorf("match %q = %q, want %q", tt.raw, got, tt.want)
+		}
+	}
+}
+
 func TestParseDecisionsFromOpenCodeJSON(t *testing.T) {
 	raw := `{"type":"text","part":{"type":"text","text":"SKIP: 07d0d11d-9dbf-4954-8b4d-a6293e844ca9 false positive: exec.CommandContext uses argv\nFIX: 865d7d08-9e0b-4510-a0bb-c8eb070301be added ReadHeaderTimeout"}}`
 	out := ParseDecisions(raw)

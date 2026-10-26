@@ -16,8 +16,9 @@ const DefaultServer = "http://localhost:8778"
 
 // Context is one named server target — a URL and the credential to use.
 type Context struct {
-	Server string `yaml:"server"`
-	Token  string `yaml:"token"`
+	Server       string `yaml:"server"`
+	Token        string `yaml:"token"`
+	RefreshToken string `yaml:"refresh_token,omitempty"`
 }
 
 // Config is the CLI's on-disk configuration: a set of named contexts (like

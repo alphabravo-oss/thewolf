@@ -338,3 +338,10 @@ exclude-queries:
 		})
 	}
 }
+
+func TestKubescapeCurrentSeverity(t *testing.T) {
+	findings, err := parseKubescapeOutput([]byte(`{"results":[{"resourceID":"pod.yaml","controls":[{"controlID":"C-0004","name":"Memory limits","status":{"status":"failed"},"severity":"High"}]}]}`))
+	if err != nil || len(findings) != 1 || findings[0].Severity != models.SeverityHigh {
+		t.Fatalf("current output: findings=%+v err=%v", findings, err)
+	}
+}

@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
@@ -40,41 +41,13 @@ func (p *StaticcheckPlugin) Execute(ctx context.Context, opts models.ExecuteOpts
 		defer cancel()
 	}
 
-	// staticcheck caches build artifacts under $XDG_CACHE_HOME (defaults
-	// to ~/.cache/staticcheck) and falls back to $HOME/.cache when XDG
-	// isn't set. Our --read-only root + HOME=/ blocks both. Redirect
-	// HOME into the per-container tmpfs. Also export PATH so the Go
-	// toolchain is reachable (staticcheck shells out to `go list`).
+	// Share Go module/build caches across analyzers and scans.
 	cmd := container.CommandContext(ctx,
 		container.ConfigFromOpts(opts.ContainerCfg),
 		container.Options{
-			RepoDir: opts.RepoPath,
-			WorkDir: container.ContainerSubPath(opts.RepoPath, goDir),
-			ExtraEnv: map[string]string{
-				"HOME": "/tmp",
-				"PATH": "/usr/local/go-toolchain/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-				// GOTOOLCHAIN=local disables Go's auto-download of a
-				// newer toolchain when go.mod's `go` directive is
-				// ahead of the container's installed Go. Auto-download
-				// writes into $GOTOOLDIR which is read-only under our
-				// --read-only root and fails with 'permission denied',
-				// killing the whole staticcheck run. With GOTOOLCHAIN
-				// pinned to 'local', Go uses whatever's installed in
-				// the container; if that's too old to parse the source,
-				// the failure message is at least diagnosable.
-				"GOTOOLCHAIN": "local",
-				// -buildvcs=false disables Go's VCS-stamping of binaries.
-				// Without it, `go list` shells out to git and fails with
-				// "error obtaining VCS status: exit status 128" inside
-				// the read-only scanner container (no writable .git, no
-				// git binary inheriting the host config). That bubbles
-				// up as a fake 'compile' finding with no file/line. The
-				// error message Go prints literally says
-				//   "Use -buildvcs=false to disable VCS stamping."
-				// GOFLAGS propagates the flag to every nested go command
-				// staticcheck runs.
-				"GOFLAGS": "-buildvcs=false",
-			},
+			RepoDir:  opts.RepoPath,
+			WorkDir:  container.ContainerSubPath(opts.RepoPath, goDir),
+			ExtraEnv: container.GoEnv(container.ConfigFromOpts(opts.ContainerCfg)),
 		},
 		"staticcheck", "-f", "json", "./...")
 	out, err := cmd.Output()
@@ -140,7 +113,7 @@ func parseStaticcheckOutputWithMetrics(data []byte, onParseError func(error)) ([
 		findings = append(findings, models.Finding{
 			ToolName:    "staticcheck",
 			Category:    models.CategoryQuality,
-			Severity:    mapStaticcheckSeverity(diag.Severity),
+			Severity:    mapStaticcheckSeverity(diag.Code),
 			Title:       diag.Code,
 			Description: diag.Message,
 			FilePath:    diag.Location.File,
@@ -156,13 +129,12 @@ func parseStaticcheckOutputWithMetrics(data []byte, onParseError func(error)) ([
 	return findings, nil
 }
 
-func mapStaticcheckSeverity(s string) models.Severity {
-	switch s {
-	case "error":
-		return models.SeverityHigh
-	case "warning":
+// staticcheck reports nearly every check as "error", so its severity field
+// says nothing. The check family does: SA* are likely bugs; S*, ST*, QF* and
+// U1000 are simplifications, style, quick fixes and unused code.
+func mapStaticcheckSeverity(code string) models.Severity {
+	if strings.HasPrefix(code, "SA") {
 		return models.SeverityMedium
-	default:
-		return models.SeverityLow
 	}
+	return models.SeverityLow
 }

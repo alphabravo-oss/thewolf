@@ -1,0 +1,43 @@
+{
+  "tasks": 248,
+  "checked": 66,
+  "D06_6_complete": true,
+  "D06_complete": true,
+  "D06_acceptance_audit": "README.md#d06-acceptance-audit",
+  "mixed_owner_history_requests": 12,
+  "origin_visibility_requests": 12,
+  "database_failure_requests": 5,
+  "derived_run_inputs_authorized": true,
+  "administrator_scan_oversight_preserved": true,
+  "private_fix_ownership_preserved": true,
+  "ownerless_admin_recovery_preserved": true,
+  "initial_reproduction_exit": 1,
+  "initial_fixture_correction_exit": 1,
+  "focused_race_exit": 0,
+  "focused_packages_with_matching_tests": 2,
+  "full_go_race_exit": 0,
+  "full_go_race_packages": 136,
+  "full_suite_backends": [
+    "sqlite",
+    "postgres"
+  ],
+  "new_http_tests_backend": "sqlite",
+  "runtime_os": "linux",
+  "non_linux_runtime_qualified": false,
+  "go_lint_exit": 0,
+  "scanner_sync_exit": 0,
+  "gosec_exit": 1,
+  "gosec_high_high_findings": 29,
+  "gosec_rules": {
+    "G704": 3,
+    "G703": 25,
+    "G702": 1
+  },
+  "gosec_analysis_errors": {},
+  "fixture_removed": true,
+  "source_files": 183,
+  "ui_changed": false,
+  "deployed": false,
+  "diff_check_exit": 0,
+  "documentation_links_valid": true
+}

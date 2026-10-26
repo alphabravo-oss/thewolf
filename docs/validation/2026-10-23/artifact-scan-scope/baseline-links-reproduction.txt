@@ -1,0 +1,35 @@
+--- FAIL: TestArtifactReadsStayWithinTheirScan (0.00s)
+    scope_test.go:30: invalid scan ID accepted: "", "own evidence" <nil>
+    scope_test.go:30: invalid scan ID accepted: ".", "own evidence" <nil>
+    scope_test.go:30: invalid scan ID accepted: "..", "own evidence" <nil>
+    scope_test.go:30: invalid scan ID accepted: "a/b", "own evidence" <nil>
+    scope_test.go:30: invalid scan ID accepted: "a\\b", "own evidence" <nil>
+    scope_test.go:30: invalid scan ID accepted: "bad\x00id", "own evidence" <nil>
+    --- FAIL: TestArtifactReadsStayWithinTheirScan/absolute_path (0.00s)
+        scope_test.go:41: cross-scan read: "foreign secret" <nil>
+    --- FAIL: TestArtifactReadsStayWithinTheirScan/storage_key (0.00s)
+        scope_test.go:41: cross-scan read: "foreign secret" <nil>
+    --- FAIL: TestArtifactReadsStayWithinTheirScan/foreign.log (0.00s)
+        scope_test.go:68: foreign link read: "foreign secret" <nil>
+    --- FAIL: TestArtifactReadsStayWithinTheirScan/foreign-dir (0.00s)
+        scope_test.go:68: foreign link read: "foreign secret" <nil>
+    scope_test.go:78: hardlink read: "foreign secret" <nil>
+    scope_test.go:91: directory alias read: "foreign secret" <nil>
+    scope_test.go:98: directory alias publication: &{FindingsRevision:<nil> ID:6d74553e-e0d5-46fa-8f45-d33c21b252cd ScanID:alias-scan ArtifactType: FilePath:/tmp/TestArtifactReadsStayWithinTheirScan53326094/001/alias-scan/6d74553e-e0d5-46fa-8f45-d33c21b252cd/probe.log StorageKey:alias-scan/6d74553e-e0d5-46fa-8f45-d33c21b252cd/probe.log FileSize:9 ChecksumSHA256:1d0390f9bd5f040079654ed82366722f2138209bc8b9ebcf2901035183708586 RedactionLevel: CreatedAt:0001-01-01 00:00:00 +0000 UTC UpdatedAt:0001-01-01 00:00:00 +0000 UTC} <nil>
+    scope_test.go:102: foreign scan mutated: 1 -> 2, <nil>
+--- FAIL: TestLegacyNamedArtifactRequiresFullManifestIdentity (0.00s)
+    --- FAIL: TestLegacyNamedArtifactRequiresFullManifestIdentity/same-prefix-foreign (0.00s)
+        scope_test.go:145: unbound legacy read: "legacy evidence" <nil>
+    --- FAIL: TestLegacyNamedArtifactRequiresFullManifestIdentity/missing (0.00s)
+        scope_test.go:145: unbound legacy read: "legacy evidence" <nil>
+    --- FAIL: TestLegacyNamedArtifactRequiresFullManifestIdentity/empty (0.00s)
+        scope_test.go:145: unbound legacy read: "legacy evidence" <nil>
+    --- FAIL: TestLegacyNamedArtifactRequiresFullManifestIdentity/malformed (0.00s)
+        scope_test.go:145: unbound legacy read: "legacy evidence" <nil>
+    --- FAIL: TestLegacyNamedArtifactRequiresFullManifestIdentity/trailing (0.00s)
+        scope_test.go:145: unbound legacy read: "legacy evidence" <nil>
+    --- FAIL: TestLegacyNamedArtifactRequiresFullManifestIdentity/oversized (0.00s)
+        scope_test.go:145: unbound legacy read: "legacy evidence" <nil>
+FAIL
+FAIL	github.com/alphabravocompany/thewolf/artifactscoperepro	0.009s
+FAIL

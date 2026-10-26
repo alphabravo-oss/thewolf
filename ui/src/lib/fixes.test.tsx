@@ -1,0 +1,21 @@
+import { renderHook } from "@testing-library/react";
+import { beforeEach, expect, it, vi } from "vitest";
+import { api } from "./api";
+import { useFixSubmission } from "./fixes";
+vi.mock("./api", () => ({ api: { post: vi.fn() } }));
+beforeEach(() => vi.mocked(api.post).mockReset());
+it("retains a fix key after a lost response and distinguishes changed/new intent", async () => {
+ const post=vi.mocked(api.post);
+ const body={repo_id:"repo",scan_id:"scan",mode:"dry_run"};
+ post.mockRejectedValueOnce(new Error("response lost")).mockResolvedValue({data:{id:"original-job"}});
+ const {result,rerender}=renderHook(()=>useFixSubmission());
+ await expect(result.current(body)).rejects.toThrow("response lost");
+ rerender();
+ await result.current({...body});
+ const key=(index:number)=>(post.mock.calls[index][2]?.headers as Record<string,string>)["Idempotency-Key"];
+ expect(key(0)).toBeTruthy();expect(key(1)).toBe(key(0));
+ await result.current({...body});expect(key(2)).not.toBe(key(1));
+ post.mockRejectedValueOnce(new Error("response lost"));
+ await expect(result.current(body)).rejects.toThrow();
+ await result.current({...body,mode:"push"});expect(key(4)).not.toBe(key(3));
+});

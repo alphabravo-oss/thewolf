@@ -1,3 +1,4 @@
+import { EmptyState, ErrorState, PermissionState } from "@/components/ui/empty-state";
 // Collection detail. Lets the user:
 //   - Rename or clear description (inline edit)
 //   - Delete the collection (modal; optional purge of scan records)
@@ -17,9 +18,12 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { api } from "@/lib/api";
+import { api, ApiError, isNotFound } from "@/lib/api";
 import { useMe, canModify } from "@/lib/me";
-import type { Collection, Repo, Scan } from "@/lib/types";
+import { parseToolList, type Collection, type Repo, type Scan } from "@/lib/types";
+import { DataTable, type Column } from "@/components/ui/data-table";
+import { ScanStatusPill } from "@/components/scan-status-pill";
+import { formatRelativeTime } from "@/lib/utils";
 import { CardSkeleton } from "@/components/skeleton";
 import { AddRepoForm } from "@/components/add-repo-form";
 import { PostureCards } from "@/components/fleet/posture-cards";
@@ -33,6 +37,8 @@ type CollectionDetail = {
   repos: Repo[];
   scans: Scan[];
 };
+
+type RepositoryRow = Repo & { latest?: Scan; scanCount: number };
 
 export const Route = createFileRoute("/_authed/collections/$collectionId")({
   component: CollectionDetailPage,
@@ -55,6 +61,7 @@ function CollectionDetailPage() {
       const r = await api.get<CollectionDetail>(`/collections/${collectionId}`);
       return r.data;
     },
+    refetchInterval: 30_000,
   });
 
   const update = useMutation({
@@ -102,23 +109,47 @@ function CollectionDetailPage() {
     },
   });
 
-  if (q.isLoading || !q.data) {
+
+  if (q.error instanceof ApiError && q.error.status === 403) return <PermissionState description="You do not have access to this collection." />;
+  if (isNotFound(q.error)) return <EmptyState title="Collection not found" />;
+  if (q.isError) return <ErrorState title="Could not load collection" actionLabel="Retry collection" onRetry={() => void q.refetch()} />;
+  if (q.isLoading) {
     return (
-      <div className="page stack page--mid">
+      <div className="space-y-6">
         <CardSkeleton />
       </div>
     );
   }
+  if (!q.data) return <EmptyState title="Collection not found" />;
   const { collection: c, repos, scans } = q.data;
+  const history = new Map<string, Scan[]>();
+  for (const s of scans ?? []) {
+    if (s.origin_scan_id) continue;
+    const items = history.get(s.repo_id) ?? [];
+    items.push(s);
+    history.set(s.repo_id, items);
+  }
+  for (const items of history.values()) items.sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id));
+  const rows: RepositoryRow[] = (repos ?? []).map((repo) => ({ ...repo, latest: history.get(repo.id)?.[0], scanCount: history.get(repo.id)?.length ?? 0 }));
+  const columns: Column<RepositoryRow>[] = [
+    { key: "name", header: "Repository", sortAccessor: (r) => r.name, accessor: (r) => <div className="min-w-40 max-w-64 space-y-1"><Link to="/repos/$repoId" params={{ repoId: r.id }} search={{ collection_id: collectionId }} className="block truncate font-medium hover:underline" title={r.name}>{r.name}</Link><p className="truncate text-xs text-muted-foreground" title={`${r.source_type} · ${r.source_path}`}>{r.source_type} · {r.source_path}</p></div> },
+    { key: "branch", header: "Default branch", sortAccessor: (r) => r.default_branch, accessor: (r) => <span className="font-mono text-xs">{r.default_branch || "—"}</span> },
+    { key: "latest", header: "Latest scan", sortAccessor: (r) => r.latest?.created_at ?? "", accessor: (r) => r.latest ? <Link to="/scans/$scanId" params={{ scanId: r.latest.id }} className="block space-y-1.5 hover:underline"><ScanStatusPill status={r.latest.status} scan={r.latest} size="sm" /><p className="whitespace-nowrap text-xs text-muted-foreground">{r.latest.branch || "Default source"} · <time dateTime={r.latest.created_at} title={new Date(r.latest.created_at).toLocaleString()}>{formatRelativeTime(r.latest.created_at)}</time></p></Link> : <span className="whitespace-nowrap text-sm text-muted-foreground">Never scanned</span> },
+    { key: "coverage", header: "Tools completed", sortable: false, accessor: (r) => r.latest ? <div className="text-xs tabular-nums">{parseToolList(r.latest.tools_completed).length} / {parseToolList(r.latest.tools_selected).length}{parseToolList(r.latest.tools_failed).length > 0 && <p className="text-status-error">{parseToolList(r.latest.tools_failed).length} failed</p>}</div> : <span className="text-muted-foreground">—</span> },
+    { key: "findings", header: "Latest findings", align: "right", sortAccessor: (r) => r.latest?.finding_count ?? -1, accessor: (r) => r.latest ? <Link to="/scans/$scanId" params={{ scanId: r.latest.id }} className="tabular-nums hover:underline">{r.latest.finding_count.toLocaleString()}</Link> : <span className="text-muted-foreground">—</span> },
+    { key: "scans", header: "Scan history", align: "right", sortAccessor: (r) => r.scanCount, accessor: (r) => <Link to="/scans" search={{ repo_id: r.id }} className="tabular-nums hover:underline" aria-label={`View ${r.scanCount} scans for ${r.name}`}>{r.scanCount} scans</Link> },
+    { key: "actions", header: "Actions", sortable: false, accessor: (r) => <div className="flex items-center gap-1"><Link to="/repos/$repoId" params={{ repoId: r.id }} search={{ collection_id: collectionId }} hash="findings" className="px-2 py-1 text-xs hover:underline">Findings</Link>{canModify(me.data, r.user_id) && <button type="button" aria-label={`Scan ${r.name}`} onClick={() => scan.launch({ repo_id: r.id, collection_id: collectionId, branch: r.default_branch || "main", profile: "standard" })} disabled={scan.busy} className="inline-flex h-8 items-center gap-1 rounded px-2 text-xs font-medium hover:bg-muted/50 disabled:opacity-50"><PlayIcon className="size-3.5" />Scan</button>}{canModify(me.data, c.user_id) && <button type="button" onClick={() => setRemoveTarget(r)} className="size-8 grid place-items-center rounded hover:bg-muted/50" aria-label={`Remove ${r.name} from collection`}><XIcon className="size-3.5" /></button>}</div> },
+  ];
+
 
   return (
-    <div className="page stack page--mid">
+    <div className="space-y-6">
       <DeleteWithRecordsDialog
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
         kind="collection"
         name={c.name}
-        recordCount={scans?.length}
+        recordCount={scans?.filter((s) => s.collection_id === collectionId).length}
         pending={del.isPending}
         onConfirm={(purge) => del.mutate(purge)}
       />
@@ -187,12 +218,13 @@ function CollectionDetailPage() {
         )}
       </div>
 
+      <p className="text-sm text-muted-foreground">Work within this collection: open a repository to review its findings, or inspect a scan for the evidence from that run. Scan history follows the repository when it moves between collections.</p>
       <PostureCards collectionId={collectionId} />
 
       <section className="glass-card p-5">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-medium">Repositories ({repos?.length ?? 0})</h2>
-          {!adding && (
+          {!adding && canModify(me.data, c.user_id) && (
             <button
               type="button"
               onClick={() => setAdding(true)}
@@ -214,80 +246,13 @@ function CollectionDetailPage() {
           />
         )}
 
-        {repos && repos.length > 0 ? (
-          <ul className="divide-y divide-border/30">
-            {repos.map((r) => (
-              <li key={r.id} className="py-2.5 flex items-center justify-between gap-3">
-                <Link
-                  to="/repos/$repoId"
-                  params={{ repoId: r.id }}
-                  className="flex-1 min-w-0"
-                >
-                  <div className="text-sm font-medium truncate">{r.name}</div>
-                  <div className="text-xs text-muted-foreground truncate">
-                    <span className="font-mono">{r.source_path}</span>
-                    {r.default_branch && <> · {r.default_branch}</>}
-                  </div>
-                </Link>
-                <button
-                  type="button"
-                  onClick={() =>
-                    scan.launch({
-                      repo_id: r.id,
-                      branch: r.default_branch || "main",
-                      profile: "standard",
-                    })
-                  }
-                  disabled={scan.busy}
-                  className="inline-flex h-7 items-center gap-1 rounded px-2 text-xs font-medium hover:bg-muted/50 disabled:opacity-50"
-                >
-                  <PlayIcon className="size-3.5" />
-                  Scan this
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRemoveTarget(r)}
-                  className="size-7 grid place-items-center rounded hover:bg-muted/50"
-                  aria-label="Remove from collection"
-                  title="Remove from collection"
-                >
-                  <XIcon className="size-3.5" />
-                </button>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          !adding && (
-            <p className="text-sm text-muted-foreground py-2">
-              No repos yet. Click <strong>Add repo</strong> to attach one.
-            </p>
-          )
-        )}
+        <p className="mb-4 text-xs text-muted-foreground">Finding counts describe the latest scan, including partial results. Use Findings to review the repository’s current open issues.</p>
+        <DataTable data={rows} columns={columns} keyExtractor={(r) => r.id} searchPlaceholder="Search repositories in this collection..." pageSize={20} density="compact" persistKey={`collection-repos:${collectionId}`} emptyMessage="No repositories in this collection. Add a repository to get started." />
       </section>
 
       {scan.dialog}
 
-      {scans && scans.length > 0 && (
-        <section className="glass-card p-5">
-          <h2 className="text-sm font-medium mb-3">Recent scans ({scans.length})</h2>
-          <ul className="divide-y divide-border/30">
-            {scans.slice(0, 10).map((s) => (
-              <li key={s.id} className="py-2 text-sm flex items-center justify-between">
-                <Link
-                  to="/scans/$scanId"
-                  params={{ scanId: s.id }}
-                  className="font-mono truncate flex-1 min-w-0 hover:underline"
-                >
-                  {s.id.slice(0, 8)} · {s.status}
-                </Link>
-                <span className="text-xs text-muted-foreground">
-                  {s.finding_count ?? 0} findings
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+
     </div>
   );
 }

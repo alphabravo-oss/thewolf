@@ -1,0 +1,29 @@
+{
+  "Id": "11ef9abb5b82300faa36ec18dd01f0470c0b18eba6191913bf044186b6a8c641",
+  "Name": "/wolf-plan-mfa-state-pg-20261023",
+  "Image": "sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873",
+  "label": "mfa-state-20261023",
+  "ports": {
+    "5432/tcp": [
+      {
+        "HostIp": "127.0.0.1",
+        "HostPort": "32805"
+      }
+    ]
+  },
+  "mounts": [
+    {
+      "Type": "volume",
+      "Name": "f6f1b0b82e2cb6b559440a4cd01a8146778cc7a38ed0cc2a3260b5969d021c19",
+      "Source": "/var/lib/docker/volumes/f6f1b0b82e2cb6b559440a4cd01a8146778cc7a38ed0cc2a3260b5969d021c19/_data",
+      "Destination": "/var/lib/postgresql",
+      "Driver": "local",
+      "Mode": "",
+      "RW": true,
+      "Propagation": ""
+    }
+  ],
+  "removed": true,
+  "container_absence_verified": true,
+  "anonymous_volume_absence_verified": true
+}

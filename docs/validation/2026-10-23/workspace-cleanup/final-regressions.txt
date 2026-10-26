@@ -1,0 +1,4 @@
+ok  	github.com/alphabravocompany/thewolf/internal/scantarget	3.259s
+ok  	github.com/alphabravocompany/thewolf/internal/scannerbuild	1.471s
+ok  	github.com/alphabravocompany/thewolf/internal/scannertools/manifest	1.658s
+ok  	github.com/alphabravocompany/thewolf/internal/scannertools/lock	1.881s

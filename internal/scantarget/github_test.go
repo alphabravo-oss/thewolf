@@ -31,6 +31,14 @@ func TestParseGitHubSource(t *testing.T) {
 		{"alphabravo-oss/thewolf/extra", "", "", true},
 		{"alphabravo-oss/ ", "", "", true},
 		{"alphabravo oss/thewolf", "", "", true},
+		{"../thewolf", "", "", true},
+		{"owner/..", "", "", true},
+		{"owner/.git", "", "", true},
+		{"owner/repo?query=1", "", "", true},
+		{"owner/repo#fragment", "", "", true},
+		{"owner/%2e%2e", "", "", true},
+		{"owner/repo\\other", "", "", true},
+		{"owner/repo\rname", "", "", true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.in, func(t *testing.T) {
@@ -264,5 +272,22 @@ func TestPrepareGitHubCloneError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "github.com/owner/repo") {
 		t.Errorf("error should identify the repo, got: %v", err)
+	}
+}
+
+func TestGitHubPreparationRecordsRetainableContentIdentity(t *testing.T) {
+	path, _ := gitStateFixture(t)
+	prepared, err := (Resolver{GitHubCloner: func(string, string, string, string) (string, error) { return path, nil }}).Prepare(t.Context(), &models.Repo{SourceType: models.SourceTypeGitHub, SourcePath: "owner/repo"}, "main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prepared.Cleanup()
+	retained, err := PrepareExisting(t.Context(), prepared.Path, prepared.SourceType)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer retained.Cleanup()
+	if prepared.TreeDigest == "" || prepared.TreeDigest != retained.TreeDigest || prepared.CommitSHA != retained.CommitSHA {
+		t.Fatal("GitHub preparation and retained workspace disagree on source identity")
 	}
 }

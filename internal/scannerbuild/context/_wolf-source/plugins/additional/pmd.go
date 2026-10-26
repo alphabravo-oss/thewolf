@@ -18,9 +18,13 @@ func init() {
 	plugin.Register(&PMDPlugin{})
 }
 
-func (p *PMDPlugin) Name() string                 { return "pmd" }
-func (p *PMDPlugin) Category() models.Category    { return models.CategoryQuality }
-func (p *PMDPlugin) Languages() []models.Language { return nil }
+func (p *PMDPlugin) Name() string              { return "pmd" }
+func (p *PMDPlugin) Category() models.Category { return models.CategoryQuality }
+
+// Only the Java and ECMAScript rulesets run (see Execute), so other repos are out of scope.
+func (p *PMDPlugin) Languages() []models.Language {
+	return []models.Language{models.LangJava, models.LangJavaScript}
+}
 
 func (p *PMDPlugin) CheckAvailable() bool { return container.IsScannersReady() }
 

@@ -15,7 +15,7 @@ func TestValidateScannerBaseImagesRequiresDigestPins(t *testing.T) {
 	if err := os.MkdirAll(scanners, 0o750); err != nil {
 		t.Fatal(err)
 	}
-	valid := "FROM --platform=linux/amd64 example.test/scanner@sha256:" + strings.Repeat("a", 64) + "\n"
+	valid := "FROM --platform=linux/amd64 example.test/scanner@sha256:" + strings.Repeat("a", 64) + " AS base\nFROM base AS tools\nFROM tools\n"
 	if err := os.WriteFile(filepath.Join(scanners, "Dockerfile"), []byte(valid), 0o600); err != nil {
 		t.Fatal(err)
 	}

@@ -1,0 +1,31 @@
+{
+  "Id": "11425bd5d8abe48b2095a49ab29a96accec442a3154207a3f777baafa5561a34",
+  "Name": "/wolf-plan-lockfile-pg-20261023",
+  "Image": "sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873",
+  "label": "lockfile-suppression-20261023",
+  "ports": {
+    "5432/tcp": [
+      {
+        "HostIp": "127.0.0.1",
+        "HostPort": "32792"
+      }
+    ]
+  },
+  "mounts": [
+    {
+      "Type": "volume",
+      "Name": "eb2375193f4762c82956a42becc876b533fc998238b17b197c5d84124b6e8eab",
+      "Source": "/var/lib/docker/volumes/eb2375193f4762c82956a42becc876b533fc998238b17b197c5d84124b6e8eab/_data",
+      "Destination": "/var/lib/postgresql",
+      "Driver": "local",
+      "Mode": "",
+      "RW": true,
+      "Propagation": ""
+    }
+  ],
+  "removed": true,
+  "container_absent": true,
+  "volumes_absent": {
+    "eb2375193f4762c82956a42becc876b533fc998238b17b197c5d84124b6e8eab": true
+  }
+}

@@ -1,0 +1,9 @@
+--- FAIL: TestGitignoreUnreadablePolicyIsNotNoMatch (0.00s)
+    gitignore_contract_test.go:197: unreadable policy silently ignored: map[] <nil>
+FAIL
+FAIL	github.com/alphabravocompany/thewolf/internal/scan/suppress	0.146s
+ok  	github.com/alphabravocompany/thewolf/internal/scan/report	1.038s
+ok  	github.com/alphabravocompany/thewolf/internal/api/routes	1.648s
+ok  	github.com/alphabravocompany/thewolf/internal/db	5.511s
+ok  	github.com/alphabravocompany/thewolf/cmd/wolf	1.730s
+FAIL

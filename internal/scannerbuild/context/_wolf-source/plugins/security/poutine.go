@@ -19,11 +19,18 @@ func (p *PoutinePlugin) Languages() []models.Language { return nil }
 
 func (p *PoutinePlugin) CheckAvailable() bool { return container.IsScannersReady() }
 
-func (p *PoutinePlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
-	if !plugin.HasPipelineConfig(opts.RepoPath) {
-		plugin.Skipf(opts.OnOutput, "poutine", "no GitHub Actions, GitLab CI, Azure Pipelines, or Tekton config found.")
-		return nil, nil
+func (p *PoutinePlugin) Applicability(repoPath, target string) error {
+	if !plugin.HasPipelineConfig(repoPath) {
+		return &plugin.NotApplicableError{Reason: "no supported CI pipeline configuration found"}
 	}
+	return nil
+}
+
+func (p *PoutinePlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
+	if err := p.Applicability(opts.RepoPath, opts.Target); err != nil {
+		return nil, err
+	}
+
 	if opts.Timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, opts.Timeout)

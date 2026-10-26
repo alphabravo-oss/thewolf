@@ -1,0 +1,34 @@
+{
+  "Id": "7852cb35c73b13d7ac06b65ff6de93a0dd8795c6d1aa93e662ece1b8b703435a",
+  "Name": "/wolf-plan-mfa-policy-pg-20261023",
+  "Image": "sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873",
+  "Mounts": [
+    {
+      "Type": "volume",
+      "Name": "517c9105a1e9150f338f360248e2250bf6d909fae3ee6703da6c164292b36acf",
+      "Source": "/var/lib/docker/volumes/517c9105a1e9150f338f360248e2250bf6d909fae3ee6703da6c164292b36acf/_data",
+      "Destination": "/var/lib/postgresql",
+      "Driver": "local",
+      "Mode": "",
+      "RW": true,
+      "Propagation": ""
+    }
+  ],
+  "labels": {
+    "wolf.plan.fixture": "mfa-policy-20261023"
+  },
+  "ports": {
+    "5432/tcp": [
+      {
+        "HostIp": "127.0.0.1",
+        "HostPort": "32809"
+      }
+    ]
+  },
+  "cleanup": {
+    "container_absent": true,
+    "volumes_absent": [
+      "517c9105a1e9150f338f360248e2250bf6d909fae3ee6703da6c164292b36acf"
+    ]
+  }
+}

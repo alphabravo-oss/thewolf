@@ -2222,7 +2222,7 @@ func selectedBundleSignerEnvironment() []string {
 }
 
 func readStrictJSONFile(path string, target any) error {
-	file, err := os.Open(path)
+	file, err := os.Open(path) // #nosec G703 -- only caller supplies the operator bundle trust-policy environment path, never bundle/request data.
 	if err != nil {
 		return err
 	}

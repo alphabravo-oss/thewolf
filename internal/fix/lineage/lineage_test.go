@@ -229,60 +229,75 @@ func TestBuildRunsPairsChildAndDelta(t *testing.T) {
 }
 
 func TestMaybeEnqueueNextRun(t *testing.T) {
-	ctx := context.Background()
-	store := newLineageStore(t)
-	seedRepo(t, store, "u1", "r1")
-	origin := &models.Scan{
-		ID: "origin-n", UserID: "u1", RepoID: "r1",
-		Status: models.ScanStatusCompleted, FindingCount: 10,
-	}
-	if err := store.CreateScan(ctx, origin); err != nil {
-		t.Fatal(err)
-	}
-	rem := &models.Remediation{
-		ID: "rem-n", UserID: "u1", RepoID: "r1",
-		OriginScanID: "origin-n", Branch: BranchName("origin-n"),
-		State: models.RemediationOpen,
-	}
-	if err := store.CreateRemediation(ctx, rem); err != nil {
-		t.Fatal(err)
-	}
-	prev := &models.FixJob{
-		ID: "job-n1", UserID: "u1", RepoID: "r1", ScanID: "origin-n",
-		RemediationID: "rem-n", Status: models.FixJobAwaitingPush,
-		Engine: "opencode", Mode: models.FixModeDryRun,
-		PlannedRuns: 3, RunIndex: 1, MaxLoops: 2,
-	}
-	if err := store.EnqueueFixJob(ctx, prev); err != nil {
-		t.Fatal(err)
-	}
-	child := &models.Scan{
-		ID: "child-n", UserID: "u1", RepoID: "r1",
-		OriginScanID: "origin-n", FixJobID: "job-n1",
-		RemediationID: "rem-n", Status: models.ScanStatusCompleted,
-		FindingCount: 8,
-	}
-	if err := store.CreateScan(ctx, child); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.CreateFinding(ctx, &models.Finding{
-		ID: "f1", ScanID: child.ID, RepoID: "r1", ToolName: "gosec",
-		Title: "x", FilePath: "a.go", Status: models.StatusOpen,
-		Severity: models.SeverityHigh, Category: models.CategorySAST,
-		Fingerprint: "fp-f1",
-	}); err != nil {
-		t.Fatal(err)
-	}
-	next, err := MaybeEnqueueNextRun(ctx, store, child)
-	if err != nil || next == nil {
-		t.Fatalf("next=%v err=%v", next, err)
-	}
-	if next.RunIndex != 2 || next.PlannedRuns != 3 || next.ScanID != child.ID {
-		t.Fatalf("next %+v", next)
-	}
-	again, err := MaybeEnqueueNextRun(ctx, store, child)
-	if err != nil || again != nil {
-		t.Fatalf("duplicate next=%v err=%v", again, err)
+	for _, cancelFirst := range []bool{false, true} {
+		name := "enqueue"
+		if cancelFirst {
+			name = "cancel-before-enqueue"
+		}
+		t.Run(name, func(t *testing.T) {
+			ctx := context.Background()
+			store := newLineageStore(t)
+			seedRepo(t, store, "u1", "r1")
+			origin := &models.Scan{
+				ID: "origin-n", UserID: "u1", RepoID: "r1",
+				Status: models.ScanStatusCompleted, FindingCount: 10,
+			}
+			if err := store.CreateScan(ctx, origin); err != nil {
+				t.Fatal(err)
+			}
+			rem := &models.Remediation{
+				ID: "rem-n", UserID: "u1", RepoID: "r1",
+				OriginScanID: "origin-n", Branch: BranchName("origin-n"),
+				State: models.RemediationOpen,
+			}
+			if err := store.CreateRemediation(ctx, rem); err != nil {
+				t.Fatal(err)
+			}
+			prev := &models.FixJob{
+				ID: "job-n1", UserID: "u1", RepoID: "r1", ScanID: "origin-n",
+				RemediationID: "rem-n", Status: models.FixJobAwaitingPush,
+				Engine: "opencode", Mode: models.FixModeDryRun,
+				PlannedRuns: 3, RunIndex: 1, MaxLoops: 2,
+			}
+			if err := store.EnqueueFixJob(ctx, prev); err != nil {
+				t.Fatal(err)
+			}
+			child := &models.Scan{
+				ID: "child-n", UserID: "u1", RepoID: "r1",
+				OriginScanID: "origin-n", FixJobID: "job-n1",
+				RemediationID: "rem-n", Status: models.ScanStatusCompleted,
+				FindingCount: 8,
+			}
+			if err := store.CreateScan(ctx, child); err != nil {
+				t.Fatal(err)
+			}
+			if err := store.CreateFinding(ctx, &models.Finding{
+				ID: "f1", ScanID: child.ID, RepoID: "r1", ToolName: "gosec",
+				Title: "x", FilePath: "a.go", Status: models.StatusOpen,
+				Severity: models.SeverityHigh, Category: models.CategorySAST,
+				Fingerprint: "fp-f1",
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if cancelFirst {
+				interrupted := &cancelBeforeCreateStore{Store: store, previousID: prev.ID}
+				if stale, err := MaybeEnqueueNextRun(ctx, interrupted, child); err != nil || stale != nil {
+					t.Fatalf("cancelled follow-up started: %+v %v", stale, err)
+				}
+				return
+			}
+			next, err := MaybeEnqueueNextRun(ctx, store, child)
+			if err != nil || next == nil {
+				t.Fatalf("next=%v err=%v", next, err)
+			}
+			if next.RunIndex != 2 || next.PlannedRuns != 3 || next.ScanID != child.ID {
+				t.Fatalf("next %+v", next)
+			}
+			again, err := MaybeEnqueueNextRun(ctx, store, child)
+			if err != nil || again != nil {
+				t.Fatalf("duplicate next=%v err=%v", again, err)
+			}
+		})
 	}
 }
 
@@ -294,4 +309,22 @@ func newLineageStore(t *testing.T) *db.SQLiteStore {
 	}
 	t.Cleanup(func() { _ = store.Close() })
 	return store
+}
+
+// Simulates cancellation between the lineage read and the creation transaction.
+type cancelBeforeCreateStore struct {
+	db.Store
+	previousID string
+}
+
+func (s *cancelBeforeCreateStore) CreateFixJob(ctx context.Context, job *models.FixJob, all bool) (*models.FixJob, bool, error) {
+	previous, err := s.Store.GetFixJobByID(ctx, s.previousID)
+	if err != nil {
+		return nil, false, err
+	}
+	previous.Status = models.FixJobCancelled
+	if err := s.Store.UpdateFixJob(ctx, previous); err != nil {
+		return nil, false, err
+	}
+	return s.Store.CreateFixJob(ctx, job, all)
 }

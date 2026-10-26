@@ -1,0 +1,931 @@
+7:48PM INF static-ui: no dist dir found; UI routes disabled (run `npm run dev` separately)
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000001] "POST http://example.com/api/v1/auth/register HTTP/1.1" from 192.0.2.1:1234 - 201 961B in 101.921504ms
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000002] "POST http://example.com/api/v1/auth/tokens HTTP/1.1" from 192.0.2.1:1234 - 201 356B in 306.618µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000003] "POST http://example.com/api/v1/auth/tokens HTTP/1.1" from 192.0.2.1:1234 - 201 320B in 300.606µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000004] "POST http://example.com/api/v1/auth/tokens HTTP/1.1" from 192.0.2.1:1234 - 201 325B in 447.153µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000005] "GET http://example.com/api/v1/repos/d57fd8c6-30cd-46c6-9a12-d5056104edc7 HTTP/1.1" from 192.0.2.1:1234 - 403 182B in 414.932µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000006] "GET http://example.com/api/v1/repos/65c92b49-8c13-475c-972c-31a2492a4b89 HTTP/1.1" from 192.0.2.1:1234 - 404 138B in 219.153µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000007] "GET http://example.com/api/v1/repos/d57fd8c6-30cd-46c6-9a12-d5056104edc7 HTTP/1.1" from 192.0.2.1:1234 - 403 182B in 435.89µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000008] "GET http://example.com/api/v1/repos/d9ce4ef3-afd4-499f-9b3f-07a9785609a8 HTTP/1.1" from 192.0.2.1:1234 - 404 138B in 143.772µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000009] "GET http://example.com/api/v1/repos/d57fd8c6-30cd-46c6-9a12-d5056104edc7 HTTP/1.1" from 192.0.2.1:1234 - 403 182B in 317.517µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000010] "GET http://example.com/api/v1/repos/0a0db883-79d4-400e-a6f1-c202cfd11526 HTTP/1.1" from 192.0.2.1:1234 - 404 138B in 195.278µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000011] "GET http://example.com/api/v1/repos/d57fd8c6-30cd-46c6-9a12-d5056104edc7 HTTP/1.1" from 192.0.2.1:1234 - 403 92B in 138.932µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000012] "GET http://example.com/api/v1/repos/cdf00bb9-74e1-4d28-b98e-80e494aeb85c HTTP/1.1" from 192.0.2.1:1234 - 403 92B in 156.145µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000013] "GET http://example.com/api/v1/repos/d57fd8c6-30cd-46c6-9a12-d5056104edc7 HTTP/1.1" from 192.0.2.1:1234 - 401 64B in 18.465µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000014] "GET http://example.com/api/v1/repos/9ec61116-f6e7-4c8f-85b7-e8b034b8012f HTTP/1.1" from 192.0.2.1:1234 - 401 64B in 6.261µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000015] "PUT http://example.com/api/v1/repos/d57fd8c6-30cd-46c6-9a12-d5056104edc7 HTTP/1.1" from 192.0.2.1:1234 - 403 182B in 199.605µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000016] "PUT http://example.com/api/v1/repos/69b92eed-32ad-4957-8e98-979c19980c97 HTTP/1.1" from 192.0.2.1:1234 - 404 138B in 248.508µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000017] "PUT http://example.com/api/v1/repos/d57fd8c6-30cd-46c6-9a12-d5056104edc7 HTTP/1.1" from 192.0.2.1:1234 - 403 182B in 293.334µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000018] "PUT http://example.com/api/v1/repos/ff78fcda-68d4-484b-92ef-5548859d710d HTTP/1.1" from 192.0.2.1:1234 - 404 138B in 284.325µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000019] "PUT http://example.com/api/v1/repos/d57fd8c6-30cd-46c6-9a12-d5056104edc7 HTTP/1.1" from 192.0.2.1:1234 - 403 182B in 475.335µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000020] "PUT http://example.com/api/v1/repos/7f5b5d96-b121-4c05-be84-377ffd8a213f HTTP/1.1" from 192.0.2.1:1234 - 404 138B in 244.08µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000021] "PUT http://example.com/api/v1/repos/d57fd8c6-30cd-46c6-9a12-d5056104edc7 HTTP/1.1" from 192.0.2.1:1234 - 403 93B in 275.799µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000022] "PUT http://example.com/api/v1/repos/03198d0b-6770-43ec-9bd8-0762c75ca974 HTTP/1.1" from 192.0.2.1:1234 - 403 93B in 354.718µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000023] "PUT http://example.com/api/v1/repos/d57fd8c6-30cd-46c6-9a12-d5056104edc7 HTTP/1.1" from 192.0.2.1:1234 - 401 64B in 20.869µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000024] "PUT http://example.com/api/v1/repos/5307ebc3-b1ba-4d50-a6e4-7cd7d01a176f HTTP/1.1" from 192.0.2.1:1234 - 401 64B in 6.021µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000025] "DELETE http://example.com/api/v1/repos/d57fd8c6-30cd-46c6-9a12-d5056104edc7 HTTP/1.1" from 192.0.2.1:1234 - 403 198B in 210.667µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000026] "DELETE http://example.com/api/v1/repos/88123a78-f6fc-401a-824b-6403a8d68af3 HTTP/1.1" from 192.0.2.1:1234 - 404 138B in 192.594µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000027] "DELETE http://example.com/api/v1/repos/d57fd8c6-30cd-46c6-9a12-d5056104edc7 HTTP/1.1" from 192.0.2.1:1234 - 403 198B in 356.742µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000028] "DELETE http://example.com/api/v1/repos/8dabce26-5247-441c-b9fe-f0d78961e56b HTTP/1.1" from 192.0.2.1:1234 - 404 138B in 323.539µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000029] "DELETE http://example.com/api/v1/repos/d57fd8c6-30cd-46c6-9a12-d5056104edc7 HTTP/1.1" from 192.0.2.1:1234 - 403 198B in 272.605µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000030] "DELETE http://example.com/api/v1/repos/09e97cdb-1b2c-4b30-aa75-65a95577ef8a HTTP/1.1" from 192.0.2.1:1234 - 404 138B in 338.658µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000031] "DELETE http://example.com/api/v1/repos/d57fd8c6-30cd-46c6-9a12-d5056104edc7 HTTP/1.1" from 192.0.2.1:1234 - 403 93B in 201.719µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000032] "DELETE http://example.com/api/v1/repos/81976ad0-d3bd-4d86-a407-50f2aa9b2f32 HTTP/1.1" from 192.0.2.1:1234 - 403 93B in 255.292µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000033] "DELETE http://example.com/api/v1/repos/d57fd8c6-30cd-46c6-9a12-d5056104edc7 HTTP/1.1" from 192.0.2.1:1234 - 401 64B in 15.409µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000034] "DELETE http://example.com/api/v1/repos/750d0a0f-fd71-47e8-91f1-574b4da71f33 HTTP/1.1" from 192.0.2.1:1234 - 401 64B in 6.803µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000035] "GET http://example.com/api/v1/findings/a1df9943-f37d-48df-bb2c-2c9294e45aa0 HTTP/1.1" from 192.0.2.1:1234 - 404 144B in 320.213µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000036] "GET http://example.com/api/v1/findings/4a67195b-446d-4935-a15d-7cf3aa5d69bb HTTP/1.1" from 192.0.2.1:1234 - 404 218B in 176.442µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000037] "GET http://example.com/api/v1/findings/a1df9943-f37d-48df-bb2c-2c9294e45aa0 HTTP/1.1" from 192.0.2.1:1234 - 404 144B in 289.175µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000038] "GET http://example.com/api/v1/findings/0c4aa336-c70d-481f-b717-ccef89e02160 HTTP/1.1" from 192.0.2.1:1234 - 404 218B in 169.95µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000039] "GET http://example.com/api/v1/findings/a1df9943-f37d-48df-bb2c-2c9294e45aa0 HTTP/1.1" from 192.0.2.1:1234 - 404 144B in 379.825µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000040] "GET http://example.com/api/v1/findings/a10498fb-d3d0-4aea-bd83-ce8902b089c3 HTTP/1.1" from 192.0.2.1:1234 - 404 218B in 210.065µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000041] "GET http://example.com/api/v1/findings/a1df9943-f37d-48df-bb2c-2c9294e45aa0 HTTP/1.1" from 192.0.2.1:1234 - 403 95B in 173.988µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000042] "GET http://example.com/api/v1/findings/16e5d838-762e-4f6d-8391-99c23cedc59f HTTP/1.1" from 192.0.2.1:1234 - 403 95B in 94.878µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000043] "GET http://example.com/api/v1/findings/a1df9943-f37d-48df-bb2c-2c9294e45aa0 HTTP/1.1" from 192.0.2.1:1234 - 401 64B in 13.495µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000044] "GET http://example.com/api/v1/findings/a4b79b97-2262-41ee-93ec-6e3781e2a359 HTTP/1.1" from 192.0.2.1:1234 - 401 64B in 6.844µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000045] "PUT http://example.com/api/v1/findings/a1df9943-f37d-48df-bb2c-2c9294e45aa0/status HTTP/1.1" from 192.0.2.1:1234 - 404 144B in 305.515µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000046] "PUT http://example.com/api/v1/findings/6a242e20-ce99-40d0-af94-c0934e0a4c66/status HTTP/1.1" from 192.0.2.1:1234 - 404 218B in 194.625µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000047] "PUT http://example.com/api/v1/findings/a1df9943-f37d-48df-bb2c-2c9294e45aa0/status HTTP/1.1" from 192.0.2.1:1234 - 404 144B in 379.687µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000048] "PUT http://example.com/api/v1/findings/0a3cb1ec-49da-435a-aa8b-447a7d6cbfc0/status HTTP/1.1" from 192.0.2.1:1234 - 404 218B in 269.588µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000049] "PUT http://example.com/api/v1/findings/a1df9943-f37d-48df-bb2c-2c9294e45aa0/status HTTP/1.1" from 192.0.2.1:1234 - 404 144B in 377.302µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000050] "PUT http://example.com/api/v1/findings/705434e0-62b6-41fb-98aa-cddf94909fd8/status HTTP/1.1" from 192.0.2.1:1234 - 404 218B in 294.596µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000051] "PUT http://example.com/api/v1/findings/a1df9943-f37d-48df-bb2c-2c9294e45aa0/status HTTP/1.1" from 192.0.2.1:1234 - 403 96B in 208.131µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000052] "PUT http://example.com/api/v1/findings/1cbec74f-fb51-4c9f-b95a-f3ef7a9de537/status HTTP/1.1" from 192.0.2.1:1234 - 403 96B in 249.329µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000053] "PUT http://example.com/api/v1/findings/a1df9943-f37d-48df-bb2c-2c9294e45aa0/status HTTP/1.1" from 192.0.2.1:1234 - 401 64B in 12.494µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000054] "PUT http://example.com/api/v1/findings/b18e631a-0447-48ef-9620-b9a0529382a8/status HTTP/1.1" from 192.0.2.1:1234 - 401 64B in 6.752µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000055] "GET http://example.com/api/v1/findings/export?scan_id=dcf256ff-b6bf-448f-b656-fe69ad4cfa08&format=json&include_suppressed=true HTTP/1.1" from 192.0.2.1:1234 - 403 182B in 384.054µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000056] "GET http://example.com/api/v1/findings/export?scan_id=6a9eb7aa-274e-4f2e-ba24-7db1a5f59481&format=json&include_suppressed=true HTTP/1.1" from 192.0.2.1:1234 - 404 138B in 263.827µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000057] "GET http://example.com/api/v1/findings/export?scan_id=dcf256ff-b6bf-448f-b656-fe69ad4cfa08&format=json&include_suppressed=true HTTP/1.1" from 192.0.2.1:1234 - 403 182B in 293.062µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000058] "GET http://example.com/api/v1/findings/export?scan_id=d3928f1f-a176-4ae7-8f95-774fd0a25f0b&format=json&include_suppressed=true HTTP/1.1" from 192.0.2.1:1234 - 404 138B in 170.711µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000059] "GET http://example.com/api/v1/findings/export?scan_id=dcf256ff-b6bf-448f-b656-fe69ad4cfa08&format=json&include_suppressed=true HTTP/1.1" from 192.0.2.1:1234 - 403 182B in 471.139µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000060] "GET http://example.com/api/v1/findings/export?scan_id=7c9a97d3-331e-4c58-be8b-f377a06f196a&format=json&include_suppressed=true HTTP/1.1" from 192.0.2.1:1234 - 404 138B in 230.223µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000061] "GET http://example.com/api/v1/findings/export?scan_id=dcf256ff-b6bf-448f-b656-fe69ad4cfa08&format=json&include_suppressed=true HTTP/1.1" from 192.0.2.1:1234 - 403 95B in 179.647µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000062] "GET http://example.com/api/v1/findings/export?scan_id=27da4a67-ad2c-40d4-8c87-f58237ecf511&format=json&include_suppressed=true HTTP/1.1" from 192.0.2.1:1234 - 403 95B in 188.615µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000063] "GET http://example.com/api/v1/findings/export?scan_id=dcf256ff-b6bf-448f-b656-fe69ad4cfa08&format=json&include_suppressed=true HTTP/1.1" from 192.0.2.1:1234 - 401 64B in 16.382µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000064] "GET http://example.com/api/v1/findings/export?scan_id=b21343e6-1bc6-4b33-8cbb-83e14cb3fa67&format=json&include_suppressed=true HTTP/1.1" from 192.0.2.1:1234 - 401 64B in 10.25µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000065] "POST http://example.com/api/v1/sarif/import HTTP/1.1" from 192.0.2.1:1234 - 403 182B in 208.653µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000066] "POST http://example.com/api/v1/sarif/import HTTP/1.1" from 192.0.2.1:1234 - 404 138B in 206.279µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000067] "POST http://example.com/api/v1/sarif/import HTTP/1.1" from 192.0.2.1:1234 - 403 182B in 328.568µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000068] "POST http://example.com/api/v1/sarif/import HTTP/1.1" from 192.0.2.1:1234 - 404 138B in 241.926µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000069] "POST http://example.com/api/v1/sarif/import HTTP/1.1" from 192.0.2.1:1234 - 403 182B in 204.405µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000070] "POST http://example.com/api/v1/sarif/import HTTP/1.1" from 192.0.2.1:1234 - 404 138B in 324.431µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000071] "POST http://example.com/api/v1/sarif/import HTTP/1.1" from 192.0.2.1:1234 - 403 93B in 236.787µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000072] "POST http://example.com/api/v1/sarif/import HTTP/1.1" from 192.0.2.1:1234 - 403 93B in 252.195µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000073] "POST http://example.com/api/v1/sarif/import HTTP/1.1" from 192.0.2.1:1234 - 401 64B in 16.801µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000074] "POST http://example.com/api/v1/sarif/import HTTP/1.1" from 192.0.2.1:1234 - 401 64B in 7.083µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000075] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/diff?baseline_scan_id=6f7eedd0-fcf1-4071-9191-6cd5c575bf53 HTTP/1.1" from 192.0.2.1:1234 - 403 182B in 648.512µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000076] "GET http://example.com/api/v1/scans/3b9c925e-e146-4caa-b63a-5f0a9c16ca10/diff?baseline_scan_id=6f7eedd0-fcf1-4071-9191-6cd5c575bf53 HTTP/1.1" from 192.0.2.1:1234 - 404 228B in 451.902µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000077] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/diff?baseline_scan_id=6f7eedd0-fcf1-4071-9191-6cd5c575bf53 HTTP/1.1" from 192.0.2.1:1234 - 403 182B in 687.505µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000078] "GET http://example.com/api/v1/scans/5de89e80-336b-4c49-afd5-0eef3c84c763/diff?baseline_scan_id=6f7eedd0-fcf1-4071-9191-6cd5c575bf53 HTTP/1.1" from 192.0.2.1:1234 - 404 228B in 486.848µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000079] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/diff?baseline_scan_id=6f7eedd0-fcf1-4071-9191-6cd5c575bf53 HTTP/1.1" from 192.0.2.1:1234 - 403 182B in 728.101µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000080] "GET http://example.com/api/v1/scans/0ffc9d94-6bca-4844-9651-d6fdb4d42385/diff?baseline_scan_id=6f7eedd0-fcf1-4071-9191-6cd5c575bf53 HTTP/1.1" from 192.0.2.1:1234 - 404 228B in 440.891µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000081] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/diff?baseline_scan_id=6f7eedd0-fcf1-4071-9191-6cd5c575bf53 HTTP/1.1" from 192.0.2.1:1234 - 403 92B in 144.732µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000082] "GET http://example.com/api/v1/scans/68097c25-57cc-4cfd-a06d-faa45229dccd/diff?baseline_scan_id=6f7eedd0-fcf1-4071-9191-6cd5c575bf53 HTTP/1.1" from 192.0.2.1:1234 - 403 92B in 129.073µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000083] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/diff?baseline_scan_id=6f7eedd0-fcf1-4071-9191-6cd5c575bf53 HTTP/1.1" from 192.0.2.1:1234 - 401 64B in 22.362µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000084] "GET http://example.com/api/v1/scans/5597e247-31d6-493b-8549-c9188519ac8c/diff?baseline_scan_id=6f7eedd0-fcf1-4071-9191-6cd5c575bf53 HTTP/1.1" from 192.0.2.1:1234 - 401 64B in 11.171µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000085] "GET http://example.com/api/v1/scans/6f7eedd0-fcf1-4071-9191-6cd5c575bf53/diff?baseline_scan_id=dcf256ff-b6bf-448f-b656-fe69ad4cfa08 HTTP/1.1" from 192.0.2.1:1234 - 403 182B in 616.46µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000086] "GET http://example.com/api/v1/scans/6f7eedd0-fcf1-4071-9191-6cd5c575bf53/diff?baseline_scan_id=e5038742-f48d-41d4-872e-837eac8309c0 HTTP/1.1" from 192.0.2.1:1234 - 404 230B in 312.658µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000087] "GET http://example.com/api/v1/scans/6f7eedd0-fcf1-4071-9191-6cd5c575bf53/diff?baseline_scan_id=dcf256ff-b6bf-448f-b656-fe69ad4cfa08 HTTP/1.1" from 192.0.2.1:1234 - 403 182B in 813.122µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000088] "GET http://example.com/api/v1/scans/6f7eedd0-fcf1-4071-9191-6cd5c575bf53/diff?baseline_scan_id=d7a8496e-ccd2-4d67-8004-727d417dc579 HTTP/1.1" from 192.0.2.1:1234 - 404 230B in 239.28µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000089] "GET http://example.com/api/v1/scans/6f7eedd0-fcf1-4071-9191-6cd5c575bf53/diff?baseline_scan_id=dcf256ff-b6bf-448f-b656-fe69ad4cfa08 HTTP/1.1" from 192.0.2.1:1234 - 403 182B in 799.646µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000090] "GET http://example.com/api/v1/scans/6f7eedd0-fcf1-4071-9191-6cd5c575bf53/diff?baseline_scan_id=ba5b3789-63f1-4453-9c9b-0742d3d3f68f HTTP/1.1" from 192.0.2.1:1234 - 404 230B in 379.405µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000091] "GET http://example.com/api/v1/scans/6f7eedd0-fcf1-4071-9191-6cd5c575bf53/diff?baseline_scan_id=dcf256ff-b6bf-448f-b656-fe69ad4cfa08 HTTP/1.1" from 192.0.2.1:1234 - 403 92B in 279.146µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000092] "GET http://example.com/api/v1/scans/6f7eedd0-fcf1-4071-9191-6cd5c575bf53/diff?baseline_scan_id=571e1978-1a01-4fff-8ab2-15e6f4384a70 HTTP/1.1" from 192.0.2.1:1234 - 403 92B in 104.176µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000093] "GET http://example.com/api/v1/scans/6f7eedd0-fcf1-4071-9191-6cd5c575bf53/diff?baseline_scan_id=dcf256ff-b6bf-448f-b656-fe69ad4cfa08 HTTP/1.1" from 192.0.2.1:1234 - 401 64B in 16.951µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000094] "GET http://example.com/api/v1/scans/6f7eedd0-fcf1-4071-9191-6cd5c575bf53/diff?baseline_scan_id=d78f7421-f6f7-462a-9864-e30394d66db0 HTTP/1.1" from 192.0.2.1:1234 - 401 64B in 10.72µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000095] "POST http://example.com/api/v1/repos/f2da123e-3315-4d65-8fe4-06a79b7ad1ec/baselines HTTP/1.1" from 192.0.2.1:1234 - 400 180B in 380.467µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000096] "POST http://example.com/api/v1/repos/f2da123e-3315-4d65-8fe4-06a79b7ad1ec/baselines HTTP/1.1" from 192.0.2.1:1234 - 404 138B in 327.726µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000097] "POST http://example.com/api/v1/repos/f2da123e-3315-4d65-8fe4-06a79b7ad1ec/baselines HTTP/1.1" from 192.0.2.1:1234 - 400 180B in 409.422µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000098] "POST http://example.com/api/v1/repos/f2da123e-3315-4d65-8fe4-06a79b7ad1ec/baselines HTTP/1.1" from 192.0.2.1:1234 - 404 138B in 441.182µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000099] "POST http://example.com/api/v1/repos/f2da123e-3315-4d65-8fe4-06a79b7ad1ec/baselines HTTP/1.1" from 192.0.2.1:1234 - 403 182B in 374.987µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000100] "POST http://example.com/api/v1/repos/f2da123e-3315-4d65-8fe4-06a79b7ad1ec/baselines HTTP/1.1" from 192.0.2.1:1234 - 403 182B in 365.218µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000101] "POST http://example.com/api/v1/repos/f2da123e-3315-4d65-8fe4-06a79b7ad1ec/baselines HTTP/1.1" from 192.0.2.1:1234 - 403 93B in 244.4µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000102] "POST http://example.com/api/v1/repos/f2da123e-3315-4d65-8fe4-06a79b7ad1ec/baselines HTTP/1.1" from 192.0.2.1:1234 - 403 93B in 286.169µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000103] "POST http://example.com/api/v1/repos/f2da123e-3315-4d65-8fe4-06a79b7ad1ec/baselines HTTP/1.1" from 192.0.2.1:1234 - 401 64B in 12.313µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000104] "POST http://example.com/api/v1/repos/f2da123e-3315-4d65-8fe4-06a79b7ad1ec/baselines HTTP/1.1" from 192.0.2.1:1234 - 401 64B in 8.848µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000105] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08 HTTP/1.1" from 192.0.2.1:1234 - 403 182B in 274.036µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000106] "GET http://example.com/api/v1/scans/b5aa7000-c3a5-47cf-9ef0-53d23879d22a HTTP/1.1" from 192.0.2.1:1234 - 404 138B in 269.209µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000107] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08 HTTP/1.1" from 192.0.2.1:1234 - 403 182B in 427.394µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000108] "GET http://example.com/api/v1/scans/5bc09820-da88-4943-9229-9fb9e851b798 HTTP/1.1" from 192.0.2.1:1234 - 404 138B in 277.513µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000109] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08 HTTP/1.1" from 192.0.2.1:1234 - 403 182B in 361.602µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000110] "GET http://example.com/api/v1/scans/d997718f-5c61-4e34-a870-49973fe9321e HTTP/1.1" from 192.0.2.1:1234 - 404 138B in 196.049µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000111] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08 HTTP/1.1" from 192.0.2.1:1234 - 403 92B in 186.581µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000112] "GET http://example.com/api/v1/scans/73871ff0-76dd-427b-8c12-25e290c87e05 HTTP/1.1" from 192.0.2.1:1234 - 403 92B in 134.263µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000113] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08 HTTP/1.1" from 192.0.2.1:1234 - 401 64B in 21.812µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000114] "GET http://example.com/api/v1/scans/af81aae6-cf7a-40cd-abb3-5bc3f5e6c175 HTTP/1.1" from 192.0.2.1:1234 - 401 64B in 13.806µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000115] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/lineage HTTP/1.1" from 192.0.2.1:1234 - 403 182B in 252.625µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000116] "GET http://example.com/api/v1/scans/d0992118-2660-497c-a10e-7f7089fc958b/lineage HTTP/1.1" from 192.0.2.1:1234 - 404 138B in 240.654µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000117] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/lineage HTTP/1.1" from 192.0.2.1:1234 - 403 182B in 409.221µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000118] "GET http://example.com/api/v1/scans/eee596f7-f277-4cad-ada9-778def848ede/lineage HTTP/1.1" from 192.0.2.1:1234 - 404 138B in 187.433µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000119] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/lineage HTTP/1.1" from 192.0.2.1:1234 - 403 182B in 318.751µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000120] "GET http://example.com/api/v1/scans/dbe4c8a6-d0b6-47c1-8d62-7dd4d2e05376/lineage HTTP/1.1" from 192.0.2.1:1234 - 404 138B in 224.162µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000121] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/lineage HTTP/1.1" from 192.0.2.1:1234 - 403 92B in 226.306µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000122] "GET http://example.com/api/v1/scans/2cdd6318-8e21-4d12-8981-7c016c0dbdd4/lineage HTTP/1.1" from 192.0.2.1:1234 - 403 92B in 101.972µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000123] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/lineage HTTP/1.1" from 192.0.2.1:1234 - 401 64B in 16.101µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000124] "GET http://example.com/api/v1/scans/b1cac5df-9afa-426a-a9ec-3406f3df15cb/lineage HTTP/1.1" from 192.0.2.1:1234 - 401 64B in 9.618µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000125] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/result HTTP/1.1" from 192.0.2.1:1234 - 403 182B in 379.375µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000126] "GET http://example.com/api/v1/scans/8def419d-aec6-411e-bfe2-e3b46c88c493/result HTTP/1.1" from 192.0.2.1:1234 - 404 138B in 259.468µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000127] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/result HTTP/1.1" from 192.0.2.1:1234 - 403 182B in 616.05µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000128] "GET http://example.com/api/v1/scans/c94e006e-6b43-448a-b7e8-3fc7cdd0ca75/result HTTP/1.1" from 192.0.2.1:1234 - 404 138B in 300.778µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000129] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/result HTTP/1.1" from 192.0.2.1:1234 - 403 182B in 359.276µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000130] "GET http://example.com/api/v1/scans/73cf8ae7-e657-4277-9488-4bb020f4b3f7/result HTTP/1.1" from 192.0.2.1:1234 - 404 138B in 253.437µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000131] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/result HTTP/1.1" from 192.0.2.1:1234 - 403 92B in 246.825µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000132] "GET http://example.com/api/v1/scans/b2da5df5-4c0e-4e6c-bb6c-12b2661917b4/result HTTP/1.1" from 192.0.2.1:1234 - 403 92B in 269.998µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000133] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/result HTTP/1.1" from 192.0.2.1:1234 - 401 64B in 21.813µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000134] "GET http://example.com/api/v1/scans/09b98eab-91fe-46dd-a557-0112dccf07b3/result HTTP/1.1" from 192.0.2.1:1234 - 401 64B in 7.734µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000135] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/findings HTTP/1.1" from 192.0.2.1:1234 - 403 182B in 337.797µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000136] "GET http://example.com/api/v1/scans/9ff6cb3d-05a7-4758-8be4-e33b03a91202/findings HTTP/1.1" from 192.0.2.1:1234 - 404 212B in 310.685µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000137] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/findings HTTP/1.1" from 192.0.2.1:1234 - 403 182B in 363.885µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000138] "GET http://example.com/api/v1/scans/00ecbbc3-781f-479d-ab3f-b23b777fd8c0/findings HTTP/1.1" from 192.0.2.1:1234 - 404 212B in 218.08µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000139] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/findings HTTP/1.1" from 192.0.2.1:1234 - 403 182B in 513.758µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000140] "GET http://example.com/api/v1/scans/552fd142-42e7-4311-a7ed-18637e640c04/findings HTTP/1.1" from 192.0.2.1:1234 - 404 212B in 381.598µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000141] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/findings HTTP/1.1" from 192.0.2.1:1234 - 403 92B in 202.572µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000142] "GET http://example.com/api/v1/scans/c969163c-d286-4815-b6bb-37ca45db568e/findings HTTP/1.1" from 192.0.2.1:1234 - 403 92B in 258.095µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000143] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/findings HTTP/1.1" from 192.0.2.1:1234 - 401 64B in 24.366µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000144] "GET http://example.com/api/v1/scans/5ac96ecb-fe8f-4167-8573-1938983a23c3/findings HTTP/1.1" from 192.0.2.1:1234 - 401 64B in 6.523µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000145] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/findings/stats HTTP/1.1" from 192.0.2.1:1234 - 403 182B in 281.86µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000146] "GET http://example.com/api/v1/scans/6614f94b-bebb-46a9-a3a8-2b90bfb3ecf1/findings/stats HTTP/1.1" from 192.0.2.1:1234 - 404 212B in 170.06µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000147] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/findings/stats HTTP/1.1" from 192.0.2.1:1234 - 403 182B in 402.449µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000148] "GET http://example.com/api/v1/scans/c1251423-0a30-40bd-ac15-69e4b9708438/findings/stats HTTP/1.1" from 192.0.2.1:1234 - 404 212B in 171.884µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000149] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/findings/stats HTTP/1.1" from 192.0.2.1:1234 - 403 182B in 320.795µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000150] "GET http://example.com/api/v1/scans/a4ce709a-0b8a-463f-a4f7-d72fa36cde50/findings/stats HTTP/1.1" from 192.0.2.1:1234 - 404 212B in 310.825µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000151] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/findings/stats HTTP/1.1" from 192.0.2.1:1234 - 403 92B in 151.856µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000152] "GET http://example.com/api/v1/scans/8f78a9e1-c424-4078-9a56-43aecbb8b225/findings/stats HTTP/1.1" from 192.0.2.1:1234 - 403 92B in 197.813µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000153] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/findings/stats HTTP/1.1" from 192.0.2.1:1234 - 401 64B in 30.078µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000154] "GET http://example.com/api/v1/scans/522e7689-d6ab-4537-bc3e-e086755b3319/findings/stats HTTP/1.1" from 192.0.2.1:1234 - 401 64B in 10.32µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000155] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/stream HTTP/1.1" from 192.0.2.1:1234 - 403 182B in 246.464µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000156] "GET http://example.com/api/v1/scans/980d2139-ffbd-4f5f-8bae-1d487dca7cf2/stream HTTP/1.1" from 192.0.2.1:1234 - 404 138B in 163.868µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000157] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/stream HTTP/1.1" from 192.0.2.1:1234 - 403 182B in 353.085µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000158] "GET http://example.com/api/v1/scans/709c0512-c682-4641-b28b-5f79517bcebf/stream HTTP/1.1" from 192.0.2.1:1234 - 404 138B in 314.543µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000159] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/stream HTTP/1.1" from 192.0.2.1:1234 - 403 182B in 337.135µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000160] "GET http://example.com/api/v1/scans/87ebdf42-3ac0-47b1-8b3e-f145b601002e/stream HTTP/1.1" from 192.0.2.1:1234 - 404 138B in 226.467µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000161] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/stream HTTP/1.1" from 192.0.2.1:1234 - 403 92B in 178.417µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000162] "GET http://example.com/api/v1/scans/a807572c-ddc0-4393-8a32-ad9c198ea523/stream HTTP/1.1" from 192.0.2.1:1234 - 403 92B in 233.209µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000163] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/stream HTTP/1.1" from 192.0.2.1:1234 - 401 64B in 15.179µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000164] "GET http://example.com/api/v1/scans/83928419-0a06-4729-9bd4-e2dbca214007/stream HTTP/1.1" from 192.0.2.1:1234 - 401 64B in 5.872µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000165] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/report HTTP/1.1" from 192.0.2.1:1234 - 403 182B in 289.426µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000166] "GET http://example.com/api/v1/scans/4317ecf4-3d55-4a5e-a670-97510d394071/report HTTP/1.1" from 192.0.2.1:1234 - 404 212B in 168.208µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000167] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/report HTTP/1.1" from 192.0.2.1:1234 - 403 182B in 360.279µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000168] "GET http://example.com/api/v1/scans/d3dbfe65-10f0-4ae9-b245-66ef9c60c7f1/report HTTP/1.1" from 192.0.2.1:1234 - 404 212B in 363.806µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000169] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/report HTTP/1.1" from 192.0.2.1:1234 - 403 182B in 412.458µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000170] "GET http://example.com/api/v1/scans/30947958-b873-4c6f-a900-fb02fa8f939a/report HTTP/1.1" from 192.0.2.1:1234 - 404 212B in 282.473µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000171] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/report HTTP/1.1" from 192.0.2.1:1234 - 403 92B in 368.273µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000172] "GET http://example.com/api/v1/scans/b26abb9b-2e0b-4866-b10c-ef7df78baa30/report HTTP/1.1" from 192.0.2.1:1234 - 403 92B in 116.329µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000173] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/report HTTP/1.1" from 192.0.2.1:1234 - 401 64B in 18.685µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000174] "GET http://example.com/api/v1/scans/41587ca9-b1c6-497c-9fb4-4920435971f2/report HTTP/1.1" from 192.0.2.1:1234 - 401 64B in 6.902µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000175] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/manifest HTTP/1.1" from 192.0.2.1:1234 - 403 182B in 376.48µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000176] "GET http://example.com/api/v1/scans/cfc266b4-0252-4b5a-85eb-8dd85c289f0d/manifest HTTP/1.1" from 192.0.2.1:1234 - 404 212B in 202.742µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000177] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/manifest HTTP/1.1" from 192.0.2.1:1234 - 403 182B in 453.454µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000178] "GET http://example.com/api/v1/scans/88c9c93a-8ac2-44c3-98ec-25783ffbf6f6/manifest HTTP/1.1" from 192.0.2.1:1234 - 404 212B in 377.702µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000179] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/manifest HTTP/1.1" from 192.0.2.1:1234 - 403 182B in 467.3µs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000180] "GET http://example.com/api/v1/scans/0d85c4bb-1088-408f-ac15-86712b57ca62/manifest HTTP/1.1" from 192.0.2.1:1234 - 404 212B in 315.955µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/manifest
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000181] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/manifest HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 72.989µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/4960b1eb-89a2-4ddc-8ee4-e50a745c9bf5/manifest
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000182] "GET http://example.com/api/v1/scans/4960b1eb-89a2-4ddc-8ee4-e50a745c9bf5/manifest HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 40.737µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/manifest
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000183] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/manifest HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 52.859µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/2a301853-13d9-4095-a062-ccf1330a24bc/manifest
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000184] "GET http://example.com/api/v1/scans/2a301853-13d9-4095-a062-ccf1330a24bc/manifest HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 73.979µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/sarif
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000185] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/sarif HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 74.109µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/16593b24-c096-41dc-b651-788c0cdf365b/sarif
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000186] "GET http://example.com/api/v1/scans/16593b24-c096-41dc-b651-788c0cdf365b/sarif HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 36.429µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/sarif
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000187] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/sarif HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 42.699µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/b544554c-d97e-4fdc-b26f-37eabbdcdd96/sarif
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000188] "GET http://example.com/api/v1/scans/b544554c-d97e-4fdc-b26f-37eabbdcdd96/sarif HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 59.653µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/sarif
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000189] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/sarif HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 42.68µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/05812c30-63a9-4f17-9ed0-d168a65bae5b/sarif
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000190] "GET http://example.com/api/v1/scans/05812c30-63a9-4f17-9ed0-d168a65bae5b/sarif HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 50.464µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/sarif
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000191] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/sarif HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 46.218µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/31d827a7-d3f5-4045-87a3-cde4847aa062/sarif
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000192] "GET http://example.com/api/v1/scans/31d827a7-d3f5-4045-87a3-cde4847aa062/sarif HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 52.148µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/sarif
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000193] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/sarif HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 100.92µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/fc60c5de-a289-4120-bdaa-61de341e5ab5/sarif
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000194] "GET http://example.com/api/v1/scans/fc60c5de-a289-4120-bdaa-61de341e5ab5/sarif HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 37.099µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/coverage
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000195] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/coverage HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 43.371µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/01254d80-7814-4905-b432-ef8529497ef2/coverage
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000196] "GET http://example.com/api/v1/scans/01254d80-7814-4905-b432-ef8529497ef2/coverage HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 34.104µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/coverage
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000197] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/coverage HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 57.768µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/033e0b7a-5fe1-44e8-9deb-1078029fdef3/coverage
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000198] "GET http://example.com/api/v1/scans/033e0b7a-5fe1-44e8-9deb-1078029fdef3/coverage HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 36.95µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/coverage
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000199] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/coverage HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 54.423µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/b447d0b1-a340-4a3e-89df-db2cfb34a4c6/coverage
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000200] "GET http://example.com/api/v1/scans/b447d0b1-a340-4a3e-89df-db2cfb34a4c6/coverage HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 52.37µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/coverage
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000201] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/coverage HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 69.902µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/026cc6a1-1fdc-4571-9ad7-5f50338d1e31/coverage
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000202] "GET http://example.com/api/v1/scans/026cc6a1-1fdc-4571-9ad7-5f50338d1e31/coverage HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 39.343µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/coverage
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000203] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/coverage HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 43.311µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/1c3e06e4-6540-4716-84aa-b44b2346799f/coverage
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000204] "GET http://example.com/api/v1/scans/1c3e06e4-6540-4716-84aa-b44b2346799f/coverage HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 45.605µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/test-coverage
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000205] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/test-coverage HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 44.584µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/09405df8-7bcc-4e3b-a2e5-ff4c81f0dd8a/test-coverage
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000206] "GET http://example.com/api/v1/scans/09405df8-7bcc-4e3b-a2e5-ff4c81f0dd8a/test-coverage HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 41.208µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/test-coverage
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000207] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/test-coverage HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 47.88µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/eb048d4d-0e19-4ed4-9d16-00fc93e4aa22/test-coverage
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000208] "GET http://example.com/api/v1/scans/eb048d4d-0e19-4ed4-9d16-00fc93e4aa22/test-coverage HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 60.725µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/test-coverage
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000209] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/test-coverage HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 86.834µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/02269636-50a6-449e-80ae-603260946210/test-coverage
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000210] "GET http://example.com/api/v1/scans/02269636-50a6-449e-80ae-603260946210/test-coverage HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 37.35µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/test-coverage
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000211] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/test-coverage HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 52.4µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/9099cde6-5684-472f-acea-f4588599df3d/test-coverage
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000212] "GET http://example.com/api/v1/scans/9099cde6-5684-472f-acea-f4588599df3d/test-coverage HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 40.898µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/test-coverage
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000213] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/test-coverage HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 76.233µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/d1e3e34c-55fb-44db-a1f3-2971aa26602e/test-coverage
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000214] "GET http://example.com/api/v1/scans/d1e3e34c-55fb-44db-a1f3-2971aa26602e/test-coverage HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 34.033µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/gate
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000215] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/gate HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 68.368µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/7ff6194c-be86-4575-889e-ada6e89b763b/gate
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000216] "GET http://example.com/api/v1/scans/7ff6194c-be86-4575-889e-ada6e89b763b/gate HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 60.244µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/gate
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000217] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/gate HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 58.179µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/6ac912b0-f01e-4398-a8ac-60153471d91a/gate
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000218] "GET http://example.com/api/v1/scans/6ac912b0-f01e-4398-a8ac-60153471d91a/gate HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 31.89µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/gate
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000219] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/gate HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 52.619µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/9609ea85-e475-411b-8ee8-ea6776f69265/gate
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000220] "GET http://example.com/api/v1/scans/9609ea85-e475-411b-8ee8-ea6776f69265/gate HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 36.569µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/gate
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000221] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/gate HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 99.468µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/890d146b-2b07-4fc8-ab02-ba98e4e5f419/gate
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000222] "GET http://example.com/api/v1/scans/890d146b-2b07-4fc8-ab02-ba98e4e5f419/gate HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 37.841µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/gate
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000223] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/gate HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 67.607µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/99d0fd75-111d-43c6-98db-de9c547e8e31/gate
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000224] "GET http://example.com/api/v1/scans/99d0fd75-111d-43c6-98db-de9c547e8e31/gate HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 54.113µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/tools
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000225] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/tools HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 50.525µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/2ede58c0-5583-48ae-9d16-74b2e1c7db36/tools
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000226] "GET http://example.com/api/v1/scans/2ede58c0-5583-48ae-9d16-74b2e1c7db36/tools HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 31.519µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/tools
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000227] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/tools HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 43.711µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/813ac9e1-1acc-40d8-8769-05a6a94b1047/tools
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000228] "GET http://example.com/api/v1/scans/813ac9e1-1acc-40d8-8769-05a6a94b1047/tools HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 66.665µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/tools
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000229] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/tools HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 43.701µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/1cf9af4d-69ea-4ea6-b968-ce2a70eccc82/tools
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000230] "GET http://example.com/api/v1/scans/1cf9af4d-69ea-4ea6-b968-ce2a70eccc82/tools HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 65.574µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/tools
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000231] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/tools HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 59.232µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/43d888a1-f2dd-4e43-ac78-6a52bf4a2b7c/tools
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000232] "GET http://example.com/api/v1/scans/43d888a1-f2dd-4e43-ac78-6a52bf4a2b7c/tools HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 46.557µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/tools
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000233] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/tools HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 39.173µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/4a85d5fb-2714-4578-b69e-9ae4c1e4e0e5/tools
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000234] "GET http://example.com/api/v1/scans/4a85d5fb-2714-4578-b69e-9ae4c1e4e0e5/tools HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 32.181µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/scanner-runs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000235] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/scanner-runs HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 46.037µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/538185ff-5646-438a-8e3c-0a9f433d579f/scanner-runs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000236] "GET http://example.com/api/v1/scans/538185ff-5646-438a-8e3c-0a9f433d579f/scanner-runs HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 55.895µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/scanner-runs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000237] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/scanner-runs HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 44.774µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/9900bc93-70cc-445a-9cd3-1627cdfaa71d/scanner-runs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000238] "GET http://example.com/api/v1/scans/9900bc93-70cc-445a-9cd3-1627cdfaa71d/scanner-runs HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 57.988µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/scanner-runs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000239] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/scanner-runs HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 73.088µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/b28e1ddf-93a6-4131-baed-fc65f9a307d3/scanner-runs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000240] "GET http://example.com/api/v1/scans/b28e1ddf-93a6-4131-baed-fc65f9a307d3/scanner-runs HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 47.76µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/scanner-runs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000241] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/scanner-runs HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 42.209µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/ae2e088a-487c-4ea3-b931-d8e2ef5edf43/scanner-runs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000242] "GET http://example.com/api/v1/scans/ae2e088a-487c-4ea3-b931-d8e2ef5edf43/scanner-runs HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 31.799µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/scanner-runs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000243] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/scanner-runs HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 49.793µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dc4b057d-fcff-4bd6-a4c9-6103def6f07b/scanner-runs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000244] "GET http://example.com/api/v1/scans/dc4b057d-fcff-4bd6-a4c9-6103def6f07b/scanner-runs HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 67.818µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/tools/test/output
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000245] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/tools/test/output HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 53.081µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/c0d05695-5b99-4ee5-8768-1940472043b0/tools/test/output
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000246] "GET http://example.com/api/v1/scans/c0d05695-5b99-4ee5-8768-1940472043b0/tools/test/output HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 60.254µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/tools/test/output
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000247] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/tools/test/output HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 100.279µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/7ae3613b-e764-4155-8cb9-742d09bcb11d/tools/test/output
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000248] "GET http://example.com/api/v1/scans/7ae3613b-e764-4155-8cb9-742d09bcb11d/tools/test/output HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 42.371µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/tools/test/output
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000249] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/tools/test/output HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 41.939µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/1e64fb19-e2b5-4e05-bb14-f7745b1e09b6/tools/test/output
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000250] "GET http://example.com/api/v1/scans/1e64fb19-e2b5-4e05-bb14-f7745b1e09b6/tools/test/output HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 33.213µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/tools/test/output
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000251] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/tools/test/output HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 47.299µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/0f4aa2dc-869e-4998-b7fb-0dbd95078284/tools/test/output
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000252] "GET http://example.com/api/v1/scans/0f4aa2dc-869e-4998-b7fb-0dbd95078284/tools/test/output HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 57.91µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/tools/test/output
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000253] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/tools/test/output HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 78.468µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/ed3781be-d5ee-423d-9b16-c77b0dc0187e/tools/test/output
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000254] "GET http://example.com/api/v1/scans/ed3781be-d5ee-423d-9b16-c77b0dc0187e/tools/test/output HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 51.827µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/artifacts/296ccd8a-c168-4461-a0cf-e9ebaf443c43/download
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000255] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/artifacts/296ccd8a-c168-4461-a0cf-e9ebaf443c43/download HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 61.825µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/13a66aa8-e869-4501-ad86-975db7b7485f/artifacts/296ccd8a-c168-4461-a0cf-e9ebaf443c43/download
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000256] "GET http://example.com/api/v1/scans/13a66aa8-e869-4501-ad86-975db7b7485f/artifacts/296ccd8a-c168-4461-a0cf-e9ebaf443c43/download HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 33.022µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/artifacts/296ccd8a-c168-4461-a0cf-e9ebaf443c43/download
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000257] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/artifacts/296ccd8a-c168-4461-a0cf-e9ebaf443c43/download HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 43.05µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/8bf50866-fbe6-4a51-b130-ead9a8ecfaf2/artifacts/296ccd8a-c168-4461-a0cf-e9ebaf443c43/download
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000258] "GET http://example.com/api/v1/scans/8bf50866-fbe6-4a51-b130-ead9a8ecfaf2/artifacts/296ccd8a-c168-4461-a0cf-e9ebaf443c43/download HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 34.774µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/artifacts/296ccd8a-c168-4461-a0cf-e9ebaf443c43/download
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000259] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/artifacts/296ccd8a-c168-4461-a0cf-e9ebaf443c43/download HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 44.052µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dfe05297-521b-4e94-8aa9-96b4d8b44b3b/artifacts/296ccd8a-c168-4461-a0cf-e9ebaf443c43/download
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000260] "GET http://example.com/api/v1/scans/dfe05297-521b-4e94-8aa9-96b4d8b44b3b/artifacts/296ccd8a-c168-4461-a0cf-e9ebaf443c43/download HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 41.477µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/artifacts/296ccd8a-c168-4461-a0cf-e9ebaf443c43/download
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000261] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/artifacts/296ccd8a-c168-4461-a0cf-e9ebaf443c43/download HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 58.46µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/ffb61c17-cb1c-4d98-a313-ef04431faa28/artifacts/296ccd8a-c168-4461-a0cf-e9ebaf443c43/download
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000262] "GET http://example.com/api/v1/scans/ffb61c17-cb1c-4d98-a313-ef04431faa28/artifacts/296ccd8a-c168-4461-a0cf-e9ebaf443c43/download HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 117.14µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/artifacts/296ccd8a-c168-4461-a0cf-e9ebaf443c43/download
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000263] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/artifacts/296ccd8a-c168-4461-a0cf-e9ebaf443c43/download HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 54.394µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/f59ca05a-5c91-4573-9eca-b6ee90f0b337/artifacts/296ccd8a-c168-4461-a0cf-e9ebaf443c43/download
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000264] "GET http://example.com/api/v1/scans/f59ca05a-5c91-4573-9eca-b6ee90f0b337/artifacts/296ccd8a-c168-4461-a0cf-e9ebaf443c43/download HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 33.373µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/ai-logs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000265] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/ai-logs HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 58.321µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/75c12052-2fff-40e2-ade0-b0116de2573b/ai-logs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000266] "GET http://example.com/api/v1/scans/75c12052-2fff-40e2-ade0-b0116de2573b/ai-logs HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 34.095µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/ai-logs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000267] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/ai-logs HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 71.055µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/22262951-570f-40e4-b5c6-cfa7ecf027cc/ai-logs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000268] "GET http://example.com/api/v1/scans/22262951-570f-40e4-b5c6-cfa7ecf027cc/ai-logs HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 34.316µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/ai-logs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000269] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/ai-logs HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 66.927µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/d1da548f-8044-480a-8486-faae9c8e3e13/ai-logs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000270] "GET http://example.com/api/v1/scans/d1da548f-8044-480a-8486-faae9c8e3e13/ai-logs HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 37.2µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/ai-logs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000271] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/ai-logs HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 52.458µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/1da41363-dca4-4ef1-9ff9-a83e67cc3492/ai-logs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000272] "GET http://example.com/api/v1/scans/1da41363-dca4-4ef1-9ff9-a83e67cc3492/ai-logs HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 31.359µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/ai-logs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000273] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/ai-logs HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 36.008µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/f695f146-caea-4638-93d7-ab5efbf8307f/ai-logs
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000274] "GET http://example.com/api/v1/scans/f695f146-caea-4638-93d7-ab5efbf8307f/ai-logs HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 42.541µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/tool-summaries
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000275] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/tool-summaries HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 43.01µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/1a991c24-5bd8-4b7c-a66c-20337d730c3d/tool-summaries
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000276] "GET http://example.com/api/v1/scans/1a991c24-5bd8-4b7c-a66c-20337d730c3d/tool-summaries HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 29.095µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/tool-summaries
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000277] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/tool-summaries HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 38.621µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/0818f7e1-b98d-4842-a569-65f8db6a34cd/tool-summaries
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000278] "GET http://example.com/api/v1/scans/0818f7e1-b98d-4842-a569-65f8db6a34cd/tool-summaries HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 38.733µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/tool-summaries
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000279] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/tool-summaries HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 69.942µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/bc9e0f6c-259f-4e21-bf6f-064d946f635d/tool-summaries
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000280] "GET http://example.com/api/v1/scans/bc9e0f6c-259f-4e21-bf6f-064d946f635d/tool-summaries HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 39.014µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/tool-summaries
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000281] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/tool-summaries HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 55.074µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/d2a6d8c7-fc18-46bc-87d8-98832cebca89/tool-summaries
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000282] "GET http://example.com/api/v1/scans/d2a6d8c7-fc18-46bc-87d8-98832cebca89/tool-summaries HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 26.37µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/tool-summaries
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000283] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/tool-summaries HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 52.7µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/a16bb2eb-80e6-428d-9d62-64186c5dbe9b/tool-summaries
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000284] "GET http://example.com/api/v1/scans/a16bb2eb-80e6-428d-9d62-64186c5dbe9b/tool-summaries HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 26.921µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/recommendations
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000285] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/recommendations HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 55.405µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/0faa1e0d-e7f6-4ea2-90ab-b616aeb80ff4/recommendations
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000286] "GET http://example.com/api/v1/scans/0faa1e0d-e7f6-4ea2-90ab-b616aeb80ff4/recommendations HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 27.341µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/recommendations
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000287] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/recommendations HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 50.995µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/fcd9c926-6049-428b-8778-d50fdf3b69f6/recommendations
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000288] "GET http://example.com/api/v1/scans/fcd9c926-6049-428b-8778-d50fdf3b69f6/recommendations HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 37.34µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/recommendations
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000289] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/recommendations HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 58.68µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/56c08b1f-d431-4c96-970d-96ed6e6e4ae1/recommendations
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000290] "GET http://example.com/api/v1/scans/56c08b1f-d431-4c96-970d-96ed6e6e4ae1/recommendations HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 37.461µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/recommendations
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000291] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/recommendations HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 36.749µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/aab872b4-2f03-4d89-8b7e-26651957f888/recommendations
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000292] "GET http://example.com/api/v1/scans/aab872b4-2f03-4d89-8b7e-26651957f888/recommendations HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 25.928µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/recommendations
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000293] "GET http://example.com/api/v1/scans/dcf256ff-b6bf-448f-b656-fe69ad4cfa08/recommendations HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 55.405µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/scans/949e0e50-d1cf-40a0-b924-6722d28367fb/recommendations
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000294] "GET http://example.com/api/v1/scans/949e0e50-d1cf-40a0-b924-6722d28367fb/recommendations HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 36.69µs
+7:48PM WRN rate limit exceeded ip=192.0.2.1 path=/api/v1/auth/tokens
+2026/10/23 19:48:35 [thewolf-dev-1-mj/hi7pQH8Bp5-000295] "POST http://example.com/api/v1/auth/tokens HTTP/1.1" from 192.0.2.1:1234 - 429 198B in 46.206µs
+--- FAIL: TestScanFindingAndImportResourceNonDisclosure (0.39s)
+    --- FAIL: TestScanFindingAndImportResourceNonDisclosure/repo (0.00s)
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/repo/user_session (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 403 {"error":{"code":"forbidden","message":"repo does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"repo does not belong to current user"}
+            resource_disclosure_test.go:108: existence disclosed:
+                foreign: {"error":{"code":"forbidden","message":"repo does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"repo does not belong to current user"}
+                
+                missing: {"error":{"code":"not_found","message":"repo not found"},"type":"about:blank","title":"not_found","status":404,"detail":"repo not found"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/repo/user_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 403 {"error":{"code":"forbidden","message":"repo does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"repo does not belong to current user"}
+            resource_disclosure_test.go:108: existence disclosed:
+                foreign: {"error":{"code":"forbidden","message":"repo does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"repo does not belong to current user"}
+                
+                missing: {"error":{"code":"not_found","message":"repo not found"},"type":"about:blank","title":"not_found","status":404,"detail":"repo not found"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/repo/admin_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 403 {"error":{"code":"forbidden","message":"repo does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"repo does not belong to current user"}
+            resource_disclosure_test.go:108: existence disclosed:
+                foreign: {"error":{"code":"forbidden","message":"repo does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"repo does not belong to current user"}
+                
+                missing: {"error":{"code":"not_found","message":"repo not found"},"type":"about:blank","title":"not_found","status":404,"detail":"repo not found"}
+    --- FAIL: TestScanFindingAndImportResourceNonDisclosure/repo_update (0.00s)
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/repo_update/user_session (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 403 {"error":{"code":"forbidden","message":"repo does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"repo does not belong to current user"}
+            resource_disclosure_test.go:108: existence disclosed:
+                foreign: {"error":{"code":"forbidden","message":"repo does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"repo does not belong to current user"}
+                
+                missing: {"error":{"code":"not_found","message":"repo not found"},"type":"about:blank","title":"not_found","status":404,"detail":"repo not found"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/repo_update/user_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 403 {"error":{"code":"forbidden","message":"repo does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"repo does not belong to current user"}
+            resource_disclosure_test.go:108: existence disclosed:
+                foreign: {"error":{"code":"forbidden","message":"repo does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"repo does not belong to current user"}
+                
+                missing: {"error":{"code":"not_found","message":"repo not found"},"type":"about:blank","title":"not_found","status":404,"detail":"repo not found"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/repo_update/admin_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 403 {"error":{"code":"forbidden","message":"repo does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"repo does not belong to current user"}
+            resource_disclosure_test.go:108: existence disclosed:
+                foreign: {"error":{"code":"forbidden","message":"repo does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"repo does not belong to current user"}
+                
+                missing: {"error":{"code":"not_found","message":"repo not found"},"type":"about:blank","title":"not_found","status":404,"detail":"repo not found"}
+    --- FAIL: TestScanFindingAndImportResourceNonDisclosure/repo_delete (0.00s)
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/repo_delete/user_session (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 403 {"error":{"code":"forbidden","message":"you can only delete repositories you created"},"type":"about:blank","title":"forbidden","status":403,"detail":"you can only delete repositories you created"}
+            resource_disclosure_test.go:108: existence disclosed:
+                foreign: {"error":{"code":"forbidden","message":"you can only delete repositories you created"},"type":"about:blank","title":"forbidden","status":403,"detail":"you can only delete repositories you created"}
+                
+                missing: {"error":{"code":"not_found","message":"repo not found"},"type":"about:blank","title":"not_found","status":404,"detail":"repo not found"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/repo_delete/user_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 403 {"error":{"code":"forbidden","message":"you can only delete repositories you created"},"type":"about:blank","title":"forbidden","status":403,"detail":"you can only delete repositories you created"}
+            resource_disclosure_test.go:108: existence disclosed:
+                foreign: {"error":{"code":"forbidden","message":"you can only delete repositories you created"},"type":"about:blank","title":"forbidden","status":403,"detail":"you can only delete repositories you created"}
+                
+                missing: {"error":{"code":"not_found","message":"repo not found"},"type":"about:blank","title":"not_found","status":404,"detail":"repo not found"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/repo_delete/admin_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 403 {"error":{"code":"forbidden","message":"you can only delete repositories you created"},"type":"about:blank","title":"forbidden","status":403,"detail":"you can only delete repositories you created"}
+            resource_disclosure_test.go:108: existence disclosed:
+                foreign: {"error":{"code":"forbidden","message":"you can only delete repositories you created"},"type":"about:blank","title":"forbidden","status":403,"detail":"you can only delete repositories you created"}
+                
+                missing: {"error":{"code":"not_found","message":"repo not found"},"type":"about:blank","title":"not_found","status":404,"detail":"repo not found"}
+    --- FAIL: TestScanFindingAndImportResourceNonDisclosure/finding (0.00s)
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/finding/user_session (0.00s)
+            resource_disclosure_test.go:108: existence disclosed:
+                foreign: {"error":{"code":"not_found","message":"finding not found"},"type":"about:blank","title":"not_found","status":404,"detail":"finding not found"}
+                
+                missing: {"error":{"code":"not_found","message":"finding <finding> not found"},"type":"about:blank","title":"not_found","status":404,"detail":"finding <finding> not found"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/finding/user_token (0.00s)
+            resource_disclosure_test.go:108: existence disclosed:
+                foreign: {"error":{"code":"not_found","message":"finding not found"},"type":"about:blank","title":"not_found","status":404,"detail":"finding not found"}
+                
+                missing: {"error":{"code":"not_found","message":"finding <finding> not found"},"type":"about:blank","title":"not_found","status":404,"detail":"finding <finding> not found"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/finding/admin_token (0.00s)
+            resource_disclosure_test.go:108: existence disclosed:
+                foreign: {"error":{"code":"not_found","message":"finding not found"},"type":"about:blank","title":"not_found","status":404,"detail":"finding not found"}
+                
+                missing: {"error":{"code":"not_found","message":"finding <finding> not found"},"type":"about:blank","title":"not_found","status":404,"detail":"finding <finding> not found"}
+    --- FAIL: TestScanFindingAndImportResourceNonDisclosure/finding_triage (0.00s)
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/finding_triage/user_session (0.00s)
+            resource_disclosure_test.go:108: existence disclosed:
+                foreign: {"error":{"code":"not_found","message":"finding not found"},"type":"about:blank","title":"not_found","status":404,"detail":"finding not found"}
+                
+                missing: {"error":{"code":"not_found","message":"finding <finding> not found"},"type":"about:blank","title":"not_found","status":404,"detail":"finding <finding> not found"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/finding_triage/user_token (0.00s)
+            resource_disclosure_test.go:108: existence disclosed:
+                foreign: {"error":{"code":"not_found","message":"finding not found"},"type":"about:blank","title":"not_found","status":404,"detail":"finding not found"}
+                
+                missing: {"error":{"code":"not_found","message":"finding <finding> not found"},"type":"about:blank","title":"not_found","status":404,"detail":"finding <finding> not found"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/finding_triage/admin_token (0.00s)
+            resource_disclosure_test.go:108: existence disclosed:
+                foreign: {"error":{"code":"not_found","message":"finding not found"},"type":"about:blank","title":"not_found","status":404,"detail":"finding not found"}
+                
+                missing: {"error":{"code":"not_found","message":"finding <finding> not found"},"type":"about:blank","title":"not_found","status":404,"detail":"finding <finding> not found"}
+    --- FAIL: TestScanFindingAndImportResourceNonDisclosure/finding_export (0.00s)
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/finding_export/user_session (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 403 {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+            resource_disclosure_test.go:108: existence disclosed:
+                foreign: {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+                
+                missing: {"error":{"code":"not_found","message":"scan not found"},"type":"about:blank","title":"not_found","status":404,"detail":"scan not found"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/finding_export/user_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 403 {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+            resource_disclosure_test.go:108: existence disclosed:
+                foreign: {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+                
+                missing: {"error":{"code":"not_found","message":"scan not found"},"type":"about:blank","title":"not_found","status":404,"detail":"scan not found"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/finding_export/admin_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 403 {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+            resource_disclosure_test.go:108: existence disclosed:
+                foreign: {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+                
+                missing: {"error":{"code":"not_found","message":"scan not found"},"type":"about:blank","title":"not_found","status":404,"detail":"scan not found"}
+    --- FAIL: TestScanFindingAndImportResourceNonDisclosure/import (0.00s)
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/import/user_session (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 403 {"error":{"code":"forbidden","message":"repo does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"repo does not belong to current user"}
+            resource_disclosure_test.go:108: existence disclosed:
+                foreign: {"error":{"code":"forbidden","message":"repo does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"repo does not belong to current user"}
+                
+                missing: {"error":{"code":"not_found","message":"repo not found"},"type":"about:blank","title":"not_found","status":404,"detail":"repo not found"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/import/user_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 403 {"error":{"code":"forbidden","message":"repo does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"repo does not belong to current user"}
+            resource_disclosure_test.go:108: existence disclosed:
+                foreign: {"error":{"code":"forbidden","message":"repo does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"repo does not belong to current user"}
+                
+                missing: {"error":{"code":"not_found","message":"repo not found"},"type":"about:blank","title":"not_found","status":404,"detail":"repo not found"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/import/admin_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 403 {"error":{"code":"forbidden","message":"repo does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"repo does not belong to current user"}
+            resource_disclosure_test.go:108: existence disclosed:
+                foreign: {"error":{"code":"forbidden","message":"repo does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"repo does not belong to current user"}
+                
+                missing: {"error":{"code":"not_found","message":"repo not found"},"type":"about:blank","title":"not_found","status":404,"detail":"repo not found"}
+    --- FAIL: TestScanFindingAndImportResourceNonDisclosure/compare_current (0.00s)
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/compare_current/user_session (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 403 {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+            resource_disclosure_test.go:108: existence disclosed:
+                foreign: {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+                
+                missing: {"error":{"code":"not_found","message":"current scan <scan> not found"},"type":"about:blank","title":"not_found","status":404,"detail":"current scan <scan> not found"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/compare_current/user_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 403 {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+            resource_disclosure_test.go:108: existence disclosed:
+                foreign: {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+                
+                missing: {"error":{"code":"not_found","message":"current scan <scan> not found"},"type":"about:blank","title":"not_found","status":404,"detail":"current scan <scan> not found"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/compare_current/admin_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 403 {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+            resource_disclosure_test.go:108: existence disclosed:
+                foreign: {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+                
+                missing: {"error":{"code":"not_found","message":"current scan <scan> not found"},"type":"about:blank","title":"not_found","status":404,"detail":"current scan <scan> not found"}
+    --- FAIL: TestScanFindingAndImportResourceNonDisclosure/compare_baseline (0.00s)
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/compare_baseline/user_session (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 403 {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+            resource_disclosure_test.go:108: existence disclosed:
+                foreign: {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+                
+                missing: {"error":{"code":"not_found","message":"baseline scan <scan> not found"},"type":"about:blank","title":"not_found","status":404,"detail":"baseline scan <scan> not found"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/compare_baseline/user_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 403 {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+            resource_disclosure_test.go:108: existence disclosed:
+                foreign: {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+                
+                missing: {"error":{"code":"not_found","message":"baseline scan <scan> not found"},"type":"about:blank","title":"not_found","status":404,"detail":"baseline scan <scan> not found"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/compare_baseline/admin_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 403 {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+            resource_disclosure_test.go:108: existence disclosed:
+                foreign: {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+                
+                missing: {"error":{"code":"not_found","message":"baseline scan <scan> not found"},"type":"about:blank","title":"not_found","status":404,"detail":"baseline scan <scan> not found"}
+    --- FAIL: TestScanFindingAndImportResourceNonDisclosure/baseline_attachment (0.00s)
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/baseline_attachment/user_session (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 400 {"error":{"code":"bad_request","message":"scan does not belong to this repo"},"type":"about:blank","title":"bad_request","status":400,"detail":"scan does not belong to this repo"}
+            resource_disclosure_test.go:108: existence disclosed:
+                foreign: {"error":{"code":"bad_request","message":"scan does not belong to this repo"},"type":"about:blank","title":"bad_request","status":400,"detail":"scan does not belong to this repo"}
+                
+                missing: {"error":{"code":"not_found","message":"scan not found"},"type":"about:blank","title":"not_found","status":404,"detail":"scan not found"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/baseline_attachment/user_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 400 {"error":{"code":"bad_request","message":"scan does not belong to this repo"},"type":"about:blank","title":"bad_request","status":400,"detail":"scan does not belong to this repo"}
+            resource_disclosure_test.go:108: existence disclosed:
+                foreign: {"error":{"code":"bad_request","message":"scan does not belong to this repo"},"type":"about:blank","title":"bad_request","status":400,"detail":"scan does not belong to this repo"}
+                
+                missing: {"error":{"code":"not_found","message":"scan not found"},"type":"about:blank","title":"not_found","status":404,"detail":"scan not found"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/baseline_attachment/admin_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 403 {"error":{"code":"forbidden","message":"repo does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"repo does not belong to current user"}
+            resource_disclosure_test.go:100: missing=true: want 404: 403 {"error":{"code":"forbidden","message":"repo does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"repo does not belong to current user"}
+    --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan (0.00s)
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/user_session (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 403 {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+            resource_disclosure_test.go:108: existence disclosed:
+                foreign: {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+                
+                missing: {"error":{"code":"not_found","message":"scan not found"},"type":"about:blank","title":"not_found","status":404,"detail":"scan not found"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/user_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 403 {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+            resource_disclosure_test.go:108: existence disclosed:
+                foreign: {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+                
+                missing: {"error":{"code":"not_found","message":"scan not found"},"type":"about:blank","title":"not_found","status":404,"detail":"scan not found"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/admin_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 403 {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+            resource_disclosure_test.go:108: existence disclosed:
+                foreign: {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+                
+                missing: {"error":{"code":"not_found","message":"scan not found"},"type":"about:blank","title":"not_found","status":404,"detail":"scan not found"}
+    --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/lineage (0.00s)
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/lineage/user_session (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 403 {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+            resource_disclosure_test.go:108: existence disclosed:
+                foreign: {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+                
+                missing: {"error":{"code":"not_found","message":"scan not found"},"type":"about:blank","title":"not_found","status":404,"detail":"scan not found"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/lineage/user_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 403 {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+            resource_disclosure_test.go:108: existence disclosed:
+                foreign: {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+                
+                missing: {"error":{"code":"not_found","message":"scan not found"},"type":"about:blank","title":"not_found","status":404,"detail":"scan not found"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/lineage/admin_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 403 {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+            resource_disclosure_test.go:108: existence disclosed:
+                foreign: {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+                
+                missing: {"error":{"code":"not_found","message":"scan not found"},"type":"about:blank","title":"not_found","status":404,"detail":"scan not found"}
+    --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/result (0.00s)
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/result/user_session (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 403 {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+            resource_disclosure_test.go:108: existence disclosed:
+                foreign: {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+                
+                missing: {"error":{"code":"not_found","message":"scan not found"},"type":"about:blank","title":"not_found","status":404,"detail":"scan not found"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/result/user_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 403 {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+            resource_disclosure_test.go:108: existence disclosed:
+                foreign: {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+                
+                missing: {"error":{"code":"not_found","message":"scan not found"},"type":"about:blank","title":"not_found","status":404,"detail":"scan not found"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/result/admin_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 403 {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+            resource_disclosure_test.go:108: existence disclosed:
+                foreign: {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+                
+                missing: {"error":{"code":"not_found","message":"scan not found"},"type":"about:blank","title":"not_found","status":404,"detail":"scan not found"}
+    --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/findings (0.00s)
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/findings/user_session (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 403 {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+            resource_disclosure_test.go:108: existence disclosed:
+                foreign: {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+                
+                missing: {"error":{"code":"not_found","message":"scan <scan> not found"},"type":"about:blank","title":"not_found","status":404,"detail":"scan <scan> not found"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/findings/user_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 403 {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+            resource_disclosure_test.go:108: existence disclosed:
+                foreign: {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+                
+                missing: {"error":{"code":"not_found","message":"scan <scan> not found"},"type":"about:blank","title":"not_found","status":404,"detail":"scan <scan> not found"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/findings/admin_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 403 {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+            resource_disclosure_test.go:108: existence disclosed:
+                foreign: {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+                
+                missing: {"error":{"code":"not_found","message":"scan <scan> not found"},"type":"about:blank","title":"not_found","status":404,"detail":"scan <scan> not found"}
+    --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/findings/stats (0.00s)
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/findings/stats/user_session (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 403 {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+            resource_disclosure_test.go:108: existence disclosed:
+                foreign: {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+                
+                missing: {"error":{"code":"not_found","message":"scan <scan> not found"},"type":"about:blank","title":"not_found","status":404,"detail":"scan <scan> not found"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/findings/stats/user_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 403 {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+            resource_disclosure_test.go:108: existence disclosed:
+                foreign: {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+                
+                missing: {"error":{"code":"not_found","message":"scan <scan> not found"},"type":"about:blank","title":"not_found","status":404,"detail":"scan <scan> not found"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/findings/stats/admin_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 403 {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+            resource_disclosure_test.go:108: existence disclosed:
+                foreign: {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+                
+                missing: {"error":{"code":"not_found","message":"scan <scan> not found"},"type":"about:blank","title":"not_found","status":404,"detail":"scan <scan> not found"}
+    --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/stream (0.00s)
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/stream/user_session (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 403 {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+            resource_disclosure_test.go:108: existence disclosed:
+                foreign: {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+                
+                missing: {"error":{"code":"not_found","message":"scan not found"},"type":"about:blank","title":"not_found","status":404,"detail":"scan not found"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/stream/user_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 403 {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+            resource_disclosure_test.go:108: existence disclosed:
+                foreign: {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+                
+                missing: {"error":{"code":"not_found","message":"scan not found"},"type":"about:blank","title":"not_found","status":404,"detail":"scan not found"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/stream/admin_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 403 {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+            resource_disclosure_test.go:108: existence disclosed:
+                foreign: {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+                
+                missing: {"error":{"code":"not_found","message":"scan not found"},"type":"about:blank","title":"not_found","status":404,"detail":"scan not found"}
+    --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/report (0.00s)
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/report/user_session (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 403 {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+            resource_disclosure_test.go:108: existence disclosed:
+                foreign: {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+                
+                missing: {"error":{"code":"not_found","message":"scan <scan> not found"},"type":"about:blank","title":"not_found","status":404,"detail":"scan <scan> not found"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/report/user_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 403 {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+            resource_disclosure_test.go:108: existence disclosed:
+                foreign: {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+                
+                missing: {"error":{"code":"not_found","message":"scan <scan> not found"},"type":"about:blank","title":"not_found","status":404,"detail":"scan <scan> not found"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/report/admin_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 403 {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+            resource_disclosure_test.go:108: existence disclosed:
+                foreign: {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+                
+                missing: {"error":{"code":"not_found","message":"scan <scan> not found"},"type":"about:blank","title":"not_found","status":404,"detail":"scan <scan> not found"}
+    --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/manifest (0.00s)
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/manifest/user_session (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 403 {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+            resource_disclosure_test.go:108: existence disclosed:
+                foreign: {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+                
+                missing: {"error":{"code":"not_found","message":"scan <scan> not found"},"type":"about:blank","title":"not_found","status":404,"detail":"scan <scan> not found"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/manifest/user_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 403 {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+            resource_disclosure_test.go:108: existence disclosed:
+                foreign: {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+                
+                missing: {"error":{"code":"not_found","message":"scan <scan> not found"},"type":"about:blank","title":"not_found","status":404,"detail":"scan <scan> not found"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/manifest/admin_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 403 {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+            resource_disclosure_test.go:108: existence disclosed:
+                foreign: {"error":{"code":"forbidden","message":"scan does not belong to current user"},"type":"about:blank","title":"forbidden","status":403,"detail":"scan does not belong to current user"}
+                
+                missing: {"error":{"code":"not_found","message":"scan <scan> not found"},"type":"about:blank","title":"not_found","status":404,"detail":"scan <scan> not found"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/manifest/weak_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 403: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 403: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/manifest/anonymous (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 401: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 401: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+    --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/sarif (0.00s)
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/sarif/user_session (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/sarif/user_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/sarif/admin_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/sarif/weak_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 403: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 403: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/sarif/anonymous (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 401: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 401: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+    --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/coverage (0.00s)
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/coverage/user_session (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/coverage/user_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/coverage/admin_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/coverage/weak_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 403: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 403: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/coverage/anonymous (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 401: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 401: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+    --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/test-coverage (0.00s)
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/test-coverage/user_session (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/test-coverage/user_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/test-coverage/admin_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/test-coverage/weak_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 403: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 403: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/test-coverage/anonymous (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 401: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 401: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+    --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/gate (0.00s)
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/gate/user_session (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/gate/user_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/gate/admin_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/gate/weak_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 403: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 403: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/gate/anonymous (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 401: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 401: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+    --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/tools (0.00s)
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/tools/user_session (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/tools/user_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/tools/admin_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/tools/weak_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 403: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 403: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/tools/anonymous (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 401: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 401: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+    --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/scanner-runs (0.00s)
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/scanner-runs/user_session (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/scanner-runs/user_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/scanner-runs/admin_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/scanner-runs/weak_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 403: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 403: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/scanner-runs/anonymous (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 401: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 401: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+    --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/tools/test/output (0.00s)
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/tools/test/output/user_session (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/tools/test/output/user_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/tools/test/output/admin_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/tools/test/output/weak_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 403: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 403: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/tools/test/output/anonymous (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 401: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 401: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+    --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/artifacts/296ccd8a-c168-4461-a0cf-e9ebaf443c43/download (0.00s)
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/artifacts/296ccd8a-c168-4461-a0cf-e9ebaf443c43/download/user_session (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/artifacts/296ccd8a-c168-4461-a0cf-e9ebaf443c43/download/user_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/artifacts/296ccd8a-c168-4461-a0cf-e9ebaf443c43/download/admin_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/artifacts/296ccd8a-c168-4461-a0cf-e9ebaf443c43/download/weak_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 403: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 403: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/artifacts/296ccd8a-c168-4461-a0cf-e9ebaf443c43/download/anonymous (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 401: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 401: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+    --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/ai-logs (0.00s)
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/ai-logs/user_session (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/ai-logs/user_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/ai-logs/admin_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/ai-logs/weak_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 403: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 403: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/ai-logs/anonymous (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 401: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 401: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+    --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/tool-summaries (0.00s)
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/tool-summaries/user_session (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/tool-summaries/user_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/tool-summaries/admin_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/tool-summaries/weak_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 403: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 403: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/tool-summaries/anonymous (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 401: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 401: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+    --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/recommendations (0.00s)
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/recommendations/user_session (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/recommendations/user_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/recommendations/admin_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 404: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/recommendations/weak_token (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 403: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 403: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+        --- FAIL: TestScanFindingAndImportResourceNonDisclosure/scan/recommendations/anonymous (0.00s)
+            resource_disclosure_test.go:100: missing=false: want 401: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+            resource_disclosure_test.go:100: missing=true: want 401: 429 {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+    resource_disclosure_test.go:127: create token: expected 201, got 429: {"error":{"code":"rate_limited","message":"too many requests, please try again later"},"type":"about:blank","title":"rate_limited","status":429,"detail":"too many requests, please try again later"}
+FAIL
+FAIL	github.com/alphabravocompany/thewolf/internal/api	0.408s
+FAIL

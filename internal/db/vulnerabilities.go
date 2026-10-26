@@ -34,12 +34,6 @@ func (s *SQLiteStore) InsertVulnerabilityEvidence(ctx context.Context, e *models
 func (s *SQLiteStore) ListEvidenceByVulnerability(ctx context.Context, vulnerabilityID string) ([]models.VulnerabilityEvidence, error) {
 	return listEvidenceByVulnerability(ctx, s.db, vulnerabilityID)
 }
-func (s *SQLiteStore) MoveVulnerabilityEvidence(ctx context.Context, evidenceIDs []string, toVulnerabilityID string) error {
-	return moveVulnerabilityEvidence(ctx, s.db, evidenceIDs, toVulnerabilityID)
-}
-func (s *SQLiteStore) DeleteVulnerability(ctx context.Context, id string) error {
-	return deleteVulnerability(ctx, s.db, id)
-}
 func (s *SQLiteStore) RefreshVulnerabilityEvidence(ctx context.Context, vulnerabilityID string) error {
 	return refreshVulnerabilityEvidence(ctx, s.db, vulnerabilityID)
 }
@@ -67,12 +61,6 @@ func (s *PostgresStore) InsertVulnerabilityEvidence(ctx context.Context, e *mode
 }
 func (s *PostgresStore) ListEvidenceByVulnerability(ctx context.Context, vulnerabilityID string) ([]models.VulnerabilityEvidence, error) {
 	return listEvidenceByVulnerability(ctx, s.db, vulnerabilityID)
-}
-func (s *PostgresStore) MoveVulnerabilityEvidence(ctx context.Context, evidenceIDs []string, toVulnerabilityID string) error {
-	return moveVulnerabilityEvidence(ctx, s.db, evidenceIDs, toVulnerabilityID)
-}
-func (s *PostgresStore) DeleteVulnerability(ctx context.Context, id string) error {
-	return deleteVulnerability(ctx, s.db, id)
 }
 func (s *PostgresStore) RefreshVulnerabilityEvidence(ctx context.Context, vulnerabilityID string) error {
 	return refreshVulnerabilityEvidence(ctx, s.db, vulnerabilityID)
@@ -107,20 +95,20 @@ func hydrateVulnerability(v *models.Vulnerability) {
 	}
 }
 
-func upsertVulnerability(ctx context.Context, database *sqlx.DB, v *models.Vulnerability) error {
+func upsertVulnerability(ctx context.Context, database sqlx.ExtContext, v *models.Vulnerability) error {
 	now := time.Now().UTC()
 	if v.CreatedAt.IsZero() {
 		v.CreatedAt = now
 	}
 	v.UpdatedAt = now
 	prepareVulnerabilityForWrite(v)
-	_, err := database.NamedExecContext(ctx,
+	_, err := sqlx.NamedExecContext(ctx, database,
 		`INSERT INTO vulnerabilities (id, repo_id, scan_id, canonical_key, title, severity, category,
 		 fine_category, confidence, baseline_state, composite_score, evidence_count,
 		 finding_ids_json, corroborated_by_json, suppressed, created_at, updated_at)
 		 VALUES (:id, :repo_id, :scan_id, :canonical_key, :title, :severity, :category,
 		 :fine_category, :confidence, :baseline_state, :composite_score, :evidence_count,
-		 :finding_ids_json, :corroborated_by_json, :suppressed, :created_at, :updated_at)
+		 :finding_ids_json, :corroborated_by_json, CASE WHEN :suppressed THEN 1 ELSE 0 END, :created_at, :updated_at)
 		 ON CONFLICT (repo_id, canonical_key) DO UPDATE SET
 		   scan_id = excluded.scan_id,
 		   title = excluded.title,
@@ -135,20 +123,20 @@ func upsertVulnerability(ctx context.Context, database *sqlx.DB, v *models.Vulne
 	return err
 }
 
-func getVulnerabilityByID(ctx context.Context, database *sqlx.DB, id string) (*models.Vulnerability, error) {
+func getVulnerabilityByID(ctx context.Context, database sqlx.ExtContext, id string) (*models.Vulnerability, error) {
 	q := database.Rebind("SELECT * FROM vulnerabilities WHERE id = ?")
 	var v models.Vulnerability
-	if err := database.GetContext(ctx, &v, q, id); err != nil {
+	if err := sqlx.GetContext(ctx, database, &v, q, id); err != nil {
 		return nil, err
 	}
 	hydrateVulnerability(&v)
 	return &v, nil
 }
 
-func listVulnerabilities(ctx context.Context, database *sqlx.DB, query string, args ...any) ([]models.Vulnerability, error) {
+func listVulnerabilities(ctx context.Context, database sqlx.ExtContext, query string, args ...any) ([]models.Vulnerability, error) {
 	q := database.Rebind(query)
 	var out []models.Vulnerability
-	if err := database.SelectContext(ctx, &out, q, args...); err != nil {
+	if err := sqlx.SelectContext(ctx, database, &out, q, args...); err != nil {
 		return nil, err
 	}
 	for i := range out {
@@ -157,7 +145,7 @@ func listVulnerabilities(ctx context.Context, database *sqlx.DB, query string, a
 	return out, nil
 }
 
-func listVulnerabilitiesForUser(ctx context.Context, database *sqlx.DB, userID string, fleetMode bool) ([]models.Vulnerability, error) {
+func listVulnerabilitiesForUser(ctx context.Context, database sqlx.ExtContext, userID string, fleetMode bool) ([]models.Vulnerability, error) {
 	q := `SELECT v.* FROM vulnerabilities v`
 	args := []any{}
 	if !fleetMode {
@@ -168,35 +156,35 @@ func listVulnerabilitiesForUser(ctx context.Context, database *sqlx.DB, userID s
 	return listVulnerabilities(ctx, database, q, args...)
 }
 
-func getVulnerabilityByRepoKey(ctx context.Context, database *sqlx.DB, repoID, canonicalKey string) (*models.Vulnerability, error) {
+func getVulnerabilityByRepoKey(ctx context.Context, database sqlx.ExtContext, repoID, canonicalKey string) (*models.Vulnerability, error) {
 	q := database.Rebind("SELECT * FROM vulnerabilities WHERE repo_id = ? AND canonical_key = ?")
 	var v models.Vulnerability
-	if err := database.GetContext(ctx, &v, q, repoID, canonicalKey); err != nil {
+	if err := sqlx.GetContext(ctx, database, &v, q, repoID, canonicalKey); err != nil {
 		return nil, err
 	}
 	hydrateVulnerability(&v)
 	return &v, nil
 }
 
-func insertVulnerabilityEvidence(ctx context.Context, database *sqlx.DB, e *models.VulnerabilityEvidence) error {
+func insertVulnerabilityEvidence(ctx context.Context, database sqlx.ExtContext, e *models.VulnerabilityEvidence) error {
 	if e.CreatedAt.IsZero() {
 		e.CreatedAt = time.Now().UTC()
 	}
-	_, err := database.NamedExecContext(ctx,
+	_, err := sqlx.NamedExecContext(ctx, database,
 		`INSERT INTO vulnerability_evidence (id, vulnerability_id, finding_id, tool_name, title, file_path, line_start, rule_id, reason, created_at)
 		 VALUES (:id, :vulnerability_id, :finding_id, :tool_name, :title, :file_path, :line_start, :rule_id, :reason, :created_at)
 		 ON CONFLICT (finding_id) DO NOTHING`, e)
 	return err
 }
 
-func listEvidenceByVulnerability(ctx context.Context, database *sqlx.DB, vulnerabilityID string) ([]models.VulnerabilityEvidence, error) {
-	q := database.Rebind("SELECT * FROM vulnerability_evidence WHERE vulnerability_id = ? ORDER BY created_at")
+func listEvidenceByVulnerability(ctx context.Context, database sqlx.ExtContext, vulnerabilityID string) ([]models.VulnerabilityEvidence, error) {
+	q := database.Rebind("SELECT * FROM vulnerability_evidence WHERE vulnerability_id = ? ORDER BY created_at, id")
 	var out []models.VulnerabilityEvidence
-	err := database.SelectContext(ctx, &out, q, vulnerabilityID)
+	err := sqlx.SelectContext(ctx, database, &out, q, vulnerabilityID)
 	return out, err
 }
 
-func moveVulnerabilityEvidence(ctx context.Context, database *sqlx.DB, evidenceIDs []string, toVulnerabilityID string) error {
+func moveVulnerabilityEvidence(ctx context.Context, database sqlx.ExtContext, evidenceIDs []string, toVulnerabilityID string) error {
 	if len(evidenceIDs) == 0 {
 		return nil
 	}
@@ -211,13 +199,13 @@ func moveVulnerabilityEvidence(ctx context.Context, database *sqlx.DB, evidenceI
 	return err
 }
 
-func deleteVulnerability(ctx context.Context, database *sqlx.DB, id string) error {
+func deleteVulnerability(ctx context.Context, database sqlx.ExtContext, id string) error {
 	q := database.Rebind("DELETE FROM vulnerabilities WHERE id = ?")
 	_, err := database.ExecContext(ctx, q, id)
 	return err
 }
 
-func refreshVulnerabilityEvidence(ctx context.Context, database *sqlx.DB, vulnerabilityID string) error {
+func refreshVulnerabilityEvidence(ctx context.Context, database sqlx.ExtContext, vulnerabilityID string) error {
 	ev, err := listEvidenceByVulnerability(ctx, database, vulnerabilityID)
 	if err != nil {
 		return err

@@ -6,6 +6,7 @@
 package report
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -15,8 +16,8 @@ import (
 )
 
 // WriteAllResult captures the on-disk paths produced by WriteAll. Empty
-// fields indicate the corresponding artifact was not written (e.g. SARIF
-// generation failed). All paths are absolute.
+// fields indicate the corresponding artifact was not written before an error.
+// All paths are absolute when dir is absolute.
 type WriteAllResult struct {
 	FindingsJSON  string
 	RawMarkdown   string
@@ -27,36 +28,36 @@ type WriteAllResult struct {
 }
 
 // WriteAll materializes every deterministic artifact for a scan into dir.
-// It is intentionally tolerant: any single artifact failing to render or
-// write logs the cause but does not abort the others — a partial set of
-// artifacts is better than none.
+// A render or write failure returns the paths already written and an error;
+// callers must not report a partial bundle as complete.
 //
 // Caller is responsible for populating ReportConfig and Manifest with
 // matching data (same findings, same scan ID, etc.). Suppression rules
 // (defaults + repo-local .wolfignore) are applied here, in-place on the
 // rcfg.Findings slice, so findings.json captures the Suppressed flag
 // alongside everything else.
-func WriteAll(dir string, rcfg ReportConfig, manifest Manifest) (WriteAllResult, error) {
+func WriteAll(ctx context.Context, dir string, rcfg ReportConfig, manifest Manifest) (WriteAllResult, error) {
 	var res WriteAllResult
+	if err := ctx.Err(); err != nil {
+		return res, err
+	}
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return res, fmt.Errorf("create scan dir: %w", err)
 	}
 
-	var suppressedCount int
-	rcfg.Findings, suppressedCount = suppress.ApplyRepo(rcfg.Findings, manifest.RepoPath)
-	manifest.Counts.Suppressed = suppressedCount
-	manifest.Counts.Visible = len(rcfg.Findings) - suppressedCount
-	// Recompute high-severity over visible findings only — that's the
-	// number a reader actually cares about ("how much real signal?").
-	manifest.Counts.HighSeverity = 0
-	for _, f := range rcfg.Findings {
-		if f.Suppressed {
-			continue
+	var err error
+	if manifest.IgnorePolicy == nil {
+		snapshot, captureErr := suppress.Capture(ctx, rcfg.Findings, manifest.RepoPath)
+		if captureErr != nil {
+			return res, captureErr
 		}
-		if f.Severity == "critical" || f.Severity == "high" {
-			manifest.Counts.HighSeverity++
-		}
+		manifest.IgnorePolicy = &snapshot
 	}
+	rcfg.Findings, _, err = manifest.IgnorePolicy.Apply(rcfg.Findings)
+	if err != nil {
+		return res, err
+	}
+	manifest.Counts = CountFindings(manifest.Counts.RawFindings, rcfg.Findings)
 
 	// findings.json — primary canonical artifact. If this fails, the whole
 	// scan-output story breaks, so we surface the error.
@@ -71,20 +72,28 @@ func WriteAll(dir string, rcfg ReportConfig, manifest Manifest) (WriteAllResult,
 		return res, fmt.Errorf("generate findings.json: %w", err)
 	}
 
-	// RAW.md — legacy combined markdown. Best-effort.
+	// RAW.md — legacy combined markdown.
 	if md, err := GenerateMarkdown(rcfg); err == nil {
 		path := filepath.Join(dir, "RAW.md")
 		if werr := os.WriteFile(path, []byte(md), 0o600); werr == nil {
 			res.RawMarkdown = path
+		} else {
+			return res, fmt.Errorf("write RAW.md: %w", werr)
 		}
+	} else {
+		return res, fmt.Errorf("generate RAW.md: %w", err)
 	}
 
-	// combined.sarif — SARIF 2.1.0 aggregate. Best-effort.
+	// combined.sarif — SARIF 2.1.0 aggregate.
 	if sarifData, err := GenerateSARIF(rcfg); err == nil {
 		path := filepath.Join(dir, "combined.sarif")
 		if werr := os.WriteFile(path, sarifData, 0o600); werr == nil {
 			res.CombinedSARIF = path
+		} else {
+			return res, fmt.Errorf("write combined.sarif: %w", werr)
 		}
+	} else {
+		return res, fmt.Errorf("generate combined.sarif: %w", err)
 	}
 
 	// FIX-HIGH.md and FIX-ALL.md — the curated Phase-2 docs. Built from
@@ -105,12 +114,16 @@ func WriteAll(dir string, rcfg ReportConfig, manifest Manifest) (WriteAllResult,
 		path := filepath.Join(dir, "FIX-HIGH.md")
 		if werr := os.WriteFile(path, []byte(md), 0o600); werr == nil {
 			res.FixHigh = path
+		} else {
+			return res, fmt.Errorf("write FIX-HIGH.md: %w", werr)
 		}
 	}
 	if md := RenderFixAll(fxCfg); md != "" {
 		path := filepath.Join(dir, "FIX-ALL.md")
 		if werr := os.WriteFile(path, []byte(md), 0o600); werr == nil {
 			res.FixAll = path
+		} else {
+			return res, fmt.Errorf("write FIX-ALL.md: %w", werr)
 		}
 	}
 

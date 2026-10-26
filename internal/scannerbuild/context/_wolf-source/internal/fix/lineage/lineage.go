@@ -5,14 +5,13 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
-
 	"github.com/alphabravocompany/thewolf/internal/db"
+	gitpkg "github.com/alphabravocompany/thewolf/internal/fix/git"
 	"github.com/alphabravocompany/thewolf/internal/models"
+	"github.com/google/uuid"
 )
 
 // BranchName is the shared fix branch for an origin scan.
@@ -46,7 +45,7 @@ func EnqueueChildScan(ctx context.Context, store db.Store, origin *models.Scan, 
 	}
 	if st, err := os.Stat(workspace); err != nil || !st.IsDir() {
 		// Tests may pass a synthetic path; still record it so the child
-		// carries the prepared_workspace field. Live workers skip missing dirs.
+		// carries the prepared_workspace field. Execution fails if it is missing.
 		if err != nil && !os.IsNotExist(err) {
 			return nil, fmt.Errorf("lineage: workspace %s: %w", workspace, err)
 		}
@@ -119,7 +118,7 @@ func headSHA(dir string) string {
 	if _, err := os.Stat(dir); err != nil {
 		return ""
 	}
-	cmd := exec.Command("git", "-C", dir, "rev-parse", "HEAD")
+	cmd := gitpkg.Command(context.Background(), nil, "-C", dir, "rev-parse", "HEAD")
 	out, err := cmd.Output()
 	if err != nil {
 		return ""
@@ -137,11 +136,18 @@ func AfterAgentRun(ctx context.Context, store db.Store, job *models.FixJob) (*mo
 	if err != nil || rem == nil {
 		return nil, err
 	}
+	if rem.State != models.RemediationOpen {
+		return nil, nil
+	}
 	if job.WorkspacePath != "" && rem.WorkspacePath != job.WorkspacePath {
 		rem.WorkspacePath = job.WorkspacePath
-		_ = store.UpdateRemediation(ctx, rem)
+		if err := store.UpdateRemediation(ctx, rem); err != nil {
+			return nil, err
+		}
 	}
-	_ = SupersedeSiblings(ctx, store, job)
+	if err := SupersedeSiblings(ctx, store, job); err != nil {
+		return nil, err
+	}
 
 	pushed := job.Pushed || (job.Status == models.FixJobSucceeded && job.PushSHA != "")
 	if pushed {

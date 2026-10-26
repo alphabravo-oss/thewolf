@@ -1,5 +1,7 @@
 package knowledge
 
+import "strings"
+
 // semgrep mappings cover the most frequently emitted rules in the
 // default security + correctness rulesets.
 
@@ -55,7 +57,7 @@ func semgrepEntries() []Entry {
 // the rule's namespace path. Empty strings mean "no inferred mapping".
 func CategorizeBySemgrepPrefix(ruleID string) (fineCat, strategy string) {
 	switch {
-	case containsPath(ruleID, "sqli", "tainted-sql"):
+	case containsPath(ruleID, "sqli", "sql-injection", "tainted-sql"):
 		return "sql-injection", "parameterize-query"
 	case containsPath(ruleID, "xss"):
 		return "xss", "escape-html-output"
@@ -75,23 +77,15 @@ func CategorizeBySemgrepPrefix(ruleID string) (fineCat, strategy string) {
 	return "", ""
 }
 
-// containsPath checks whether any of needles appears anywhere in the
-// dot-separated rule_id. The substring match is intentional — semgrep
-// includes the family name at varying depths.
+// Match namespace/family tokens at varying depths, not "xss" inside an
+// unrelated rule name. Hyphens and underscores also delimit family tokens.
 func containsPath(ruleID string, needles ...string) bool {
+	separators := strings.NewReplacer("/", ".", "-", ".", "_", ".")
+	path := "." + separators.Replace(strings.ToLower(ruleID)) + "."
 	for _, n := range needles {
-		if indexOf(ruleID, n) >= 0 {
+		if strings.Contains(path, "."+separators.Replace(n)+".") {
 			return true
 		}
 	}
 	return false
-}
-
-func indexOf(s, sub string) int {
-	for i := 0; i+len(sub) <= len(s); i++ {
-		if s[i:i+len(sub)] == sub {
-			return i
-		}
-	}
-	return -1
 }

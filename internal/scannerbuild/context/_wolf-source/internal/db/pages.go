@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"strings"
 
 	"github.com/jmoiron/sqlx"
@@ -10,13 +11,18 @@ import (
 )
 
 func (s *SQLiteStore) ListScansPage(ctx context.Context, q ScanListQuery) ([]models.Scan, int, error) {
-	return listScansPage(ctx, s.db, q)
+	return listScansPage(ctx, s.readDatabase(), q)
 }
 func (s *PostgresStore) ListScansPage(ctx context.Context, q ScanListQuery) ([]models.Scan, int, error) {
 	return listScansPage(ctx, s.db, q)
 }
 
 func listScansPage(ctx context.Context, database *sqlx.DB, q ScanListQuery) ([]models.Scan, int, error) {
+	tx, err := database.BeginTxx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
+	if err != nil {
+		return nil, 0, err
+	}
+	defer func() { _ = tx.Rollback() }()
 	var conds []string
 	var args []any
 	if !q.Fleet {
@@ -31,6 +37,11 @@ func listScansPage(ctx context.Context, database *sqlx.DB, q ScanListQuery) ([]m
 		conds = append(conds, "status = ?")
 		args = append(args, q.Status)
 	}
+	if q.Search != "" {
+		term := "%" + strings.NewReplacer("!", "!!", "%", "!%", "_", "!_").Replace(strings.ToLower(q.Search)) + "%"
+		conds = append(conds, "(LOWER(id) LIKE ? ESCAPE '!' OR LOWER(branch) LIKE ? ESCAPE '!' OR repo_id IN (SELECT id FROM repos WHERE LOWER(name) LIKE ? ESCAPE '!'))")
+		args = append(args, term, term, term)
+	}
 	if q.RootsOnly {
 		conds = append(conds, "(origin_scan_id IS NULL OR origin_scan_id = '')")
 	}
@@ -39,26 +50,34 @@ func listScansPage(ctx context.Context, database *sqlx.DB, q ScanListQuery) ([]m
 		where = " WHERE " + strings.Join(conds, " AND ")
 	}
 	var total int
-	if err := database.GetContext(ctx, &total, database.Rebind("SELECT COUNT(*) FROM scans"+where), args...); err != nil {
+	if err := tx.GetContext(ctx, &total, tx.Rebind("SELECT COUNT(*) FROM scans"+where), args...); err != nil {
 		return nil, 0, err
 	}
-	listQ := database.Rebind("SELECT * FROM scans" + where + " ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?")
+	order := "created_at DESC, id DESC"
+	if column := map[string]string{"status": "status", "id": "id", "repo": "(SELECT name FROM repos WHERE repos.id = scans.repo_id)", "findings": "finding_count", "started": "started_at"}[q.SortBy]; column != "" {
+		direction := " ASC"
+		if q.Desc {
+			direction = " DESC"
+		}
+		order = column + direction + ", id DESC"
+	}
+	listQ := tx.Rebind("SELECT * FROM scans" + where + " ORDER BY " + order + " LIMIT ? OFFSET ?")
 	off := q.Offset
 	if off < 0 {
 		off = 0
 	}
 	pageArgs := append(append([]any{}, args...), pageLimit(q.Limit), off)
-	var scans []models.Scan
-	if err := database.SelectContext(ctx, &scans, listQ, pageArgs...); err != nil {
+	scans := []models.Scan{}
+	if err := tx.SelectContext(ctx, &scans, listQ, pageArgs...); err != nil {
 		return nil, 0, err
 	}
-	if err := attachScanRepos(ctx, database, scans); err != nil {
+	if err := attachScanRepos(ctx, tx, scans); err != nil {
 		return nil, 0, err
 	}
-	return scans, total, nil
+	return scans, total, tx.Commit()
 }
 
-func attachScanRepos(ctx context.Context, database *sqlx.DB, scans []models.Scan) error {
+func attachScanRepos(ctx context.Context, database sqlx.ExtContext, scans []models.Scan) error {
 	if len(scans) == 0 {
 		return nil
 	}
@@ -82,7 +101,7 @@ func attachScanRepos(ctx context.Context, database *sqlx.DB, scans []models.Scan
 		return err
 	}
 	var repos []models.Repo
-	if err := database.SelectContext(ctx, &repos, database.Rebind(query), args...); err != nil {
+	if err := sqlx.SelectContext(ctx, database, &repos, database.Rebind(query), args...); err != nil {
 		return err
 	}
 	byID := make(map[string]models.Repo, len(repos))
@@ -99,7 +118,7 @@ func attachScanRepos(ctx context.Context, database *sqlx.DB, scans []models.Scan
 }
 
 func (s *SQLiteStore) ListVulnerabilitiesPage(ctx context.Context, q VulnListQuery) ([]models.Vulnerability, int, error) {
-	return listVulnerabilitiesPage(ctx, s.db, q)
+	return listVulnerabilitiesPage(ctx, s.readDatabase(), q)
 }
 func (s *PostgresStore) ListVulnerabilitiesPage(ctx context.Context, q VulnListQuery) ([]models.Vulnerability, int, error) {
 	return listVulnerabilitiesPage(ctx, s.db, q)
@@ -120,28 +139,46 @@ func listVulnerabilitiesPage(ctx context.Context, database *sqlx.DB, q VulnListQ
 		conds = append(conds, "v.scan_id = ?")
 		args = append(args, q.ScanID)
 	}
+	if search := strings.TrimSpace(q.Search); search != "" {
+		term := "%" + strings.NewReplacer("!", "!!", "%", "!%", "_", "!_").Replace(strings.ToLower(search)) + "%"
+		conds = append(conds, "LOWER(v.title || ' ' || v.severity || ' ' || v.category || ' ' || v.baseline_state || ' ' || v.corroborated_by_json) LIKE ? ESCAPE '!'")
+		args = append(args, term)
+	}
 	where := ""
 	if len(conds) > 0 {
 		where = " WHERE " + strings.Join(conds, " AND ")
 	}
-	var total int
-	if err := database.GetContext(ctx, &total, database.Rebind("SELECT COUNT(*) FROM vulnerabilities v"+where), args...); err != nil {
+	tx, err := database.BeginTxx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
+	if err != nil {
 		return nil, 0, err
 	}
-	listQ := database.Rebind("SELECT v.* FROM vulnerabilities v" + where + " ORDER BY v.composite_score DESC LIMIT ? OFFSET ?")
+	defer func() { _ = tx.Rollback() }()
+	var total int
+	if err := tx.GetContext(ctx, &total, database.Rebind("SELECT COUNT(*) FROM vulnerabilities v"+where), args...); err != nil {
+		return nil, 0, err
+	}
+	order := "v.composite_score DESC, v.id ASC"
+	if column := map[string]string{"severity": "CASE v.severity WHEN 'critical' THEN 5 WHEN 'high' THEN 4 WHEN 'medium' THEN 3 WHEN 'low' THEN 2 WHEN 'info' THEN 1 ELSE 0 END", "title": "v.title", "evidence": "v.evidence_count", "baseline": "v.baseline_state", "composite_score": "v.composite_score"}[q.SortBy]; column != "" {
+		direction := " ASC"
+		if q.Desc {
+			direction = " DESC"
+		}
+		order = column + direction + ", v.id ASC"
+	}
+	listQ := tx.Rebind("SELECT v.* FROM vulnerabilities v" + where + " ORDER BY " + order + " LIMIT ? OFFSET ?")
 	off := q.Offset
 	if off < 0 {
 		off = 0
 	}
 	pageArgs := append(append([]any{}, args...), pageLimit(q.Limit), off)
-	var vulns []models.Vulnerability
-	if err := database.SelectContext(ctx, &vulns, listQ, pageArgs...); err != nil {
+	vulns := []models.Vulnerability{}
+	if err := tx.SelectContext(ctx, &vulns, listQ, pageArgs...); err != nil {
 		return nil, 0, err
 	}
 	for i := range vulns {
 		hydrateVulnerability(&vulns[i])
 	}
-	return vulns, total, nil
+	return vulns, total, tx.Commit()
 }
 
 func (s *SQLiteStore) ScanFindingStats(ctx context.Context, scanID string) (ScanFindingStats, error) {
@@ -152,26 +189,35 @@ func (s *PostgresStore) ScanFindingStats(ctx context.Context, scanID string) (Sc
 }
 
 func scanFindingStats(ctx context.Context, database *sqlx.DB, scanID string) (ScanFindingStats, error) {
+	return queryFindingStats(ctx, database, "scan_id = ? AND (cluster_id = '' OR cluster_id = id)", []any{scanID})
+}
+
+func queryFindingStats(ctx context.Context, database sqlx.ExtContext, where string, args []any) (ScanFindingStats, error) {
 	stats := ScanFindingStats{
 		BySeverity: map[string]int{"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0},
 		ByTool:     map[string]int{},
 		ByCategory: map[string]int{},
 	}
-	q := database.Rebind(`SELECT severity, tool_name, category, COUNT(*) AS n
-		FROM findings WHERE scan_id = ? GROUP BY severity, tool_name, category`)
+	q := database.Rebind(`SELECT severity, tool_name, category, corroborated_by_json, COUNT(*) AS n
+		FROM findings WHERE ` + where + ` GROUP BY severity, tool_name, category, corroborated_by_json`)
 	var rows []struct {
-		Severity string `db:"severity"`
-		ToolName string `db:"tool_name"`
-		Category string `db:"category"`
-		N        int    `db:"n"`
+		Severity           string `db:"severity"`
+		ToolName           string `db:"tool_name"`
+		CorroboratedByJSON string `db:"corroborated_by_json"`
+		Category           string `db:"category"`
+		N                  int    `db:"n"`
 	}
-	if err := database.SelectContext(ctx, &rows, q, scanID); err != nil {
+	if err := sqlx.SelectContext(ctx, database, &rows, q, args...); err != nil {
 		return stats, err
 	}
 	for _, r := range rows {
 		stats.Total += r.N
 		stats.BySeverity[r.Severity] += r.N
-		stats.ByTool[r.ToolName] += r.N
+		f := models.Finding{ToolName: r.ToolName, CorroboratedByJSON: r.CorroboratedByJSON}
+		hydrateFindingAfterRead(&f)
+		for _, tool := range f.ReportingTools() {
+			stats.ByTool[tool] += r.N
+		}
 		stats.ByCategory[r.Category] += r.N
 	}
 	return stats, nil

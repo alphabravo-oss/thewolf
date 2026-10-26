@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"strings"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
@@ -26,30 +25,36 @@ func (p *KubescapePlugin) Languages() []models.Language { return nil }
 
 func (p *KubescapePlugin) CheckAvailable() bool { return container.IsScannersReady() }
 
+func (p *KubescapePlugin) Applicability(repoPath, _ string) error {
+	return plugin.KubernetesApplicability(repoPath)
+}
+
 func (p *KubescapePlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
+	if err := p.Applicability(opts.RepoPath, opts.Target); err != nil {
+		return nil, err
+	}
 	if opts.Timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, opts.Timeout)
 		defer cancel()
 	}
 
-	cmd := container.CommandContext(ctx,
-		container.ConfigFromOpts(opts.ContainerCfg),
-		container.Options{RepoDir: opts.RepoPath},
-		"kubescape", "scan", "--format", "json", "--output", "-", "/scan")
+	cfg := container.ConfigFromOpts(opts.ContainerCfg)
+	cache := "/tmp/.kubescape"
+	if cfg != nil && cfg.DBVolume != "" {
+		cache = "/var/lib/wolf-db/kubescape"
+	}
+	cmd := container.CommandContext(ctx, cfg,
+		container.Options{RepoDir: opts.RepoPath, ExtraEnv: map[string]string{"HOME": "/tmp", "KS_CACHE_DIR": cache}},
+		// Omitting --output writes to stdout; "-" is a literal filename.
+		"kubescape", "scan", "--format", "json", "/scan")
 	out, err := cmd.Output()
 	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			stderr := string(exitErr.Stderr)
-			if strings.Contains(stderr, "no resources found") {
-				plugin.Skipf(opts.OnOutput, "kubescape", "no Kubernetes manifests found in this repository. Add YAML files with Kubernetes resources (Deployments, Services, etc.) to enable scanning.")
-				return nil, nil
-			}
-		}
 		if len(out) == 0 {
 			return nil, plugin.WrapExecError("kubescape", err)
 		}
 	}
+	plugin.SaveRaw(opts, out, "json")
 
 	findings, perr := parseKubescapeOutput(out)
 	if perr != nil {
@@ -74,9 +79,7 @@ type kubescapeControlResult struct {
 	ControlID string          `json:"controlID"`
 	Name      string          `json:"name"`
 	Status    kubescapeStatus `json:"status"`
-	Severity  struct {
-		ScoreFactor float64 `json:"scoreFactor"`
-	} `json:"severity"`
+	Severity  json.RawMessage `json:"severity"`
 }
 
 // kubescapeStatus accepts both the legacy string ("failed") and current
@@ -138,7 +141,7 @@ func parseKubescapeOutput(data []byte) ([]models.Finding, error) {
 			findings = append(findings, models.Finding{
 				ToolName:    "kubescape",
 				Category:    models.CategoryInfra,
-				Severity:    mapKubescapeScore(c.Severity.ScoreFactor),
+				Severity:    kubescapeSeverity(c.Severity),
 				Title:       fmt.Sprintf("[%s] %s", c.ControlID, c.Name),
 				Description: c.Name,
 				FilePath:    r.ResourceID,
@@ -148,6 +151,21 @@ func parseKubescapeOutput(data []byte) ([]models.Finding, error) {
 		}
 	}
 	return findings, nil
+}
+
+func kubescapeSeverity(raw json.RawMessage) models.Severity {
+	var label string
+	if json.Unmarshal(raw, &label) == nil {
+		switch models.Severity(strings.ToLower(label)) {
+		case models.SeverityCritical, models.SeverityHigh, models.SeverityMedium, models.SeverityLow, models.SeverityInfo:
+			return models.Severity(strings.ToLower(label))
+		}
+	}
+	var legacy struct {
+		ScoreFactor float64 `json:"scoreFactor"`
+	}
+	_ = json.Unmarshal(raw, &legacy)
+	return mapKubescapeScore(legacy.ScoreFactor)
 }
 
 func mapKubescapeScore(score float64) models.Severity {

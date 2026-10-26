@@ -15,6 +15,19 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18.6-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: wolf_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      WOLF_TEST_POSTGRES_DSN: postgres://postgres@localhost:5432/wolf_test?sslmode=disable
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
@@ -56,8 +69,8 @@ jobs:
       - name: scanner metadata validation
         run: make scanners-validate
 
-      - name: go test (unit, no integration)
-        run: go test -race -count=1 -timeout 120s ./...
+      - name: go test (race, SQLite and PostgreSQL)
+        run: go test -race -count=1 -timeout 600s ./...
 
   lint:
     runs-on: ubuntu-latest
@@ -68,4 +81,33 @@ jobs:
           go-version-file: go.mod
       - uses: golangci/golangci-lint-action@9fae48acfc02a90574d7c304a1758ef9895495fa # v7.0.1
         with:
-          version: v2.12.2
+          version: v2.14.0
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+      - name: Reachable Go vulnerabilities
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+      - name: Secrets in complete Git history
+        if: ${{ !cancelled() }}
+        run: go run github.com/zricethezav/gitleaks/v8@v8.30.1 git --redact --no-banner .
+      - name: High-confidence high-severity Go security findings
+        if: ${{ !cancelled() }}
+        run: |
+          # Use the scanner's locked dependency graph: its x/tools importer
+          # supports Go 1.27 export data; go run @version ignores that graph.
+          go build -C scanners/go-tools -mod=readonly -o "$RUNNER_TEMP/gosec" github.com/securego/gosec/v2/cmd/gosec
+          "$RUNNER_TEMP/gosec" -fmt json -out "$RUNNER_TEMP/gosec.json" -severity high -confidence high -exclude-dir=internal/scannerbuild/context ./cmd/... ./internal/... ./pkg/... ./plugins/...
+      - name: Retain security findings for triage
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: gosec-findings
+          path: ${{ runner.temp }}/gosec.json
+          if-no-files-found: warn

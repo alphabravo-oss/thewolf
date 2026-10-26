@@ -1,0 +1,6 @@
+Database/API package results from the focused race invocation with WOLF_TEST_POSTGRES_DSN set to disposable PostgreSQL 18.6. The lineage fixture was subsequently corrected; final lineage/OpenAPI results are in fix-cancellation-lineage-openapi.txt.
+
+Command: go test -race ./internal/db ./internal/api/routes ./internal/fix/lineage -run Test(Fix|CancelFix|ResumeFix|CreateFix|MaybeEnqueueNextRun) -count=1
+
+ok  	github.com/alphabravocompany/thewolf/internal/db	5.448s
+ok  	github.com/alphabravocompany/thewolf/internal/api/routes	6.048s

@@ -3,7 +3,9 @@ package routes_test
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -15,7 +17,54 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/api/routes"
 	"github.com/alphabravocompany/thewolf/internal/auth"
 	"github.com/alphabravocompany/thewolf/internal/db"
+	"github.com/alphabravocompany/thewolf/internal/models"
 )
+
+type registrationPolicyStore struct {
+	db.Store
+	value string
+	err   error
+}
+
+func (s registrationPolicyStore) GetSetting(ctx context.Context, key string) (string, error) {
+	if key == "registration_enabled" {
+		return s.value, s.err
+	}
+	return s.Store.GetSetting(ctx, key)
+}
+
+func TestRegistrationRequiresExplicitPolicy(t *testing.T) {
+	for _, tc := range []struct {
+		name, value string
+		err         error
+		want        int
+	}{
+		{"enabled", "TRUE", nil, http.StatusCreated},
+		{"disabled", "false", nil, http.StatusForbidden},
+		{"empty", "", nil, http.StatusForbidden},
+		{"malformed", "tru", nil, http.StatusForbidden},
+		{"missing", "", sql.ErrNoRows, http.StatusForbidden},
+		{"unavailable", "true", errors.New("storage unavailable"), http.StatusForbidden},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r, store := setupTestRouter(t)
+			defer store.Close()
+			if err := store.CreateUser(t.Context(), &models.User{ID: "owner", Email: "owner@example.test", PasswordHash: "unused", Role: models.RoleAdmin}); err != nil {
+				t.Fatal(err)
+			}
+			routes.SetHandler(registrationPolicyStore{Store: store, value: tc.value, err: tc.err}, nil)
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/auth/register", bytes.NewBufferString(`{"email":"new@example.test","password":"password1234"}`)))
+			if w.Code != tc.want {
+				t.Fatalf("registration: %d: %s", w.Code, w.Body.String())
+			}
+			users, err := store.ListUsers(t.Context())
+			if err != nil || (tc.want == http.StatusForbidden && len(users) != 1) {
+				t.Fatalf("denied registration changed users: %d, %v", len(users), err)
+			}
+		})
+	}
+}
 
 func setupTestRouter(t *testing.T) (*chi.Mux, db.Store) {
 	t.Helper()

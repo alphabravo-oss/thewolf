@@ -1,0 +1,6 @@
+=== RUN   TestFindingClustersSQLite
+--- PASS: TestFindingClustersSQLite (0.26s)
+=== RUN   TestFindingClustersPostgres
+--- PASS: TestFindingClustersPostgres (1.91s)
+PASS
+ok  	github.com/alphabravocompany/thewolf/internal/db	3.195s

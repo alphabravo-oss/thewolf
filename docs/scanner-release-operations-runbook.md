@@ -288,6 +288,14 @@ The registry worker is opt-in and has no Docker/Kubernetes control-plane
 socket. It needs database access plus egress only to configured registry and
 token-service origins.
 
+Registry redirects must retain the configured scheme, host, port, and request
+method. Cross-origin redirects (including CDN/object-storage blob redirects),
+HTTPS downgrades, and redirects that turn a write into a read fail explicitly.
+Bearer token services remain separately allowlisted and cannot redirect. Use a
+registry endpoint that serves content through its configured origin; qualify
+CDN-backed registries before enabling mirror repair. Do not expand worker
+egress or forward credentials to a redirect target as a workaround.
+
 - Compose: `docker compose --profile scanner-release-registry up -d
   scanner-release-registry`
 - Helm: set `scannerRelease.registry.enabled=true`; configure the bounded

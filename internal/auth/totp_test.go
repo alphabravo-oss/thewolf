@@ -20,11 +20,11 @@ func TestTOTPGenerateAndValidate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GenerateCode: %v", err)
 	}
-	if !ValidateTOTP(code, key.Secret()) {
+	if _, ok := ValidateTOTP(code, key.Secret(), time.Now()); !ok {
 		t.Error("valid code rejected")
 	}
-	if ValidateTOTP("000000", key.Secret()) && code == "000000" {
-		t.Skip("astronomically unlikely collision")
+	if _, ok := ValidateTOTP("not-a-code", key.Secret(), time.Now()); ok {
+		t.Fatal("invalid code accepted")
 	}
 }
 
@@ -54,5 +54,28 @@ func TestRecoveryCodes(t *testing.T) {
 	}
 	if _, ok := MatchRecoveryCode("zzzz-zzzz", hashed); ok {
 		t.Error("bogus code matched")
+	}
+}
+
+func TestTOTPStepWindow(t *testing.T) {
+	const secret = "JBSWY3DPEHPK3PXP"
+	now := time.Unix(1792788000, 0)
+	for offset := -2; offset <= 2; offset++ {
+		instant := now.Add(time.Duration(offset) * 30 * time.Second)
+		code, err := totp.GenerateCode(secret, instant)
+		if err != nil {
+			t.Fatal(err)
+		}
+		step, ok := ValidateTOTP(" "+code+" ", secret, now)
+		want := offset >= -1 && offset <= 1
+		if ok != want || (ok && step != instant.Unix()/30) {
+			t.Errorf("offset=%d: step=%d valid=%v", offset, step, ok)
+		}
+	}
+	if _, ok := ValidateTOTP("123456", "invalid!secret", now); ok {
+		t.Fatal("invalid secret accepted")
+	}
+	if _, ok := ValidateTOTP("123456", secret, time.Unix(-1, 0)); ok {
+		t.Fatal("negative time accepted")
 	}
 }

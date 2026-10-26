@@ -1,0 +1,29 @@
+$ playwright test scan-live.spec.ts --workers=2
+[WebServer] $ vite build
+[WebServer] (node:3500994) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:3501161) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 6 tests using 2 workers
+
+(node:3501294) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3501295) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  2 [desktop-chromium-linux] › e2e/scan-live.spec.ts:52:1 › scan header exposes attempts, incomplete execution and changed scope @browser-matrix (677ms)
+  ✓  1 [desktop-chromium-linux] › e2e/scan-live.spec.ts:6:1 › live scan reconnects with its cursor, shows output and refreshes terminal state @browser-matrix (795ms)
+(node:3501495) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3501503) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  3 [mobile-chromium-linux] › e2e/scan-live.spec.ts:6:1 › live scan reconnects with its cursor, shows output and refreshes terminal state @browser-matrix (695ms)
+  ✓  4 [mobile-chromium-linux] › e2e/scan-live.spec.ts:52:1 › scan header exposes attempts, incomplete execution and changed scope @browser-matrix (603ms)
+(node:3501710) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3501717) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  6 [desktop-firefox-linux] › e2e/scan-live.spec.ts:52:1 › scan header exposes attempts, incomplete execution and changed scope @browser-matrix (1.9s)
+  ✓  5 [desktop-firefox-linux] › e2e/scan-live.spec.ts:6:1 › live scan reconnects with its cursor, shows output and refreshes terminal state @browser-matrix (2.6s)
+
+  6 passed (11.4s)

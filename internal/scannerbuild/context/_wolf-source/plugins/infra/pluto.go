@@ -28,7 +28,14 @@ func (p *PlutoPlugin) Languages() []models.Language { return nil }
 
 func (p *PlutoPlugin) CheckAvailable() bool { return container.IsScannersReady() }
 
+func (p *PlutoPlugin) Applicability(repoPath, _ string) error {
+	return plugin.KubernetesApplicability(repoPath)
+}
+
 func (p *PlutoPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
+	if err := p.Applicability(opts.RepoPath, opts.Target); err != nil {
+		return nil, err
+	}
 	if opts.Timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, opts.Timeout)

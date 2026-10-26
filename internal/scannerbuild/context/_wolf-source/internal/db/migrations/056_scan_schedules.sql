@@ -9,10 +9,10 @@ CREATE TABLE IF NOT EXISTS scan_schedules (
   quiet_start TEXT NOT NULL DEFAULT '',
   quiet_end TEXT NOT NULL DEFAULT '',
   enabled INTEGER NOT NULL DEFAULT 1,
-  last_run_at DATETIME,
+  last_run_at TIMESTAMP,
   last_sha TEXT NOT NULL DEFAULT '',
-  created_at DATETIME NOT NULL,
-  updated_at DATETIME NOT NULL
+  created_at TIMESTAMP NOT NULL,
+  updated_at TIMESTAMP NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_scan_schedules_user ON scan_schedules(user_id);
 CREATE INDEX IF NOT EXISTS idx_scan_schedules_repo ON scan_schedules(repo_id);

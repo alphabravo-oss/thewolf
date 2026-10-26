@@ -9,7 +9,6 @@
 # ============================================================
 FROM debian:trixie-slim@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a0c3ccd26f436a0e
 
-ARG WOLF_VERSION=dev
 LABEL org.opencontainers.image.title="wolf-scanners-min" \
       org.opencontainers.image.description="Minimal test image (bandit only) for the wolf shim's integration tests"
 
@@ -29,11 +28,15 @@ RUN chmod +x /usr/local/bin/wolf-tool-entry
 RUN python3 -m venv /opt/py && \
     . /opt/py/bin/activate && \
     pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir bandit && \
+    . /etc/wolf-scanners/versions.env && \
+    pip install --no-cache-dir "bandit==${BANDIT_VERSION}" && \
     ln -sf /opt/py/bin/bandit /usr/local/bin/bandit
 
 RUN groupadd -g 1000 wolf && \
     useradd  -u 1000 -g 1000 -m -d /home/wolf -s /bin/bash wolf
+
+ARG WOLF_VERSION=dev
+LABEL org.opencontainers.image.version="${WOLF_VERSION}"
 
 USER wolf
 WORKDIR /scan

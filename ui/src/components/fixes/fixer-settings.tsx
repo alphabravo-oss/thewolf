@@ -1,7 +1,10 @@
 // Fixer settings — OAuth persist status, default harness/model/effort.
 import { useEffect, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useSettingsMap } from "@/lib/flags";
 import { api } from "@/lib/api";
 import { useFixEngines, type FixCatalogEngine, type FixerPromptTemplate } from "@/lib/fixes";
 import { FixerConsolePanel } from "@/components/fixes/fixer-console";
@@ -9,26 +12,16 @@ import { FixerConsolePanel } from "@/components/fixes/fixer-console";
 export function FixerSettings() {
   const qc = useQueryClient();
   const engines = useFixEngines(true);
-  const settingsQ = useQuery({
-    queryKey: ["settings"],
-    queryFn: async () => {
-      const r = await api.get<{ key: string; value: string }[] | Record<string, string>>(
-        "/settings",
-      );
-      const out: Record<string, string> = {};
-      if (Array.isArray(r.data)) {
-        for (const row of r.data) out[row.key] = row.value;
-      } else if (r.data && typeof r.data === "object") {
-        for (const [k, v] of Object.entries(r.data)) out[k] = String(v);
-      }
-      return out;
-    },
-  });
+  const settingsQ = useSettingsMap();
   const save = useMutation({
     mutationFn: (updates: Record<string, string>) => api.put("/settings", updates),
-    onSuccess: () => {
+    onSuccess: async (_, updates) => {
+      qc.setQueryData<Record<string, string>>(["settings"], (previous) => ({ ...previous, ...updates }));
       toast.success("Fixer defaults saved");
-      qc.invalidateQueries({ queryKey: ["settings"] });
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["settings"] }),
+        qc.invalidateQueries({ queryKey: ["fix-engines"] }),
+      ]);
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Save failed"),
   });
@@ -60,8 +53,11 @@ export function FixerSettings() {
         "high";
   const live = Boolean(selected && liveModels.some((m) => m.plan === "live"));
 
+  if (settingsQ.isPending || engines.isPending) return <p role="status" className="text-sm text-muted-foreground">Loading fixer settings…</p>;
+  if (settingsQ.isError || engines.isError) return <p role="alert" className="text-sm text-destructive">Could not load fixer settings.</p>;
+
   return (
-    <section className="space-y-5">
+    <section className="space-y-4">
       <div className="glass-card p-5 space-y-4 text-sm">
         <div>
           <h2 className="text-sm font-medium">Fixer harness</h2>
@@ -70,26 +66,9 @@ export function FixerSettings() {
             in on the worker. Grok uses an xAI API key.
           </p>
         </div>
-        <label className="block space-y-1">
-          <span className="text-xs text-muted-foreground">Harness</span>
-          <select
-            value={engineName}
-            onChange={(e) =>
-              save.mutate({
-                fixer_engine: e.target.value,
-                fixer_model: "",
-              })
-            }
-            className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border text-sm"
-          >
-            <option value="auto">Auto (first logged-in CLI, then API)</option>
-            {catalog.map((e) => (
-              <option key={e.name} value={e.name}>
-                {e.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        <FixerChoice label="Harness" value={engineName} disabled={save.isPending}
+          options={[{ value: "auto", label: "Auto (first logged-in CLI, then API)" }, ...catalog.map(e => ({ value: e.name, label: e.label }))]}
+          onSave={(value) => save.mutate({ fixer_engine: value, fixer_model: "", fixer_effort: "" })} />
       </div>
 
       <div className="glass-card p-5 space-y-3 text-sm">
@@ -164,49 +143,13 @@ export function FixerSettings() {
           Effort is OpenCode <code className="font-mono">--variant</code>, Claude{" "}
           <code className="font-mono">--effort</code>, or Codex reasoning effort.
         </p>
-        {selected && (
-          <label className="block space-y-1">
-            <span className="text-xs text-muted-foreground">
-              Model{live ? " · live from worker" : ""}
-            </span>
-            <select
-              value={model}
-              onChange={(e) =>
-                save.mutate({
-                  fixer_engine: engineName === "auto" ? selected.name : engineName,
-                  fixer_model: e.target.value,
-                })
-              }
-              className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border text-sm"
-            >
-              {liveModels.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.label}
-                  {m.provider ? ` · ${m.provider}` : ""}
-                  {m.context_k ? ` · ${m.context_k}k ctx` : ""}
-                  {m.speed ? ` · ${m.speed}` : ""}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-        {efforts.length > 0 && (
-          <label className="block space-y-1">
-            <span className="text-xs text-muted-foreground">Effort / speed</span>
-            <select
-              value={effort}
-              onChange={(e) => save.mutate({ fixer_effort: e.target.value })}
-              className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border text-sm"
-            >
-              {efforts.map((e) => (
-                <option key={e.id} value={e.id}>
-                  {e.label}
-                  {e.hint ? ` — ${e.hint}` : ""}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
+        {selected && liveModels.length > 0 && <FixerChoice label={live ? "Model · live from worker" : "Model"}
+          value={model} disabled={save.isPending}
+          options={liveModels.map(m => ({ value: m.id, label: [m.label, m.provider, m.context_k ? `${m.context_k}k ctx` : "", m.speed].filter(Boolean).join(" · ") }))}
+          onSave={(value) => save.mutate({ fixer_engine: engineName === "auto" ? selected.name : engineName, fixer_model: value, fixer_effort: "" })} />}
+        {efforts.length > 0 && <FixerChoice label="Effort / speed" value={effort} disabled={save.isPending}
+          options={efforts.map(e => ({ value: e.id, label: e.label + (e.hint ? ` — ${e.hint}` : "") }))}
+          onSave={(value) => save.mutate({ fixer_effort: value })} />}
       </div>
 
       <FixerPromptEditors
@@ -216,6 +159,25 @@ export function FixerSettings() {
       />
     </section>
   );
+}
+
+function FixerChoice({ label, value, options, disabled, onSave }: {
+  label: string; value: string; options: { value: string; label: string }[];
+  disabled: boolean; onSave: (value: string) => void;
+}) {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
+  const dirty = draft !== value;
+  return <form className="space-y-1" onSubmit={(e) => { e.preventDefault(); if (dirty && !disabled) onSave(draft); }}>
+    <div className="text-xs text-muted-foreground">{label}</div>
+    <div className="flex items-center gap-2">
+      <Select value={draft} onValueChange={setDraft} disabled={disabled}>
+        <SelectTrigger aria-label={label} className="h-9 min-w-0"><SelectValue /></SelectTrigger>
+        <SelectContent>{options.map(option => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
+      </Select>
+      {dirty && <Button type="submit" size="sm" disabled={disabled}>Save</Button>}
+    </div>
+  </form>;
 }
 
 function FixerPromptEditors({
@@ -283,7 +245,7 @@ function PromptEditor({
   const dirty = draft !== tmpl.value;
   return (
     <div className="space-y-2">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="font-medium">{title}</div>
           <p className="text-xs text-muted-foreground">{hint}</p>
@@ -293,24 +255,21 @@ function PromptEditor({
             type="button"
             disabled={saving}
             onClick={() => {
-              setDraft(tmpl.default);
               onSave({ [tmpl.key]: "" });
             }}
             className="h-8 px-2 rounded-md border border-border text-xs hover:bg-muted/40 disabled:opacity-50"
           >
             Reset to default
           </button>
-          <button
-            type="button"
-            disabled={saving || !dirty}
-            onClick={() => onSave({ [tmpl.key]: draft })}
-            className="h-8 px-2 rounded-md bg-primary text-primary-foreground text-xs font-medium disabled:opacity-50"
-          >
+          {dirty && <Button type="button" size="sm" disabled={saving} onClick={() => onSave({ [tmpl.key]: draft })}>
             Save
-          </button>
+          </Button>}
         </div>
       </div>
       <textarea
+        aria-label={title}
+        disabled={saving}
+        onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && dirty && !saving) { e.preventDefault(); onSave({ [tmpl.key]: draft }); } }}
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
         spellCheck={false}

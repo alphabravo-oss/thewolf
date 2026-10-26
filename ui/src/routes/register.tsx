@@ -1,7 +1,7 @@
 // Registration. Mirrors login.tsx; redirects to / after success.
 import { createFileRoute, useNavigate, redirect } from "@tanstack/react-router";
 import { useForm } from "@tanstack/react-form";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
 import {
@@ -29,7 +29,9 @@ interface AuthSettings {
 
 function RegisterPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
   const authSettings = useQuery({
     queryKey: ["auth-settings"],
     queryFn: async () => (await api.get<AuthSettings>("/auth/settings")).data,
@@ -39,9 +41,10 @@ function RegisterPage() {
     defaultValues: { email: "", password: "", passwordConfirm: "" },
     onSubmit: async ({ value }) => {
       if (value.password !== value.passwordConfirm) {
-        toast.error("Passwords don't match");
+        setError("Passwords don't match");
         return;
       }
+      setError("");
       setSubmitting(true);
       try {
         // Only send the fields the API knows about.
@@ -49,10 +52,11 @@ function RegisterPage() {
           email: value.email,
           password: value.password,
         });
+        queryClient.clear();
         toast.success("Welcome to Wolf");
         navigate({ to: "/" });
       } catch (e) {
-        toast.error(
+        setError(
           isCommunityLimit(e) ? COMMUNITY_LIMIT_COPY : e instanceof Error ? e.message : "Registration failed",
         );
       } finally {
@@ -67,11 +71,12 @@ function RegisterPage() {
   return (
     <AuthShell>
       <div className="space-y-1.5">
-        <h2 className="text-2xl font-semibold tracking-tight">Create your account</h2>
+        <h1 className="text-2xl font-semibold tracking-tight">Create your account</h1>
         <p className="text-sm text-muted-foreground">Get started with The Wolf.</p>
       </div>
 
-      {registrationDisabled ? (
+      {error && <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive-text">{error}</p>}
+      {authSettings.isError ? <p role="alert" className="text-sm text-destructive-text">Could not check registration availability. Reload to try again.</p> : registrationDisabled ? (
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
             Registration is disabled. Ask an administrator to create an account from
@@ -165,7 +170,7 @@ function RegisterPage() {
 
       <div className="text-center text-xs text-muted-foreground">
         Have an account?{" "}
-        <a href="/login" className="text-foreground hover:underline">
+        <a href="/login" className="text-foreground underline underline-offset-2">
           Sign in
         </a>
       </div>

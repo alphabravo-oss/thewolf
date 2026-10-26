@@ -7,10 +7,10 @@ import (
 	"net"
 	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
+	gitpkg "github.com/alphabravocompany/thewolf/internal/fix/git"
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/secrets"
 )
@@ -121,12 +121,11 @@ func (r Resolver) prepareGit(ctx context.Context, repo *models.Repo, ref string)
 	if ref == "" {
 		ref = repo.DefaultBranch
 	}
-	dir, err := makeScanWorkspace("wolf-git-scan-*")
+	dir, cleanup, err := makeScanWorkspace("wolf-git-scan-*")
 	if err != nil {
 		return Prepared{}, fmt.Errorf("create Git workspace: %w", err)
 	}
-	cleanup := func() { _ = os.RemoveAll(dir) }
-	env := append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "GIT_CONFIG_NOSYSTEM=1")
+	var env []string
 	credentialCleanup := func() {}
 	if repo.CredentialSecretID != "" {
 		env, credentialCleanup, err = r.gitCredentialEnv(ctx, repo, host, canonical, dir, env)
@@ -138,9 +137,8 @@ func (r Resolver) prepareGit(ctx context.Context, repo *models.Repo, ref string)
 	defer credentialCleanup()
 
 	run := func(args ...string) ([]byte, error) {
-		cmd := exec.CommandContext(ctx, "git", args...)
+		cmd := gitpkg.Command(ctx, env, args...)
 		cmd.Dir = dir
-		cmd.Env = env
 		out, runErr := cmd.CombinedOutput()
 		if runErr != nil {
 			return nil, fmt.Errorf("git command failed: %s", truncateGitOutput(string(out)))
@@ -180,14 +178,16 @@ func (r Resolver) prepareGit(ctx context.Context, repo *models.Repo, ref string)
 		return Prepared{}, err
 	}
 	sha := strings.TrimSpace(string(shaOutput))
-	treeOutput, err := run("rev-parse", "HEAD^{tree}")
+	// Credential files are preparation-only and must not affect source identity.
+	credentialCleanup()
+	treeDigest, err := workspaceTreeDigest(dir)
 	if err != nil {
 		cleanup()
 		return Prepared{}, err
 	}
 	return Prepared{
 		Path: dir, SourceType: models.SourceTypeGit, SourcePath: canonical,
-		CommitSHA: sha, TreeDigest: "git:" + strings.TrimSpace(string(treeOutput)),
+		CommitSHA: sha, TreeDigest: treeDigest,
 		DirtyState: "clean", PreparedWorkspace: dir, Cleanup: cleanup,
 	}, nil
 }

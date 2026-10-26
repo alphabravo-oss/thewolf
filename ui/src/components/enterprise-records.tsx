@@ -3,7 +3,7 @@ import { PlusIcon, Trash2Icon } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { api, ApiError, isNotFound } from "@/lib/api";
-import { useVersion } from "@/lib/edition";
+import { useEdition } from "@/lib/edition";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
@@ -19,15 +19,24 @@ export function EnterpriseChrome({
   description?: string;
   children: ReactNode;
 }) {
-  const v = useVersion();
+  const edition = useEdition();
   return (
     <PageShell>
       <PageHeader
-        eyebrow={v.data?.product ?? "Enterprise"}
+        eyebrow="Enterprise preview"
         title={title}
         description={description}
       />
-      {children}
+      {edition.isPending ? <p role="status">Loading edition…</p> : edition.isError ? (
+        <EmptyState title="Could not verify this edition" description="Reload to check which Enterprise modules are available." />
+      ) : edition.data?.edition !== "enterprise" ? (
+        <EmptyState title="Enterprise preview" description="This module is not available in Community. Your existing bookmark still works; no tenancy or policy enforcement is provided here." />
+      ) : <>
+        <p role="note" className="rounded-lg border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
+          Preview: these records describe configuration. Creating a record does not enforce tenant isolation, access policies, compliance, or data residency.
+        </p>
+        {children}
+      </>}
     </PageShell>
   );
 }
@@ -111,6 +120,7 @@ export function RecordsPanel({
         <Input
           value={name}
           onChange={(e) => setName(e.target.value)}
+          aria-label={`${title} name`}
           placeholder="Name"
           className="max-w-xs"
         />

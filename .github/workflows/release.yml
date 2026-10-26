@@ -65,24 +65,24 @@ jobs:
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 24
+          node-version: "26.11.1"
 
       - name: Enable pnpm
-        run: corepack enable
+        run: npm install -g pnpm@12.11.2
 
       - name: Validate Go and scanner metadata
         run: |
-          go test -short -race -count=1 -timeout 120s ./...
+          go test -short -race -count=1 -timeout 600s ./...
           make scanners-validate
 
       - name: Validate UI
         working-directory: ui
         run: |
-          corepack pnpm install --frozen-lockfile
-          corepack pnpm typecheck
-          corepack pnpm lint
-          corepack pnpm test
-          corepack pnpm build
+          pnpm install --frozen-lockfile
+          pnpm typecheck
+          pnpm lint
+          pnpm test
+          pnpm build
 
   publish-app:
     name: Publish app image

@@ -2,10 +2,13 @@ package suppress
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
+	"syscall"
 )
 
 // ParseWolfIgnore reads a `.wolfignore` file and returns a RuleSet.
@@ -22,9 +25,8 @@ import (
 // path glob from optional `category=` / `rule=` filters. Multiple values
 // in a filter are comma-separated, no spaces.
 //
-// Returns parse errors that the caller can surface in `wolf scan` output;
-// individual malformed lines are skipped with a log entry rather than
-// aborting the whole file.
+// Invalid syntax, unsupported negation, and read errors reject the entire file.
+// Never apply a partial ruleset or broaden a malformed filter into a path rule.
 func ParseWolfIgnore(r io.Reader, source string) (RuleSet, error) {
 	var rs RuleSet
 	sc := bufio.NewScanner(r)
@@ -35,13 +37,14 @@ func ParseWolfIgnore(r io.Reader, source string) (RuleSet, error) {
 		if raw == "" || strings.HasPrefix(raw, "#") {
 			continue
 		}
-		rule, ok := parseWolfIgnoreLine(raw, source, lineNo)
-		if ok {
-			rs.Rules = append(rs.Rules, rule)
+		rule, err := parseWolfIgnoreLine(raw, source)
+		if err != nil {
+			return RuleSet{}, fmt.Errorf("%s:%d: %w", source, lineNo, err)
 		}
+		rs.Rules = append(rs.Rules, rule)
 	}
 	if err := sc.Err(); err != nil {
-		return rs, err
+		return RuleSet{}, fmt.Errorf("%s:%d: %w", source, lineNo+1, err)
 	}
 	return rs, nil
 }
@@ -51,8 +54,16 @@ func ParseWolfIgnore(r io.Reader, source string) (RuleSet, error) {
 // does not exist — a missing .wolfignore is not an error, it just means
 // "no extra rules".
 func ParseWolfIgnoreFile(path string) (RuleSet, error) {
-	// #nosec G304 -- reads .wolfignore at the scan root
-	f, err := os.Open(path)
+	root, err := os.OpenRoot(filepath.Dir(path))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return RuleSet{}, nil
+		}
+		return RuleSet{}, err
+	}
+	defer func() { _ = root.Close() }()
+	// Pin a regular file inside the source root; a FIFO must not block the reader.
+	f, err := root.OpenFile(filepath.Base(path), os.O_RDONLY|syscall.O_NONBLOCK, 0)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return RuleSet{}, nil
@@ -60,68 +71,61 @@ func ParseWolfIgnoreFile(path string) (RuleSet, error) {
 		return RuleSet{}, err
 	}
 	defer func() { _ = f.Close() }()
+	info, err := f.Stat()
+	if err != nil {
+		return RuleSet{}, err
+	}
+	if !info.Mode().IsRegular() {
+		return RuleSet{}, fmt.Errorf("%s: expected a regular file", filepath.Base(path))
+	}
 	return ParseWolfIgnore(f, filepath.Base(path))
 }
 
-// parseWolfIgnoreLine splits one line into a Rule. Returns false when the
-// line is malformed (no path glob, just filters) — the caller drops it.
-func parseWolfIgnoreLine(raw, source string, lineNo int) (Rule, bool) {
-	// Tokenize: first token is the path glob, remaining tokens are
-	// "key=value" filters.
-	parts := splitFields(raw)
-	if len(parts) == 0 {
-		return Rule{}, false
-	}
+func parseWolfIgnoreLine(raw, source string) (Rule, error) {
+	parts := strings.Fields(raw)
 	pathGlob := parts[0]
 	if strings.HasPrefix(pathGlob, "!") {
-		// Negation is not implemented; drop the line rather than suppress.
-		return Rule{}, false
+		return Rule{}, fmt.Errorf("negation is not supported")
 	}
-	rule := Rule{
-		PathGlob: pathGlob,
-		Reason:   source + ":" + pathGlob,
+	if key, _, ok := strings.Cut(pathGlob, "="); ok {
+		switch strings.ToLower(key) {
+		case "category", "categories", "rule", "rules", "rule_id", "rule-id", "reason":
+			return Rule{}, fmt.Errorf("expected a path glob before filters")
+		}
 	}
+	if strings.ContainsRune(pathGlob, 0) {
+		return Rule{}, fmt.Errorf("path glob contains NUL")
+	}
+	if _, err := path.Match(pathGlob, ""); err != nil {
+		return Rule{}, fmt.Errorf("invalid path glob: %w", err)
+	}
+	rule := Rule{PathGlob: pathGlob, Reason: source + ":" + pathGlob}
 	for _, p := range parts[1:] {
-		key, val, ok := cutKV(p)
-		if !ok {
-			continue
+		if strings.HasPrefix(p, "#") {
+			break
+		}
+		key, val, ok := strings.Cut(p, "=")
+		if !ok || val == "" || strings.ContainsRune(val, 0) {
+			return Rule{}, fmt.Errorf("expected a nonempty filter or reason")
 		}
 		switch strings.ToLower(key) {
-		case "category", "categories":
-			rule.Categories = append(rule.Categories, splitCSV(val)...)
-		case "rule", "rules", "rule_id", "rule-id":
-			rule.RuleIDs = append(rule.RuleIDs, splitCSV(val)...)
+		case "category", "categories", "rule", "rules", "rule_id", "rule-id":
+			values := strings.Split(val, ",")
+			for _, value := range values {
+				if value == "" {
+					return Rule{}, fmt.Errorf("filter contains an empty value")
+				}
+			}
+			if strings.EqualFold(key, "category") || strings.EqualFold(key, "categories") {
+				rule.Categories = append(rule.Categories, values...)
+			} else {
+				rule.RuleIDs = append(rule.RuleIDs, values...)
+			}
 		case "reason":
 			rule.Reason = val
+		default:
+			return Rule{}, fmt.Errorf("unknown filter %q", key)
 		}
 	}
-	return rule, true
-}
-
-// splitFields splits on any whitespace run, ignoring empties.
-func splitFields(s string) []string {
-	return strings.Fields(s)
-}
-
-func cutKV(s string) (key, val string, ok bool) {
-	i := strings.IndexByte(s, '=')
-	if i < 0 {
-		return "", "", false
-	}
-	return s[:i], s[i+1:], true
-}
-
-func splitCSV(s string) []string {
-	if s == "" {
-		return nil
-	}
-	parts := strings.Split(s, ",")
-	out := make([]string, 0, len(parts))
-	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if p != "" {
-			out = append(out, p)
-		}
-	}
-	return out
+	return rule, nil
 }

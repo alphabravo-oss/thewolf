@@ -1,3 +1,4 @@
+import { findingTitle } from "@/lib/finding-title";
 // Slide-in side panel that previews a finding without leaving the list.
 // Used by the findings table's Enter shortcut + row click. Contains
 // description, code snippet with log-viewer styling, AI fix suggestion
@@ -70,7 +71,7 @@ export function FindingPreview({ finding, onClose }: FindingPreviewProps) {
             {finding.tool_name} · {finding.category}
           </div>
           <h2 className="text-base font-semibold leading-tight mt-0.5">
-            {finding.title}
+            {findingTitle(finding)}
           </h2>
           <div className="text-2xs text-muted-foreground font-mono mt-0.5 truncate">
             {finding.file_path}
@@ -107,7 +108,7 @@ export function FindingPreview({ finding, onClose }: FindingPreviewProps) {
           </section>
         )}
 
-        {finding.code_snippet && (
+        {finding.code_snippet && !/^requires login[.!]?$/i.test(finding.code_snippet.trim()) && (
           <section>
             <h3 className="text-2xs uppercase tracking-wide text-muted-foreground mb-1.5">
               Code

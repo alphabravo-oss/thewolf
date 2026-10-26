@@ -1,0 +1,52 @@
+=== RUN   TestFindingPageLoad
+=== RUN   TestFindingPageLoad/sqlite
+    finding_pages_test.go:284: repos_added=1 explain=map[detail:SEARCH findings USING INDEX idx_findings_scan_visible_severity (scan_id=? AND suppressed=?) id:5 notused:170 parent:0]
+    finding_pages_test.go:312: cold cache: all SQLite connection/page caches closed; OS page cache retained
+    finding_pages_test.go:340: repos_added=1 mode=scan_page cold_database_cache_ms=9.05
+    finding_pages_test.go:411: repos_added=1 mode=scan_page concurrency=2 warm_samples=20 p50_ms=6.28 p95_ms=14.31 mean_allocated_bytes=335651 peak_heap_bytes=3667056 response_bytes=32884 slo_p95_ms=500
+    finding_pages_test.go:312: cold cache: all SQLite connection/page caches closed; OS page cache retained
+    finding_pages_test.go:340: repos_added=1 mode=scan_stats cold_database_cache_ms=51.95
+    finding_pages_test.go:411: repos_added=1 mode=scan_stats concurrency=2 warm_samples=20 p50_ms=53.27 p95_ms=74.53 mean_allocated_bytes=16917 peak_heap_bytes=1585928 response_bytes=188 slo_p95_ms=1000
+    finding_pages_test.go:312: cold cache: all SQLite connection/page caches closed; OS page cache retained
+    finding_pages_test.go:340: repos_added=1 mode=fleet_page cold_database_cache_ms=1101.29
+    finding_pages_test.go:411: repos_added=1 mode=fleet_page concurrency=2 warm_samples=20 p50_ms=1316.90 p95_ms=1815.54 mean_allocated_bytes=462311478 peak_heap_bytes=467833792 response_bytes=32884 slo_p95_ms=5000
+    finding_pages_test.go:284: repos_added=10 explain=map[detail:SEARCH findings USING INDEX idx_findings_scan_visible_severity (scan_id=? AND suppressed=?) id:5 notused:145 parent:0]
+    finding_pages_test.go:312: cold cache: all SQLite connection/page caches closed; OS page cache retained
+    finding_pages_test.go:340: repos_added=10 mode=scan_page cold_database_cache_ms=3.06
+    finding_pages_test.go:411: repos_added=10 mode=scan_page concurrency=2 warm_samples=20 p50_ms=3.60 p95_ms=5.36 mean_allocated_bytes=346450 peak_heap_bytes=7343008 response_bytes=32686 slo_p95_ms=500
+    finding_pages_test.go:312: cold cache: all SQLite connection/page caches closed; OS page cache retained
+    finding_pages_test.go:340: repos_added=10 mode=scan_stats cold_database_cache_ms=8.20
+    finding_pages_test.go:411: repos_added=10 mode=scan_stats concurrency=2 warm_samples=20 p50_ms=7.00 p95_ms=12.67 mean_allocated_bytes=16926 peak_heap_bytes=1815296 response_bytes=184 slo_p95_ms=1000
+    finding_pages_test.go:312: cold cache: all SQLite connection/page caches closed; OS page cache retained
+    finding_pages_test.go:340: repos_added=10 mode=fleet_page cold_database_cache_ms=2223.55
+    finding_pages_test.go:411: repos_added=10 mode=fleet_page concurrency=2 warm_samples=20 p50_ms=2805.28 p95_ms=3095.32 mean_allocated_bytes=926028859 peak_heap_bytes=919401000 response_bytes=32689 slo_p95_ms=10000
+=== RUN   TestFindingPageLoad/postgres
+    finding_pages_test.go:284: repos_added=1 explain=map[QUERY PLAN:Limit  (cost=0.41..27.63 rows=50 width=271)]
+    finding_pages_test.go:284: repos_added=1 explain=map[QUERY PLAN:  ->  Index Scan using idx_findings_scan_visible_severity on findings  (cost=0.41..26947.77 rows=49511 width=271)]
+    finding_pages_test.go:284: repos_added=1 explain=map[QUERY PLAN:        Index Cond: ((scan_id = '7c0dbcbb-a803-4e6c-8bd4-3ad5a1e8ccc2'::text) AND (suppressed = false))]
+    finding_pages_test.go:333: cold cache: evicted 11421 PostgreSQL buffers belonging to the owned test schema; OS page cache retained
+    finding_pages_test.go:340: repos_added=1 mode=scan_page cold_database_cache_ms=199.88
+    finding_pages_test.go:411: repos_added=1 mode=scan_page concurrency=2 warm_samples=20 p50_ms=132.03 p95_ms=179.14 mean_allocated_bytes=311598 peak_heap_bytes=18837888 response_bytes=33584 slo_p95_ms=500
+    finding_pages_test.go:333: cold cache: evicted 7236 PostgreSQL buffers belonging to the owned test schema; OS page cache retained
+    finding_pages_test.go:340: repos_added=1 mode=scan_stats cold_database_cache_ms=52.33
+    finding_pages_test.go:411: repos_added=1 mode=scan_stats concurrency=2 warm_samples=20 p50_ms=54.49 p95_ms=60.71 mean_allocated_bytes=22041 peak_heap_bytes=2412600 response_bytes=188 slo_p95_ms=1000
+    finding_pages_test.go:333: cold cache: evicted 4591 PostgreSQL buffers belonging to the owned test schema; OS page cache retained
+    finding_pages_test.go:340: repos_added=1 mode=fleet_page cold_database_cache_ms=2461.66
+    finding_pages_test.go:411: repos_added=1 mode=fleet_page concurrency=2 warm_samples=20 p50_ms=2333.27 p95_ms=2518.40 mean_allocated_bytes=468459638 peak_heap_bytes=477864912 response_bytes=33584 slo_p95_ms=5000
+    finding_pages_test.go:284: repos_added=10 explain=map[QUERY PLAN:Limit  (cost=0.42..172.24 rows=50 width=271)]
+    finding_pages_test.go:284: repos_added=10 explain=map[QUERY PLAN:  ->  Index Scan using idx_findings_scan_visible_severity on findings  (cost=0.42..16769.98 rows=4880 width=271)]
+    finding_pages_test.go:284: repos_added=10 explain=map[QUERY PLAN:        Index Cond: ((scan_id = 'c8f979a8-6757-4f33-82a1-243762384f25'::text) AND (suppressed = false))]
+    finding_pages_test.go:333: cold cache: evicted 16286 PostgreSQL buffers belonging to the owned test schema; OS page cache retained
+    finding_pages_test.go:340: repos_added=10 mode=scan_page cold_database_cache_ms=15.41
+    finding_pages_test.go:411: repos_added=10 mode=scan_page concurrency=2 warm_samples=20 p50_ms=6.20 p95_ms=7.85 mean_allocated_bytes=313554 peak_heap_bytes=13193632 response_bytes=33286 slo_p95_ms=500
+    finding_pages_test.go:333: cold cache: evicted 1061 PostgreSQL buffers belonging to the owned test schema; OS page cache retained
+    finding_pages_test.go:340: repos_added=10 mode=scan_stats cold_database_cache_ms=6.37
+    finding_pages_test.go:411: repos_added=10 mode=scan_stats concurrency=2 warm_samples=20 p50_ms=4.29 p95_ms=6.66 mean_allocated_bytes=21988 peak_heap_bytes=2505336 response_bytes=184 slo_p95_ms=1000
+    finding_pages_test.go:333: cold cache: evicted 1035 PostgreSQL buffers belonging to the owned test schema; OS page cache retained
+    finding_pages_test.go:340: repos_added=10 mode=fleet_page cold_database_cache_ms=4936.51
+    finding_pages_test.go:411: repos_added=10 mode=fleet_page concurrency=2 warm_samples=20 p50_ms=5370.89 p95_ms=5814.74 mean_allocated_bytes=938928577 peak_heap_bytes=948361736 response_bytes=33389 slo_p95_ms=10000
+--- PASS: TestFindingPageLoad (144.44s)
+    --- PASS: TestFindingPageLoad/sqlite (47.41s)
+    --- PASS: TestFindingPageLoad/postgres (97.04s)
+PASS
+ok  	github.com/alphabravocompany/thewolf/internal/db	144.520s

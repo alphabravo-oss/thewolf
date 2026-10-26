@@ -1,3 +1,4 @@
+import { Checkbox } from "@/components/ui/checkbox";
 // Fixed-bottom-center bulk-action toolbar for /repos. Renders only when
 // at least one repo is selected. Each action opens a small confirmation
 // or picker dialog. Scan dispatches N parallel POST /scans calls — the
@@ -368,10 +369,9 @@ function DeleteDialog({
           </DialogDescription>
         </DialogHeader>
         <label className="flex items-start gap-3 rounded-md border border-border bg-muted/20 p-3 text-sm">
-          <input
-            type="checkbox"
+          <Checkbox
             checked={purge}
-            onChange={(e) => setPurge(e.target.checked)}
+            onCheckedChange={(value) => setPurge(value === true)}
             className="mt-0.5"
           />
           <span>

@@ -23,16 +23,16 @@ func (p *SpectralPlugin) Languages() []models.Language { return nil }
 
 func (p *SpectralPlugin) CheckAvailable() bool { return container.IsScannersReady() }
 
+func (p *SpectralPlugin) Applicability(repoPath, target string) error {
+	if !plugin.HasFile(repoPath, "openapi.yaml") && !plugin.HasFile(repoPath, "openapi.yml") && !plugin.HasFile(repoPath, "openapi.json") && !plugin.HasFile(repoPath, "swagger.yaml") && !plugin.HasFile(repoPath, "swagger.yml") && !plugin.HasFile(repoPath, "swagger.json") {
+		return &plugin.NotApplicableError{Reason: "no OpenAPI/Swagger specification found"}
+	}
+	return nil
+}
+
 func (p *SpectralPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
-	hasSpec := plugin.HasFile(opts.RepoPath, "openapi.yaml") ||
-		plugin.HasFile(opts.RepoPath, "openapi.yml") ||
-		plugin.HasFile(opts.RepoPath, "openapi.json") ||
-		plugin.HasFile(opts.RepoPath, "swagger.yaml") ||
-		plugin.HasFile(opts.RepoPath, "swagger.yml") ||
-		plugin.HasFile(opts.RepoPath, "swagger.json")
-	if !hasSpec {
-		plugin.Skipf(opts.OnOutput, "spectral", "no OpenAPI/Swagger spec files found. Add an API specification file to enable linting.")
-		return nil, nil
+	if err := p.Applicability(opts.RepoPath, opts.Target); err != nil {
+		return nil, err
 	}
 
 	timeout := opts.Timeout

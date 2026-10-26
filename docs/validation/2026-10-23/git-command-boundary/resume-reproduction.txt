@@ -1,0 +1,11 @@
+12:01PM INF scan starting branch=main component=scan repo_id=1e39b108-0758-45ea-979d-ce6b72161826 scan_id=0d6095be-f69d-4471-af00-2a4773ae7c12
+12:01PM INF scan starting branch=main component=scan repo_id=1db408a3-2402-466b-a225-c2367119e653 scan_id=bb4dc363-bc97-4156-a77b-d85c476764c7
+12:01PM INF scan starting branch=main component=scan repo_id=01c83b7f-0cba-40a2-8ab1-26b736eba7f4 scan_id=859b1a0b-546e-437b-8611-cfbe48aabaa6
+--- FAIL: TestExecuteQueuedScanDoesNotReplaceFailedRetainedSource (0.55s)
+    --- FAIL: TestExecuteQueuedScanDoesNotReplaceFailedRetainedSource/missing (0.19s)
+        scan_source_recovery_test.go:56: retained source failure replaced: status=failed code=source_prepare_failed message=retain existing workspace: lstat /tmp/TestExecuteQueuedScanDoesNotReplaceFailedRetainedSourcemissing1206652025/001/replacement-must-not-be-used: no such file or directory
+    --- FAIL: TestExecuteQueuedScanDoesNotReplaceFailedRetainedSource/file (0.18s)
+        scan_source_recovery_test.go:56: retained source failure replaced: status=failed code=source_prepare_failed message=retain existing workspace: lstat /tmp/TestExecuteQueuedScanDoesNotReplaceFailedRetainedSourcefile3135759929/001/replacement-must-not-be-used: no such file or directory
+FAIL
+FAIL	github.com/alphabravocompany/thewolf/internal/api/routes	0.563s
+FAIL

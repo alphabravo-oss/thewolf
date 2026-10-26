@@ -1,209 +1,107 @@
-// ui/src/routes/_authed.index.tsx
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { DownloadIcon, Loader2Icon, PlusIcon, ShieldIcon } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Loader2Icon, PlayIcon, ShieldCheckIcon } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { PostureCards } from "@/components/fleet/posture-cards";
-import { SeverityTrend } from "@/components/fleet/severity-trend";
-import { TopComponents } from "@/components/fleet/top-components";
-import { NeedsAttention } from "@/components/fleet/needs-attention";
-import { InventoryBreakdown } from "@/components/fleet/inventory-breakdown";
-import { RecentActivity } from "@/components/fleet/recent-activity";
+import { DashboardEvidence } from "@/components/fleet/dashboard-evidence";
+import { AddRepoForm } from "@/components/add-repo-form";
+import { useScanWithPreflight } from "@/components/scan-preflight";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { PermissionState } from "@/components/ui/empty-state";
+import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader, PageShell } from "@/components/ui/page";
-import { api, isNotFound } from "@/lib/api";
+import { ApiError, api } from "@/lib/api";
+import { useFleetPosture } from "@/lib/fleet";
+import { useIsAdmin } from "@/lib/me";
+import { useRuntimeCapabilities } from "@/lib/runtime-capabilities";
 import { safeErrorMessage } from "@/lib/safe-display";
-import type { Repo, SetupStatus } from "@/lib/types";
+import type { Repo } from "@/lib/types";
 
 export const Route = createFileRoute("/_authed/")({ component: FleetDashboard });
 
 function FleetDashboard() {
-  const setupQ = useQuery({
-    queryKey: ["setup", "status"],
-    queryFn: async () => {
-      try {
-        return (await api.get<SetupStatus>("/setup/status")).data ?? null;
-      } catch (e) {
-        if (isNotFound(e)) return null;
-        throw e;
-      }
-    },
-  });
-  const reposQ = useQuery({
-    queryKey: ["repos", { limit: 1 }],
-    queryFn: async () => {
-      const r = await api.get<Repo[]>("/repos?limit=1");
-      return r.data ?? [];
-    },
-  });
-  const repoCount = setupQ.data?.repo_count ?? reposQ.data?.length;
-  const showOnboarding = repoCount === 0;
-
-  return (
-    <PageShell>
-      <div className="reveal reveal-1">
-        <PageHeader
-          title="Home"
-          description="Open findings, posture, and inventory across every repository wolf manages."
-        />
-      </div>
-      {showOnboarding ? (
-        <OnboardingCard />
-      ) : (
-        <>
-          <div className="reveal reveal-2">
-            <PostureCards />
-          </div>
-          <div className="reveal reveal-3">
-            <SeverityTrend />
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 reveal reveal-4">
-            <TopComponents />
-            <NeedsAttention />
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 reveal reveal-5">
-            <InventoryBreakdown />
-            <RecentActivity />
-          </div>
-        </>
-      )}
-    </PageShell>
-  );
-}
-
-interface DoctorCheck {
-  label: string;
-  ok: boolean;
-  detail?: string;
-}
-
-interface DoctorResult {
-  overall_ok: boolean;
-  checks: DoctorCheck[];
-}
-
-interface PullResult {
-  pulled: string[];
-  errors?: { image: string; error: string }[];
-}
-
-function OnboardingCard() {
+  const fleet = useFleetPosture();
+  const scan = useScanWithPreflight();
   const navigate = useNavigate();
-  const [doctor, setDoctor] = useState<DoctorResult | null>(null);
-
-  const doctorMut = useMutation({
-    mutationFn: async () =>
-      (await api.post<DoctorResult>("/scanners/doctor")).data,
-    onSuccess: (d) => setDoctor(d),
-    onError: (e) =>
-      toast.error(safeErrorMessage(e, "Scanner diagnostics could not run.")),
-  });
-
-  const pullMut = useMutation({
-    mutationFn: async () => (await api.post<PullResult>("/scanners/pull")).data,
-    onSuccess: (p) => {
-      if (p && (!p.errors || p.errors.length === 0)) {
-        toast.success(`Pulled ${p.pulled?.length ?? 0} image(s)`);
-      } else {
-        toast.error(
-          `Pulled ${p?.pulled?.length ?? 0}, ${p?.errors?.length ?? 0} failed`,
-        );
-      }
-    },
-    onError: (e) =>
-      toast.error(safeErrorMessage(e, "Scanner images could not be pulled.")),
-  });
-
-  const sampleMut = useMutation({
+  const qc = useQueryClient();
+  const [adding, setAdding] = useState(false);
+  const sample = useMutation({
     mutationFn: async () => (await api.post<Repo>("/setup/sample-repo")).data,
     onSuccess: (repo) => {
       if (!repo?.id) {
-        toast.error("Sample repository was created but no id was returned");
+        toast.error("The sample could not be opened. Try again.");
         return;
       }
-      toast.success(`Added ${repo.name || "sample repository"}`);
-      void navigate({ to: "/repos/$repoId", params: { repoId: repo.id } });
+      scan.configure({ repo_id: repo.id, profile: "standard" });
+      void qc.invalidateQueries({ queryKey: ["repos"] });
+      void qc.invalidateQueries({ queryKey: ["fleet"] });
+      void qc.invalidateQueries({ queryKey: ["setup"] });
     },
-    onError: (e) =>
-      toast.error(safeErrorMessage(e, "Could not add the sample repository.")),
+    onError: (e) => toast.error(safeErrorMessage(e, "Could not add the sample repository.")),
   });
 
-  return (
-    <section className="glass-card p-5 space-y-4 reveal reveal-2">
-      <div>
-        <h2 className="text-sm font-medium">Get started</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Run doctor, pull scanner images, then add a sample or real repository.
-        </p>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => doctorMut.mutate()}
-          disabled={doctorMut.isPending}
-          className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border text-sm hover:bg-muted/30 disabled:opacity-50"
-        >
-          {doctorMut.isPending ? (
-            <Loader2Icon className="size-4 animate-spin" />
-          ) : (
-            <ShieldIcon className="size-4" />
-          )}
-          {doctorMut.isPending ? "Running…" : "Run doctor"}
-        </button>
-        <button
-          type="button"
-          onClick={() => pullMut.mutate()}
-          disabled={pullMut.isPending}
-          className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border text-sm hover:bg-muted/30 disabled:opacity-50"
-        >
-          {pullMut.isPending ? (
-            <Loader2Icon className="size-4 animate-spin" />
-          ) : (
-            <DownloadIcon className="size-4" />
-          )}
-          {pullMut.isPending ? "Pulling…" : "Pull scanner images"}
-        </button>
-        <button
-          type="button"
-          onClick={() => sampleMut.mutate()}
-          disabled={sampleMut.isPending}
-          className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
-        >
-          {sampleMut.isPending ? (
-            <Loader2Icon className="size-4 animate-spin" />
-          ) : (
-            <PlusIcon className="size-4" />
-          )}
-          {sampleMut.isPending ? "Adding…" : "Add sample repository"}
-        </button>
-        <Link
-          to="/repos"
-          className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border text-sm hover:bg-muted/30"
-        >
-          Add a real repo
-        </Link>
-      </div>
-      {doctor && (
-        <div
-          className="rounded-md border border-border bg-muted/20 p-3 text-sm space-y-1"
-          role={doctor.overall_ok ? "status" : "alert"}
-        >
-          <div className="font-medium">
-            {doctor.overall_ok ? "All checks passed" : "Some checks failed"}
-          </div>
-          <ul className="text-xs space-y-0.5 font-mono">
-            {(doctor.overall_ok
-              ? (doctor.checks ?? [])
-              : (doctor.checks ?? []).filter((c) => !c.ok)
-            ).map((c, i) => (
-              <li key={i}>
-                {c.ok ? "ok" : "fail"} · {c.label}
-                {c.detail ? ` — ${c.detail}` : ""}
-              </li>
-            ))}
-          </ul>
+  return <PageShell>
+    {scan.dialog}
+    <PageHeader title="Home" description="Security risk, scan coverage, and what needs your attention." />
+    {fleet.isLoading ? <div role="status" aria-label="Loading Home"><Skeleton className="h-64" /></div>
+      : fleet.error instanceof ApiError && fleet.error.status === 403 ? <PermissionState description="You do not have access to fleet evidence." />
+      : fleet.isError || !fleet.data ? <div role="alert" className="rounded-lg border border-border p-6 space-y-3"><p>Dashboard evidence could not be loaded. Coverage and risk are unknown.</p><Button variant="outline" onClick={() => void fleet.refetch()}>Retry dashboard</Button></div>
+      : fleet.data.repo_count === 0 ? <section className="rounded-xl border border-border bg-card px-6 py-8 sm:p-10 space-y-6">
+        <div className="max-w-xl space-y-3">
+          <ShieldCheckIcon className="size-8 text-primary" aria-hidden />
+          <h2 className="text-2xl font-semibold tracking-tight">Your first security scan starts here</h2>
+          <p className="text-sm leading-relaxed text-muted-foreground">Try a small sample with security issues to explore. Wolf checks scanner readiness, walks you through any downloads, and shows what to fix.</p>
         </div>
-      )}
-    </section>
-  );
+        <div className="flex flex-wrap gap-3">
+          <Button onClick={() => sample.mutate()} disabled={sample.isPending || scan.busy}>{sample.isPending ? <Loader2Icon className="animate-spin" /> : <PlayIcon />}{sample.isPending ? "Preparing sample…" : "Scan the sample repository"}</Button>
+          <Button variant="outline" onClick={() => setAdding(true)}>Add your repository</Button>
+        </div>
+        <p className="text-xs text-muted-foreground">No source credentials needed for the sample. Bring your own local path, GitHub repository, Git URL, or SSH source.</p>
+        <ScannerReadiness />
+      </section> : <>
+        <div className="flex flex-wrap items-center justify-between gap-3"><ScannerReadiness /><Button variant="outline" onClick={() => setAdding(true)}>Add your repository</Button></div>
+        <DashboardEvidence />
+      </>}
+    <Dialog open={adding} onOpenChange={setAdding}><DialogContent className="max-h-[90dvh] overflow-y-auto [&>button]:hidden"><DialogHeader className="sr-only"><DialogTitle>Add your repository</DialogTitle><DialogDescription>Choose a local path, GitHub repository, remote Git URL, or SSH node.</DialogDescription></DialogHeader>{adding && <AddRepoForm onDone={(repoId) => {
+      setAdding(false);
+      void qc.invalidateQueries({ queryKey: ["fleet"] });
+      if (repoId) void navigate({ to: "/repos/$repoId", params: { repoId } });
+    }} />}</DialogContent></Dialog>
+  </PageShell>;
+}
+
+type DoctorResult = { overall_ok: boolean; checks: { label: string; ok: boolean; detail?: string }[] };
+
+function ScannerReadiness() {
+  const admin = useIsAdmin();
+  const runtime = useRuntimeCapabilities();
+  const doctor = useQuery({
+    queryKey: ["scanners", "doctor", "home"],
+    queryFn: async () => (await api.post<DoctorResult>("/scanners/doctor")).data,
+    enabled: admin && runtime.data?.docker_image_management === true,
+    staleTime: 60_000,
+    retry: false,
+  });
+  if (!admin) return <p className="text-xs text-muted-foreground">Scanner readiness is checked before every scan. Ask an administrator if preparation is needed. <Link to="/account" search={{ section: "secrets" }} className="underline underline-offset-4">GitHub credentials</Link></p>;
+  const failed = doctor.data?.checks?.filter((c) => !c.ok) ?? [];
+  const dockerUnavailable = failed.some((c) => /^(docker reachable|Container config)/.test(`${c.label} ${c.detail || ""}`));
+  const needsImages = failed.some((c) => /^scanners image present/.test(`${c.label} ${c.detail || ""}`));
+  const status = runtime.isError || doctor.isError ? "Readiness unavailable"
+    : runtime.isPending ? "Checking scanner readiness…"
+    : !runtime.data?.docker_image_management ? runtime.data?.worker_readiness?.status === "unavailable" ? "No scan worker available" : "Scans run on workers"
+    : doctor.isPending ? "Checking scanner readiness…"
+    : dockerUnavailable ? "Docker unavailable"
+    : needsImages ? "Scanner images needed"
+    : doctor.data?.overall_ok ? "Ready to scan"
+    : "Scanner setup needs attention";
+  return <div className="space-y-2 text-xs text-muted-foreground">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+      <span role="status" className="font-medium text-foreground">{status}</span>
+      <Link to="/settings" search={{ tab: "scanners" }} className="underline underline-offset-4">{dockerUnavailable ? "Check Docker connection" : needsImages ? "Prepare scanner images" : "Scanner preparation"}</Link>
+      <Link to="/account" search={{ section: "secrets" }} className="underline underline-offset-4">GitHub credentials</Link>
+      {runtime.data?.docker_image_management && <button type="button" disabled={doctor.isFetching} onClick={() => void doctor.refetch()} className="underline underline-offset-4 disabled:opacity-50">{doctor.isFetching ? "Running doctor…" : "Run doctor"}</button>}
+    </div>
+    {failed.length > 0 && <details><summary className="cursor-pointer">Diagnostic details</summary><ul className="mt-2 space-y-1">{failed.map((c) => <li key={c.label}>{c.label} {c.detail}</li>)}</ul></details>}
+  </div>;
 }

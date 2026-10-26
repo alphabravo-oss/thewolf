@@ -1,0 +1,28 @@
+[WebServer] $ vite build
+[WebServer] (node:3542632) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:3542811) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 6 tests using 2 workers
+
+(node:3542875) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3542876) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  2 [desktop-chromium-linux] › e2e/agents-state.spec.ts:39:1 › verification failures cannot publish and PR failures remain actionable @browser-matrix (1.3s)
+(node:3543080) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [desktop-chromium-linux] › e2e/agents-state.spec.ts:4:1 › agent failures stay distinct from disabled, unconfigured and empty states @browser-matrix (5.0s)
+(node:3543234) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  3 [mobile-chromium-linux] › e2e/agents-state.spec.ts:4:1 › agent failures stay distinct from disabled, unconfigured and empty states @browser-matrix (4.9s)
+  ✓  4 [mobile-chromium-linux] › e2e/agents-state.spec.ts:39:1 › verification failures cannot publish and PR failures remain actionable @browser-matrix (1.3s)
+(node:3543339) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3543346) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  6 [desktop-firefox-linux] › e2e/agents-state.spec.ts:39:1 › verification failures cannot publish and PR failures remain actionable @browser-matrix (3.3s)
+  ✓  5 [desktop-firefox-linux] › e2e/agents-state.spec.ts:4:1 › agent failures stay distinct from disabled, unconfigured and empty states @browser-matrix (6.7s)
+
+  6 passed (20.3s)

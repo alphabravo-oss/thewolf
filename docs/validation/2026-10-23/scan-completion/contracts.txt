@@ -1,0 +1,3 @@
+ok  	github.com/alphabravocompany/thewolf/internal/db	6.136s
+ok  	github.com/alphabravocompany/thewolf/internal/api/routes	27.881s
+ok  	github.com/alphabravocompany/thewolf/internal/finding/sarifio	1.634s

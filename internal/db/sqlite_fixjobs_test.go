@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -72,8 +73,8 @@ func TestUpdateFixJobDoesNotResurrectCancelled(t *testing.T) {
 	got.Status = models.FixJobAwaitingPush
 	got.PauseReason = "ready to push"
 	got.ResultBranch = "wolf-fix/job-cancel"
-	if err := store.UpdateFixJob(ctx, got); err != nil {
-		t.Fatalf("stale write: %v", err)
+	if err := store.UpdateFixJob(ctx, got); !errors.Is(err, ErrFixJobConflict) {
+		t.Fatalf("stale write should conflict: %v", err)
 	}
 	back, _ := store.GetFixJobByID(ctx, "job-cancel")
 	if back.Status != models.FixJobCancelled {
@@ -138,8 +139,7 @@ func TestReclaimStaleJobs(t *testing.T) {
 	}
 	// Backdate the heartbeat so it looks stale.
 	old := time.Now().UTC().Add(-10 * time.Minute)
-	claimed.HeartbeatAt = &old
-	if err := store.UpdateFixJob(ctx, claimed); err != nil {
+	if _, err := store.db.ExecContext(ctx, "UPDATE fix_jobs SET heartbeat_at=? WHERE id=?", old, claimed.ID); err != nil {
 		t.Fatalf("update: %v", err)
 	}
 

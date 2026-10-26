@@ -1,0 +1,8 @@
+=== RUN   TestNormalizedEvidencePersistence
+=== RUN   TestNormalizedEvidencePersistence/sqlite
+=== RUN   TestNormalizedEvidencePersistence/postgres
+--- PASS: TestNormalizedEvidencePersistence (2.32s)
+    --- PASS: TestNormalizedEvidencePersistence/sqlite (0.23s)
+    --- PASS: TestNormalizedEvidencePersistence/postgres (2.09s)
+PASS
+ok  	github.com/alphabravocompany/thewolf/internal/db	3.350s

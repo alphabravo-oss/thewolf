@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "wolf.scanners/vulnerability-db-evidence/v1",
+  "provider": "trivy",
+  "databaseKind": "vulnerability",
+  "repository": "ghcr.io/aquasecurity/trivy-db",
+  "digest": "sha256:9e699fbea6a733d2f93b1c8a1b70a9fbcd19f8c4aef9baab8bc140d98309858d",
+  "recordedAt": "2026-10-23T07:50:12Z",
+  "expiresAt": "2026-10-31T07:50:12Z",
+  "verifiedAt": "2026-10-23T08:29:53Z"
+}

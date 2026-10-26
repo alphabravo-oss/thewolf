@@ -1,0 +1,17 @@
+{
+  "baseline_source_receipt": "../legacy-ownership/source.json",
+  "inputs": {
+    "internal/artifacts/snapshots.go": "a1431915cbe70fe412da15a820f9402b308bfd2e78b183fe52701958a8ae4d0e",
+    "internal/artifacts/artifacts.go": "e7555772c3d12c651eaa87daa9fe18802fce8be592f63d0cae63276886bee2c1"
+  },
+  "snapshot_source_hash_checked_before_reproduction": true,
+  "temporary_module": "github.com/alphabravocompany/thewolf/artifactscoperepro",
+  "go_version": "1.27.3",
+  "test_source": "internal/artifacts/scan_scope_test.go",
+  "test_transform": "Omit new-helper pinning test and its io import; convert Fatalf to Errorf to collect all failures. No production worktree files were reverted.",
+  "transformed_test_sha256": "4fd9addc3d244dcd6339cab959eaf6a2d753079dc60ed58264eb28b733f8ea21",
+  "initial_toolchain_attempt_exit": 1,
+  "qualified_reproduction_exit": 1,
+  "temporary_module_removed": true,
+  "historical_source_bundle_retained": false
+}

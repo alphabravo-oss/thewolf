@@ -40,7 +40,7 @@ spec:
           env:
             - {name: WOLF_DB_DRIVER, value: postgres}
             - name: WOLF_DB_DSN
-              valueFrom: {secretKeyRef: {name: {{ include "wolf.fullname" . }}, key: postgres-dsn}}
+              valueFrom: {secretKeyRef: {name: {{ include "wolf.dbDSNSecretName" . }}, key: {{ include "wolf.dbDSNSecretKey" . }}}}
             - name: WOLF_MASTER_KEY
               valueFrom: {secretKeyRef: {name: {{ include "wolf.fullname" . }}, key: master-key}}
             - {name: WOLF_SCANNER_CUSTOM_BUILD_POLL_INTERVAL, value: {{ .Values.scannerRelease.customBuild.pollInterval | quote }}}

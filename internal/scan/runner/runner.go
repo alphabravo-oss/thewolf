@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -47,12 +48,12 @@ type RunConfig struct {
 	// "select by language."
 	ToolsExplicit bool
 	DisabledTools []string // tools to exclude from the auto-detected set
-	Concurrency   int
+	Concurrency   int      // zero selects automatic Docker-host sizing
 	// HeavyConcurrency limits scanners that are expensive enough to contend
-	// heavily for CPU, memory, disk, Docker, or network resources. Defaults to 1.
+	// heavily for CPU, memory, disk, Docker, or network resources. Zero is auto.
 	HeavyConcurrency int
 	// NetworkConcurrency limits scanners that need external network access.
-	// Defaults to 2.
+	// Zero selects an automatic cap.
 	NetworkConcurrency int
 	ToolResources      map[string]ResourceSpec
 	IncludePaths       []string
@@ -79,7 +80,7 @@ type RunConfig struct {
 	OnToolOutput    func(toolName string, line string)
 	OnToolRaw       func(toolName string, data []byte, ext string) // optional: observe raw bytes
 	// OnToolCancelable, when set, is called once per tool — BEFORE its
-	// goroutine grabs an errgroup slot — with the per-tool cancel func.
+	// goroutine waits for resources — with the per-tool cancel func.
 	// The caller (API layer) stashes the cancel func in a registry
 	// keyed by (scanID, toolName) so DELETE /api/scans/{id}/tools/{name}
 	// can fire it. Cancelling a tool that hasn't started yet still
@@ -109,27 +110,9 @@ type RunResult struct {
 	ToolsFailed        map[string]error
 	ToolParseErrors    map[string]int
 	ToolsSkipped       []string
+	ToolSkipReasons    map[string]string
 	MissingSuggestions []MissingPluginSuggestion
 	Duration           time.Duration
-}
-
-// severityRank returns a numeric rank for severity comparison.
-// Higher rank means more severe.
-func severityRank(s models.Severity) int {
-	switch s {
-	case models.SeverityCritical:
-		return 5
-	case models.SeverityHigh:
-		return 4
-	case models.SeverityMedium:
-		return 3
-	case models.SeverityLow:
-		return 2
-	case models.SeverityInfo:
-		return 1
-	default:
-		return 0
-	}
 }
 
 // Fingerprint computes the v1 stable fingerprint for legacy callers that only
@@ -143,32 +126,6 @@ func Fingerprint(toolName, ruleID, title, filePath string) string {
 		FilePath: filePath,
 	}
 	return identity.Build(f).Stable
-}
-
-// dedupKey returns the deduplication key for a finding. SCA findings key on
-// vulnerability identity so distinct CVEs in the same lockfile (line 0,
-// shared fine_category) do not collapse. Other findings use
-// (file, line, fine_category) when a fine_category is set, else
-// rule_id / title.
-func dedupKey(f models.Finding) string {
-	if f.Category == models.CategorySCA {
-		id := f.RuleID
-		if id == "" {
-			id = f.CWEID
-		}
-		if id == "" {
-			id = f.Title
-		}
-		return "sca:" + strings.ToLower(id)
-	}
-	if f.FineCategory != "" {
-		return fmt.Sprintf("%s:%d:%s", f.FilePath, f.LineStart, f.FineCategory)
-	}
-	identifier := f.RuleID
-	if identifier == "" {
-		identifier = f.Title
-	}
-	return fmt.Sprintf("%s:%d:%s", f.FilePath, f.LineStart, identifier)
 }
 
 // confidenceFromCorroboration converts the number of distinct tools that
@@ -201,10 +158,12 @@ func uniqStrings(in []string) []string {
 
 // Deduplicate removes duplicate findings, merging cross-tool matches into a
 // single record annotated with CorroboratedBy + Confidence. Two findings are
-// duplicates when they share (file, start_line, fine_category) — or (file,
-// start_line, rule_id) when no fine_category is known.
+// SCA duplicates share package, advisory and location. Other findings share
+// (file, start_line, fine_category), or (file, start_line, rule_id) when no
+// fine_category is known.
 //
-// When duplicates exist the highest-severity record is kept as the primary,
+// When duplicates exist an open, unsuppressed record takes precedence; the
+// highest-severity record within that visibility class is kept as the primary,
 // but every contributing tool's name is preserved on CorroboratedBy so the
 // renderer can show "flagged by gosec + semgrep".
 func Deduplicate(findings []models.Finding) []models.Finding {
@@ -216,12 +175,13 @@ func Deduplicate(findings []models.Finding) []models.Finding {
 	result := make([]models.Finding, 0, len(findings))
 
 	for _, f := range findings {
-		key := dedupKey(f)
+		key := identity.ClusterKey(f)
 		if b, exists := seen[key]; exists {
 			b.tools = append(b.tools, f.ToolName)
-			// Promote the higher-severity record to primary while
-			// preserving the running tool list.
-			if severityRank(f.Severity) > severityRank(result[b.idx].Severity) {
+			// An open, unsuppressed member must stay visible even when a
+			// higher-severity member was individually suppressed or triaged.
+			current := result[b.idx]
+			if identity.PreferPrimary(f, current) {
 				existingTools := b.tools
 				result[b.idx] = f
 				b.tools = existingTools
@@ -273,7 +233,7 @@ func SelectTools(cfg RunConfig) []models.Plugin {
 
 	if len(cfg.Tools) > 0 || cfg.ToolsExplicit {
 		// Explicit tool list overrides everything.
-		for _, name := range cfg.Tools {
+		for _, name := range uniqStrings(cfg.Tools) {
 			if p, err := cfg.Registry.Get(name); err == nil {
 				selected = append(selected, p)
 			}
@@ -310,23 +270,13 @@ func SelectTools(cfg RunConfig) []models.Plugin {
 		selected = filtered
 	}
 
-	return selected
-}
-
-// defaultConcurrency returns the default worker count: 4.
-// Kept conservative because some tools (e.g. semgrep) are CPU-intensive.
-func defaultConcurrency() int {
-	return 4
-}
-
-// defaultHeavyConcurrency returns the default worker count for expensive tools.
-func defaultHeavyConcurrency() int {
-	return 1
-}
-
-// defaultNetworkConcurrency returns the default worker count for networked scanners.
-func defaultNetworkConcurrency() int {
-	return 2
+	applicable := selected[:0]
+	for _, p := range selected {
+		if !plugin.IsNotApplicable(plugin.CheckApplicability(p, cfg.RepoPath, cfg.Target)) {
+			applicable = append(applicable, p)
+		}
+	}
+	return applicable
 }
 
 func ResourceSpecsFromManifest(m *manifest.Manifest) map[string]ResourceSpec {
@@ -369,51 +319,11 @@ func resourceClassFromCategory(p models.Plugin) string {
 	}
 }
 
-func acquireResourceSlots(ctx context.Context, spec ResourceSpec, slots resourceSlots) (func(), error) {
-	var releases []func()
-	acquire := func(sem chan struct{}, enabled bool) error {
-		if !enabled || sem == nil {
-			return nil
-		}
-		select {
-		case sem <- struct{}{}:
-			releases = append(releases, func() { <-sem })
-			return nil
-		case <-ctx.Done():
-			for i := len(releases) - 1; i >= 0; i-- {
-				releases[i]()
-			}
-			return ctx.Err()
-		}
-	}
-
-	if err := acquire(slots.exclusive, spec.Exclusive || spec.Class == "exclusive"); err != nil {
-		return func() {}, err
-	}
-	if err := acquire(slots.network, spec.NetworkRequired || spec.Class == "network"); err != nil {
-		return func() {}, err
-	}
-	if err := acquire(slots.heavy, spec.Class == "heavy"); err != nil {
-		return func() {}, err
-	}
-	return func() {
-		for i := len(releases) - 1; i >= 0; i-- {
-			releases[i]()
-		}
-	}, nil
-}
-
 func timeoutForTool(defaultTimeout time.Duration, spec ResourceSpec) time.Duration {
 	if spec.Timeout > 0 {
 		return spec.Timeout
 	}
 	return defaultTimeout
-}
-
-type resourceSlots struct {
-	heavy     chan struct{}
-	network   chan struct{}
-	exclusive chan struct{}
 }
 
 // sniffExt looks at the first non-whitespace bytes of data and returns a best-
@@ -452,44 +362,57 @@ func extractStderr(err error) string {
 func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	log := wolflog.Component("runner")
 	start := time.Now()
+	if cfg.ToolResources == nil {
+		if m, err := manifest.LoadDefault(); err == nil {
+			cfg.ToolResources = ResourceSpecsFromManifest(m)
+		}
+	}
 
-	concurrency := cfg.Concurrency
-	if concurrency <= 0 {
-		concurrency = defaultConcurrency()
-	}
-	heavyConcurrency := cfg.HeavyConcurrency
-	if heavyConcurrency <= 0 {
-		heavyConcurrency = defaultHeavyConcurrency()
-	}
-	networkConcurrency := cfg.NetworkConcurrency
-	if networkConcurrency <= 0 {
-		networkConcurrency = defaultNetworkConcurrency()
-	}
-	slots := resourceSlots{
-		heavy:     make(chan struct{}, heavyConcurrency),
-		network:   make(chan struct{}, networkConcurrency),
-		exclusive: make(chan struct{}, 1),
-	}
+	containerCfg := container.ConfigFromOpts(cfg.ContainerCfg)
+	plan := DetectScheduling(ctx, containerCfg, cfg.Concurrency, cfg.HeavyConcurrency, cfg.NetworkConcurrency)
+	slots := newResourceSlots(plan)
+	log.Info().Interface("scheduling", plan).Msg("scanner scheduling configured")
 
 	result := &RunResult{
 		ToolsFailed:     make(map[string]error),
+		ToolSkipReasons: make(map[string]string),
 		ToolParseErrors: make(map[string]int),
 	}
 
 	// Select tools.
-	plugins := SelectTools(cfg)
+	// Keep non-applicable selections for durable skip reporting. Preflight
+	// callers of SelectTools receive only tools whose inputs may be present.
+	selection := cfg
+	selection.RepoPath = ""
+	plugins := SelectTools(selection)
 	netReq := make(map[string]bool, len(cfg.ToolResources))
 	for name, spec := range cfg.ToolResources {
 		netReq[name] = spec.NetworkRequired || spec.Class == "network"
 	}
-	container.SetNetworkRequirements(netReq)
+	if containerCfg != nil {
+		copyCfg := *containerCfg
+		if plan.CPUBudget > 0 && container.CPUCount(&copyCfg) > plan.CPUBudget {
+			copyCfg.CPUs = strconv.FormatFloat(plan.CPUBudget, 'f', -1, 64)
+		}
+		if len(cfg.ToolResources) > 0 {
+			copyCfg.NetworkRequirements = netReq
+		}
+		containerCfg = &copyCfg
+		cfg.ContainerCfg = containerCfg
+	}
 
 	// Check availability and partition into runnable vs skipped.
 	var runnable []models.Plugin
 	for _, p := range plugins {
+		if err := plugin.CheckApplicability(p, cfg.RepoPath, cfg.Target); plugin.IsNotApplicable(err) {
+			result.ToolsSkipped = append(result.ToolsSkipped, p.Name())
+			result.ToolSkipReasons[p.Name()] = err.Error()
+			continue
+		}
 		if !p.CheckAvailable() {
 			log.Warn().Str("tool", p.Name()).Msg("tool not available, skipping")
 			result.ToolsSkipped = append(result.ToolsSkipped, p.Name())
+			result.ToolSkipReasons[p.Name()] = "tool unavailable"
 			result.MissingSuggestions = append(result.MissingSuggestions, MissingPluginSuggestion{
 				PluginName: p.Name(),
 				Languages:  p.Languages(),
@@ -523,12 +446,11 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 		timeout = 10 * time.Minute
 	}
 
-	// Run plugins in parallel using errgroup with limited concurrency.
+	// Start waiters together; resource admission limits actual execution.
 	var mu sync.Mutex
 	var allFindings []models.Finding
 
 	g, gctx := errgroup.WithContext(ctx)
-	g.SetLimit(concurrency)
 
 	for _, p := range runnable {
 		p := p // capture loop variable
@@ -546,7 +468,6 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 			defer toolCancel() // release in case the tool completes normally
 			toolName := p.Name()
 			parseErrors := 0
-			toolStart := time.Now()
 
 			// If this tool was cancelled BEFORE it acquired a slot
 			// (e.g. waited behind a long-running peer, then user
@@ -564,7 +485,16 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 			}
 
 			spec := resourceSpecFor(p, cfg.ToolResources)
-			releaseResources, acquireErr := acquireResourceSlots(toolCtx, spec, slots)
+			memory, memoryErr := container.MemoryBytes(container.MemoryLimitFor(containerCfg, toolName))
+			if memoryErr != nil {
+				memory = plan.MemoryBudget
+			}
+			// An uncapped scanner must have the entire host budget to itself.
+			cpus := container.CPUCount(containerCfg)
+			if containerCfg != nil && containerCfg.CPUs == "" && plan.CPUBudget > 0 {
+				cpus = plan.CPUBudget
+			}
+			releaseResources, acquireErr := acquireResourceSlots(toolCtx, spec, slots, cpus, memory)
 			if acquireErr != nil {
 				log.Info().Str("tool", toolName).Err(acquireErr).Msg("tool cancelled before acquiring scanner resource slot; skipping")
 				if cfg.OnToolDone != nil {
@@ -577,6 +507,7 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 				return nil
 			}
 			defer releaseResources()
+			toolStart := time.Now()
 
 			log.Info().Str("tool", toolName).Str("resource_class", spec.Class).Msg("tool starting")
 
@@ -603,8 +534,12 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 				ContainerCfg: cfg.ContainerCfg,
 			}
 			toolOpts.OnParseError = func(error) { parseErrors++ }
-			if cfg.OnToolOutput != nil {
-				toolOpts.OnOutput = func(line string) {
+			var skipReason string
+			toolOpts.OnOutput = func(line string) {
+				if reason, ok := strings.CutPrefix(line, "[SKIP] "+toolName+": "); ok {
+					skipReason = reason
+				}
+				if cfg.OnToolOutput != nil {
 					cfg.OnToolOutput(toolName, line)
 				}
 			}
@@ -630,6 +565,19 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 			}
 
 			findings, err := p.Execute(executionCtx, toolOpts)
+			if err == nil && len(findings) == 0 && skipReason != "" {
+				err = &plugin.SkippedError{Reason: skipReason}
+			}
+			if plugin.IsSkipped(err) && len(findings) == 0 {
+				mu.Lock()
+				result.ToolsSkipped = append(result.ToolsSkipped, toolName)
+				result.ToolSkipReasons[toolName] = err.Error()
+				mu.Unlock()
+				if cfg.OnToolDone != nil {
+					cfg.OnToolDone(toolName, nil, err)
+				}
+				return nil
+			}
 
 			elapsed := time.Since(toolStart)
 

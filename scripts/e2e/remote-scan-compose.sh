@@ -63,6 +63,15 @@ printf '%s\n' \
 git -C "$work/repositories/fixture" add main.py
 git -C "$work/repositories/fixture" commit --quiet -m fixture
 
+# Match the runtime owner so Git can read provenance without bypassing its
+# ownership protection. Only the disposable fixture is changed.
+docker run --rm --network none --user 0 \
+  --mount "type=bind,source=$work/repositories/fixture,target=/fixture" \
+  --entrypoint sh "$runtime_image" -ec 'chown -R "$(id -u wolf):$(id -g wolf)" /fixture'
+docker run --rm --network none \
+  --mount "type=bind,source=$work/repositories/fixture,target=/fixture,readonly" \
+  --entrypoint git "$runtime_image" -C /fixture rev-parse HEAD >/dev/null
+
 port="$(python3 - <<'PY'
 import socket
 with socket.socket() as sock:

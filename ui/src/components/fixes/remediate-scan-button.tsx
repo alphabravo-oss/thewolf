@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { RepeatIcon } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
-import { enqueueFix, useAutofixEnabled, useRepoFixable } from "@/lib/fixes";
+import { useFixSubmission, useAutofixEnabled, useRepoFixable } from "@/lib/fixes";
 
 export function RemediateScanButton({
   scanId,
@@ -25,9 +25,10 @@ export function RemediateScanButton({
   const [open, setOpen] = useState(false);
   const [runs, setRuns] = useState(1);
 
+  const submitFix = useFixSubmission();
   const enqueue = useMutation({
     mutationFn: () =>
-      enqueueFix({
+      submitFix({
         repo_id: repoId,
         scan_id: scanId,
         mode: "dry_run",

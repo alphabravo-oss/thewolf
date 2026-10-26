@@ -1,11 +1,13 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
+	"time"
 
 	"github.com/spf13/cobra"
 )
@@ -15,8 +17,8 @@ import (
 // a local one-shot scan, while `wolf scan list`, `wolf scan create`, etc.
 // drive the server's scan API.
 func AddScanSubcommands(scan *cobra.Command) {
-	var repoID, collectionID, branch, profile string
-	var tools []string
+	var repoID, collectionID, branch, profile, requestFile, idempotencyKey, clientReference string
+	var tools, categories, includePaths, excludePaths []string
 	var aiEnabled bool
 	create := &cobra.Command{
 		Use:         "create",
@@ -24,10 +26,20 @@ func AddScanSubcommands(scan *cobra.Command) {
 		Annotations: apiAnno("POST", "/scans"),
 		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if repoID == "" {
-				return fmt.Errorf("--repo is required")
+			body := map[string]any{}
+			if requestFile != "" {
+				var err error
+				body, err = readObjectFile(requestFile)
+				if err != nil {
+					return err
+				}
 			}
-			body := map[string]any{"repo_id": repoID}
+			if repoID != "" {
+				body["repo_id"] = repoID
+			}
+			if body["repo_id"] == nil && body["source"] == nil {
+				return fmt.Errorf("--repo or --request-file containing a source is required")
+			}
 			if collectionID != "" {
 				body["collection_id"] = collectionID
 			}
@@ -43,7 +55,19 @@ func AddScanSubcommands(scan *cobra.Command) {
 			if cmd.Flags().Changed("ai") {
 				body["ai_enabled"] = aiEnabled
 			}
-			return runRender(cmd, "POST", "/scans", body)
+			if len(categories) > 0 {
+				body["categories"] = categories
+			}
+			if len(includePaths) > 0 {
+				body["include_paths"] = includePaths
+			}
+			if len(excludePaths) > 0 {
+				body["exclude_paths"] = excludePaths
+			}
+			if clientReference != "" {
+				body["client_reference"] = clientReference
+			}
+			return runScannerCommand(cmd, "POST", "/scans", body, idempotencyKey, "", false)
 		},
 	}
 	create.Flags().StringVar(&repoID, "repo", "", "repository ID")
@@ -52,6 +76,61 @@ func AddScanSubcommands(scan *cobra.Command) {
 	create.Flags().StringVar(&profile, "profile", "", "scan profile (standard, full, targeted, fast, pr, release)")
 	create.Flags().StringSliceVar(&tools, "tools", nil, "explicit tool list")
 	create.Flags().BoolVar(&aiEnabled, "ai", false, "enable AI enrichment")
+	create.Flags().StringVar(&requestFile, "request-file", "", "JSON/YAML scan request, including git or SSH source; explicit flags override fields")
+	create.Flags().StringVar(&idempotencyKey, "idempotency-key", "", "reuse this key when retrying the same scan request")
+	create.Flags().StringVar(&clientReference, "client-reference", "", "external job or commit reference")
+	create.Flags().StringSliceVar(&categories, "categories", nil, "scanner categories")
+	create.Flags().StringSliceVar(&includePaths, "include-paths", nil, "included repository paths")
+	create.Flags().StringSliceVar(&excludePaths, "exclude-paths", nil, "excluded repository paths")
+
+	var waitTimeout, pollInterval time.Duration
+	wait := &cobra.Command{
+		Use: "wait <id>", Short: "Wait for terminal execution; failed/cancelled scans return nonzero",
+		Annotations: apiAnno("GET", "/scans/{}"), Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if waitTimeout <= 0 || pollInterval <= 0 {
+				return fmt.Errorf("--timeout and --interval must be positive")
+			}
+			c, err := resolveClient(cmd)
+			if err != nil {
+				return err
+			}
+			ctx, cancel := context.WithTimeout(cmd.Context(), waitTimeout)
+			defer cancel()
+			for {
+				env, err := c.Do(ctx, "GET", "/scans/"+url.PathEscape(args[0]), nil)
+				if err != nil {
+					return err
+				}
+				var scan struct {
+					Status string `json:"status"`
+				}
+				if err := json.Unmarshal(env.Data, &scan); err != nil {
+					return fmt.Errorf("decode scan: %w", err)
+				}
+				switch scan.Status {
+				case "completed", "failed", "cancelled":
+					if err := Render(cmd.OutOrStdout(), resolveOutput(cmd), env); err != nil {
+						return err
+					}
+					if scan.Status != "completed" {
+						return fmt.Errorf("scan %s %s", args[0], scan.Status)
+					}
+					return nil
+				case "pending", "running":
+				default:
+					return fmt.Errorf("unknown scan status %q", scan.Status)
+				}
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-time.After(pollInterval):
+				}
+			}
+		},
+	}
+	wait.Flags().DurationVar(&waitTimeout, "timeout", 30*time.Minute, "maximum wait")
+	wait.Flags().DurationVar(&pollInterval, "interval", 2*time.Second, "status polling interval")
 
 	var rescanRelease, rescanReason, rescanKey string
 	releaseRescan := &cobra.Command{
@@ -158,18 +237,20 @@ func AddScanSubcommands(scan *cobra.Command) {
 					Status string `json:"status"`
 				} `json:"result"`
 			}
-			_ = json.Unmarshal(env.Data, &data)
+			if err := json.Unmarshal(env.Data, &data); err != nil {
+				return fmt.Errorf("decode quality gate: %w", err)
+			}
 			status := data.Evaluation.Status
 			if status == "" {
 				status = data.Result.Status
 			}
-			if status == "fail" {
+			if status != "pass" && status != "warn" {
 				return &GateFailedError{ScanID: args[0], Status: status}
 			}
 			return nil
 		},
 	}
-	gate.Flags().BoolVar(&gateFailExitCode, "fail-exit-code", false, "return exit code 2 when the quality gate fails")
+	gate.Flags().BoolVar(&gateFailExitCode, "fail-exit-code", false, "return exit code 5 unless the quality gate passes or warns on a complete scan")
 
 	var preflightRepo, preflightBranch, preflightProfile string
 	preflight := &cobra.Command{
@@ -239,8 +320,12 @@ func AddScanSubcommands(scan *cobra.Command) {
 		orphans,
 		purgeOrphans,
 		create,
+		wait,
 		releaseRescan,
 		preflight,
+		importCoverageCommand(),
+		subGetCmd("test-coverage <id>", "Read measured automated test coverage and policy checks", "/scans/%s/test-coverage"),
+		subGetCmd("coverage-files <id>", "Read measured coverage by source file", "/scans/%s/test-coverage/files"),
 		actionCmd("retry <id>", "Retry a failed or cancelled scan", "POST", "/scans/%s/retry"),
 		deleteCmd("cancel <id>", "Cancel a scan", "/scans/%s"),
 		cancelTool,
@@ -253,7 +338,7 @@ func AddScanSubcommands(scan *cobra.Command) {
 		subGetCmd("result <id>", "Get the stable automation result for a scan", "/scans/%s/result"),
 		subGetCmd("manifest <id>", "Get a scan's manifest", "/scans/%s/manifest"),
 		subGetCmd("sarif <id>", "Get a scan's SARIF output", "/scans/%s/sarif"),
-		subGetCmd("coverage <id>", "Get a scan's coverage", "/scans/%s/coverage"),
+		subGetCmd("coverage <id>", "Estimate test-file presence (not measured test coverage)", "/scans/%s/coverage"),
 		gate,
 		subGetCmd("tools <id>", "List a scan's tools", "/scans/%s/tools"),
 		subGetCmd("scanner-runs <id>", "List scanner run records", "/scans/%s/scanner-runs"),

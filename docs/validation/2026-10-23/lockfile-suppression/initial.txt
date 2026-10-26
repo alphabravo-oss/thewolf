@@ -1,0 +1,48 @@
+ok  	github.com/alphabravocompany/thewolf/internal/scan/suppress	0.007s
+5:24PM INF scan starting branch=main component=scan repo_id=54fea8fa-b97a-4284-99f7-a72d7372ed64 scan_id=ed72332a-3634-4124-8e3f-15a520a8123a
+5:24PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=ed72332a-3634-4124-8e3f-15a520a8123a
+5:24PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+5:24PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+5:24PM INF tools selected component=scan count=2 scan_id=ed72332a-3634-4124-8e3f-15a520a8123a tools=["cluster-a","cluster-b"]
+5:24PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+5:24PM INF tool completed component=runner elapsed=0.819805 findings=1 tool=cluster-b
+5:24PM INF tool completed component=scan findings=1 scan_id=ed72332a-3634-4124-8e3f-15a520a8123a tool=cluster-b
+5:24PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+5:24PM INF tool completed component=runner elapsed=0.775692 findings=1 tool=cluster-a
+5:24PM INF tool completed component=scan findings=1 scan_id=ed72332a-3634-4124-8e3f-15a520a8123a tool=cluster-a
+5:24PM INF scan run complete component=runner elapsed=5.460499 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+5:24PM INF scan run finished component=scan scan_id=ed72332a-3634-4124-8e3f-15a520a8123a status=completed
+5:24PM INF scan complete — all tools finished component=scan findings=1 scan_id=ed72332a-3634-4124-8e3f-15a520a8123a status=completed
+5:24PM INF scan starting branch=main component=scan repo_id=9cd438a2-523e-4498-a463-954e9f87775e scan_id=aa0836ad-bc19-47e1-a720-8618b5b6120d
+5:24PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=aa0836ad-bc19-47e1-a720-8618b5b6120d
+5:24PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+5:24PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+5:24PM INF tools selected component=scan count=2 scan_id=aa0836ad-bc19-47e1-a720-8618b5b6120d tools=["cluster-a","cluster-b"]
+5:24PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+5:24PM INF tool completed component=runner elapsed=1.081577 findings=1 tool=cluster-b
+5:24PM INF tool completed component=scan findings=1 scan_id=aa0836ad-bc19-47e1-a720-8618b5b6120d tool=cluster-b
+5:24PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+5:24PM INF tool completed component=runner elapsed=0.462662 findings=1 tool=cluster-a
+5:24PM INF tool completed component=scan findings=1 scan_id=aa0836ad-bc19-47e1-a720-8618b5b6120d tool=cluster-a
+5:24PM INF scan run complete component=runner elapsed=4.000879 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+5:24PM INF scan run finished component=scan scan_id=aa0836ad-bc19-47e1-a720-8618b5b6120d status=completed
+5:24PM INF scan complete — all tools finished component=scan findings=1 scan_id=aa0836ad-bc19-47e1-a720-8618b5b6120d status=completed
+5:24PM INF scan starting branch=main component=scan repo_id=7d62ead4-289b-4788-8277-128d5836f1eb scan_id=a936b10c-f2d9-4b58-9871-f21bfdb4f74e
+5:24PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=a936b10c-f2d9-4b58-9871-f21bfdb4f74e
+5:24PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+5:24PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+5:24PM INF tools selected component=scan count=2 scan_id=a936b10c-f2d9-4b58-9871-f21bfdb4f74e tools=["cluster-a","cluster-b"]
+5:24PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+5:24PM INF tool completed component=runner elapsed=0.560896 findings=1 tool=cluster-b
+5:24PM INF tool completed component=scan findings=1 scan_id=a936b10c-f2d9-4b58-9871-f21bfdb4f74e tool=cluster-b
+5:24PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+5:24PM INF tool completed component=runner elapsed=0.496226 findings=1 tool=cluster-a
+5:24PM INF tool completed component=scan findings=1 scan_id=a936b10c-f2d9-4b58-9871-f21bfdb4f74e tool=cluster-a
+5:24PM INF scan run complete component=runner elapsed=3.281712 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+5:24PM INF scan run finished component=scan scan_id=a936b10c-f2d9-4b58-9871-f21bfdb4f74e status=completed
+5:24PM INF scan complete — all tools finished component=scan findings=1 scan_id=a936b10c-f2d9-4b58-9871-f21bfdb4f74e status=completed
+--- FAIL: TestLockfileSuppressionViewsAndArtifacts (0.32s)
+    lockfile_suppression_test.go:98: detail differs: 200 {"data":{"cluster_id":"1b67ef5c-10a0-4cf1-a5a2-cebd1fa5aff5","id":"1b67ef5c-10a0-4cf1-a5a2-cebd1fa5aff5","scan_id":"15a18792-3f10-4e73-a658-20cd104f70fb","repo_id":"4b128d32-41e8-423b-84dc-9915923f2ac9","fingerprint":"8a40e198fde2d487eeb214d1379176785b498623e94268576fc25a5bd68a7cf6","stable_fingerprint":"8a40e198fde2d487eeb214d1379176785b498623e94268576fc25a5bd68a7cf6","location_fingerprint":"ffe93ed04b74ed5fadde13e0da7f8a2154530d3a71faea7d441860126cb68401","semantic_fingerprint":"8a40e198fde2d487eeb214d1379176785b498623e94268576fc25a5bd68a7cf6","evidence_fingerprint":"252773c1ee70f9249fc7182e3def8a0a783a65b996f0ef4f3186ba6f5f06706f","identity_version":1,"tool_name":"secrets","category":"secrets","severity":"high","title":"secrets-Cargo.lock","description":"secrets-Cargo.lock","file_path":"Cargo.lock","line_start":0,"line_end":0,"code_snippet":"","rule_id":"secrets-Cargo.lock","package_name":"alpha","package_version":"1","advisory_id":"secrets-Cargo.lock","tool_severity_score":8,"location_weight":1,"ai_context_score":1,"composite_score":2.666666666666667,"module_name":"","function_name":"","symbol_kind":"","file_purpose":"","dependents_json":"","status":"open","sarif_data":"{\"ruleId\":\"secrets-Cargo.lock\",\"level\":\"error\",\"message\":{\"text\":\"secrets-Cargo.lock\"},\"locations\":[{\"physicalLocation\":{\"artifactLocation\":{\"uri\":\"Cargo.lock\"},\"region\":{\"startLine\":0,\"endLine\":0}}}],\"partialFingerprints\":null,\"properties\":{\"advisoryId\":\"secrets-Cargo.lock\",\"category\":\"secrets\",\"packageName\":\"alpha\",\"packageVersion\":\"1\",\"severity\":\"high\",\"status\":\"open\"},\"suppressions\":null}","created_at":"2026-10-23T17:24:29.589396984Z","updated_at":"2026-10-23T17:24:29.59178849Z","confidence":"low","corroborated_by":["secrets"],"baseline_state":"new","first_seen_at":"2026-10-23T17:24:29.588473064Z","last_seen_at":"2026-10-23T17:24:29.588473064Z","introduced_in_scan_id":"15a18792-3f10-4e73-a658-20cd104f70fb","source_kind":"sarif_import","source_ref":"sarif-import","evidence":[{"cluster_id":"1b67ef5c-10a0-4cf1-a5a2-cebd1fa5aff5","id":"1b67ef5c-10a0-4cf1-a5a2-cebd1fa5aff5","scan_id":"15a18792-3f10-4e73-a658-20cd104f70fb","repo_id":"4b128d32-41e8-423b-84dc-9915923f2ac9","fingerprint":"8a40e198fde2d487eeb214d1379176785b498623e94268576fc25a5bd68a7cf6","stable_fingerprint":"8a40e198fde2d487eeb214d1379176785b498623e94268576fc25a5bd68a7cf6","location_fingerprint":"ffe93ed04b74ed5fadde13e0da7f8a2154530d3a71faea7d441860126cb68401","semantic_fingerprint":"8a40e198fde2d487eeb214d1379176785b498623e94268576fc25a5bd68a7cf6","evidence_fingerprint":"252773c1ee70f9249fc7182e3def8a0a783a65b996f0ef4f3186ba6f5f06706f","identity_version":1,"tool_name":"secrets","category":"secrets","severity":"high","title":"secrets-Cargo.lock","description":"secrets-Cargo.lock","file_path":"Cargo.lock","line_start":0,"line_end":0,"code_snippet":"","rule_id":"secrets-Cargo.lock","package_name":"alpha","package_version":"1","advisory_id":"secrets-Cargo.lock","tool_severity_score":8,"location_weight":1,"ai_context_score":1,"composite_score":2.666666666666667,"module_name":"","function_name":"","symbol_kind":"","file_purpose":"","dependents_json":"","status":"open","sarif_data":"{\"ruleId\":\"secrets-Cargo.lock\",\"level\":\"error\",\"message\":{\"text\":\"secrets-Cargo.lock\"},\"locations\":[{\"physicalLocation\":{\"artifactLocation\":{\"uri\":\"Cargo.lock\"},\"region\":{\"startLine\":0,\"endLine\":0}}}],\"partialFingerprints\":null,\"properties\":{\"advisoryId\":\"secrets-Cargo.lock\",\"category\":\"secrets\",\"packageName\":\"alpha\",\"packageVersion\":\"1\",\"severity\":\"high\",\"status\":\"open\"},\"suppressions\":null}","created_at":"2026-10-23T17:24:29.589396984Z","updated_at":"2026-10-23T17:24:29.59178849Z","confidence":"low","corroborated_by":["secrets"],"baseline_state":"new","first_seen_at":"2026-10-23T17:24:29.588473064Z","last_seen_at":"2026-10-23T17:24:29.588473064Z","introduced_in_scan_id":"15a18792-3f10-4e73-a658-20cd104f70fb","source_kind":"sarif_import","source_ref":"sarif-import"}]}}
+FAIL
+FAIL	github.com/alphabravocompany/thewolf/internal/api/routes	1.034s
+FAIL

@@ -22,6 +22,7 @@ export function AppShell() {
 
   // Surface browser offline so hung tables/mutations are explained.
   const [online, setOnline] = useState(true);
+  const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
   useEffect(() => {
     if (typeof navigator === "undefined") return;
     const sync = () => setOnline(navigator.onLine);
@@ -35,15 +36,15 @@ export function AppShell() {
   }, []);
 
   return (
-    <div data-testid="app-shell" className="flex h-screen overflow-hidden bg-background">
+    <div data-testid="app-shell" className="flex h-dvh overflow-hidden bg-background">
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[100] focus:rounded-md focus:bg-background focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-foreground focus:shadow-lg focus:ring-2 focus:ring-ring"
       >
         Skip to main content
       </a>
-      <Sidebar />
-      <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+      <Sidebar onMobileOpenChange={setMobileNavigationOpen} />
+      <div inert={mobileNavigationOpen} aria-hidden={mobileNavigationOpen || undefined} className="flex flex-col flex-1 min-w-0 overflow-hidden">
         <Topbar />
         {!online && (
           <div
@@ -59,7 +60,7 @@ export function AppShell() {
           tabIndex={-1}
           className="flex-1 min-h-0 overflow-y-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
         >
-          <div className="p-6 max-w-[1600px] mx-auto animate-fade-in">
+          <div className="p-4 sm:p-6 max-w-[1600px] mx-auto animate-fade-in">
             <OrphanRecordsBanner />
             <Outlet />
           </div>

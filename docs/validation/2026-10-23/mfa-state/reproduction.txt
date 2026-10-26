@@ -1,0 +1,33 @@
+8:27PM INF static-ui: no dist dir found; UI routes disabled (run `npm run dev` separately)
+2026/10/23 20:27:40 [thewolf-dev-1-mj/Ei9w4Xt8lt-000001] "POST http://example.com/api/v1/auth/register HTTP/1.1" from 192.0.2.1:1234 - 201 961B in 83.047438ms
+2026/10/23 20:27:40 [thewolf-dev-1-mj/Ei9w4Xt8lt-000002] "POST http://example.com/api/v1/auth/mfa/setup HTTP/1.1" from 192.0.2.1:1234 - 200 3083B in 5.625682ms
+2026/10/23 20:27:40 [thewolf-dev-1-mj/Ei9w4Xt8lt-000003] "POST http://example.com/api/v1/auth/mfa/activate HTTP/1.1" from 192.0.2.1:1234 - 200 165B in 344.33µs
+2026/10/23 20:27:40 [thewolf-dev-1-mj/Ei9w4Xt8lt-000004] "POST http://example.com/api/v1/auth/login HTTP/1.1" from 10.50.0.10:1234 - 200 355B in 76.223328ms
+2026/10/23 20:27:40 [thewolf-dev-1-mj/Ei9w4Xt8lt-000006] "POST http://example.com/api/v1/auth/mfa/login HTTP/1.1" from 10.50.0.1:1234 - 200 960B in 871.853µs
+2026/10/23 20:27:40 [thewolf-dev-1-mj/Ei9w4Xt8lt-000005] "POST http://example.com/api/v1/auth/mfa/login HTTP/1.1" from 10.50.0.2:1234 - 200 960B in 1.000325ms
+8:27PM WRN audit log append failed error="sql: database is closed"
+8:27PM INF static-ui: no dist dir found; UI routes disabled (run `npm run dev` separately)
+2026/10/23 20:27:40 [thewolf-dev-1-mj/Ei9w4Xt8lt-000007] "POST http://example.com/api/v1/auth/register HTTP/1.1" from 192.0.2.1:1234 - 201 961B in 82.633988ms
+2026/10/23 20:27:40 [thewolf-dev-1-mj/Ei9w4Xt8lt-000008] "POST http://example.com/api/v1/auth/mfa/setup HTTP/1.1" from 192.0.2.1:1234 - 200 3083B in 5.315237ms
+2026/10/23 20:27:40 [thewolf-dev-1-mj/Ei9w4Xt8lt-000009] "POST http://example.com/api/v1/auth/mfa/activate HTTP/1.1" from 192.0.2.1:1234 - 200 165B in 265.09µs
+2026/10/23 20:27:40 [thewolf-dev-1-mj/Ei9w4Xt8lt-000010] "POST http://example.com/api/v1/auth/login HTTP/1.1" from 10.50.0.10:1234 - 200 355B in 21.947658ms
+2026/10/23 20:27:40 [thewolf-dev-1-mj/Ei9w4Xt8lt-000012] "POST http://example.com/api/v1/auth/mfa/login HTTP/1.1" from 10.50.0.1:1234 - 200 960B in 924.382µs
+2026/10/23 20:27:40 [thewolf-dev-1-mj/Ei9w4Xt8lt-000011] "POST http://example.com/api/v1/auth/mfa/login HTTP/1.1" from 10.50.0.2:1234 - 200 960B in 1.054328ms
+--- FAIL: TestMFARecoveryConcurrentConsumption (0.72s)
+    --- FAIL: TestMFARecoveryConcurrentConsumption/different_codes=false (0.38s)
+        mfa_concurrency_test.go:120: same snapshot produced successes=2 conflicts=0, want 1/1
+    --- FAIL: TestMFARecoveryConcurrentConsumption/different_codes=true (0.33s)
+        mfa_concurrency_test.go:120: same snapshot produced successes=2 conflicts=0, want 1/1
+8:27PM WRN audit log append failed error="sql: database is closed"
+8:27PM INF static-ui: no dist dir found; UI routes disabled (run `npm run dev` separately)
+2026/10/23 20:27:40 [thewolf-dev-1-mj/Ei9w4Xt8lt-000013] "POST http://example.com/api/v1/auth/register HTTP/1.1" from 192.0.2.1:1234 - 201 961B in 36.596383ms
+2026/10/23 20:27:40 [thewolf-dev-1-mj/Ei9w4Xt8lt-000014] "POST http://example.com/api/v1/auth/mfa/setup HTTP/1.1" from 192.0.2.1:1234 - 200 3003B in 6.914841ms
+2026/10/23 20:27:40 [thewolf-dev-1-mj/Ei9w4Xt8lt-000015] "POST http://example.com/api/v1/auth/mfa/activate HTTP/1.1" from 192.0.2.1:1234 - 200 165B in 453.464µs
+2026/10/23 20:27:40 [thewolf-dev-1-mj/Ei9w4Xt8lt-000016] "POST http://example.com/api/v1/auth/mfa/activate HTTP/1.1" from 192.0.2.1:1234 - 200 165B in 673.721µs
+--- FAIL: TestMFAActivationCannotReplaceActiveRecoveryCodes (0.25s)
+    mfa_concurrency_test.go:178: already active enrollment: 200
+    mfa_concurrency_test.go:185: reactivation replaced unused recovery codes
+8:27PM WRN audit log append failed error="sql: database is closed"
+FAIL
+FAIL	github.com/alphabravocompany/thewolf/internal/api	0.992s
+FAIL

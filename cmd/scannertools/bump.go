@@ -5,8 +5,11 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -31,6 +34,9 @@ func bumpToolAt(
 	if toolName == "" || newVersion == "" {
 		return fmt.Errorf("bump requires --tool and --version")
 	}
+	if !regexp.MustCompile(`^[0-9]+(?:\.[0-9]+){1,3}$`).MatchString(newVersion) {
+		return fmt.Errorf("version must be a stable numeric release")
+	}
 
 	manifestPath := filepath.Join(root, "scanners", "tools.yaml")
 	m, err := manifest.LoadFile(manifestPath)
@@ -48,12 +54,41 @@ func bumpToolAt(
 	if oldVersion == newVersion {
 		return fmt.Errorf("scanner tool %q is already pinned to %s", toolName, newVersion)
 	}
+	// Resolve the exact new artifact before changing files. Carrying the old
+	// archive hash into a version bump produces an image that cannot build.
+	if tool.SourceIntegrity.URL != "" {
+		tool.SourceIntegrity.URL = strings.ReplaceAll(tool.SourceIntegrity.URL, oldVersion, newVersion)
+		if tool.SourceIntegrity.SHA256 != "" {
+			digest, err := sourceSHA256(&http.Client{Timeout: 10 * time.Minute}, tool.SourceIntegrity.URL)
+			if err != nil {
+				return err
+			}
+			tool.SourceIntegrity.SHA256 = digest
+		}
+	}
 
 	if err := bumpManifestFile(manifestPath, toolName, oldVersion, newVersion, tool); err != nil {
 		return err
 	}
 	if err := bumpVersionsEnv(filepath.Join(root, "scanners", "versions.env"), tool.VersionVariable, newVersion); err != nil {
 		return err
+	}
+	if tool.SourceIntegrity.SHA256Variable != "" {
+		if err := bumpVersionsEnv(filepath.Join(root, "scanners", "versions.env"), tool.SourceIntegrity.SHA256Variable, tool.SourceIntegrity.SHA256); err != nil {
+			return err
+		}
+	}
+	if tool.UpdateSource.Type == "go_module" {
+		cmd := exec.Command("go", "get", tool.Install.Package+"@v"+newVersion)
+		cmd.Dir = filepath.Join(root, "scanners", "go-tools")
+		if output, err := cmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("update scanner module graph: %w: %s", err, output)
+		}
+		download := exec.Command("go", "mod", "download", "all")
+		download.Dir = cmd.Dir
+		if output, err := download.CombinedOutput(); err != nil {
+			return fmt.Errorf("lock scanner dependencies: %w: %s", err, output)
+		}
 	}
 	if err := synchronizeEmbeddedDefinition(root); err != nil {
 		return err
@@ -87,16 +122,12 @@ func bumpToolAt(
 }
 
 func synchronizeEmbeddedDefinition(root string) error {
-	for _, name := range []string{"tools.yaml", "versions.env"} {
-		source := filepath.Join(root, "scanners", name)
-		data, err := os.ReadFile(source)
-		if err != nil {
-			return err
-		}
-		target := filepath.Join(root, "internal", "scannerbuild", "context", name)
-		if err := writeFileAtomic(target, data, 0o644); err != nil {
-			return err
-		}
+	// Use the canonical generator: it includes nested scanner files and the
+	// fixer source closure, not just the two top-level metadata files.
+	cmd := exec.Command("go", "run", "./internal/scannerbuild/cmd/synccontext", "--root", root)
+	cmd.Dir = root
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("synchronize embedded context: %w: %s", err, output)
 	}
 	return nil
 }
@@ -134,6 +165,12 @@ func bumpManifestFile(path, toolName, oldVersion, newVersion string, tool manife
 		return fmt.Errorf("scanner tool %q not found in %s", toolName, path)
 	}
 	setMappingScalar(toolNode, "pinned_version", newVersion)
+	if integrity := mappingValue(toolNode, "source_integrity"); integrity != nil {
+		setMappingScalar(integrity, "url", tool.SourceIntegrity.URL)
+		if tool.SourceIntegrity.SHA256 != "" {
+			setMappingScalar(integrity, "sha256", tool.SourceIntegrity.SHA256)
+		}
+	}
 	if smoke := mappingValue(toolNode, "smoke"); smoke != nil {
 		if expected := mappingValue(smoke, "expected_pattern"); expected != nil && expected.Value == oldVersion {
 			expected.Value = newVersion
@@ -236,7 +273,7 @@ func bumpVersionsEnv(path, variable, newVersion string) error {
 	if !updated {
 		return fmt.Errorf("%s does not contain %s", path, variable)
 	}
-	return os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644)
+	return os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644) // #nosec G703 -- path is always scanners/versions.env under the operator-selected CLI root; tool/version values only change content.
 }
 
 func writeBumpChangelog(root, toolName, oldVersion, newVersion string) (string, error) {

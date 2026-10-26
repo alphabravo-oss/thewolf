@@ -3,9 +3,10 @@ package validator
 import (
 	"context"
 	"fmt"
-	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/alphabravocompany/thewolf/internal/plugin"
 )
 
 // Result holds the outcome of a validation run.
@@ -65,7 +66,7 @@ func (v *Validator) Validate(ctx context.Context, toolName string, repoPath stri
 
 	// #nosec G204 -- command is a configured tool name (docker / claude / codex / scanner binary); args sourced from internal config, not user input
 	// nosemgrep: go.lang.security.audit.dangerous-exec-command.dangerous-exec-command
-	cmd := exec.CommandContext(ctx, cmdParts[0], args...)
+	cmd := plugin.CommandContext(ctx, cmdParts[0], args...)
 	cmd.Dir = repoPath
 	output, err := cmd.CombinedOutput()
 
@@ -99,7 +100,7 @@ func (v *Validator) ValidateWithCommand(ctx context.Context, repoPath string, co
 
 	// #nosec G204 -- command is a configured tool name (docker / claude / codex / scanner binary); args sourced from internal config, not user input
 	// nosemgrep: go.lang.security.audit.dangerous-exec-command.dangerous-exec-command
-	cmd := exec.CommandContext(ctx, parts[0], parts[1:]...)
+	cmd := plugin.CommandContext(ctx, parts[0], parts[1:]...)
 	cmd.Dir = repoPath
 	output, err := cmd.CombinedOutput()
 

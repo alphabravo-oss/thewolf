@@ -1,0 +1,5 @@
+--- FAIL: TestUnknownBaselineDoesNotMatchNewOrPassGate (0.00s)
+    evaluator_test.go:125: unknown baseline asserted a new finding or passed: {Status:fail Reason: Summary:{Status:fail FailCount:1 WarnCount:0 PassCount:0 Ignored:0 BySeverity:map[high:1]} MatchedRules:[{RuleID:fail-high-security Action:fail FindingIDs:[unknown] FindingCount:1}] Coverage:[]}
+FAIL
+FAIL	github.com/alphabravocompany/thewolf/internal/finding/gates	0.002s
+FAIL

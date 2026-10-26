@@ -1,0 +1,33 @@
+{
+  "Id": "c6bbc00129b22f7885f5d7b22b893bfa77dc4a635a8e20a6e0138cf57db46557",
+  "Name": "/wolf-plan-mfa-replay-pg-20261023",
+  "Image": "sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873",
+  "Mounts": [
+    {
+      "Type": "volume",
+      "Name": "f4b1bde2b297f494553b63856b8846adfddd9d6a2cc373cb188481bf4c9fead2",
+      "Source": "/var/lib/docker/volumes/f4b1bde2b297f494553b63856b8846adfddd9d6a2cc373cb188481bf4c9fead2/_data",
+      "Destination": "/var/lib/postgresql",
+      "Driver": "local",
+      "Mode": "",
+      "RW": true,
+      "Propagation": ""
+    }
+  ],
+  "labels": {
+    "wolf.plan.fixture": "mfa-replay-20261023"
+  },
+  "ports": {
+    "5432/tcp": [
+      {
+        "HostIp": "127.0.0.1",
+        "HostPort": "32807"
+      }
+    ]
+  },
+  "removed": true,
+  "container_absent_verified": true,
+  "volumes_absent_verified": [
+    "f4b1bde2b297f494553b63856b8846adfddd9d6a2cc373cb188481bf4c9fead2"
+  ]
+}

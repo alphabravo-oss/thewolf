@@ -1,0 +1,9 @@
+{
+  "compile_exit": 0,
+  "binary_format": "Mach-O",
+  "architecture": "arm64",
+  "bytes": 5902642,
+  "sha256": "5acb1d2cc1c5baf95130d1a015f5dbec5ca937a8a2baf7e407bc6a138fef6fff",
+  "runtime_tested": false,
+  "metadata_verifier": "Python standard-library executable header parsing; file utility unavailable."
+}

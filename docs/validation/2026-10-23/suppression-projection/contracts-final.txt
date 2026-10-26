@@ -1,0 +1,24 @@
+--- FAIL: TestLiveManifestCountsFollowPolicyWithoutLosingProducerMetadata (0.37s)
+    suppression_projection_test.go:109: revision refresh lost metadata: 200 {
+          "counts": {
+            "raw_findings": 7,
+            "after_dedupe": 1,
+            "suppressed": 0,
+            "visible": 1,
+            "high_severity": 1
+          },
+          "findings_revision": 2,
+          "producer_extension": {
+            "trace": "preserve"
+          },
+          "scan_id": "fbcc483b-aabb-477f-9002-c6edb8cac65d",
+          "scanners_run": [
+            "alpha"
+          ]
+        }
+--- FAIL: TestPublicationGateUsesWrittenSuppressionProjection (0.31s)
+    suppression_projection_test.go:203: gate disagrees with written projection: &{ScanStatus:completed FindingsRevision:3 ID:b7ecac94-d0c6-4dc5-b169-578b3ed8bfff ScanID:2abb56f6-c523-4b35-86ea-d58fcf2474f0 PolicyID:default Status:pass SummaryJSON:{"status":"pass","fail_count":0,"warn_count":0,"pass_count":0,"ignored":0,"by_severity":{}} MatchedRulesJSON:[] EvaluatedAt:2026-10-23 18:46:25.317381803 +0000 UTC CreatedAt:2026-10-23 18:46:25.317381803 +0000 UTC UpdatedAt:2026-10-23 18:46:25.320379689 +0000 UTC} <nil>
+FAIL
+FAIL	github.com/alphabravocompany/thewolf/internal/api/routes	1.871s
+ok  	github.com/alphabravocompany/thewolf/internal/scan/report	1.026s [no tests to run]
+FAIL

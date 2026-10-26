@@ -2,6 +2,8 @@ package db
 
 import (
 	"context"
+	"database/sql"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -299,8 +301,9 @@ func TestScanBaselinesAndComparisons(t *testing.T) {
 	currentScanID := uuid.New().String()
 	store.CreateUser(ctx, &models.User{ID: userID, Email: "baseline@test.com", PasswordHash: "hash"})
 	store.CreateRepo(ctx, &models.Repo{ID: repoID, UserID: userID, Name: "baseline-repo", SourceType: models.SourceTypeLocal, SourcePath: "/tmp", DefaultBranch: "main"})
-	store.CreateScan(ctx, &models.Scan{ID: baseScanID, UserID: userID, RepoID: repoID, Branch: "main", Status: models.ScanStatusCompleted, ToolsSelected: "[]", ToolsCompleted: "[]", ToolsFailed: "[]", CoverageSummary: "{}"})
-	store.CreateScan(ctx, &models.Scan{ID: currentScanID, UserID: userID, RepoID: repoID, Branch: "main", Status: models.ScanStatusCompleted, ToolsSelected: "[]", ToolsCompleted: "[]", ToolsFailed: "[]", CoverageSummary: "{}"})
+	now := time.Now().UTC()
+	store.CreateScan(ctx, &models.Scan{CompletedAt: &now, ID: baseScanID, UserID: userID, RepoID: repoID, Branch: "main", Status: models.ScanStatusCompleted, ToolsSelected: `["a"]`, ToolsCompleted: `["a"]`, ToolsFailed: "[]", CoverageSummary: "{}"})
+	store.CreateScan(ctx, &models.Scan{ID: currentScanID, UserID: userID, RepoID: repoID, Branch: "main", Status: models.ScanStatusCompleted, ToolsSelected: `["a"]`, ToolsCompleted: `["a"]`, ToolsFailed: "[]", CoverageSummary: "{}"})
 
 	baseline := &models.ScanBaseline{
 		ID:        uuid.New().String(),
@@ -399,7 +402,7 @@ func TestFindingSuppressionsCRUD(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("CreateFindingSuppressionAudit failed: %v", err)
 	}
-	if err := store.RevokeFindingSuppression(ctx, suppression.ID); err != nil {
+	if err := store.RevokeFindingSuppression(ctx, suppression.ID, userID); err != nil {
 		t.Fatalf("RevokeFindingSuppression failed: %v", err)
 	}
 	suppressions, err = store.ListFindingSuppressions(ctx, repoID, false)
@@ -450,6 +453,7 @@ func TestQualityPoliciesAndGateResults(t *testing.T) {
 	}
 
 	result := &models.QualityGateResult{
+		ScanStatus:       models.ScanStatusCompleted,
 		ID:               uuid.New().String(),
 		ScanID:           scanID,
 		PolicyID:         policy.ID,
@@ -1006,13 +1010,21 @@ func TestOrphanSummaryCountsFindingsWithoutRepo(t *testing.T) {
 	if _, err := store.db.ExecContext(ctx, "PRAGMA foreign_keys = OFF"); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.CreateFinding(ctx, &models.Finding{
+	finding := models.Finding{
 		ID: uuid.New().String(), ScanID: "missing-scan", RepoID: "missing-repo",
 		ToolName: "semgrep", RuleID: "x", Severity: models.SeverityHigh,
 		Title: "leftover", FilePath: "a.go", Status: models.StatusOpen,
 		Category: models.CategorySAST, Fingerprint: "orphan-f",
-	}); err != nil {
-		t.Fatalf("create finding: %v", err)
+	}
+	if err := store.CreateFinding(ctx, &finding); err == nil {
+		t.Fatal("application persistence accepted a missing scan")
+	}
+	// Seed historical corruption directly; normal persistence requires a scan
+	// whose finding revision it can advance, even with SQLite FK checks disabled.
+	finding.CreatedAt, finding.UpdatedAt = time.Now().UTC(), time.Now().UTC()
+	prepareFindingForWrite(&finding)
+	if _, err := store.db.NamedExecContext(ctx, insertFindingQuery, &finding); err != nil {
+		t.Fatal(err)
 	}
 	if _, err := store.db.ExecContext(ctx, "PRAGMA foreign_keys = ON"); err != nil {
 		t.Fatal(err)
@@ -1033,5 +1045,65 @@ func TestOrphanSummaryCountsFindingsWithoutRepo(t *testing.T) {
 	}
 	if sum.FindingCount != 0 {
 		t.Fatalf("expected leftovers gone, finding_count = %d", sum.FindingCount)
+	}
+}
+
+func TestSQLiteReadSnapshotsDoNotReserveWriter(t *testing.T) {
+	store, err := NewSQLite(filepath.Join(t.TempDir(), "snapshot.db") + "?_foreign_keys=off&_journal_mode=DELETE&_txlock=deferred")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	if store.reader == nil {
+		t.Fatal("disk database has no reader pool")
+	}
+	var foreignKeys int
+	var journal string
+	if err := store.db.Get(&foreignKeys, "PRAGMA foreign_keys"); err != nil || foreignKeys != 1 {
+		t.Fatalf("foreign keys: %d %v", foreignKeys, err)
+	}
+	if err := store.db.Get(&journal, "PRAGMA journal_mode"); err != nil || journal != "wal" {
+		t.Fatalf("journal: %s %v", journal, err)
+	}
+	if _, err := store.db.Exec("CREATE TABLE read_snapshot_check (id INTEGER PRIMARY KEY)"); err != nil {
+		t.Fatal(err)
+	}
+	read, err := store.reader.BeginTxx(t.Context(), &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = read.Rollback() }()
+	var count int
+	if err := read.Get(&count, "SELECT COUNT(*) FROM read_snapshot_check"); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+	defer cancel()
+	if _, err := store.db.ExecContext(ctx, "INSERT INTO read_snapshot_check VALUES (1)"); err != nil {
+		t.Fatalf("reader blocked writer: %v", err)
+	}
+	if err := read.Get(&count, "SELECT COUNT(*) FROM read_snapshot_check"); err != nil || count != 0 {
+		t.Fatalf("snapshot changed: %d %v", count, err)
+	}
+	if _, err := read.Exec("INSERT INTO read_snapshot_check VALUES (2)"); err == nil {
+		t.Fatal("reader accepted a write")
+	}
+	if err := read.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.reader.Get(&count, "SELECT COUNT(*) FROM read_snapshot_check"); err != nil || count != 1 {
+		t.Fatalf("fresh snapshot: %d %v", count, err)
+	}
+	// Cancellation must return the reserved reader connection to the pool.
+	store.reader.SetMaxOpenConns(1)
+	cancelled, stop := context.WithCancel(t.Context())
+	tx, err := store.reader.BeginTxx(cancelled, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stop()
+	_ = tx.Rollback()
+	if err := store.reader.GetContext(ctx, &count, "SELECT COUNT(*) FROM read_snapshot_check"); err != nil || count != 1 {
+		t.Fatalf("cancelled reader leaked: %d %v", count, err)
 	}
 }

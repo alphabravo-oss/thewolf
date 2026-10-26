@@ -1,0 +1,39 @@
+{
+  "schemaVersion": "wolf.remote-scan-native-qualification/v1",
+  "database": "postgres",
+  "scannerImage": "wolf-scanners@sha256:7daf286f883b35cd4bfa1c7e5c43f368035e66878019b1a51f72e5a288403644",
+  "postgresImage": "postgres@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873",
+  "initial": {
+    "schemaVersion": "wolf.remote-scan-deployment-qualification/v1",
+    "scanId": "89cf19e8-42de-4dba-b795-595ae3c01bfb",
+    "repositoryId": "988f1d52-6a1e-4ef8-a336-005ad49e3540",
+    "sourcePath": "/tmp/wolf-native-deployment.gMV8PR/repositories/fixture",
+    "backend": "docker",
+    "scannerDigest": "sha256:7daf286f883b35cd4bfa1c7e5c43f368035e66878019b1a51f72e5a288403644",
+    "idempotencyVerified": true,
+    "gitProvenanceVerified": true,
+    "scannerRunVerified": true,
+    "durationSeconds": 2,
+    "result": "passed"
+  },
+  "afterRestart": {
+    "schemaVersion": "wolf.remote-scan-deployment-qualification/v1",
+    "scanId": "d0833d21-6cd9-4fa7-84d4-71bd2fd32b72",
+    "repositoryId": "988f1d52-6a1e-4ef8-a336-005ad49e3540",
+    "sourcePath": "/tmp/wolf-native-deployment.gMV8PR/repositories/fixture",
+    "backend": "docker",
+    "scannerDigest": "sha256:7daf286f883b35cd4bfa1c7e5c43f368035e66878019b1a51f72e5a288403644",
+    "idempotencyVerified": true,
+    "gitProvenanceVerified": true,
+    "scannerRunVerified": true,
+    "durationSeconds": 2,
+    "result": "passed"
+  },
+  "restartRecoveryVerified": true,
+  "result": "passed",
+  "harnessLogSHA256": "faa114e60dbd8aa1bffe1c3465c55e4d5ed818a462ed082a29f28a614b9d31e0",
+  "binarySHA256": "d328a9191fc371346dcbffd6a9f6425cd0f0c8cb1a204293d04f5ae82541ef42",
+  "binarySourceImage": "wolf@sha256:11f7ec73bfb3cd7714e72631f577d25c4db64059255da7b520a4b1ece0ac8af3",
+  "harnessSHA256": "2de21a75b91419c97ea7820dc614379f3bd39d90d7a01d3f4cfeaca581614a11",
+  "probeSHA256": "54499787b4345d0df77ee24a37d0f6b9809abe2c91d3df7405fd909838b48c5e"
+}

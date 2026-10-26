@@ -28,9 +28,9 @@ import (
 // to relay over SSE, and persists the job's terminal status. One binary; in
 // k8s it's a Deployment scaled to the queue, or a Job-per-task with --once.
 //
-// The whole subsystem stays dark until the autofix_enabled setting is on: the
-// server refuses to enqueue jobs, so a worker against a flag-off install simply
-// finds an empty queue.
+// Fix execution requires autofix_enabled. Disabled workers retain queued jobs
+// and stop active fixes on their next heartbeat. Administrator setup consoles
+// remain available so engines can be installed and authenticated before enablement.
 func newFixerCmd() *cobra.Command {
 	var (
 		once       bool
@@ -48,7 +48,7 @@ func newFixerCmd() *cobra.Command {
 			defer cancel()
 
 			if err := secrets.LoadMasterKey(); err != nil {
-				wolflog.L().Warn().Err(err).Msg("master key not loaded; stored GitHub/LLM secrets cannot be decrypted")
+				return fmt.Errorf("load secrets master key: %w", err)
 			}
 			install.EnsureLocalBinOnPATH()
 

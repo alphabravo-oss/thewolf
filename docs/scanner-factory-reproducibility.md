@@ -1,5 +1,33 @@
 # Managed/customer scanner factory reproducibility
 
+## GoKart compatibility build
+
+`scanners/go-tools/gokart.patch` adapts GoKart 0.5.1 to the locked Go analysis
+dependencies. It uses the existing x/tools driver for SSA prerequisites/facts
+and handles synthetic functions with no package. Finding filtering compares
+file/line/column identities so distinct sources and sinks on the same line are
+retained. `build-gokart.sh` patches a
+temporary source copy, retains the committed module graph, and uses a relative
+module replacement so temporary directory names do not enter build metadata.
+The patch and build/check scripts are inputs to the scanner lock and embedded
+build context. Do not substitute an unpatched `go install ...@version` build.
+
+From the repository root, a local executable regression check is:
+
+```sh
+bash scanners/go-tools/build-gokart.sh /tmp/wolf-gokart-check
+bash scanners/go-tools/test-gokart.sh /tmp/wolf-gokart-check
+go test ./plugins/go -run GoKart -count=1
+```
+
+The executable check requires the locked Go toolchain, Python 3, and standard
+shell tools already present in the default scanner image; it disables module
+network access and checks unsafe, same-line unsafe, safe, and invalid-source inputs. Native image
+smoke runs the same check. Cross-architecture emulation does not replace native
+release qualification. A local passing binary does not update deployed images.
+
+## Factory comparison
+
 Wolf compares managed and customer factory outputs with a deterministic,
 offline command. The comparison is intentionally not a byte-for-byte image
 digest assertion: registry namespaces, release IDs, builder identities,
@@ -158,3 +186,62 @@ The comparator does not authenticate evidence by itself. Signature and trust
 verification must happen before comparison; keeping those responsibilities
 separate allows the same deterministic comparator to run in managed, private,
 and air-gapped environments.
+
+## Cached builds and dependency updates
+
+Use BuildKit for scanner, fixer, and application images. The default scanner
+image installs language families in independent stages. `install/version-inputs.sh`
+derives each stage's inputs from the canonical `versions.env`; changing an
+upstream image pin does not reinstall local tools, and changing Bandit does not
+reinstall Go, Ruby, PHP, or Node tools. Go, pip, npm and application pnpm caches
+are BuildKit mounts. Release-version labels follow installation, so a new
+release ID reuses identical tool layers. Application and release-adapter Go
+builds have separate targets.
+
+The weekly scheduled scanner build reuses the existing CI cache. An explicitly
+requested security rebuild still bypasses layers. Cache hits never bypass
+runtime smoke, parser fixtures, vulnerability checks, signatures, or promotion
+requirements. A fresh immutable OS snapshot intentionally invalidates the base
+and its dependent stages.
+
+Normal scanner update flow:
+
+```sh
+make scanners-check-updates
+make scanners-bump TOOL=bandit VERSION=<reviewed-stable-version>
+make scanners-validate
+make scanners-build
+```
+
+`scanners-bump` updates the manifest and canonical environment, downloads and
+hashes declared source artifacts, refreshes the Go command dependency graph
+when applicable, synchronizes embedded build inputs, and regenerates the lock
+and inventory. Source downloads must use HTTPS and succeed before their hashes
+are written. For an update containing upstream images, resolve their immutable
+references before qualification:
+
+```sh
+go run ./cmd/scannertools lock --refresh-images --require-resolved
+make scanners-validate
+```
+
+Run `make scanners-sync` after editing installer scripts, Dockerfiles, fixer
+inputs, or compiled Wolf source. Never hand-edit `internal/scannerbuild/context`.
+`make scanners-cache-check` verifies installer dependency isolation. The existing
+discovery/candidate/approval/promotion workflow remains the release authority;
+local builds do not promote the stable channel.
+
+Fixer updates use `fixer/versions.env`, matching Dockerfile arguments and
+`scanners/build-policy.yaml`, the `fixer/go-tools` module, and the on-demand CLI
+pins in `internal/fix/install/spec.go`. Refresh integrity values for both CPU
+architectures and run `make scanners-sync`. TypeScript 7 requires its verified
+architecture-specific npm package as well as the main package. The base image
+smokes every installed tool; engine variants must also pass native-platform
+CLI smoke. Optional OpenCode remains outside the four-variant release table.
+
+On 2026-10-13, all four scanner image builds passed on linux/amd64. A repeat
+default-image build changing only `WOLF_VERSION` completed in 0.60 seconds with
+45 cached steps on the same builder. This measures warm local cache reuse, not
+cold CI or cross-architecture performance. ShellCheck and Cppcheck in the
+scanner image still follow the exact Debian stable snapshot package versions;
+they are not claims of latest upstream tool releases.

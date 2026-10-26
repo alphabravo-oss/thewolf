@@ -1,0 +1,10 @@
+=== RUN   TestFixAttemptFinalizationIsAtomic
+=== RUN   TestFixAttemptFinalizationIsAtomic/sqlite
+=== RUN   TestFixAttemptFinalizationIsAtomic/postgres
+--- PASS: TestFixAttemptFinalizationIsAtomic (1.48s)
+    --- PASS: TestFixAttemptFinalizationIsAtomic/sqlite (0.22s)
+    --- PASS: TestFixAttemptFinalizationIsAtomic/postgres (1.25s)
+=== RUN   TestFixAttemptRoundTrip
+--- PASS: TestFixAttemptRoundTrip (0.23s)
+PASS
+ok  	github.com/alphabravocompany/thewolf/internal/db	2.746s

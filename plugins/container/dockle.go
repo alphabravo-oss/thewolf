@@ -32,6 +32,13 @@ func (p *DocklePlugin) Languages() []models.Language { return nil }
 
 func (p *DocklePlugin) CheckAvailable() bool { return pkgcontainer.IsScannersReady() }
 
+func (p *DocklePlugin) Applicability(repoPath, target string) error {
+	if target == "" {
+		return &plugin.NotApplicableError{Reason: "no image target provided; Dockle requires a built image or archive"}
+	}
+	return nil
+}
+
 func (p *DocklePlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
 	// dockle scans **built container images**, not source. The previous
 	// behavior of docker-building the repo's Dockerfile in-band was
@@ -39,10 +46,8 @@ func (p *DocklePlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]
 	// version skew) silently failed the scan. Mirror the nuclei pattern:
 	// require opts.Target to be a pre-built image name (or :tag) the
 	// operator has already produced or pulled.
-	if opts.Target == "" {
-		plugin.Skipf(opts.OnOutput, "dockle",
-			"no image target provided. dockle scans built images, not Dockerfiles; pass --target <image:tag> to enable. Skipping.")
-		return nil, nil
+	if err := p.Applicability(opts.RepoPath, opts.Target); err != nil {
+		return nil, err
 	}
 	// Defensive sanity-check: presence of a Dockerfile is informational
 	// only — the user still has to build it themselves.

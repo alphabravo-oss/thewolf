@@ -1,0 +1,29 @@
+{
+  "Id": "61459eac785e4438c68443f4f167445b28d0bd579222c9a7b338644c8a905eeb",
+  "Name": "/wolf-plan-fleet-auth-pg-20261023",
+  "Image": "sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873",
+  "label": "fleet-authorization-20261023",
+  "ports": {
+    "5432/tcp": [
+      {
+        "HostIp": "127.0.0.1",
+        "HostPort": "32799"
+      }
+    ]
+  },
+  "mounts": [
+    {
+      "Type": "volume",
+      "Name": "d8586b1c8995c9797466f63d66154cd421836667bc8ddfedbe913bba6434bdf4",
+      "Source": "/var/lib/docker/volumes/d8586b1c8995c9797466f63d66154cd421836667bc8ddfedbe913bba6434bdf4/_data",
+      "Destination": "/var/lib/postgresql",
+      "Driver": "local",
+      "Mode": "",
+      "RW": true,
+      "Propagation": ""
+    }
+  ],
+  "removed": true,
+  "container_absence_verified": true,
+  "anonymous_volume_absence_verified": true
+}

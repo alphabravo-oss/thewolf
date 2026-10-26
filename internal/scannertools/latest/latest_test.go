@@ -126,7 +126,7 @@ func TestCheckerUnavailableSourceFails(t *testing.T) {
 
 func TestCheckerNPMCurrent(t *testing.T) {
 	checker := Checker{Client: fixtureClient(t, map[string]string{
-		"https://registry.npmjs.org/eslint": `{"dist-tags":{"latest":"9.13.0"}}`,
+		"https://registry.npmjs.org/eslint/latest": `{"version":"9.13.0"}`,
 	})}
 	got := checker.Check(context.Background(), "eslint", manifest.Tool{
 		PinnedVersion: "9.13.0",
@@ -360,7 +360,7 @@ func TestCheckerGoModuleUpdateAvailable(t *testing.T) {
 
 func TestCheckerPackagistUpdateAvailable(t *testing.T) {
 	checker := Checker{Client: fixtureClient(t, map[string]string{
-		"https://repo.packagist.org/p2/phpstan/phpstan.json": `{"package":{"versions":{"1.12.7":{},"1.12.8":{},"dev-main":{}}}}`,
+		"https://repo.packagist.org/p2/phpstan/phpstan.json": `{"packages":{"phpstan/phpstan":[{"version":"1.12.7"},{"version":"1.12.8"},{"version":"dev-main"}]}}`,
 	})}
 	got := checker.Check(context.Background(), "phpstan", manifest.Tool{
 		PinnedVersion: "1.12.7",
@@ -416,7 +416,7 @@ func TestCheckerDebianPackageWithoutDirectPin(t *testing.T) {
 
 func TestCheckerToolchainNPM(t *testing.T) {
 	checker := Checker{Client: fixtureClient(t, map[string]string{
-		"https://registry.npmjs.org/npm": `{"dist-tags":{"latest":"11.4.2"}}`,
+		"https://registry.npmjs.org/npm/latest": `{"version":"11.4.2"}`,
 	})}
 	got := checker.Check(context.Background(), "npm-audit", manifest.Tool{
 		UpdateSource: manifest.UpdateSource{
@@ -502,4 +502,10 @@ func response(status int, body string, headers map[string]string) *http.Response
 
 func publicLookup(context.Context, string) ([]net.IP, error) {
 	return []net.IP{net.ParseIP("8.8.8.8")}, nil
+}
+
+func TestNormalizeNamespacedReleaseVersion(t *testing.T) {
+	if got := NormalizeVersion("cargo-audit/v0.22.2"); got != "0.22.2" {
+		t.Fatalf("namespaced version = %q", got)
+	}
 }

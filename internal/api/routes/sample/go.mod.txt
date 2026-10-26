@@ -1,0 +1,3 @@
+module example.invalid/wolf-sample
+
+go 1.23

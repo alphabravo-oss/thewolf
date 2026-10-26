@@ -182,19 +182,57 @@ func TestApply_RealCodeNotSuppressed(t *testing.T) {
 	}
 }
 
-func TestApply_LockfileDoesNotSuppressSCA(t *testing.T) {
-	sca := models.Finding{FilePath: "Cargo.lock", Category: models.CategorySCA, ToolName: "cargo-audit"}
-	sast := models.Finding{FilePath: "Cargo.lock", Category: models.CategorySAST, ToolName: "semgrep"}
-	out, n := Apply([]models.Finding{sca, sast}, DefaultRules())
-	if n != 1 {
-		t.Fatalf("expected 1 suppression (sast only), got %d", n)
+func TestApply_LockfileCategories(t *testing.T) {
+	t.Setenv("WOLF_DISABLE_DEFAULT_SUPPRESSIONS", "")
+	for _, name := range []string{"Cargo.lock", "package-lock.json", "go.sum", "pnpm-lock.yaml", "yarn.lock", "Gemfile.lock", "composer.lock", "poetry.lock"} {
+		for _, prefix := range []string{"", "./", "services/api/"} {
+			t.Run(prefix+name, func(t *testing.T) {
+				categories := []models.Category{models.CategorySAST, models.CategorySCA, models.CategorySecrets, models.CategoryLicense, models.CategoryContainer, models.CategoryQuality, models.CategorySBOM, models.CategoryInfra, models.CategoryDAST, models.CategoryDocs, "", "future"}
+				var findings []models.Finding
+				for _, category := range categories {
+					findings = append(findings, models.Finding{FilePath: prefix + name, Category: category})
+				}
+				out, n, err := ApplyRepo(t.Context(), findings, "")
+				if err != nil {
+					t.Fatal(err)
+				}
+				if n != 2 {
+					t.Fatalf("suppressed %d, want only SAST and secrets", n)
+				}
+				for i, f := range out {
+					want := categories[i] == models.CategorySAST || categories[i] == models.CategorySecrets
+					if f.Suppressed != want || (want && f.SuppressedReason != "default:lockfile") {
+						t.Errorf("category %q: %+v", categories[i], f)
+					}
+				}
+			})
+		}
 	}
-	if out[0].Suppressed {
-		t.Error("cargo-audit SCA on Cargo.lock should NOT be suppressed")
-	}
-	if !out[1].Suppressed || out[1].SuppressedReason != "default:lockfile" {
-		t.Errorf("sast finding on Cargo.lock SHOULD be suppressed, got %+v", out[1])
-	}
+	// Explicit repository rules may suppress dependencies; the built-in exception
+	// must not silently override an operator's rule, even with the same reason.
+	t.Run("explicit", func(t *testing.T) {
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, ".wolfignore"), []byte("Cargo.lock reason=default:lockfile\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		out, n, err := ApplyRepo(t.Context(), []models.Finding{{FilePath: "Cargo.lock", Category: models.CategorySCA}}, dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if n != 1 || !out[0].Suppressed || out[0].SuppressedReason != "default:lockfile" {
+			t.Fatalf("explicit rule ignored: %+v", out)
+		}
+	})
+	t.Run("disabled", func(t *testing.T) {
+		t.Setenv("WOLF_DISABLE_DEFAULT_SUPPRESSIONS", "1")
+		out, n, err := ApplyRepo(t.Context(), []models.Finding{{FilePath: "Cargo.lock", Category: models.CategorySAST}}, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if n != 0 || out[0].Suppressed {
+			t.Fatal("defaults ignored disable flag")
+		}
+	})
 }
 
 func TestApplyRepoIsTheSharedMatcher(t *testing.T) {
@@ -207,7 +245,10 @@ func TestApplyRepoIsTheSharedMatcher(t *testing.T) {
 		{FilePath: "legacy/secret.go", FineCategory: "hardcoded-secret", Severity: models.SeverityHigh},
 		{FilePath: "cmd/main.go", Severity: models.SeverityHigh},
 	}
-	out, n := ApplyRepo(findings, dir)
+	out, n, err := ApplyRepo(t.Context(), findings, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if n != 2 {
 		t.Fatalf("suppressed %d, want 2", n)
 	}
@@ -262,5 +303,37 @@ func TestCombine_FirstMatchWins(t *testing.T) {
 	r, ok := combined.Match(models.Finding{FilePath: "x/foo.go"})
 	if !ok || r.Reason != "a" {
 		t.Errorf("expected first-wins, got %+v ok=%v", r, ok)
+	}
+}
+
+func TestApplyMemoizationPreservesRulePredicates(t *testing.T) {
+	rules := RuleSet{Rules: []Rule{
+		{PathGlob: "**/*.lock", ToolCategories: []models.Category{models.CategorySAST, models.CategorySecrets}, Reason: "default:lockfile"},
+		{PathGlob: "**/main.go", Categories: []string{"secret"}, RuleIDs: []string{"key"}, Reason: "specific"},
+	}}
+	findings := []models.Finding{
+		{FilePath: "go.lock", Category: models.CategorySCA},
+		{FilePath: "go.lock", Category: models.CategorySAST},
+		{FilePath: "go.lock", Category: models.CategorySCA},
+		{FilePath: "src/main.go", FineCategory: "other", RuleID: "key"},
+		{FilePath: "src/main.go", FineCategory: "secret", RuleID: "other"},
+		{FilePath: "src/main.go", FineCategory: "secret", RuleID: "key"},
+		{FilePath: "src/main.go", FineCategory: "secret", RuleID: "key"},
+		{FilePath: "src/main.go", FineCategory: "secret", RuleID: "key", Suppressed: true, SuppressedReason: "existing"},
+	}
+	got, count := Apply(findings, rules)
+	if count != 3 {
+		t.Fatalf("newly suppressed=%d, want 3", count)
+	}
+	reasons := []string{"", "default:lockfile", "", "", "", "specific", "specific", "existing"}
+	for i, reason := range reasons {
+		if got[i].Suppressed != (reason != "") || got[i].SuppressedReason != reason {
+			t.Fatalf("finding %d: %+v", i, got[i])
+		}
+	}
+	// Cache results must not survive a changed ruleset on a subsequent request.
+	again, _ := Apply([]models.Finding{{FilePath: "src/main.go", FineCategory: "secret", RuleID: "key"}}, RuleSet{})
+	if again[0].Suppressed {
+		t.Fatal("stale suppression cache")
 	}
 }

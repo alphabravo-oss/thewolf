@@ -1,8 +1,103 @@
 package secrets
 
 import (
+	"bytes"
+	"encoding/hex"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
 )
+
+func TestConcurrentMasterKeyLoadingPreservesCiphertext(t *testing.T) {
+	t.Setenv("WOLF_MASTER_KEY", "")
+	t.Setenv("HOME", t.TempDir())
+	SetMasterKey(nil)
+	t.Cleanup(func() { SetMasterKey(nil) })
+	var wg sync.WaitGroup
+	for range 16 {
+		wg.Go(func() {
+			for range 10 {
+				if err := LoadMasterKey(); err != nil {
+					t.Errorf("load key: %v", err)
+					return
+				}
+				ciphertext, err := Encrypt("credential preserved across reload")
+				if err != nil {
+					t.Error(err)
+					return
+				}
+				if err := LoadMasterKey(); err != nil {
+					t.Error(err)
+					return
+				}
+				if plaintext, err := Decrypt(ciphertext); err != nil || plaintext != "credential preserved across reload" {
+					t.Errorf("ciphertext lost across reload: %v", err)
+					return
+				}
+			}
+		})
+	}
+	wg.Wait()
+	data, err := os.ReadFile(filepath.Join(os.Getenv("HOME"), ".wolf", "master.key"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, err := hex.DecodeString(string(data))
+	if err != nil || len(key) != 32 {
+		t.Fatalf("persisted key encoding changed: %v", err)
+	}
+	ciphertext, err := Encrypt("persisted key continuity")
+	if err != nil {
+		t.Fatal(err)
+	}
+	SetMasterKey(key)
+	clear(key) // publication must not retain the caller's mutable slice
+	if plaintext, err := Decrypt(ciphertext); err != nil || plaintext != "persisted key continuity" {
+		t.Fatalf("published key changed with caller's slice: %v", err)
+	}
+}
+
+func TestMasterKeyPreservesMalformedFilesAndEnvironmentPrecedence(t *testing.T) {
+	t.Setenv("WOLF_MASTER_KEY", "")
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	path := filepath.Join(home, ".wolf", "master.key")
+	if err := os.Mkdir(filepath.Dir(path), 0700); err != nil {
+		t.Fatal(err)
+	}
+	for _, content := range []string{"", "00", "not hexadecimal"} {
+		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if err := LoadMasterKey(); err == nil {
+			t.Fatal("malformed key accepted")
+		}
+		if data, err := os.ReadFile(path); err != nil || !bytes.Equal(data, []byte(content)) {
+			t.Fatal("malformed key was replaced")
+		}
+	}
+	t.Setenv("WOLF_MASTER_KEY", strings.Repeat("ab", 32))
+	if err := LoadMasterKey(); err != nil {
+		t.Fatalf("valid environment key must override malformed file: %v", err)
+	}
+	ciphertext, err := Encrypt("environment key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	SetMasterKey(bytes.Repeat([]byte{0xab}, 32))
+	if plaintext, err := Decrypt(ciphertext); err != nil || plaintext != "environment key" {
+		t.Fatal("environment key decoding changed")
+	}
+	t.Setenv("WOLF_MASTER_KEY", "bad")
+	if err := LoadMasterKey(); err == nil {
+		t.Fatal("invalid environment key accepted")
+	}
+	if data, err := os.ReadFile(path); err != nil || string(data) != "not hexadecimal" {
+		t.Fatal("environment key loading changed the stored file")
+	}
+}
 
 func TestEncryptDecrypt(t *testing.T) {
 	// Set a test key (32 bytes)

@@ -122,8 +122,15 @@ func ScannersPlan(w http.ResponseWriter, r *http.Request) {
 	if reg == nil {
 		reg = plugin.Global
 	}
+	repoPath := ""
+	if req.RepoID != "" {
+		if repo, err := h.Store.GetRepoByID(r.Context(), req.RepoID); err == nil && repo.SourceType == models.SourceTypeLocal {
+			repoPath = repo.SourcePath
+		}
+	}
 	result := planner.Build(planner.Config{
 		Registry:          reg,
+		RepoPath:          repoPath,
 		Manifest:          m,
 		Languages:         languages,
 		Tools:             req.Tools,
@@ -148,18 +155,19 @@ func scannerPlanLanguages(ctx context.Context, h *Handler, req scannerPlanReques
 	if err != nil {
 		return nil, "", err
 	}
-	if repo.DetectedLanguages != "" {
-		var counts map[string]int
-		if json.Unmarshal([]byte(repo.DetectedLanguages), &counts) == nil && len(counts) > 0 {
-			return languagesFromCounts(counts), "repo_cache", nil
-		}
-	}
 	if repo.SourceType == models.SourceTypeLocal && repo.SourcePath != "" {
 		det, err := detector.Detect(repo.SourcePath)
 		if err == nil {
 			return languagesFromModelCounts(det.Languages), "local_detection", nil
 		}
 	}
+	if repo.DetectedLanguages != "" {
+		var counts map[string]int
+		if json.Unmarshal([]byte(repo.DetectedLanguages), &counts) == nil && len(counts) > 0 {
+			return languagesFromCounts(counts), "repo_cache", nil
+		}
+	}
+
 	return nil, "none", nil
 }
 
@@ -174,7 +182,7 @@ func ScannersTools(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cfg := container.Default()
-	rows := scstatus.BuildWithChecksAndImages(m, cfg, scannerVersionChecksByTool(r.Context()), localScannerImagePresence(cfg))
+	rows := scstatus.BuildWithChecksAndImages(m, cfg, scannerVersionChecksByTool(r.Context()), localScannerImagePresence(r.Context(), cfg))
 	response.WriteJSON(w, http.StatusOK, response.ListResponse{
 		Data: rows,
 		Meta: response.ListMeta{Total: len(rows), Page: 1, PerPage: len(rows)},
@@ -192,7 +200,7 @@ func ScannersTool(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cfg := container.Default()
-	row, ok := scstatus.Find(scstatus.BuildWithChecksAndImages(m, cfg, scannerVersionChecksByTool(r.Context()), localScannerImagePresence(cfg)), name)
+	row, ok := scstatus.Find(scstatus.BuildWithChecksAndImages(m, cfg, scannerVersionChecksByTool(r.Context()), localScannerImagePresence(r.Context(), cfg)), name)
 	if !ok {
 		response.WriteError(w, http.StatusNotFound, "scanner_tool_not_found", "scanner tool not found")
 		return
@@ -383,14 +391,14 @@ func scannerVersionChecksByTool(ctx context.Context) map[string]models.ScannerVe
 	return out
 }
 
-func localScannerImagePresence(cfg *container.Config) map[string]bool {
+func localScannerImagePresence(ctx context.Context, cfg *container.Config) map[string]bool {
 	if cfg == nil {
 		return nil
 	}
 	images := cfg.AllImages()
 	out := make(map[string]bool, len(images))
 	for _, image := range images {
-		_, err := dockerImageDigest(image)
+		_, err := container.LocalImageDigest(ctx, cfg, image)
 		out[image] = err == nil
 	}
 	return out
@@ -572,6 +580,7 @@ func splitFirstWS(s string) (head, rest string) {
 // available is true iff both digests are known AND differ.
 type imageStatus struct {
 	Image            string `json:"image"`
+	LocalPresent     bool   `json:"local_present"`
 	LocalDigest      string `json:"local_digest,omitempty"`
 	RemoteDigest     string `json:"remote_digest,omitempty"`
 	UpdatesAvailable bool   `json:"updates_available"`
@@ -609,8 +618,11 @@ func ScannersImages(w http.ResponseWriter, r *http.Request) {
 			// locally — that's the 'not pulled yet' state, not an error.
 			// Leave LocalDigest empty in that case; the UI renders an
 			// 'not pulled' pill rather than 'error'.
-			if d, err := dockerImageDigest(img); err == nil {
+			if d, err := container.LocalImageDigest(r.Context(), cfg, img); err == nil {
 				s.LocalDigest = d
+				s.LocalPresent = true
+			} else if !errors.Is(err, container.ErrImageMissing) {
+				s.LocalError = "Local image availability could not be checked"
 			}
 			index, err := dockerIndexDigest(img)
 			if err != nil {
@@ -677,38 +689,20 @@ func ScannersPullOne(w http.ResponseWriter, r *http.Request) {
 	// a Never-policy deployment can't use the per-image Update button.
 	sub.PullPolicy = container.PullAlways
 	if err := container.EnsureImage(r.Context(), &sub); err != nil {
-		response.WriteError(w, http.StatusInternalServerError, "pull_failed", err.Error())
+		status, code := classifyPullError(err)
+		response.WriteError(w, status, code, err.Error())
 		return
 	}
 	// Re-probe the new local digest so the UI can refresh without
 	// firing another round-trip.
-	d, _ := dockerImageDigest(body.Image)
+	d, err := container.LocalImageDigest(r.Context(), cfg, body.Image)
+	if err != nil {
+		response.WriteError(w, http.StatusServiceUnavailable, "pull_verification_failed", "image pull completed but local availability could not be verified")
+		return
+	}
 	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{
 		Data: map[string]string{"image": body.Image, "local_digest": d},
 	})
-}
-
-// dockerImageDigest returns the local content-addressable digest of a
-// loaded docker image (the sha256: matching the multi-arch manifest
-// index entry that we actually pulled for our platform). Returns "" if
-// the image isn't present locally.
-func dockerImageDigest(ref string) (string, error) {
-	if _, err := exec.LookPath("docker"); err != nil {
-		return "", err
-	}
-	// RepoDigests is the upstream registry digest stored at pull time.
-	// Prefer this over Id (the local layer hash) because it's what the
-	// registry advertises and what we compare against.
-	out, err := exec.Command("docker", "image", "inspect", "--format", "{{range .RepoDigests}}{{.}}{{println}}{{end}}", ref).Output()
-	if err != nil {
-		return "", err
-	}
-	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
-		if i := strings.Index(line, "@"); i >= 0 {
-			return strings.TrimSpace(line[i+1:]), nil
-		}
-	}
-	return "", nil
 }
 
 // dockerIndexDigest returns the digest of what ref's tag currently points at,
@@ -775,4 +769,21 @@ func dockerChildDigests(ref string) []string {
 		}
 	}
 	return digests
+}
+
+// classifyPullError turns registry failures the operator can act on into
+// specific codes; anything unrecognised stays a server-side pull failure.
+func classifyPullError(err error) (int, string) {
+	msg := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(msg, "429") || strings.Contains(msg, "toomanyrequests") || strings.Contains(msg, "rate limit"):
+		return http.StatusServiceUnavailable, "registry_rate_limited"
+	case strings.Contains(msg, "unauthorized") || strings.Contains(msg, "denied") || strings.Contains(msg, "authentication required"):
+		return http.StatusBadGateway, "registry_auth_failed"
+	case strings.Contains(msg, "manifest unknown") || strings.Contains(msg, "not found"):
+		return http.StatusBadGateway, "image_not_found"
+	case strings.Contains(msg, "no such host") || strings.Contains(msg, "i/o timeout") || strings.Contains(msg, "connection refused") || strings.Contains(msg, "tls") || strings.Contains(msg, "x509"):
+		return http.StatusBadGateway, "registry_unreachable"
+	}
+	return http.StatusInternalServerError, "pull_failed"
 }

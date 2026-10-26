@@ -3,7 +3,7 @@
 -- autofix_enabled to 'true' (Settings → General, or
 -- `wolf settings set --set autofix_enabled=true`). Mirrors fleet_mode /
 -- ai_enabled. Default OFF.
-INSERT OR IGNORE INTO settings (key, value) VALUES ('autofix_enabled', 'false');
+INSERT INTO settings (key, value) VALUES ('autofix_enabled', 'false') ON CONFLICT(key) DO NOTHING;
 
 -- A fix job: one queued unit of remediation work a worker claims and runs.
 -- v1 mode is always 'dry_run' (produce a branch + diff, no push/PR).

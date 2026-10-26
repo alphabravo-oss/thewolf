@@ -1,0 +1,8 @@
+--- FAIL: TestFindingClustersSQLite (0.21s)
+    finding_clusters_test.go:15: error in index idx_findings_scan_visible_severity after drop column: no such column: cluster_id
+--- FAIL: TestScanCompletionSQLite (0.35s)
+    scan_completion_test.go:159: sql: database is closed
+FAIL
+FAIL	github.com/alphabravocompany/thewolf/internal/db	107.849s
+ok  	github.com/alphabravocompany/thewolf/internal/api/routes	122.163s
+FAIL

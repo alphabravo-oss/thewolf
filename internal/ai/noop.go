@@ -29,7 +29,7 @@ func (p *NoopProvider) Name() string {
 func (p *NoopProvider) Analyze(_ context.Context, req AnalyzeRequest) (*AnalyzeResponse, error) {
 	return &AnalyzeResponse{
 		FixSuggestion: "",
-		ContextScore:  5.0,
+		ContextScore:  0,
 		Explanation:   fmt.Sprintf("AI analysis unavailable. Raw finding from %s: %s", req.Finding.ToolName, req.Finding.Title),
 	}, nil
 }
@@ -39,8 +39,8 @@ func (p *NoopProvider) Score(_ context.Context, req ScoreRequest) (*ScoreRespons
 	for i := range req.Findings {
 		scores[i] = FindingScore{
 			Index:        i,
-			ContextScore: 5.0,
-			Explanation:  "AI scoring unavailable; default score assigned.",
+			ContextScore: 0,
+			Explanation:  "AI scoring unavailable; no assessment made.",
 		}
 	}
 	return &ScoreResponse{Scores: scores}, nil

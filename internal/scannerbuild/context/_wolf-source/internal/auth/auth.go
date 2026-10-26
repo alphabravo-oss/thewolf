@@ -19,6 +19,17 @@ const (
 	saltLen      = 16
 )
 
+// ValidatePassword is the shared human-password policy for API and bootstrap.
+func ValidatePassword(pw string) (string, bool) {
+	if len(pw) < 12 {
+		return "password must be at least 12 characters", false
+	}
+	if len(pw) > 128 {
+		return "password must be at most 128 characters", false
+	}
+	return "", true
+}
+
 // HashPassword hashes a password using Argon2id.
 func HashPassword(password string) (string, error) {
 	salt := make([]byte, saltLen)

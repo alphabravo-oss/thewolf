@@ -476,11 +476,23 @@ func MatchDecisionID(raw string, findings []models.Finding) string {
 		return ""
 	}
 	for _, f := range findings {
-		if f.ID == raw || strings.HasPrefix(f.ID, raw) || (len(raw) >= 8 && strings.HasPrefix(raw, f.ID[:8])) {
+		if f.ID == raw {
 			return f.ID
 		}
 	}
-	return ""
+	if len(raw) < 8 {
+		return ""
+	}
+	match := ""
+	for _, f := range findings {
+		if strings.HasPrefix(f.ID, raw) {
+			if match != "" && match != f.ID {
+				return "" // An ambiguous prefix cannot authorize a decision.
+			}
+			match = f.ID
+		}
+	}
+	return match
 }
 
 func findingBlock(f models.Finding) string {

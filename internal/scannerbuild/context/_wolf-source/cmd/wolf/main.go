@@ -10,16 +10,18 @@
 //
 // Configuration is read from environment variables (12-factor); wolf.yaml
 // is honored only via env-overlay scripts in docker-compose. See
-// docs/PLAN-containerized-scanner-execution.md §5.6 for the full env-var reference.
+// docs/archive/2026-10-23/PLAN-containerized-scanner-execution.md §5.6 for the full env-var reference.
 package main
 
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -39,6 +41,7 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/scan/report"
 	"github.com/alphabravocompany/thewolf/internal/scan/runner"
 	scannermanifest "github.com/alphabravocompany/thewolf/internal/scannertools/manifest"
+	"github.com/alphabravocompany/thewolf/internal/scantarget"
 	"github.com/alphabravocompany/thewolf/internal/serve"
 	"github.com/alphabravocompany/thewolf/internal/setup/scanners"
 	"github.com/alphabravocompany/thewolf/internal/wolflog"
@@ -128,7 +131,7 @@ func openStore() (db.Store, error) { return serve.OpenStore() }
 // `wolf pull scanners` to fix the situation interactively. Subcommands that
 // can run without the scanner backend (e.g. `wolf version`) skip this.
 func installScannerBackend(ctx context.Context) error {
-	_, err := scanners.LoadAndInstall(ctx)
+	_, err := scanners.LoadAndInstall(ctx, "docker")
 	return err
 }
 
@@ -186,7 +189,7 @@ func newPullCmd() *cobra.Command {
 		Short: "Pre-pull every scanner image in the current configuration",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			if _, err := scanners.LoadAndInstall(ctx); err != nil {
+			if _, err := scanners.LoadAndInstall(ctx, "docker"); err != nil {
 				// We tolerate the default image pull failing here because
 				// scanners.Pull will try each image individually and report.
 				wolflog.L().Warn().Err(err).Msg("default image install raised an error; continuing per-image")
@@ -238,6 +241,11 @@ func newScanCmd() *cobra.Command {
 				return fmt.Errorf("resolve --repo: %w", err)
 			}
 			ctx := cmd.Context()
+			release, err := scantarget.RetainWorkspace(absRepo)
+			if err != nil {
+				return fmt.Errorf("retain scan workspace: %w", err)
+			}
+			defer release()
 
 			// Detect languages/frameworks before installing scanner backend
 			// so --detect-only short-circuits the (slower) image-availability check.
@@ -398,12 +406,12 @@ func newScanCmd() *cobra.Command {
 				Failed:      failedFrom(result.ToolsFailed),
 				Counts:      report.CountFindings(0, result.Findings),
 			}
-			written, werr := report.WriteAll(scanDir, rcfg, manifest)
+			written, werr := report.WriteAll(cmd.Context(), scanDir, rcfg, manifest)
 			if werr != nil {
-				fmt.Fprintf(os.Stderr, "warning: artifact write failed: %v\n", werr)
+				werr = fmt.Errorf("artifact write failed: %w", werr)
 			}
 
-			fmt.Printf("\nScan complete: %d findings across %d tools in %s\n",
+			fmt.Printf("\nScan finished: %d findings across %d tools in %s\n",
 				len(result.Findings), len(result.ToolsRun), result.Duration)
 			fmt.Println("Artifacts written:")
 			if written.FixHigh != "" {
@@ -431,16 +439,34 @@ func newScanCmd() *cobra.Command {
 					fmt.Printf("  %s: %s\n", tool, e)
 				}
 			}
-			return nil
+			// Retain partial findings and artifacts, but never report failed or
+			// empty execution as success to scripts running a local scan.
+			var executionErr error
+			if len(result.ToolsFailed) > 0 {
+				executionErr = fmt.Errorf("scan incomplete: %d tool(s) failed", len(result.ToolsFailed))
+			} else if len(result.ToolsRun) == 0 {
+				executionErr = errors.New("scan incomplete: no tools ran")
+			}
+			for _, tool := range tools {
+				if !slices.Contains(result.ToolsRun, tool) {
+					executionErr = errors.Join(executionErr, fmt.Errorf("scan incomplete: requested tool %q did not run", tool))
+				}
+			}
+			for tool, count := range result.ToolParseErrors {
+				if count > 0 {
+					executionErr = errors.Join(executionErr, fmt.Errorf("scan incomplete: %s reported %d parse error(s)", tool, count))
+				}
+			}
+			return errors.Join(ctx.Err(), executionErr, werr)
 		},
 	}
 	cmd.Flags().StringVar(&repoPath, "repo", "", "repository path (required)")
 	cmd.Flags().StringVar(&branch, "branch", "main", "branch label for the scan record")
 	cmd.Flags().StringVar(&profile, "profile", "standard", "scan profile (standard, full, targeted, fast, pr, release)")
 	cmd.Flags().StringSliceVar(&tools, "tools", nil, "explicit tool list (default: auto-detect by language)")
-	cmd.Flags().IntVar(&concurrency, "concurrency", 4, "parallel tool execution cap")
-	cmd.Flags().IntVar(&heavyConcurrency, "heavy-concurrency", 1, "parallel heavy scanner execution cap")
-	cmd.Flags().IntVar(&networkConcurrency, "network-concurrency", 2, "parallel network scanner execution cap")
+	cmd.Flags().IntVar(&concurrency, "concurrency", 0, "parallel tool execution cap (0 = automatic)")
+	cmd.Flags().IntVar(&heavyConcurrency, "heavy-concurrency", 0, "parallel heavy scanner execution cap (0 = automatic)")
+	cmd.Flags().IntVar(&networkConcurrency, "network-concurrency", 0, "parallel network scanner execution cap (0 = automatic)")
 	cmd.Flags().BoolVar(&allScanners, "all-scanners", false, "run every registered scanner regardless of detected languages")
 	cmd.Flags().BoolVar(&detectOnly, "detect-only", false, "report detected languages/frameworks and exit without scanning")
 	cmd.Flags().BoolVar(&planOnly, "plan-only", false, "emit scanner run/skip plan and exit without scanning")
@@ -553,9 +579,17 @@ func failedFrom(in map[string]error) map[string]string {
 // readGitCommit best-efforts the HEAD short SHA for the manifest. Falls back
 // to "" when repoPath isn't a git checkout — the manifest field is omitempty.
 func readGitCommit(repoPath string) string {
-	gitHead := filepath.Join(repoPath, ".git", "HEAD")
-	// #nosec G304 -- path is an artifact under the scan dir
-	data, err := os.ReadFile(gitHead)
+	repoRoot, err := os.OpenRoot(repoPath)
+	if err != nil {
+		return ""
+	}
+	defer func() { _ = repoRoot.Close() }()
+	gitRoot, err := repoRoot.OpenRoot(".git")
+	if err != nil {
+		return ""
+	}
+	defer func() { _ = gitRoot.Close() }()
+	data, err := gitRoot.ReadFile("HEAD")
 	if err != nil {
 		return ""
 	}
@@ -568,8 +602,10 @@ func readGitCommit(repoPath string) string {
 		return head
 	}
 	ref := strings.TrimPrefix(head, "ref: ")
-	// #nosec G304 -- path is an artifact under the scan dir
-	refData, err := os.ReadFile(filepath.Join(repoPath, ".git", ref))
+	if !filepath.IsLocal(ref) {
+		return ""
+	}
+	refData, err := gitRoot.ReadFile(ref)
 	if err != nil {
 		return ""
 	}

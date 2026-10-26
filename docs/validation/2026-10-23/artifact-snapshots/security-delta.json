@@ -1,0 +1,14 @@
+{
+  "previous_count": 33,
+  "current_count": 29,
+  "analysis_errors": {},
+  "removed_static_sites": [
+    {
+      "file": "internal/api/routes/scans.go",
+      "rule": "G703",
+      "count": 4
+    }
+  ],
+  "added_static_sites": [],
+  "disposition": "Shared confined publication replaces four scans.go sinks. Static inventory change only; R03 remains open. No accepted exceptions or suppressions."
+}

@@ -1,10 +1,11 @@
 package routes
 
 import (
-	"bytes"
-	"os/exec"
+	"context"
 	"path/filepath"
 	"strings"
+
+	gitpkg "github.com/alphabravocompany/thewolf/internal/fix/git"
 )
 
 // filterUnifiedDiff keeps only file sections whose path matches one of files.
@@ -92,31 +93,21 @@ func liveWorkspaceDiff(repoPath string) string {
 		return ""
 	}
 	base := workspaceMergeBase(repoPath)
-	args := []string{"-C", repoPath, "diff", "--find-renames"}
-	if base != "" {
-		args = append(args, base+"...HEAD")
-	} else {
-		args = append(args, "HEAD")
+	if base == "" {
+		base = "HEAD"
 	}
-	out, err := exec.Command("git", args...).CombinedOutput() // #nosec G204
-	if err != nil && len(bytes.TrimSpace(out)) == 0 {
+	// Compare the full working tree to the base once, including staged edits.
+	// Disable repository-configured diff/textconv and fsmonitor helpers.
+	out, err := gitpkg.Command(context.Background(), nil, "-C", repoPath, "diff", "--no-ext-diff", "--no-textconv", "--find-renames", base, "--").Output() // #nosec G204
+	if err != nil {
 		return ""
 	}
-	staged := string(out)
-	// Include uncommitted edits still in the worktree.
-	wt, _ := exec.Command("git", "-C", repoPath, "diff", "--find-renames").CombinedOutput() // #nosec G204
-	if extra := strings.TrimSpace(string(wt)); extra != "" {
-		if staged != "" && !strings.HasSuffix(staged, "\n") {
-			staged += "\n"
-		}
-		staged += extra
-	}
-	return staged
+	return string(out)
 }
 
 func workspaceMergeBase(repoPath string) string {
 	for _, ref := range []string{"main", "master", "origin/main", "origin/master"} {
-		out, err := exec.Command("git", "-C", repoPath, "merge-base", "HEAD", ref).Output() // #nosec G204
+		out, err := gitpkg.Command(context.Background(), nil, "-C", repoPath, "merge-base", "HEAD", ref).Output() // #nosec G204
 		if err == nil {
 			if s := strings.TrimSpace(string(out)); s != "" {
 				return s
@@ -136,7 +127,7 @@ func listWorkspaceCommits(repoPath string) []fixCommit {
 	if repoPath == "" || !filepath.IsAbs(repoPath) {
 		return nil
 	}
-	out, err := exec.Command("git", "-C", repoPath, "log", "-50", "--format=%H\t%s\t%cI").Output() // #nosec G204
+	out, err := gitpkg.Command(context.Background(), nil, "-C", repoPath, "log", "-50", "--format=%H\t%s\t%cI").Output() // #nosec G204
 	if err != nil {
 		return nil
 	}

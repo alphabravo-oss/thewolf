@@ -1,0 +1,20 @@
+{
+  "name": "wolf-plan-baseline-state-pg-20261023",
+  "id": "a7d1c1203701ed44ba34fdf497a5e94a32f76d3e09c74993e9d63e7f967dcbdd",
+  "image_reference": "postgres@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873",
+  "image_id": "sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873",
+  "ports": {
+    "5432/tcp": [
+      {
+        "HostIp": "127.0.0.1",
+        "HostPort": "32788"
+      }
+    ]
+  },
+  "created": "2026-10-23T15:39:44.936062546Z",
+  "purpose": "Owned isolated PostgreSQL fixture; production unchanged",
+  "removed": true,
+  "anonymous_volumes_removed": true,
+  "absence_verified": true,
+  "removed_at": "2026-10-23T15:59:30.685825+00:00"
+}

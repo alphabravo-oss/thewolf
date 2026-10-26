@@ -1,6 +1,10 @@
 package suppress
 
-import "os"
+import (
+	"os"
+
+	"github.com/alphabravocompany/thewolf/internal/models"
+)
 
 // DefaultRules returns the built-in suppression ruleset applied before any
 // repo-local `.wolfignore`. These rules encode universal FP patterns:
@@ -12,12 +16,13 @@ import "os"
 // Each rule's Reason follows the "default:<short-name>" convention so the
 // renderer can render them grouped.
 //
-// `!` lines in `.wolfignore` are ignored (negation is not implemented).
+// `!` lines in `.wolfignore` are rejected (negation is not implemented).
 // Set WOLF_DISABLE_DEFAULT_SUPPRESSIONS=1 to skip this ruleset.
 func DefaultRules() RuleSet {
 	if os.Getenv("WOLF_DISABLE_DEFAULT_SUPPRESSIONS") == "1" {
 		return RuleSet{}
 	}
+	lockfileCategories := []models.Category{models.CategorySAST, models.CategorySecrets}
 	return RuleSet{Rules: []Rule{
 		// --- Vendored / installed dependencies — all categories ---
 		{PathGlob: "**/vendor/**", Reason: "default:vendor"},
@@ -59,7 +64,8 @@ func DefaultRules() RuleSet {
 		// payloads, malformed JSON, etc. Real bugs here aren't real bugs;
 		// they're the test corpus. Suppressing all findings (not just
 		// hardcoded-secret) is the right default — if you really need to
-		// scan a fixtures directory, negate via .wolfignore.
+		// scan a fixtures directory, disable default suppressions; .wolfignore
+		// negation is not supported.
 		{PathGlob: "**/testdata/**", Reason: "default:testdata"}, // go convention
 		{PathGlob: "**/test-fixtures/**", Reason: "default:test-fixtures"},
 		{PathGlob: "**/test_fixtures/**", Reason: "default:test-fixtures"},
@@ -189,15 +195,15 @@ func DefaultRules() RuleSet {
 		{PathGlob: ".github/workflows/**", Reason: "default:github-workflows"},
 		{PathGlob: "**/.github/workflows/**", Reason: "default:github-workflows"},
 
-		// --- Lockfiles ---
-		{PathGlob: "**/package-lock.json", Reason: "default:lockfile"},
-		{PathGlob: "**/pnpm-lock.yaml", Reason: "default:lockfile"},
-		{PathGlob: "**/yarn.lock", Reason: "default:lockfile"},
-		{PathGlob: "**/Gemfile.lock", Reason: "default:lockfile"},
-		{PathGlob: "**/composer.lock", Reason: "default:lockfile"},
-		{PathGlob: "**/Cargo.lock", Reason: "default:lockfile"},
-		{PathGlob: "**/poetry.lock", Reason: "default:lockfile"},
-		{PathGlob: "**/go.sum", Reason: "default:lockfile"},
+		// --- Lockfiles — SAST/secrets only (enforced by matches). ---
+		{PathGlob: "**/package-lock.json", ToolCategories: lockfileCategories, Reason: "default:lockfile"},
+		{PathGlob: "**/pnpm-lock.yaml", ToolCategories: lockfileCategories, Reason: "default:lockfile"},
+		{PathGlob: "**/yarn.lock", ToolCategories: lockfileCategories, Reason: "default:lockfile"},
+		{PathGlob: "**/Gemfile.lock", ToolCategories: lockfileCategories, Reason: "default:lockfile"},
+		{PathGlob: "**/composer.lock", ToolCategories: lockfileCategories, Reason: "default:lockfile"},
+		{PathGlob: "**/Cargo.lock", ToolCategories: lockfileCategories, Reason: "default:lockfile"},
+		{PathGlob: "**/poetry.lock", ToolCategories: lockfileCategories, Reason: "default:lockfile"},
+		{PathGlob: "**/go.sum", ToolCategories: lockfileCategories, Reason: "default:lockfile"},
 
 		// --- Wolf's own outputs and scanner-config files ---
 		// FINDINGS/ holds local scan-result JSON exports; trufflehog flags

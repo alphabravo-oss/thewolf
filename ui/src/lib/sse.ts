@@ -1,6 +1,5 @@
-// Reusable SSE hook. Connects to /api/<path> with cookie auth, reconnects
-// on transport errors with a configurable backoff, and surfaces the latest
-// event to callers via state + a callback.
+// Keep one EventSource through transient failures so the browser retains
+// Last-Event-ID and honors the server's retry interval.
 import { useEffect, useRef, useCallback, useState } from "react";
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? "/api/v1";
@@ -11,100 +10,46 @@ interface UseSSEOptions<T> {
   onEvent?: (event: T) => void;
   onError?: (error: Event) => void;
   onOpen?: () => void;
-  reconnectInterval?: number;
 }
 
 export function useSSE<T = Record<string, unknown>>({
-  path,
-  enabled = true,
-  onEvent,
-  onError,
-  onOpen,
-  reconnectInterval = 3000,
+  path, enabled = true, onEvent, onError, onOpen,
 }: UseSSEOptions<T>) {
   const [connected, setConnected] = useState(false);
   const [lastEvent, setLastEvent] = useState<T | null>(null);
   const sourceRef = useRef<EventSource | null>(null);
-  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const connectRef = useRef<() => void>(() => {});
-
-  const onEventRef = useRef(onEvent);
-  const onErrorRef = useRef(onError);
-  const onOpenRef = useRef(onOpen);
-  const enabledRef = useRef(enabled);
+  const callbacks = useRef({ onEvent, onError, onOpen });
+  useEffect(() => { callbacks.current = { onEvent, onError, onOpen }; });
 
   useEffect(() => {
-    onEventRef.current = onEvent;
-    onErrorRef.current = onError;
-    onOpenRef.current = onOpen;
-    enabledRef.current = enabled;
-  });
-
-  useEffect(() => {
-    if (!enabled) {
-      // Close existing connection on cleanup (no synchronous setState)
-      const currentSource = sourceRef.current;
-      const currentTimer = reconnectTimerRef.current;
-      return () => {
-        currentSource?.close();
-        if (currentTimer) clearTimeout(currentTimer);
-      };
-    }
-
-    function doConnect() {
-      if (sourceRef.current) {
-        sourceRef.current.close();
-      }
-
-      const url = `${BASE_URL}${path}`;
-      const source = new EventSource(url, { withCredentials: true });
-      sourceRef.current = source;
-
-      source.onopen = () => {
-        setConnected(true);
-        onOpenRef.current?.();
-      };
-
-      source.onmessage = (e) => {
-        try {
-          const data = JSON.parse(e.data) as T;
-          setLastEvent(data);
-          onEventRef.current?.(data);
-        } catch {
-          // ignore parse errors
-        }
-      };
-
-      source.onerror = (e) => {
-        setConnected(false);
-        onErrorRef.current?.(e);
-        source.close();
-
-        reconnectTimerRef.current = setTimeout(() => {
-          if (enabledRef.current) connectRef.current();
-        }, reconnectInterval);
-      };
-    }
-
-    connectRef.current = doConnect;
-    doConnect();
-
+    if (!enabled) return;
+    const source = new EventSource(`${BASE_URL}${path}`, { withCredentials: true });
+    sourceRef.current = source;
+    source.onopen = () => {
+      setConnected(true);
+      callbacks.current.onOpen?.();
+    };
+    source.onmessage = (event) => {
+      let data: T;
+      try { data = JSON.parse(event.data) as T; } catch { return; }
+      setLastEvent(data);
+      callbacks.current.onEvent?.(data);
+    };
+    source.onerror = (event) => {
+      setConnected(false);
+      callbacks.current.onError?.(event);
+    };
     return () => {
-      sourceRef.current?.close();
-      if (reconnectTimerRef.current) {
-        clearTimeout(reconnectTimerRef.current);
-      }
+      source.onopen = source.onmessage = source.onerror = null;
+      source.close();
+      sourceRef.current = null;
       setConnected(false);
     };
-  }, [enabled, path, reconnectInterval]);
+  }, [enabled, path]);
 
   const disconnect = useCallback(() => {
     sourceRef.current?.close();
-    if (reconnectTimerRef.current) {
-      clearTimeout(reconnectTimerRef.current);
-    }
     setConnected(false);
   }, []);
-
   return { connected, lastEvent, disconnect };
 }

@@ -1,0 +1,42 @@
+{
+  "tasks": 248,
+  "checked": 64,
+  "D06_5_complete": true,
+  "D06_complete": false,
+  "D06_6_complete": false,
+  "new_http_endpoint_cases": 32,
+  "new_http_negative_requests": 320,
+  "initial_reproduction_exit": 1,
+  "initial_compile_exit": 1,
+  "initial_rate_limited_contracts_exit": 1,
+  "duplicate_import_fixture_exit": 1,
+  "old_coverage_expectation_exit": 1,
+  "focused_contracts_exit": 0,
+  "full_go_race_exit": 0,
+  "full_go_race_packages": 136,
+  "full_suite_backends": [
+    "sqlite",
+    "postgres"
+  ],
+  "new_http_tests_backend": "sqlite",
+  "full_race_before_final_unused_binding_cleanup": true,
+  "final_targeted_race_exit": 0,
+  "final_targeted_race_packages": 4,
+  "initial_lint_exit": 1,
+  "final_lint_exit": 0,
+  "scanner_sync_exit": 0,
+  "gosec_exit": 1,
+  "gosec_high_high_findings": 29,
+  "gosec_rules": {
+    "G704": 3,
+    "G703": 25,
+    "G702": 1
+  },
+  "gosec_analysis_errors": {},
+  "fixture_removed": true,
+  "source_files": 178,
+  "ui_changed": false,
+  "deployed": false,
+  "diff_check_exit": 0,
+  "documentation_links_valid": true
+}

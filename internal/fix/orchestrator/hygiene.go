@@ -37,10 +37,10 @@ func applyToolHygiene(
 	deps Deps,
 	logf Logf,
 	rep *jobReport,
-) (outcomes map[string]string, leftover []models.Finding, files []string) {
+) (outcomes map[string]string, leftover []models.Finding, files []string, runErr error) {
 	outcomes = map[string]string{}
 	if ws == nil {
-		return outcomes, group.Findings, nil
+		return outcomes, group.Findings, nil, nil
 	}
 	kind := hygiene.Classify(group.Tool)
 	var res hygiene.Result
@@ -53,11 +53,11 @@ func applyToolHygiene(
 	case hygiene.KindPolicy:
 		res, err = hygiene.PolicyPass(ws.Path(), group.Findings)
 	default:
-		return outcomes, group.Findings, nil
+		return outcomes, group.Findings, nil, nil
 	}
 	if err != nil {
 		logf("  %s: hygiene %s failed: %v — sending leftovers to the agent", group.Tool, kind, err)
-		return outcomes, group.Findings, nil
+		return outcomes, group.Findings, nil, nil
 	}
 	if res.Message != "" {
 		logf("  %s: %s", group.Tool, res.Message)
@@ -67,7 +67,9 @@ func applyToolHygiene(
 		if note, ok := res.Kept[f.ID]; ok {
 			outcomes[f.ID] = models.FixOutcomeKept
 			rep.note(f, models.FixOutcomeKept, note)
-			persistHygiene(ctx, deps, job, f, models.FixOutcomeKept, "FIX: "+note)
+			if err := persistHygiene(ctx, deps, job, f, models.FixOutcomeKept, "FIX: "+note); err != nil {
+				return outcomes, leftover, res.Files, err
+			}
 			logf("decide FIX  %s — %s", f.ID, note)
 			continue
 		}
@@ -77,13 +79,15 @@ func applyToolHygiene(
 			// on every future scan.
 			outcomes[f.ID] = models.FixOutcomeMuted
 			rep.note(f, models.FixOutcomeMuted, note)
-			persistHygiene(ctx, deps, job, f, models.FixOutcomeMuted, "MUTE: "+note)
+			if err := persistHygiene(ctx, deps, job, f, models.FixOutcomeMuted, "MUTE: "+note); err != nil {
+				return outcomes, leftover, res.Files, err
+			}
 			logf("decide MUTE %s — %s", f.ID, note)
 			continue
 		}
 		leftover = append(leftover, f)
 	}
-	return outcomes, leftover, res.Files
+	return outcomes, leftover, res.Files, nil
 }
 
 func muteFinding(
@@ -107,9 +111,9 @@ func muteFinding(
 	return files
 }
 
-func persistHygiene(ctx context.Context, deps Deps, job *models.FixJob, f models.Finding, outcome, excerpt string) {
+func persistHygiene(ctx context.Context, deps Deps, job *models.FixJob, f models.Finding, outcome, excerpt string) error {
 	if job == nil {
-		return
+		return nil
 	}
 	att := models.FixAttempt{
 		JobID:       job.ID,
@@ -120,5 +124,5 @@ func persistHygiene(ctx context.Context, deps Deps, job *models.FixJob, f models
 		DiffExcerpt: excerpt,
 		CreatedAt:   time.Now().UTC(),
 	}
-	persist(ctx, deps, &att)
+	return persist(ctx, deps, &att)
 }

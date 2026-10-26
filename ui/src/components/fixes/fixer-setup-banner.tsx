@@ -1,12 +1,24 @@
+import { ErrorState } from "@/components/ui/empty-state";
 import { Link } from "@tanstack/react-router";
 import { KeyIcon, TerminalIcon, WrenchIcon } from "lucide-react";
-import { useFixEngines } from "@/lib/fixes";
+import { useAutofixEnabled, useFixEngines } from "@/lib/fixes";
 import { useMe } from "@/lib/me";
 
 export function FixerSetupBanner() {
   const me = useMe();
-  const engines = useFixEngines(true);
+  const flag = useAutofixEnabled();
+  const engines = useFixEngines(flag.enabled);
+  if (flag.isLoading) return null;
+  if (flag.isError) return <ErrorState title="Unable to load fixing settings" onRetry={() => void flag.refetch()} />;
+  if (!flag.enabled) return (
+    <p className="text-sm text-muted-foreground">
+      Autonomous fixing is off. {me.data?.role === "admin" ? (
+        <Link to="/settings" search={{ tab: "general" }} className="text-primary hover:underline">Enable it in Settings → General.</Link>
+      ) : "Ask an administrator to enable it."}
+    </p>
+  );
   if (engines.isLoading) return null;
+  if (engines.isError) return <ErrorState title="Unable to check fixer setup" onRetry={() => void engines.refetch()} />;
 
   const worker = engines.data?.worker ?? [];
   const keys = engines.data?.api_keys;

@@ -1,0 +1,22 @@
+[WebServer] $ vite build
+[WebServer] (node:3489050) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:3489209) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 4 tests using 2 workers
+
+(node:3489292) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3489293) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  2 [desktop-chromium-linux] › e2e/product.spec.ts:78:3 › scanner settings and image inventory › renders the Kubernetes-managed capability branch without Docker actions (1.2s)
+(node:3489562) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [desktop-chromium-linux] › e2e/product.spec.ts:6:3 › scanner settings and image inventory › keeps one scoped scanner download surface functional @visual (2.0s)
+(node:3489820) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  3 [mobile-chromium-linux] › e2e/product.spec.ts:6:3 › scanner settings and image inventory › keeps one scoped scanner download surface functional @visual (1.9s)
+  ✓  4 [mobile-chromium-linux] › e2e/product.spec.ts:78:3 › scanner settings and image inventory › renders the Kubernetes-managed capability branch without Docker actions (1.1s)
+
+  4 passed (9.4s)

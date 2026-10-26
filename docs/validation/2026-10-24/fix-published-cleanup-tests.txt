@@ -1,0 +1,22 @@
+ok  	github.com/alphabravocompany/thewolf/internal/db	1.614s
+ok  	github.com/alphabravocompany/thewolf/internal/fix	1.019s [no tests to run]
+ok  	github.com/alphabravocompany/thewolf/internal/fix/auth	1.042s [no tests to run]
+ok  	github.com/alphabravocompany/thewolf/internal/fix/budget	1.015s [no tests to run]
+ok  	github.com/alphabravocompany/thewolf/internal/fix/console	1.028s [no tests to run]
+ok  	github.com/alphabravocompany/thewolf/internal/fix/engine	1.038s [no tests to run]
+ok  	github.com/alphabravocompany/thewolf/internal/fix/fixstore	1.017s [no tests to run]
+ok  	github.com/alphabravocompany/thewolf/internal/fix/git	1.033s [no tests to run]
+ok  	github.com/alphabravocompany/thewolf/internal/fix/hygiene	1.024s [no tests to run]
+ok  	github.com/alphabravocompany/thewolf/internal/fix/install	1.018s [no tests to run]
+ok  	github.com/alphabravocompany/thewolf/internal/fix/lineage	1.038s [no tests to run]
+ok  	github.com/alphabravocompany/thewolf/internal/fix/orchestrator	1.100s
+ok  	github.com/alphabravocompany/thewolf/internal/fix/planner	1.018s [no tests to run]
+ok  	github.com/alphabravocompany/thewolf/internal/fix/pr	1.038s [no tests to run]
+ok  	github.com/alphabravocompany/thewolf/internal/fix/profile	1.015s [no tests to run]
+ok  	github.com/alphabravocompany/thewolf/internal/fix/qualification	1.022s [no tests to run]
+ok  	github.com/alphabravocompany/thewolf/internal/fix/validator	1.016s [no tests to run]
+ok  	github.com/alphabravocompany/thewolf/internal/fix/verify	1.018s [no tests to run]
+ok  	github.com/alphabravocompany/thewolf/internal/fix/wiring	1.026s [no tests to run]
+ok  	github.com/alphabravocompany/thewolf/internal/fix/worker	1.032s [no tests to run]
+ok  	github.com/alphabravocompany/thewolf/internal/fix/workspace	1.093s
+ok  	github.com/alphabravocompany/thewolf/internal/fix/writability	1.029s [no tests to run]

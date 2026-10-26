@@ -3,12 +3,14 @@ package db
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/jmoiron/sqlx"
 
+	"github.com/alphabravocompany/thewolf/internal/finding/gates"
 	"github.com/alphabravocompany/thewolf/internal/models"
 )
 
@@ -48,22 +50,24 @@ func severityRankName(s models.Severity) int {
 }
 
 func dedupCurrentFindings(in []models.Finding) []models.Finding {
-	best := make(map[string]models.Finding, len(in))
-	for _, f := range in {
-		k := identKey(f.RepoID, findingIdent(f))
-		prev, ok := best[k]
+	best := make(map[string]int, len(in))
+	for i := range in {
+		f := &in[i]
+		k := identKey(f.RepoID, findingIdent(*f))
+		previous, ok := best[k]
 		if !ok {
-			best[k] = f
+			best[k] = i
 			continue
 		}
+		prev := &in[previous]
 		pr, nr := severityRankName(prev.Severity), severityRankName(f.Severity)
-		if nr > pr || (nr == pr && f.CreatedAt.After(prev.CreatedAt)) {
-			best[k] = f
+		if nr > pr || (nr == pr && (f.CreatedAt.After(prev.CreatedAt) || (f.CreatedAt.Equal(prev.CreatedAt) && f.ID < prev.ID))) {
+			best[k] = i
 		}
 	}
 	out := make([]models.Finding, 0, len(best))
-	for _, f := range best {
-		out = append(out, f)
+	for _, i := range best {
+		out = append(out, in[i])
 	}
 	return out
 }
@@ -81,100 +85,35 @@ func appendRepoScope(col string, fleetMode bool, collectionID, userID string, ar
 	return extra, out
 }
 
-func latestBranchScanIDs(ctx context.Context, db *sqlx.DB, userID string, fleetMode bool, collectionID string) ([]string, error) {
-	q := `
-SELECT s.id
-FROM scans s
-INNER JOIN (
-  SELECT repo_id,
-         COALESCE(NULLIF(branch, ''), '_') AS branch_key,
-         MAX(COALESCE(completed_at, created_at)) AS latest_at
-  FROM scans
-  WHERE status IN ('completed', 'cancelled')
-    AND TRIM(COALESCE(origin_scan_id, '')) = ''
-  GROUP BY repo_id, COALESCE(NULLIF(branch, ''), '_')
-) t ON t.repo_id = s.repo_id
-   AND COALESCE(NULLIF(s.branch, ''), '_') = t.branch_key
-   AND COALESCE(s.completed_at, s.created_at) = t.latest_at
-WHERE s.status IN ('completed', 'cancelled')
-  AND TRIM(COALESCE(origin_scan_id, '')) = ''`
-	args := []any{}
-	extra, args := appendRepoScope("s.repo_id", fleetMode, collectionID, userID, args)
-	q += extra
-	q = db.Rebind(q)
-	var ids []string
-	if err := db.SelectContext(ctx, &ids, q, args...); err != nil {
-		return nil, fmt.Errorf("latest branch scans: %w", err)
-	}
-	return ids, nil
-}
-
-func listCurrentOpenFindings(ctx context.Context, db *sqlx.DB, userID string, fleetMode bool, collectionID string) ([]models.Finding, error) {
-	ids, err := latestBranchScanIDs(ctx, db, userID, fleetMode, collectionID)
+func listCurrentOpenFindings(ctx context.Context, database *sqlx.DB, userID string, fleetMode bool, collectionID string) ([]models.Finding, error) {
+	e, err := loadFleetEvidence(ctx, database, userID, fleetMode, collectionID)
 	if err != nil {
 		return nil, err
 	}
-	if len(ids) == 0 {
-		return nil, nil
-	}
-	q, args, err := sqlx.In(`SELECT * FROM findings WHERE status = 'open' AND scan_id IN (?)`, ids)
-	if err != nil {
-		return nil, err
-	}
-	q = db.Rebind(q)
-	var findings []models.Finding
-	if err := db.SelectContext(ctx, &findings, q, args...); err != nil {
-		return nil, fmt.Errorf("current open findings: %w", err)
+	current := e.currentEvidence(time.Now().UTC())
+	// Keep suppressed open records for the include_suppressed API option.
+	current = slices.DeleteFunc(current, func(f models.Finding) bool { return f.Status != models.StatusOpen })
+	current = dedupCurrentFindings(current)
+	// Aggregates read compact evidence; REST findings and vulnerability callers
+	// still need complete records, including descriptions, scores and SARIF.
+	findings := make([]models.Finding, 0, len(current))
+	for batch := range slices.Chunk(current, 500) {
+		ids := make([]string, len(batch))
+		for i, f := range batch {
+			ids[i] = f.ID
+		}
+		query, args, err := sqlx.In(`SELECT * FROM findings WHERE id IN (?)`, ids)
+		if err != nil {
+			return nil, err
+		}
+		var rows []models.Finding
+		if err := database.SelectContext(ctx, &rows, database.Rebind(query), args...); err != nil {
+			return nil, err
+		}
+		findings = append(findings, rows...)
 	}
 	hydrateFindingsAfterRead(findings)
-	return dedupCurrentFindings(findings), nil
-}
-
-func firstSeenByIdent(ctx context.Context, db *sqlx.DB, userID string, fleetMode bool, collectionID string) (map[string]time.Time, error) {
-	q := `
-SELECT repo_id,
-       COALESCE(NULLIF(location_fingerprint, ''), id) AS ident,
-       MIN(created_at) AS first_seen
-FROM findings
-WHERE 1=1`
-	args := []any{}
-	extra, args := appendRepoScope("repo_id", fleetMode, collectionID, userID, args)
-	q += extra + ` GROUP BY repo_id, COALESCE(NULLIF(location_fingerprint, ''), id)`
-	q = db.Rebind(q)
-	type row struct {
-		RepoID    string `db:"repo_id"`
-		Ident     string `db:"ident"`
-		FirstSeen string `db:"first_seen"`
-	}
-	var rows []row
-	if err := db.SelectContext(ctx, &rows, q, args...); err != nil {
-		return nil, fmt.Errorf("first seen: %w", err)
-	}
-	out := make(map[string]time.Time, len(rows))
-	for _, r := range rows {
-		if ts, ok := parseDBTime(r.FirstSeen); ok {
-			out[identKey(r.RepoID, r.Ident)] = ts
-		}
-	}
-	return out, nil
-}
-
-func parseDBTime(raw string) (time.Time, bool) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return time.Time{}, false
-	}
-	for _, layout := range []string{
-		time.RFC3339Nano,
-		time.RFC3339,
-		"2006-01-02 15:04:05.999999999-07:00",
-		"2006-01-02 15:04:05",
-	} {
-		if ts, err := time.Parse(layout, raw); err == nil {
-			return ts.UTC(), true
-		}
-	}
-	return time.Time{}, false
+	return findings, nil
 }
 
 func countBySeverity(findings []models.Finding) map[string]int {
@@ -189,204 +128,40 @@ func countBySeverity(findings []models.Finding) map[string]int {
 }
 
 func computeFleetPosture(ctx context.Context, database *sqlx.DB, userID string, fleetMode bool, collectionID string) (*FleetPostureResult, error) {
-	out := &FleetPostureResult{
-		OpenFindingsBySeverity: map[string]int{"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0},
-		WeekOverWeekDelta:      map[string]int{"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0},
-	}
-	findings, err := listCurrentOpenFindings(ctx, database, userID, fleetMode, collectionID)
+	e, err := loadFleetEvidence(ctx, database, userID, fleetMode, collectionID)
 	if err != nil {
 		return nil, err
 	}
-	out.OpenFindingsBySeverity = countBySeverity(findings)
-
-	firstSeen, err := firstSeenByIdent(ctx, database, userID, fleetMode, collectionID)
-	if err != nil {
-		return nil, err
-	}
-	weekAgo := time.Now().AddDate(0, 0, -7).UTC()
-	twoWeeksAgo := time.Now().AddDate(0, 0, -14).UTC()
-	recent := map[string]int{}
-	prior := map[string]int{}
-	for _, f := range findings {
-		seen, ok := firstSeen[identKey(f.RepoID, findingIdent(f))]
-		if !ok {
-			seen = f.CreatedAt
-		}
-		sev := strings.ToLower(string(f.Severity))
-		if seen.After(weekAgo) || seen.Equal(weekAgo) {
-			recent[sev]++
-		} else if (seen.After(twoWeeksAgo) || seen.Equal(twoWeeksAgo)) && seen.Before(weekAgo) {
-			prior[sev]++
-		}
-	}
-	for sev := range out.WeekOverWeekDelta {
-		out.WeekOverWeekDelta[sev] = recent[sev] - prior[sev]
-	}
-
-	repoQ := `SELECT COUNT(*) FROM repos r WHERE 1=1`
-	repoArgs := []any{}
-	if !fleetMode {
-		repoQ += ` AND r.user_id = ?`
-		repoArgs = append(repoArgs, userID)
-	}
-	if collectionID != "" {
-		repoQ += ` AND r.id IN (SELECT repo_id FROM collection_repos WHERE collection_id = ?)`
-		repoArgs = append(repoArgs, collectionID)
-	}
-	repoQ = database.Rebind(repoQ)
-	if err := database.QueryRowContext(ctx, repoQ, repoArgs...).Scan(&out.RepoCount); err != nil {
-		return nil, fmt.Errorf("count repos: %w", err)
-	}
-
-	gateQ := `SELECT COUNT(DISTINCT s.repo_id)
-	          FROM quality_gate_results g
-	          JOIN scans s ON s.id = g.scan_id
-	          WHERE g.status = 'fail'`
-	gateArgs := []any{}
-	if !fleetMode {
-		gateQ += ` AND s.repo_id IN (SELECT id FROM repos WHERE user_id = ?)`
-		gateArgs = append(gateArgs, userID)
-	}
-	if collectionID != "" {
-		gateQ += ` AND s.repo_id IN (SELECT repo_id FROM collection_repos WHERE collection_id = ?)`
-		gateArgs = append(gateArgs, collectionID)
-	}
-	gateQ = database.Rebind(gateQ)
-	_ = database.QueryRowContext(ctx, gateQ, gateArgs...).Scan(&out.GatesFailing)
-	return out, nil
+	return e.posture(time.Now().UTC()), nil
 }
 
 func computeNeedsAttention(ctx context.Context, database *sqlx.DB, userID string, fleetMode bool, limit int) ([]NeedsAttentionRow, error) {
+	e, err := loadFleetEvidence(ctx, database, userID, fleetMode, "")
+	if err != nil {
+		return nil, err
+	}
+	rows := e.attention(time.Now().UTC())
 	if limit <= 0 {
 		limit = 10
 	}
-	repoQ := `SELECT id, name FROM repos`
-	repoArgs := []any{}
-	if !fleetMode {
-		repoQ += ` WHERE user_id = ?`
-		repoArgs = append(repoArgs, userID)
+	if len(rows) > limit {
+		rows = rows[:limit]
 	}
-	repoQ = database.Rebind(repoQ)
-	type repoRef struct {
-		ID, Name string
-	}
-	var repos []repoRef
-	rows, err := database.QueryContext(ctx, repoQ, repoArgs...)
-	if err != nil {
-		return nil, fmt.Errorf("list repos for needs-attention: %w", err)
-	}
-	for rows.Next() {
-		var r repoRef
-		if err := rows.Scan(&r.ID, &r.Name); err != nil {
-			_ = rows.Close()
-			return nil, err
-		}
-		repos = append(repos, r)
-	}
-	_ = rows.Close()
-
-	findings, err := listCurrentOpenFindings(ctx, database, userID, fleetMode, "")
-	if err != nil {
-		return nil, err
-	}
-	firstSeen, err := firstSeenByIdent(ctx, database, userID, fleetMode, "")
-	if err != nil {
-		return nil, err
-	}
-	weekAgo := time.Now().AddDate(0, 0, -7).UTC()
-	type tallies struct{ crit, high int }
-	byRepo := map[string]tallies{}
-	for _, f := range findings {
-		seen, ok := firstSeen[identKey(f.RepoID, findingIdent(f))]
-		if !ok {
-			seen = f.CreatedAt
-		}
-		if seen.Before(weekAgo) {
-			continue
-		}
-		t := byRepo[f.RepoID]
-		switch models.Severity(strings.ToLower(string(f.Severity))) {
-		case models.SeverityCritical:
-			t.crit++
-		case models.SeverityHigh:
-			t.high++
-		}
-		byRepo[f.RepoID] = t
-	}
-
-	out := make([]NeedsAttentionRow, 0, len(repos))
-	for _, r := range repos {
-		newCrit := byRepo[r.ID].crit
-		newHigh := byRepo[r.ID].high
-
-		gateFailing := 0
-		var lastScanAt *time.Time
-		lastQ := database.Rebind(`SELECT created_at FROM scans WHERE repo_id = ? ORDER BY created_at DESC LIMIT 1`)
-		_ = database.QueryRowContext(ctx, lastQ, r.ID).Scan(&lastScanAt)
-		gateQ := database.Rebind(`SELECT COUNT(*) FROM quality_gate_results g
-			 JOIN scans s ON s.id = g.scan_id
-			 WHERE s.repo_id = ? AND g.status = 'fail'
-			 AND g.scan_id = (SELECT id FROM scans WHERE repo_id = ? ORDER BY created_at DESC LIMIT 1)`)
-		_ = database.QueryRowContext(ctx, gateQ, r.ID, r.ID).Scan(&gateFailing)
-
-		staleDaysOver30 := 0
-		if lastScanAt != nil {
-			d := int(time.Since(*lastScanAt).Hours() / 24)
-			if d > 30 {
-				staleDaysOver30 = d - 30
-			}
-		} else {
-			staleDaysOver30 = 30
-		}
-
-		score := 10*newCrit + 5*newHigh + 8*gateFailing + staleDaysOver30
-		if score == 0 {
-			continue
-		}
-
-		var reason, detail string
-		switch {
-		case newCrit > 0:
-			reason = "new_high"
-			detail = fmt.Sprintf("%d new critical, %d new high", newCrit, newHigh)
-		case newHigh > 0:
-			reason = "new_high"
-			detail = fmt.Sprintf("%d new high", newHigh)
-		case gateFailing > 0:
-			reason = "gate_failing"
-			detail = "latest scan failed gate"
-		case lastScanAt == nil:
-			reason = "stale"
-			detail = "never scanned"
-		default:
-			reason = "stale"
-			detail = fmt.Sprintf("last scan %d days ago", staleDaysOver30+30)
-		}
-
-		out = append(out, NeedsAttentionRow{
-			RepoID: r.ID,
-			Name:   r.Name,
-			Reason: reason,
-			Detail: detail,
-			Score:  score,
-		})
-	}
-
-	sort.SliceStable(out, func(i, j int) bool { return out[i].Score > out[j].Score })
-	if len(out) > limit {
-		out = out[:limit]
-	}
-	return out, nil
+	return rows, nil
 }
 
-func computeAggregateByRule(ctx context.Context, database *sqlx.DB, userID string, fleetMode bool, limit int) ([]FindingsAggregateRow, error) {
+func computeAggregateByRule(ctx context.Context, database *sqlx.DB, userID string, fleetMode bool, limit int, securityOnly bool) ([]FindingsAggregateRow, error) {
 	if limit <= 0 {
 		limit = 10
 	}
-	findings, err := listCurrentOpenFindings(ctx, database, userID, fleetMode, "")
+	e, err := loadFleetEvidence(ctx, database, userID, fleetMode, "")
 	if err != nil {
 		return nil, err
 	}
+	findings := e.currentEvidence(time.Now().UTC())
+	findings = slices.DeleteFunc(findings, func(f models.Finding) bool { return f.Status != models.StatusOpen })
+	findings = dedupCurrentFindings(findings)
+	findings = slices.DeleteFunc(findings, func(f models.Finding) bool { return f.Suppressed })
 	type agg struct {
 		repos    map[string]bool
 		findings int
@@ -396,6 +171,9 @@ func computeAggregateByRule(ctx context.Context, database *sqlx.DB, userID strin
 	}
 	byRule := map[string]*agg{}
 	for _, f := range findings {
+		if securityOnly && !slices.Contains(gates.SecurityCategories(), f.Category) {
+			continue
+		}
 		rule := strings.TrimSpace(f.RuleID)
 		if rule == "" {
 			rule = strings.TrimSpace(f.Title)
@@ -449,6 +227,9 @@ func computeAggregateByRule(ctx context.Context, database *sqlx.DB, userID strin
 		})
 	}
 	sort.SliceStable(out, func(i, j int) bool {
+		if securityOnly && out[i].Severity != out[j].Severity {
+			return severityRankName(models.Severity(out[i].Severity)) > severityRankName(models.Severity(out[j].Severity))
+		}
 		if out[i].Repos != out[j].Repos {
 			return out[i].Repos > out[j].Repos
 		}
@@ -475,8 +256,8 @@ func (s *SQLiteStore) FleetNeedsAttention(ctx context.Context, userID string, fl
 	return computeNeedsAttention(ctx, s.db, userID, fleetMode, limit)
 }
 
-func (s *SQLiteStore) FindingsAggregateByRule(ctx context.Context, userID string, fleetMode bool, limit int) ([]FindingsAggregateRow, error) {
-	return computeAggregateByRule(ctx, s.db, userID, fleetMode, limit)
+func (s *SQLiteStore) FindingsAggregateByRule(ctx context.Context, userID string, fleetMode bool, limit int, securityOnly bool) ([]FindingsAggregateRow, error) {
+	return computeAggregateByRule(ctx, s.db, userID, fleetMode, limit, securityOnly)
 }
 
 func (s *SQLiteStore) FindingsByRepo(ctx context.Context, userID string, fleetMode bool, collectionID string) ([]FindingsByRepoRow, error) {
@@ -495,8 +276,8 @@ func (s *PostgresStore) FleetNeedsAttention(ctx context.Context, userID string, 
 	return computeNeedsAttention(ctx, s.db, userID, fleetMode, limit)
 }
 
-func (s *PostgresStore) FindingsAggregateByRule(ctx context.Context, userID string, fleetMode bool, limit int) ([]FindingsAggregateRow, error) {
-	return computeAggregateByRule(ctx, s.db, userID, fleetMode, limit)
+func (s *PostgresStore) FindingsAggregateByRule(ctx context.Context, userID string, fleetMode bool, limit int, securityOnly bool) ([]FindingsAggregateRow, error) {
+	return computeAggregateByRule(ctx, s.db, userID, fleetMode, limit, securityOnly)
 }
 
 func (s *PostgresStore) FindingsByRepo(ctx context.Context, userID string, fleetMode bool, collectionID string) ([]FindingsByRepoRow, error) {
@@ -527,10 +308,14 @@ func repoNames(ctx context.Context, database *sqlx.DB, userID string, fleetMode 
 }
 
 func computeFindingsByRepo(ctx context.Context, database *sqlx.DB, userID string, fleetMode bool, collectionID string) ([]FindingsByRepoRow, error) {
-	findings, err := listCurrentOpenFindings(ctx, database, userID, fleetMode, collectionID)
+	e, err := loadFleetEvidence(ctx, database, userID, fleetMode, collectionID)
 	if err != nil {
 		return nil, err
 	}
+	findings := e.currentEvidence(time.Now().UTC())
+	findings = slices.DeleteFunc(findings, func(f models.Finding) bool { return f.Status != models.StatusOpen })
+	findings = dedupCurrentFindings(findings)
+	findings = slices.DeleteFunc(findings, func(f models.Finding) bool { return f.Suppressed })
 	names := repoNames(ctx, database, userID, fleetMode)
 	type bucket struct {
 		total, crit, high, med, low, info int

@@ -237,7 +237,10 @@ func Detect(repoPath string) (*DetectionResult, error) {
 // If the extension is not recognised and the file is executable, it peeks at
 // the shebang line to identify shell scripts. Returns "" for unknown files.
 func DetectLanguage(filePath string) models.Language {
-	ext := strings.TrimPrefix(filepath.Ext(filePath), ".")
+	if filepath.Ext(filePath) == ".C" {
+		return models.LangCPP
+	}
+	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(filePath), "."))
 	if lang, ok := extToLang[ext]; ok {
 		return lang
 	}

@@ -1,0 +1,20 @@
+$ playwright test scan-live.spec.ts --workers=2
+[WebServer] $ vite build
+[WebServer] (node:3499122) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:3499248) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 3 tests using 2 workers
+
+(node:3499310) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3499309) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [mobile-chromium-linux] › e2e/scan-live.spec.ts:6:1 › live scan reconnects with its cursor, shows output and refreshes terminal state @browser-matrix (681ms)
+  ✓  2 [desktop-chromium-linux] › e2e/scan-live.spec.ts:6:1 › live scan reconnects with its cursor, shows output and refreshes terminal state @browser-matrix (770ms)
+(node:3499514) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  3 [desktop-firefox-linux] › e2e/scan-live.spec.ts:6:1 › live scan reconnects with its cursor, shows output and refreshes terminal state @browser-matrix (2.6s)
+
+  3 passed (10.2s)

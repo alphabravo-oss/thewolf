@@ -6,8 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
+	"os/exec"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
@@ -331,8 +330,12 @@ func TestRepoFixable(t *testing.T) {
 
 	// A writable git work tree → fixable.
 	gitDir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(gitDir, ".git"), 0o755); err != nil {
-		t.Fatal(err)
+	for _, args := range [][]string{{"init", "-b", "main"}, {"-c", "user.name=test", "-c", "user.email=test@example.test", "commit", "--allow-empty", "-m", "initial"}} {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = gitDir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git: %s %v", out, err)
+		}
 	}
 	code, writable, reason := fixable(createRepo(gitDir))
 	if code != http.StatusOK || !writable {

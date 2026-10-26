@@ -1,21 +1,3 @@
-// Sidebar — structural port of astronomer/frontend/src/components/layout/sidebar.tsx,
-// carrying Wolf's navigation instead of Astronomer's cluster tree.
-//
-// What comes from Astronomer: the `bg-sidebar` rail with a hairline right
-// border, the 14-unit logo header with an inline collapse toggle, collapsible
-// `NavGroup`s that auto-expand around the active route, the `.nav-item` class
-// for every row, icon-only rendering at 4rem when collapsed, and the bottom
-// docs/version block.
-//
-// What stays Wolf: the nav items themselves, and the gating rules behind them —
-// Scans/Findings are for every signed-in user, Agents is behind the
-// `autofix_enabled` flag, Audit is admin-only, and Collections is the folder
-// model everyone browses.
-//
-// The mobile drawer (off-canvas below `md`, focus-trapped, Escape to close) is
-// Wolf's own and has no Astronomer counterpart — Astronomer's console assumes a
-// desktop viewport. It is kept because dropping it would regress accessibility
-// on small screens.
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -23,11 +5,10 @@ import {
   Bot,
   Bug,
   Building2,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
-  ChevronUp,
   Gauge,
+  FolderGit2,
   KeyRound,
   Layers,
   LayoutDashboard,
@@ -41,7 +22,7 @@ import {
   X,
 } from "lucide-react";
 import { WolfLogo } from "@/components/wolf-logo";
-import { useEdition, useVersion, shortRev } from "@/lib/edition";
+import { useEdition, useVersion } from "@/lib/edition";
 import { useFlag } from "@/lib/flags";
 import { useIsAdmin } from "@/lib/me";
 import { useUIStore } from "@/lib/store-ui";
@@ -57,13 +38,8 @@ type NavItem = {
 type NavGroup = {
   label: string;
   items: NavItem[];
-  defaultOpen?: boolean;
 };
 
-// Navigation follows the folder model: you browse Collections -> a collection
-// -> a repo -> a scan -> its findings, so there is no top-level Repos item.
-// Scans and Findings are owner-scoped inbox views for every signed-in user.
-// Agents only when autonomous fixing is on.
 const enterpriseIcons: Record<string, typeof Package> = {
   "/enterprise/identity": KeyRound,
   "/enterprise/tenancy": Building2,
@@ -78,20 +54,20 @@ function useNavGroups(): NavGroup[] {
   const editionQ = useEdition();
 
   return useMemo(() => {
-    const platform: NavItem[] = [
+    const primary: NavItem[] = [
       { label: "Home", to: "/", icon: LayoutDashboard, exact: true },
-      { label: "Collections", to: "/collections", icon: Package },
-    ];
-
-    const fleet: NavItem[] = [
-      { label: "Scans", to: "/scans", icon: Gauge },
+      { label: "Repositories", to: "/repos", icon: FolderGit2 },
       { label: "Findings", to: "/findings", icon: Bug },
       { label: "Vulnerabilities", to: "/vulnerabilities", icon: ShieldAlert },
-      { label: "Coverage", to: "/coverage", icon: Layers },
+      { label: "Scans", to: "/scans", icon: Gauge },
     ];
-    if (autofix.enabled) fleet.push({ label: "Agents", to: "/agents", icon: Bot });
+    if (autofix.enabled) primary.push({ label: "Fixes", to: "/fixes", icon: Bot });
+    const secondary: NavItem[] = [
+      { label: "Collections", to: "/collections", icon: Package },
+      { label: "Scanner coverage", to: "/coverage", icon: Layers },
+    ];
 
-    const enterprise: NavItem[] = (editionQ.data?.ui_routes ?? [])
+    const enterprise: NavItem[] = (editionQ.data?.edition === "enterprise" ? editionQ.data.ui_routes ?? [] : [])
       .filter((rt) => rt.path?.startsWith("/enterprise/") && rt.title)
       .map((rt) => ({
         label: rt.title,
@@ -99,17 +75,18 @@ function useNavGroups(): NavGroup[] {
         icon: enterpriseIcons[rt.path] ?? Building2,
       }));
 
-    const admin: NavItem[] = [];
-    if (isAdmin) admin.push({ label: "Audit", to: "/audit", icon: ScrollText });
-    admin.push({ label: "Settings", to: "/settings", icon: Settings });
+    const admin: NavItem[] = isAdmin ? [
+      { label: "Settings", to: "/settings", icon: Settings },
+      { label: "Audit", to: "/audit", icon: ScrollText },
+    ] : [];
 
     return [
-      { label: "Platform", items: platform, defaultOpen: true },
-      { label: "Fleet", items: fleet, defaultOpen: true },
-      { label: "Enterprise", items: enterprise, defaultOpen: true },
-      { label: "Administration", items: admin, defaultOpen: true },
+      { label: "Daily work", items: primary },
+      { label: "Explore", items: secondary },
+      { label: "Enterprise", items: enterprise },
+      { label: "Administration", items: admin },
     ].filter((g) => g.items.length > 0);
-  }, [autofix.enabled, isAdmin, editionQ.data?.ui_routes]);
+  }, [autofix.enabled, isAdmin, editionQ.data]);
 }
 
 function isActive(pathname: string, item: NavItem) {
@@ -117,42 +94,17 @@ function isActive(pathname: string, item: NavItem) {
   return pathname === item.to || pathname.startsWith(`${item.to}/`);
 }
 
-export function Sidebar() {
+export function Sidebar({ onMobileOpenChange }: { onMobileOpenChange: (open: boolean) => void }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const navGroups = useNavGroups();
   const collapsed = useUIStore((s) => s.sidebarCollapsed);
   const setCollapsed = useUIStore((s) => s.setSidebarCollapsed);
 
   const versionQ = useVersion();
+  const version = versionQ.data?.community?.version || versionQ.data?.version;
+  const displayVersion = version && version !== "unknown" ? version.replace(/^v/, "") : null;
 
-  // Multiple groups stay open at once — a single-open accordion would collapse
-  // your context every time you expanded another. Seeded from `defaultOpen`.
-  const [openGroups, setOpenGroups] = useState<Set<string>>(
-    () => new Set(navGroups.filter((g) => g.defaultOpen).map((g) => g.label)),
-  );
-
-  // Keep `defaultOpen` groups open and auto-expand the group holding the active
-  // route, without collapsing the rest.
-  useEffect(() => {
-    setOpenGroups((prev) => {
-      const next = new Set(prev);
-      let changed = false;
-      for (const g of navGroups) {
-        if (g.defaultOpen && !next.has(g.label)) {
-          next.add(g.label);
-          changed = true;
-        }
-      }
-      const activeGroup = navGroups.find((g) => g.items.some((i) => isActive(pathname, i)));
-      if (activeGroup && !next.has(activeGroup.label)) {
-        next.add(activeGroup.label);
-        changed = true;
-      }
-      return changed ? next : prev;
-    });
-  }, [navGroups, pathname]);
-
-  // ---- Mobile drawer (Wolf-specific; see file header) ----
+  // Mobile drawer: hide the background, trap focus, and return it on close.
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isDesktop, setIsDesktop] = useState(() =>
     typeof window === "undefined" ? false : window.matchMedia("(min-width: 768px)").matches,
@@ -160,6 +112,8 @@ export function Sidebar() {
   const openButtonRef = useRef<HTMLButtonElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const drawerRef = useRef<HTMLElement>(null);
+
+  useEffect(() => { onMobileOpenChange(mobileOpen && !isDesktop); }, [mobileOpen, isDesktop, onMobileOpenChange]);
 
   useEffect(() => {
     setMobileOpen(false);
@@ -296,15 +250,10 @@ export function Sidebar() {
               <div className="flex-shrink-0 w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center">
                 <WolfLogo bare className="h-4 w-4 text-white" />
               </div>
-              <div className="flex flex-col min-w-0">
-                <span className="text-sm font-semibold text-foreground tracking-tight truncate leading-tight">
-                  {versionQ.data?.product ?? "The Wolf"}
-                </span>
-                <span className="text-[10px] text-muted-foreground leading-tight">
-                  {versionQ.data?.edition === "enterprise" ? "Enterprise · " : "Community · "}
-                  by AlphaBravo
-                </span>
-              </div>
+              <span className="text-sm font-semibold tracking-tight">Wolf</span>
+              <span className="rounded border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                {versionQ.data?.edition === "enterprise" ? "Enterprise" : "Community"}
+              </span>
             </Link>
           )}
           <button
@@ -328,22 +277,14 @@ export function Sidebar() {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 overflow-y-auto py-2 px-1 no-scrollbar">
+        <nav aria-label="Primary" className="flex-1 overflow-y-auto py-3 px-2 no-scrollbar">
           {navGroups.map((group) => (
             <SidebarGroup
               key={group.label}
               group={group}
               pathname={pathname}
               collapsed={railCollapsed}
-              isOpen={openGroups.has(group.label)}
-              onToggle={() =>
-                setOpenGroups((prev) => {
-                  const next = new Set(prev);
-                  if (next.has(group.label)) next.delete(group.label);
-                  else next.add(group.label);
-                  return next;
-                })
-              }
+
             />
           ))}
         </nav>
@@ -360,38 +301,8 @@ export function Sidebar() {
             <BookOpen className="h-4 w-4" />
             {!railCollapsed && <span className="text-xs">Documentation</span>}
           </a>
-          {!railCollapsed && (
-            <div className="px-3 py-1 space-y-0.5">
-              <p className="text-[10px] text-muted-foreground tabular-nums">
-                Community v{versionQ.data?.community?.version ?? versionQ.data?.version ?? ""}
-                {versionQ.data?.community?.commit
-                  ? ` · ${shortRev(versionQ.data.community.commit)}`
-                  : versionQ.data?.commit
-                    ? ` · ${shortRev(versionQ.data.commit)}`
-                    : ""}
-              </p>
-              {versionQ.data?.overlay ? (
-                <p className="text-[10px] text-muted-foreground tabular-nums">
-                  Enterprise overlay {shortRev(versionQ.data.overlay.version || versionQ.data.overlay.commit)}
-                </p>
-              ) : (
-                <p className="text-[10px] text-muted-foreground">
-                  {versionQ.data?.product ?? "Wolf Community"} ·{" "}
-                  {versionQ.data?.license ?? "source-available"}
-                </p>
-              )}
-              <p className="text-[10px] text-muted-foreground">
-                Built by{" "}
-                <a
-                  href="https://alphabravo.io"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hover:text-foreground underline-offset-2 hover:underline"
-                >
-                  AlphaBravo
-                </a>
-              </p>
-            </div>
+          {!railCollapsed && displayVersion && (
+            <p className="px-3 py-1 text-xs text-muted-foreground tabular-nums">v{displayVersion}</p>
           )}
         </div>
       </aside>
@@ -399,91 +310,28 @@ export function Sidebar() {
   );
 }
 
-// Collapsible nav group — Astronomer's Rancher-style accordion.
-function SidebarGroup({
-  group,
-  pathname,
-  collapsed,
-  isOpen,
-  onToggle,
-}: {
+function SidebarGroup({ group, pathname, collapsed }: {
   group: NavGroup;
   pathname: string;
   collapsed: boolean;
-  isOpen: boolean;
-  onToggle: () => void;
 }) {
-  if (collapsed) {
-    return (
-      <div className="space-y-0.5">
-        {group.items.map((item) => {
-          const Icon = item.icon;
-          const active = isActive(pathname, item);
-          return (
-            <Link
-              key={item.to}
-              to={item.to}
-              className={cn("nav-item group justify-center px-0", active && "active")}
-              title={item.label}
-            >
-              <Icon
-                className={cn(
-                  "h-4 w-4 flex-shrink-0",
-                  active ? "text-foreground" : "text-muted-foreground group-hover:text-foreground",
-                )}
-              />
-            </Link>
-          );
-        })}
-      </div>
-    );
-  }
-
   return (
-    <div className="mb-1">
-      {/* Group header with the chevron on the right (Rancher style). Sentence
-          case at text-sm — NOT the small-caps treatment Wolf used to have;
-          Astronomer's group labels read as headings, not as eyebrows. */}
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={isOpen}
-        className="w-full flex items-center justify-between px-3 py-2 text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors"
-      >
-        <span>{group.label}</span>
-        {isOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-      </button>
-      {isOpen && (
-        <div className="space-y-px">
-          {group.items.map((item) => {
-            const Icon = item.icon;
-            const active = isActive(pathname, item);
-            // Expanded rows are deliberately NOT `.nav-item`: Astronomer uses a
-            // tighter row here (gap-2, py-1.5, inset by mx-1) and reserves the
-            // roomier `.nav-item` for the collapsed rail and the footer links.
-            return (
-              <Link
-                key={item.to}
-                to={item.to}
-                className={cn(
-                  "flex items-center gap-2 px-3 py-1.5 mx-1 rounded-md text-sm transition-colors",
-                  active
-                    ? "bg-accent text-foreground font-medium"
-                    : "text-muted-foreground hover:text-foreground hover:bg-accent/50",
-                )}
-              >
-                <Icon
-                  className={cn(
-                    "h-4 w-4 flex-shrink-0",
-                    active ? "text-foreground" : "text-muted-foreground",
-                  )}
-                />
-                <span className="truncate flex-1">{item.label}</span>
-              </Link>
-            );
-          })}
-        </div>
+    <div className={cn("space-y-1", group.label !== "Daily work" && "mt-4 border-t border-sidebar-border pt-3")}>
+      {!collapsed && ["Administration", "Enterprise"].includes(group.label) && (
+        <p className="px-3 pb-1 text-xs font-medium text-muted-foreground">{group.label}</p>
       )}
+      {group.items.map((item) => {
+        const Icon = item.icon;
+        const active = isActive(pathname, item) || (item.to === "/fixes" && pathname.startsWith("/agents"));
+        return (
+          <Link key={item.to} to={item.to} title={collapsed ? item.label : undefined}
+            aria-label={collapsed ? item.label : undefined} aria-current={active ? "page" : undefined}
+            className={cn("nav-item min-h-10", collapsed && "justify-center px-0", active && "active")}>
+            <Icon aria-hidden="true" />
+            {!collapsed && <span className="truncate">{item.label}</span>}
+          </Link>
+        );
+      })}
     </div>
   );
 }

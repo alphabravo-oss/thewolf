@@ -1,0 +1,10 @@
+--- FAIL: TestWorkspaceDigestDistinguishesEntryBoundariesTypesAndModes (0.00s)
+    --- FAIL: TestWorkspaceDigestDistinguishesEntryBoundariesTypesAndModes/entry-boundaries (0.00s)
+        digest_framing_test.go:35: different source trees have the same digest
+    --- FAIL: TestWorkspaceDigestDistinguishesEntryBoundariesTypesAndModes/file-types (0.00s)
+        digest_framing_test.go:43: different source trees have the same digest
+    --- FAIL: TestWorkspaceDigestDistinguishesEntryBoundariesTypesAndModes/executable-mode (0.00s)
+        digest_framing_test.go:52: different source trees have the same digest
+FAIL
+FAIL	github.com/alphabravocompany/thewolf/internal/scantarget	0.014s
+FAIL

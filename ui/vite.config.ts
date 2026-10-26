@@ -16,6 +16,7 @@ export default defineConfig({
   plugins: [
     TanStackRouterVite({
       routesDirectory: "./src/routes",
+      routeFileIgnorePattern: "\\.test\\.[tj]sx?$",
       generatedRouteTree: "./src/routeTree.gen.ts",
       autoCodeSplitting: true,
     }),

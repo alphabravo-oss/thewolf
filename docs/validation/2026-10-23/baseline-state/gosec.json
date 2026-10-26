@@ -1,0 +1,476 @@
+{
+	"Golang errors": {},
+	"Issues": [
+		{
+			"severity": "HIGH",
+			"confidence": "HIGH",
+			"cwe": {
+				"id": "918",
+				"url": "https://cwe.mitre.org/data/definitions/918.html"
+			},
+			"rule_id": "G704",
+			"details": "SSRF via taint analysis",
+			"file": "/root/wolf-all/thewolf/internal/scannertools/httpcache/cache.go",
+			"code": "144: \n145: \tresponse, err := client.Do(req)\n146: \tif err != nil {\n",
+			"line": "145",
+			"column": "28",
+			"nosec": false,
+			"suppressions": null
+		},
+		{
+			"severity": "HIGH",
+			"confidence": "HIGH",
+			"cwe": {
+				"id": "918",
+				"url": "https://cwe.mitre.org/data/definitions/918.html"
+			},
+			"rule_id": "G704",
+			"details": "SSRF via taint analysis",
+			"file": "/root/wolf-all/thewolf/internal/scannerregistry/client.go",
+			"code": "1042: \tretry.Header.Set(\"Authorization\", \"Bearer \"+token)\n1043: \treturn client.Do(retry)\n1044: }\n",
+			"line": "1043",
+			"column": "18",
+			"nosec": false,
+			"suppressions": null
+		},
+		{
+			"severity": "HIGH",
+			"confidence": "HIGH",
+			"cwe": {
+				"id": "918",
+				"url": "https://cwe.mitre.org/data/definitions/918.html"
+			},
+			"rule_id": "G704",
+			"details": "SSRF via taint analysis",
+			"file": "/root/wolf-all/thewolf/internal/scannerregistry/client.go",
+			"code": "1018: \t}\n1019: \tresponse, err := client.Do(request)\n1020: \tif err != nil || response.StatusCode != http.StatusUnauthorized {\n",
+			"line": "1019",
+			"column": "28",
+			"nosec": false,
+			"suppressions": null
+		},
+		{
+			"severity": "HIGH",
+			"confidence": "HIGH",
+			"cwe": {
+				"id": "22",
+				"url": "https://cwe.mitre.org/data/definitions/22.html"
+			},
+			"rule_id": "G703",
+			"details": "Path traversal via taint analysis",
+			"file": "/root/wolf-all/thewolf/internal/scannertools/manifest/manifest.go",
+			"code": "167: func LoadFile(path string) (*Manifest, error) {\n168: \tdata, err := os.ReadFile(path)\n169: \tif err != nil {\n",
+			"line": "168",
+			"column": "26",
+			"nosec": false,
+			"suppressions": null
+		},
+		{
+			"severity": "HIGH",
+			"confidence": "HIGH",
+			"cwe": {
+				"id": "22",
+				"url": "https://cwe.mitre.org/data/definitions/22.html"
+			},
+			"rule_id": "G703",
+			"details": "Path traversal via taint analysis",
+			"file": "/root/wolf-all/thewolf/internal/scannerreleasebackend/source.go",
+			"code": "272: \t\t}\n273: \t\tif err := os.RemoveAll(filepath.Join(workspace, name)); err != nil {\n274: \t\t\treturn err\n",
+			"line": "273",
+			"column": "25",
+			"nosec": false,
+			"suppressions": null
+		},
+		{
+			"severity": "HIGH",
+			"confidence": "HIGH",
+			"cwe": {
+				"id": "22",
+				"url": "https://cwe.mitre.org/data/definitions/22.html"
+			},
+			"rule_id": "G703",
+			"details": "Path traversal via taint analysis",
+			"file": "/root/wolf-all/thewolf/internal/scannerreleaseadapter/quality_execution.go",
+			"code": "800: \tvar paths []string\n801: \terr := filepath.WalkDir(source, func(path string, entry os.DirEntry, walkErr error) error {\n802: \t\tif walkErr != nil {\n",
+			"line": "801",
+			"column": "25",
+			"nosec": false,
+			"suppressions": null
+		},
+		{
+			"severity": "HIGH",
+			"confidence": "HIGH",
+			"cwe": {
+				"id": "22",
+				"url": "https://cwe.mitre.org/data/definitions/22.html"
+			},
+			"rule_id": "G703",
+			"details": "Path traversal via taint analysis",
+			"file": "/root/wolf-all/thewolf/internal/scannerreleaseadapter/actions.go",
+			"code": "1141: \t\t}\n1142: \t\tdestination, err := os.OpenFile(\n1143: \t\t\tfilepath.Join(target, destinationName), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600,\n",
+			"line": "1142",
+			"column": "34",
+			"nosec": false,
+			"suppressions": null
+		},
+		{
+			"severity": "HIGH",
+			"confidence": "HIGH",
+			"cwe": {
+				"id": "22",
+				"url": "https://cwe.mitre.org/data/definitions/22.html"
+			},
+			"rule_id": "G703",
+			"details": "Path traversal via taint analysis",
+			"file": "/root/wolf-all/thewolf/internal/scannerreleaseadapter/actions.go",
+			"code": "1113: \tdefer func() { _ = compressed.Close() }()\n1114: \tif err := os.MkdirAll(target, 0o700); err != nil {\n1115: \t\treturn err\n",
+			"line": "1114",
+			"column": "23",
+			"nosec": false,
+			"suppressions": null
+		},
+		{
+			"severity": "HIGH",
+			"confidence": "HIGH",
+			"cwe": {
+				"id": "22",
+				"url": "https://cwe.mitre.org/data/definitions/22.html"
+			},
+			"rule_id": "G703",
+			"details": "Path traversal via taint analysis",
+			"file": "/root/wolf-all/thewolf/internal/scannerreleaseadapter/actions.go",
+			"code": "1103: func extractTrivyDatabaseArchive(archivePath, target, databaseName string) error {\n1104: \tarchive, err := os.Open(archivePath)\n1105: \tif err != nil {\n",
+			"line": "1104",
+			"column": "25",
+			"nosec": false,
+			"suppressions": null
+		},
+		{
+			"severity": "HIGH",
+			"confidence": "HIGH",
+			"cwe": {
+				"id": "22",
+				"url": "https://cwe.mitre.org/data/definitions/22.html"
+			},
+			"rule_id": "G703",
+			"details": "Path traversal via taint analysis",
+			"file": "/root/wolf-all/thewolf/internal/scannerreleaseadapter/actions.go",
+			"code": "1064: \tvar archives []string\n1065: \terr := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {\n1066: \t\tif walkErr != nil {\n",
+			"line": "1065",
+			"column": "25",
+			"nosec": false,
+			"suppressions": null
+		},
+		{
+			"severity": "HIGH",
+			"confidence": "HIGH",
+			"cwe": {
+				"id": "22",
+				"url": "https://cwe.mitre.org/data/definitions/22.html"
+			},
+			"rule_id": "G703",
+			"details": "Path traversal via taint analysis",
+			"file": "/root/wolf-all/thewolf/internal/scannerreleaseadapter/actions.go",
+			"code": "1007: \t\t}\n1008: \t\tif err := os.MkdirAll(stage, 0o700); err != nil {\n1009: \t\t\treturn \"\", trivyDatabaseEvidence{}, err\n",
+			"line": "1008",
+			"column": "24",
+			"nosec": false,
+			"suppressions": null
+		},
+		{
+			"severity": "HIGH",
+			"confidence": "HIGH",
+			"cwe": {
+				"id": "22",
+				"url": "https://cwe.mitre.org/data/definitions/22.html"
+			},
+			"rule_id": "G703",
+			"details": "Path traversal via taint analysis",
+			"file": "/root/wolf-all/thewolf/internal/scannerreleaseadapter/actions.go",
+			"code": "1004: \t\tstage := filepath.Join(scratch, \"trivy-oci-\"+spec.cacheDirectory)\n1005: \t\tif err := os.RemoveAll(stage); err != nil {\n1006: \t\t\treturn \"\", trivyDatabaseEvidence{}, err\n",
+			"line": "1005",
+			"column": "25",
+			"nosec": false,
+			"suppressions": null
+		},
+		{
+			"severity": "HIGH",
+			"confidence": "HIGH",
+			"cwe": {
+				"id": "22",
+				"url": "https://cwe.mitre.org/data/definitions/22.html"
+			},
+			"rule_id": "G703",
+			"details": "Path traversal via taint analysis",
+			"file": "/root/wolf-all/thewolf/internal/scannerreleaseadapter/actions.go",
+			"code": "976: \t}\n977: \tif err := os.MkdirAll(cache, 0o700); err != nil {\n978: \t\treturn \"\", trivyDatabaseEvidence{}, err\n",
+			"line": "977",
+			"column": "23",
+			"nosec": false,
+			"suppressions": null
+		},
+		{
+			"severity": "HIGH",
+			"confidence": "HIGH",
+			"cwe": {
+				"id": "22",
+				"url": "https://cwe.mitre.org/data/definitions/22.html"
+			},
+			"rule_id": "G703",
+			"details": "Path traversal via taint analysis",
+			"file": "/root/wolf-all/thewolf/internal/scannerreleaseadapter/actions.go",
+			"code": "973: \tcache := filepath.Join(scratch, \"trivy-cache\")\n974: \tif err := os.RemoveAll(cache); err != nil {\n975: \t\treturn \"\", trivyDatabaseEvidence{}, err\n",
+			"line": "974",
+			"column": "24",
+			"nosec": false,
+			"suppressions": null
+		},
+		{
+			"severity": "HIGH",
+			"confidence": "HIGH",
+			"cwe": {
+				"id": "22",
+				"url": "https://cwe.mitre.org/data/definitions/22.html"
+			},
+			"rule_id": "G703",
+			"details": "Path traversal via taint analysis",
+			"file": "/root/wolf-all/thewolf/internal/scannerproposal/editor.go",
+			"code": "354: \t}\n355: \treturn os.WriteFile(script, []byte(updated), 0o755)\n356: }\n",
+			"line": "355",
+			"column": "21",
+			"nosec": false,
+			"suppressions": null
+		},
+		{
+			"severity": "HIGH",
+			"confidence": "HIGH",
+			"cwe": {
+				"id": "22",
+				"url": "https://cwe.mitre.org/data/definitions/22.html"
+			},
+			"rule_id": "G703",
+			"details": "Path traversal via taint analysis",
+			"file": "/root/wolf-all/thewolf/internal/scannerproposal/editor.go",
+			"code": "282: \t\tif updated != string(value) {\n283: \t\t\tif err := os.WriteFile(dockerfile, []byte(updated), 0o644); err != nil {\n284: \t\t\t\treturn err\n",
+			"line": "283",
+			"column": "26",
+			"nosec": false,
+			"suppressions": null
+		},
+		{
+			"severity": "HIGH",
+			"confidence": "HIGH",
+			"cwe": {
+				"id": "22",
+				"url": "https://cwe.mitre.org/data/definitions/22.html"
+			},
+			"rule_id": "G703",
+			"details": "Path traversal via taint analysis",
+			"file": "/root/wolf-all/thewolf/internal/scannerproposal/checkout.go",
+			"code": "668: \t}\n669: \treturn os.WriteFile(destination, value, info.Mode().Perm())\n670: }\n",
+			"line": "669",
+			"column": "21",
+			"nosec": false,
+			"suppressions": null
+		},
+		{
+			"severity": "HIGH",
+			"confidence": "HIGH",
+			"cwe": {
+				"id": "22",
+				"url": "https://cwe.mitre.org/data/definitions/22.html"
+			},
+			"rule_id": "G703",
+			"details": "Path traversal via taint analysis",
+			"file": "/root/wolf-all/thewolf/internal/api/static.go",
+			"code": "110: \t\t}\n111: \t\thttp.ServeFileFS(w, r, root.FS(), urlPath)\n112: \t\treturn\n",
+			"line": "111",
+			"column": "19",
+			"nosec": false,
+			"suppressions": null
+		},
+		{
+			"severity": "HIGH",
+			"confidence": "HIGH",
+			"cwe": {
+				"id": "22",
+				"url": "https://cwe.mitre.org/data/definitions/22.html"
+			},
+			"rule_id": "G703",
+			"details": "Path traversal via taint analysis",
+			"file": "/root/wolf-all/thewolf/internal/api/static.go",
+			"code": "56: \tindexPath := filepath.Join(dir, \"index.html\")\n57: \tif _, err := os.Stat(indexPath); err != nil {\n58: \t\twolflog.Warn().Str(\"dir\", dir).Err(err).Msg(\"static-ui: index.html missing; SPA fallback disabled\")\n",
+			"line": "57",
+			"column": "22",
+			"nosec": false,
+			"suppressions": null
+		},
+		{
+			"severity": "HIGH",
+			"confidence": "HIGH",
+			"cwe": {
+				"id": "22",
+				"url": "https://cwe.mitre.org/data/definitions/22.html"
+			},
+			"rule_id": "G703",
+			"details": "Path traversal via taint analysis",
+			"file": "/root/wolf-all/thewolf/internal/api/routes/scanner_release_bundles.go",
+			"code": "2224: func readStrictJSONFile(path string, target any) error {\n2225: \tfile, err := os.Open(path)\n2226: \tif err != nil {\n",
+			"line": "2225",
+			"column": "22",
+			"nosec": false,
+			"suppressions": null
+		},
+		{
+			"severity": "HIGH",
+			"confidence": "HIGH",
+			"cwe": {
+				"id": "22",
+				"url": "https://cwe.mitre.org/data/definitions/22.html"
+			},
+			"rule_id": "G703",
+			"details": "Path traversal via taint analysis",
+			"file": "/root/wolf-all/thewolf/internal/api/routes/scanner_bundle_image_verifier.go",
+			"code": "114: \t}\n115: \tvalue, err := os.ReadFile(trustPath)\n116: \tif err != nil {\n",
+			"line": "115",
+			"column": "27",
+			"nosec": false,
+			"suppressions": null
+		},
+		{
+			"severity": "HIGH",
+			"confidence": "HIGH",
+			"cwe": {
+				"id": "22",
+				"url": "https://cwe.mitre.org/data/definitions/22.html"
+			},
+			"rule_id": "G703",
+			"details": "Path traversal via taint analysis",
+			"file": "/root/wolf-all/thewolf/internal/api/routes/fixes.go",
+			"code": "442: \t}\n443: \tf, err := os.Open(logPath) // #nosec G304 -- logPath is derived from a server-issued job UUID under the artifacts root\n444: \tif err != nil {\n",
+			"line": "443",
+			"column": "19",
+			"nosec": false,
+			"suppressions": null
+		},
+		{
+			"severity": "HIGH",
+			"confidence": "HIGH",
+			"cwe": {
+				"id": "22",
+				"url": "https://cwe.mitre.org/data/definitions/22.html"
+			},
+			"rule_id": "G703",
+			"details": "Path traversal via taint analysis",
+			"file": "/root/wolf-all/thewolf/internal/api/routes/admin.go",
+			"code": "171: \t}\n172: \tinfo, err := os.Stat(path)\n173: \tif err != nil || info.IsDir() {\n",
+			"line": "172",
+			"column": "22",
+			"nosec": false,
+			"suppressions": null
+		},
+		{
+			"severity": "HIGH",
+			"confidence": "HIGH",
+			"cwe": {
+				"id": "22",
+				"url": "https://cwe.mitre.org/data/definitions/22.html"
+			},
+			"rule_id": "G703",
+			"details": "Path traversal via taint analysis",
+			"file": "/root/wolf-all/thewolf/internal/api/routes/admin.go",
+			"code": "154: \tvar n int64\n155: \t_ = filepath.WalkDir(root, func(_ string, d fs.DirEntry, err error) error {\n156: \t\tif err != nil || d.IsDir() {\n",
+			"line": "155",
+			"column": "22",
+			"nosec": false,
+			"suppressions": null
+		},
+		{
+			"severity": "HIGH",
+			"confidence": "HIGH",
+			"cwe": {
+				"id": "22",
+				"url": "https://cwe.mitre.org/data/definitions/22.html"
+			},
+			"rule_id": "G703",
+			"details": "Path traversal via taint analysis",
+			"file": "/root/wolf-all/thewolf/cmd/wolf/backup.go",
+			"code": "142: \t}\n143: \treturn os.WriteFile(dest, payload, 0o600)\n144: }\n",
+			"line": "143",
+			"column": "21",
+			"nosec": false,
+			"suppressions": null
+		},
+		{
+			"severity": "HIGH",
+			"confidence": "HIGH",
+			"cwe": {
+				"id": "22",
+				"url": "https://cwe.mitre.org/data/definitions/22.html"
+			},
+			"rule_id": "G703",
+			"details": "Path traversal via taint analysis",
+			"file": "/root/wolf-all/thewolf/cmd/scannertools/propose.go",
+			"code": "280: \t\t}\n281: \t\treturn os.WriteFile(destination, data, info.Mode().Perm())\n282: \t})\n",
+			"line": "281",
+			"column": "22",
+			"nosec": false,
+			"suppressions": null
+		},
+		{
+			"severity": "HIGH",
+			"confidence": "HIGH",
+			"cwe": {
+				"id": "22",
+				"url": "https://cwe.mitre.org/data/definitions/22.html"
+			},
+			"rule_id": "G703",
+			"details": "Path traversal via taint analysis",
+			"file": "/root/wolf-all/thewolf/cmd/scannertools/propose.go",
+			"code": "255: \t\t}\n256: \t\treturn os.WriteFile(target, data, info.Mode().Perm())\n257: \t}\n",
+			"line": "256",
+			"column": "22",
+			"nosec": false,
+			"suppressions": null
+		},
+		{
+			"severity": "HIGH",
+			"confidence": "HIGH",
+			"cwe": {
+				"id": "22",
+				"url": "https://cwe.mitre.org/data/definitions/22.html"
+			},
+			"rule_id": "G703",
+			"details": "Path traversal via taint analysis",
+			"file": "/root/wolf-all/thewolf/cmd/scannertools/bump.go",
+			"code": "275: \t}\n276: \treturn os.WriteFile(path, []byte(strings.Join(lines, \"\\n\")), 0o644)\n277: }\n",
+			"line": "276",
+			"column": "21",
+			"nosec": false,
+			"suppressions": null
+		},
+		{
+			"severity": "HIGH",
+			"confidence": "HIGH",
+			"cwe": {
+				"id": "78",
+				"url": "https://cwe.mitre.org/data/definitions/78.html"
+			},
+			"rule_id": "G702",
+			"details": "Command injection via taint analysis",
+			"file": "/root/wolf-all/thewolf/internal/scannerreleaseadapter/actions.go",
+			"code": "750: \t}\n751: \tcommand := exec.CommandContext(ctx, path, args...) // #nosec G204 -- path and argv come only from the compiled catalog above.\n752: \tcommand.Dir = directory\n",
+			"line": "751",
+			"column": "32",
+			"nosec": false,
+			"suppressions": null
+		}
+	],
+	"Stats": {
+		"files": 540,
+		"lines": 146467,
+		"nosec": 123,
+		"found": 29
+	},
+	"GosecVersion": "dev"
+}

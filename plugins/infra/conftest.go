@@ -33,14 +33,19 @@ func (p *ConftestPlugin) Languages() []models.Language { return nil }
 
 func (p *ConftestPlugin) CheckAvailable() bool { return container.IsScannersReady() }
 
-func (p *ConftestPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
-	policyDir := findConftestPolicyDir(opts.RepoPath)
-	if policyDir == "" {
-		plugin.Skipf(opts.OnOutput, "conftest",
-			"no Rego policy directory found (looked for policy/, tests/policy/, .conftest/). "+
-				"Add Rego policies to enable policy-as-code testing.")
-		return nil, nil
+func (p *ConftestPlugin) Applicability(repoPath, target string) error {
+	if findConftestPolicyDir(repoPath) == "" {
+		return &plugin.NotApplicableError{Reason: "no Rego policy directory found (policy/, tests/policy/, .conftest/)"}
 	}
+	return nil
+}
+
+func (p *ConftestPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
+	if err := p.Applicability(opts.RepoPath, opts.Target); err != nil {
+		return nil, err
+	}
+	policyDir := findConftestPolicyDir(opts.RepoPath)
+
 	if opts.Timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, opts.Timeout)

@@ -1,0 +1,6 @@
+ok  	github.com/alphabravocompany/thewolf/internal/scan/suppress	1.042s
+--- FAIL: TestLockfileSuppressionViewsAndArtifacts (0.62s)
+    lockfile_suppression_test.go:183: FIX-HIGH.md visibility disagrees for sca-Cargo.lock
+FAIL
+FAIL	github.com/alphabravocompany/thewolf/internal/api/routes	0.726s
+FAIL

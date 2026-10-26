@@ -1,6 +1,6 @@
 // Package scanners wires up the container scanner backend at wolf-slim
-// startup. It is intentionally small: load config (yaml + env), populate the
-// process-wide *container.Config, and EnsureImage for the default image.
+// startup. It loads configuration, populates the process-wide
+// *container.Config, and probes images only for the Docker runtime.
 //
 // The actual cmd/wolf main package is responsible for calling LoadAndInstall
 // once at startup. Subcommands `wolf doctor` and `wolf pull scanners` are
@@ -99,10 +99,12 @@ func EnvDefaults() Config {
 }
 
 // DefaultScannersTag is the runtime default tag for the wolf-built scanner
-// images. The scanner release factory updates this channel independently from
-// Wolf app releases. Operators can pin an immutable scanner release with
-// WOLF_SCANNERS_TAG or the per-image WOLF_SCANNERS_IMAGE* overrides.
-const DefaultScannersTag = "stable"
+// images: the newest published, signed scanner release on GHCR. Defaulting to
+// the `stable` channel left fresh installs unable to pull, because nothing has
+// been promoted to it yet. Set WOLF_SCANNERS_TAG=stable to follow the channel
+// once the release factory promotes it, or override per image with
+// WOLF_SCANNERS_IMAGE*. Bump this with each published scanner release.
+const DefaultScannersTag = "scanner-set-2026.36.1"
 
 // ResolvedTag returns the scanner image tag the runtime resolves: the
 // WOLF_SCANNERS_TAG override if set, else DefaultScannersTag.
@@ -282,13 +284,23 @@ func isDockerHubRegistry(component string) bool {
 	}
 }
 
+// RuntimeFromEnv returns the configured scan runtime, defaulting to Docker.
+// Unknown values are preserved so initialization can reject them.
+func RuntimeFromEnv() string {
+	return strings.ToLower(envOr("WOLF_SCAN_RUNTIME", "docker"))
+}
+
 // LoadAndInstall builds a *container.Config from envs (caller may overlay
 // yaml values onto the returned Config before calling SetDefault by hand),
-// installs it as the process-wide default, and ensures the default image is
-// locally available per the pull policy.
+// installs it as the process-wide default, and, for Docker, ensures the default
+// image is locally available per the pull policy. Kubernetes image availability
+// belongs to the worker/node runtime; loading configuration does not prove readiness.
 //
 // This is the single entry point cmd/wolf/main.go should call at startup.
-func LoadAndInstall(ctx context.Context) (*container.Config, error) {
+func LoadAndInstall(ctx context.Context, runtime string) (*container.Config, error) {
+	if runtime != "docker" && runtime != "kubernetes" {
+		return nil, fmt.Errorf("unsupported scanner runtime %q (supported: docker, kubernetes)", runtime)
+	}
 	cfg, err := EnvDefaults().ToContainerConfig()
 	if err != nil {
 		return nil, fmt.Errorf("scanners: invalid container config: %w", err)
@@ -302,9 +314,14 @@ func LoadAndInstall(ctx context.Context) (*container.Config, error) {
 	// ImageOverrides if the corresponding image exists. Explicit env
 	// vars still take precedence (handled by ToContainerConfig before
 	// this point).
-	autoDiscoverBucketImages(cfg)
+	if runtime == "docker" {
+		autoDiscoverBucketImages(cfg)
+	}
 
 	container.SetDefault(cfg)
+	if runtime == "kubernetes" {
+		return cfg, nil
+	}
 	if err := container.EnsureImage(ctx, cfg); err != nil {
 		return cfg, err
 	}

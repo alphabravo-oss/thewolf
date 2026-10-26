@@ -1,0 +1,221 @@
+7:11PM INF static-ui: no dist dir found; UI routes disabled (run `npm run dev` separately)
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000001] "POST http://example.com/api/v1/auth/register HTTP/1.1" from 192.0.2.1:1234 - 201 961B in 50.065233ms
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000002] "POST http://example.com/api/v1/auth/tokens HTTP/1.1" from 192.0.2.1:1234 - 201 354B in 590.522µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000003] "POST http://example.com/api/v1/auth/tokens HTTP/1.1" from 192.0.2.1:1234 - 201 329B in 678.919µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000004] "POST http://example.com/api/v1/auth/tokens HTTP/1.1" from 192.0.2.1:1234 - 201 353B in 356.291µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000005] "GET http://example.com/api/v1/repos HTTP/1.1" from 192.0.2.1:1234 - 200 916B in 465.045µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000006] "GET http://example.com/api/v1/collections HTTP/1.1" from 192.0.2.1:1234 - 200 616B in 302.239µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000007] "GET http://example.com/api/v1/scans HTTP/1.1" from 192.0.2.1:1234 - 200 2103B in 633.954µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000008] "GET http://example.com/api/v1/findings HTTP/1.1" from 192.0.2.1:1234 - 200 2355B in 1.108738ms
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000009] "GET http://example.com/api/v1/findings/export?format=json HTTP/1.1" from 192.0.2.1:1234 - 200 2724B in 885.358µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000010] "GET http://example.com/api/v1/findings/aggregate HTTP/1.1" from 192.0.2.1:1234 - 200 521B in 633.954µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000011] "GET http://example.com/api/v1/findings/by-repo HTTP/1.1" from 192.0.2.1:1234 - 200 325B in 583.158µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000012] "GET http://example.com/api/v1/vulnerabilities HTTP/1.1" from 192.0.2.1:1234 - 200 1099B in 335.993µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000013] "GET http://example.com/api/v1/fleet/inventory HTTP/1.1" from 192.0.2.1:1234 - 200 157B in 280.018µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000014] "GET http://example.com/api/v1/fleet/needs-attention HTTP/1.1" from 192.0.2.1:1234 - 200 383B in 499.552µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000015] "GET http://example.com/api/v1/findings/c59646a0-859a-409b-b576-e7602993a1bb HTTP/1.1" from 192.0.2.1:1234 - 200 1160B in 528.586µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000016] "GET http://example.com/api/v1/vulnerabilities/386af23e-e55a-4745-b684-2c65deb89a01 HTTP/1.1" from 192.0.2.1:1234 - 200 966B in 298.232µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000017] "GET http://example.com/api/v1/vulnerabilities/386af23e-e55a-4745-b684-2c65deb89a01/evidence HTTP/1.1" from 192.0.2.1:1234 - 200 389B in 261.191µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000018] "GET http://example.com/api/v1/evidence?vulnerability_id=386af23e-e55a-4745-b684-2c65deb89a01 HTTP/1.1" from 192.0.2.1:1234 - 200 389B in 237.136µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000019] "GET http://example.com/api/v1/findings/c7cefa29-3acd-45c9-8c76-edb82af4d6a4 HTTP/1.1" from 192.0.2.1:1234 - 200 1160B in 332.898µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000020] "GET http://example.com/api/v1/vulnerabilities/d0825071-ff78-461e-8954-02333bb6347c HTTP/1.1" from 192.0.2.1:1234 - 200 965B in 260.39µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000021] "GET http://example.com/api/v1/vulnerabilities/d0825071-ff78-461e-8954-02333bb6347c/evidence HTTP/1.1" from 192.0.2.1:1234 - 200 388B in 209.394µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000022] "GET http://example.com/api/v1/evidence?vulnerability_id=d0825071-ff78-461e-8954-02333bb6347c HTTP/1.1" from 192.0.2.1:1234 - 200 388B in 205.618µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000023] "GET http://example.com/api/v1/fleet/posture HTTP/1.1" from 192.0.2.1:1234 - 200 2075B in 712.432µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000024] "GET http://example.com/api/v1/findings/trends HTTP/1.1" from 192.0.2.1:1234 - 200 135B in 596.873µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000025] "GET http://example.com/api/v1/findings/trends/export?format=json HTTP/1.1" from 192.0.2.1:1234 - 200 209B in 424.208µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000026] "GET http://example.com/api/v1/repos HTTP/1.1" from 192.0.2.1:1234 - 200 916B in 306.467µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000027] "GET http://example.com/api/v1/collections HTTP/1.1" from 192.0.2.1:1234 - 200 616B in 334.95µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000028] "GET http://example.com/api/v1/scans HTTP/1.1" from 192.0.2.1:1234 - 200 2103B in 1.334023ms
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000029] "GET http://example.com/api/v1/findings HTTP/1.1" from 192.0.2.1:1234 - 200 2355B in 2.971366ms
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000030] "GET http://example.com/api/v1/findings/export?format=json HTTP/1.1" from 192.0.2.1:1234 - 200 2724B in 2.345448ms
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000031] "GET http://example.com/api/v1/findings/aggregate HTTP/1.1" from 192.0.2.1:1234 - 200 521B in 1.685264ms
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000032] "GET http://example.com/api/v1/findings/by-repo HTTP/1.1" from 192.0.2.1:1234 - 200 325B in 1.855696ms
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000033] "GET http://example.com/api/v1/vulnerabilities HTTP/1.1" from 192.0.2.1:1234 - 200 1099B in 815.046µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000034] "GET http://example.com/api/v1/fleet/inventory HTTP/1.1" from 192.0.2.1:1234 - 200 157B in 714.916µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000035] "GET http://example.com/api/v1/fleet/needs-attention HTTP/1.1" from 192.0.2.1:1234 - 200 383B in 1.348379ms
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000036] "GET http://example.com/api/v1/findings/c59646a0-859a-409b-b576-e7602993a1bb HTTP/1.1" from 192.0.2.1:1234 - 200 1160B in 1.38069ms
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000037] "GET http://example.com/api/v1/vulnerabilities/386af23e-e55a-4745-b684-2c65deb89a01 HTTP/1.1" from 192.0.2.1:1234 - 200 966B in 1.197035ms
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000038] "GET http://example.com/api/v1/vulnerabilities/386af23e-e55a-4745-b684-2c65deb89a01/evidence HTTP/1.1" from 192.0.2.1:1234 - 200 389B in 846.484µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000039] "GET http://example.com/api/v1/evidence?vulnerability_id=386af23e-e55a-4745-b684-2c65deb89a01 HTTP/1.1" from 192.0.2.1:1234 - 200 389B in 719.965µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000040] "GET http://example.com/api/v1/findings/c7cefa29-3acd-45c9-8c76-edb82af4d6a4 HTTP/1.1" from 192.0.2.1:1234 - 200 1160B in 1.073621ms
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000041] "GET http://example.com/api/v1/vulnerabilities/d0825071-ff78-461e-8954-02333bb6347c HTTP/1.1" from 192.0.2.1:1234 - 200 965B in 1.084443ms
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000042] "GET http://example.com/api/v1/vulnerabilities/d0825071-ff78-461e-8954-02333bb6347c/evidence HTTP/1.1" from 192.0.2.1:1234 - 200 388B in 935.072µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000043] "GET http://example.com/api/v1/evidence?vulnerability_id=d0825071-ff78-461e-8954-02333bb6347c HTTP/1.1" from 192.0.2.1:1234 - 200 388B in 823.921µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000044] "GET http://example.com/api/v1/fleet/posture HTTP/1.1" from 192.0.2.1:1234 - 200 2075B in 1.418171ms
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000045] "GET http://example.com/api/v1/findings/trends HTTP/1.1" from 192.0.2.1:1234 - 200 135B in 1.161698ms
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000046] "GET http://example.com/api/v1/findings/trends/export?format=json HTTP/1.1" from 192.0.2.1:1234 - 200 209B in 1.38577ms
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000047] "GET http://example.com/api/v1/repos HTTP/1.1" from 192.0.2.1:1234 - 200 484B in 516.252µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000048] "GET http://example.com/api/v1/collections HTTP/1.1" from 192.0.2.1:1234 - 200 334B in 610.049µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000049] "GET http://example.com/api/v1/scans HTTP/1.1" from 192.0.2.1:1234 - 200 1078B in 1.139006ms
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000050] "GET http://example.com/api/v1/findings HTTP/1.1" from 192.0.2.1:1234 - 200 1204B in 1.974999ms
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000051] "GET http://example.com/api/v1/findings/export?format=json HTTP/1.1" from 192.0.2.1:1234 - 200 1363B in 2.253204ms
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000052] "GET http://example.com/api/v1/findings/aggregate HTTP/1.1" from 192.0.2.1:1234 - 200 266B in 1.415245ms
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000053] "GET http://example.com/api/v1/findings/by-repo HTTP/1.1" from 192.0.2.1:1234 - 200 168B in 1.290891ms
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000054] "GET http://example.com/api/v1/vulnerabilities HTTP/1.1" from 192.0.2.1:1234 - 200 576B in 655.464µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000055] "GET http://example.com/api/v1/fleet/inventory HTTP/1.1" from 192.0.2.1:1234 - 200 116B in 438.006µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000056] "GET http://example.com/api/v1/fleet/needs-attention HTTP/1.1" from 192.0.2.1:1234 - 200 197B in 1.191325ms
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000057] "GET http://example.com/api/v1/findings/c59646a0-859a-409b-b576-e7602993a1bb HTTP/1.1" from 192.0.2.1:1234 - 404 144B in 724.495µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000058] "GET http://example.com/api/v1/vulnerabilities/386af23e-e55a-4745-b684-2c65deb89a01 HTTP/1.1" from 192.0.2.1:1234 - 404 156B in 316.527µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000059] "GET http://example.com/api/v1/vulnerabilities/386af23e-e55a-4745-b684-2c65deb89a01/evidence HTTP/1.1" from 192.0.2.1:1234 - 404 156B in 302.669µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000060] "GET http://example.com/api/v1/evidence?vulnerability_id=386af23e-e55a-4745-b684-2c65deb89a01 HTTP/1.1" from 192.0.2.1:1234 - 404 156B in 349.88µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000061] "GET http://example.com/api/v1/findings/c7cefa29-3acd-45c9-8c76-edb82af4d6a4 HTTP/1.1" from 192.0.2.1:1234 - 200 1160B in 550.536µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000062] "GET http://example.com/api/v1/vulnerabilities/d0825071-ff78-461e-8954-02333bb6347c HTTP/1.1" from 192.0.2.1:1234 - 200 965B in 484.243µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000063] "GET http://example.com/api/v1/vulnerabilities/d0825071-ff78-461e-8954-02333bb6347c/evidence HTTP/1.1" from 192.0.2.1:1234 - 200 388B in 492.929µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000064] "GET http://example.com/api/v1/evidence?vulnerability_id=d0825071-ff78-461e-8954-02333bb6347c HTTP/1.1" from 192.0.2.1:1234 - 200 388B in 308.542µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000065] "GET http://example.com/api/v1/fleet/posture HTTP/1.1" from 192.0.2.1:1234 - 200 1266B in 852.776µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000066] "GET http://example.com/api/v1/findings/trends HTTP/1.1" from 192.0.2.1:1234 - 200 135B in 620.989µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000067] "GET http://example.com/api/v1/findings/trends/export?format=json HTTP/1.1" from 192.0.2.1:1234 - 200 209B in 587.166µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000068] "GET http://example.com/api/v1/repos HTTP/1.1" from 192.0.2.1:1234 - 200 484B in 370.257µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000069] "GET http://example.com/api/v1/collections HTTP/1.1" from 192.0.2.1:1234 - 200 334B in 257.526µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000070] "GET http://example.com/api/v1/scans HTTP/1.1" from 192.0.2.1:1234 - 200 1078B in 1.142642ms
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000071] "GET http://example.com/api/v1/findings HTTP/1.1" from 192.0.2.1:1234 - 200 1204B in 1.804298ms
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000072] "GET http://example.com/api/v1/findings/export?format=json HTTP/1.1" from 192.0.2.1:1234 - 200 1363B in 1.803227ms
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000073] "GET http://example.com/api/v1/findings/aggregate HTTP/1.1" from 192.0.2.1:1234 - 200 266B in 1.644959ms
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000074] "GET http://example.com/api/v1/findings/by-repo HTTP/1.1" from 192.0.2.1:1234 - 200 168B in 1.51867ms
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000075] "GET http://example.com/api/v1/vulnerabilities HTTP/1.1" from 192.0.2.1:1234 - 200 576B in 973.474µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000076] "GET http://example.com/api/v1/fleet/inventory HTTP/1.1" from 192.0.2.1:1234 - 200 116B in 822.559µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000077] "GET http://example.com/api/v1/fleet/needs-attention HTTP/1.1" from 192.0.2.1:1234 - 200 197B in 1.855154ms
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000078] "GET http://example.com/api/v1/findings/c59646a0-859a-409b-b576-e7602993a1bb HTTP/1.1" from 192.0.2.1:1234 - 404 144B in 1.00857ms
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000079] "GET http://example.com/api/v1/vulnerabilities/386af23e-e55a-4745-b684-2c65deb89a01 HTTP/1.1" from 192.0.2.1:1234 - 404 156B in 416.996µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000080] "GET http://example.com/api/v1/vulnerabilities/386af23e-e55a-4745-b684-2c65deb89a01/evidence HTTP/1.1" from 192.0.2.1:1234 - 404 156B in 353.696µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000081] "GET http://example.com/api/v1/evidence?vulnerability_id=386af23e-e55a-4745-b684-2c65deb89a01 HTTP/1.1" from 192.0.2.1:1234 - 404 156B in 318.27µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000082] "GET http://example.com/api/v1/findings/c7cefa29-3acd-45c9-8c76-edb82af4d6a4 HTTP/1.1" from 192.0.2.1:1234 - 200 1160B in 627.592µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000083] "GET http://example.com/api/v1/vulnerabilities/d0825071-ff78-461e-8954-02333bb6347c HTTP/1.1" from 192.0.2.1:1234 - 200 965B in 386.478µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000084] "GET http://example.com/api/v1/vulnerabilities/d0825071-ff78-461e-8954-02333bb6347c/evidence HTTP/1.1" from 192.0.2.1:1234 - 200 388B in 651.437µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000085] "GET http://example.com/api/v1/evidence?vulnerability_id=d0825071-ff78-461e-8954-02333bb6347c HTTP/1.1" from 192.0.2.1:1234 - 200 388B in 393.27µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000086] "GET http://example.com/api/v1/fleet/posture HTTP/1.1" from 192.0.2.1:1234 - 200 1266B in 1.012827ms
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000087] "GET http://example.com/api/v1/findings/trends HTTP/1.1" from 192.0.2.1:1234 - 200 135B in 1.008339ms
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000088] "GET http://example.com/api/v1/findings/trends/export?format=json HTTP/1.1" from 192.0.2.1:1234 - 200 209B in 1.161757ms
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000089] "PUT http://example.com/api/v1/findings/c7cefa29-3acd-45c9-8c76-edb82af4d6a4/status HTTP/1.1" from 192.0.2.1:1234 - 200 1170B in 1.503642ms
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000090] "POST http://example.com/api/v1/findings/bulk HTTP/1.1" from 192.0.2.1:1234 - 200 23B in 1.25849ms
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000091] "POST http://example.com/api/v1/vulnerabilities/d0825071-ff78-461e-8954-02333bb6347c/split HTTP/1.1" from 192.0.2.1:1234 - 400 362B in 689.739µs
+2026/10/23 19:11:47 [thewolf-dev-1-mj/MwbJGx11N7-000092] "POST http://example.com/api/v1/vulnerabilities/d0825071-ff78-461e-8954-02333bb6347c/merge HTTP/1.1" from 192.0.2.1:1234 - 400 208B in 437.355µs
+--- FAIL: TestFleetAuthorizationDoesNotElevateAPITokens (0.36s)
+    --- FAIL: TestFleetAuthorizationDoesNotElevateAPITokens/admin_read_token (0.03s)
+        --- FAIL: TestFleetAuthorizationDoesNotElevateAPITokens/admin_read_token//repos (0.00s)
+            fleet_authorization_test.go:91: fleet=false: 200 {"data":[{"id":"6a911b1c-cf22-43ac-b7d5-ec53877e515c","user_id":"1eb6d78b-04a9-4bc2-aa34-1d89d6c04e1f","name":"1eb6d78b-04a9-4bc2-aa34-1d89d6c04e1f","source_type":"local","source_path":"/tmp/TestFleetAuthorizationDoesNotElevateAPITokens4097513236/002","default_branch":"main","detected_languages":"{}","detected_frameworks":"[]","detected_at":null,"created_at":"2026-10-23T19:11:47.862870744Z","updated_at":"2026-10-23T19:11:47.862870744Z"},{"id":"5626580c-7cf7-43a6-860d-67296db1344f","user_id":"bb94c7b1-2783-4b66-9762-58458a6a179e","name":"bb94c7b1-2783-4b66-9762-58458a6a179e","source_type":"local","source_path":"/tmp/TestFleetAuthorizationDoesNotElevateAPITokens4097513236/001","default_branch":"main","detected_languages":"{}","detected_frameworks":"[]","detected_at":null,"created_at":"2026-10-23T19:11:47.860952561Z","updated_at":"2026-10-23T19:11:47.860952561Z"}],"meta":{"total":2,"page":1,"per_page":2}}
+        --- FAIL: TestFleetAuthorizationDoesNotElevateAPITokens/admin_read_token//collections (0.00s)
+            fleet_authorization_test.go:91: fleet=false: 200 {"data":[{"id":"d9572b31-4fab-460c-915b-c1dd70c64f3e","user_id":"1eb6d78b-04a9-4bc2-aa34-1d89d6c04e1f","name":"1eb6d78b-04a9-4bc2-aa34-1d89d6c04e1f","description":"","scan_config":"","created_at":"2026-10-23T19:11:47.862922542Z","updated_at":"2026-10-23T19:11:47.862922542Z","repo_count":1},{"id":"80b7e307-1cc4-42f2-b620-912718f09250","user_id":"bb94c7b1-2783-4b66-9762-58458a6a179e","name":"bb94c7b1-2783-4b66-9762-58458a6a179e","description":"","scan_config":"","created_at":"2026-10-23T19:11:47.861066526Z","updated_at":"2026-10-23T19:11:47.861066526Z","repo_count":1}],"meta":{"total":2,"page":1,"per_page":2}}
+        --- FAIL: TestFleetAuthorizationDoesNotElevateAPITokens/admin_read_token//scans (0.00s)
+            fleet_authorization_test.go:91: fleet=false: 200 {"data":[{"findings_revision":1,"id":"fc22392e-851e-4c55-9ab3-dd7b5d7914ea","user_id":"1eb6d78b-04a9-4bc2-aa34-1d89d6c04e1f","repo_id":"6a911b1c-cf22-43ac-b7d5-ec53877e515c","branch":"main","phase":"queued","categories":"[]","include_paths":"[]","exclude_paths":"[]","status":"completed","tools_selected":"[]","tools_completed":"[\"test\"]","tools_failed":"[]","tools_errors":"{}","finding_count":0,"coverage_summary":"","ai_enabled":false,"ai_summary":"","completed_at":"2026-10-23T19:11:47.862957197Z","created_at":"2026-10-23T19:11:47.86295834Z","updated_at":"2026-10-23T19:11:47.86295834Z","repo":{"id":"6a911b1c-cf22-43ac-b7d5-ec53877e515c","user_id":"1eb6d78b-04a9-4bc2-aa34-1d89d6c04e1f","name":"1eb6d78b-04a9-4bc2-aa34-1d89d6c04e1f","source_type":"local","source_path":"/tmp/TestFleetAuthorizationDoesNotElevateAPITokens4097513236/002","default_branch":"main","detected_languages":"{}","detected_frameworks":"[]","detected_at":null,"created_at":"2026-10-23T19:11:47.862870744Z","updated_at":"2026-10-23T19:11:47.862870744Z"}},{"findings_revision":1,"id":"87779d5c-c017-46f9-9053-c8f4847027bd","user_id":"bb94c7b1-2783-4b66-9762-58458a6a179e","repo_id":"5626580c-7cf7-43a6-860d-67296db1344f","branch":"main","phase":"queued","categories":"[]","include_paths":"[]","exclude_paths":"[]","status":"completed","tools_selected":"[]","tools_completed":"[\"test\"]","tools_failed":"[]","tools_errors":"{}","finding_count":0,"coverage_summary":"","ai_enabled":false,"ai_summary":"","completed_at":"2026-10-23T19:11:47.861176974Z","created_at":"2026-10-23T19:11:47.86118017Z","updated_at":"2026-10-23T19:11:47.86118017Z","repo":{"id":"5626580c-7cf7-43a6-860d-67296db1344f","user_id":"bb94c7b1-2783-4b66-9762-58458a6a179e","name":"bb94c7b1-2783-4b66-9762-58458a6a179e","source_type":"local","source_path":"/tmp/TestFleetAuthorizationDoesNotElevateAPITokens4097513236/001","default_branch":"main","detected_languages":"{}","detected_frameworks":"[]","detected_at":null,"created_at":"2026-10-23T19:11:47.860952561Z","updated_at":"2026-10-23T19:11:47.860952561Z"}}],"meta":{"total":2,"page":1,"per_page":50}}
+        --- FAIL: TestFleetAuthorizationDoesNotElevateAPITokens/admin_read_token//findings (0.00s)
+            fleet_authorization_test.go:91: fleet=false: 200 {"data":[{"id":"c59646a0-859a-409b-b576-e7602993a1bb","scan_id":"87779d5c-c017-46f9-9053-c8f4847027bd","repo_id":"5626580c-7cf7-43a6-860d-67296db1344f","fingerprint":"9f535c92e689e4b517a7ec05711c7539f966bb3aec04ff956e9ae128d96f8362","stable_fingerprint":"9f535c92e689e4b517a7ec05711c7539f966bb3aec04ff956e9ae128d96f8362","location_fingerprint":"92dac6c0b602476f7b114e41a290f0d813046d216b73757ec2c17298676315c5","semantic_fingerprint":"9f535c92e689e4b517a7ec05711c7539f966bb3aec04ff956e9ae128d96f8362","evidence_fingerprint":"7391094d6d18cbfcd764d979bd19ef51c703294ad25e01b9c01cad441888c5de","identity_version":1,"tool_name":"test","category":"sast","severity":"high","title":"bb94c7b1-2783-4b66-9762-58458a6a179e","description":"","file_path":"app.go","line_start":0,"line_end":0,"code_snippet":"","rule_id":"bb94c7b1-2783-4b66-9762-58458a6a179e","tool_severity_score":0,"location_weight":0,"ai_context_score":0,"composite_score":0,"module_name":"","function_name":"","symbol_kind":"","file_purpose":"","dependents_json":"","status":"open","created_at":"2026-10-23T19:11:47.861724496Z","updated_at":"2026-10-23T19:11:47.861724496Z","corroborated_by":["test"]},{"id":"c7cefa29-3acd-45c9-8c76-edb82af4d6a4","scan_id":"fc22392e-851e-4c55-9ab3-dd7b5d7914ea","repo_id":"6a911b1c-cf22-43ac-b7d5-ec53877e515c","fingerprint":"c61af38b9ec5dfad335e65a8998f7f9358f6cae40ea5b938d7f2f06fa8054aeb","stable_fingerprint":"c61af38b9ec5dfad335e65a8998f7f9358f6cae40ea5b938d7f2f06fa8054aeb","location_fingerprint":"12a13c0e7e1dc4a344f7be7e8542a83b0356de457e8f18c4b0c45e4d89d41329","semantic_fingerprint":"c61af38b9ec5dfad335e65a8998f7f9358f6cae40ea5b938d7f2f06fa8054aeb","evidence_fingerprint":"5a0675d3206a15f64c95acf29a5f238d7f56575bc2311613a815a489b0ca57c1","identity_version":1,"tool_name":"test","category":"sast","severity":"high","title":"1eb6d78b-04a9-4bc2-aa34-1d89d6c04e1f","description":"","file_path":"app.go","line_start":0,"line_end":0,"code_snippet":"","rule_id":"1eb6d78b-04a9-4bc2-aa34-1d89d6c04e1f","tool_severity_score":0,"location_weight":0,"ai_context_score":0,"composite_score":0,"module_name":"","function_name":"","symbol_kind":"","file_purpose":"","dependents_json":"","status":"open","created_at":"2026-10-23T19:11:47.863251471Z","updated_at":"2026-10-23T19:11:47.863251471Z","corroborated_by":["test"]}],"meta":{"total":2,"page":1,"per_page":50}}
+        --- FAIL: TestFleetAuthorizationDoesNotElevateAPITokens/admin_read_token//findings/export?format=json (0.00s)
+            fleet_authorization_test.go:91: fleet=false: 200 [
+                  {
+                    "id": "c59646a0-859a-409b-b576-e7602993a1bb",
+                    "scan_id": "87779d5c-c017-46f9-9053-c8f4847027bd",
+                    "repo_id": "5626580c-7cf7-43a6-860d-67296db1344f",
+                    "fingerprint": "9f535c92e689e4b517a7ec05711c7539f966bb3aec04ff956e9ae128d96f8362",
+                    "stable_fingerprint": "9f535c92e689e4b517a7ec05711c7539f966bb3aec04ff956e9ae128d96f8362",
+                    "location_fingerprint": "92dac6c0b602476f7b114e41a290f0d813046d216b73757ec2c17298676315c5",
+                    "semantic_fingerprint": "9f535c92e689e4b517a7ec05711c7539f966bb3aec04ff956e9ae128d96f8362",
+                    "evidence_fingerprint": "7391094d6d18cbfcd764d979bd19ef51c703294ad25e01b9c01cad441888c5de",
+                    "identity_version": 1,
+                    "tool_name": "test",
+                    "category": "sast",
+                    "severity": "high",
+                    "title": "bb94c7b1-2783-4b66-9762-58458a6a179e",
+                    "description": "",
+                    "file_path": "app.go",
+                    "line_start": 0,
+                    "line_end": 0,
+                    "code_snippet": "",
+                    "rule_id": "bb94c7b1-2783-4b66-9762-58458a6a179e",
+                    "tool_severity_score": 0,
+                    "location_weight": 0,
+                    "ai_context_score": 0,
+                    "composite_score": 0,
+                    "module_name": "",
+                    "function_name": "",
+                    "symbol_kind": "",
+                    "file_purpose": "",
+                    "dependents_json": "",
+                    "status": "open",
+                    "created_at": "2026-10-23T19:11:47.861724496Z",
+                    "updated_at": "2026-10-23T19:11:47.861724496Z",
+                    "corroborated_by": [
+                      "test"
+                    ]
+                  },
+                  {
+                    "id": "c7cefa29-3acd-45c9-8c76-edb82af4d6a4",
+                    "scan_id": "fc22392e-851e-4c55-9ab3-dd7b5d7914ea",
+                    "repo_id": "6a911b1c-cf22-43ac-b7d5-ec53877e515c",
+                    "fingerprint": "c61af38b9ec5dfad335e65a8998f7f9358f6cae40ea5b938d7f2f06fa8054aeb",
+                    "stable_fingerprint": "c61af38b9ec5dfad335e65a8998f7f9358f6cae40ea5b938d7f2f06fa8054aeb",
+                    "location_fingerprint": "12a13c0e7e1dc4a344f7be7e8542a83b0356de457e8f18c4b0c45e4d89d41329",
+                    "semantic_fingerprint": "c61af38b9ec5dfad335e65a8998f7f9358f6cae40ea5b938d7f2f06fa8054aeb",
+                    "evidence_fingerprint": "5a0675d3206a15f64c95acf29a5f238d7f56575bc2311613a815a489b0ca57c1",
+                    "identity_version": 1,
+                    "tool_name": "test",
+                    "category": "sast",
+                    "severity": "high",
+                    "title": "1eb6d78b-04a9-4bc2-aa34-1d89d6c04e1f",
+                    "description": "",
+                    "file_path": "app.go",
+                    "line_start": 0,
+                    "line_end": 0,
+                    "code_snippet": "",
+                    "rule_id": "1eb6d78b-04a9-4bc2-aa34-1d89d6c04e1f",
+                    "tool_severity_score": 0,
+                    "location_weight": 0,
+                    "ai_context_score": 0,
+                    "composite_score": 0,
+                    "module_name": "",
+                    "function_name": "",
+                    "symbol_kind": "",
+                    "file_purpose": "",
+                    "dependents_json": "",
+                    "status": "open",
+                    "created_at": "2026-10-23T19:11:47.863251471Z",
+                    "updated_at": "2026-10-23T19:11:47.863251471Z",
+                    "corroborated_by": [
+                      "test"
+                    ]
+                  }
+                ]
+        --- FAIL: TestFleetAuthorizationDoesNotElevateAPITokens/admin_read_token//findings/aggregate (0.00s)
+            fleet_authorization_test.go:91: fleet=false: 200 {"data":[{"key":"1eb6d78b-04a9-4bc2-aa34-1d89d6c04e1f","repos":1,"findings":1,"tool":"test","title":"1eb6d78b-04a9-4bc2-aa34-1d89d6c04e1f","severity":"high","repo_ids":["6a911b1c-cf22-43ac-b7d5-ec53877e515c"],"repo_names":["1eb6d78b-04a9-4bc2-aa34-1d89d6c04e1f"]},{"key":"bb94c7b1-2783-4b66-9762-58458a6a179e","repos":1,"findings":1,"tool":"test","title":"bb94c7b1-2783-4b66-9762-58458a6a179e","severity":"high","repo_ids":["5626580c-7cf7-43a6-860d-67296db1344f"],"repo_names":["bb94c7b1-2783-4b66-9762-58458a6a179e"]}]}
+        --- FAIL: TestFleetAuthorizationDoesNotElevateAPITokens/admin_read_token//findings/by-repo (0.00s)
+            fleet_authorization_test.go:91: fleet=false: 200 {"data":[{"repo_id":"6a911b1c-cf22-43ac-b7d5-ec53877e515c","name":"1eb6d78b-04a9-4bc2-aa34-1d89d6c04e1f","total":1,"critical":0,"high":1,"medium":0,"low":0,"info":0},{"repo_id":"5626580c-7cf7-43a6-860d-67296db1344f","name":"bb94c7b1-2783-4b66-9762-58458a6a179e","total":1,"critical":0,"high":1,"medium":0,"low":0,"info":0}]}
+        --- FAIL: TestFleetAuthorizationDoesNotElevateAPITokens/admin_read_token//vulnerabilities (0.00s)
+            fleet_authorization_test.go:91: fleet=false: 200 {"data":[{"id":"386af23e-e55a-4745-b684-2c65deb89a01","repo_id":"5626580c-7cf7-43a6-860d-67296db1344f","scan_id":"87779d5c-c017-46f9-9053-c8f4847027bd","canonical_key":"9f535c92e689e4b517a7ec05711c7539f966bb3aec04ff956e9ae128d96f8362","title":"bb94c7b1-2783-4b66-9762-58458a6a179e","severity":"high","category":"sast","composite_score":0,"evidence_count":1,"finding_ids":["c59646a0-859a-409b-b576-e7602993a1bb"],"corroborated_by":["test"],"created_at":"2026-10-23T19:11:47.862473776Z","updated_at":"2026-10-23T19:11:47.862726793Z"},{"id":"d0825071-ff78-461e-8954-02333bb6347c","repo_id":"6a911b1c-cf22-43ac-b7d5-ec53877e515c","scan_id":"fc22392e-851e-4c55-9ab3-dd7b5d7914ea","canonical_key":"c61af38b9ec5dfad335e65a8998f7f9358f6cae40ea5b938d7f2f06fa8054aeb","title":"1eb6d78b-04a9-4bc2-aa34-1d89d6c04e1f","severity":"high","category":"sast","composite_score":0,"evidence_count":1,"finding_ids":["c7cefa29-3acd-45c9-8c76-edb82af4d6a4"],"corroborated_by":["test"],"created_at":"2026-10-23T19:11:47.863815764Z","updated_at":"2026-10-23T19:11:47.864075623Z"}],"meta":{"total":2,"page":1,"per_page":50}}
+        --- FAIL: TestFleetAuthorizationDoesNotElevateAPITokens/admin_read_token//fleet/inventory (0.00s)
+            fleet_authorization_test.go:91: fleet=false: 200 {"data":{"by_source_type":{"local":2},"by_collection":{"1eb6d78b-04a9-4bc2-aa34-1d89d6c04e1f":1,"bb94c7b1-2783-4b66-9762-58458a6a179e":1},"by_language":{}}}
+        --- FAIL: TestFleetAuthorizationDoesNotElevateAPITokens/admin_read_token//fleet/needs-attention (0.00s)
+            fleet_authorization_test.go:91: fleet=false: 200 {"data":[{"repo_id":"5626580c-7cf7-43a6-860d-67296db1344f","name":"bb94c7b1-2783-4b66-9762-58458a6a179e","reason":"new_high","detail":"new high: bb94c7b1-2783-4b66-9762-58458a6a179e","score":80},{"repo_id":"6a911b1c-cf22-43ac-b7d5-ec53877e515c","name":"1eb6d78b-04a9-4bc2-aa34-1d89d6c04e1f","reason":"new_high","detail":"new high: 1eb6d78b-04a9-4bc2-aa34-1d89d6c04e1f","score":80}]}
+        --- FAIL: TestFleetAuthorizationDoesNotElevateAPITokens/admin_read_token//findings/c7cefa29-3acd-45c9-8c76-edb82af4d6a4 (0.00s)
+            fleet_authorization_test.go:104: want 404: 200 {"data":{"id":"c7cefa29-3acd-45c9-8c76-edb82af4d6a4","scan_id":"fc22392e-851e-4c55-9ab3-dd7b5d7914ea","repo_id":"6a911b1c-cf22-43ac-b7d5-ec53877e515c","fingerprint":"c61af38b9ec5dfad335e65a8998f7f9358f6cae40ea5b938d7f2f06fa8054aeb","stable_fingerprint":"c61af38b9ec5dfad335e65a8998f7f9358f6cae40ea5b938d7f2f06fa8054aeb","location_fingerprint":"12a13c0e7e1dc4a344f7be7e8542a83b0356de457e8f18c4b0c45e4d89d41329","semantic_fingerprint":"c61af38b9ec5dfad335e65a8998f7f9358f6cae40ea5b938d7f2f06fa8054aeb","evidence_fingerprint":"5a0675d3206a15f64c95acf29a5f238d7f56575bc2311613a815a489b0ca57c1","identity_version":1,"tool_name":"test","category":"sast","severity":"high","title":"1eb6d78b-04a9-4bc2-aa34-1d89d6c04e1f","description":"","file_path":"app.go","line_start":0,"line_end":0,"code_snippet":"","rule_id":"1eb6d78b-04a9-4bc2-aa34-1d89d6c04e1f","tool_severity_score":0,"location_weight":0,"ai_context_score":0,"composite_score":0,"module_name":"","function_name":"","symbol_kind":"","file_purpose":"","dependents_json":"","status":"open","created_at":"2026-10-23T19:11:47.863251471Z","updated_at":"2026-10-23T19:11:47.863251471Z","corroborated_by":["test"]}}
+        --- FAIL: TestFleetAuthorizationDoesNotElevateAPITokens/admin_read_token//vulnerabilities/d0825071-ff78-461e-8954-02333bb6347c (0.00s)
+            fleet_authorization_test.go:104: want 404: 200 {"data":{"id":"d0825071-ff78-461e-8954-02333bb6347c","repo_id":"6a911b1c-cf22-43ac-b7d5-ec53877e515c","scan_id":"fc22392e-851e-4c55-9ab3-dd7b5d7914ea","canonical_key":"c61af38b9ec5dfad335e65a8998f7f9358f6cae40ea5b938d7f2f06fa8054aeb","title":"1eb6d78b-04a9-4bc2-aa34-1d89d6c04e1f","severity":"high","category":"sast","composite_score":0,"evidence_count":1,"finding_ids":["c7cefa29-3acd-45c9-8c76-edb82af4d6a4"],"corroborated_by":["test"],"created_at":"2026-10-23T19:11:47.863815764Z","updated_at":"2026-10-23T19:11:47.864075623Z","merge_reason":"Single finding; no merge.","evidence":[{"id":"98eb60bd-a655-4872-9b28-6f9f150bce8e","vulnerability_id":"d0825071-ff78-461e-8954-02333bb6347c","finding_id":"c7cefa29-3acd-45c9-8c76-edb82af4d6a4","tool_name":"test","title":"1eb6d78b-04a9-4bc2-aa34-1d89d6c04e1f","file_path":"app.go","line_start":0,"rule_id":"1eb6d78b-04a9-4bc2-aa34-1d89d6c04e1f","reason":"same identity","created_at":"2026-10-23T19:11:47.86395712Z"}]}}
+        --- FAIL: TestFleetAuthorizationDoesNotElevateAPITokens/admin_read_token//vulnerabilities/d0825071-ff78-461e-8954-02333bb6347c/evidence (0.00s)
+            fleet_authorization_test.go:104: want 404: 200 {"data":[{"id":"98eb60bd-a655-4872-9b28-6f9f150bce8e","vulnerability_id":"d0825071-ff78-461e-8954-02333bb6347c","finding_id":"c7cefa29-3acd-45c9-8c76-edb82af4d6a4","tool_name":"test","title":"1eb6d78b-04a9-4bc2-aa34-1d89d6c04e1f","file_path":"app.go","line_start":0,"rule_id":"1eb6d78b-04a9-4bc2-aa34-1d89d6c04e1f","reason":"same identity","created_at":"2026-10-23T19:11:47.86395712Z"}]}
+        --- FAIL: TestFleetAuthorizationDoesNotElevateAPITokens/admin_read_token//evidence?vulnerability_id=d0825071-ff78-461e-8954-02333bb6347c (0.00s)
+            fleet_authorization_test.go:104: want 404: 200 {"data":[{"id":"98eb60bd-a655-4872-9b28-6f9f150bce8e","vulnerability_id":"d0825071-ff78-461e-8954-02333bb6347c","finding_id":"c7cefa29-3acd-45c9-8c76-edb82af4d6a4","tool_name":"test","title":"1eb6d78b-04a9-4bc2-aa34-1d89d6c04e1f","file_path":"app.go","line_start":0,"rule_id":"1eb6d78b-04a9-4bc2-aa34-1d89d6c04e1f","reason":"same identity","created_at":"2026-10-23T19:11:47.86395712Z"}]}
+        fleet_authorization_test.go:119: posture: want 1 repos: 200 {"data":{"open_findings_by_severity":{"critical":0,"high":2,"info":0,"low":0,"medium":0},"week_over_week_delta":{"critical":0,"high":0,"info":0,"low":0,"medium":0},"repo_count":2,"gates_failing":0,"coverage":{"fresh_days":7,"fresh_repos":0,"rows":[{"repo_id":"6a911b1c-cf22-43ac-b7d5-ec53877e515c","name":"1eb6d78b-04a9-4bc2-aa34-1d89d6c04e1f","branch":"main","scan_id":"fc22392e-851e-4c55-9ab3-dd7b5d7914ea","status":"incomplete","detail":"Not all selected scanners completed successfully.","gate_failing":false},{"repo_id":"5626580c-7cf7-43a6-860d-67296db1344f","name":"bb94c7b1-2783-4b66-9762-58458a6a179e","branch":"main","scan_id":"87779d5c-c017-46f9-9053-c8f4847027bd","status":"incomplete","detail":"Not all selected scanners completed successfully.","gate_failing":false}]},"changes":{"window_days":7,"compared_branches":0,"excluded_branches":2,"new":0,"resurfaced":0,"resolved":0,"suppressed":0,"rows":[{"repo_id":"6a911b1c-cf22-43ac-b7d5-ec53877e515c","name":"1eb6d78b-04a9-4bc2-aa34-1d89d6c04e1f","branch":"main","scan_id":"fc22392e-851e-4c55-9ab3-dd7b5d7914ea","reason":"Needs a recent, complete scan.","new":0,"resurfaced":0,"resolved":0,"suppressed":0},{"repo_id":"5626580c-7cf7-43a6-860d-67296db1344f","name":"bb94c7b1-2783-4b66-9762-58458a6a179e","branch":"main","scan_id":"87779d5c-c017-46f9-9053-c8f4847027bd","reason":"Needs a recent, complete scan.","new":0,"resurfaced":0,"resolved":0,"suppressed":0}]},"priorities":[{"finding_id":"c7cefa29-3acd-45c9-8c76-edb82af4d6a4","repo_id":"6a911b1c-cf22-43ac-b7d5-ec53877e515c","name":"1eb6d78b-04a9-4bc2-aa34-1d89d6c04e1f","title":"1eb6d78b-04a9-4bc2-aa34-1d89d6c04e1f","severity":"high","tool":"test","file_path":"app.go","line":0,"state":"new","confidence":""},{"finding_id":"c59646a0-859a-409b-b576-e7602993a1bb","repo_id":"5626580c-7cf7-43a6-860d-67296db1344f","name":"bb94c7b1-2783-4b66-9762-58458a6a179e","title":"bb94c7b1-2783-4b66-9762-58458a6a179e","severity":"high","tool":"test","file_path":"app.go","line":0,"state":"new","confidence":""}],"work":[],"generated_at":"2026-10-23T19:11:47.901729612Z"}}
+        fleet_authorization_test.go:136: trends: want 1 repos: 200 {"data":[{"date":"2026-10-23","counts":{"critical":0,"high":2,"medium":0,"low":0,"info":0,"total":2},"repos":2,"incomplete_scans":2}]}
+        fleet_authorization_test.go:136: trends: want 1 repos: 200 [
+              {
+                "date": "2026-10-23",
+                "counts": {
+                  "critical": 0,
+                  "high": 2,
+                  "medium": 0,
+                  "low": 0,
+                  "info": 0,
+                  "total": 2
+                },
+                "repos": 2,
+                "incomplete_scans": 2
+              }
+            ]
+    fleet_authorization_test.go:154: /findings/c7cefa29-3acd-45c9-8c76-edb82af4d6a4/status: want 404: 200 {"data":{"id":"c7cefa29-3acd-45c9-8c76-edb82af4d6a4","scan_id":"fc22392e-851e-4c55-9ab3-dd7b5d7914ea","repo_id":"6a911b1c-cf22-43ac-b7d5-ec53877e515c","fingerprint":"c61af38b9ec5dfad335e65a8998f7f9358f6cae40ea5b938d7f2f06fa8054aeb","stable_fingerprint":"c61af38b9ec5dfad335e65a8998f7f9358f6cae40ea5b938d7f2f06fa8054aeb","location_fingerprint":"12a13c0e7e1dc4a344f7be7e8542a83b0356de457e8f18c4b0c45e4d89d41329","semantic_fingerprint":"c61af38b9ec5dfad335e65a8998f7f9358f6cae40ea5b938d7f2f06fa8054aeb","evidence_fingerprint":"5a0675d3206a15f64c95acf29a5f238d7f56575bc2311613a815a489b0ca57c1","identity_version":1,"tool_name":"test","category":"sast","severity":"high","title":"1eb6d78b-04a9-4bc2-aa34-1d89d6c04e1f","description":"","file_path":"app.go","line_start":0,"line_end":0,"code_snippet":"","rule_id":"1eb6d78b-04a9-4bc2-aa34-1d89d6c04e1f","tool_severity_score":0,"location_weight":0,"ai_context_score":0,"composite_score":0,"module_name":"","function_name":"","symbol_kind":"","file_purpose":"","dependents_json":"","status":"false_positive","created_at":"2026-10-23T19:11:47.863251471Z","updated_at":"2026-10-23T19:11:47.947234497Z","corroborated_by":["test"]}}
+    fleet_authorization_test.go:154: /findings/bulk: want 403: 200 {"data":{"updated":2}}
+    fleet_authorization_test.go:154: /vulnerabilities/d0825071-ff78-461e-8954-02333bb6347c/split: want 404: 400 {"error":{"code":"invalid_cluster_change","message":"select a nonempty proper subset of source evidence for split, or another cluster in the same repository for merge"},"type":"about:blank","title":"invalid_cluster_change","status":400,"detail":"select a nonempty proper subset of source evidence for split, or another cluster in the same repository for merge"}
+    fleet_authorization_test.go:154: /vulnerabilities/d0825071-ff78-461e-8954-02333bb6347c/merge: want 404: 400 {"error":{"code":"bad_request","message":"can only merge vulnerabilities in the same repo"},"type":"about:blank","title":"bad_request","status":400,"detail":"can only merge vulnerabilities in the same repo"}
+    fleet_authorization_test.go:160: denied mutation changed finding: &{ClusterID: ID:c59646a0-859a-409b-b576-e7602993a1bb ScanID:87779d5c-c017-46f9-9053-c8f4847027bd RepoID:5626580c-7cf7-43a6-860d-67296db1344f Fingerprint:9f535c92e689e4b517a7ec05711c7539f966bb3aec04ff956e9ae128d96f8362 StableFingerprint:9f535c92e689e4b517a7ec05711c7539f966bb3aec04ff956e9ae128d96f8362 LocationFingerprint:92dac6c0b602476f7b114e41a290f0d813046d216b73757ec2c17298676315c5 SemanticFingerprint:9f535c92e689e4b517a7ec05711c7539f966bb3aec04ff956e9ae128d96f8362 EvidenceFingerprint:7391094d6d18cbfcd764d979bd19ef51c703294ad25e01b9c01cad441888c5de IdentityVersion:1 ToolName:test Category:sast Severity:high Title:bb94c7b1-2783-4b66-9762-58458a6a179e Description: FilePath:app.go LineStart:0 LineEnd:0 CodeSnippet: CWEID: RuleID:bb94c7b1-2783-4b66-9762-58458a6a179e PackageName: PackageVersion: PackageEcosystem: PackageURL: AdvisoryID: ToolSeverityScore:0 LocationWeight:0 AIContextScore:0 CompositeScore:0 AIFixSuggestion: ModuleName: FunctionName: SymbolKind: FilePurpose: DependentsJSON: Status:false_positive SARIFData: CreatedAt:2026-10-23 19:11:47.861724496 +0000 UTC UpdatedAt:2026-10-23 19:11:47.948654753 +0000 UTC FineCategory: FixStrategyID: Confidence: CorroboratedByJSON:["test"] CorroboratedBy:[test] Suppressed:false SuppressionID: SuppressedReason: BaselineIdentityKey: BaselineState: FirstSeenAt:<nil> LastSeenAt:<nil> IntroducedInScanID: ResolvedInScanID: SourceKind: SourceRef: AIFixPrompt: TriagedBy: AIUnfixable:false}, <nil>
+FAIL
+FAIL	github.com/alphabravocompany/thewolf/internal/api	0.373s
+FAIL

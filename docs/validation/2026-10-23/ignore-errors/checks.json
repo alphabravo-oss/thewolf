@@ -1,0 +1,40 @@
+{
+  "tasks": 240,
+  "checked": 57,
+  "D05_3_complete": true,
+  "D05_complete": false,
+  "final_go_race_packages": 136,
+  "final_go_race_exit": 0,
+  "uncached": true,
+  "go_lint_exit": 0,
+  "scanner_sync_exit": 0,
+  "focused_contracts_exit": 0,
+  "backends": [
+    "sqlite",
+    "postgres"
+  ],
+  "whole_file_validation": true,
+  "partial_rules_discarded_on_read_error": true,
+  "no_projection_mutation_on_error": true,
+  "outside_symlink_directory_fifo_rejected": true,
+  "cli_command_failure_checked": true,
+  "report_no_partial_outputs_checked": true,
+  "rule_create_revoke_expiry_rollback_retry_checked": true,
+  "api_views_preview_triage_import_retry_checked": true,
+  "visible_statistics_checked": true,
+  "preview_one_parsed_file": true,
+  "gosec_exit": 1,
+  "gosec_high_high_findings": 29,
+  "gosec_rules": {
+    "G704": 3,
+    "G703": 25,
+    "G702": 1
+  },
+  "gosec_analysis_errors": {},
+  "fixture_removed": true,
+  "source_files": 135,
+  "ui_changed": false,
+  "deployed": false,
+  "diff_check_exit": 0,
+  "documentation_links_valid": true
+}

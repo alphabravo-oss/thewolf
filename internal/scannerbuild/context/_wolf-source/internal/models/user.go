@@ -30,9 +30,15 @@ type User struct {
 	TOTPEnabled bool `json:"totp_enabled" db:"totp_enabled"`
 	// TOTPRecoveryCodes is a JSON array of SHA-256 hashes of unused one-time
 	// recovery codes. Consumed (removed) as they are used. Never serialized.
-	TOTPRecoveryCodes string    `json:"-" db:"totp_recovery_codes"`
-	CreatedAt         time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt         time.Time `json:"updated_at" db:"updated_at"`
+	TOTPRecoveryCodes string `json:"-" db:"totp_recovery_codes"`
+	// CredentialVersion invalidates pending MFA challenges after password or enrollment changes.
+	CredentialVersion int64 `json:"-" db:"credential_version"`
+	// MFARevision prevents stale equal-state writes, including after reset/re-enrollment.
+	MFARevision int64 `json:"-" db:"mfa_revision"`
+	// TOTPLastStep is the greatest accepted 30-second counter, or -1 before first use.
+	TOTPLastStep int64     `json:"-" db:"totp_last_step"`
+	CreatedAt    time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at" db:"updated_at"`
 }
 
 // IsAdmin reports whether the user has the admin role.

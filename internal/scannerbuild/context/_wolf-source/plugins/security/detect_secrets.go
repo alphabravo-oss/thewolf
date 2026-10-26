@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
@@ -31,14 +33,30 @@ func (p *DetectSecretsPlugin) Execute(ctx context.Context, opts models.ExecuteOp
 		defer cancel()
 	}
 
-	cmd := container.CommandContext(ctx,
-		container.ConfigFromOpts(opts.ContainerCfg),
-		container.Options{RepoDir: opts.RepoPath},
-		"detect-secrets", "scan", "/scan")
+	excluded := make([]string, len(plugin.DefaultExcludeDirs))
+	for i, dir := range plugin.DefaultExcludeDirs {
+		excluded[i] = regexp.QuoteMeta(dir)
+	}
+	cfg := container.ConfigFromOpts(opts.ContainerCfg)
+	cmd := container.CommandContext(ctx, cfg,
+		container.Options{RepoDir: opts.RepoPath, ExtraEnv: map[string]string{
+			// Python otherwise forks for all host CPUs despite Docker's quota.
+			"PYTHON_CPU_COUNT": strconv.Itoa(max(1, int(container.CPUCount(cfg)))),
+		}},
+		// Detection stays local; online credential verification would retry
+		// against the network-isolated sandbox and stall on every candidate.
+		// KeywordDetector findings are already discarded by our parser.
+		// Archive snapshots may have no .git; do not silently scan zero files.
+		"detect-secrets", "scan", "--all-files", "--no-verify", "--disable-plugin", "KeywordDetector",
+		"--exclude-files", "(^|/)("+strings.Join(excluded, "|")+")(/|$)", "/scan")
 	out, err := cmd.Output()
 	if err != nil && len(out) == 0 {
+		if ctx.Err() != nil {
+			return nil, fmt.Errorf("detect-secrets did not finish: %w", ctx.Err())
+		}
 		return nil, plugin.WrapExecError("detect-secrets", err)
 	}
+	plugin.SaveRaw(opts, out, "json")
 
 	findings, perr := parseDetectSecretsOutput(out)
 	if perr != nil {

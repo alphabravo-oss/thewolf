@@ -1,0 +1,14 @@
+=== RUN   TestFixHandoffExcludesWorkspaceUsers
+=== RUN   TestFixHandoffExcludesWorkspaceUsers/sqlite
+=== RUN   TestFixHandoffExcludesWorkspaceUsers/postgres
+--- PASS: TestFixHandoffExcludesWorkspaceUsers (1.75s)
+    --- PASS: TestFixHandoffExcludesWorkspaceUsers/sqlite (0.38s)
+    --- PASS: TestFixHandoffExcludesWorkspaceUsers/postgres (1.37s)
+=== RUN   TestPublishedFixCleanupRetainsFailuresAndRetries
+=== RUN   TestPublishedFixCleanupRetainsFailuresAndRetries/sqlite
+=== RUN   TestPublishedFixCleanupRetainsFailuresAndRetries/postgres
+--- PASS: TestPublishedFixCleanupRetainsFailuresAndRetries (1.10s)
+    --- PASS: TestPublishedFixCleanupRetainsFailuresAndRetries/sqlite (0.25s)
+    --- PASS: TestPublishedFixCleanupRetainsFailuresAndRetries/postgres (0.85s)
+PASS
+ok  	github.com/alphabravocompany/thewolf/internal/db	3.893s
