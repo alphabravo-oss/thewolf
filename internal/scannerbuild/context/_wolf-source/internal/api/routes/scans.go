@@ -742,6 +742,7 @@ func executeScan(parent context.Context, h *Handler, scanID, userID, repoID, bra
 		Target:             targetURL,
 		ResolveDAST:        func(ctx context.Context) (*models.DASTExecution, error) { return resolveDAST(ctx, h.Store, repoID) },
 		RepoPath:           repoPath,
+		ResolveSecret:      scanOwnerSecretResolver(h, scan.UserID),
 		ScanID:             scanID,
 		UserID:             scan.UserID,
 		LeaseToken:         executionLeaseToken,
@@ -4403,4 +4404,21 @@ func GetScanRecommendations(w http.ResponseWriter, r *http.Request) {
 		recs = []models.ScanRecommendation{}
 	}
 	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: recs})
+}
+
+// scanOwnerSecretResolver resolves secrets that externally registered scanners
+// declare (e.g. a commercial license) from the scan owner's custom secrets.
+func scanOwnerSecretResolver(h *Handler, userID string) func(context.Context, string) (string, error) {
+	return func(ctx context.Context, name string) (string, error) {
+		stored, err := h.Store.ListSecretsByUser(ctx, userID)
+		if err != nil {
+			return "", err
+		}
+		for _, secret := range stored {
+			if secret.KeyType == models.KeyTypeCustom && secret.KeyName == name {
+				return secrets.Decrypt(secret.EncryptedValue)
+			}
+		}
+		return "", fmt.Errorf("no custom secret named %q for the scan owner", name)
+	}
 }

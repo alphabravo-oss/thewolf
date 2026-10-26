@@ -35,15 +35,18 @@ type RunConfig struct {
 	RepoPath    string
 	// Target is an explicit non-repository scan target, such as a controlled
 	// DAST URL or container-image archive. It is never inferred from RepoPath.
-	Target     string
-	ScanID     string
-	UserID     string
-	LeaseToken string
-	Attempt    int
-	Branch     string
-	Registry   *plugin.Registry
-	Languages  []models.Language
-	Tools      []string // explicit tool list (overrides auto-detection)
+	Target string
+	// ResolveSecret returns a stored secret value by name for scanners that
+	// declare secrets (pkg/scannerapi). Nil when the run has no secret store.
+	ResolveSecret func(ctx context.Context, name string) (string, error)
+	ScanID        string
+	UserID        string
+	LeaseToken    string
+	Attempt       int
+	Branch        string
+	Registry      *plugin.Registry
+	Languages     []models.Language
+	Tools         []string // explicit tool list (overrides auto-detection)
 	// ToolsExplicit distinguishes an intentionally empty profile/category
 	// selection from legacy auto-detection, where an empty Tools slice means
 	// "select by language."
@@ -311,6 +314,9 @@ func resourceSpecFor(p models.Plugin, resources map[string]ResourceSpec) Resourc
 			return spec
 		}
 	}
+	if spec, ok := externalResourceSpec(p.Name()); ok {
+		return spec
+	}
 	return ResourceSpec{Class: resourceClassFromCategory(p)}
 }
 
@@ -570,7 +576,8 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 
 			var findings []models.Finding
 			var err error
-			if p.Category() == models.CategoryDAST && cfg.ResolveDAST != nil {
+			toolOpts.SecretEnv, err = resolveExternalSecrets(executionCtx, toolName, cfg.ResolveSecret)
+			if err == nil && p.Category() == models.CategoryDAST && cfg.ResolveDAST != nil {
 				toolOpts.DAST, err = cfg.ResolveDAST(executionCtx)
 				if err == nil {
 					toolOpts.Target = toolOpts.DAST.Target.URL
