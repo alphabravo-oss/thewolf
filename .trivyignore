@@ -12,21 +12,18 @@
 # image. An exception scoped to one image can therefore never suppress the
 # same vulnerability ID in another image.
 #
-# CodeQL 2.26.2 is the latest bundle, but its packaged extractor/runtime
-# helper artifacts still include these fixed transitive dependencies.
-GHSA-r7wm-3cxj-wff9 # owner=scanner-platform; expires=2026-09-10; reason=latest CodeQL bundle still ships vulnerable jackson-core helper artifacts; images=codeql
-CVE-2026-54512 # owner=scanner-platform; expires=2026-09-10; reason=latest CodeQL bundle still ships vulnerable jackson-databind helper artifacts; images=codeql
-CVE-2026-54513 # owner=scanner-platform; expires=2026-09-10; reason=latest CodeQL bundle still ships vulnerable jackson-databind helper artifacts; images=codeql
-CVE-2026-48109 # owner=scanner-platform; expires=2026-09-10; reason=latest CodeQL bundle still ships vulnerable MessagePack helper artifacts; images=codeql
-CVE-2026-48502 # owner=scanner-platform; expires=2026-09-10; reason=latest CodeQL bundle still ships vulnerable MessagePack helper artifacts; images=codeql
-CVE-2026-48506 # owner=scanner-platform; expires=2026-09-10; reason=latest CodeQL bundle still ships vulnerable MessagePack helper artifacts; images=codeql
-CVE-2026-39822 # owner=scanner-platform; expires=2026-09-10; reason=latest CodeQL bundle still ships vulnerable Go helper binaries; images=codeql
-CVE-2026-56852 # owner=scanner-platform; expires=2026-09-10; reason=latest CodeQL bundle still ships vulnerable Go helper binaries; images=codeql
-CVE-2026-71556 # owner=scanner-platform; expires=2026-09-10; reason=latest CodeQL bundle still ships vulnerable go-git helper binary; images=codeql
-CVE-2026-26127 # owner=scanner-platform; expires=2026-09-10; reason=latest CodeQL bundle still ships vulnerable .NET CSharp extractor runtime; images=codeql
-CVE-2026-26131 # owner=scanner-platform; expires=2026-09-10; reason=latest CodeQL bundle still ships vulnerable .NET CSharp extractor runtime; images=codeql
-CVE-2026-47302 # owner=scanner-platform; expires=2026-09-10; reason=latest CodeQL bundle still ships vulnerable .NET CSharp extractor runtime; images=codeql
-CVE-2026-50524 # owner=scanner-platform; expires=2026-09-10; reason=latest CodeQL bundle still ships vulnerable .NET CSharp extractor runtime; images=codeql
-CVE-2026-50528 # owner=scanner-platform; expires=2026-09-10; reason=latest CodeQL bundle still ships vulnerable .NET CSharp extractor runtime; images=codeql
-CVE-2026-50651 # owner=scanner-platform; expires=2026-09-10; reason=latest CodeQL bundle still ships vulnerable .NET CSharp extractor runtime; images=codeql
-CVE-2026-57108 # owner=scanner-platform; expires=2026-09-10; reason=latest CodeQL bundle still ships vulnerable .NET CSharp extractor runtime; images=codeql
+# Re-triaged 2026-10-26 against a CodeQL 2.27.3 image built from current pins
+# (latest bundle, published 2026-10-20). The IDs below remain only in
+# artifacts GitHub ships inside the CodeQL bundle; no Wolf-side fix exists.
+# Six earlier exceptions no longer reproduce and were removed. Short expiry:
+# re-check when the next CodeQL bundle ships.
+CVE-2026-54512 # owner=scanner-platform; expires=2026-11-25; reason=CodeQL 2.27.3 bundle still ships jackson-databind 2.18.6 helper artifact; images=codeql
+CVE-2026-54513 # owner=scanner-platform; expires=2026-11-25; reason=CodeQL 2.27.3 bundle still ships jackson-databind 2.18.6 helper artifact; images=codeql
+CVE-2026-39822 # owner=scanner-platform; expires=2026-11-25; reason=CodeQL 2.27.3 bundle still ships Go 1.26.4 stdlib compiled into bundled scc; images=codeql
+CVE-2026-26127 # owner=scanner-platform; expires=2026-11-25; reason=CodeQL 2.27.3 bundle still ships .NET 10.0.0 runtime in C# extractor; images=codeql
+CVE-2026-26131 # owner=scanner-platform; expires=2026-11-25; reason=CodeQL 2.27.3 bundle still ships .NET 10.0.0 runtime in C# extractor; images=codeql
+CVE-2026-47302 # owner=scanner-platform; expires=2026-11-25; reason=CodeQL 2.27.3 bundle still ships .NET 10.0.0 runtime in C# extractor; images=codeql
+CVE-2026-50524 # owner=scanner-platform; expires=2026-11-25; reason=CodeQL 2.27.3 bundle still ships .NET 10.0.0 runtime in C# extractor; images=codeql
+CVE-2026-50528 # owner=scanner-platform; expires=2026-11-25; reason=CodeQL 2.27.3 bundle still ships .NET 10.0.0 runtime in C# extractor; images=codeql
+CVE-2026-50651 # owner=scanner-platform; expires=2026-11-25; reason=CodeQL 2.27.3 bundle still ships .NET 10.0.0 runtime in C# extractor; images=codeql
+CVE-2026-57108 # owner=scanner-platform; expires=2026-11-25; reason=CodeQL 2.27.3 bundle still ships .NET 10.0.0 runtime in C# extractor; images=codeql

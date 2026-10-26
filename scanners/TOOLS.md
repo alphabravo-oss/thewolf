@@ -66,7 +66,7 @@ Wolf scanner metadata is authored in `scanners/tools.yaml`. This table is genera
 | `cargo-audit` | sca | rust bucket | `0.22.2` (`CARGO_AUDIT_VERSION`) | `wolf-scanners-rust` | - | `github:rustsec/rustsec` |
 | `cargo-deny` | sca | rust bucket | `0.20.2` (`CARGO_DENY_VERSION`) | `wolf-scanners-rust` | - | `github:EmbarkStudios/cargo-deny` |
 | `clippy` | quality | rust bucket | `1.99.0` (`RUST_TOOLCHAIN`) | `wolf-scanners-rust` | - | `rust:stable` |
-| `codeql` | sast | codeql bucket | `2.27.2` (`CODEQL_VERSION`) | `wolf-scanners-codeql` | - | `github:github/codeql-cli-binaries` |
+| `codeql` | sast | codeql bucket | `2.27.3` (`CODEQL_VERSION`) | `wolf-scanners-codeql` | - | `github:github/codeql-cli-binaries` |
 | `detekt` | sast | jvm bucket | `1.23.8` (`DETEKT_VERSION`) | `wolf-scanners-jvm` | - | `github:detekt/detekt` |
 | `infer` | sast | jvm bucket | `1.3.0` (`INFER_VERSION`) | `wolf-scanners-jvm` | - | `github:facebook/infer` |
 | `pmd` | quality | jvm bucket | `7.28.0` (`PMD_VERSION`) | `wolf-scanners-jvm` | - | `github:pmd/pmd` |

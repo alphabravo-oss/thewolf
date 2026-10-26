@@ -94,10 +94,14 @@ test("worker warning survives list, submit and queued detail and can recover @br
   // Verify manual refresh while readiness is stable, then verify automatic
   // recovery. A polling response must not remove the button mid-click.
   await Promise.all([
-    page.waitForRequest(/\/scanners\/runtime-capabilities$/),
+    page.waitForResponse(/\/scanners\/runtime-capabilities$/),
     page.getByRole("button", { name: "Refresh worker status" }).click(),
   ]);
   workerStatus = "ready";
-  await page.clock.fastForward(10_000);
-  await expect(warning).toHaveCount(0);
+  // Polling restarts after each refetch; keep advancing the fake clock until the
+  // next poll lands instead of assuming exactly one 10s tick on a slow runner.
+  await expect(async () => {
+    await page.clock.fastForward(10_000);
+    await expect(warning).toHaveCount(0, { timeout: 1_000 });
+  }).toPass({ timeout: 20_000 });
 });

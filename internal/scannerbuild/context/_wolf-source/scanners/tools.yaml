@@ -147,7 +147,7 @@ tools:
     plugin_package: plugins/additional
     integration_tier: bucket
     bucket: codeql
-    pinned_version: "2.27.2"
+    pinned_version: "2.27.3"
     version_variable: CODEQL_VERSION
     update_source:
       type: github_releases
@@ -155,12 +155,12 @@ tools:
       repo: codeql-cli-binaries
       tag_pattern: '^v\d+\.\d+\.\d+$'
     source_integrity:
-      url: https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.27.2/codeql-bundle-linux64.tar.gz
-      sha256: f002864be6dd8d5d7bdb123aaf7291ec8e291012bd9f70b6d2362f730db52aeb
+      url: "https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.27.3/codeql-bundle-linux64.tar.gz"
+      sha256: "64518dc413c8e7b5733fee2489e830a899bb1e3f28c8873b5869d5cc90164c5c"
       sha256_variable: CODEQL_LINUX_AMD64_SHA256
     smoke:
       command: ["codeql", "--version"]
-      expected_pattern: "2.27.2"
+      expected_pattern: "2.27.3"
   conftest:
     display_name: Conftest
     category: infra
