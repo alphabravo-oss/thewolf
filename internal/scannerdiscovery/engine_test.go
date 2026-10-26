@@ -44,7 +44,7 @@ func TestCompleteScopeIncludesToolsImagesBasesAndToolchains(t *testing.T) {
 			t.Fatal("results are not sorted deterministically")
 		}
 	}
-	if kinds[ComponentTool] != 53 || kinds[ComponentUpstreamImage] != 25 ||
+	if kinds[ComponentTool] != 54 || kinds[ComponentUpstreamImage] != 26 ||
 		kinds[ComponentBaseImage] != 4 || kinds[ComponentToolchain] != 7 {
 		t.Fatalf("component kinds = %#v", kinds)
 	}

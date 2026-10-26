@@ -15,6 +15,7 @@ func TestAllSecurityParsersHostileCorpus(t *testing.T) {
 			return parseRenovateOutput(data, func(string) {})
 		},
 		"scorecard": parseScorecardOutput,
+		"zap":       parseZAPOutput,
 		"zizmor":    parseZizmorOutput,
 		"poutine":   parsePoutineOutput,
 	} {

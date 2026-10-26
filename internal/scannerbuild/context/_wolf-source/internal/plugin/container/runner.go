@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -40,6 +41,10 @@ func alternateCommandFactory() CommandFactory {
 // RepoDir; gosec/codeql/infer override WorkDir to run from a specific
 // subdirectory; nuclei sets NoRepoMount because DAST scans don't read a repo.
 type Options struct {
+	// DASTProxy attaches the scanner to the internal DAST network
+	// (WOLF_DAST_NETWORK), whose only route out is Wolf's approved-origin
+	// proxy. Without that network (dev, host-run Wolf) it uses the host gateway.
+	DASTProxy bool
 	// RepoDir is the wolf-slim-visible path to the repo to scan. The shim
 	// translates this to the host-visible path (via cfg.HostReposRoot) before
 	// passing to docker's -v flag. REQUIRED unless NoRepoMount is true.
@@ -150,6 +155,10 @@ func CommandContext(ctx context.Context, cfg *Config, opts Options, tool string,
 		"--tmpfs", "/tmp:rw,size=4g,mode=1777",
 	}
 
+	if opts.Stdin != "" {
+		dockerArgs = append(dockerArgs, "-i")
+	}
+
 	if !opts.NoRepoMount {
 		if cfg.RepoVolume != "" {
 			mountFlag := fmt.Sprintf("%s:%s:ro", cfg.RepoVolume, ScanMountPoint)
@@ -184,6 +193,13 @@ func CommandContext(ctx context.Context, cfg *Config, opts Options, tool string,
 	}
 	dockerArgs = append(dockerArgs, "--workdir", workdir)
 	dockerArgs = appendIsolationFlags(dockerArgs, cfg, tool)
+	if opts.DASTProxy {
+		if network := DASTNetwork(); network != "" {
+			dockerArgs[slices.Index(dockerArgs, "--network")+1] = network
+		} else {
+			dockerArgs = append(dockerArgs, "--add-host", "host.docker.internal:host-gateway")
+		}
+	}
 
 	// Resource limits. MemoryOverride wins over cfg.Memory when set.
 	memLimit := MemoryLimitFor(cfg, tool)

@@ -92,6 +92,9 @@ services:
       - WOLF_SCANNERS_PULL_POLICY=${WOLF_SCANNERS_PULL_POLICY:-IfNotPresent}
       - WOLF_SCANNERS_NETWORK=${WOLF_SCANNERS_NETWORK:-none}
       - WOLF_SCANNERS_ALLOW_NETWORK=${WOLF_SCANNERS_ALLOW_NETWORK:-bridge}
+      # DAST scanners join this internal network; their only way out is
+      # Wolf's approved-origin proxy.
+      - WOLF_DAST_NETWORK=${WOLF_DAST_NETWORK:-wolf-dast}
       - WOLF_SCAN_WORKERS=${WOLF_SCAN_WORKERS:-1}
       - WOLF_SCAN_ISOLATION=${WOLF_SCAN_ISOLATION:-standard}
       - WOLF_SCANNERS_MEMORY=${WOLF_SCANNERS_MEMORY:-2g}
@@ -123,6 +126,7 @@ services:
         required: false
     networks:
       - wolf-net
+      - wolf-dast
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wolf", "version"]
@@ -181,6 +185,9 @@ services:
       - WOLF_SCANNERS_PULL_POLICY=${WOLF_SCANNERS_PULL_POLICY:-IfNotPresent}
       - WOLF_SCANNERS_NETWORK=${WOLF_SCANNERS_NETWORK:-none}
       - WOLF_SCANNERS_ALLOW_NETWORK=${WOLF_SCANNERS_ALLOW_NETWORK:-bridge}
+      # DAST scanners join this internal network; their only way out is
+      # Wolf's approved-origin proxy.
+      - WOLF_DAST_NETWORK=${WOLF_DAST_NETWORK:-wolf-dast}
       - WOLF_SCAN_WORKERS=${WOLF_SCAN_WORKERS:-1}
       - WOLF_SCAN_ISOLATION=${WOLF_SCAN_ISOLATION:-standard}
       - WOLF_SCANNERS_MEMORY=${WOLF_SCANNERS_MEMORY:-2g}
@@ -200,6 +207,7 @@ services:
         required: false
     networks:
       - wolf-net
+      - wolf-dast
     restart: unless-stopped
     deploy:
       replicas: ${WOLF_SCAN_WORKERS:-1}
@@ -1010,6 +1018,10 @@ services:
 networks:
   wolf-net:
     driver: bridge
+  wolf-dast:
+    # No external route: DAST scanners reach targets only through the proxy.
+    name: ${WOLF_DAST_NETWORK:-wolf-dast}
+    internal: true
 
 volumes:
   wolf-data:

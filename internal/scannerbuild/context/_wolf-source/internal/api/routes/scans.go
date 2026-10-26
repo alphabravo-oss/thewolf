@@ -161,8 +161,7 @@ func CreateScan(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req createScanRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.WriteError(w, http.StatusBadRequest, "bad_request", "invalid request body")
+	if !scannerDecode(w, r, &req) {
 		return
 	}
 
@@ -734,8 +733,14 @@ func executeScan(parent context.Context, h *Handler, scanID, userID, repoID, bra
 
 	var scannerPlan *report.ScannerPlan
 	applyScanProfile(h, &req, repoID)
-	selection := scanSelectionConfig(h, req, detectedLanguages, repoPath)
+	targetURL := ""
+	if target, err := h.Store.GetDASTTarget(ctx, repoID); err == nil && target.Approved() {
+		targetURL = target.URL
+	}
+	selection := scanSelectionConfig(h, req, detectedLanguages, repoPath, targetURL)
 	cfg := runner.RunConfig{
+		Target:             targetURL,
+		ResolveDAST:        func(ctx context.Context) (*models.DASTExecution, error) { return resolveDAST(ctx, h.Store, repoID) },
 		RepoPath:           repoPath,
 		ResolveSecret:      scanOwnerSecretResolver(h, scan.UserID),
 		ScanID:             scanID,
@@ -977,6 +982,7 @@ func executeScan(parent context.Context, h *Handler, scanID, userID, repoID, bra
 		cfg.ToolResources = runner.ResourceSpecsFromManifest(toolManifest)
 		scannerPlan = planner.ToReportPlan(planner.Build(planner.Config{
 			Registry:      h.Registry,
+			Target:        targetURL,
 			Manifest:      toolManifest,
 			Languages:     detectedLanguages,
 			Tools:         selection.Tools,

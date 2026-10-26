@@ -31,7 +31,8 @@ import (
 
 // RunConfig holds all configuration for a scan run.
 type RunConfig struct {
-	RepoPath string
+	ResolveDAST func(context.Context) (*models.DASTExecution, error)
+	RepoPath    string
 	// Target is an explicit non-repository scan target, such as a controlled
 	// DAST URL or container-image archive. It is never inferred from RepoPath.
 	Target string
@@ -227,7 +228,9 @@ func applyKnowledge(f *models.Finding) bool {
 //  2. Otherwise ("auto" mode), select plugins matching detected Languages.
 //
 // In all cases, DisabledTools are removed from the final set.
-func SelectTools(cfg RunConfig) []models.Plugin {
+func SelectTools(cfg RunConfig) []models.Plugin { return selectTools(cfg, true) }
+
+func selectTools(cfg RunConfig, checkInputs bool) []models.Plugin {
 	if cfg.Registry == nil {
 		return nil
 	}
@@ -273,6 +276,9 @@ func SelectTools(cfg RunConfig) []models.Plugin {
 		selected = filtered
 	}
 
+	if !checkInputs {
+		return selected
+	}
 	applicable := selected[:0]
 	for _, p := range selected {
 		if !plugin.IsNotApplicable(plugin.CheckApplicability(p, cfg.RepoPath, cfg.Target)) {
@@ -388,9 +394,7 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	// Select tools.
 	// Keep non-applicable selections for durable skip reporting. Preflight
 	// callers of SelectTools receive only tools whose inputs may be present.
-	selection := cfg
-	selection.RepoPath = ""
-	plugins := SelectTools(selection)
+	plugins := selectTools(cfg, false)
 	netReq := make(map[string]bool, len(cfg.ToolResources))
 	for name, spec := range cfg.ToolResources {
 		netReq[name] = spec.NetworkRequired || spec.Class == "network"
@@ -570,13 +574,16 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 				}
 			}
 
-			secretEnv, secretErr := resolveExternalSecrets(executionCtx, toolName, cfg.ResolveSecret)
-			toolOpts.SecretEnv = secretEnv
 			var findings []models.Finding
 			var err error
-			if secretErr != nil {
-				err = secretErr
-			} else {
+			toolOpts.SecretEnv, err = resolveExternalSecrets(executionCtx, toolName, cfg.ResolveSecret)
+			if err == nil && p.Category() == models.CategoryDAST && cfg.ResolveDAST != nil {
+				toolOpts.DAST, err = cfg.ResolveDAST(executionCtx)
+				if err == nil {
+					toolOpts.Target = toolOpts.DAST.Target.URL
+				}
+			}
+			if err == nil {
 				findings, err = p.Execute(executionCtx, toolOpts)
 			}
 			if err == nil && len(findings) == 0 && skipReason != "" {

@@ -1,7 +1,7 @@
 # Deterministic scanner compatibility policy. Resource limits are evaluated
 # against recorded execution evidence, never as wall-clock unit microbenchmarks.
 schemaVersion: wolf.scanners/quality-policy/v1
-expectedToolCount: 53
+expectedToolCount: 54
 
 parserContract:
   # The final component is the authoritative tools.yaml/plugin registration key.
@@ -92,6 +92,7 @@ tools:
   vale: {family: documentation, strategy: gated-executable, parserOwned: true, parserFormat: json, thresholdProfile: light, rationale: "Runs only in the exact-digest upstream image with checked-in styles."}
   vulture: {family: python, strategy: executable-fixture, parserOwned: true, parserFormat: text, thresholdProfile: light}
   yamllint: {family: documentation, strategy: executable-fixture, parserOwned: true, parserFormat: text, thresholdProfile: light}
+  zap: {family: dast, strategy: gated-executable, parserOwned: true, parserFormat: json, thresholdProfile: network, rationale: "Requires an administrator-approved loopback target reached only through the DAST proxy; public network scanning is prohibited in fixtures."}
   zizmor: {family: supply-chain, strategy: gated-executable, parserOwned: true, parserFormat: json, thresholdProfile: medium, rationale: "Runs only in the exact-digest upstream image against local GitHub Actions files."}
 
 scannerVariants:

@@ -10,8 +10,8 @@ Wolf scanner metadata is authored in `scanners/tools.yaml`. This table is genera
 |---|---:|
 | Default Wolf image | 21 |
 | Wolf bucket images | 7 |
-| Upstream/native images | 25 |
-| Total registered scanner tools | 53 |
+| Upstream/native images | 26 |
+| Total registered scanner tools | 54 |
 
 ## Tools
 
@@ -41,6 +41,7 @@ Wolf scanner metadata is authored in `scanners/tools.yaml`. This table is genera
 | `trivy` | sca | upstream | `0.75.0` (`TRIVY_VERSION`) | `aquasec/trivy:0.75.0` | `linux/amd64`, `linux/arm64` | `docker:aquasec/trivy` |
 | `trufflehog` | secrets | upstream | `3.99.2` (`TRUFFLEHOG_VERSION`) | `trufflesecurity/trufflehog:3.99.2` | `linux/amd64`, `linux/arm64` | `docker:trufflesecurity/trufflehog` |
 | `vale` | docs | upstream | `3.24.0` (`VALE_VERSION`) | `jdkato/vale:v3.24.0` | `linux/amd64`, `linux/arm64` | `docker:jdkato/vale` |
+| `zap` | dast | upstream | `2.17.0` (`ZAP_VERSION`) | `ghcr.io/zaproxy/zaproxy:2.17.0@sha256:030d3df57735dacbb83464854758e674dd9ad01d79d12a129a8e58b1fd384238` | `linux/amd64`, `linux/arm64` | `docker:ghcr.io/zaproxy/zaproxy` |
 | `zizmor` | sast | upstream | `1.30.1` (`ZIZMOR_VERSION`) | `ghcr.io/zizmorcore/zizmor:1.30.1@sha256:a2eb396d886c053073405c7a980f2139ba2248ec172243cfa3841e57196e8101` | `linux/amd64`, `linux/arm64` | `docker:ghcr.io/zizmorcore/zizmor` |
 | `bandit` | sast | default | `1.9.4` (`BANDIT_VERSION`) | `pip:bandit` | - | `pypi:bandit` |
 | `brakeman` | sast | default | `8.1.0` (`BRAKEMAN_VERSION`) | `gem:brakeman` | - | `rubygems:brakeman` |

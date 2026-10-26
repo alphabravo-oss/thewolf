@@ -128,7 +128,55 @@ func newRepoCmd() *cobra.Command {
 		subGetCmd("branches <id>", "List a repository's branches", "/repos/%s/branches"),
 		subGetCmd("fixable <id>", "List a repository's fixable findings", "/repos/%s/fixable"),
 		listOrg,
+		newRepoDASTCmd(),
 	)
+	return cmd
+}
+
+// newRepoDASTCmd manages a repository's DAST target. Saving revokes approval;
+// approval names the exact revision the administrator reviewed.
+func newRepoDASTCmd() *cobra.Command {
+	cmd := group("dast", "Manage a repository's DAST target (ZAP, Nuclei)")
+
+	var targetURL, mode, specURL, apiFormat, authSecret string
+	var setRevision int64
+	set := &cobra.Command{
+		Use:         "set <id>",
+		Short:       "Set the DAST target (clears approval; empty --url disables DAST)",
+		Annotations: apiAnno("PUT", "/repos/{}/dast-target"),
+		Args:        cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			body := map[string]any{"url": targetURL, "mode": mode, "api_spec_url": specURL, "api_format": apiFormat, "auth_secret_id": authSecret, "revision": setRevision}
+			return runRender(cmd, "PUT", "/repos/"+args[0]+"/dast-target", body)
+		},
+	}
+	set.Flags().StringVar(&targetURL, "url", "", "HTTP(S) target URL")
+	set.Flags().StringVar(&mode, "mode", "baseline", "ZAP mode: baseline (passive), full (active attacks), api")
+	set.Flags().StringVar(&specURL, "api-spec-url", "", "same-origin OpenAPI spec URL or GraphQL endpoint (api mode)")
+	set.Flags().StringVar(&apiFormat, "api-format", "openapi", "openapi or graphql")
+	set.Flags().StringVar(&authSecret, "auth-secret", "", "custom secret ID holding a JSON object of auth headers")
+	set.Flags().Int64Var(&setRevision, "revision", 0, "current revision from `wolf repo dast get` (0 for a new target)")
+
+	var approveRevision int64
+	var allowPrivate, approveActive bool
+	approve := &cobra.Command{
+		Use:         "approve <id>",
+		Short:       "Approve the reviewed DAST target revision (administrators)",
+		Annotations: apiAnno("POST", "/repos/{}/dast-target/approve"),
+		Args:        cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if approveRevision < 1 {
+				return fmt.Errorf("--revision is required (see `wolf repo dast get %s`)", args[0])
+			}
+			body := map[string]any{"revision": approveRevision, "allow_private": allowPrivate, "approve_active": approveActive}
+			return runRender(cmd, "POST", "/repos/"+args[0]+"/dast-target/approve", body)
+		},
+	}
+	approve.Flags().Int64Var(&approveRevision, "revision", 0, "the revision you reviewed")
+	approve.Flags().BoolVar(&allowPrivate, "allow-private", false, "allow a private-network target")
+	approve.Flags().BoolVar(&approveActive, "approve-active", false, "authorize active attacks (required for full mode)")
+
+	cmd.AddCommand(subGetCmd("get <id>", "Show the DAST target and approval", "/repos/%s/dast-target"), set, approve)
 	return cmd
 }
 

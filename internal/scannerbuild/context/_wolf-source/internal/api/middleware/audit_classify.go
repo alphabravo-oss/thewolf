@@ -60,6 +60,8 @@ var auditRules = []auditRule{
 	{http.MethodPost, eq("/config/secrets"), "secret.created", CatSecrets, SevWarning},
 	{http.MethodDelete, underPrefix("/config/secrets/"), "secret.deleted", CatSecrets, SevWarning},
 	// Configuration
+	{http.MethodPut, underPrefixSuffix("/repos/", "/dast-target"), "repo.dast_target.changed", CatConfiguration, SevWarning},
+	{http.MethodPost, underPrefixSuffix("/repos/", "/dast-target/approve"), "repo.dast_target.approved", CatAuthorization, SevCritical},
 	{http.MethodPut, eq("/settings"), "settings.updated", CatConfiguration, SevWarning},
 	{http.MethodPost, eq("/license/validate"), "license.validated", CatConfiguration, SevInfo},
 	{http.MethodPost, eq("/license/install"), "license.install", CatConfiguration, SevWarning},

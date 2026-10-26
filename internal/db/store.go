@@ -167,6 +167,8 @@ type Store interface {
 	DeleteUser(ctx context.Context, id string) error
 
 	// Repos
+	GetDASTTarget(ctx context.Context, repoID string) (*models.DASTTarget, error)
+	SaveDASTTarget(ctx context.Context, target *models.DASTTarget, approve bool) error
 	CreateRepo(ctx context.Context, repo *models.Repo) error
 	GetRepoByID(ctx context.Context, id string) (*models.Repo, error)
 	ListReposByUser(ctx context.Context, userID string) ([]models.Repo, error)

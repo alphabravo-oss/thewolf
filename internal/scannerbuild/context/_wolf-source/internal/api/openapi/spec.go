@@ -101,6 +101,9 @@ func Endpoints() []Endpoint {
 		{"POST", "/repos/{id}/sync", "repos", "Clone or pull the latest commits without starting a scan", "write:repos", "", false},
 		{"DELETE", "/repos/{id}", "repos", "Delete a repository (pass purge=true to also remove scan records)", "write:repos", "", false},
 		{"GET", "/repos/{id}/branches", "repos", "List a repository's branches", "read:repos", "", true},
+		{"GET", "/repos/{id}/dast-target", "repos", "Read repository DAST target and approval", "read:repos", "", false},
+		{"PUT", "/repos/{id}/dast-target", "repos", "Update DAST target; every edit revokes approval", "write:repos", "UpdateDASTTargetRequest", false},
+		{"POST", "/repos/{id}/dast-target/approve", "repos", "Administrator approval of the current target revision; full mode requires approve_active", "admin", "ApproveDASTTargetRequest", false},
 		{"GET", "/repos/{id}/fixable", "repos", "Writability preflight: can wolf write a fix branch to this repo?", "read:repos", "", false},
 		{"GET", "/repos/{id}/baselines", "repos", "List repository scan baselines", "read:scans", "", true},
 		{"POST", "/repos/{id}/baselines", "repos", "Create a repository scan baseline", "write:scans", "CreateBaselineRequest", false},
@@ -929,6 +932,13 @@ func operationID(ep Endpoint) string {
 }
 
 func buildResponses(ep Endpoint) map[string]any {
+	if ep.Path == "/repos/{id}/dast-target" || ep.Path == "/repos/{id}/dast-target/approve" {
+		return map[string]any{
+			"200": map[string]any{"description": "Repository DAST settings", "content": map[string]any{"application/json": map[string]any{"schema": objSchema(map[string]any{"data": map[string]any{"$ref": "#/components/schemas/DASTTarget"}})}}},
+			"400": errRef("Invalid or blocked target"), "401": errRef("Authentication required"), "403": errRef("Owner or administrator permission required"), "404": errRef("Repository not found"), "409": errRef("Target revision changed; reload before approval"),
+		}
+	}
+
 	if legacyScannerBuildEndpoint(ep) {
 		gone := errRef("Legacy synchronous scanner image builds are disabled; use durable scanner release candidates")
 		gone["headers"] = legacyScannerBuildHeaders()
@@ -1662,6 +1672,24 @@ func buildComponents() map[string]any {
 			"CreateRepoRequest": objSchema(map[string]any{
 				"name": str, "source_type": str, "source_path": str, "remote_node_id": str, "remote_path": str, "default_branch": str,
 			}, "name", "source_path"),
+			"DASTTarget": objSchema(map[string]any{
+				"repo_id": str, "url": str, "mode": map[string]any{"type": "string", "enum": []string{"baseline", "full", "api"}, "default": "baseline"},
+				"api_spec_url": str, "api_format": map[string]any{"type": "string", "enum": []string{"openapi", "graphql"}, "default": "openapi"},
+				"auth_secret_id": str, "revision": map[string]any{"type": "integer"}, "approved_by": str, "allow_private": map[string]any{"type": "boolean"}, "active_approved": map[string]any{"type": "boolean"},
+			}),
+			"UpdateDASTTargetRequest": objSchema(map[string]any{
+				"url":            map[string]any{"type": "string", "description": "HTTP(S) target; empty disables DAST. Metadata/link-local destinations are forbidden."},
+				"mode":           map[string]any{"type": "string", "enum": []string{"baseline", "full", "api"}, "default": "baseline"},
+				"api_spec_url":   map[string]any{"type": "string", "description": "Same-origin OpenAPI spec URL or GraphQL endpoint, required for passive API mode."},
+				"api_format":     map[string]any{"type": "string", "enum": []string{"openapi", "graphql"}, "default": "openapi"},
+				"auth_secret_id": map[string]any{"type": "string", "description": "Repository owner's custom secret containing a JSON object of HTTP headers; never plaintext."},
+				"revision":       map[string]any{"type": "integer", "minimum": 0},
+			}, "url", "revision"),
+			"ApproveDASTTargetRequest": objSchema(map[string]any{
+				"revision":       map[string]any{"type": "integer", "minimum": 1},
+				"allow_private":  map[string]any{"type": "boolean", "default": false},
+				"approve_active": map[string]any{"type": "boolean", "default": false, "description": "Explicit authorization to actively attack this full-mode target."},
+			}, "revision"),
 			"UpdateRepoRequest": objSchema(map[string]any{"name": str, "branch": str}),
 			"RemoteNodeRequest": objSchema(map[string]any{
 				"name": str, "host": str, "port": map[string]any{"type": "integer"}, "username": str,

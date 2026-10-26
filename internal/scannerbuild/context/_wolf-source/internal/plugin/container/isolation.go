@@ -37,6 +37,11 @@ func IsolationFromEnv() string {
 	}
 }
 
+// DASTNetwork is the internal Docker network shared by Wolf and DAST scanner
+// containers. It has no external route, so a DAST scanner can only reach the
+// target through Wolf's approved-origin proxy.
+func DASTNetwork() string { return strings.TrimSpace(os.Getenv("WOLF_DAST_NETWORK")) }
+
 // ResolveNetwork is deny-by-default: none unless the tool declared
 // network_required (then AllowNetwork, default bridge) or isolation is relaxed.
 func ResolveNetwork(cfg *Config, tool string) string {

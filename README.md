@@ -8,7 +8,7 @@
 
 <p align="center">
   <img alt="Version" src="https://img.shields.io/badge/version-0.2.0-1f6feb?style=flat-square" />
-  <img alt="Scanners" src="https://img.shields.io/badge/scanners-53-1f6feb?style=flat-square" />
+  <img alt="Scanners" src="https://img.shields.io/badge/scanners-54-1f6feb?style=flat-square" />
   <img alt="Self-hosted" src="https://img.shields.io/badge/deployment-self--hosted-2ea043?style=flat-square" />
   <img alt="AI" src="https://img.shields.io/badge/AI-assisted%20remediation-8957e5?style=flat-square" />
   <img alt="API" src="https://img.shields.io/badge/API-OpenAPI%203.0-0969da?style=flat-square" />
@@ -19,7 +19,7 @@
 
 > **Measure code. Improve it. Prove it got better.**
 >
-> The Wolf unifies **53 best-in-class security and quality scanners** behind a single console, API, and CLI, then runs them as reproducible, version-pinned evidence against every repository in your fleet. Whether code was written by a developer, generated with AI, or changed by an automated fix, Wolf makes it answer to deterministic scanners, quality gates, baselines, and targeted rescans before you trust it. No per-seat licensing. No code leaving your perimeter. No forty tools to install and babysit. Just Docker, and a platform that runs entirely on your terms.
+> The Wolf unifies **54 best-in-class security and quality scanners** behind a single console, API, and CLI, then runs them as reproducible, version-pinned evidence against every repository in your fleet. Whether code was written by a developer, generated with AI, or changed by an automated fix, Wolf makes it answer to deterministic scanners, quality gates, baselines, and targeted rescans before you trust it. No per-seat licensing. No code leaving your perimeter. No forty tools to install and babysit. Just Docker, and a platform that runs entirely on your terms.
 
 ---
 
@@ -52,7 +52,7 @@ The Wolf collapses that sprawl into one platform:
 
 ### Unified Scanning
 
-**53 scanners, one deterministic engine.** SAST, SCA, secrets, containers, IaC, DAST, SBOM, license, privacy/PII, K8s, and more — running in parallel, version-pinned, and fully reproducible.
+**54 scanners, one deterministic engine.** SAST, SCA, secrets, containers, IaC, DAST, SBOM, license, privacy/PII, K8s, and more — running in parallel, version-pinned, and fully reproducible.
 
 </td>
 <td width="33%" valign="top">
@@ -101,7 +101,7 @@ The Wolf collapses that sprawl into one platform:
 
 ### One platform, every scanner
 
-The Wolf orchestrates **53 industry-standard tools** across every major category — and it doesn't ask you to install a single one. Each tool runs in its own short-lived, locked-down container; the only thing on your host is Docker. That gives teams a deterministic improvement loop: scan code consistently, fix what matters, and rescan the exact evidence before merging. It works for traditional development, AI-assisted development, and autonomous remediation.
+The Wolf orchestrates **54 industry-standard tools** across every major category — and it doesn't ask you to install a single one. Each tool runs in its own short-lived, locked-down container; the only thing on your host is Docker. That gives teams a deterministic improvement loop: scan code consistently, fix what matters, and rescan the exact evidence before merging. It works for traditional development, AI-assisted development, and autonomous remediation.
 
 - **Comprehensive coverage** — SAST, software composition analysis (SCA), secret detection, container & image hardening, infrastructure-as-code, Kubernetes, policy-as-code, DAST, SBOM generation, license compliance, privacy/PII data-flow, dependency freshness, repository hygiene, and per-language linting for Python, Go, JavaScript/TypeScript, Java, Kotlin, Ruby, PHP, Rust, C/C++, Swift, and more.
 - **Parallel by design** — every applicable tool runs concurrently with configurable concurrency, so a full multi-tool scan finishes in the time of your slowest scanner, not the sum of all of them.
@@ -241,7 +241,7 @@ registry mirrors, air-gapped installs, and advanced custom builds—see
 | **Secrets** | Gitleaks · TruffleHog · detect-secrets | Official image / bundled | History + working-tree secret detection, with live verification |
 | **Containers** | Hadolint · Dockle | Official image | Dockerfile linting & CIS image hardening |
 | **Infrastructure** | TFLint | Official image | Provider-aware Terraform linting |
-| **DAST** | Nuclei | Official image | Template-based HTTP/DNS/TCP vulnerability scanning |
+| **DAST** | OWASP ZAP, Nuclei | Official images | Baseline, full (active) and API scans plus HTTP templates against an administrator-approved repository target, through an approved-origin proxy |
 | **Privacy / PII** | Bearer | Official image | GDPR/HIPAA/PCI data-flow analysis |
 | **Repo hygiene** | OpenSSF Scorecard | Official image | Supply-chain security posture scoring |
 | **SBOM** | Syft | Official image | Software bill-of-materials generation |

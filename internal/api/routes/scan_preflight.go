@@ -109,7 +109,16 @@ func ScanPreflight(w http.ResponseWriter, r *http.Request) {
 	if repo.SourceType == models.SourceTypeLocal {
 		repoPath = repo.SourcePath
 	}
-	plugins := runner.SelectTools(scanSelectionConfig(h, createReq, languages, repoPath))
+	target, err := h.Store.GetDASTTarget(r.Context(), repo.ID)
+	if err != nil {
+		response.WriteError(w, 500, "server_error", "failed to read DAST target")
+		return
+	}
+	targetURL := ""
+	if target.Approved() {
+		targetURL = target.URL
+	}
+	plugins := runner.SelectTools(scanSelectionConfig(h, createReq, languages, repoPath, targetURL))
 	tools := make([]string, 0, len(plugins))
 	for _, p := range plugins {
 		// Execution checks availability before publishing its selected list.
@@ -184,9 +193,14 @@ func ScanPreflight(w http.ResponseWriter, r *http.Request) {
 // scanSelectionConfig is shared by readiness and execution. Source detection
 // and profile policy feed the same runner selector, including explicit empty
 // category selections and repository-specific applicability checks.
-func scanSelectionConfig(h *Handler, req createScanRequest, languages []models.Language, repoPath string) runner.RunConfig {
+func scanSelectionConfig(h *Handler, req createScanRequest, languages []models.Language, repoPath string, targets ...string) runner.RunConfig {
+	target := ""
+	if len(targets) > 0 {
+		target = targets[0]
+	}
 	return runner.RunConfig{
 		Registry:      h.Registry,
+		Target:        target,
 		RepoPath:      repoPath,
 		Tools:         toolsForProfile(h, req, languages),
 		ToolsExplicit: req.Profile == "full" || len(req.Categories) > 0 || len(req.Tools) > 0,
