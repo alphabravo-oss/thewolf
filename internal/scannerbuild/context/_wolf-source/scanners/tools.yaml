@@ -938,3 +938,20 @@ tools:
       type: docker_registry
       repository: ghcr.io/zizmorcore/zizmor
       tag_pattern: '^\d+\.\d+\.\d+$'
+  zap:
+    display_name: OWASP ZAP
+    category: dast
+    resource_class: heavy
+    default_timeout: 15m
+    network_required: true
+    plugin_package: plugins/security
+    integration_tier: upstream
+    pinned_version: "2.17.0"
+    version_variable: ZAP_VERSION
+    image:
+      pinned_reference: ghcr.io/zaproxy/zaproxy:2.17.0@sha256:030d3df57735dacbb83464854758e674dd9ad01d79d12a129a8e58b1fd384238
+      entrypoint: python3
+    update_source:
+      type: docker_registry
+      repository: ghcr.io/zaproxy/zaproxy
+      tag_pattern: '^\d+\.\d+\.\d+$'

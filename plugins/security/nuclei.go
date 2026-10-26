@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/alphabravocompany/thewolf/internal/dast"
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
 	"github.com/alphabravocompany/thewolf/internal/plugin/container"
@@ -33,12 +34,19 @@ func (p *NucleiPlugin) Applicability(repoPath, target string) error {
 }
 
 func (p *NucleiPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
-	// Nuclei is a DAST scanner — it needs HTTP targets, not source code.
-	// Without an explicit Target (URL/host) we have nothing to scan and the
-	// previous fallback (`-l /scan` against the repo root) caused multi-hour
-	// hangs because nuclei recursively walks the tree probing every file
-	// as a URL. Skip cleanly so the scan doesn't get held up.
-	if err := p.Applicability(opts.RepoPath, opts.Target); err != nil {
+	// Repository scans run only against an administrator-approved target,
+	// through the approved-origin proxy. Scanner-release qualification passes
+	// a fixture Target with no DAST execution; it runs on its own controlled
+	// wolf-quality network, so it connects directly.
+	target := opts.Target
+	var headers map[string]string
+	if opts.DAST != nil {
+		if !opts.DAST.Target.Approved() {
+			return nil, &plugin.NotApplicableError{Reason: "no approved repository DAST target"}
+		}
+		target, headers = opts.DAST.Target.URL, opts.DAST.Headers
+	}
+	if err := p.Applicability(opts.RepoPath, target); err != nil {
 		return nil, err
 	}
 	if opts.Timeout > 0 {
@@ -47,38 +55,54 @@ func (p *NucleiPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]
 		defer cancel()
 	}
 
-	// Nuclei is a DAST scanner — it scans HTTP targets, not local repos.
-	// When a target URL is provided, no repo mount is needed.
-	// nuclei writes config + template cache to ~/.config/nuclei. As
-	// non-root with HOME=/ that path is read-only; redirect with HOME=/tmp
-	// and explicit -config-directory so the cache lives in the tmpfs.
-	args := []string{
-		"-jsonl", "-silent",
-		"-config-directory", "/tmp/nuclei",
-		"-u", opts.Target,
+	var proxy *dast.Proxy
+	if opts.DAST != nil {
+		var err error
+		if proxy, err = dast.StartProxy(ctx, opts.DAST.Target); err != nil {
+			return nil, err
+		}
+		defer proxy.Close()
 	}
-	opt := container.Options{
-		NoRepoMount: true,
-		ExtraEnv:    map[string]string{"HOME": "/tmp"},
+	headerLines := []string{}
+	for name, value := range headers {
+		headerLines = append(headerLines, name+": "+value)
 	}
+	config, err := json.Marshal(map[string]any{"header": headerLines})
+	if err != nil {
+		return nil, err
+	}
+	// HTTP templates only: network/headless/code templates cannot bypass the
+	// approved-origin proxy. Disable out-of-band callbacks and update traffic.
+	args := []string{"-c", `umask 077; cat > /tmp/wolf-nuclei.yaml; exec nuclei "$@"`, "nuclei",
+		"-jsonl", "-silent", "-config", "/tmp/wolf-nuclei.yaml", "-omit-raw",
+		"-config-directory", "/tmp/nuclei", "-u", target,
+		"-pt", "http", "-ni", "-duc", "-dr",
+	}
+	if proxy != nil {
+		args = append(args, "-proxy", proxy.URL)
+	}
+	opt := container.Options{NoRepoMount: true, DASTProxy: proxy != nil, EntrypointOverride: "sh", Stdin: string(config), ExtraEnv: map[string]string{"HOME": "/tmp"}}
 
 	cmd := container.CommandContext(ctx,
 		container.ConfigFromOpts(opts.ContainerCfg),
 		opt,
 		"nuclei", args...)
 	out, err := cmd.Output()
-	if err != nil && len(out) == 0 {
-		return nil, plugin.WrapExecError("nuclei", err)
+	if err != nil {
+		return nil, fmt.Errorf("Nuclei failed to scan the target: %v", err)
 	}
+	if proxy != nil && !proxy.ReachedTarget() {
+		return nil, fmt.Errorf("Nuclei could not reach the approved target (check target availability and installed templates)")
+	}
+	for _, secret := range headers {
+		encoded, _ := json.Marshal(secret)
+		if len(encoded) > 2 {
+			out = bytes.ReplaceAll(out, encoded[1:len(encoded)-1], []byte("[REDACTED]"))
+		}
+	}
+	plugin.SaveRaw(opts, out, "jsonl")
 
-	findings, perr := parseNucleiOutputWithMetrics(out, opts.OnParseError)
-	if perr != nil {
-		return nil, perr
-	}
-	for i := range findings {
-		findings[i].FilePath = container.NormalizePath(findings[i].FilePath)
-	}
-	return findings, nil
+	return parseNucleiOutputWithMetrics(out, opts.OnParseError)
 }
 
 type nucleiResult struct {

@@ -24,6 +24,7 @@ const (
 )
 
 type Config struct {
+	Target            string
 	Registry          *plugin.Registry
 	RepoPath          string
 	ToolsExplicit     bool
@@ -157,7 +158,7 @@ func decideAuto(cfg Config, p models.Plugin, languages map[models.Language]bool,
 }
 
 func withAvailability(cfg Config, p models.Plugin, d Decision) Decision {
-	if err := plugin.CheckApplicability(p, cfg.RepoPath); plugin.IsNotApplicable(err) {
+	if err := plugin.CheckApplicability(p, cfg.RepoPath, cfg.Target); plugin.IsNotApplicable(err) {
 		d.Selected = false
 		d.ReasonCode = ReasonNotApplicable
 		d.Reason = err.Error()

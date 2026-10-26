@@ -40,7 +40,7 @@ func CheckApplicability(p models.Plugin, repoPath string, targets ...string) err
 	if len(targets) > 0 {
 		target = targets[0]
 	}
-	if repoPath == "" {
+	if repoPath == "" && p.Category() != models.CategoryDAST {
 		return nil
 	}
 	if checker, ok := p.(interface{ Applicability(string, string) error }); ok {

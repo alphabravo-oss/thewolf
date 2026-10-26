@@ -128,7 +128,19 @@ func ScannersPlan(w http.ResponseWriter, r *http.Request) {
 			repoPath = repo.SourcePath
 		}
 	}
+	targetURL := ""
+	if req.RepoID != "" {
+		target, err := h.Store.GetDASTTarget(r.Context(), req.RepoID)
+		if err != nil {
+			response.WriteError(w, 500, "server_error", "failed to read DAST target")
+			return
+		}
+		if target.Approved() {
+			targetURL = target.URL
+		}
+	}
 	result := planner.Build(planner.Config{
+		Target:            targetURL,
 		Registry:          reg,
 		RepoPath:          repoPath,
 		Manifest:          m,

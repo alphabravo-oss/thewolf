@@ -20,6 +20,7 @@ type Plugin interface {
 
 // ExecuteOpts contains options for plugin execution.
 type ExecuteOpts struct {
+	DAST         *DASTExecution
 	RepoPath     string
 	Branch       string
 	IncludePaths []string

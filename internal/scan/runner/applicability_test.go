@@ -29,6 +29,7 @@ func TestInputGuardsAreSharedBySelectionAndExecution(t *testing.T) {
 		{"zizmor", ".github/workflows/ci.yml", "name: ci", ""},
 		{"dockle", "", "", "example:tag"},
 		{"nuclei", "", "", "https://example.invalid"},
+		{"zap", "", "", "https://example.invalid"},
 	} {
 		t.Run(tc.tool, func(t *testing.T) {
 			repo := t.TempDir()

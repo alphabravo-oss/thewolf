@@ -20,6 +20,7 @@ import {
 } from "recharts";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { RepositoryDASTTarget } from "@/components/repos/dast-target";
 import { RepositoryCISnippet } from "@/components/repos/ci-snippet";
 import { api, ApiError, isNotFound } from "@/lib/api";
 import { parseToolList, type Finding, type Repo, type Scan, type ScanSchedule } from "@/lib/types";
@@ -290,6 +291,7 @@ function RepoDetailPage() {
       </section>
 
           {canModify(me.data, r.user_id) && <button type="button" onClick={() => sync.mutate()} disabled={sync.isPending || scan.busy} className="inline-flex h-9 items-center gap-2 rounded-md border border-border px-3 text-sm hover:bg-muted/50 disabled:opacity-50"><RefreshCwIcon className={`size-4 ${sync.isPending ? "animate-spin" : ""}`} />{sync.isPending ? "Syncing…" : `Sync ${r.default_branch || "main"}`}</button>}
+          <RepositoryDASTTarget repo={r} />
           <ScheduleCard repoId={repoId} defaultBranch={r.default_branch || "main"} />
           <section className="glass-card p-5 space-y-3">
             <RepositoryCISnippet repoId={repoId} />
