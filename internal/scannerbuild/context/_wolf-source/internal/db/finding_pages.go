@@ -156,13 +156,13 @@ func queryCurrentFindings(ctx context.Context, database *sqlx.DB, userID string,
 	// Reuse history semantics: incomplete scans add evidence without erasing the
 	// last complete observation. Only compact identities are loaded for history;
 	// descriptions, snippets and native reports are fetched for the page only.
-	e, err := loadFleetEvidence(ctx, tx, userID, fleet, collectionID)
+	e, err := loadFleetEvidence(ctx, tx, userID, fleet, collectionID, repoID)
 	if err != nil {
 		return result, err
 	}
 	normalization := trace.StartRegion(ctx, "finding.normalization")
 	current := e.currentEvidence(time.Now().UTC())
-	current = slices.DeleteFunc(current, func(f models.Finding) bool {
+	current = slices.DeleteFunc(current, func(f *fleetFinding) bool {
 		return f.Status != models.StatusOpen || (repoID != "" && f.RepoID != repoID)
 	})
 	current = dedupCurrentFindings(current)

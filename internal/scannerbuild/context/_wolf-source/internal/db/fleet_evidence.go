@@ -94,35 +94,103 @@ type fleetRepo struct {
 	ID   string `db:"id"`
 	Name string `db:"name"`
 }
+
+// fleetFinding holds only the persisted columns read by fleet evidence. Keep full
+// finding payloads in the paged/detail queries, and share evidence by pointer.
+type fleetFinding struct {
+	ID                  string          `db:"id"`
+	ScanID              string          `db:"scan_id"`
+	RepoID              string          `db:"repo_id"`
+	Fingerprint         string          `db:"fingerprint"`
+	StableFingerprint   string          `db:"stable_fingerprint"`
+	LocationFingerprint string          `db:"location_fingerprint"`
+	ToolName            string          `db:"tool_name"`
+	Category            models.Category `db:"category"`
+	Severity            models.Severity `db:"severity"`
+	Title               string          `db:"title"`
+	FilePath            string          `db:"file_path"`
+	LineStart           int             `db:"line_start"`
+	RuleID              string          `db:"rule_id"`
+	Status              models.Status   `db:"status"`
+	Suppressed          bool            `db:"suppressed"`
+	BaselineState       string          `db:"baseline_state"`
+	Confidence          string          `db:"confidence"`
+	CreatedAt           time.Time       `db:"created_at"`
+}
+
+func (f *fleetFinding) diffKey() string {
+	// Match the legacy projection passed to diff.Compare, including its identity
+	// fallback when neither fingerprint was persisted.
+	return findingdiff.Key(models.Finding{
+		Fingerprint: f.Fingerprint, StableFingerprint: f.StableFingerprint,
+		ToolName: f.ToolName, Category: f.Category, Title: f.Title,
+		FilePath: f.FilePath, LineStart: f.LineStart, RuleID: f.RuleID,
+	})
+}
+
 type fleetEvidence struct {
 	repos       []fleetRepo
 	scans       []models.Scan
-	findings    map[string][]models.Finding
+	findings    map[string][]*fleetFinding
 	failedGates map[string]bool
 }
 
 // ponytail: O(scan + finding history) per aggregate, using four scoped queries
 // and compact evidence columns (no SARIF/snippets). Materialize daily snapshots
 // when history volume makes this too expensive; never cap history silently.
-func loadFleetEvidence(ctx context.Context, database sqlx.ExtContext, userID string, fleetMode bool, collectionID string) (*fleetEvidence, error) {
+func loadFleetEvidence(ctx context.Context, database sqlx.ExtContext, userID string, fleetMode bool, collectionID, repoID string) (*fleetEvidence, error) {
 	region := trace.StartRegion(ctx, "finding.database")
 	defer region.End()
-	e := &fleetEvidence{findings: map[string][]models.Finding{}, failedGates: map[string]bool{}}
+	e := &fleetEvidence{findings: map[string][]*fleetFinding{}, failedGates: map[string]bool{}}
 	scope, args := appendRepoScope("r.id", fleetMode, collectionID, userID, nil)
+	if repoID != "" {
+		scope += " AND r.id = ?"
+		args = append(args, repoID)
+	}
 	if err := sqlx.SelectContext(ctx, database, &e.repos, database.Rebind(`SELECT r.id, r.name FROM repos r WHERE 1=1`+scope+` ORDER BY r.name, r.id`), args...); err != nil {
 		return nil, err
 	}
-	scope, args = appendRepoScope("s.repo_id", fleetMode, collectionID, userID, nil)
+	scope = strings.ReplaceAll(scope, "r.id", "s.repo_id")
 	root := ` FROM scans s JOIN repos r ON r.id = s.repo_id WHERE TRIM(COALESCE(s.origin_scan_id, '')) = ''` + scope
 	if err := sqlx.SelectContext(ctx, database, &e.scans, database.Rebind(`SELECT s.id, s.repo_id, s.branch, s.source_type, s.source_path, s.remote_node_id, s.profile, s.categories, s.include_paths, s.exclude_paths, s.status, s.tools_selected, s.tools_completed, s.tools_failed, s.scanner_release_id, s.release_manifest_digest, s.created_at, s.completed_at, s.phase, s.lease_expires_at, s.heartbeat_at`+root+` ORDER BY s.created_at, s.id`), args...); err != nil {
 		return nil, err
 	}
-	var findings []models.Finding
-	if err := sqlx.SelectContext(ctx, database, &findings, database.Rebind(`SELECT f.id, f.scan_id, f.repo_id, f.fingerprint, f.stable_fingerprint, f.location_fingerprint, f.tool_name, f.category, f.severity, f.title, f.file_path, f.line_start, f.rule_id, f.status, f.suppressed, f.baseline_state, f.confidence, f.created_at FROM findings f WHERE (f.cluster_id = '' OR f.cluster_id = f.id) AND f.scan_id IN (SELECT s.id`+root+`) ORDER BY f.scan_id, f.id`), args...); err != nil {
+	rows, err := database.QueryxContext(ctx, database.Rebind(`SELECT f.id, f.scan_id, f.repo_id, f.fingerprint, f.stable_fingerprint, f.location_fingerprint, f.tool_name, f.category, f.severity, f.title, f.file_path, f.line_start, f.rule_id, f.status, f.suppressed, f.baseline_state, f.confidence, f.created_at FROM findings f WHERE (f.cluster_id = '' OR f.cluster_id = f.id) AND f.scan_id IN (SELECT s.id`+root+`) ORDER BY f.scan_id, f.id`), args...)
+	if err != nil {
 		return nil, err
 	}
-	// Group views into the same backing array; copying large Finding structs
-	// per scan doubles the live history footprint without adding information.
+	defer func() { _ = rows.Close() }()
+	// Repeated labels and paths dominate retained strings in large histories.
+	// Intern only these low-cardinality fields, within this request's snapshot.
+	labels := map[string]string{}
+	intern := func(value string) string {
+		if existing, ok := labels[value]; ok {
+			return existing
+		}
+		labels[value] = value
+		return value
+	}
+	var findings []*fleetFinding
+	for rows.Next() {
+		f := new(fleetFinding)
+		if err := rows.StructScan(f); err != nil {
+			return nil, err
+		}
+		f.ScanID, f.RepoID = intern(f.ScanID), intern(f.RepoID)
+		f.ToolName, f.RuleID = intern(f.ToolName), intern(f.RuleID)
+		f.Title, f.FilePath = intern(f.Title), intern(f.FilePath)
+		f.Category, f.Severity = models.Category(intern(string(f.Category))), models.Severity(intern(string(f.Severity)))
+		f.Status = models.Status(intern(string(f.Status)))
+		f.BaselineState, f.Confidence = intern(f.BaselineState), intern(f.Confidence)
+		findings = append(findings, f)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	// Group pointer views into the same backing array; never copy evidence.
 	for start := 0; start < len(findings); {
 		end := start + 1
 		for end < len(findings) && findings[end].ScanID == findings[start].ScanID {
@@ -150,12 +218,12 @@ func scanObservedAt(s models.Scan) time.Time {
 func completeEvidence(s models.Scan) bool {
 	return gates.EvaluateScan(gates.Policy{}, &s, nil).Status == gates.StatusPass
 }
-func branchKey(s models.Scan) string     { return identKey(s.RepoID, s.Branch) }
-func openEvidence(f models.Finding) bool { return f.Status == models.StatusOpen && !f.Suppressed }
-func securityEvidence(f models.Finding) bool {
+func branchKey(s models.Scan) string    { return identKey(s.RepoID, s.Branch) }
+func openEvidence(f *fleetFinding) bool { return f.Status == models.StatusOpen && !f.Suppressed }
+func securityEvidence(f *fleetFinding) bool {
 	return slices.Contains(gates.SecurityCategories(), f.Category)
 }
-func progressKey(f models.Finding) string {
+func progressKey(f *fleetFinding) string {
 	// Use the same durable identity as scan comparisons so line movement cannot
 	// claim a fix. Current backlog still counts individual source locations.
 	key := f.StableFingerprint
@@ -168,39 +236,39 @@ func progressKey(f models.Finding) string {
 	return identKey(f.RepoID, key)
 }
 
-func (e *fleetEvidence) currentEvidence(at time.Time) []models.Finding {
-	branches := map[string]map[string]*models.Finding{}
+func (e *fleetEvidence) currentEvidence(at time.Time) []*fleetFinding {
+	branches := map[string]map[string]*fleetFinding{}
 	for _, s := range e.scans {
 		if scanObservedAt(s).After(at) {
 			continue
 		}
 		key := branchKey(s)
 		if branches[key] == nil || completeEvidence(s) {
-			branches[key] = make(map[string]*models.Finding, len(e.findings[s.ID]))
+			branches[key] = make(map[string]*fleetFinding, len(e.findings[s.ID]))
 		}
 		// Incomplete/cancelled attempts may add evidence, never erase the last
 		// complete observation. A repeated finding's latest triage state wins.
 		for i := range e.findings[s.ID] {
-			f := &e.findings[s.ID][i]
-			branches[key][findingIdent(*f)] = f
+			f := e.findings[s.ID][i]
+			branches[key][findingIdent(f)] = f
 		}
 	}
 	count := 0
 	for _, branch := range branches {
 		count += len(branch)
 	}
-	findings := make([]models.Finding, 0, count)
+	findings := make([]*fleetFinding, 0, count)
 	for _, branch := range branches {
 		for _, f := range branch {
-			findings = append(findings, *f)
+			findings = append(findings, f)
 		}
 	}
 	return findings
 }
 
-func (e *fleetEvidence) currentOpen(at time.Time) []models.Finding {
+func (e *fleetEvidence) currentOpen(at time.Time) []*fleetFinding {
 	findings := e.currentEvidence(at)
-	findings = slices.DeleteFunc(findings, func(f models.Finding) bool { return !openEvidence(f) })
+	findings = slices.DeleteFunc(findings, func(f *fleetFinding) bool { return !openEvidence(f) })
 	return dedupCurrentFindings(findings)
 }
 
@@ -292,8 +360,8 @@ func scanScope(s models.Scan) string {
 	return string(raw)
 }
 
-func distinctProgress(findings []models.Finding) []models.Finding {
-	byKey := map[string]models.Finding{}
+func distinctProgress(findings []*fleetFinding) []*fleetFinding {
+	byKey := map[string]*fleetFinding{}
 	for _, f := range findings {
 		key := progressKey(f)
 		previous, exists := byKey[key]
@@ -301,7 +369,7 @@ func distinctProgress(findings []models.Finding) []models.Finding {
 			byKey[key] = f
 		}
 	}
-	out := make([]models.Finding, 0, len(byKey))
+	out := make([]*fleetFinding, 0, len(byKey))
 	for _, f := range byKey {
 		out = append(out, f)
 	}
@@ -312,15 +380,11 @@ func (e *fleetEvidence) changes(now time.Time, coverage FleetCoverage) (FleetCha
 	out := FleetChanges{WindowDays: 7, Rows: []FleetChangeRow{}}
 	cutoff := now.AddDate(0, 0, -7)
 	byID, bases := map[string]models.Scan{}, map[string]models.Scan{}
-	historical := map[string]bool{}
 	for _, s := range e.scans {
 		byID[s.ID] = s
 		if !scanObservedAt(s).After(cutoff) {
 			if completeEvidence(s) {
 				bases[branchKey(s)] = s
-			}
-			for _, f := range e.findings[s.ID] {
-				historical[progressKey(f)] = true
 			}
 		}
 	}
@@ -350,6 +414,17 @@ func (e *fleetEvidence) changes(now time.Time, coverage FleetCoverage) (FleetCha
 		}
 		out.Rows = append(out.Rows, row)
 	}
+	if out.ComparedBranches == 0 {
+		return out, countBySeverity(nil)
+	}
+	historical := map[string]bool{}
+	for _, s := range e.scans {
+		if !scanObservedAt(s).After(cutoff) {
+			for _, f := range e.findings[s.ID] {
+				historical[progressKey(f)] = true
+			}
+		}
+	}
 	currentKeys, baselineOpen, unverified := map[string]bool{}, map[string]bool{}, map[string]bool{}
 	for _, f := range e.currentEvidence(now) {
 		currentKeys[progressKey(f)] = true
@@ -366,7 +441,7 @@ func (e *fleetEvidence) changes(now time.Time, coverage FleetCoverage) (FleetCha
 		}
 	}
 	newKeys, resurfaced, resolved, suppressed := map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{}
-	var beforeLocations, afterLocations []models.Finding
+	var beforeLocations, afterLocations []*fleetFinding
 	for i := range out.Rows {
 		row := &out.Rows[i]
 		if row.Reason != "" {
@@ -375,8 +450,24 @@ func (e *fleetEvidence) changes(now time.Time, coverage FleetCoverage) (FleetCha
 		before, after := distinctProgress(e.findings[row.BaselineScanID]), distinctProgress(e.findings[row.ScanID])
 		// Include suppressed observations in the diff: hiding an issue cannot
 		// masquerade as its absence in a verification scan.
-		d := findingdiff.Compare(before, after)
-		for _, f := range d.New {
+		baseByID := make(map[string]*fleetFinding, len(before))
+		for _, f := range before {
+			key := f.diffKey()
+			if _, exists := baseByID[key]; key != "" && !exists {
+				baseByID[key] = f
+			}
+		}
+		seen := make(map[string]bool, len(after))
+		for _, f := range after {
+			id := f.diffKey()
+			seen[id] = true
+			if _, exists := baseByID[id]; exists {
+				if openEvidence(f) && securityEvidence(f) && !baselineOpen[progressKey(f)] {
+					resurfaced[progressKey(f)] = true
+					row.Resurfaced++
+				}
+				continue
+			}
 			key := progressKey(f)
 			if !openEvidence(f) || !securityEvidence(f) || baselineOpen[key] {
 				continue
@@ -389,7 +480,10 @@ func (e *fleetEvidence) changes(now time.Time, coverage FleetCoverage) (FleetCha
 				row.New++
 			}
 		}
-		for _, f := range d.Fixed {
+		for id, f := range baseByID {
+			if seen[id] {
+				continue
+			}
 			key := progressKey(f)
 			if openEvidence(f) && securityEvidence(f) && !currentKeys[key] && !unverified[key] {
 				resolved[key] = true
@@ -400,12 +494,6 @@ func (e *fleetEvidence) changes(now time.Time, coverage FleetCoverage) (FleetCha
 		for _, f := range before {
 			if openEvidence(f) && securityEvidence(f) {
 				beforeOpen[progressKey(f)] = true
-			}
-		}
-		for _, f := range d.Existing {
-			if openEvidence(f) && securityEvidence(f) && !baselineOpen[progressKey(f)] {
-				resurfaced[progressKey(f)] = true
-				row.Resurfaced++
 			}
 		}
 		for _, f := range after {
@@ -419,8 +507,8 @@ func (e *fleetEvidence) changes(now time.Time, coverage FleetCoverage) (FleetCha
 	}
 	// Compatibility field: actual location-count change within the comparable
 	// cohort, deduplicated across branches. The dashboard uses explicit changes.
-	beforeLocations = slices.DeleteFunc(beforeLocations, func(f models.Finding) bool { return !openEvidence(f) })
-	afterLocations = slices.DeleteFunc(afterLocations, func(f models.Finding) bool { return !openEvidence(f) })
+	beforeLocations = slices.DeleteFunc(beforeLocations, func(f *fleetFinding) bool { return !openEvidence(f) })
+	afterLocations = slices.DeleteFunc(afterLocations, func(f *fleetFinding) bool { return !openEvidence(f) })
 	delta, previous := countBySeverity(dedupCurrentFindings(afterLocations)), countBySeverity(dedupCurrentFindings(beforeLocations))
 	for sev, n := range previous {
 		delta[sev] -= n
@@ -460,6 +548,7 @@ func (e *fleetEvidence) posture(now time.Time) *FleetPostureResult {
 			}
 		}
 	}
+	out.Priorities = make([]FleetPriority, 0, out.OpenFindingsBySeverity["critical"]+out.OpenFindingsBySeverity["high"])
 	for _, f := range current {
 		if !securityEvidence(f) || severityRankName(f.Severity) < 4 {
 			continue
@@ -541,7 +630,7 @@ func (e *fleetEvidence) attention(now time.Time) []NeedsAttentionRow {
 }
 
 func fleetFindingTrends(ctx context.Context, database *sqlx.DB, userID string, fleetMode bool, collectionID string) ([]FleetTrendEntry, error) {
-	e, err := loadFleetEvidence(ctx, database, userID, fleetMode, collectionID)
+	e, err := loadFleetEvidence(ctx, database, userID, fleetMode, collectionID, "")
 	if err != nil {
 		return nil, err
 	}
