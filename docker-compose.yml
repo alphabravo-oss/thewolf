@@ -41,7 +41,7 @@ services:
     volumes:
       - wolf-data:/home/wolf/.wolf
       # Mount the docker socket so wolf-slim can spawn scanner containers
-      # (Docker-out-of-Docker pattern). See docs/PLAN-containerized-scanner-execution.md §10.1 for security posture.
+      # (Docker-out-of-Docker pattern). See docs/archive/2026-10-23/PLAN-containerized-scanner-execution.md §10.1 for security posture.
       - /var/run/docker.sock:/var/run/docker.sock
       # Mount the host repos root read-only. Repos that wolf scans must live
       # under this path. WOLF_REPOS_ROOT defaults to ./repos relative to the
@@ -57,6 +57,7 @@ services:
       - ${WOLF_SCANNER_BUNDLE_IMAGE_TRUST_POLICY_HOST_FILE:-./deploy/scanner-release-managed/bundle-image-trust.disabled}:/run/wolf/offline-bundles/images/trust-policy.json:ro
     environment:
       - WOLF_MASTER_KEY=${WOLF_MASTER_KEY:-}
+      - WOLF_TRUSTED_PROXIES=${WOLF_TRUSTED_PROXIES:-}
       # First-run admin. Bootstrapped only when BOTH are set and no user with
       # that email exists yet. Set these in your .env (see .env.example) so the
       # first `docker compose up` has a login. Leave the password empty to skip
@@ -68,6 +69,7 @@ services:
       # Durable API submission. The separate scan-worker service claims and
       # executes pending scans; set "inline" only as a one-release rollback.
       - WOLF_SCAN_EXECUTION_MODE=${WOLF_SCAN_EXECUTION_MODE:-queue}
+      - WOLF_MCP_ENABLED=${WOLF_MCP_ENABLED:-0}
       # Scanner release management defaults to observation only. Existing
       # scan execution is unchanged; candidate/canary/stable control requires
       # explicit staged enablement after qualification.
@@ -75,20 +77,22 @@ services:
       - WOLF_SCANNER_LEGACY_BUILD_ENDPOINTS=${WOLF_SCANNER_LEGACY_BUILD_ENDPOINTS:-true}
       - WOLF_ARTIFACTS_ROOT=/home/wolf/.wolf/artifacts
       - WOLF_LOG_LEVEL=${WOLF_LOG_LEVEL:-info}
-      # Scanner image references (per-bucket; Option B from docs/PLAN-containerized-scanner-execution.md §5.1).
-      # WOLF_SCANNERS_TAG defaults to the scanner stable channel so scanner
-      # images can be updated independently from Wolf app releases.
-      - WOLF_SCANNERS_TAG=${WOLF_SCANNERS_TAG:-stable}
-      - WOLF_SCANNERS_IMAGE=${WOLF_SCANNERS_IMAGE:-ghcr.io/alphabravo-oss/wolf-scanners:${WOLF_SCANNERS_TAG:-stable}}
-      - WOLF_SCANNERS_IMAGE_JVM=${WOLF_SCANNERS_IMAGE_JVM:-ghcr.io/alphabravo-oss/wolf-scanners-jvm:${WOLF_SCANNERS_TAG:-stable}}
-      - WOLF_SCANNERS_IMAGE_RUST=${WOLF_SCANNERS_IMAGE_RUST:-ghcr.io/alphabravo-oss/wolf-scanners-rust:${WOLF_SCANNERS_TAG:-stable}}
-      - WOLF_SCANNERS_IMAGE_CODEQL=${WOLF_SCANNERS_IMAGE_CODEQL:-ghcr.io/alphabravo-oss/wolf-scanners-codeql:${WOLF_SCANNERS_TAG:-stable}}
+      # Scanner image references (per-bucket; Option B from docs/archive/2026-10-23/PLAN-containerized-scanner-execution.md §5.1).
+      # WOLF_SCANNERS_TAG defaults to the newest published scanner release on GHCR.
+      # Set it to `stable` to follow the channel once the release factory promotes it.
+      - WOLF_SCANNERS_TAG=${WOLF_SCANNERS_TAG:-scanner-set-2026.36.1}
+      - WOLF_SCANNERS_IMAGE=${WOLF_SCANNERS_IMAGE:-ghcr.io/alphabravo-oss/wolf-scanners:${WOLF_SCANNERS_TAG:-scanner-set-2026.36.1}}
+      - WOLF_SCANNERS_IMAGE_JVM=${WOLF_SCANNERS_IMAGE_JVM:-ghcr.io/alphabravo-oss/wolf-scanners-jvm:${WOLF_SCANNERS_TAG:-scanner-set-2026.36.1}}
+      - WOLF_SCANNERS_IMAGE_RUST=${WOLF_SCANNERS_IMAGE_RUST:-ghcr.io/alphabravo-oss/wolf-scanners-rust:${WOLF_SCANNERS_TAG:-scanner-set-2026.36.1}}
+      - WOLF_SCANNERS_IMAGE_CODEQL=${WOLF_SCANNERS_IMAGE_CODEQL:-ghcr.io/alphabravo-oss/wolf-scanners-codeql:${WOLF_SCANNERS_TAG:-scanner-set-2026.36.1}}
       - WOLF_SCANNERS_DOCKERHUB_MIRROR=${WOLF_SCANNERS_DOCKERHUB_MIRROR:-}
       - WOLF_SCANNERS_PULL_POLICY=${WOLF_SCANNERS_PULL_POLICY:-IfNotPresent}
       - WOLF_SCANNERS_NETWORK=${WOLF_SCANNERS_NETWORK:-none}
+      - WOLF_SCANNERS_ALLOW_NETWORK=${WOLF_SCANNERS_ALLOW_NETWORK:-bridge}
+      - WOLF_SCAN_WORKERS=${WOLF_SCAN_WORKERS:-1}
       - WOLF_SCAN_ISOLATION=${WOLF_SCAN_ISOLATION:-standard}
       - WOLF_SCANNERS_MEMORY=${WOLF_SCANNERS_MEMORY:-2g}
-      - WOLF_SCANNERS_CPUS=${WOLF_SCANNERS_CPUS:-1.5}
+      - WOLF_SCANNERS_CPUS=${WOLF_SCANNERS_CPUS:-2}
       # Vuln-DB cache shared across scanner runs. Must be a HOST path (not a
       # named docker volume) — scanner containers run as the host user UID/GID
       # to read repo files, and a named volume's default root-owned perms
@@ -165,17 +169,19 @@ services:
       - WOLF_LOG_LEVEL=${WOLF_LOG_LEVEL:-info}
       - WOLF_SCAN_EXECUTION_MODE=queue
       - WOLF_ARTIFACTS_ROOT=/home/wolf/.wolf/artifacts
-      - WOLF_SCANNERS_TAG=${WOLF_SCANNERS_TAG:-stable}
-      - WOLF_SCANNERS_IMAGE=${WOLF_SCANNERS_IMAGE:-ghcr.io/alphabravo-oss/wolf-scanners:${WOLF_SCANNERS_TAG:-stable}}
-      - WOLF_SCANNERS_IMAGE_JVM=${WOLF_SCANNERS_IMAGE_JVM:-ghcr.io/alphabravo-oss/wolf-scanners-jvm:${WOLF_SCANNERS_TAG:-stable}}
-      - WOLF_SCANNERS_IMAGE_RUST=${WOLF_SCANNERS_IMAGE_RUST:-ghcr.io/alphabravo-oss/wolf-scanners-rust:${WOLF_SCANNERS_TAG:-stable}}
-      - WOLF_SCANNERS_IMAGE_CODEQL=${WOLF_SCANNERS_IMAGE_CODEQL:-ghcr.io/alphabravo-oss/wolf-scanners-codeql:${WOLF_SCANNERS_TAG:-stable}}
+      - WOLF_SCANNERS_TAG=${WOLF_SCANNERS_TAG:-scanner-set-2026.36.1}
+      - WOLF_SCANNERS_IMAGE=${WOLF_SCANNERS_IMAGE:-ghcr.io/alphabravo-oss/wolf-scanners:${WOLF_SCANNERS_TAG:-scanner-set-2026.36.1}}
+      - WOLF_SCANNERS_IMAGE_JVM=${WOLF_SCANNERS_IMAGE_JVM:-ghcr.io/alphabravo-oss/wolf-scanners-jvm:${WOLF_SCANNERS_TAG:-scanner-set-2026.36.1}}
+      - WOLF_SCANNERS_IMAGE_RUST=${WOLF_SCANNERS_IMAGE_RUST:-ghcr.io/alphabravo-oss/wolf-scanners-rust:${WOLF_SCANNERS_TAG:-scanner-set-2026.36.1}}
+      - WOLF_SCANNERS_IMAGE_CODEQL=${WOLF_SCANNERS_IMAGE_CODEQL:-ghcr.io/alphabravo-oss/wolf-scanners-codeql:${WOLF_SCANNERS_TAG:-scanner-set-2026.36.1}}
       - WOLF_SCANNERS_DOCKERHUB_MIRROR=${WOLF_SCANNERS_DOCKERHUB_MIRROR:-}
       - WOLF_SCANNERS_PULL_POLICY=${WOLF_SCANNERS_PULL_POLICY:-IfNotPresent}
       - WOLF_SCANNERS_NETWORK=${WOLF_SCANNERS_NETWORK:-none}
+      - WOLF_SCANNERS_ALLOW_NETWORK=${WOLF_SCANNERS_ALLOW_NETWORK:-bridge}
+      - WOLF_SCAN_WORKERS=${WOLF_SCAN_WORKERS:-1}
       - WOLF_SCAN_ISOLATION=${WOLF_SCAN_ISOLATION:-standard}
       - WOLF_SCANNERS_MEMORY=${WOLF_SCANNERS_MEMORY:-2g}
-      - WOLF_SCANNERS_CPUS=${WOLF_SCANNERS_CPUS:-1.5}
+      - WOLF_SCANNERS_CPUS=${WOLF_SCANNERS_CPUS:-2}
       - WOLF_SCANNERS_DB_VOLUME=${WOLF_SCANNERS_DB_VOLUME:-${HOME}/.wolf/scanner-cache}
       - WOLF_HOST_REPOS_ROOT=${WOLF_HOST_REPOS_ROOT:-${WOLF_REPOS_ROOT:-./repos}}
       - WOLF_IN_CONTAINER_REPOS_ROOT=/repos
@@ -248,6 +254,24 @@ services:
       - WOLF_LOG_LEVEL=${WOLF_LOG_LEVEL:-info}
       - WOLF_ARTIFACTS_ROOT=/home/wolf/.wolf/artifacts
       - WOLF_WORKSPACE_ROOT=/workspaces
+      - WOLF_SCANNERS_TAG=${WOLF_SCANNERS_TAG:-scanner-set-2026.36.1}
+      - WOLF_SCANNERS_IMAGE=${WOLF_SCANNERS_IMAGE:-ghcr.io/alphabravo-oss/wolf-scanners:${WOLF_SCANNERS_TAG:-scanner-set-2026.36.1}}
+      - WOLF_SCANNERS_IMAGE_JVM=${WOLF_SCANNERS_IMAGE_JVM:-ghcr.io/alphabravo-oss/wolf-scanners-jvm:${WOLF_SCANNERS_TAG:-scanner-set-2026.36.1}}
+      - WOLF_SCANNERS_IMAGE_RUST=${WOLF_SCANNERS_IMAGE_RUST:-ghcr.io/alphabravo-oss/wolf-scanners-rust:${WOLF_SCANNERS_TAG:-scanner-set-2026.36.1}}
+      - WOLF_SCANNERS_IMAGE_CODEQL=${WOLF_SCANNERS_IMAGE_CODEQL:-ghcr.io/alphabravo-oss/wolf-scanners-codeql:${WOLF_SCANNERS_TAG:-scanner-set-2026.36.1}}
+      - WOLF_SCANNERS_DOCKERHUB_MIRROR=${WOLF_SCANNERS_DOCKERHUB_MIRROR:-}
+      - WOLF_SCANNERS_PULL_POLICY=${WOLF_SCANNERS_PULL_POLICY:-IfNotPresent}
+      - WOLF_SCANNERS_NETWORK=${WOLF_SCANNERS_NETWORK:-none}
+      - WOLF_SCANNERS_ALLOW_NETWORK=${WOLF_SCANNERS_ALLOW_NETWORK:-bridge}
+      - WOLF_SCAN_WORKERS=${WOLF_SCAN_WORKERS:-1}
+      - WOLF_SCAN_ISOLATION=${WOLF_SCAN_ISOLATION:-standard}
+      - WOLF_SCANNERS_MEMORY=${WOLF_SCANNERS_MEMORY:-2g}
+      - WOLF_SCANNERS_CPUS=${WOLF_SCANNERS_CPUS:-2}
+      - WOLF_SCANNERS_DB_VOLUME=${WOLF_SCANNERS_DB_VOLUME:-${HOME}/.wolf/scanner-cache}
+      - WOLF_HOST_REPOS_ROOT=${WOLF_HOST_REPOS_ROOT:-${WOLF_REPOS_ROOT:-./repos}}
+      - WOLF_IN_CONTAINER_REPOS_ROOT=/repos
+      - WOLF_HOST_WORKSPACE_ROOT=${WOLF_HOST_WORKSPACE_ROOT:-${PWD}/workspaces}
+      - WOLF_IN_CONTAINER_WORKSPACE_ROOT=/workspaces
     depends_on:
       wolf:
         condition: service_healthy
@@ -892,7 +916,7 @@ services:
           memory: 512M
 
   postgres:
-    image: postgres:16-alpine
+    image: postgres:18.6-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
     # Pull the password from a docker secret rather than baking the
     # literal env. POSTGRES_PASSWORD_FILE is honored by the official
     # postgres image. For local dev a sane default still lands at
@@ -901,6 +925,8 @@ services:
     # secret create or compose secrets: { external: true } — never
     # commit the value (KICS 487f4be7).
     environment:
+      # Keep the existing location: older volumes fail visibly until migrated.
+      PGDATA: /var/lib/postgresql/data
       POSTGRES_USER: ${POSTGRES_USER:-wolf}
       POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
       POSTGRES_DB: ${POSTGRES_DB:-wolf}
@@ -926,7 +952,7 @@ services:
     networks:
       - wolf-net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-wolf}"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U ${POSTGRES_USER:-wolf}"]
       interval: 5s
       timeout: 5s
       retries: 5

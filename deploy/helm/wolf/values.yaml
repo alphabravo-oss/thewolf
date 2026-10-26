@@ -316,9 +316,9 @@ scannerRelease:
     serviceAccountAnnotations: {}
 scanner:
   serviceAccountName: ""
-  defaultImage: ghcr.io/alphabravo-oss/wolf-scanners:stable
-  jvmImage: ghcr.io/alphabravo-oss/wolf-scanners-jvm:stable
-  rustImage: ghcr.io/alphabravo-oss/wolf-scanners-rust:stable
+  defaultImage: ghcr.io/alphabravo-oss/wolf-scanners:scanner-set-2026.36.1
+  jvmImage: ghcr.io/alphabravo-oss/wolf-scanners-jvm:scanner-set-2026.36.1
+  rustImage: ghcr.io/alphabravo-oss/wolf-scanners-rust:scanner-set-2026.36.1
   codeqlImage: ""
   dockerHubMirror: ""
   imagePullPolicy: IfNotPresent

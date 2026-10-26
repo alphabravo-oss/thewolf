@@ -1,25 +1,29 @@
+# syntax=docker/dockerfile:1.7
 # ============================================================
 # checkov:skip=CKV_DOCKER_2 — bucket images are one-shot scanner containers, not long-lived services
 # Stage 1: Build the Go binary
 # ============================================================
-FROM golang:1.26.6-alpine@sha256:af8d6740070b8906d12eae1c3e3ea0957fb63f492051ea05e354c38ef9fe88df AS builder
+FROM golang:1.27.3-alpine@sha256:b8c9b82affbbb82a020bbcf998dad2ba9516944ac7e883524642a481a9505e9c AS build-source
 
 RUN apk add --no-cache gcc musl-dev sqlite-dev git
 
 WORKDIR /app
+ARG TARGETARCH
 
 # Cache module downloads in a separate layer
 COPY go.mod go.sum ./
-RUN go mod download && go mod verify
+RUN --mount=type=cache,target=/go/pkg/mod go mod download && go mod verify
 
 # Copy source and build
 COPY . .
+
+FROM build-source AS builder
 
 ARG VERSION=dev
 ARG COMMIT=unknown
 ARG BUILD_DATE=unknown
 
-RUN CGO_ENABLED=1 go build \
+RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,id=wolf-build-${TARGETARCH},target=/root/.cache/go-build CGO_ENABLED=1 go build \
     -trimpath \
     -ldflags "-s -w \
         -X main.version=${VERSION} \
@@ -29,10 +33,12 @@ RUN CGO_ENABLED=1 go build \
     -tags 'sqlite_omit_load_extension netgo osusergo' \
     -o /wolf ./cmd/wolf/
 
+FROM build-source AS release-builder
+
 # The managed release lanes are separate trust and dependency boundaries.
 # Build static, lane-locked entrypoints so one image cannot select another
 # lane at runtime. scannertools is shared only by the fixed and quality lanes.
-RUN mkdir -p /release-adapters \
+RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,id=wolf-build-${TARGETARCH},target=/root/.cache/go-build mkdir -p /release-adapters \
     && CGO_ENABLED=0 go build -trimpath -ldflags '-s -w' \
       -o /release-adapters/fixed ./cmd/wolf-scanner-release-fixed-adapter \
     && CGO_ENABLED=0 go build -trimpath -ldflags '-s -w' \
@@ -45,18 +51,18 @@ RUN mkdir -p /release-adapters \
       -o /release-adapters/python-parser-qualification.test ./plugins/python \
     && CGO_ENABLED=0 go test -c -trimpath \
       -o /release-adapters/scanner-rollout-qualification.test ./internal/scannerrollout
-RUN CGO_ENABLED=0 go build -trimpath -ldflags '-s -w' \
+RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,id=wolf-build-${TARGETARCH},target=/root/.cache/go-build CGO_ENABLED=0 go build -trimpath -ldflags '-s -w' \
       -o /release-adapters/synccontext ./internal/scannerbuild/cmd/synccontext
 
 # ============================================================
 # Pinned adapter tools
 # ============================================================
-FROM golang:1.26.6-alpine@sha256:af8d6740070b8906d12eae1c3e3ea0957fb63f492051ea05e354c38ef9fe88df AS scanner-release-oras-tool
+FROM golang:1.27.3-alpine@sha256:b8c9b82affbbb82a020bbcf998dad2ba9516944ac7e883524642a481a9505e9c AS scanner-release-oras-tool
 
 ARG TARGETARCH
-ARG ORAS_VERSION=1.3.3
+ARG ORAS_VERSION=1.3.4
 
-RUN apk add --no-cache ca-certificates git \
+RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,id=wolf-build-${TARGETARCH},target=/root/.cache/go-build apk add --no-cache ca-certificates git \
     && case "${TARGETARCH}" in \
       amd64|arm64) ;; \
       *) echo "unsupported adapter target architecture: ${TARGETARCH}" >&2; exit 1 ;; \
@@ -68,14 +74,12 @@ RUN apk add --no-cache ca-certificates git \
     && install -m 0444 "$(go env GOPATH)/pkg/mod/oras.land/oras@v${ORAS_VERSION}/LICENSE" \
       /out/licenses/oras/LICENSE
 
-FROM golang:1.26.6-alpine@sha256:af8d6740070b8906d12eae1c3e3ea0957fb63f492051ea05e354c38ef9fe88df AS scanner-release-trivy-tool
+FROM golang:1.27.3-alpine@sha256:b8c9b82affbbb82a020bbcf998dad2ba9516944ac7e883524642a481a9505e9c AS scanner-release-trivy-tool
 
 ARG TARGETARCH
-ARG TRIVY_VERSION=0.73.0
-ARG TRIVY_GO_GIT_VERSION=5.19.2
-ARG TRIVY_ORAS_GO_VERSION=2.6.2
+ARG TRIVY_VERSION=0.75.0
 
-RUN apk add --no-cache ca-certificates git \
+RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,id=wolf-build-${TARGETARCH},target=/root/.cache/go-build apk add --no-cache ca-certificates git \
     && case "${TARGETARCH}" in \
       amd64|arm64) ;; \
       *) echo "unsupported adapter target architecture: ${TARGETARCH}" >&2; exit 1 ;; \
@@ -83,16 +87,13 @@ RUN apk add --no-cache ca-certificates git \
     && mkdir -p /src /out/bin /out/licenses/trivy \
     && git clone --depth 1 --branch "v${TRIVY_VERSION}" https://github.com/aquasecurity/trivy.git /src/trivy \
     && cd /src/trivy \
-    && go get \
-      "github.com/go-git/go-git/v5@v${TRIVY_GO_GIT_VERSION}" \
-      "oras.land/oras-go/v2@v${TRIVY_ORAS_GO_VERSION}" \
     && go mod download all \
     && go mod verify \
     && CGO_ENABLED=0 GOEXPERIMENT=jsonv2 GOOS=linux GOARCH="${TARGETARCH}" go build -trimpath \
       -ldflags "-s -w -X=github.com/aquasecurity/trivy/pkg/version/app.ver=${TRIVY_VERSION}" \
       -o /out/bin/trivy ./cmd/trivy \
     && install -m 0444 LICENSE /out/licenses/trivy/LICENSE \
-    && rm -rf /src/trivy /root/.cache/go-build
+    && rm -rf /src/trivy
 
 # ============================================================
 # Managed scanner-release adapter images
@@ -102,13 +103,14 @@ FROM alpine:3.24@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec4
 LABEL org.opencontainers.image.title="Wolf fixed release adapter" \
       org.opencontainers.image.source="https://github.com/alphabravo-oss/thewolf"
 
-RUN apk add --no-cache ca-certificates tzdata git \
+RUN apk upgrade --no-cache \
+    && apk add --no-cache ca-certificates tzdata git \
     && addgroup -S wolf \
     && adduser -S wolf -G wolf
 
-COPY --from=builder --chmod=0555 /release-adapters/fixed /usr/local/bin/wolf-release-adapter
-COPY --from=builder --chmod=0555 /release-adapters/scannertools /usr/local/bin/scannertools
-COPY --from=builder --chmod=0555 /release-adapters/synccontext /usr/local/bin/synccontext
+COPY --from=release-builder --chmod=0555 /release-adapters/fixed /usr/local/bin/wolf-release-adapter
+COPY --from=release-builder --chmod=0555 /release-adapters/scannertools /usr/local/bin/scannertools
+COPY --from=release-builder --chmod=0555 /release-adapters/synccontext /usr/local/bin/synccontext
 COPY --from=builder /usr/local/go /usr/local/go
 COPY --from=scanner-release-oras-tool --chmod=0555 /out/bin/oras /usr/local/bin/oras
 COPY --from=scanner-release-oras-tool /out/licenses/oras /usr/share/licenses/oras
@@ -122,15 +124,16 @@ FROM alpine:3.24@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec4
 
 LABEL org.opencontainers.image.title="Wolf quality release adapter" \
       org.opencontainers.image.source="https://github.com/alphabravo-oss/thewolf" \
-      org.opencontainers.image.version.trivy="0.73.0" \
-      org.opencontainers.image.version.oras="1.3.3"
+      org.opencontainers.image.version.trivy="0.75.0" \
+      org.opencontainers.image.version.oras="1.3.4"
 
-RUN apk add --no-cache ca-certificates tzdata docker-cli git \
+RUN apk upgrade --no-cache \
+    && apk add --no-cache ca-certificates tzdata docker-cli git \
     && addgroup -S wolf \
     && adduser -S wolf -G wolf
 
-COPY --from=builder --chmod=0555 /release-adapters/quality /usr/local/bin/wolf-release-adapter
-COPY --from=builder --chmod=0555 /release-adapters/scannertools /usr/local/bin/scannertools
+COPY --from=release-builder --chmod=0555 /release-adapters/quality /usr/local/bin/wolf-release-adapter
+COPY --from=release-builder --chmod=0555 /release-adapters/scannertools /usr/local/bin/scannertools
 COPY --from=scanner-release-oras-tool --chmod=0555 /out/bin/oras /usr/local/bin/oras
 COPY --from=scanner-release-trivy-tool --chmod=0555 /out/bin/trivy /usr/local/bin/trivy
 COPY --from=scanner-release-oras-tool /out/licenses/oras /usr/share/licenses/oras
@@ -150,16 +153,17 @@ LABEL org.opencontainers.image.title="Wolf integration release adapter" \
 # use trusted precompiled qualification binaries, jq and Python timing helpers
 # in addition to Docker/Compose, kind and kubectl. Candidate checkout code is
 # never compiled or executed in this credential-bearing lane.
-RUN apk add --no-cache ca-certificates tzdata bash docker-cli docker-cli-compose \
+RUN apk upgrade --no-cache \
+    && apk add --no-cache ca-certificates tzdata bash docker-cli docker-cli-compose \
       jq kind kubectl python3 \
     && addgroup -S wolf \
     && adduser -S wolf -G wolf \
     && mkdir -p /usr/local/libexec/wolf/release-qualification
 
-COPY --from=builder --chmod=0555 /release-adapters/integration /usr/local/bin/wolf-release-adapter
-COPY --from=builder --chmod=0555 /release-adapters/python-parser-qualification.test \
+COPY --from=release-builder --chmod=0555 /release-adapters/integration /usr/local/bin/wolf-release-adapter
+COPY --from=release-builder --chmod=0555 /release-adapters/python-parser-qualification.test \
   /usr/local/libexec/wolf/release-qualification/python-parser-qualification.test
-COPY --from=builder --chmod=0555 /release-adapters/scanner-rollout-qualification.test \
+COPY --from=release-builder --chmod=0555 /release-adapters/scanner-rollout-qualification.test \
   /usr/local/libexec/wolf/release-qualification/scanner-rollout-qualification.test
 COPY --from=scanner-release-oras-tool --chmod=0555 /out/bin/oras /usr/local/bin/oras
 COPY --from=scanner-release-oras-tool /out/licenses/oras /usr/share/licenses/oras
@@ -179,13 +183,14 @@ ENTRYPOINT ["/usr/local/bin/wolf-release-adapter"]
 # Proposal generation validates a freshly fetched exact Git commit with the
 # repository's pinned scannertools command. Keep the Go toolchain in this
 # narrowly scoped image; the API/runtime image below remains minimal.
-FROM golang:1.26.6-alpine@sha256:af8d6740070b8906d12eae1c3e3ea0957fb63f492051ea05e354c38ef9fe88df AS proposal-runtime
+FROM golang:1.27.3-alpine@sha256:b8c9b82affbbb82a020bbcf998dad2ba9516944ac7e883524642a481a9505e9c AS proposal-runtime
 
 LABEL org.opencontainers.image.title="Wolf scanner proposal runtime" \
       org.opencontainers.image.description="Non-root worker for generating and validating immutable scanner release proposals" \
       org.opencontainers.image.source="https://github.com/alphabravo-oss/thewolf"
 
-RUN apk add --no-cache ca-certificates tzdata git \
+RUN apk upgrade --no-cache \
+    && apk add --no-cache ca-certificates tzdata git \
     && addgroup -S wolf \
     && adduser -S wolf -G wolf
 
@@ -201,15 +206,15 @@ CMD ["scanner-release-worker", "--role=proposal"]
 # ============================================================
 # Stage 2: Build the Vite UI (ui/, pnpm)
 # ============================================================
-FROM node:24-alpine@sha256:d32cdf619f63fe0471182d08996dd516c6275bb5fd31ae06e55a570bd9e1ad43 AS ui-builder
+FROM node:26.11.1-alpine@sha256:143494b1da2945f061539253adc65e4f1569ddf07da2d384c022c791a9d90a4a AS ui-builder
 
-RUN npm install -g pnpm@9.15.9
+RUN npm install -g pnpm@12.11.2
 
 WORKDIR /app/ui
 
 # Install deps from the lockfile first for caching.
-COPY ui/package.json ui/pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile
+COPY ui/package.json ui/pnpm-lock.yaml ui/pnpm-workspace.yaml ./
+RUN --mount=type=cache,id=wolf-pnpm,target=/pnpm/store pnpm install --frozen-lockfile --store-dir=/pnpm/store
 
 # Build the SPA.
 COPY ui/ ./
@@ -226,7 +231,8 @@ LABEL org.opencontainers.image.title="The Wolf" \
       org.opencontainers.image.vendor="AlphaBravo" \
       org.opencontainers.image.licenses="LicenseRef-Source-Available"
 
-RUN apk add --no-cache ca-certificates tzdata docker-cli docker-cli-buildx git \
+RUN apk upgrade --no-cache \
+    && apk add --no-cache ca-certificates tzdata docker-cli docker-cli-buildx git \
     && addgroup -S wolf \
     && adduser -S wolf -G wolf \
     && addgroup -S docker \

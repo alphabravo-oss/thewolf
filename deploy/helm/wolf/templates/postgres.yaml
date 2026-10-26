@@ -41,7 +41,7 @@ spec:
           ports:
             - {name: postgres, containerPort: 5432}
           readinessProbe:
-            exec: {command: ["pg_isready", "-U", {{ .Values.postgres.username | quote }}]}
+            exec: {command: ["pg_isready", "-h", "127.0.0.1", "-U", {{ .Values.postgres.username | quote }}]}
           securityContext:
             allowPrivilegeEscalation: false
             capabilities: {drop: ["ALL"]}

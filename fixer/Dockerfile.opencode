@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7
 # check=skip=InvalidDefaultArgInFrom
 # WOLF_FIXER_BASE_REF intentionally has no mutable default; the release
 # pipeline must provide the verified base image by digest.
@@ -23,8 +24,8 @@
 ARG WOLF_FIXER_BASE_REF
 FROM ${WOLF_FIXER_BASE_REF} AS base
 
-ARG OPENCODE_VERSION=1.18.16
-ARG OPENCODE_INTEGRITY=sha512-l4nUfoucuw8u5WYU9my9Yz7lYpBI649i/ppgL0BGTjp/HC3p2jN50i331YpcGbKfGTEv9VG6mxU1+QZyaR5hxA==
+ARG OPENCODE_VERSION=1.19.0
+ARG OPENCODE_INTEGRITY=sha512-lddJhFwZI3GLlw8VyOo4yNwBVGeVN/mxH6ORh60h69zAXL7QhjSWY9orj10rwO2kxVnxH9dh45uDCWNuiqPb8A==
 
 ENV WOLF_FIXER_VARIANT=opencode \
     WOLF_FIXER_ENGINE=opencode
@@ -35,14 +36,13 @@ LABEL dev.wolf.fixer.variant="opencode" \
 
 USER root
 
-RUN set -eux; \
+RUN --mount=type=cache,target=/tmp/npm-cache set -eux; \
     actual_integrity="$(npm --cache /tmp/npm-cache view "opencode-ai@${OPENCODE_VERSION}" dist.integrity)"; \
     test "$actual_integrity" = "$OPENCODE_INTEGRITY"; \
     npm --cache /tmp/npm-cache install --global --omit=dev "opencode-ai@${OPENCODE_VERSION}"; \
     command -v opencode; \
     installed_version="$(opencode --version | head -n1 | awk '{print $NF}')"; \
-    test "$installed_version" = "$OPENCODE_VERSION"; \
-    rm -rf /tmp/npm-cache
+    test "$installed_version" = "$OPENCODE_VERSION"
 
 USER wolf
 WORKDIR /workspace

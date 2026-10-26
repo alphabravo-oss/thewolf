@@ -115,7 +115,7 @@ env:
   PRIMARY_NAMESPACE: alphabravo-oss
   MIRROR_REGISTRY: docker.io
   MIRROR_NAMESPACE: alphabravo-oss
-  TRIVY_VERSION: v0.73.0
+  TRIVY_VERSION: v0.75.0
   # These licenses permit redistribution subject to their notices/source
   # obligations. Unknown, proprietary, and every unlisted license still fail.
   TRIVY_IGNORED_LICENSES: GPL-1.0-only,GPL-1.0-or-later,GPL-2.0-only,GPL-2.0-or-later,GPL-2.0-with-autoconf-exception+,GPL-2.0-with-bison-exception+,GPL-3.0-only,GPL-3.0-or-later,GPL-3.0-with-autoconf-exception+,LGPL-2.0-only,LGPL-2.0-or-later,LGPL-2.1-only,LGPL-2.1-or-later,LGPL-3.0-only,LGPL-3.0-or-later,Sleepycat
@@ -372,7 +372,7 @@ jobs:
             {
               echo
               echo "> [!WARNING]"
-              echo "> Discovery found updates or unresolved sources. The weekly no-cache candidate still rebuilds the last reviewed immutable lock; promotion remains gated until proposals are reviewed."
+              echo "> Discovery found updates or unresolved sources. The weekly candidate still rebuilds the last reviewed immutable lock; promotion remains gated until proposals are reviewed."
             } >>"$GITHUB_STEP_SUMMARY"
           fi
 
@@ -863,7 +863,7 @@ jobs:
                   test -x /usr/local/bin/scannertools
                   test -x /usr/local/bin/oras
                   test -x /usr/local/bin/trivy
-                  trivy --version | grep -F "Version: 0.73.0"
+                  trivy --version | grep -F "Version: 0.75.0"
                 '
               ;;
             release-integration)
@@ -1249,8 +1249,6 @@ jobs:
           sbom: false
           no-cache: >-
             ${{
-              (github.event_name == 'schedule' &&
-               github.event.schedule == '43 3 * * 0') ||
               needs.prepare.outputs.operation == 'security-rebuild'
             }}
           cache-from: type=gha,scope=scanner-${{ matrix.variant }}-publish
@@ -1641,8 +1639,6 @@ jobs:
           sbom: false
           no-cache: >-
             ${{
-              (github.event_name == 'schedule' &&
-               github.event.schedule == '43 3 * * 0') ||
               needs.prepare.outputs.operation == 'security-rebuild'
             }}
           cache-from: type=gha,scope=scanner-${{ matrix.variant }}-publish

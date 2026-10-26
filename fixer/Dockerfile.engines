@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7
 # check=skip=InvalidDefaultArgInFrom
 # WOLF_FIXER_BASE_REF is the Debian wolf-fixer base (git, node, gh, wolf).
 # This image is the independently scalable fixer worker: queue + Claude +
@@ -10,18 +11,19 @@
 # ============================================================
 
 ARG WOLF_FIXER_BASE_REF
-ARG GO_IMAGE=golang:1.26.6-alpine@sha256:af8d6740070b8906d12eae1c3e3ea0957fb63f492051ea05e354c38ef9fe88df
+ARG GO_IMAGE=golang:1.27.3-alpine@sha256:b8c9b82affbbb82a020bbcf998dad2ba9516944ac7e883524642a481a9505e9c
 
 FROM ${GO_IMAGE} AS builder
 RUN apk add --no-cache gcc musl-dev sqlite-dev git
 WORKDIR /app
+ARG TARGETARCH
 COPY go.mod go.sum ./
-RUN go mod download && go mod verify
+RUN --mount=type=cache,target=/go/pkg/mod go mod download && go mod verify
 COPY . .
 ARG VERSION=dev
 ARG COMMIT=unknown
 ARG BUILD_DATE=unknown
-RUN CGO_ENABLED=1 go build \
+RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,id=wolf-build-${TARGETARCH},target=/root/.cache/go-build CGO_ENABLED=1 go build \
     -trimpath \
     -ldflags "-s -w \
         -X main.version=${VERSION} \
@@ -31,21 +33,21 @@ RUN CGO_ENABLED=1 go build \
     -tags 'sqlite_omit_load_extension netgo osusergo' \
     -o /wolf ./cmd/wolf/
 COPY fixer/go-tools /tmp/fixer-go-tools
-RUN cd /tmp/fixer-go-tools \
+RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,id=wolf-build-${TARGETARCH},target=/root/.cache/go-build cd /tmp/fixer-go-tools \
     && go build -mod=readonly -trimpath -o /goimports golang.org/x/tools/cmd/goimports
 
 FROM ${WOLF_FIXER_BASE_REF}
 
-ARG CLAUDE_CODE_VERSION=2.1.220
-ARG CLAUDE_CODE_INTEGRITY=sha512-ogBrvwkqF9f8okmnXKxmRNHuvtFxFEffe5pWdqOV3iQDxlUOKirFqnyWC7NGXXnDA4WkkbPH8pvSbwyCR2Auyw==
-ARG CLAUDE_CODE_LINUX_AMD64_INTEGRITY=sha512-3CGFCnI0gpgsqNeJruFALBDGJaKXOuok3alQEg56ty2yOPpIrOx/r2Y0+T4uhJl7kP5Hzw4IFkxo4DZKWvzQ7Q==
-ARG CLAUDE_CODE_LINUX_ARM64_INTEGRITY=sha512-VHFI8mKruIntKn7eq81sbyS19/KWmQcmJQsS/C+j9M/E+w0s4UytgsL7DADPjBE/GByNiKoRtLYDMntCjRlOdA==
-ARG CODEX_VERSION=0.146.0
-ARG CODEX_INTEGRITY=sha512-yG3sPWNda/2YAIQIDq9MrrjoCTIQ7rxYM5IasrG3VBcuhCLTkgeg/JzqmJq1V98RE4MJ5jCxDXXQlOjrditFRw==
-ARG CODEX_LINUX_AMD64_INTEGRITY=sha512-fswvyGprAPCMiOEue/7MKMk7pCjh9kZIJfJX5i9atmfnmGYbYCcUhZsEH9LEP0+0t5xyPqDbfNXY7NSxIVuXxA==
-ARG CODEX_LINUX_ARM64_INTEGRITY=sha512-qiYDxkkEFnXG7joadJW6Q+XcgyDXCpGdpa9nk/c+i0gEomur1j7bHvx12NfWWCF/y8Tqri6ay+FLuC2MjdehtA==
-ARG OPENCODE_VERSION=1.18.16
-ARG OPENCODE_INTEGRITY=sha512-l4nUfoucuw8u5WYU9my9Yz7lYpBI649i/ppgL0BGTjp/HC3p2jN50i331YpcGbKfGTEv9VG6mxU1+QZyaR5hxA==
+ARG CLAUDE_CODE_VERSION=2.1.296
+ARG CLAUDE_CODE_INTEGRITY=sha512-OX/k/rpcthMqnFKOWcpNcbiLsMKtAjLOpQNJHlYiDCFUznWCIwdRTyl/p9SdHVrsrzZuPMCNqZjnpakIni6upw==
+ARG CLAUDE_CODE_LINUX_AMD64_INTEGRITY=sha512-+m01urgelnI+VJxPaKPEK0wixgq42uZ8PeCaUk5tX/8YoDBvSmC/REVQG2jQfJAr8dxunpjJ600FvLrcj1WWTw==
+ARG CLAUDE_CODE_LINUX_ARM64_INTEGRITY=sha512-Q6Qh6qFmwuBG9rQFiDR6bY3XkFnwTN9AAPrnnDgBvr9sbg1Ql5wrf0lfoCDiV369EUHOzxI4i5OdHW9Vf2/oeA==
+ARG CODEX_VERSION=0.162.1
+ARG CODEX_INTEGRITY=sha512-NWZdi/kxyjv/8EUGFupziGU38YyleugZRM4JXgY5XFH7FUmaFA33NZS2Bmq0HPazf7S3jJQQWsZ/jAK9jsrV3Q==
+ARG CODEX_LINUX_AMD64_INTEGRITY=sha512-cjK2mdHIfEepZ1lQ1MX3aTQC+8ncIsvnacl/6vI2dIIcfP8/MrhTQ2+qRlkXFNDzJSj1d36quIszP+3/4CUJWQ==
+ARG CODEX_LINUX_ARM64_INTEGRITY=sha512-Ss7W/SrKtQFNaMtSojNoiykJgX+iDC8daM+YrcvgmJADtQPk0cd3w6Dna4CYH2CYvf9nQranj69fpcTzZ3sQIQ==
+ARG OPENCODE_VERSION=1.19.0
+ARG OPENCODE_INTEGRITY=sha512-lddJhFwZI3GLlw8VyOo4yNwBVGeVN/mxH6ORh60h69zAXL7QhjSWY9orj10rwO2kxVnxH9dh45uDCWNuiqPb8A==
 
 ENV WOLF_FIXER_VARIANT=engines \
     WOLF_FIXER_ENGINE=auto
@@ -54,8 +56,6 @@ LABEL dev.wolf.fixer.variant="engines" \
       dev.wolf.fixer.auth-mode="oauth-or-api-key"
 
 USER root
-
-COPY --from=builder /wolf /usr/local/bin/wolf
 
 # Claude Code, Codex, and OpenCode — same pins as the single-engine variants.
 RUN set -eux; \
@@ -108,6 +108,9 @@ RUN chmod 0755 /tmp/install-fix-tools.sh \
 COPY --from=builder /goimports /opt/wolf/fix-tools/bin/goimports
 RUN ln -sfn /opt/wolf/fix-tools/bin/goimports /usr/local/bin/goimports \
     && command -v goimports
+
+# App updates reuse the engine and formatter layers above.
+COPY --from=builder /wolf /usr/local/bin/wolf
 
 USER wolf
 WORKDIR /workspace

@@ -114,12 +114,12 @@ print(secrets.token_hex(24))
 PY
 )"
   docker run --rm --detach --name "$postgres_container" \
-    --tmpfs /var/lib/postgresql/data:rw,size=1g,uid=70,gid=70 \
+    --tmpfs /var/lib/postgresql:rw,size=1g,uid=70,gid=70 \
     --tmpfs /var/run/postgresql:rw,size=16m,uid=70,gid=70 \
     -e POSTGRES_USER=wolf -e "POSTGRES_PASSWORD=$postgres_password" \
     -e POSTGRES_DB=wolf -p 127.0.0.1::5432 "$postgres_image" >/dev/null
   for attempt in {1..60}; do
-    if docker exec "$postgres_container" pg_isready -U wolf -d wolf >/dev/null 2>&1; then
+    if docker exec "$postgres_container" pg_isready -h 127.0.0.1 -U wolf -d wolf >/dev/null 2>&1; then
       break
     fi
     if [[ "$attempt" -eq 60 ]]; then

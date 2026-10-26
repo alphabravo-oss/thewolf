@@ -51,12 +51,12 @@ jobs:
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: "22"
+          node-version: "26.11.1"
 
       - name: Enable pinned package manager
         run: |
-          corepack enable
-          corepack prepare pnpm@9.15.9 --activate
+          node --version
+          npm install -g pnpm@12.11.2
 
       - name: Install locked UI dependencies
         run: pnpm install --frozen-lockfile

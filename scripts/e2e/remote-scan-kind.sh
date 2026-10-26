@@ -120,8 +120,24 @@ fi
 
 if [[ "$load_local_images" == 1 ]]; then
   for image in "$runtime_image" "$scanner_image" "$postgres_image"; do
-    docker image inspect "$image" >/dev/null
-    kind load docker-image --name "$cluster" "$image"
+    platform="$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$image")"
+    repository="${image%@*}"
+    first_component="${repository%%/*}"
+    if [[ "$repository" != */* ]]; then
+      repository="docker.io/library/$repository"
+    elif [[ "$first_component" != *.* && "$first_component" != *:* && "$first_component" != localhost ]]; then
+      repository="docker.io/$repository"
+    fi
+    # Preserve the repository of digest-only OCI exports. Kind's generic
+    # loader invents anonymous names and imports uncached foreign platforms.
+    # Import only the locally available platform without modifying host tags.
+    docker image save "$image" | docker exec --privileged -i "$node" \
+      ctr -n k8s.io images import --base-name "$repository" --digests \
+      --platform "$platform" --snapshotter=overlayfs \
+      --label io.cri-containerd.image=managed -
+    docker exec "$node" ctr -n k8s.io images ls |
+      awk -v ref="$repository@${image##*@}" -v digest="${image##*@}" \
+        '$1 == ref && $3 == digest { found = 1 } END { exit !found }'
   done
 fi
 

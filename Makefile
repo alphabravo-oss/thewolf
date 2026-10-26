@@ -89,7 +89,7 @@ fmt:
 ui-build:
 	@echo "==> Building Wolf UI (Vite)..."
 	@if [ -f $(UI_DIR)/package.json ]; then \
-		cd $(UI_DIR) && corepack pnpm install --frozen-lockfile && corepack pnpm build; \
+		cd $(UI_DIR) && pnpm install --frozen-lockfile && pnpm build; \
 	else \
 		echo "==> No UI package.json found at $(UI_DIR), skipping"; \
 	fi
@@ -100,7 +100,7 @@ helm-validate:
 
 ## ui-dev-install: One-time install for local dev (after a fresh clone)
 ui-dev-install:
-	cd $(UI_DIR) && corepack pnpm install
+	cd $(UI_DIR) && pnpm install
 
 ## dev: Start backend (Air live-reload) + frontend (Vite HMR) together
 dev:
@@ -111,7 +111,7 @@ dev:
 	@mkdir -p $(BUILD_DIR)/tmp
 	@trap 'kill 0' EXIT; \
 		$(AIR) & \
-		(cd $(UI_DIR) && corepack pnpm dev) & \
+		(cd $(UI_DIR) && pnpm dev) & \
 		wait
 
 ## dev-api: Start only the Go backend with Air live-reload
@@ -123,7 +123,7 @@ dev-api:
 ## dev-ui: Start only the Vite UI dev server
 dev-ui:
 	@if [ -f $(UI_DIR)/package.json ]; then \
-		cd $(UI_DIR) && corepack pnpm dev; \
+		cd $(UI_DIR) && pnpm dev; \
 	else \
 		echo "==> No UI package.json found at $(UI_DIR)"; \
 	fi
@@ -132,7 +132,7 @@ dev-ui:
 ui-dev: dev-ui
 
 ## scanners-validate: Validate scanner manifest, version pins, image routing, embedded context, generated docs, and OS package lock
-scanners-validate: scanners-docs-check scanners-os-packages-check scanners-vulnerability-dbs-check scanners-context-check scanners-quality
+scanners-validate: scanners-cache-check scanners-docs-check scanners-os-packages-check scanners-vulnerability-dbs-check scanners-context-check scanners-quality
 	@echo "==> Validating scanner metadata..."
 	go run ./cmd/scannertools validate
 
@@ -381,3 +381,12 @@ help:
 	@echo "The Wolf — Available targets:"
 	@echo ""
 	@grep -E '^## ' $(MAKEFILE_LIST) | sed 's/^## /  /' | column -t -s ':'
+
+.PHONY: scanners-cache-check scanners-check-updates
+## scanners-cache-check: Verify unrelated version pins do not invalidate installer inputs
+scanners-cache-check:
+	bash scanners/ci/test-build-cache.sh
+
+## scanners-check-updates: Discover latest stable scanner releases without changing pins
+scanners-check-updates:
+	go run ./scanners/ci/discover --output scanners-discovery.json

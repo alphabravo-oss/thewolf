@@ -1,0 +1,7 @@
+# Reviewed 2026-10-13: historical test credentials, UI clipboard fixture,
+# documentation idempotency key, and a scanner step key. Exact fingerprints
+# preserve scanning of new content in these files. No production credentials.
+6b01b22222954c7d25df698f8863d49412e350f3:internal/remediate/land_test.go:generic-api-key:86
+40df4a068170bef8dea842448a5c90620cdf0d20:docs/scanner-release-worker.md:generic-api-key:484
+955cdefe2d357c4d20649d48e056b7c9de861ecf:ui/e2e/scanner-management.spec.ts:generic-api-key:2020
+17c96b5d76ac760289d03343835af9f659d0279a:internal/api/routes/scanner_supply_chain_test.go:generic-api-key:307
