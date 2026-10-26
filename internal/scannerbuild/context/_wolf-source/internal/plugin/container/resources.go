@@ -81,3 +81,15 @@ func CPUCount(cfg *Config) float64 {
 	}
 	return 1.5
 }
+
+// goMemoryLimit is the Go runtime soft limit for a scanner container: 85% of
+// its memory limit. Most scanners are Go programs; under a CPU cap their
+// collector falls behind and the heap overshoots the hard limit (GoKart on a
+// 3k-file service: OOM at 8 GiB, 6.7 GiB peak with this). Others ignore it.
+func goMemoryLimit(limit string) string {
+	bytes, err := MemoryBytes(limit)
+	if err != nil || bytes <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("%dMiB", bytes*85/100/(1<<20))
+}

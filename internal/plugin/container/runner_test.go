@@ -328,3 +328,19 @@ func TestImageReady_Disabled(t *testing.T) {
 		t.Error("ImageReady should be false when Disabled=true")
 	}
 }
+
+// Go scanners under a CPU cap overshoot their heap; the runtime soft limit keeps
+// them below the container limit (GoKart: OOM at 8 GiB without it).
+func TestBuildDockerArgs_GoMemoryLimitFollowsContainerLimit(t *testing.T) {
+	cfg := newTestCfg()
+	cfg.Memory = "8g"
+	_, args := mustBuildDockerArgs(t, cfg, Options{RepoDir: "/repos/x"}, "gokart", "/scan")
+	if joined := argList(args).String(); !strings.Contains(joined, "GOMEMLIMIT=6963MiB") {
+		t.Fatalf("GOMEMLIMIT not set to 85%% of the container limit: %s", joined)
+	}
+	cfg.Memory = ""
+	_, args = mustBuildDockerArgs(t, cfg, Options{RepoDir: "/repos/x"}, "gokart", "/scan")
+	if joined := argList(args).String(); strings.Contains(joined, "GOMEMLIMIT") {
+		t.Fatalf("GOMEMLIMIT set without a container memory limit: %s", joined)
+	}
+}
