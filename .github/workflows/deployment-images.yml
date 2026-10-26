@@ -341,7 +341,6 @@ jobs:
           ignore-unfixed: true
           format: table
           trivyignores: build/child-quality/${{ matrix.variant }}-${{ matrix.arch }}.trivyignore
-          ignored-licenses: ${{ env.TRIVY_IGNORED_LICENSES }}
           version: ${{ env.TRIVY_VERSION }}
 
       - name: Generate exact child SPDX

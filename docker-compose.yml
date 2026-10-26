@@ -78,13 +78,13 @@ services:
       - WOLF_ARTIFACTS_ROOT=/home/wolf/.wolf/artifacts
       - WOLF_LOG_LEVEL=${WOLF_LOG_LEVEL:-info}
       # Scanner image references (per-bucket; Option B from docs/archive/2026-10-23/PLAN-containerized-scanner-execution.md §5.1).
-      # WOLF_SCANNERS_TAG defaults to the newest published scanner release on GHCR.
-      # Set it to `stable` to follow the channel once the release factory promotes it.
-      - WOLF_SCANNERS_TAG=${WOLF_SCANNERS_TAG:-scanner-set-2026.36.1}
-      - WOLF_SCANNERS_IMAGE=${WOLF_SCANNERS_IMAGE:-ghcr.io/alphabravo-oss/wolf-scanners:${WOLF_SCANNERS_TAG:-scanner-set-2026.36.1}}
-      - WOLF_SCANNERS_IMAGE_JVM=${WOLF_SCANNERS_IMAGE_JVM:-ghcr.io/alphabravo-oss/wolf-scanners-jvm:${WOLF_SCANNERS_TAG:-scanner-set-2026.36.1}}
-      - WOLF_SCANNERS_IMAGE_RUST=${WOLF_SCANNERS_IMAGE_RUST:-ghcr.io/alphabravo-oss/wolf-scanners-rust:${WOLF_SCANNERS_TAG:-scanner-set-2026.36.1}}
-      - WOLF_SCANNERS_IMAGE_CODEQL=${WOLF_SCANNERS_IMAGE_CODEQL:-ghcr.io/alphabravo-oss/wolf-scanners-codeql:${WOLF_SCANNERS_TAG:-scanner-set-2026.36.1}}
+      # WOLF_SCANNERS_TAG defaults to the scanner `stable` channel, which the release
+      # factory moves independently from Wolf app releases. Pin scanner-set-YYYY.WW.N to freeze.
+      - WOLF_SCANNERS_TAG=${WOLF_SCANNERS_TAG:-stable}
+      - WOLF_SCANNERS_IMAGE=${WOLF_SCANNERS_IMAGE:-ghcr.io/alphabravo-oss/wolf-scanners:${WOLF_SCANNERS_TAG:-stable}}
+      - WOLF_SCANNERS_IMAGE_JVM=${WOLF_SCANNERS_IMAGE_JVM:-ghcr.io/alphabravo-oss/wolf-scanners-jvm:${WOLF_SCANNERS_TAG:-stable}}
+      - WOLF_SCANNERS_IMAGE_RUST=${WOLF_SCANNERS_IMAGE_RUST:-ghcr.io/alphabravo-oss/wolf-scanners-rust:${WOLF_SCANNERS_TAG:-stable}}
+      - WOLF_SCANNERS_IMAGE_CODEQL=${WOLF_SCANNERS_IMAGE_CODEQL:-ghcr.io/alphabravo-oss/wolf-scanners-codeql:${WOLF_SCANNERS_TAG:-stable}}
       - WOLF_SCANNERS_DOCKERHUB_MIRROR=${WOLF_SCANNERS_DOCKERHUB_MIRROR:-}
       - WOLF_SCANNERS_PULL_POLICY=${WOLF_SCANNERS_PULL_POLICY:-IfNotPresent}
       - WOLF_SCANNERS_NETWORK=${WOLF_SCANNERS_NETWORK:-none}
@@ -169,11 +169,11 @@ services:
       - WOLF_LOG_LEVEL=${WOLF_LOG_LEVEL:-info}
       - WOLF_SCAN_EXECUTION_MODE=queue
       - WOLF_ARTIFACTS_ROOT=/home/wolf/.wolf/artifacts
-      - WOLF_SCANNERS_TAG=${WOLF_SCANNERS_TAG:-scanner-set-2026.36.1}
-      - WOLF_SCANNERS_IMAGE=${WOLF_SCANNERS_IMAGE:-ghcr.io/alphabravo-oss/wolf-scanners:${WOLF_SCANNERS_TAG:-scanner-set-2026.36.1}}
-      - WOLF_SCANNERS_IMAGE_JVM=${WOLF_SCANNERS_IMAGE_JVM:-ghcr.io/alphabravo-oss/wolf-scanners-jvm:${WOLF_SCANNERS_TAG:-scanner-set-2026.36.1}}
-      - WOLF_SCANNERS_IMAGE_RUST=${WOLF_SCANNERS_IMAGE_RUST:-ghcr.io/alphabravo-oss/wolf-scanners-rust:${WOLF_SCANNERS_TAG:-scanner-set-2026.36.1}}
-      - WOLF_SCANNERS_IMAGE_CODEQL=${WOLF_SCANNERS_IMAGE_CODEQL:-ghcr.io/alphabravo-oss/wolf-scanners-codeql:${WOLF_SCANNERS_TAG:-scanner-set-2026.36.1}}
+      - WOLF_SCANNERS_TAG=${WOLF_SCANNERS_TAG:-stable}
+      - WOLF_SCANNERS_IMAGE=${WOLF_SCANNERS_IMAGE:-ghcr.io/alphabravo-oss/wolf-scanners:${WOLF_SCANNERS_TAG:-stable}}
+      - WOLF_SCANNERS_IMAGE_JVM=${WOLF_SCANNERS_IMAGE_JVM:-ghcr.io/alphabravo-oss/wolf-scanners-jvm:${WOLF_SCANNERS_TAG:-stable}}
+      - WOLF_SCANNERS_IMAGE_RUST=${WOLF_SCANNERS_IMAGE_RUST:-ghcr.io/alphabravo-oss/wolf-scanners-rust:${WOLF_SCANNERS_TAG:-stable}}
+      - WOLF_SCANNERS_IMAGE_CODEQL=${WOLF_SCANNERS_IMAGE_CODEQL:-ghcr.io/alphabravo-oss/wolf-scanners-codeql:${WOLF_SCANNERS_TAG:-stable}}
       - WOLF_SCANNERS_DOCKERHUB_MIRROR=${WOLF_SCANNERS_DOCKERHUB_MIRROR:-}
       - WOLF_SCANNERS_PULL_POLICY=${WOLF_SCANNERS_PULL_POLICY:-IfNotPresent}
       - WOLF_SCANNERS_NETWORK=${WOLF_SCANNERS_NETWORK:-none}
@@ -254,11 +254,11 @@ services:
       - WOLF_LOG_LEVEL=${WOLF_LOG_LEVEL:-info}
       - WOLF_ARTIFACTS_ROOT=/home/wolf/.wolf/artifacts
       - WOLF_WORKSPACE_ROOT=/workspaces
-      - WOLF_SCANNERS_TAG=${WOLF_SCANNERS_TAG:-scanner-set-2026.36.1}
-      - WOLF_SCANNERS_IMAGE=${WOLF_SCANNERS_IMAGE:-ghcr.io/alphabravo-oss/wolf-scanners:${WOLF_SCANNERS_TAG:-scanner-set-2026.36.1}}
-      - WOLF_SCANNERS_IMAGE_JVM=${WOLF_SCANNERS_IMAGE_JVM:-ghcr.io/alphabravo-oss/wolf-scanners-jvm:${WOLF_SCANNERS_TAG:-scanner-set-2026.36.1}}
-      - WOLF_SCANNERS_IMAGE_RUST=${WOLF_SCANNERS_IMAGE_RUST:-ghcr.io/alphabravo-oss/wolf-scanners-rust:${WOLF_SCANNERS_TAG:-scanner-set-2026.36.1}}
-      - WOLF_SCANNERS_IMAGE_CODEQL=${WOLF_SCANNERS_IMAGE_CODEQL:-ghcr.io/alphabravo-oss/wolf-scanners-codeql:${WOLF_SCANNERS_TAG:-scanner-set-2026.36.1}}
+      - WOLF_SCANNERS_TAG=${WOLF_SCANNERS_TAG:-stable}
+      - WOLF_SCANNERS_IMAGE=${WOLF_SCANNERS_IMAGE:-ghcr.io/alphabravo-oss/wolf-scanners:${WOLF_SCANNERS_TAG:-stable}}
+      - WOLF_SCANNERS_IMAGE_JVM=${WOLF_SCANNERS_IMAGE_JVM:-ghcr.io/alphabravo-oss/wolf-scanners-jvm:${WOLF_SCANNERS_TAG:-stable}}
+      - WOLF_SCANNERS_IMAGE_RUST=${WOLF_SCANNERS_IMAGE_RUST:-ghcr.io/alphabravo-oss/wolf-scanners-rust:${WOLF_SCANNERS_TAG:-stable}}
+      - WOLF_SCANNERS_IMAGE_CODEQL=${WOLF_SCANNERS_IMAGE_CODEQL:-ghcr.io/alphabravo-oss/wolf-scanners-codeql:${WOLF_SCANNERS_TAG:-stable}}
       - WOLF_SCANNERS_DOCKERHUB_MIRROR=${WOLF_SCANNERS_DOCKERHUB_MIRROR:-}
       - WOLF_SCANNERS_PULL_POLICY=${WOLF_SCANNERS_PULL_POLICY:-IfNotPresent}
       - WOLF_SCANNERS_NETWORK=${WOLF_SCANNERS_NETWORK:-none}

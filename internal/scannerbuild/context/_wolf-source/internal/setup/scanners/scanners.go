@@ -99,12 +99,11 @@ func EnvDefaults() Config {
 }
 
 // DefaultScannersTag is the runtime default tag for the wolf-built scanner
-// images: the newest published, signed scanner release on GHCR. Defaulting to
-// the `stable` channel left fresh installs unable to pull, because nothing has
-// been promoted to it yet. Set WOLF_SCANNERS_TAG=stable to follow the channel
-// once the release factory promotes it, or override per image with
-// WOLF_SCANNERS_IMAGE*. Bump this with each published scanner release.
-const DefaultScannersTag = "scanner-set-2026.36.1"
+// images: the `stable` channel, which the scanner release factory moves to a
+// qualified, signed release independently from Wolf app releases. Pin an
+// immutable release (scanner-set-YYYY.WW.N) with WOLF_SCANNERS_TAG, or
+// override per image with WOLF_SCANNERS_IMAGE*.
+const DefaultScannersTag = "stable"
 
 // ResolvedTag returns the scanner image tag the runtime resolves: the
 // WOLF_SCANNERS_TAG override if set, else DefaultScannersTag.
@@ -164,22 +163,24 @@ func ActiveImageRefs() map[string]string {
 	return refs
 }
 
-// envBucketOverrides reads WOLF_SCANNERS_IMAGE_{JVM,RUST,CODEQL} and produces
-// the per-tool override map. Tools not listed fall through to Config.Image.
+// envBucketOverrides maps bucket tools to their images. It uses the same refs
+// as ActiveImageRefs (explicit WOLF_SCANNERS_IMAGE_{JVM,RUST,CODEQL}, else
+// derived from the default image and tag), so execution, preflight and the
+// inventory agree. Before, buckets ran only when the env vars were set, so
+// installs outside the stock Compose file silently skipped CodeQL/JVM/Rust.
 func envBucketOverrides() map[string]string {
+	refs := ActiveImageRefs()
 	out := map[string]string{}
-	if v := os.Getenv("WOLF_SCANNERS_IMAGE_JVM"); v != "" {
-		out["detekt"] = v
-		out["infer"] = v
-		out["pmd"] = v
-	}
-	if v := os.Getenv("WOLF_SCANNERS_IMAGE_RUST"); v != "" {
-		out["clippy"] = v
-		out["cargo-audit"] = v
-		out["cargo-deny"] = v
-	}
-	if v := os.Getenv("WOLF_SCANNERS_IMAGE_CODEQL"); v != "" {
-		out["codeql"] = v
+	for variant, tools := range map[string][]string{
+		"jvm":    {"detekt", "infer", "pmd"},
+		"rust":   {"clippy", "cargo-audit", "cargo-deny"},
+		"codeql": {"codeql"},
+	} {
+		if ref := refs[variant]; ref != "" {
+			for _, tool := range tools {
+				out[tool] = ref
+			}
+		}
 	}
 	if len(out) == 0 {
 		return nil

@@ -533,7 +533,6 @@ jobs:
           ignore-unfixed: true
           format: table
           trivyignores: build/scanner-evidence/${{ matrix.variant }}-${{ matrix.arch }}.trivyignore
-          ignored-licenses: ${{ env.TRIVY_IGNORED_LICENSES }}
           version: ${{ env.TRIVY_VERSION }}
 
       - uses: aquasecurity/trivy-action@dc5a429b52fcf669ce959baa2c2dd26090d2a6c4 # 0.32.0
@@ -703,7 +702,6 @@ jobs:
           ignore-unfixed: true
           format: table
           trivyignores: build/fixer-evidence/${{ matrix.variant }}-${{ matrix.arch }}.trivyignore
-          ignored-licenses: ${{ env.TRIVY_IGNORED_LICENSES }}
           version: ${{ env.TRIVY_VERSION }}
 
       - uses: aquasecurity/trivy-action@dc5a429b52fcf669ce959baa2c2dd26090d2a6c4 # 0.32.0
@@ -910,7 +908,6 @@ jobs:
           ignore-unfixed: true
           format: table
           trivyignores: build/runtime-evidence/${{ matrix.variant }}-${{ matrix.arch }}.trivyignore
-          ignored-licenses: ${{ env.TRIVY_IGNORED_LICENSES }}
           version: ${{ env.TRIVY_VERSION }}
 
       - name: Generate runtime SPDX SBOM
@@ -1984,7 +1981,6 @@ jobs:
           format: json
           output: build/published-quality/security.json
           trivyignores: build/published-quality/image.trivyignore
-          ignored-licenses: ${{ env.TRIVY_IGNORED_LICENSES }}
           version: ${{ env.TRIVY_VERSION }}
 
       - name: Generate exact published child SPDX SBOM
