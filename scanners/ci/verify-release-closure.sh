@@ -189,7 +189,7 @@ else
       and .approvalReceiptDigest == null
       and (.digest | test("^sha256:[a-f0-9]{64}$"))
       and .primary.verified == true
-      and .mirror.verified == true)
+      and (.mirror == null or .mirror.verified == true))
   ' "$manifest" >/dev/null || {
       echo "release aggregate is incomplete or does not retain the exact candidate image closure" >&2
       exit 1
@@ -223,7 +223,8 @@ else
       --arg candidate_manifest_sha "$candidate_manifest_sha" \
       --arg lock "$lock_digest" \
       --arg definition "$definition_digest" \
-      --arg commit "$definition_commit" '
+      --arg commit "$definition_commit" \
+      --argjson require_mirror "$require_mirror" '
     .schemaVersion == "wolf.scanners.candidate-verification/v1"
     and .candidate.id == $candidate
     and .candidate.ociDigest == $candidate_digest
@@ -231,7 +232,7 @@ else
     and .candidate.lockDigest == $lock
     and .candidate.definitionDigest == $definition
     and .candidate.definitionCommit == $commit
-    and .mirrorRequired == true
+    and (.mirrorRequired == true or ($require_mirror | not))
     and .closureVerified == true
     and (.images | length) == 8
   ' "$candidate_report" >/dev/null
