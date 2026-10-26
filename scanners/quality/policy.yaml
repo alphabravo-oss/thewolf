@@ -1,7 +1,7 @@
 # Deterministic scanner compatibility policy. Resource limits are evaluated
 # against recorded execution evidence, never as wall-clock unit microbenchmarks.
 schemaVersion: wolf.scanners/quality-policy/v1
-expectedToolCount: 53
+expectedToolCount: 54
 
 parserContract:
   # The final component is the authoritative tools.yaml/plugin registration key.

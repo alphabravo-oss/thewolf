@@ -80,7 +80,7 @@ func (*ZAPPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]model
 			result.Report = bytes.ReplaceAll(result.Report, encoded[1:len(encoded)-1], []byte("[REDACTED]"))
 		}
 	}
-	findings, err := parseZAPReport(result.Report)
+	findings, err := parseZAPOutput(result.Report)
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +106,7 @@ type zapAlert struct {
 	} `json:"instances"`
 }
 
-func parseZAPReport(data []byte) ([]models.Finding, error) {
+func parseZAPOutput(data []byte) ([]models.Finding, error) {
 	var report struct {
 		Sites []struct {
 			Alerts []zapAlert `json:"alerts"`
