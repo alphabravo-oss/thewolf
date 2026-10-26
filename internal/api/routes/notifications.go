@@ -78,6 +78,15 @@ func ListNotifications(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	if n, since := pendingScannerUpdates(); n > 0 && claims.IsAdmin() {
+		title := "Scanner image update available"
+		if n > 1 {
+			title = fmt.Sprintf("Scanner image updates available (%d images)", n)
+		}
+		items = append(items, notificationItem{
+			Type: "scanner_update", Title: title, Href: "/settings?tab=scanners", At: since,
+		})
+	}
 	sort.Slice(items, func(i, j int) bool { return items[i].At.After(items[j].At) })
 	if len(items) > 20 {
 		items = items[:20]

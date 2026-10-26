@@ -600,48 +600,7 @@ func ScannersImages(w http.ResponseWriter, r *http.Request) {
 			"container backend not initialized")
 		return
 	}
-	imgs := cfg.AllImages()
-	sort.Strings(imgs)
-
-	// Probe each image's local + remote digest concurrently. Each probe
-	// shells out to docker once; the inner timeouts are baked into the
-	// helpers so a hung registry doesn't stall the whole response.
-	results := make([]imageStatus, len(imgs))
-	var wg sync.WaitGroup
-	for i, img := range imgs {
-		i, img := i, img
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			s := imageStatus{Image: img}
-			// `docker image inspect` exits 1 when the image isn't present
-			// locally — that's the 'not pulled yet' state, not an error.
-			// Leave LocalDigest empty in that case; the UI renders an
-			// 'not pulled' pill rather than 'error'.
-			if d, err := container.LocalImageDigest(r.Context(), cfg, img); err == nil {
-				s.LocalDigest = d
-				s.LocalPresent = true
-			} else if !errors.Is(err, container.ErrImageMissing) {
-				s.LocalError = "Local image availability could not be checked"
-			}
-			index, err := dockerIndexDigest(img)
-			if err != nil {
-				s.RemoteError = err.Error()
-			} else {
-				s.RemoteDigest = index
-			}
-			if s.LocalDigest != "" && index != "" && s.LocalDigest != index {
-				// Mismatch against the index is usually a real update, but a
-				// --platform pull records a child digest instead. Check those
-				// before claiming an update is available.
-				s.UpdatesAvailable = !slices.Contains(dockerChildDigests(img), s.LocalDigest)
-			}
-			results[i] = s
-		}()
-	}
-	wg.Wait()
-
-	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: results})
+	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: probeScannerImages(r.Context(), cfg)})
 }
 
 // ScannersPullOne pulls a single image. Used by the per-image
@@ -786,4 +745,52 @@ func classifyPullError(err error) (int, string) {
 		return http.StatusBadGateway, "registry_unreachable"
 	}
 	return http.StatusInternalServerError, "pull_failed"
+}
+
+// probeScannerImages compares every configured scanner image's local digest
+// with the registry. Shared by the inventory page and the background update
+// check so both agree on what "update available" means.
+func probeScannerImages(ctx context.Context, cfg *container.Config) []imageStatus {
+	imgs := cfg.AllImages()
+	sort.Strings(imgs)
+
+	// Probe each image's local + remote digest concurrently. Each probe
+	// shells out to docker once; the inner timeouts are baked into the
+	// helpers so a hung registry doesn't stall the whole response.
+	results := make([]imageStatus, len(imgs))
+	var wg sync.WaitGroup
+	for i, img := range imgs {
+		i, img := i, img
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			s := imageStatus{Image: img}
+			// `docker image inspect` exits 1 when the image isn't present
+			// locally — that's the 'not pulled yet' state, not an error.
+			// Leave LocalDigest empty in that case; the UI renders an
+			// 'not pulled' pill rather than 'error'.
+			if d, err := container.LocalImageDigest(ctx, cfg, img); err == nil {
+				s.LocalDigest = d
+				s.LocalPresent = true
+			} else if !errors.Is(err, container.ErrImageMissing) {
+				s.LocalError = "Local image availability could not be checked"
+			}
+			index, err := dockerIndexDigest(img)
+			if err != nil {
+				s.RemoteError = err.Error()
+			} else {
+				s.RemoteDigest = index
+			}
+			if s.LocalDigest != "" && index != "" && s.LocalDigest != index {
+				// Mismatch against the index is usually a real update, but a
+				// --platform pull records a child digest instead. Check those
+				// before claiming an update is available.
+				s.UpdatesAvailable = !slices.Contains(dockerChildDigests(img), s.LocalDigest)
+			}
+			results[i] = s
+		}()
+	}
+	wg.Wait()
+
+	return results
 }
