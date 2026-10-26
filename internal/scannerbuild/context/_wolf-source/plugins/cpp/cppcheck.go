@@ -28,8 +28,7 @@ func (p *CppcheckPlugin) CheckAvailable() bool { return container.IsScannersRead
 
 func (p *CppcheckPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
 	if !plugin.HasFilesWithExtension(opts.RepoPath, "c", "cpp", "cc", "h", "hpp") {
-		plugin.Skipf(opts.OnOutput, "cppcheck", "no C/C++ source files found. Add .c, .cpp, or .h files to enable static analysis.")
-		return nil, nil
+		return nil, p.Applicability(opts.RepoPath, "")
 	}
 
 	if opts.Timeout > 0 {
@@ -118,4 +117,9 @@ func mapCppcheckSeverity(s string) models.Severity {
 	default:
 		return models.SeverityInfo
 	}
+}
+
+// Applicability keeps absent inputs out of selection and coverage.
+func (p *CppcheckPlugin) Applicability(repoPath, _ string) error {
+	return plugin.Absent(!plugin.HasFilesWithExtension(repoPath, "c", "cpp", "cc", "h", "hpp"), "no C/C++ source files found. Add .c, .cpp, or .h files to enable static analysis.")
 }

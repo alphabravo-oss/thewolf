@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
@@ -28,6 +30,9 @@ func (p *ESLintPlugin) Languages() []models.Language {
 func (p *ESLintPlugin) CheckAvailable() bool { return container.IsScannersReady() }
 
 func (p *ESLintPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
+	if err := p.Applicability(opts.RepoPath, ""); err != nil {
+		return nil, err
+	}
 	if opts.Timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, opts.Timeout)
@@ -44,8 +49,7 @@ func (p *ESLintPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			stderr := string(exitErr.Stderr)
 			if strings.Contains(stderr, "eslint.config") || strings.Contains(stderr, "eslintrc") {
-				plugin.Skipf(opts.OnOutput, "eslint", "no ESLint configuration found. Create an eslint.config.js (ESLint v9+) or .eslintrc.* file in the repository root to enable linting.")
-				return nil, nil
+				return nil, &plugin.NotApplicableError{Reason: eslintNoConfig}
 			}
 		}
 		if len(out) == 0 {
@@ -111,4 +115,23 @@ func mapESLintSeverity(s int) models.Severity {
 	default:
 		return models.SeverityInfo
 	}
+}
+
+const eslintNoConfig = "no ESLint configuration found. Create an eslint.config.js (ESLint v9+) or .eslintrc.* file in the repository root to enable linting."
+
+// Applicability keeps absent inputs out of selection and coverage. ESLint
+// resolves configuration from the repository root.
+func (p *ESLintPlugin) Applicability(repoPath, _ string) error {
+	return plugin.Absent(!plugin.HasGlob(repoPath, "eslint.config.*", ".eslintrc", ".eslintrc.*") && !packageJSONHasESLintConfig(repoPath), eslintNoConfig)
+}
+
+func packageJSONHasESLintConfig(repoPath string) bool {
+	data, err := os.ReadFile(filepath.Join(repoPath, "package.json"))
+	if err != nil {
+		return false
+	}
+	var manifest struct {
+		ESLintConfig json.RawMessage `json:"eslintConfig"`
+	}
+	return json.Unmarshal(data, &manifest) == nil && len(manifest.ESLintConfig) > 0
 }

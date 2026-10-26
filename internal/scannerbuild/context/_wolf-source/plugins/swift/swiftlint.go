@@ -27,8 +27,7 @@ func (p *SwiftLintPlugin) CheckAvailable() bool { return container.IsScannersRea
 
 func (p *SwiftLintPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
 	if !plugin.HasFilesWithExtension(opts.RepoPath, "swift") {
-		plugin.Skipf(opts.OnOutput, "swiftlint", "no Swift files (*.swift) found. Add Swift source files to enable linting.")
-		return nil, nil
+		return nil, p.Applicability(opts.RepoPath, "")
 	}
 
 	if opts.Timeout > 0 {
@@ -97,4 +96,9 @@ func mapSwiftLintSeverity(s string) models.Severity {
 	default:
 		return models.SeverityLow
 	}
+}
+
+// Applicability keeps absent inputs out of selection and coverage.
+func (p *SwiftLintPlugin) Applicability(repoPath, _ string) error {
+	return plugin.Absent(!plugin.HasFilesWithExtension(repoPath, "swift"), "no Swift files (*.swift) found. Add Swift source files to enable linting.")
 }

@@ -26,8 +26,7 @@ func (p *DetektPlugin) CheckAvailable() bool { return container.IsScannersReady(
 
 func (p *DetektPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
 	if !plugin.HasFilesWithExtension(opts.RepoPath, "kt", "kts") {
-		plugin.Skipf(opts.OnOutput, "detekt", "no Kotlin files (*.kt, *.kts) found.")
-		return nil, nil
+		return nil, p.Applicability(opts.RepoPath, "")
 	}
 	if opts.Timeout > 0 {
 		var cancel context.CancelFunc
@@ -121,4 +120,9 @@ func mapDetektSeverity(s string) models.Severity {
 	default:
 		return models.SeverityInfo
 	}
+}
+
+// Applicability keeps absent inputs out of selection and coverage.
+func (p *DetektPlugin) Applicability(repoPath, _ string) error {
+	return plugin.Absent(!plugin.HasFilesWithExtension(repoPath, "kt", "kts"), "no Kotlin files (*.kt, *.kts) found.")
 }

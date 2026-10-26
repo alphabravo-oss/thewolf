@@ -26,8 +26,7 @@ func (p *RadonPlugin) CheckAvailable() bool { return container.IsScannersReady()
 
 func (p *RadonPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
 	if !plugin.HasFilesWithExtension(opts.RepoPath, "py") {
-		plugin.Skipf(opts.OnOutput, "radon", "no Python files (*.py) found. Add Python source files to enable complexity analysis.")
-		return nil, nil
+		return nil, p.Applicability(opts.RepoPath, "")
 	}
 
 	if opts.Timeout > 0 {
@@ -113,4 +112,9 @@ func mapRadonSeverity(rank string) models.Severity {
 	default:
 		return models.SeverityInfo
 	}
+}
+
+// Applicability keeps absent inputs out of selection and coverage.
+func (p *RadonPlugin) Applicability(repoPath, _ string) error {
+	return plugin.Absent(!plugin.HasFilesWithExtension(repoPath, "py"), "no Python files (*.py) found. Add Python source files to enable complexity analysis.")
 }

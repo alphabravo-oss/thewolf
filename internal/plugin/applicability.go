@@ -122,3 +122,21 @@ func HasKubernetesInputs(dir string) (bool, error) {
 	})
 	return found, err
 }
+
+// Absent reports a missing scanner input as not applicable.
+func Absent(missing bool, reason string) error {
+	if missing {
+		return &NotApplicableError{Reason: reason}
+	}
+	return nil
+}
+
+// HasGlob reports whether any pattern (relative to dir) matches a file.
+func HasGlob(dir string, patterns ...string) bool {
+	for _, pattern := range patterns {
+		if matches, _ := filepath.Glob(filepath.Join(dir, pattern)); len(matches) > 0 {
+			return true
+		}
+	}
+	return false
+}

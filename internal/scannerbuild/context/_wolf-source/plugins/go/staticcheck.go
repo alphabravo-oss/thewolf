@@ -31,8 +31,7 @@ func (p *StaticcheckPlugin) CheckAvailable() bool { return container.IsScannersR
 func (p *StaticcheckPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
 	goDir := plugin.FindFile(opts.RepoPath, "go.mod")
 	if goDir == "" {
-		plugin.Skipf(opts.OnOutput, "staticcheck", "no go.mod found in project or immediate subdirectories.")
-		return nil, nil
+		return nil, p.Applicability(opts.RepoPath, "")
 	}
 
 	if opts.Timeout > 0 {
@@ -137,4 +136,9 @@ func mapStaticcheckSeverity(code string) models.Severity {
 		return models.SeverityMedium
 	}
 	return models.SeverityLow
+}
+
+// Applicability keeps absent inputs out of selection and coverage.
+func (p *StaticcheckPlugin) Applicability(repoPath, _ string) error {
+	return plugin.Absent(plugin.FindFile(repoPath, "go.mod") == "", "no go.mod found in project or immediate subdirectories.")
 }

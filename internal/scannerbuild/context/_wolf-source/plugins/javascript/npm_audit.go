@@ -36,8 +36,7 @@ func (p *NPMAuditPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) (
 		jsDir = plugin.FindFile(opts.RepoPath, manifest)
 	}
 	if jsDir == "" {
-		plugin.Skipf(opts.OnOutput, "npm-audit", "no package.json found in project or immediate subdirectories.")
-		return nil, nil
+		return nil, p.Applicability(opts.RepoPath, "")
 	}
 
 	if opts.Timeout > 0 {
@@ -168,4 +167,9 @@ func parseNPMAuditOutput(data []byte) ([]models.Finding, error) {
 		}
 	}
 	return findings, nil
+}
+
+// Applicability keeps absent inputs out of selection and coverage.
+func (p *NPMAuditPlugin) Applicability(repoPath, _ string) error {
+	return plugin.Absent(plugin.FindFile(repoPath, "package-lock.json") == "" && plugin.FindFile(repoPath, "package.json") == "", "no package.json found in project or immediate subdirectories.")
 }

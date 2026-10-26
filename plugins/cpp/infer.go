@@ -30,9 +30,7 @@ func (p *InferPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]m
 	// arm64 binary on any infer release. Skip cleanly on arm64 hosts
 	// rather than fail when the binary isn't in the jvm bucket image.
 	if plugin.IsArm64Host() {
-		plugin.Skipf(opts.OnOutput, "infer",
-			"no upstream Linux/arm64 binary — infer is unavailable on this host. Skipping.")
-		return nil, nil
+		return nil, p.Applicability(opts.RepoPath, "")
 	}
 	cfg := container.ConfigFromOpts(opts.ContainerCfg)
 	// Infer ships in the JVM bucket image (with pmd). It's not in the
@@ -126,4 +124,9 @@ func mapInferSeverity(s string) models.Severity {
 	default:
 		return models.SeverityInfo
 	}
+}
+
+// Applicability keeps absent inputs out of selection and coverage.
+func (p *InferPlugin) Applicability(repoPath, _ string) error {
+	return plugin.Absent(!plugin.HasFile(repoPath, "Makefile"), "no upstream Linux/arm64 binary — infer is unavailable on this host. Skipping.")
 }

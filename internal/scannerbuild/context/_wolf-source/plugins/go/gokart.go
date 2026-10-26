@@ -32,8 +32,7 @@ func (p *GoKartPlugin) CheckAvailable() bool { return container.IsScannersReady(
 func (p *GoKartPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
 	goDir := plugin.FindFile(opts.RepoPath, "go.mod")
 	if goDir == "" {
-		plugin.Skipf(opts.OnOutput, "gokart", "no go.mod found in project or immediate subdirectories.")
-		return nil, nil
+		return nil, p.Applicability(opts.RepoPath, "")
 	}
 	if opts.Timeout > 0 {
 		var cancel context.CancelFunc
@@ -150,4 +149,9 @@ func mapGoKartSeverity(level string) models.Severity {
 	default:
 		return models.SeverityMedium
 	}
+}
+
+// Applicability keeps absent inputs out of selection and coverage.
+func (p *GoKartPlugin) Applicability(repoPath, _ string) error {
+	return plugin.Absent(plugin.FindFile(repoPath, "go.mod") == "", "no go.mod found in project or immediate subdirectories.")
 }

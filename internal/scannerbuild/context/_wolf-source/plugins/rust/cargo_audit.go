@@ -28,8 +28,7 @@ func (p *CargoAuditPlugin) CheckAvailable() bool { return container.IsScannersRe
 func (p *CargoAuditPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
 	lockDir := plugin.FindFile(opts.RepoPath, "Cargo.lock")
 	if lockDir == "" {
-		plugin.Skipf(opts.OnOutput, "cargo-audit", "no Cargo.lock found. Commit a lockfile to enable Rust advisory scanning.")
-		return nil, nil
+		return nil, p.Applicability(opts.RepoPath, "")
 	}
 	if opts.Timeout > 0 {
 		var cancel context.CancelFunc
@@ -131,4 +130,9 @@ func parseCargoAuditOutput(data []byte) ([]models.Finding, error) {
 		})
 	}
 	return findings, nil
+}
+
+// Applicability keeps absent inputs out of selection and coverage.
+func (p *CargoAuditPlugin) Applicability(repoPath, _ string) error {
+	return plugin.Absent(plugin.FindFile(repoPath, "Cargo.lock") == "", "no Cargo.lock found. Commit a lockfile to enable Rust advisory scanning.")
 }

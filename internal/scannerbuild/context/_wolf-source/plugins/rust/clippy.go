@@ -33,8 +33,7 @@ func (p *ClippyPlugin) CheckAvailable() bool { return container.IsScannersReady(
 func (p *ClippyPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
 	// Verify this is a Rust project before attempting to run clippy.
 	if _, err := os.Stat(filepath.Join(opts.RepoPath, "Cargo.toml")); err != nil {
-		plugin.Skipf(opts.OnOutput, "clippy", "no Cargo.toml found — this doesn't appear to be a Rust project. Initialize with 'cargo init' to enable Clippy analysis.")
-		return nil, nil
+		return nil, p.Applicability(opts.RepoPath, "")
 	}
 
 	if opts.Timeout > 0 {
@@ -169,4 +168,9 @@ func mapClippySeverity(level string) models.Severity {
 	default:
 		return models.SeverityInfo
 	}
+}
+
+// Applicability keeps absent inputs out of selection and coverage.
+func (p *ClippyPlugin) Applicability(repoPath, _ string) error {
+	return plugin.Absent(!plugin.HasFile(repoPath, "Cargo.toml"), "no Cargo.toml found — this doesn't appear to be a Rust project. Initialize with 'cargo init' to enable Clippy analysis.")
 }

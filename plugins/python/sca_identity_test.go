@@ -2,14 +2,15 @@ package python
 
 import (
 	"context"
-	"github.com/alphabravocompany/thewolf/internal/finding/identity"
-	"github.com/alphabravocompany/thewolf/internal/models"
-	"github.com/alphabravocompany/thewolf/internal/plugin/container"
-	"github.com/alphabravocompany/thewolf/internal/scan/runner"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
+
+	"github.com/alphabravocompany/thewolf/internal/finding/identity"
+	"github.com/alphabravocompany/thewolf/internal/models"
+	"github.com/alphabravocompany/thewolf/internal/plugin/container"
+	"github.com/alphabravocompany/thewolf/internal/scan/runner"
 )
 
 func TestSCADependencyIdentityPipAudit(t *testing.T) {
