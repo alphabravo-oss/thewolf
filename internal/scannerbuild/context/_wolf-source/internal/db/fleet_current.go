@@ -17,7 +17,7 @@ import (
 // findingIdent is the same issue across rescans and branches: file + line +
 // rule. It must not use the semantic/stable hash — that ignores line number
 // and collapses hundreds of yamllint hits in one file into a single count.
-func findingIdent(f models.Finding) string {
+func findingIdent(f *fleetFinding) string {
 	if s := strings.TrimSpace(f.LocationFingerprint); s != "" {
 		return s
 	}
@@ -49,23 +49,23 @@ func severityRankName(s models.Severity) int {
 	}
 }
 
-func dedupCurrentFindings(in []models.Finding) []models.Finding {
+func dedupCurrentFindings(in []*fleetFinding) []*fleetFinding {
 	best := make(map[string]int, len(in))
 	for i := range in {
-		f := &in[i]
-		k := identKey(f.RepoID, findingIdent(*f))
+		f := in[i]
+		k := identKey(f.RepoID, findingIdent(f))
 		previous, ok := best[k]
 		if !ok {
 			best[k] = i
 			continue
 		}
-		prev := &in[previous]
+		prev := in[previous]
 		pr, nr := severityRankName(prev.Severity), severityRankName(f.Severity)
 		if nr > pr || (nr == pr && (f.CreatedAt.After(prev.CreatedAt) || (f.CreatedAt.Equal(prev.CreatedAt) && f.ID < prev.ID))) {
 			best[k] = i
 		}
 	}
-	out := make([]models.Finding, 0, len(best))
+	out := make([]*fleetFinding, 0, len(best))
 	for _, i := range best {
 		out = append(out, in[i])
 	}
@@ -86,13 +86,13 @@ func appendRepoScope(col string, fleetMode bool, collectionID, userID string, ar
 }
 
 func listCurrentOpenFindings(ctx context.Context, database *sqlx.DB, userID string, fleetMode bool, collectionID string) ([]models.Finding, error) {
-	e, err := loadFleetEvidence(ctx, database, userID, fleetMode, collectionID)
+	e, err := loadFleetEvidence(ctx, database, userID, fleetMode, collectionID, "")
 	if err != nil {
 		return nil, err
 	}
 	current := e.currentEvidence(time.Now().UTC())
 	// Keep suppressed open records for the include_suppressed API option.
-	current = slices.DeleteFunc(current, func(f models.Finding) bool { return f.Status != models.StatusOpen })
+	current = slices.DeleteFunc(current, func(f *fleetFinding) bool { return f.Status != models.StatusOpen })
 	current = dedupCurrentFindings(current)
 	// Aggregates read compact evidence; REST findings and vulnerability callers
 	// still need complete records, including descriptions, scores and SARIF.
@@ -116,7 +116,7 @@ func listCurrentOpenFindings(ctx context.Context, database *sqlx.DB, userID stri
 	return findings, nil
 }
 
-func countBySeverity(findings []models.Finding) map[string]int {
+func countBySeverity(findings []*fleetFinding) map[string]int {
 	out := map[string]int{"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
 	for _, f := range findings {
 		sev := strings.ToLower(string(f.Severity))
@@ -128,7 +128,7 @@ func countBySeverity(findings []models.Finding) map[string]int {
 }
 
 func computeFleetPosture(ctx context.Context, database *sqlx.DB, userID string, fleetMode bool, collectionID string) (*FleetPostureResult, error) {
-	e, err := loadFleetEvidence(ctx, database, userID, fleetMode, collectionID)
+	e, err := loadFleetEvidence(ctx, database, userID, fleetMode, collectionID, "")
 	if err != nil {
 		return nil, err
 	}
@@ -136,7 +136,7 @@ func computeFleetPosture(ctx context.Context, database *sqlx.DB, userID string, 
 }
 
 func computeNeedsAttention(ctx context.Context, database *sqlx.DB, userID string, fleetMode bool, limit int) ([]NeedsAttentionRow, error) {
-	e, err := loadFleetEvidence(ctx, database, userID, fleetMode, "")
+	e, err := loadFleetEvidence(ctx, database, userID, fleetMode, "", "")
 	if err != nil {
 		return nil, err
 	}
@@ -154,14 +154,14 @@ func computeAggregateByRule(ctx context.Context, database *sqlx.DB, userID strin
 	if limit <= 0 {
 		limit = 10
 	}
-	e, err := loadFleetEvidence(ctx, database, userID, fleetMode, "")
+	e, err := loadFleetEvidence(ctx, database, userID, fleetMode, "", "")
 	if err != nil {
 		return nil, err
 	}
 	findings := e.currentEvidence(time.Now().UTC())
-	findings = slices.DeleteFunc(findings, func(f models.Finding) bool { return f.Status != models.StatusOpen })
+	findings = slices.DeleteFunc(findings, func(f *fleetFinding) bool { return f.Status != models.StatusOpen })
 	findings = dedupCurrentFindings(findings)
-	findings = slices.DeleteFunc(findings, func(f models.Finding) bool { return f.Suppressed })
+	findings = slices.DeleteFunc(findings, func(f *fleetFinding) bool { return f.Suppressed })
 	type agg struct {
 		repos    map[string]bool
 		findings int
@@ -308,14 +308,14 @@ func repoNames(ctx context.Context, database *sqlx.DB, userID string, fleetMode 
 }
 
 func computeFindingsByRepo(ctx context.Context, database *sqlx.DB, userID string, fleetMode bool, collectionID string) ([]FindingsByRepoRow, error) {
-	e, err := loadFleetEvidence(ctx, database, userID, fleetMode, collectionID)
+	e, err := loadFleetEvidence(ctx, database, userID, fleetMode, collectionID, "")
 	if err != nil {
 		return nil, err
 	}
 	findings := e.currentEvidence(time.Now().UTC())
-	findings = slices.DeleteFunc(findings, func(f models.Finding) bool { return f.Status != models.StatusOpen })
+	findings = slices.DeleteFunc(findings, func(f *fleetFinding) bool { return f.Status != models.StatusOpen })
 	findings = dedupCurrentFindings(findings)
-	findings = slices.DeleteFunc(findings, func(f models.Finding) bool { return f.Suppressed })
+	findings = slices.DeleteFunc(findings, func(f *fleetFinding) bool { return f.Suppressed })
 	names := repoNames(ctx, database, userID, fleetMode)
 	type bucket struct {
 		total, crit, high, med, low, info int

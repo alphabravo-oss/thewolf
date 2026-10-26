@@ -18,22 +18,22 @@ func TestFleetEvidenceProgressAndCoverage(t *testing.T) {
 		at := now.AddDate(0, 0, -days)
 		return models.Scan{ID: id, RepoID: repo, Branch: branch, Status: models.ScanStatusCompleted, ToolsSelected: `["semgrep"]`, ToolsCompleted: `["semgrep"]`, ToolsFailed: `[]`, ReleaseManifestDigest: "sha256:release", CreatedAt: at, CompletedAt: &at}
 	}
-	finding := func(scanID, repoID, key string) models.Finding {
-		return models.Finding{ID: scanID + key, ScanID: scanID, RepoID: repoID, ToolName: "semgrep", Category: models.CategorySAST, Status: models.StatusOpen, Severity: models.SeverityHigh, Fingerprint: key, StableFingerprint: key, LocationFingerprint: key, Title: key, FilePath: key + ".go", CreatedAt: now}
+	finding := func(scanID, repoID, key string) *fleetFinding {
+		return &fleetFinding{ID: scanID + key, ScanID: scanID, RepoID: repoID, ToolName: "semgrep", Category: models.CategorySAST, Status: models.StatusOpen, Severity: models.SeverityHigh, Fingerprint: key, StableFingerprint: key, LocationFingerprint: key, Title: key, FilePath: key + ".go", CreatedAt: now}
 	}
 	fixture := func() *fleetEvidence {
-		return &fleetEvidence{repos: []fleetRepo{{"repo", "Payments"}}, scans: []models.Scan{scan("history", "repo", "main", 15), scan("baseline", "repo", "main", 8), scan("latest", "repo", "main", 1)}, findings: map[string][]models.Finding{}, failedGates: map[string]bool{}}
+		return &fleetEvidence{repos: []fleetRepo{{"repo", "Payments"}}, scans: []models.Scan{scan("history", "repo", "main", 15), scan("baseline", "repo", "main", 8), scan("latest", "repo", "main", 1)}, findings: map[string][]*fleetFinding{}, failedGates: map[string]bool{}}
 	}
 	t.Run("counts distinct changes and separates triage", func(t *testing.T) {
 		e := fixture()
-		e.findings["history"] = []models.Finding{finding("history", "repo", "returned")}
-		e.findings["baseline"] = []models.Finding{finding("baseline", "repo", "fixed"), finding("baseline", "repo", "muted"), finding("baseline", "repo", "unchanged")}
+		e.findings["history"] = []*fleetFinding{finding("history", "repo", "returned")}
+		e.findings["baseline"] = []*fleetFinding{finding("baseline", "repo", "fixed"), finding("baseline", "repo", "muted"), finding("baseline", "repo", "unchanged")}
 		muted := finding("latest", "repo", "muted")
 		muted.Suppressed = true
 		moved := finding("latest", "repo", "unchanged")
 		moved.LocationFingerprint = "moved-line"
 		moved.LineStart = 90
-		e.findings["latest"] = []models.Finding{finding("latest", "repo", "new"), finding("latest", "repo", "returned"), muted, moved, finding("latest", "repo", "new")}
+		e.findings["latest"] = []*fleetFinding{finding("latest", "repo", "new"), finding("latest", "repo", "returned"), muted, moved, finding("latest", "repo", "new")}
 		p := e.posture(now)
 		c := p.Changes
 		if c.ComparedBranches != 1 || c.New != 1 || c.Resurfaced != 1 || c.Resolved != 1 || c.Suppressed != 1 {
@@ -41,6 +41,34 @@ func TestFleetEvidenceProgressAndCoverage(t *testing.T) {
 		}
 		if p.Coverage.FreshRepos != 1 || p.OpenFindingsBySeverity["high"] != 3 {
 			t.Fatalf("posture: %+v", p)
+		}
+	})
+	t.Run("legacy identity fallback and shared evidence stay unchanged", func(t *testing.T) {
+		e := fixture()
+		known := finding("baseline", "repo", "known")
+		fixed := finding("baseline", "repo", "fixed")
+		moved := finding("latest", "repo", "known")
+		added := finding("latest", "repo", "added")
+		moved.LineStart = 90
+		for _, f := range []*fleetFinding{known, fixed, moved, added} {
+			f.Fingerprint, f.StableFingerprint = "", ""
+		}
+		e.findings["baseline"] = []*fleetFinding{known, fixed}
+		e.findings["latest"] = []*fleetFinding{moved, added}
+		original := *moved
+		for range 2 {
+			p := e.posture(now)
+			if p.Changes.New != 1 || p.Changes.Resolved != 1 || p.Changes.Resurfaced != 0 || p.OpenFindingsBySeverity["high"] != 2 {
+				t.Fatalf("legacy comparison changed: %+v", p)
+			}
+			if *moved != original || len(e.findings["latest"]) != 2 {
+				t.Fatal("aggregate mutated shared history")
+			}
+			for _, f := range e.currentOpen(now) {
+				if f != moved && f != added {
+					t.Fatal("current evidence copied a finding")
+				}
+			}
 		}
 	})
 	t.Run("old failure clears when latest branch passes", func(t *testing.T) {
@@ -57,7 +85,7 @@ func TestFleetEvidenceProgressAndCoverage(t *testing.T) {
 	for _, status := range []models.ScanStatus{models.ScanStatusCancelled, models.ScanStatusFailed, models.ScanStatusCompleted, models.ScanStatusRunning} {
 		t.Run("partial evidence retains backlog "+string(status), func(t *testing.T) {
 			e := fixture()
-			e.findings["baseline"] = []models.Finding{finding("baseline", "repo", "known")}
+			e.findings["baseline"] = []*fleetFinding{finding("baseline", "repo", "known")}
 			e.scans[2].Status = status
 			e.scans[2].ToolsCompleted = `[]`
 			p := e.posture(now)
@@ -79,7 +107,7 @@ func TestFleetEvidenceProgressAndCoverage(t *testing.T) {
 		t.Run("excludes changed "+change.name, func(t *testing.T) {
 			e := fixture()
 			change.mutate(&e.scans[2])
-			e.findings["baseline"] = []models.Finding{finding("baseline", "repo", "known")}
+			e.findings["baseline"] = []*fleetFinding{finding("baseline", "repo", "known")}
 			p := e.posture(now)
 			if p.Changes.ComparedBranches != 0 || p.Changes.Resolved != 0 || p.Changes.Rows[0].Reason == "" {
 				t.Fatalf("incomparable: %+v", p.Changes)
@@ -88,22 +116,22 @@ func TestFleetEvidenceProgressAndCoverage(t *testing.T) {
 	}
 	t.Run("another branch still observing issue prevents resolution", func(t *testing.T) {
 		e := fixture()
-		e.findings["baseline"] = []models.Finding{finding("baseline", "repo", "known")}
+		e.findings["baseline"] = []*fleetFinding{finding("baseline", "repo", "known")}
 		e.scans = append(e.scans, scan("other", "repo", "dev", 0))
 		f := finding("other", "repo", "known")
 		f.Suppressed = true
-		e.findings["other"] = []models.Finding{f}
+		e.findings["other"] = []*fleetFinding{f}
 		if got := e.posture(now).Changes.Resolved; got != 0 {
 			t.Fatalf("still observed, but counted resolved: %d", got)
 		}
 	})
 	t.Run("unknown coverage on an affected branch prevents resolution", func(t *testing.T) {
 		e := fixture()
-		e.findings["baseline"] = []models.Finding{finding("baseline", "repo", "known")}
+		e.findings["baseline"] = []*fleetFinding{finding("baseline", "repo", "known")}
 		old, current := scan("dev-before", "repo", "dev", 8), scan("dev-now", "repo", "dev", 1)
 		current.IncludePaths = `["only-a-subdirectory"]`
 		e.scans = append(e.scans, old, current)
-		e.findings[old.ID] = []models.Finding{finding(old.ID, "repo", "known")}
+		e.findings[old.ID] = []*fleetFinding{finding(old.ID, "repo", "known")}
 		p := e.posture(now)
 		if p.Changes.ComparedBranches != 1 || p.Changes.ExcludedBranches != 1 || p.Changes.Resolved != 0 {
 			t.Fatalf("unverified branch credited: %+v", p.Changes)
@@ -111,10 +139,10 @@ func TestFleetEvidenceProgressAndCoverage(t *testing.T) {
 	})
 	t.Run("spreading an existing issue to another branch is not resurfacing", func(t *testing.T) {
 		e := fixture()
-		e.findings["baseline"] = []models.Finding{finding("baseline", "repo", "known")}
-		e.findings["latest"] = []models.Finding{finding("latest", "repo", "known")}
+		e.findings["baseline"] = []*fleetFinding{finding("baseline", "repo", "known")}
+		e.findings["latest"] = []*fleetFinding{finding("latest", "repo", "known")}
 		e.scans = append(e.scans, scan("dev-before", "repo", "dev", 8), scan("dev-now", "repo", "dev", 1))
-		e.findings["dev-now"] = []models.Finding{finding("dev-now", "repo", "known")}
+		e.findings["dev-now"] = []*fleetFinding{finding("dev-now", "repo", "known")}
 		p := e.posture(now)
 		if p.Changes.New != 0 || p.Changes.Resurfaced != 0 || p.OpenFindingsBySeverity["high"] != 1 {
 			t.Fatalf("branch duplication: %+v", p)
@@ -258,6 +286,44 @@ func testFleetEvidenceQueries(t *testing.T, store Store, database *sqlx.DB) {
 	collectionScans, err := store.ListScansByCollection(ctx, col.ID)
 	if err != nil || len(collectionScans) != 4 {
 		t.Fatalf("collection lost repository history: %d %v", len(collectionScans), err)
+	}
+	// Repository filtering must scope the history queries as well as the page,
+	// while still intersecting ownership and collection membership.
+	otherRepo := &models.Repo{ID: uuid.NewString(), UserID: "owner", Name: "Other"}
+	if err := store.CreateRepo(ctx, otherRepo); err != nil {
+		t.Fatal(err)
+	}
+	otherScan := &models.Scan{ID: uuid.NewString(), RepoID: otherRepo.ID, UserID: "owner", Status: models.ScanStatusCompleted}
+	if err := store.CreateScan(ctx, otherScan); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.CreateFinding(ctx, &models.Finding{ID: uuid.NewString(), ScanID: otherScan.ID, RepoID: otherRepo.ID, ToolName: "semgrep", Severity: models.SeverityHigh, Status: models.StatusOpen}); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		user, collection, repo string
+		wantRepos, wantScans   int
+	}{
+		{"owner", "", repo.ID, 1, 3},
+		{"owner", col.ID, repo.ID, 1, 3},
+		{"owner", col.ID, otherRepo.ID, 0, 0},
+		{"other", "", repo.ID, 0, 0},
+		{"owner", "", "missing", 0, 0},
+	} {
+		e, err := loadFleetEvidence(ctx, database, tc.user, false, tc.collection, tc.repo)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(e.repos) != tc.wantRepos || len(e.scans) != tc.wantScans || len(e.findings) != tc.wantScans {
+			t.Fatalf("history scope %+v: repos=%d scans=%d finding scans=%d", tc, len(e.repos), len(e.scans), len(e.findings))
+		}
+		for _, findings := range e.findings {
+			for _, f := range findings {
+				if f.RepoID != tc.repo {
+					t.Fatal("unrelated repository evidence loaded")
+				}
+			}
+		}
 	}
 	// Failed queries must not degrade to a reassuring empty dashboard.
 	if _, err := database.Exec(`DROP TABLE quality_gate_results`); err != nil {

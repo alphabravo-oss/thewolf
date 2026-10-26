@@ -77,6 +77,9 @@ services:
       - WOLF_SCANNER_LEGACY_BUILD_ENDPOINTS=${WOLF_SCANNER_LEGACY_BUILD_ENDPOINTS:-true}
       - WOLF_ARTIFACTS_ROOT=/home/wolf/.wolf/artifacts
       - WOLF_LOG_LEVEL=${WOLF_LOG_LEVEL:-info}
+      # Keep the Go heap under the container memory limit (WOLF_API_MEMORY) so
+      # the collector works harder before the kernel OOM-kills the API.
+      - GOMEMLIMIT=${WOLF_API_GOMEMLIMIT:-900MiB}
       # Scanner image references (per-bucket; Option B from docs/archive/2026-10-23/PLAN-containerized-scanner-execution.md §5.1).
       # WOLF_SCANNERS_TAG defaults to the scanner `stable` channel, which the release
       # factory moves independently from Wolf app releases. Pin scanner-set-YYYY.WW.N to freeze.
@@ -131,7 +134,7 @@ services:
       resources:
         limits:
           cpus: "2.0"
-          memory: 1G
+          memory: ${WOLF_API_MEMORY:-1G}
         reservations:
           cpus: "0.5"
           memory: 256M
