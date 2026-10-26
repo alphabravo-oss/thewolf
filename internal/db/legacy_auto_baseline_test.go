@@ -52,16 +52,12 @@ func testLegacyAutoBaseline(t *testing.T, s Store, database *sqlx.DB) {
 	if err := s.CreateFinding(ctx, &models.Finding{ID: uuid.NewString(), ScanID: scan.ID, RepoID: repo, StableFingerprint: "f1", ToolName: "a", Severity: models.SeverityHigh, Title: "evidence"}); err != nil {
 		t.Fatal(err)
 	}
-	snapshot, _, err := s.GetScanFindingSnapshot(ctx, scan.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
 	// The executor derives baseline history before completion; this is where
 	// production failed ("saved baseline is not a prior successful ...").
 	if err := s.PersistFindingBaseline(ctx, scan.ID, "lease", now); err != nil {
 		t.Fatalf("a stale legacy auto baseline blocked baseline derivation: %v", err)
 	}
-	snapshot, _, err = s.GetScanFindingSnapshot(ctx, scan.ID)
+	snapshot, _, err := s.GetScanFindingSnapshot(ctx, scan.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
