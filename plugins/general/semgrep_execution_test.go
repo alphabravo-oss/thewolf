@@ -22,6 +22,11 @@ func TestSemgrepExecutionPreservesFailureDetailsAndPartialFindings(t *testing.T)
 		{"variant error types", `{"results":[{"check_id":"test-rule","path":"/scan/test.py","extra":{"severity":"ERROR"}}],"errors":[{"type":["PartialParsing",[]],"message":"syntax not understood"}]}`, "", "0", "syntax not understood", 1},
 		{"JSON scan errors", `{"results":[],"errors":[{"type":"Timeout","message":"analysis timed out"}]}`, "", "0", "analysis timed out", 0},
 		{"successful clean scan", `{"results":[],"errors":[]}`, "", "0", "", 0},
+		// Semgrep reports per-file parse problems (Helm templates, partial TSX parsing)
+		// as warnings and analyzes the rest; they must not mark coverage incomplete.
+		{"warning-level parse issues", `{"results":[{"check_id":"test-rule","path":"/scan/test.py","extra":{"severity":"ERROR"}}],"errors":[{"level":"warn","type":"Other syntax error","message":"chart/templates/x.yaml"},{"level":"warn","type":["PartialParsing",[]],"message":"app.tsx"}]}`, "", "0", "", 1},
+		{"error-level issue", `{"results":[],"errors":[{"level":"error","type":"Timeout","message":"analysis timed out"}]}`, "", "0", "analysis timed out", 0},
+		{"killed at memory limit", "", "", "137", "ran out of memory", 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			output := filepath.Join(t.TempDir(), "result.json")

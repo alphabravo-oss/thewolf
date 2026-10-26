@@ -154,6 +154,10 @@ func FindFile(dir string, name string) string {
 // including truncated stderr if available.
 func WrapExecError(toolName string, err error) error {
 	var exitErr *exec.ExitError
+	// 137 = SIGKILL, in scanner containers almost always the memory limit.
+	if errors.As(err, &exitErr) && exitErr.ExitCode() == 137 {
+		return fmt.Errorf("%s ran out of memory (exit 137, killed at the scanner memory limit); raise WOLF_SCANNERS_MEMORY and retry: %w", toolName, err)
+	}
 	if errors.As(err, &exitErr) && len(exitErr.Stderr) > 0 {
 		stderr := strings.TrimSpace(string(exitErr.Stderr))
 		lower := strings.ToLower(stderr)
