@@ -192,6 +192,10 @@ func CommandContext(ctx context.Context, cfg *Config, opts Options, tool string,
 	}
 	if memLimit != "" {
 		dockerArgs = append(dockerArgs, "--memory", memLimit)
+		if soft := goMemoryLimit(memLimit); soft != "" {
+			// Tool-specific ExtraEnv is appended later and still wins.
+			dockerArgs = append(dockerArgs, "-e", "GOMEMLIMIT="+soft)
+		}
 	}
 	if cfg.CPUs != "" {
 		dockerArgs = append(dockerArgs, "--cpus", cfg.CPUs)
@@ -389,6 +393,10 @@ func BuildDockerArgs(cfg *Config, opts Options, tool string, args ...string) (co
 	}
 	if memLimit != "" {
 		dockerArgs = append(dockerArgs, "--memory", memLimit)
+		if soft := goMemoryLimit(memLimit); soft != "" {
+			// Tool-specific ExtraEnv is appended later and still wins.
+			dockerArgs = append(dockerArgs, "-e", "GOMEMLIMIT="+soft)
+		}
 	}
 	if cfg.CPUs != "" {
 		dockerArgs = append(dockerArgs, "--cpus", cfg.CPUs)
