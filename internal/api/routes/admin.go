@@ -2,6 +2,8 @@ package routes
 
 import (
 	"encoding/json"
+	"errors"
+	"io"
 	"io/fs"
 	"net/http"
 	"os"
@@ -12,6 +14,7 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/api/response"
 	"github.com/alphabravocompany/thewolf/internal/artifacts"
 	"github.com/alphabravocompany/thewolf/internal/scantarget"
+	"github.com/alphabravocompany/thewolf/internal/wolflog"
 )
 
 // AdminListTokens lists every user's API tokens for the admin oversight view.
@@ -108,43 +111,40 @@ func AdminDisk(w http.ResponseWriter, r *http.Request) {
 func AdminReapWorkspaces(w http.ResponseWriter, r *http.Request) {
 	maxAgeHours := 72
 	var req struct {
-		MaxAgeHours int `json:"max_age_hours"`
+		MaxAgeHours *int `json:"max_age_hours"`
 	}
 	if r.Body != nil {
-		_ = json.NewDecoder(r.Body).Decode(&req)
-		if req.MaxAgeHours > 0 {
-			maxAgeHours = req.MaxAgeHours
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&req); err != nil && !errors.Is(err, io.EOF) {
+			response.WriteError(w, http.StatusBadRequest, "invalid_request", "invalid workspace retention request")
+			return
+		}
+		if err := decoder.Decode(new(any)); !errors.Is(err, io.EOF) {
+			response.WriteError(w, http.StatusBadRequest, "invalid_request", "expected one workspace retention request")
+			return
+		}
+		if req.MaxAgeHours != nil {
+			const maxHours = int((1<<63 - 1) / int64(time.Hour))
+			if *req.MaxAgeHours <= 0 || *req.MaxAgeHours > maxHours {
+				response.WriteError(w, http.StatusBadRequest, "invalid_request", "max_age_hours must be positive and fit within the supported duration")
+				return
+			}
+			maxAgeHours = *req.MaxAgeHours
 		}
 	}
 	root := strings.TrimSpace(os.Getenv("WOLF_WORKSPACE_ROOT"))
 	if root == "" {
-		response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: map[string]any{"removed": 0}})
+		response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: map[string]any{"removed": 0, "retained_in_use": 0}})
 		return
 	}
-	entries, err := os.ReadDir(root)
+	removed, retained, err := scantarget.ReapWorkspaces(root, time.Duration(maxAgeHours)*time.Hour)
 	if err != nil {
-		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to list workspaces")
+		wolflog.Warn().Err(err).Int("removed", removed).Int("retained_in_use", retained).Msg("workspace reap incomplete")
+		response.WriteError(w, http.StatusInternalServerError, "cleanup_failed", "workspace cleanup was incomplete; inspect server diagnostics before retrying")
 		return
 	}
-	cutoff := time.Now().Add(-time.Duration(maxAgeHours) * time.Hour)
-	removed := 0
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		name := entry.Name()
-		if !strings.HasPrefix(name, "wolf-git-scan-") && !strings.HasPrefix(name, "wolf-ssh-scan-") {
-			continue
-		}
-		info, err := entry.Info()
-		if err != nil || info.ModTime().After(cutoff) {
-			continue
-		}
-		if err := scantarget.CleanupWorkspace(filepath.Join(root, name)); err == nil {
-			removed++
-		}
-	}
-	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: map[string]any{"removed": removed}})
+	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: map[string]any{"removed": removed, "retained_in_use": retained}})
 }
 
 func dirBytes(root string) int64 {
@@ -152,7 +152,7 @@ func dirBytes(root string) int64 {
 		return 0
 	}
 	var n int64
-	_ = filepath.WalkDir(root, func(_ string, d fs.DirEntry, err error) error {
+	_ = filepath.WalkDir(root, func(_ string, d fs.DirEntry, err error) error { // #nosec G703 -- only caller supplies configured storage roots; WalkDir does not follow child symlinks and returns only aggregate size.
 		if err != nil || d.IsDir() {
 			return nil
 		}
@@ -169,7 +169,7 @@ func fileBytes(path string) int64 {
 	if strings.TrimSpace(path) == "" || strings.Contains(path, "://") {
 		return 0
 	}
-	info, err := os.Stat(path)
+	info, err := os.Stat(path) // #nosec G703 -- only caller supplies the configured database path; the admin endpoint exposes its size, not file contents.
 	if err != nil || info.IsDir() {
 		return 0
 	}

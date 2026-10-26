@@ -11,18 +11,20 @@ import (
 
 // ReportConfig holds all data needed to generate a scan report.
 type ReportConfig struct {
-	ScanID          string
-	RepoName        string
-	Branch          string
-	Findings        []models.Finding
-	Languages       map[string]int // language -> file count
-	Frameworks      []string
-	ToolsRun        []string
-	ToolsFailed     map[string]error
-	Duration        time.Duration
-	AISummary       string
-	ToolSummaries   []models.ToolSummary
-	Recommendations []models.ScanRecommendation
+	BaselineScanID   string
+	FindingsRevision int64 // Identifies API-generated persisted snapshots; zero for unversioned local reports.
+	ScanID           string
+	RepoName         string
+	Branch           string
+	Findings         []models.Finding
+	Languages        map[string]int // language -> file count
+	Frameworks       []string
+	ToolsRun         []string
+	ToolsFailed      map[string]error
+	Duration         time.Duration
+	AISummary        string
+	ToolSummaries    []models.ToolSummary
+	Recommendations  []models.ScanRecommendation
 }
 
 type jsonToolSummary struct {
@@ -44,17 +46,19 @@ type jsonRecommendation struct {
 
 // jsonReport is the top-level structure for JSON output.
 type jsonReport struct {
-	ScanID          string               `json:"scan_id"`
-	RepoName        string               `json:"repo_name"`
-	Branch          string               `json:"branch"`
-	Date            string               `json:"date"`
-	Duration        string               `json:"duration"`
-	Summary         reportSummary        `json:"summary"`
-	Findings        []jsonFinding        `json:"findings"`
-	Tools           []toolEntry          `json:"tools"`
-	AISummary       string               `json:"ai_summary,omitempty"`
-	ToolSummaries   []jsonToolSummary    `json:"tool_summaries,omitempty"`
-	Recommendations []jsonRecommendation `json:"recommendations,omitempty"`
+	BaselineScanID   string               `json:"baseline_scan_id,omitempty"`
+	FindingsRevision int64                `json:"findings_revision,omitempty"`
+	ScanID           string               `json:"scan_id"`
+	RepoName         string               `json:"repo_name"`
+	Branch           string               `json:"branch"`
+	Date             string               `json:"date"`
+	Duration         string               `json:"duration"`
+	Summary          reportSummary        `json:"summary"`
+	Findings         []jsonFinding        `json:"findings"`
+	Tools            []toolEntry          `json:"tools"`
+	AISummary        string               `json:"ai_summary,omitempty"`
+	ToolSummaries    []jsonToolSummary    `json:"tool_summaries,omitempty"`
+	Recommendations  []jsonRecommendation `json:"recommendations,omitempty"`
 }
 
 type reportSummary struct {
@@ -65,6 +69,18 @@ type reportSummary struct {
 }
 
 type jsonFinding struct {
+	BaselineState      string     `json:"baseline_state,omitempty"`
+	IntroducedInScanID string     `json:"introduced_in_scan_id,omitempty"`
+	ResolvedInScanID   string     `json:"resolved_in_scan_id,omitempty"`
+	FirstSeenAt        *time.Time `json:"first_seen_at,omitempty"`
+	LastSeenAt         *time.Time `json:"last_seen_at,omitempty"`
+	ClusterID          string     `json:"cluster_id,omitempty"`
+	PackageName        string     `json:"package_name,omitempty"`
+	PackageVersion     string     `json:"package_version,omitempty"`
+	PackageEcosystem   string     `json:"package_ecosystem,omitempty"`
+	PackageURL         string     `json:"package_url,omitempty"`
+	AdvisoryID         string     `json:"advisory_id,omitempty"`
+
 	ID              string          `json:"id"`
 	ToolName        string          `json:"tool_name"`
 	Category        string          `json:"category"`
@@ -146,11 +162,24 @@ func filterBySeverity(findings []models.Finding, sev models.Severity) []models.F
 // GenerateJSON produces a JSON-encoded report from the given config.
 func GenerateJSON(cfg ReportConfig) ([]byte, error) {
 	sevCounts := countBySeverity(cfg.Findings)
-	byTool := findingsByTool(cfg.Findings)
+	byTool := make(map[string][]models.Finding)
+	for _, f := range cfg.Findings {
+		for _, tool := range f.ReportingTools() {
+			byTool[tool] = append(byTool[tool], f)
+		}
+	}
 
 	jFindings := make([]jsonFinding, 0, len(cfg.Findings))
 	for _, f := range cfg.Findings {
 		jf := jsonFinding{
+			BaselineState: f.BaselineState, IntroducedInScanID: f.IntroducedInScanID, ResolvedInScanID: f.ResolvedInScanID, FirstSeenAt: f.FirstSeenAt, LastSeenAt: f.LastSeenAt,
+			ClusterID:        f.ClusterID,
+			PackageName:      f.PackageName,
+			PackageVersion:   f.PackageVersion,
+			PackageEcosystem: f.PackageEcosystem,
+			PackageURL:       f.PackageURL,
+			AdvisoryID:       f.AdvisoryID,
+
 			ID:               f.ID,
 			ToolName:         f.ToolName,
 			Category:         string(f.Category),
@@ -227,11 +256,13 @@ func GenerateJSON(cfg ReportConfig) ([]byte, error) {
 	}
 
 	rpt := jsonReport{
-		ScanID:   cfg.ScanID,
-		RepoName: cfg.RepoName,
-		Branch:   cfg.Branch,
-		Date:     time.Now().UTC().Format(time.RFC3339),
-		Duration: cfg.Duration.String(),
+		ScanID:           cfg.ScanID,
+		FindingsRevision: cfg.FindingsRevision,
+		BaselineScanID:   cfg.BaselineScanID,
+		RepoName:         cfg.RepoName,
+		Branch:           cfg.Branch,
+		Date:             time.Now().UTC().Format(time.RFC3339),
+		Duration:         cfg.Duration.String(),
 		Summary: reportSummary{
 			Total:      len(cfg.Findings),
 			BySeverity: sevCounts,

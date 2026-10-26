@@ -19,11 +19,14 @@ const (
 	ReasonNotExplicit         = "not_in_explicit_tool_list"
 	ReasonNoLanguageMatch     = "no_language_match"
 	ReasonUnavailable         = "tool_unavailable"
+	ReasonNotApplicable       = "not_applicable"
 	ReasonNotRegistered       = "tool_not_registered"
 )
 
 type Config struct {
 	Registry          *plugin.Registry
+	RepoPath          string
+	ToolsExplicit     bool
 	Manifest          *manifest.Manifest
 	Languages         []models.Language
 	Tools             []string
@@ -88,7 +91,7 @@ func Build(cfg Config) Result {
 	result.Summary.DisabledTools = sortedStrings(cfg.DisabledTools)
 	result.Summary.AllScanners = cfg.AllScanners
 
-	if len(explicit) > 0 {
+	if len(explicit) > 0 || cfg.ToolsExplicit {
 		for _, name := range sortedStrings(cfg.Tools) {
 			p, ok := byName[name]
 			if !ok {
@@ -154,6 +157,12 @@ func decideAuto(cfg Config, p models.Plugin, languages map[models.Language]bool,
 }
 
 func withAvailability(cfg Config, p models.Plugin, d Decision) Decision {
+	if err := plugin.CheckApplicability(p, cfg.RepoPath); plugin.IsNotApplicable(err) {
+		d.Selected = false
+		d.ReasonCode = ReasonNotApplicable
+		d.Reason = err.Error()
+		return d
+	}
 	if !cfg.CheckAvailability {
 		return d
 	}

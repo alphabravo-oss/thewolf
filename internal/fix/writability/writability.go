@@ -8,8 +8,8 @@
 //   - local  — the path is writable (W_OK) and is a git work tree.
 //   - github — a github_token secret exists, the token can push to the repo,
 //     and the repo isn't archived.
-//   - ssh    — the node is reachable and `git push --dry-run` over the node
-//     succeeds against the remote work tree.
+//   - ssh    — disabled in the production probes until remote workspace
+//     preparation is supported; an injected probe can check a remote node.
 //
 // All three real probes (filesystem access, the GitHub API, the SSH runner) are
 // reached through the Probes interface so tests can stub them with no real
@@ -42,7 +42,7 @@ type Result struct {
 // it. Err is reserved for unexpected I/O failures; a non-writable path is a
 // normal (writable=false, reason) answer, not an error.
 type LocalProbe interface {
-	Check(path string) (writable bool, reason string, err error)
+	Check(ctx context.Context, path string) (writable bool, reason string, err error)
 }
 
 // GitHubPushInfo is the slice of a GitHub repo's metadata the preflight needs:
@@ -91,7 +91,7 @@ func Check(ctx context.Context, repo *models.Repo, store db.Store, probes Probes
 	}
 	switch repo.SourceType {
 	case models.SourceTypeLocal:
-		return checkLocal(repo, probes)
+		return checkLocal(ctx, repo, probes)
 	case models.SourceTypeGitHub:
 		return checkGitHub(ctx, repo, store, probes)
 	case models.SourceTypeSSH:
@@ -104,11 +104,11 @@ func Check(ctx context.Context, repo *models.Repo, store db.Store, probes Probes
 	}
 }
 
-func checkLocal(repo *models.Repo, probes Probes) Result {
+func checkLocal(ctx context.Context, repo *models.Repo, probes Probes) Result {
 	if probes.Local == nil {
 		return Result{Writable: false, Reason: "local writability probe not configured"}
 	}
-	writable, reason, err := probes.Local.Check(repo.SourcePath)
+	writable, reason, err := probes.Local.Check(ctx, repo.SourcePath)
 	if err != nil {
 		return Result{Writable: false, Reason: "local path check failed: " + err.Error()}
 	}
@@ -129,9 +129,12 @@ func checkGitHub(ctx context.Context, repo *models.Repo, store db.Store, probes 
 	if err != nil {
 		return Result{Writable: false, Reason: "invalid github source: " + err.Error()}
 	}
-	token, reason := githubToken(ctx, store, repo)
+	token, reason := GitHubToken(ctx, store, repo)
 	if token == "" {
-		if local := localGitHubClone(repo, probes); local != "" {
+		if repo.CredentialSecretID != "" {
+			return Result{Reason: reason}
+		}
+		if local := localGitHubClone(ctx, repo, probes); local != "" {
 			return Result{
 				Writable: true,
 				CanPush:  false,
@@ -142,7 +145,7 @@ func checkGitHub(ctx context.Context, repo *models.Repo, store db.Store, probes 
 	}
 	info, err := probes.GitHub.PushInfo(ctx, token, owner, name)
 	if err != nil {
-		return Result{Writable: false, Reason: "github permission probe failed: " + err.Error()}
+		return Result{Writable: false, Reason: "github permission probe failed: " + strings.ReplaceAll(err.Error(), token, "[REDACTED]")}
 	}
 	if info.Archived {
 		return Result{Writable: false, Reason: "github repository is archived"}
@@ -159,14 +162,20 @@ func checkGitHub(ctx context.Context, repo *models.Repo, store db.Store, probes 
 
 func checkSSH(ctx context.Context, repo *models.Repo, store db.Store, probes Probes) Result {
 	if probes.SSH == nil {
-		return Result{Writable: false, Reason: "ssh writability probe not configured"}
+		return Result{Writable: false, Reason: "SSH remediation is not supported by this worker; register a local clone or GitHub source to fix this repository"}
 	}
 	if repo.RemoteNodeID == nil || *repo.RemoteNodeID == "" {
 		return Result{Writable: false, Reason: "ssh repo has no remote node configured"}
 	}
+	if store == nil {
+		return Result{Reason: "remote node store is unavailable"}
+	}
 	node, err := store.GetRemoteNodeByID(ctx, *repo.RemoteNodeID)
-	if err != nil {
+	if err != nil || node == nil {
 		return Result{Writable: false, Reason: "remote node not found"}
+	}
+	if repo.UserID == "" || node.UserID != repo.UserID {
+		return Result{Reason: "remote node does not belong to this repo's owner"}
 	}
 	remotePath := repo.RemotePath
 	if remotePath == "" {
@@ -185,10 +194,10 @@ func checkSSH(ctx context.Context, repo *models.Repo, store db.Store, probes Pro
 	return Result{Writable: true, CanPush: true, Reason: "remote work tree accepts a git push"}
 }
 
-// githubToken prefers the repo's selected credential, then the user's first
-// github_token secret.
-func githubToken(ctx context.Context, store db.Store, repo *models.Repo) (token, reason string) {
-	if store == nil || repo == nil {
+// GitHubToken uses the repo's selected credential, or the owner's first
+// github_token when no credential is selected. A broken selection fails closed.
+func GitHubToken(ctx context.Context, store db.Store, repo *models.Repo) (token, reason string) {
+	if store == nil || repo == nil || repo.UserID == "" {
 		return "", "no github_token secret available"
 	}
 	if id := strings.TrimSpace(repo.CredentialSecretID); id != "" {
@@ -196,7 +205,7 @@ func githubToken(ctx context.Context, store db.Store, repo *models.Repo) (token,
 		if err != nil || sec == nil {
 			return "", "selected GitHub token was not found"
 		}
-		if sec.UserID != "" && repo.UserID != "" && sec.UserID != repo.UserID {
+		if sec.UserID != repo.UserID {
 			return "", "selected GitHub token does not belong to this repo's owner"
 		}
 		if sec.KeyType != models.KeyTypeGitHubToken {
@@ -206,18 +215,14 @@ func githubToken(ctx context.Context, store db.Store, repo *models.Repo) (token,
 		if derr == nil && plaintext != "" {
 			return plaintext, ""
 		}
-		// Selected secret is unreadable (wrong master key, corrupt value).
-		// Fall through to any other github_token the user owns.
-	}
-	if repo.UserID == "" {
-		return "", "no github_token secret available"
+		return "", "selected GitHub token is unreadable or empty; replace it in Account → Secrets"
 	}
 	list, err := store.ListSecretsByUser(ctx, repo.UserID)
 	if err != nil {
 		return "", "failed to load secrets"
 	}
 	for _, s := range list {
-		if s.KeyType != models.KeyTypeGitHubToken {
+		if s.KeyType != models.KeyTypeGitHubToken || s.UserID != repo.UserID {
 			continue
 		}
 		plaintext, derr := secrets.Decrypt(s.EncryptedValue)
@@ -231,7 +236,7 @@ func githubToken(ctx context.Context, store db.Store, repo *models.Repo) (token,
 	return "", "no github_token secret available"
 }
 
-func localGitHubClone(repo *models.Repo, probes Probes) string {
+func localGitHubClone(ctx context.Context, repo *models.Repo, probes Probes) string {
 	if repo == nil || probes.ParseGitHubSource == nil {
 		return ""
 	}
@@ -244,7 +249,7 @@ func localGitHubClone(repo *models.Repo, probes Probes) string {
 		return ""
 	}
 	if probes.Local != nil {
-		ok, _, err := probes.Local.Check(path)
+		ok, _, err := probes.Local.Check(ctx, path)
 		if err != nil || !ok {
 			return ""
 		}

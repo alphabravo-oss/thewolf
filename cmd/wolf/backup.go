@@ -140,7 +140,7 @@ func backupSQLite(dbPath, out, password, workspaceRoot string) error {
 			dest += ".enc"
 		}
 	}
-	return os.WriteFile(dest, payload, 0o600)
+	return os.WriteFile(dest, payload, 0o600) // #nosec G703 -- dest is the local operator explicit --output path; database contents cannot select the destination.
 }
 
 func restoreSQLite(in, dest, password string, force bool) error {

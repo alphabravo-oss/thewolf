@@ -25,22 +25,6 @@ type AuditEntry struct {
 	UserAgent  string
 }
 
-// ClientIP extracts the best-guess source address: the first X-Forwarded-For
-// hop (when behind the bundled proxy) else the request's remote host.
-func ClientIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		if i := strings.IndexByte(xff, ','); i >= 0 {
-			return strings.TrimSpace(xff[:i])
-		}
-		return strings.TrimSpace(xff)
-	}
-	host := r.RemoteAddr
-	if i := strings.LastIndexByte(host, ':'); i >= 0 {
-		host = host[:i]
-	}
-	return host
-}
-
 // Audit returns middleware that records mutating requests and the small set of
 // security-sensitive reads explicitly classified for audit (currently offline
 // release-bundle export). Ordinary reads are skipped. The recorder is invoked

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"strings"
 	"sync"
@@ -11,8 +12,10 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/alphabravocompany/thewolf/internal/api/middleware"
 	"github.com/alphabravocompany/thewolf/internal/api/response"
 	"github.com/alphabravocompany/thewolf/internal/auth"
+	"github.com/alphabravocompany/thewolf/internal/db"
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/pkg/authprovider"
 	"github.com/alphabravocompany/thewolf/pkg/entitlement"
@@ -33,12 +36,6 @@ type changePasswordRequest struct {
 	NewPassword     string `json:"new_password"`
 }
 
-const minPasswordLength = 12
-
-// maxPasswordLength caps password length. Argon2id hashes the full input, so an
-// unbounded password lets an attacker burn server memory/CPU per login attempt
-// (a cheap DoS). 128 is comfortably above any human passphrase.
-const maxPasswordLength = 128
 const sessionDuration = 7 * 24 * time.Hour
 const registrationEnabledSetting = "registration_enabled"
 
@@ -46,17 +43,10 @@ var registrationMu sync.Mutex
 
 // validatePassword enforces the length policy shared by register, change-
 // password, and admin user-creation. Returns a user-facing message on failure.
-func validatePassword(pw string) (string, bool) {
-	if len(pw) < minPasswordLength {
-		return "password must be at least 12 characters", false
-	}
-	if len(pw) > maxPasswordLength {
-		return "password must be at most 128 characters", false
-	}
-	return "", true
-}
+func validatePassword(pw string) (string, bool) { return auth.ValidatePassword(pw) }
 
 func Register(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	h := DefaultHandler
 	if h == nil {
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "handler not initialized")
@@ -134,7 +124,7 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tokens, err := auth.GenerateToken(user.ID, user.Email)
+	tokens, err := issueAPITokens(r.Context(), user.ID, user.Email)
 	if err != nil {
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to generate token")
 		return
@@ -206,6 +196,7 @@ func AuthSettings(w http.ResponseWriter, r *http.Request) {
 }
 
 func Login(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	h := DefaultHandler
 	if h == nil {
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "handler not initialized")
@@ -260,7 +251,7 @@ func Login(w http.ResponseWriter, r *http.Request) {
 	// session. Hand back a short-lived challenge to be exchanged for a session
 	// via POST /auth/mfa/login with a valid code.
 	if user.MFAEnabled() {
-		challenge, err := auth.GenerateMFAChallenge(user.ID, user.Email)
+		challenge, err := issueMFAChallenge(r.Context(), user)
 		if err != nil {
 			response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to start mfa challenge")
 			return
@@ -274,7 +265,13 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tokens, err := auth.GenerateToken(user.ID, user.Email)
+	required, err := mfaRequiredEnabled(r.Context())
+	if err != nil {
+		writeMFAPolicyUnavailable(w)
+		return
+	}
+
+	tokens, err := issueAPITokens(r.Context(), user.ID, user.Email)
 	if err != nil {
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to generate token")
 		return
@@ -293,13 +290,33 @@ func Login(w http.ResponseWriter, r *http.Request) {
 			// When the org mandates MFA and this user hasn't enrolled, the
 			// session is issued (password was valid) but the enrollment guard
 			// confines it to the MFA-setup endpoints until they enroll.
-			"enrollment_required": mfaRequiredEnabled(r.Context()) && !user.MFAEnabled(),
+			"enrollment_required": required,
 		},
 	})
 }
 
 func Logout(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	var req struct {
+		RefreshToken string `json:"refresh_token"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8192)).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
+		response.WriteError(w, http.StatusBadRequest, "invalid_request", "invalid logout request")
+		return
+	}
 	if h := DefaultHandler; h != nil {
+		if req.RefreshToken != "" {
+			claims, err := auth.ValidateRefreshToken(req.RefreshToken)
+			user := auth.GetUserFromContext(r.Context())
+			if err != nil || user == nil || claims.UserID != user.UserID {
+				response.WriteError(w, http.StatusUnauthorized, "invalid_refresh", "invalid refresh credential")
+				return
+			}
+			if err := h.Store.RevokeAuthSessionByHash(r.Context(), auth.HashSessionToken(req.RefreshToken)); err != nil {
+				response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to revoke refresh credential")
+				return
+			}
+		}
 		if cookie, err := r.Cookie("wolf_token"); err == nil && auth.LooksLikeSessionToken(cookie.Value) {
 			_ = h.Store.RevokeAuthSessionByHash(r.Context(), auth.HashSessionToken(cookie.Value))
 		}
@@ -321,38 +338,38 @@ func issueSessionCookie(w http.ResponseWriter, r *http.Request, userID string) e
 	if h == nil {
 		return http.ErrServerClosed
 	}
-	plaintext, hash, prefix, err := auth.GenerateSessionToken()
+	plaintext, session, err := newBrowserSession(userID)
 	if err != nil {
 		return err
 	}
-	now := time.Now().UTC()
-	if err := h.Store.CreateAuthSession(r.Context(), &models.AuthSession{
-		ID:            uuid.New().String(),
-		UserID:        userID,
-		SessionHash:   hash,
-		SessionPrefix: prefix,
-		CreatedAt:     now,
-		ExpiresAt:     now.Add(sessionDuration),
-	}); err != nil {
+	if err := h.Store.CreateAuthSession(r.Context(), session); err != nil {
 		return err
 	}
-	http.SetCookie(w, &http.Cookie{
-		Name:     "wolf_token",
-		Value:    plaintext,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   cookieSecure(r),
-		SameSite: http.SameSiteStrictMode,
-		MaxAge:   int(sessionDuration.Seconds()),
-	})
+	setSessionCookie(w, r, plaintext)
 	return nil
 }
 
-func cookieSecure(r *http.Request) bool {
-	if r.TLS != nil {
-		return true
+func newBrowserSession(userID string) (string, *models.AuthSession, error) {
+	plaintext, hash, prefix, err := auth.GenerateSessionToken()
+	if err != nil {
+		return "", nil, err
 	}
-	return strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
+	now := time.Now().UTC()
+	return plaintext, &models.AuthSession{
+		ID: uuid.NewString(), UserID: userID, SessionHash: hash, SessionPrefix: prefix,
+		CreatedAt: now, ExpiresAt: now.Add(sessionDuration),
+	}, nil
+}
+
+func setSessionCookie(w http.ResponseWriter, r *http.Request, plaintext string) {
+	http.SetCookie(w, &http.Cookie{
+		Name: "wolf_token", Value: plaintext, Path: "/", HttpOnly: true,
+		Secure: cookieSecure(r), SameSite: http.SameSiteStrictMode, MaxAge: int(sessionDuration.Seconds()),
+	})
+}
+
+func cookieSecure(r *http.Request) bool {
+	return middleware.IsHTTPS(r)
 }
 
 func registrationAllowed(r *http.Request) bool {
@@ -376,10 +393,7 @@ func registrationSettingEnabled(r *http.Request) bool {
 		return false
 	}
 	value, err := h.Store.GetSetting(r.Context(), registrationEnabledSetting)
-	if err != nil {
-		return true
-	}
-	return !strings.EqualFold(strings.TrimSpace(value), "false")
+	return err == nil && strings.EqualFold(strings.TrimSpace(value), "true")
 }
 
 func Me(w http.ResponseWriter, r *http.Request) {
@@ -460,6 +474,10 @@ func ChangePassword(w http.ResponseWriter, r *http.Request) {
 	user.PasswordHash = hash
 	user.UpdatedAt = time.Now()
 	if err := h.Store.UpdateUser(r.Context(), user); err != nil {
+		if errors.Is(err, db.ErrUserChanged) {
+			response.WriteError(w, http.StatusConflict, "credentials_changed", "credentials changed; retry with the current password")
+			return
+		}
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to update password")
 		return
 	}

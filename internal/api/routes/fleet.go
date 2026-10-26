@@ -15,7 +15,12 @@ import (
 // Admins do; regular users see only what they created. This replaces the old
 // global fleet_mode toggle with role-based visibility — modification is already
 // owner-scoped (canModifyOwned), and now visibility follows the role too.
+// API tokens retain their owner's resource scope; they do not inherit the
+// owner's human administrator role, just as in auth.Middleware.
 func fleetVisible(ctx context.Context, store db.Store, userID string) bool {
+	if auth.TokenIDFromContext(ctx) != "" {
+		return false
+	}
 	u, err := store.GetUserByID(ctx, userID)
 	return err == nil && u != nil && u.IsAdmin()
 }
@@ -129,7 +134,7 @@ func FindingsAggregate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	rows, err := h.Store.FindingsAggregateByRule(r.Context(), claims.UserID, fleetVisible(r.Context(), h.Store, claims.UserID), limit)
+	rows, err := h.Store.FindingsAggregateByRule(r.Context(), claims.UserID, fleetVisible(r.Context(), h.Store, claims.UserID), limit, r.URL.Query().Get("security_only") == "1")
 	if err != nil {
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "aggregate findings: "+err.Error())
 		return

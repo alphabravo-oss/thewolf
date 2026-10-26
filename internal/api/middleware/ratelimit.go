@@ -5,9 +5,10 @@ import (
 	"net"
 	"net/http"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/time/rate"
 
 	"github.com/alphabravocompany/thewolf/internal/api/response"
 	"github.com/alphabravocompany/thewolf/internal/auth"
@@ -25,7 +26,7 @@ type RateLimiter struct {
 }
 
 type bucket struct {
-	tokens   int
+	limiter  *rate.Limiter
 	lastSeen time.Time
 }
 
@@ -71,25 +72,12 @@ func (rl *RateLimiter) take(ip string) (ok bool, remaining, limit int) {
 	now := time.Now()
 	b, exists := rl.visitors[ip]
 	if !exists {
-		rl.visitors[ip] = &bucket{tokens: rl.burst - 1, lastSeen: now}
-		return true, rl.burst - 1, limit
-	}
-
-	elapsed := now.Sub(b.lastSeen)
-	refill := int(elapsed/rl.interval) * rl.rate
-	if refill > 0 {
-		b.tokens += refill
-		if b.tokens > rl.burst {
-			b.tokens = rl.burst
-		}
+		b = &bucket{limiter: rate.NewLimiter(rate.Limit(float64(rl.rate)/rl.interval.Seconds()), rl.burst)}
+		rl.visitors[ip] = b
 	}
 	b.lastSeen = now
-
-	if b.tokens > 0 {
-		b.tokens--
-		return true, b.tokens, limit
-	}
-	return false, 0, limit
+	ok = b.limiter.AllowN(now, 1)
+	return ok, int(b.limiter.TokensAt(now)), limit
 }
 
 func setRateHeaders(w http.ResponseWriter, remaining, limit int) {
@@ -100,7 +88,7 @@ func setRateHeaders(w http.ResponseWriter, remaining, limit int) {
 // Handler returns middleware that rate-limits requests by client IP.
 func (rl *RateLimiter) Handler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ip := clientIP(r)
+		ip := ClientIP(r)
 		ok, rem, limit := rl.take(ip)
 		setRateHeaders(w, rem, limit)
 		if !ok {
@@ -118,24 +106,6 @@ func rateLimitRemoteKey(remoteAddr string) string {
 		return host
 	}
 	return remoteAddr
-}
-
-// clientIP uses X-Forwarded-For only when the immediate peer is loopback
-// (Compose/Caddy). Otherwise RemoteAddr, so spoofed XFF from the internet
-// is ignored.
-func clientIP(r *http.Request) string {
-	peer := rateLimitRemoteKey(r.RemoteAddr)
-	if peer == "127.0.0.1" || peer == "::1" {
-		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-			if i := strings.IndexByte(xff, ','); i >= 0 {
-				xff = xff[:i]
-			}
-			if ip := strings.TrimSpace(xff); ip != "" {
-				return ip
-			}
-		}
-	}
-	return peer
 }
 
 // StrictHandler returns middleware with tighter limits, suitable for

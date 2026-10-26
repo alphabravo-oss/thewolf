@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
 	"golang.org/x/sys/unix"
 
 	"github.com/alphabravocompany/thewolf/internal/db"
+	gitpkg "github.com/alphabravocompany/thewolf/internal/fix/git"
 	"github.com/alphabravocompany/thewolf/internal/github"
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/remote"
@@ -16,13 +19,12 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/sshclient"
 )
 
-// DefaultProbes returns the production wiring of the three probes for the given
-// store. Tests construct Probes directly with stubs instead of calling this.
-func DefaultProbes(store db.Store) Probes {
+// DefaultProbes returns the probes supported by production workspace preparation. Tests construct Probes directly with stubs instead of calling this.
+func DefaultProbes(_ db.Store) Probes {
 	return Probes{
-		Local:             localFSProbe{},
-		GitHub:            githubAPIProbe{},
-		SSH:               sshRunnerProbe{store: store},
+		Local:  localFSProbe{},
+		GitHub: githubAPIProbe{},
+		// Enable the SSH probe only when remote workspace preparation exists.
 		ParseGitHubSource: scantarget.ParseGitHubSource,
 	}
 }
@@ -32,7 +34,7 @@ func DefaultProbes(store db.Store) Probes {
 // worktree/submodule).
 type localFSProbe struct{}
 
-func (localFSProbe) Check(path string) (bool, string, error) {
+func (localFSProbe) Check(ctx context.Context, path string) (bool, string, error) {
 	if path == "" {
 		return false, "local source path is empty", nil
 	}
@@ -51,6 +53,13 @@ func (localFSProbe) Check(path string) (bool, string, error) {
 	}
 	if _, err := os.Stat(filepath.Join(path, ".git")); err != nil {
 		return false, "local path is not a git work tree", nil
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	cmd := gitpkg.Command(ctx, nil, "-C", path, "rev-parse", "--is-inside-work-tree", "--verify", "HEAD^{commit}")
+	out, err := cmd.Output()
+	if err != nil || !strings.HasPrefix(string(out), "true\n") {
+		return false, "local path must be a valid git work tree with a committed HEAD", nil
 	}
 	return true, "", nil
 }

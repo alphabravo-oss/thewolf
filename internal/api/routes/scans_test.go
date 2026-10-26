@@ -23,6 +23,7 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/fix/fixstore"
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/secrets"
+	"github.com/alphabravocompany/thewolf/pkg/entitlement"
 )
 
 // testEnv bundles the router, store, and token for scan/finding/fix tests.
@@ -35,6 +36,11 @@ type testEnv struct {
 
 func setupTestEnv(t *testing.T) *testEnv {
 	t.Helper()
+	previousArtifacts := artifacts.Global
+	if err := artifacts.Init(t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { artifacts.Global = previousArtifacts })
 
 	store, err := db.NewSQLite(":memory:")
 	if err != nil {
@@ -76,15 +82,22 @@ func setupTestEnv(t *testing.T) *testEnv {
 		r.Get("/api/scans/orphans", routes.ListOrphanScans)
 		r.Delete("/api/scans/orphans", routes.PurgeOrphanScans)
 		r.Get("/api/scans/{id}", routes.GetScan)
+		r.Get("/api/scans/{id}/result", routes.GetScanResult)
+		r.Get("/api/scans/{id}/report", routes.GetScanReport)
+		r.Get("/api/scans/{id}/sarif", routes.GetScanSARIF)
 		r.Get("/api/scans/{id}/findings", routes.GetScanFindings)
 		r.Get("/api/scans/{id}/findings/stats", routes.GetScanFindingStats)
 		r.Get("/api/scans/{id}/manifest", routes.GetScanManifest)
 		r.Get("/api/scans/{id}/gate", routes.GetScanGate)
+		r.Get("/api/scans/{id}/test-coverage", routes.GetTestCoverage)
+		r.Put("/api/scans/{id}/test-coverage", routes.ImportTestCoverage)
+		r.Get("/api/scans/{id}/test-coverage/files", routes.ListTestCoverageFiles)
 		r.Get("/api/scans/{id}/diff", routes.GetScanDiff)
 		r.Post("/api/scans/{id}/compare", routes.CompareScanToBaseline)
 		r.Get("/api/scans/{id}/compare/{compareId}", routes.CompareScan)
 		r.Get("/api/scans/{id}/artifacts/{artifactId}/download", routes.DownloadArtifact)
 		r.Get("/api/scans/{id}/tools", routes.GetScanTools)
+		r.Get("/api/scans/{id}/tools/{toolName}/output", routes.GetToolOutput)
 		r.Get("/api/scans/{id}/scanner-runs", routes.GetScannerRunRecords)
 		r.Get("/api/scans/{id}/stream", routes.StreamScan)
 		r.Post("/api/scans/{id}/retry", routes.RetryScan)
@@ -108,6 +121,7 @@ func setupTestEnv(t *testing.T) *testEnv {
 		r.Post("/api/vulnerabilities/{id}/investigate", routes.InvestigateVulnerability)
 		r.Post("/api/vulnerabilities/{id}/verify", routes.VerifyVulnerability)
 		r.Get("/api/vulnerabilities/{id}", routes.GetVulnerability)
+		r.Get("/api/vulnerabilities/{id}/evidence", routes.ListEvidence)
 		r.Post("/api/vulnerabilities/{id}/split", routes.SplitVulnerability)
 		r.Post("/api/vulnerabilities/{id}/merge", routes.MergeVulnerability)
 		// SARIF
@@ -211,14 +225,16 @@ func TestRepoBaselinesAPI(t *testing.T) {
 	env := setupTestEnv(t)
 	repoID := env.createRepo(t)
 	scanID := uuid.New().String()
+	now := time.Now().UTC()
 	if err := env.Store.CreateScan(context.Background(), &models.Scan{
+		CompletedAt:     &now,
 		ID:              scanID,
 		UserID:          env.UserID,
 		RepoID:          repoID,
 		Branch:          "main",
 		Status:          models.ScanStatusCompleted,
-		ToolsSelected:   "[]",
-		ToolsCompleted:  "[]",
+		ToolsSelected:   `["a"]`,
+		ToolsCompleted:  `["a"]`,
 		ToolsFailed:     "[]",
 		CoverageSummary: "{}",
 	}); err != nil {
@@ -274,7 +290,13 @@ func TestGetScanManifestFromArtifact(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("CreateScan failed: %v", err)
 	}
-	manifestPath := filepath.Join(t.TempDir(), "manifest.json")
+	root := t.TempDir()
+	previousArtifacts := artifacts.Global
+	t.Cleanup(func() { artifacts.Global = previousArtifacts })
+	if err := artifacts.Init(root); err != nil {
+		t.Fatal(err)
+	}
+	manifestPath := filepath.Join(artifacts.Global.ScanDir(scanID), "manifest.json")
 	if err := os.WriteFile(manifestPath, []byte(`{"scan_id":"`+scanID+`","scanner_plan":{"summary":{"run_count":1}}}`), 0o600); err != nil {
 		t.Fatalf("write manifest fixture: %v", err)
 	}
@@ -301,6 +323,9 @@ func TestGetScanManifestFromArtifact(t *testing.T) {
 	}
 	if got["scan_id"] != scanID {
 		t.Fatalf("scan_id = %v, want %s", got["scan_id"], scanID)
+	}
+	if got["scanner_plan"] == nil {
+		t.Fatal("recorded manifest was replaced by a fallback")
 	}
 	if w.Header().Get("Content-Type") != "application/json" {
 		t.Fatalf("content-type = %q", w.Header().Get("Content-Type"))
@@ -394,6 +419,7 @@ func TestImportSARIFAPI(t *testing.T) {
 	    }]}},
 	    "results": [{
 	      "ruleId": "go.sql",
+      "properties": {"baselineState":"existing"},
 	      "level": "error",
 	      "message": {"text": "unsafe query"},
 	      "locations": [{"physicalLocation": {"artifactLocation": {"uri": "app/db.go"}, "region": {"startLine": 42}}}],
@@ -427,7 +453,7 @@ func TestImportSARIFAPI(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListFindingsByScan failed: %v", err)
 	}
-	if len(findings) != 1 || findings[0].StableFingerprint != "stable-import" || findings[0].SourceKind != "sarif_import" {
+	if len(findings) != 1 || findings[0].StableFingerprint != "stable-import" || findings[0].SourceKind != "sarif_import" || findings[0].BaselineState != "new" || findings[0].IntroducedInScanID != resp.Data.Scan.ID || findings[0].FirstSeenAt == nil || findings[0].LastSeenAt == nil {
 		t.Fatalf("unexpected imported findings: %+v", findings)
 	}
 	imports, err := env.Store.ListSARIFImportsByRepo(context.Background(), repoID)
@@ -609,8 +635,96 @@ func TestDownloadArtifactRejectsCrossUserScan(t *testing.T) {
 	}
 
 	w := env.doRequest(http.MethodGet, "/api/scans/"+scanID+"/artifacts/"+artifactID+"/download", nil)
-	if w.Code != http.StatusForbidden {
-		t.Fatalf("download cross-user artifact: expected 403, got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("download cross-user artifact: expected 404, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestArtifactReadEndpointsConfineStoredPaths(t *testing.T) {
+	env := setupTestEnv(t)
+	defer env.Store.Close()
+	repoID := env.createRepo(t)
+	previous := artifacts.Global
+	t.Cleanup(func() { artifacts.Global = previous })
+	root := t.TempDir()
+	if err := artifacts.Init(root); err != nil {
+		t.Fatal(err)
+	}
+	backend := artifacts.Global
+	want := `{"artifact_secret":"must-not-escape-artifact-root"}`
+	outside := filepath.Join(t.TempDir(), "outside.json")
+	if err := os.WriteFile(outside, []byte(want), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, endpoint := range []string{"download", "log", "json", "manifest"} {
+		for _, state := range []string{"valid", "escaping-symlink", "uninitialized"} {
+			t.Run(endpoint+"/"+state, func(t *testing.T) {
+				artifacts.Global = backend
+				scanID, artifactID := uuid.NewString(), uuid.NewString()
+				if err := env.Store.CreateScan(context.Background(), &models.Scan{
+					ID: scanID, UserID: env.UserID, RepoID: repoID, Status: models.ScanStatusCompleted,
+					ToolsSelected: "[]", ToolsCompleted: "[]", ToolsFailed: "[]", CoverageSummary: "{}",
+				}); err != nil {
+					t.Fatal(err)
+				}
+				kind, name := models.ArtifactJSON, "probe.json"
+				if endpoint == "log" {
+					kind, name = models.ArtifactLog, "probe.log"
+				} else if endpoint == "manifest" {
+					kind, name = models.ArtifactManifest, "manifest.json"
+				}
+				payload := want
+				if endpoint == "manifest" {
+					data, err := json.Marshal(map[string]any{"scan_id": scanID, "findings_revision": 0, "counts": map[string]int{"raw_findings": 0, "after_dedupe": 0, "suppressed": 0, "visible": 0, "high_severity": 0}, "artifact_secret": "must-not-escape-artifact-root"})
+					if err != nil {
+						t.Fatal(err)
+					}
+					payload = string(data)
+				}
+				// The escaped file must itself be a valid response payload: validation
+				// must not accidentally make a broken confinement boundary look safe.
+				if err := os.WriteFile(outside, []byte(payload), 0600); err != nil {
+					t.Fatal(err)
+				}
+				dir := backend.ScanDir(scanID)
+				path := filepath.Join(dir, name)
+				if state == "escaping-symlink" {
+					if err := os.Symlink(outside, path); err != nil {
+						t.Fatal(err)
+					}
+				} else if err := os.WriteFile(path, []byte(payload), 0600); err != nil {
+					t.Fatal(err)
+				}
+				if err := env.Store.CreateScanArtifact(context.Background(), &models.ScanArtifact{
+					ID: artifactID, ScanID: scanID, ArtifactType: kind, FilePath: path,
+					CreatedAt: time.Now(), UpdatedAt: time.Now(),
+				}); err != nil {
+					t.Fatal(err)
+				}
+				if state == "uninitialized" {
+					artifacts.Global = nil
+				}
+				url := "/api/scans/" + scanID
+				switch endpoint {
+				case "download":
+					url += "/artifacts/" + artifactID + "/download"
+				case "manifest":
+					url += "/manifest"
+				default:
+					url += "/tools/probe/output"
+				}
+				response := env.doRequest(http.MethodGet, url, nil)
+				if state == "valid" {
+					if response.Code != http.StatusOK || response.Body.String() != payload {
+						t.Fatalf("valid artifact not returned: %d %s", response.Code, response.Body.String())
+					}
+				} else if strings.Contains(response.Body.String(), "must-not-escape-artifact-root") {
+					t.Fatalf("unsafe artifact exposed: %d %s", response.Code, response.Body.String())
+				} else if endpoint != "manifest" && response.Code == http.StatusOK {
+					t.Fatal("unreadable artifact reported success")
+				}
+			})
+		}
 	}
 }
 
@@ -722,8 +836,8 @@ func TestScanGateAPI(t *testing.T) {
 		RepoID:          repoID,
 		Branch:          "main",
 		Status:          models.ScanStatusCompleted,
-		ToolsSelected:   "[]",
-		ToolsCompleted:  "[]",
+		ToolsSelected:   `["trivy"]`,
+		ToolsCompleted:  `["trivy"]`,
 		ToolsFailed:     "[]",
 		CoverageSummary: "{}",
 	}); err != nil {
@@ -1110,21 +1224,24 @@ func TestCreateScanMissingRepoID(t *testing.T) {
 
 func TestCreateScanIdempotencyReturnsOriginalAndRejectsConflict(t *testing.T) {
 	t.Setenv("WOLF_SCAN_EXECUTION_MODE", "queue")
+	t.Setenv(entitlement.LimitsEnv, "1")
+	entitlement.SetActive(entitlement.Community{})
+	t.Cleanup(func() { entitlement.SetActive(nil) })
 	env := setupTestEnv(t)
 	defer env.Store.Close()
 	repoID := env.createRepo(t)
 
-	request := func(branch string) *httptest.ResponseRecorder {
+	request := func(branch, key string) *httptest.ResponseRecorder {
 		body, _ := json.Marshal(map[string]string{"repo_id": repoID, "branch": branch})
 		req := httptest.NewRequest(http.MethodPost, "/api/scans", bytes.NewReader(body))
 		req.Header.Set("Authorization", "Bearer "+env.Token)
-		req.Header.Set("Idempotency-Key", "build-42")
+		req.Header.Set("Idempotency-Key", key)
 		w := httptest.NewRecorder()
 		env.Router.ServeHTTP(w, req)
 		return w
 	}
-	first := request("main")
-	second := request("main")
+	first := request("main", "build-42")
+	second := request("main", "build-42")
 	if first.Code != http.StatusCreated || second.Code != http.StatusCreated {
 		t.Fatalf("idempotent create status: first=%d second=%d", first.Code, second.Code)
 	}
@@ -1136,55 +1253,69 @@ func TestCreateScanIdempotencyReturnsOriginalAndRejectsConflict(t *testing.T) {
 	if firstBody.Data.ID == "" || firstBody.Data.ID != secondBody.Data.ID {
 		t.Fatalf("expected original scan, first=%q second=%q", firstBody.Data.ID, secondBody.Data.ID)
 	}
-	conflict := request("develop")
+	conflict := request("develop", "build-42")
 	if conflict.Code != http.StatusConflict || !strings.Contains(conflict.Body.String(), "idempotency_conflict") {
 		t.Fatalf("expected idempotency conflict, got %d: %s", conflict.Code, conflict.Body.String())
+	}
+	for _, key := range []string{"build-43", ""} {
+		blocked := request("main", key)
+		if blocked.Code != http.StatusConflict || !strings.Contains(blocked.Body.String(), "community_limit") {
+			t.Fatalf("new scan must respect capacity: %d %s", blocked.Code, blocked.Body.String())
+		}
 	}
 }
 
 func TestQueuedScanStreamReplaysAfterLastEventIDAndClosesAtTerminal(t *testing.T) {
-	t.Setenv("WOLF_SCAN_EXECUTION_MODE", "queue")
-	env := setupTestEnv(t)
-	defer env.Store.Close()
-	repoID := env.createRepo(t)
-	scan := &models.Scan{
-		ID: uuid.NewString(), UserID: env.UserID, RepoID: repoID, Branch: "main",
-		Status: models.ScanStatusCompleted, Phase: "completed",
-	}
-	if err := env.Store.CreateScan(context.Background(), scan); err != nil {
-		t.Fatal(err)
-	}
-	for _, payload := range []string{
-		`{"type":"scan_status","status":"pending"}`,
-		`{"type":"scan_progress","tool_name":"semgrep","status":"running"}`,
-		`{"type":"scan_complete","status":"completed"}`,
-	} {
-		if err := env.Store.AppendScanEvent(context.Background(), &models.ScanEvent{
-			ScanID: scan.ID, EventType: "scan_event", DataJSON: payload,
-		}); err != nil {
-			t.Fatal(err)
-		}
-	}
+	for _, mode := range []string{"queue", "inline"} {
+		t.Run(mode, func(t *testing.T) {
+			t.Setenv("WOLF_SCAN_EXECUTION_MODE", mode)
+			env := setupTestEnv(t)
+			defer env.Store.Close()
+			repoID := env.createRepo(t)
+			scan := &models.Scan{
+				ID: uuid.NewString(), UserID: env.UserID, RepoID: repoID, Branch: "main",
+				Status: models.ScanStatusCompleted, Phase: "completed",
+			}
+			if err := env.Store.CreateScan(context.Background(), scan); err != nil {
+				t.Fatal(err)
+			}
+			for _, payload := range []string{
+				`{"type":"scan_status","status":"pending"}`,
+				`{"type":"scan_progress","tool_name":"semgrep","status":"running"}`,
+				`{"type":"scan_complete","status":"completed"}`,
+			} {
+				if err := env.Store.AppendScanEvent(context.Background(), &models.ScanEvent{
+					ScanID: scan.ID, EventType: "scan_event", DataJSON: payload,
+				}); err != nil {
+					t.Fatal(err)
+				}
+			}
 
-	req := httptest.NewRequest(http.MethodGet, "/api/scans/"+scan.ID+"/stream", nil)
-	req.Header.Set("Authorization", "Bearer "+env.Token)
-	req.Header.Set("Last-Event-ID", "1")
-	w := httptest.NewRecorder()
-	env.Router.ServeHTTP(w, req)
+			req := httptest.NewRequest(http.MethodGet, "/api/scans/"+scan.ID+"/stream", nil)
+			req.Header.Set("Authorization", "Bearer "+env.Token)
+			req.Header.Set("Last-Event-ID", "1")
+			w := httptest.NewRecorder()
+			env.Router.ServeHTTP(w, req)
 
-	body := w.Body.String()
-	if strings.Contains(body, "id: 1\n") {
-		t.Fatalf("stream replayed acknowledged event: %s", body)
-	}
-	for _, expected := range []string{
-		"id: 2\n",
-		`"type":"scan_progress"`,
-		"id: 3\n",
-		`"type":"scan_complete"`,
-	} {
-		if !strings.Contains(body, expected) {
-			t.Fatalf("stream omitted %q: %s", expected, body)
-		}
+			body := w.Body.String()
+			if strings.Contains(body, "id: 1\n") {
+				t.Fatalf("stream replayed acknowledged event: %s", body)
+			}
+			for _, expected := range []string{
+				"id: 2\n",
+				`"type":"scan_progress"`,
+				"id: 3\n",
+				`"type":"scan_complete"`,
+				`"status":"completed","type":"scan_status"`,
+			} {
+				if !strings.Contains(body, expected) {
+					t.Fatalf("stream omitted %q: %s", expected, body)
+				}
+			}
+			if w.Header().Get("X-Accel-Buffering") != "no" || !strings.Contains(body, ": connected\n\n") {
+				t.Fatalf("stream did not flush its initial connection frame: %s", body)
+			}
+		})
 	}
 }
 
@@ -1596,30 +1727,65 @@ func TestGetScanFindings(t *testing.T) {
 func TestGetScanFindingsSorted(t *testing.T) {
 	env := setupTestEnv(t)
 	defer env.Store.Close()
-
 	repoID := env.createRepo(t)
 	now := time.Now()
-	scan := &models.Scan{
-		ID: uuid.New().String(), UserID: env.UserID, RepoID: repoID,
-		Status: models.ScanStatusCompleted, CreatedAt: now, UpdatedAt: now,
+	scan := &models.Scan{ID: uuid.NewString(), UserID: env.UserID, RepoID: repoID, Status: models.ScanStatusRunning, CreatedAt: now, UpdatedAt: now}
+	if err := env.Store.CreateScan(context.Background(), scan); err != nil {
+		t.Fatal(err)
 	}
-	env.Store.CreateScan(context.Background(), scan)
-
 	findings := []models.Finding{
-		{ID: uuid.New().String(), ScanID: scan.ID, RepoID: repoID, Severity: models.SeverityLow, CompositeScore: 2.0, Title: "Low", Status: models.StatusOpen, CreatedAt: now, UpdatedAt: now},
-		{ID: uuid.New().String(), ScanID: scan.ID, RepoID: repoID, Severity: models.SeverityHigh, CompositeScore: 8.0, Title: "High", Status: models.StatusOpen, CreatedAt: now, UpdatedAt: now},
+		{ID: "a", Severity: models.SeverityLow, CompositeScore: 2, Title: "Zulu", ToolName: "semgrep", FilePath: "src/z.go", LineStart: 90},
+		{ID: "b", Severity: models.SeverityCritical, CompositeScore: 9, Title: "Bravo", ToolName: "gosec", FilePath: "src/b.go", LineStart: 20},
+		{ID: "c", Severity: models.SeverityHigh, CompositeScore: 7, Title: "Alpha", ToolName: "trivy", FilePath: "src/a.go", LineStart: 10, RuleID: "needle"},
+		{ID: "d", Severity: models.SeverityCritical, CompositeScore: 9, Title: "Bravo", ToolName: "gosec", FilePath: "src/b.go", LineStart: 20},
 	}
-	env.Store.CreateFindings(context.Background(), findings)
-
-	w := env.doRequest(http.MethodGet, fmt.Sprintf("/api/scans/%s/findings?sort=composite_score&order=desc", scan.ID), nil)
-	var resp struct {
-		Data []struct {
-			Title string `json:"title"`
-		} `json:"data"`
+	for i := range findings {
+		findings[i].ScanID = scan.ID
+		findings[i].RepoID = repoID
+		findings[i].Status = models.StatusOpen
+		findings[i].CreatedAt = now
+		findings[i].UpdatedAt = now
 	}
-	json.Unmarshal(w.Body.Bytes(), &resp)
-	if len(resp.Data) == 2 && resp.Data[0].Title != "High" {
-		t.Errorf("expected High first when sorted desc, got %s", resp.Data[0].Title)
+	if err := env.Store.CreateFindings(context.Background(), findings); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		query string
+		ids   []string
+	}{
+		{"", []string{"b", "d", "c", "a"}},
+		{"sort=severity&order=desc", []string{"b", "d", "c", "a"}},
+		{"sort=severity&order=asc", []string{"a", "c", "b", "d"}},
+		{"sort=composite_score&order=desc", []string{"b", "d", "c", "a"}},
+		{"sort=title&order=asc", []string{"c", "b", "d", "a"}},
+		{"sort=title&order=desc", []string{"a", "b", "d", "c"}},
+		{"sort=tool_name&order=asc", []string{"b", "d", "a", "c"}},
+		{"sort=tool_name&order=desc", []string{"c", "a", "b", "d"}},
+		{"sort=file_path&order=asc", []string{"c", "b", "d", "a"}},
+		{"sort=file_path&order=desc", []string{"a", "b", "d", "c"}},
+		{"sort=line_start&order=asc", []string{"c", "b", "d", "a"}},
+		{"sort=line_start&order=desc", []string{"a", "b", "d", "c"}},
+		{"q=NEEDLE", []string{"c"}},
+		{"q=gosec&severity=critical", []string{"b", "d"}},
+	} {
+		t.Run(tc.query, func(t *testing.T) {
+			for page, want := range tc.ids {
+				w := env.doRequest(http.MethodGet, fmt.Sprintf("/api/scans/%s/findings?%s&per_page=1&page=%d", scan.ID, tc.query, page+1), nil)
+				if w.Code != http.StatusOK {
+					t.Fatalf("status=%d: %s", w.Code, w.Body)
+				}
+				var response struct {
+					Data []models.Finding    `json:"data"`
+					Meta struct{ Total int } `json:"meta"`
+				}
+				if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+					t.Fatal(err)
+				}
+				if response.Meta.Total != len(tc.ids) || len(response.Data) != 1 || response.Data[0].ID != want {
+					t.Fatalf("page %d: expected %s of %d, got %+v", page+1, want, len(tc.ids), response)
+				}
+			}
+		})
 	}
 }
 
@@ -2401,5 +2567,235 @@ func TestScanFindingStatsMatchList(t *testing.T) {
 	}
 	if stats.Data.BySeverity["critical"] != 3 || stats.Data.BySeverity["high"] != 2 {
 		t.Fatalf("severity counts: %+v", stats.Data.BySeverity)
+	}
+}
+
+func TestScanSearchFiltersBeforePaginationAndEscapesWildcards(t *testing.T) {
+	env := setupTestEnv(t)
+	defer env.Store.Close()
+	repoID := env.createRepo(t)
+	for i, branch := range []string{"release_1", "releaseX1", "release_2", "main"} {
+		if err := env.Store.CreateScan(context.Background(), &models.Scan{
+			ID: fmt.Sprintf("scan-search-%d", i), UserID: env.UserID, RepoID: repoID,
+			Branch: branch, Status: models.ScanStatusCompleted, FindingCount: i,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	w := env.doRequest(http.MethodGet, "/api/scans?q=release_&sort=findings&order=desc&per_page=1&page=2", nil)
+	var got struct {
+		Data []models.Scan `json:"data"`
+		Meta struct {
+			Total int `json:"total"`
+		} `json:"meta"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if w.Code != http.StatusOK || got.Meta.Total != 2 || len(got.Data) != 1 || got.Data[0].Branch != "release_1" {
+		t.Fatalf("search/sort/page = %d %s", w.Code, w.Body.String())
+	}
+}
+
+func TestScanHeaderAndResultExposeExecutionEvidence(t *testing.T) {
+	env := setupTestEnv(t)
+	defer env.Store.Close()
+	repo := env.createRepo(t)
+	for _, tc := range []struct {
+		name                     string
+		status                   models.ScanStatus
+		completed, failure, want string
+	}{
+		{"complete", models.ScanStatusCompleted, `["semgrep"]`, "", "complete"},
+		{"zero successes", models.ScanStatusCompleted, `[]`, "", "incomplete"},
+		{"worker lost", models.ScanStatusFailed, `[]`, "worker_lost", "incomplete"},
+		{"running", models.ScanStatusRunning, `[]`, "", "pending"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			scan := &models.Scan{ID: uuid.NewString(), UserID: env.UserID, RepoID: repo, Status: tc.status, Attempt: 2, ToolsSelected: `["semgrep"]`, ToolsCompleted: tc.completed, ToolsFailed: `[]`, FailureCode: tc.failure}
+			if tc.failure != "" {
+				scan.FailureMessage = "Worker stopped before completion."
+			}
+			if err := env.Store.CreateScan(t.Context(), scan); err != nil {
+				t.Fatal(err)
+			}
+			run := &models.ScannerRunRecord{ID: uuid.NewString(), ScanID: scan.ID, ToolName: "semgrep", Status: "completed", RequestedScope: `{"include_paths":["src/**"]}`, EffectiveScope: `{}`, ScopeMessage: "Repository-wide scan"}
+			if err := env.Store.UpsertScannerRunRecord(t.Context(), run); err != nil {
+				t.Fatal(err)
+			}
+			for _, suffix := range []string{"", "/result"} {
+				response := env.doRequest(http.MethodGet, "/api/scans/"+scan.ID+suffix, nil)
+				var body struct {
+					Data struct {
+						Attempt        int    `json:"attempt"`
+						Completeness   string `json:"completeness"`
+						TerminalReason string `json:"terminal_reason"`
+						FailureCode    string `json:"failure_code"`
+						FailureMessage string `json:"failure_message"`
+						Scopes         []struct {
+							Requested map[string]any `json:"requested_scope"`
+							Effective map[string]any `json:"effective_scope"`
+							Message   string         `json:"scope_message"`
+						} `json:"scanner_scopes"`
+					} `json:"data"`
+				}
+				if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+					t.Fatal(err)
+				}
+				if response.Code != http.StatusOK || body.Data.Attempt != 2 || body.Data.Completeness != tc.want || body.Data.FailureCode != tc.failure || body.Data.FailureMessage != scan.FailureMessage {
+					t.Fatalf("%s: %d %s", suffix, response.Code, response.Body.String())
+				}
+				if (tc.status == models.ScanStatusRunning) != (body.Data.TerminalReason == "") {
+					t.Fatalf("wrong terminal reason: %+v", body.Data)
+				}
+				if len(body.Data.Scopes) != 1 || body.Data.Scopes[0].Requested["include_paths"] == nil || len(body.Data.Scopes[0].Effective) != 0 || body.Data.Scopes[0].Message != run.ScopeMessage {
+					t.Fatalf("lost scope evidence: %+v", body.Data)
+				}
+			}
+		})
+	}
+}
+
+func TestResumeFixOnlyPublishesPausedJobs(t *testing.T) {
+	env := setupTestEnv(t)
+	defer env.Store.Close()
+	if err := env.Store.SetSetting(t.Context(), "autofix_enabled", "true"); err != nil {
+		t.Fatal(err)
+	}
+	repoID := env.createRepo(t)
+	for _, tc := range []struct {
+		status, body string
+		code         int
+	}{
+		{models.FixJobFailed, `{"action":"push"}`, 409},
+		{models.FixJobFailed, ``, 409},
+		{models.FixJobSucceeded, `{"action":"push"}`, 409},
+		{models.FixJobAwaitingPush, `{"action":"push"}`, 200},
+		{models.FixJobPushFailed, ``, 200},
+		{models.FixJobPushFailed, `{"action":"continue"}`, 409},
+		{models.FixJobAwaitingReview, `{"action":"continue"}`, 200},
+		{models.FixJobAwaitingPush, `{"action":`, 400},
+		{models.FixJobAwaitingPush, `{"action":"push"} {}`, 400},
+		{models.FixJobAwaitingPush, `{"acton":"push"}`, 400},
+	} {
+		t.Run(tc.status+tc.body, func(t *testing.T) {
+			job := &models.FixJob{ID: uuid.NewString(), UserID: env.UserID, RepoID: repoID, Type: "fix", Status: tc.status, ResultBranch: "wolf-fix/" + uuid.NewString(), Summary: `{"kept":1}`, CreatedAt: time.Now(), UpdatedAt: time.Now()}
+			if err := env.Store.EnqueueFixJob(t.Context(), job); err != nil {
+				t.Fatal(err)
+			}
+			req := httptest.NewRequest(http.MethodPost, "/api/fixes/"+job.ID+"/resume", strings.NewReader(tc.body))
+			req.Header.Set("Authorization", "Bearer "+env.Token)
+			w := httptest.NewRecorder()
+			env.Router.ServeHTTP(w, req)
+			if w.Code != tc.code {
+				t.Fatalf("got %d: %s", w.Code, w.Body.String())
+			}
+			saved, err := env.Store.GetFixJobByID(t.Context(), job.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if saved.Summary != job.Summary || (tc.code != 200 && saved.Status != tc.status) {
+				t.Fatalf("rejected request changed job/evidence: %+v", saved)
+			}
+		})
+	}
+}
+
+func TestCreateFixIdempotencyAndOwnership(t *testing.T) {
+	env := setupTestEnv(t)
+	defer env.Store.Close()
+	env.enableAutofix(t)
+	repo := env.createRepo(t)
+	scan := env.createScan(t, repo)
+	finding := models.Finding{ID: uuid.NewString(), ScanID: scan, RepoID: repo, ToolName: "gosec", RuleID: "G1"}
+	if err := env.Store.CreateFindings(t.Context(), []models.Finding{finding}); err != nil {
+		t.Fatal(err)
+	}
+	request := func(body any, key string) *httptest.ResponseRecorder {
+		data, _ := json.Marshal(body)
+		req := httptest.NewRequest("POST", "/api/fixes", bytes.NewReader(data))
+		req.Header.Set("Authorization", "Bearer "+env.Token)
+		req.Header.Set("Idempotency-Key", key)
+		w := httptest.NewRecorder()
+		env.Router.ServeHTTP(w, req)
+		return w
+	}
+	body := map[string]any{"repo_id": repo, "scan_id": scan, "finding_ids": []string{finding.ID}}
+	first := request(body, "stable-intent")
+	if first.Code != 201 {
+		t.Fatalf("create: %d %s", first.Code, first.Body.String())
+	}
+	var original struct {
+		Data models.FixJob `json:"data"`
+	}
+	if err := json.Unmarshal(first.Body.Bytes(), &original); err != nil {
+		t.Fatal(err)
+	}
+	// A settings change and later job state must not alter a retried request.
+	if err := env.Store.SetSetting(t.Context(), "fixer_engine", "codex"); err != nil {
+		t.Fatal(err)
+	}
+	job := original.Data
+	job.Status = models.FixJobSucceeded
+	if err := env.Store.UpdateFixJob(t.Context(), &job); err != nil {
+		t.Fatal(err)
+	}
+	replay := request(body, "stable-intent")
+	if replay.Code != 200 {
+		t.Fatalf("replay: %d %s", replay.Code, replay.Body.String())
+	}
+	var repeated struct {
+		Data models.FixJob `json:"data"`
+	}
+	json.Unmarshal(replay.Body.Bytes(), &repeated)
+	if repeated.Data.ID != job.ID || repeated.Data.Engine != original.Data.Engine || repeated.Data.TargetBranch != job.TargetBranch {
+		t.Fatal("retry changed job, configuration or branch")
+	}
+	body["mode"] = "push"
+	conflict := request(body, "stable-intent")
+	if conflict.Code != 409 || !strings.Contains(conflict.Body.String(), "idempotency_conflict") {
+		t.Fatalf("changed publication intent accepted: %d %s", conflict.Code, conflict.Body.String())
+	}
+	delete(body, "mode")
+	body["target_branch"] = "main"
+	invalidBranch := request(body, "protected-branch")
+	if invalidBranch.Code != 400 {
+		t.Fatalf("default branch accepted: %d %s", invalidBranch.Code, invalidBranch.Body.String())
+	}
+	delete(body, "target_branch")
+
+	otherUser := uuid.NewString()
+	otherRepo := uuid.NewString()
+	otherScan := uuid.NewString()
+	if err := env.Store.CreateUser(t.Context(), &models.User{ID: otherUser, Email: otherUser + "@example.test", PasswordHash: "unused"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := env.Store.CreateRepo(t.Context(), &models.Repo{ID: otherRepo, UserID: otherUser, Name: "private", SourcePath: "/private"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := env.Store.CreateScan(t.Context(), &models.Scan{ID: otherScan, RepoID: otherRepo, UserID: otherUser, Status: models.ScanStatusCompleted}); err != nil {
+		t.Fatal(err)
+	}
+	otherFinding := finding
+	otherFinding.ID = uuid.NewString()
+	otherFinding.RepoID = otherRepo
+	otherFinding.ScanID = otherScan
+	if err := env.Store.CreateFindings(t.Context(), []models.Finding{otherFinding}); err != nil {
+		t.Fatal(err)
+	}
+	for _, foreign := range []map[string]any{
+		{"repo_id": otherRepo, "scan_id": otherScan},
+		{"repo_id": repo, "scan_id": otherScan},
+		{"repo_id": repo, "finding_ids": []string{otherFinding.ID}},
+		{"repo_id": repo, "scan_id": scan, "finding_ids": []string{otherFinding.ID}},
+	} {
+		w := request(foreign, uuid.NewString())
+		if w.Code != 404 {
+			t.Fatalf("foreign fix scope accepted: %d %s", w.Code, w.Body.String())
+		}
+	}
+	jobs, err := env.Store.ListFixJobsByUser(t.Context(), env.UserID, "")
+	if err != nil || len(jobs) != 1 {
+		t.Fatalf("replay/rejection changed durable work: %+v %v", jobs, err)
 	}
 }

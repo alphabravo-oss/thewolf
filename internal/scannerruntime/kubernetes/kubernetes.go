@@ -149,13 +149,13 @@ func invocationFromContainer(ctx context.Context, cfg *scannercontainer.Config, 
 		}
 	}
 	identity := scannerruntime.IdentityFromContext(ctx)
-	memory := cfg.Memory
+	memory := scannercontainer.MemoryLimitFor(cfg, tool)
 	if opts.MemoryOverride != "" {
 		memory = opts.MemoryOverride
 	}
 	invocationNetworkClass := identity.NetworkClass
 	if invocationNetworkClass == "" {
-		invocationNetworkClass = networkClass(cfg.Network)
+		invocationNetworkClass = networkClass(scannercontainer.ResolveNetwork(cfg, tool))
 	}
 	return scannerruntime.Invocation{
 		Image: image, Command: command, Args: finalArgs, WorkingDir: workdir,

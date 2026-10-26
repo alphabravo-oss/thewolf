@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/alphabravocompany/thewolf/internal/ai"
+	"github.com/alphabravocompany/thewolf/internal/plugin"
 	"github.com/alphabravocompany/thewolf/internal/wolflog"
 )
 
@@ -37,17 +38,17 @@ func defaultAuthProbe(ctx context.Context, command string) error {
 	case "claude":
 		// A minimal headless turn. Succeeds only with a valid session.
 		// #nosec G204 -- command is a fixed tool name, prompt is a constant
-		cmd = exec.CommandContext(probeCtx, command, "-p", "--max-turns", "1", "ok")
+		cmd = plugin.CommandContext(probeCtx, command, "-p", "--max-turns", "1", "ok")
 	case "codex":
 		// #nosec G204 -- command is a fixed tool name, prompt is a constant
-		cmd = exec.CommandContext(probeCtx, command, "--approval-mode", "full-auto", "--quiet", "ok")
+		cmd = plugin.CommandContext(probeCtx, command, "--approval-mode", "full-auto", "--quiet", "ok")
 	case "opencode":
 		// #nosec G204 -- command is a fixed tool name
-		cmd = exec.CommandContext(probeCtx, command, "auth", "list")
+		cmd = plugin.CommandContext(probeCtx, command, "auth", "list")
 		cmd.Stdin = nil
 	default:
 		// #nosec G204 -- command is a configured tool name
-		cmd = exec.CommandContext(probeCtx, command, "--version")
+		cmd = plugin.CommandContext(probeCtx, command, "--version")
 	}
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("%s auth probe failed: %w", command, err)

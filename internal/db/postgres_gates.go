@@ -56,31 +56,13 @@ func (s *PostgresStore) ListQualityPolicies(ctx context.Context, scope, scopeID 
 }
 
 func (s *PostgresStore) UpsertQualityGateResult(ctx context.Context, result *models.QualityGateResult) error {
-	now := time.Now().UTC()
-	if result.CreatedAt.IsZero() {
-		result.CreatedAt = now
-	}
-	if result.EvaluatedAt.IsZero() {
-		result.EvaluatedAt = now
-	}
-	result.UpdatedAt = now
-	_, err := s.db.NamedExecContext(ctx,
-		`INSERT INTO quality_gate_results (id, scan_id, policy_id, status, summary_json, matched_rules_json, evaluated_at, created_at, updated_at)
-		 VALUES (:id, :scan_id, :policy_id, :status, :summary_json, :matched_rules_json, :evaluated_at, :created_at, :updated_at)
-		 ON CONFLICT (scan_id, policy_id) DO UPDATE SET
-		   status = excluded.status,
-		   summary_json = excluded.summary_json,
-		   matched_rules_json = excluded.matched_rules_json,
-		   evaluated_at = excluded.evaluated_at,
-		   updated_at = excluded.updated_at`,
-		result)
-	return err
+	return upsertQualityGateResult(ctx, s.db, result)
 }
 
 func (s *PostgresStore) GetQualityGateResult(ctx context.Context, scanID, policyID string) (*models.QualityGateResult, error) {
 	var result models.QualityGateResult
 	err := s.db.GetContext(ctx, &result,
-		"SELECT * FROM quality_gate_results WHERE scan_id = $1 AND policy_id = $2", scanID, policyID)
+		"SELECT g.* FROM quality_gate_results g JOIN scans s ON s.id = g.scan_id AND s.findings_revision = g.findings_revision AND s.status = g.scan_status WHERE g.scan_id = $1 AND policy_id = $2", scanID, policyID)
 	if err != nil {
 		return nil, err
 	}
@@ -90,6 +72,6 @@ func (s *PostgresStore) GetQualityGateResult(ctx context.Context, scanID, policy
 func (s *PostgresStore) ListQualityGateResults(ctx context.Context, scanID string) ([]models.QualityGateResult, error) {
 	var results []models.QualityGateResult
 	err := s.db.SelectContext(ctx, &results,
-		"SELECT * FROM quality_gate_results WHERE scan_id = $1 ORDER BY evaluated_at DESC", scanID)
+		"SELECT g.* FROM quality_gate_results g JOIN scans s ON s.id = g.scan_id AND s.findings_revision = g.findings_revision AND s.status = g.scan_status WHERE g.scan_id = $1 ORDER BY evaluated_at DESC", scanID)
 	return results, err
 }

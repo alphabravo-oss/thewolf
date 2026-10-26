@@ -3,6 +3,7 @@ package api_test
 import (
 	"bytes"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
@@ -30,7 +31,7 @@ var heavyEndpoints = map[string]bool{
 }
 
 // reqFrom issues a request from a specified client IP. Each test case uses a
-// distinct IP so the per-IP rate limiter (60-burst) never trips during the
+// distinct IP so the per-IP rate limiter never trips during the
 // rapid-fire endpoint sweep — keeping the test about auth, not throttling.
 func reqFrom(srv *api.Server, method, path, bearer, ip string, body []byte) *httptest.ResponseRecorder {
 	var r *http.Request
@@ -42,7 +43,7 @@ func reqFrom(srv *api.Server, method, path, bearer, ip string, body []byte) *htt
 	if bearer != "" {
 		r.Header.Set("Authorization", "Bearer "+bearer)
 	}
-	r.Header.Set("X-Forwarded-For", ip)
+	r.RemoteAddr = net.JoinHostPort(ip, "1234")
 	w := httptest.NewRecorder()
 	srv.Router.ServeHTTP(w, r)
 	return w

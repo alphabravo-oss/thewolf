@@ -40,8 +40,8 @@ func TestMFAEndToEnd(t *testing.T) {
 		t.Fatal("setup: no qr")
 	}
 
-	code := func() string {
-		c, err := totp.GenerateCode(secret, time.Now())
+	code := func(offset time.Duration) string {
+		c, err := totp.GenerateCode(secret, time.Now().Add(offset))
 		if err != nil {
 			t.Fatalf("GenerateCode: %v", err)
 		}
@@ -49,7 +49,7 @@ func TestMFAEndToEnd(t *testing.T) {
 	}
 
 	// 2. Activate with a valid code — returns one-time recovery codes.
-	body, _ := json.Marshal(map[string]string{"code": code()})
+	body, _ := json.Marshal(map[string]string{"code": code(0)})
 	w = request(srv, http.MethodPost, "/api/v1/auth/mfa/activate", jwt, body)
 	if w.Code != http.StatusOK {
 		t.Fatalf("activate: %d %s", w.Code, w.Body.String())
@@ -86,7 +86,7 @@ func TestMFAEndToEnd(t *testing.T) {
 	}
 
 	// 4. Complete login with a TOTP code -> real session.
-	mfaLogin, _ := json.Marshal(map[string]string{"mfa_token": challenge, "code": code()})
+	mfaLogin, _ := json.Marshal(map[string]string{"mfa_token": challenge, "code": code(30 * time.Second)})
 	w = reqFrom(srv, http.MethodPost, "/api/v1/auth/mfa/login", "", "10.9.0.2", mfaLogin)
 	if w.Code != http.StatusOK {
 		t.Fatalf("mfa/login: %d %s", w.Code, w.Body.String())

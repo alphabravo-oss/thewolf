@@ -5,11 +5,10 @@ import (
 	"database/sql"
 	_ "embed"
 	"fmt"
-	"strings"
 	"time"
 
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/jmoiron/sqlx"
-	_ "github.com/lib/pq"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 )
@@ -24,16 +23,19 @@ type PostgresStore struct {
 
 // NewPostgres creates a new Postgres store.
 func NewPostgres(dsn string) (*PostgresStore, error) {
-	db, err := sqlx.Open("postgres", dsn)
+	connection, err := sql.Open("pgx", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("open postgres: %w", err)
 	}
-	db = db.Unsafe()
+	// Keep the SQL dialect name stable for rebind, locking and backup metadata.
+	db := sqlx.NewDb(connection, "postgres").Unsafe()
 	if err := db.Ping(); err != nil {
+		_ = db.Close()
 		return nil, fmt.Errorf("ping postgres: %w", err)
 	}
 	store := &PostgresStore{db: db}
 	if err := store.Migrate(); err != nil {
+		_ = db.Close()
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
 	return store, nil
@@ -44,144 +46,97 @@ func (s *PostgresStore) Close() error { return s.db.Close() }
 func (s *PostgresStore) Ping(ctx context.Context) error { return s.db.PingContext(ctx) }
 
 func (s *PostgresStore) Migrate() error {
+	// Keep the advisory lock on one dedicated connection while the legacy
+	// migrations use the pool. API and workers can start concurrently.
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	lock, err := s.db.Connx(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = lock.Close() }()
+	const migrationLockID = 0x776f6c66
+	if _, err := lock.ExecContext(ctx, "SELECT pg_advisory_lock($1)", migrationLockID); err != nil {
+		return fmt.Errorf("lock migrations: %w", err)
+	}
+	defer func() {
+		_, _ = lock.ExecContext(context.Background(), "SELECT pg_advisory_unlock($1)", migrationLockID)
+	}()
+
 	if _, err := s.db.Exec(migrationSQL); err != nil {
 		return err
 	}
-	if _, err := s.db.Exec(migration002SQL); err != nil {
-		if !strings.Contains(err.Error(), "duplicate column") && !strings.Contains(err.Error(), "already exists") {
-			return err
-		}
+	if err := execAdditiveMigration(s.db, migration002SQL); err != nil {
+		return err
 	}
-	if _, err := s.db.Exec(migration003SQL); err != nil {
-		if !strings.Contains(err.Error(), "duplicate column") && !strings.Contains(err.Error(), "already exists") {
-			return err
-		}
+	if err := execAdditiveMigration(s.db, migration003SQL); err != nil {
+		return err
 	}
-	if _, err := s.db.Exec(migration004SQL); err != nil {
-		if !strings.Contains(err.Error(), "already exists") {
-			return err
-		}
+	if err := execAdditiveMigration(s.db, migration004SQL); err != nil {
+		return err
 	}
-	if _, err := s.db.Exec(migration005SQL); err != nil {
-		if !strings.Contains(err.Error(), "duplicate column") && !strings.Contains(err.Error(), "already exists") {
-			return err
-		}
+	if err := execAdditiveMigration(s.db, migration005SQL); err != nil {
+		return err
 	}
-	if _, err := s.db.Exec(migration006SQL); err != nil {
-		if !strings.Contains(err.Error(), "duplicate column") && !strings.Contains(err.Error(), "already exists") {
-			return err
-		}
+	if err := execAdditiveMigration(s.db, migration006SQL); err != nil {
+		return err
 	}
 	if _, err := s.db.Exec(migration007PostgresSQL); err != nil {
 		return fmt.Errorf("postgres settings migration: %w", err)
 	}
-	if _, err := s.db.Exec(migration008SQL); err != nil {
-		if !strings.Contains(err.Error(), "duplicate column") && !strings.Contains(err.Error(), "already exists") {
-			return err
-		}
+	if err := execAdditiveMigration(s.db, migration008SQL); err != nil {
+		return err
 	}
-	if _, err := s.db.Exec(migration009SQL); err != nil {
-		if !strings.Contains(err.Error(), "duplicate column") && !strings.Contains(err.Error(), "already exists") {
-			return err
-		}
+	if err := execAdditiveMigration(s.db, migration009SQL); err != nil {
+		return err
 	}
-	if _, err := s.db.Exec(migration010SQL); err != nil {
-		if !strings.Contains(err.Error(), "duplicate column") && !strings.Contains(err.Error(), "already exists") {
-			return err
-		}
+	if err := execAdditiveMigration(s.db, migration010SQL); err != nil {
+		return err
 	}
-	if _, err := s.db.Exec(migration011SQL); err != nil {
-		if !strings.Contains(err.Error(), "duplicate column") && !strings.Contains(err.Error(), "already exists") {
-			return err
-		}
+	if err := execAdditiveMigration(s.db, migration011SQL); err != nil {
+		return err
 	}
-	if _, err := s.db.Exec(migration012SQL); err != nil {
-		if !strings.Contains(err.Error(), "duplicate column") && !strings.Contains(err.Error(), "already exists") {
-			return err
-		}
+	if err := execAdditiveMigration(s.db, migration012SQL); err != nil {
+		return err
 	}
-	if _, err := s.db.Exec(migration013SQL); err != nil {
-		if !strings.Contains(err.Error(), "duplicate column") && !strings.Contains(err.Error(), "already exists") {
-			return err
-		}
+	if err := execAdditiveMigration(s.db, migration013SQL); err != nil {
+		return err
 	}
-	if _, err := s.db.Exec(migration014SQL); err != nil {
-		if !strings.Contains(err.Error(), "duplicate column") && !strings.Contains(err.Error(), "already exists") {
-			return err
-		}
+	if err := execAdditiveMigration(s.db, migration014SQL); err != nil {
+		return err
 	}
-	if _, err := s.db.Exec(migration015SQL); err != nil {
-		if !strings.Contains(err.Error(), "duplicate column") && !strings.Contains(err.Error(), "already exists") {
-			return err
-		}
+	if err := execAdditiveMigration(s.db, migration015SQL); err != nil {
+		return err
 	}
-	if _, err := s.db.Exec(migration016SQL); err != nil {
-		if !strings.Contains(err.Error(), "duplicate column") && !strings.Contains(err.Error(), "already exists") {
-			return err
-		}
+	if err := execAdditiveMigration(s.db, migration016SQL); err != nil {
+		return err
 	}
-	if _, err := s.db.Exec(migration017SQL); err != nil {
-		if !strings.Contains(err.Error(), "duplicate column") && !strings.Contains(err.Error(), "already exists") {
-			return err
-		}
+	if err := execAdditiveMigration(s.db, migration017SQL); err != nil {
+		return err
 	}
-	if _, err := s.db.Exec(migration018SQL); err != nil {
-		if !strings.Contains(err.Error(), "duplicate column") && !strings.Contains(err.Error(), "already exists") {
-			return err
-		}
+	if err := execAdditiveMigration(s.db, migration018SQL); err != nil {
+		return err
 	}
-	if _, err := s.db.Exec(migration019SQL); err != nil {
-		if !strings.Contains(err.Error(), "duplicate column") && !strings.Contains(err.Error(), "already exists") {
-			return err
-		}
+	if err := execAdditiveMigration(s.db, migration019SQL); err != nil {
+		return err
 	}
-	// Migration 020 seeds fleet_mode=false. The SQL file uses
-	// INSERT OR IGNORE for SQLite; for Postgres we issue the
-	// equivalent ON CONFLICT form here. See migration 007 above
-	// for the same pattern with ai_enabled / registration_enabled.
-	if _, err := s.db.Exec(migration020SQL); err != nil {
-		if !strings.Contains(err.Error(), "already exists") && !strings.Contains(err.Error(), "syntax error") {
-			return err
-		}
+	if err := execAdditiveMigration(s.db, migration020SQL); err != nil {
+		return err
 	}
-	if _, err := s.db.Exec(`INSERT INTO settings (key, value) VALUES ('fleet_mode', 'false') ON CONFLICT(key) DO NOTHING`); err != nil {
-		if !strings.Contains(err.Error(), "already exists") && !strings.Contains(err.Error(), "does not exist") {
-			return err
-		}
+	if err := execAdditiveMigration(s.db, migration021SQL); err != nil {
+		return err
 	}
-	// Migration 021 — autofix job queue + the autofix_enabled flag (default
-	// OFF). The .sql seeds the flag with SQLite's INSERT OR IGNORE; Postgres
-	// gets the ON CONFLICT form here. The CREATE TABLE statements run from
-	// the shared .sql below.
-	if _, err := s.db.Exec(migration021SQL); err != nil {
-		if !strings.Contains(err.Error(), "already exists") && !strings.Contains(err.Error(), "syntax error") {
-			return err
-		}
+	if err := execColumnMigration(s.db, migration022SQL); err != nil {
+		return err
 	}
-	if _, err := s.db.Exec(`INSERT INTO settings (key, value) VALUES ('autofix_enabled', 'false') ON CONFLICT(key) DO NOTHING`); err != nil {
-		if !strings.Contains(err.Error(), "already exists") && !strings.Contains(err.Error(), "does not exist") {
-			return err
-		}
+	if err := execAdditiveMigration(s.db, migration023SQL); err != nil {
+		return err
 	}
-	if _, err := s.db.Exec(migration022SQL); err != nil {
-		if !strings.Contains(err.Error(), "already exists") && !strings.Contains(err.Error(), "duplicate column") {
-			return err
-		}
+	if err := execAdditiveMigration(s.db, migration024SQL); err != nil {
+		return err
 	}
-	if _, err := s.db.Exec(migration023SQL); err != nil {
-		if !strings.Contains(err.Error(), "already exists") && !strings.Contains(err.Error(), "duplicate column") {
-			return err
-		}
-	}
-	if _, err := s.db.Exec(migration024SQL); err != nil {
-		if !strings.Contains(err.Error(), "already exists") && !strings.Contains(err.Error(), "duplicate column") {
-			return err
-		}
-	}
-	if _, err := s.db.Exec(migration025SQL); err != nil {
-		if !strings.Contains(err.Error(), "already exists") && !strings.Contains(err.Error(), "duplicate column") {
-			return err
-		}
+	if err := execAdditiveMigration(s.db, migration025SQL); err != nil {
+		return err
 	}
 	if err := execAdditiveMigration(s.db, migration026SQL); err != nil {
 		return err
@@ -285,6 +240,45 @@ func (s *PostgresStore) Migrate() error {
 	if err := execAdditiveMigration(s.db, migration059SQL); err != nil {
 		return err
 	}
+	if err := execAdditiveMigration(s.db, migration060SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration061SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration062SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration063SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration064SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration065SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration066SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration067SQL); err != nil {
+		return err
+	}
+	if err := migrateMFAReplay(s.db); err != nil {
+		return err
+	}
+	if err := execColumnMigration(s.db, migration069SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration070SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration071SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration072SQL); err != nil {
+		return err
+	}
 	return sanitizePersistedSecretMasks(s.db)
 }
 
@@ -322,13 +316,7 @@ func (s *PostgresStore) GetUserByEmail(ctx context.Context, email string) (*mode
 }
 
 func (s *PostgresStore) UpdateUser(ctx context.Context, user *models.User) error {
-	user.UpdatedAt = time.Now().UTC()
-	if user.Role == "" {
-		user.Role = models.RoleUser
-	}
-	_, err := s.db.NamedExecContext(ctx,
-		`UPDATE users SET email=:email, password_hash=:password_hash, role=:role, scanner_supply_chain_personas=:scanner_supply_chain_personas, updated_at=:updated_at WHERE id=:id`, user)
-	return err
+	return updateUser(ctx, s.db, user)
 }
 
 func (s *PostgresStore) UpdateUserScannerSupplyChainPersonas(ctx context.Context, userID, encodedPersonas string) error {
@@ -344,13 +332,10 @@ func (s *PostgresStore) UpdateUserScannerSupplyChainPersonas(ctx context.Context
 	return nil
 }
 
-// UpdateUserMFA persists only the TOTP fields, kept separate from UpdateUser so
-// the general profile update never has to carry the secret/recovery columns.
-func (s *PostgresStore) UpdateUserMFA(ctx context.Context, user *models.User) error {
-	user.UpdatedAt = time.Now().UTC()
-	_, err := s.db.NamedExecContext(ctx,
-		`UPDATE users SET totp_secret=:totp_secret, totp_enabled=:totp_enabled, totp_recovery_codes=:totp_recovery_codes, updated_at=:updated_at WHERE id=:id`, user)
-	return err
+// UpdateUserMFA atomically replaces the MFA fields only if the previous state
+// still matches, so concurrent enrollment/recovery/reset cannot overwrite it.
+func (s *PostgresStore) UpdateUserMFA(ctx context.Context, user, previous *models.User) error {
+	return updateUserMFA(ctx, s.db, user, previous)
 }
 
 // UpdateUserProfile persists self-service profile fields (email + display name),
@@ -661,7 +646,16 @@ func (s *PostgresStore) CreateScan(ctx context.Context, scan *models.Scan) error
 	scan.CreatedAt = now
 	scan.UpdatedAt = now
 	prepareScanForWrite(scan)
-	_, err := s.db.NamedExecContext(ctx,
+	tx, err := beginRemediationScan(ctx, s.db, scan)
+	if err != nil {
+		return err
+	}
+	var executor sqlx.ExtContext = s.db
+	if tx != nil {
+		defer func() { _ = tx.Rollback() }()
+		executor = tx
+	}
+	_, err = sqlx.NamedExecContext(ctx, executor,
 		`INSERT INTO scans (id, user_id, repo_id, collection_id, loop_id, iteration, branch, status,
 		 source_type, remote_node_id, source_path, commit_sha, tree_digest, dirty_state, prepared_workspace,
 		 request_json, request_digest, client_reference, idempotency_key, phase, claimed_by,
@@ -684,6 +678,9 @@ func (s *PostgresStore) CreateScan(ctx context.Context, scan *models.Scan) error
 		 :categories, :include_paths, :exclude_paths,
 		 :tools_selected, :tools_completed, :tools_failed, :tools_errors, :finding_count, :coverage_summary, :ai_enabled, :ai_summary,
 		 :started_at, :completed_at, :created_at, :updated_at)`, scan)
+	if err == nil && tx != nil {
+		return tx.Commit()
+	}
 	return err
 }
 
@@ -718,10 +715,11 @@ func (s *PostgresStore) ListScansByRepo(ctx context.Context, repoID string) ([]m
 
 func (s *PostgresStore) ListScansByCollection(ctx context.Context, collectionID string) ([]models.Scan, error) {
 	var scans []models.Scan
-	err := s.db.SelectContext(ctx, &scans, "SELECT * FROM scans WHERE collection_id = $1 ORDER BY created_at DESC", collectionID)
+	err := s.db.SelectContext(ctx, &scans, "SELECT * FROM scans WHERE repo_id IN (SELECT repo_id FROM collection_repos WHERE collection_id = $1) ORDER BY created_at DESC, id DESC", collectionID)
 	return scans, err
 }
 
+// UpdateScan never lets a writer that did not see a cancellation (stale whole-row copy) erase it.
 func (s *PostgresStore) UpdateScan(ctx context.Context, scan *models.Scan) error {
 	scan.UpdatedAt = time.Now().UTC()
 	_, err := s.db.NamedExecContext(ctx,
@@ -744,7 +742,7 @@ func (s *PostgresStore) UpdateScan(ctx context.Context, scan *models.Scan) error
 		 WHERE id=:id AND (
 		   :lease_token = '' OR
 		   (lease_token=:lease_token AND status='running' AND cancel_requested_at IS NULL)
-		 )`, scan)
+		 ) AND (cancel_requested_at IS NULL OR CAST(:cancel_requested_at AS TIMESTAMPTZ) IS NOT NULL)`, scan)
 	return err
 }
 
@@ -756,28 +754,12 @@ func (s *PostgresStore) DeleteScan(ctx context.Context, id string) error {
 // --- Findings ---
 
 func (s *PostgresStore) CreateFinding(ctx context.Context, f *models.Finding) error {
-	now := time.Now().UTC()
-	f.CreatedAt = now
-	f.UpdatedAt = now
-	prepareFindingForWrite(f)
-	_, err := s.db.NamedExecContext(ctx,
-		`INSERT INTO findings (id, scan_id, repo_id, fingerprint, stable_fingerprint, location_fingerprint,
-		 semantic_fingerprint, evidence_fingerprint, identity_version, tool_name, category, severity,
-		 title, description, file_path, line_start, line_end, code_snippet, cwe_id, rule_id,
-		 tool_severity_score, location_weight, ai_context_score, composite_score,
-		 ai_fix_suggestion, status, sarif_data, module_name, function_name, symbol_kind, file_purpose, dependents_json,
-		 fine_category, fix_strategy_id, confidence, corroborated_by_json, suppressed, suppression_id,
-		 suppressed_reason, baseline_state, introduced_in_scan_id, resolved_in_scan_id, source_kind, source_ref,
-		 created_at, updated_at)
-		 VALUES (:id, :scan_id, :repo_id, :fingerprint, :stable_fingerprint, :location_fingerprint,
-		 :semantic_fingerprint, :evidence_fingerprint, :identity_version, :tool_name, :category, :severity,
-		 :title, :description, :file_path, :line_start, :line_end, :code_snippet, :cwe_id, :rule_id,
-		 :tool_severity_score, :location_weight, :ai_context_score, :composite_score,
-		 :ai_fix_suggestion, :status, :sarif_data, :module_name, :function_name, :symbol_kind, :file_purpose, :dependents_json,
-		 :fine_category, :fix_strategy_id, :confidence, :corroborated_by_json, :suppressed, :suppression_id,
-		 :suppressed_reason, :baseline_state, :introduced_in_scan_id, :resolved_in_scan_id, :source_kind, :source_ref,
-		 :created_at, :updated_at)`, f)
-	return err
+	findings := []models.Finding{*f}
+	if err := s.CreateFindings(ctx, findings); err != nil {
+		return err
+	}
+	*f = findings[0]
+	return nil
 }
 
 func (s *PostgresStore) CreateFindings(ctx context.Context, findings []models.Finding) error {
@@ -805,7 +787,7 @@ func (s *PostgresStore) GetFindingByID(ctx context.Context, id string) (*models.
 func (s *PostgresStore) ListFindingsByScan(ctx context.Context, scanID string) ([]models.Finding, error) {
 	var findings []models.Finding
 	err := s.db.SelectContext(ctx, &findings,
-		"SELECT * FROM findings WHERE scan_id = $1 ORDER BY composite_score DESC", scanID)
+		"SELECT * FROM findings WHERE scan_id = $1 AND (cluster_id = '' OR cluster_id = id) ORDER BY composite_score DESC", scanID)
 	hydrateFindingsAfterRead(findings)
 	return findings, err
 }
@@ -813,37 +795,17 @@ func (s *PostgresStore) ListFindingsByScan(ctx context.Context, scanID string) (
 func (s *PostgresStore) ListFindingsByRepo(ctx context.Context, repoID string) ([]models.Finding, error) {
 	var findings []models.Finding
 	err := s.db.SelectContext(ctx, &findings,
-		"SELECT * FROM findings WHERE repo_id = $1 ORDER BY composite_score DESC", repoID)
+		"SELECT * FROM findings WHERE repo_id = $1 AND (cluster_id = '' OR cluster_id = id) ORDER BY composite_score DESC", repoID)
 	hydrateFindingsAfterRead(findings)
 	return findings, err
 }
 
 func (s *PostgresStore) UpdateFinding(ctx context.Context, f *models.Finding) error {
-	f.UpdatedAt = time.Now().UTC()
-	prepareFindingForWrite(f)
-	_, err := s.db.ExecContext(ctx,
-		`UPDATE findings SET ai_context_score = $1, ai_fix_suggestion = $2, composite_score = $3,
-		 tool_severity_score = $4, location_weight = $5,
-		 module_name = $6, function_name = $7, symbol_kind = $8, file_purpose = $9, dependents_json = $10,
-		 stable_fingerprint = $11, location_fingerprint = $12, semantic_fingerprint = $13, evidence_fingerprint = $14,
-		 identity_version = $15, fine_category = $16, fix_strategy_id = $17, confidence = $18, corroborated_by_json = $19,
-		 suppressed = $20, suppression_id = $21, suppressed_reason = $22, baseline_state = $23, introduced_in_scan_id = $24,
-		 resolved_in_scan_id = $25, source_kind = $26, source_ref = $27, updated_at = $28 WHERE id = $29`,
-		f.AIContextScore, f.AIFixSuggestion, f.CompositeScore,
-		f.ToolSeverityScore, f.LocationWeight,
-		f.ModuleName, f.FunctionName, f.SymbolKind, f.FilePurpose, f.DependentsJSON,
-		f.StableFingerprint, f.LocationFingerprint, f.SemanticFingerprint, f.EvidenceFingerprint,
-		f.IdentityVersion, f.FineCategory, f.FixStrategyID, f.Confidence, f.CorroboratedByJSON,
-		f.Suppressed, f.SuppressionID, f.SuppressedReason, f.BaselineState, f.IntroducedInScanID,
-		f.ResolvedInScanID, f.SourceKind, f.SourceRef, f.UpdatedAt, f.ID)
-	return err
+	return updateFindingWithRevision(ctx, s.db, f)
 }
 
 func (s *PostgresStore) UpdateFindingStatus(ctx context.Context, id string, status models.Status) error {
-	_, err := s.db.ExecContext(ctx,
-		"UPDATE findings SET status = $1, updated_at = $2 WHERE id = $3",
-		status, time.Now().UTC(), id)
-	return err
+	return updateFindingClusterStatus(ctx, s.db, id, status)
 }
 
 // --- Fixes ---
@@ -920,35 +882,20 @@ func (s *PostgresStore) UpdateFixItem(ctx context.Context, item *models.FixItem)
 // --- ScanArtifacts ---
 
 func (s *PostgresStore) CreateScanArtifact(ctx context.Context, artifact *models.ScanArtifact) error {
-	now := time.Now().UTC()
-	artifact.CreatedAt = now
-	artifact.UpdatedAt = now
-	if artifact.RedactionLevel == "" {
-		artifact.RedactionLevel = "internal_report"
-	}
-	_, err := s.db.NamedExecContext(ctx,
-		`INSERT INTO scan_artifacts (id, scan_id, artifact_type, file_path, storage_key, file_size, checksum_sha256, redaction_level, created_at, updated_at)
-		 VALUES (:id, :scan_id, :artifact_type, :file_path, :storage_key, :file_size, :checksum_sha256, :redaction_level, :created_at, :updated_at)`, artifact)
-	return err
+	return createScanArtifact(ctx, s.db, artifact)
 }
 
 func (s *PostgresStore) ListScanArtifacts(ctx context.Context, scanID string) ([]models.ScanArtifact, error) {
 	var artifacts []models.ScanArtifact
 	err := s.db.SelectContext(ctx, &artifacts,
-		"SELECT * FROM scan_artifacts WHERE scan_id = $1 ORDER BY created_at", scanID)
+		"SELECT * FROM scan_artifacts WHERE scan_id = $1 ORDER BY created_at, id", scanID)
 	return artifacts, err
 }
 
 // --- SARIFImports ---
 
 func (s *PostgresStore) CreateSARIFImport(ctx context.Context, imp *models.SARIFImport) error {
-	now := time.Now().UTC()
-	imp.CreatedAt = now
-	imp.UpdatedAt = now
-	_, err := s.db.NamedExecContext(ctx,
-		`INSERT INTO sarif_imports (id, repo_id, scan_id, source, checksum_sha256, result_count, imported_count, created_by, created_at, updated_at)
-		 VALUES (:id, :repo_id, :scan_id, :source, :checksum_sha256, :result_count, :imported_count, :created_by, :created_at, :updated_at)`, imp)
-	return err
+	return createSARIFImport(ctx, s.db, imp)
 }
 
 func (s *PostgresStore) ListSARIFImportsByRepo(ctx context.Context, repoID string) ([]models.SARIFImport, error) {

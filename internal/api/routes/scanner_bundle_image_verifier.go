@@ -112,7 +112,7 @@ func loadBundleImageVerifier() (bundleImageVerifier, bool, error) {
 			return nil, false, errors.New("offline image trust policy must be between 1 byte and 1 MiB")
 		}
 	}
-	value, err := os.ReadFile(trustPath)
+	value, err := os.ReadFile(trustPath) // #nosec G703 -- trustPath is the operator image-trust-policy environment path; bundle/request data cannot select it.
 	if err != nil {
 		return nil, false, err
 	}

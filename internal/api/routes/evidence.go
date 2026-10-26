@@ -39,6 +39,9 @@ func ListEvidence(w http.ResponseWriter, r *http.Request) {
 	if !vulnerabilityVisibleToCaller(w, r, h, v, claims) {
 		return
 	}
-	attachVulnerabilityEvidence(r.Context(), h, v)
+	if err := attachVulnerabilityEvidence(r.Context(), h, v); err != nil {
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to load evidence")
+		return
+	}
 	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: v.Evidence})
 }

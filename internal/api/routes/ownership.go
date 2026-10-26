@@ -11,16 +11,16 @@ import (
 
 // canModifyOwned reports whether the caller may modify/delete a resource owned
 // by ownerUserID. Admins can modify anything; a regular user can only modify
-// what they created. An empty ownerUserID (legacy/system-created rows) is
-// treated as modifiable so pre-RBAC data isn't stranded.
+// what they created. Legacy/system-created rows without an owner require an
+// administrator session; missing ownership is not a grant to every caller.
 func canModifyOwned(claims *auth.Claims, ownerUserID string) bool {
-	if claims == nil {
+	if claims == nil || claims.UserID == "" {
 		return false
 	}
 	if claims.IsAdmin() {
 		return true
 	}
-	return ownerUserID == "" || ownerUserID == claims.UserID
+	return ownerUserID != "" && ownerUserID == claims.UserID
 }
 
 func loadRepoForCaller(w http.ResponseWriter, r *http.Request, store db.Store, repoID string, claims *auth.Claims) (*models.Repo, bool) {
@@ -34,7 +34,7 @@ func loadRepoForCaller(w http.ResponseWriter, r *http.Request, store db.Store, r
 		return nil, false
 	}
 	if !canModifyOwned(claims, repo.UserID) {
-		response.WriteError(w, http.StatusForbidden, "forbidden", "repo does not belong to current user")
+		response.WriteError(w, http.StatusNotFound, "not_found", "repo not found")
 		return nil, false
 	}
 	return repo, true

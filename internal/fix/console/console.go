@@ -6,6 +6,7 @@ package console
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -57,11 +58,12 @@ func Run(ctx context.Context, store db.Store, fs *fixstore.Store, cons *models.F
 	if CommandForTest == nil {
 		args = maybePTY(args)
 	}
-	writeCtx := context.WithoutCancel(ctx)
 	now := time.Now().UTC()
 	cons.Status = models.FixerConsoleRunning
 	cons.StartedAt = &now
-	_ = store.UpdateFixerConsole(writeCtx, cons)
+	if err := store.UpdateFixerConsole(ctx, cons); err != nil {
+		return err
+	}
 
 	home := os.Getenv("HOME")
 	if home == "" {
@@ -106,34 +108,29 @@ func Run(ctx context.Context, store db.Store, fs *fixstore.Store, cons *models.F
 
 	var wg sync.WaitGroup
 	wg.Add(1)
+	claim := *cons
 	go func() {
 		defer wg.Done()
-		pumpStdin(pumpCtx, store, cons.ID, stdin)
+		pumpStdin(pumpCtx, store, &claim, stdin)
 	}()
 
 	// Drain stdout before Wait: Wait closes StdoutPipe and drops unread bytes
 	// (os/exec: "incorrect to call Wait before all reads from the pipe have
 	// completed"). Fast commands + -race on Ubuntu hit that every time.
-	relayOutput(writeCtx, store, fs, cons, stdout)
+	relayOutput(ctx, store, fs, cons, stdout)
 	stopPump()
 	_ = stdin.Close()
 	wg.Wait()
 	waitErr := cmd.Wait()
 
 	finish := time.Now().UTC()
-	latest, _ := store.GetFixerConsoleByID(writeCtx, cons.ID)
-	if latest != nil {
-		cons = latest
-	}
-	if cons.Status == models.FixerConsoleCancelled {
-		cons.FinishedAt = &finish
-		return store.UpdateFixerConsole(writeCtx, cons)
-	}
 	cons.Status = models.FixerConsoleExited
 	cons.FinishedAt = &finish
 	if waitErr != nil && ctx.Err() == nil {
 		cons.Error = waitErr.Error()
 	}
+	writeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+	defer cancel()
 	return store.UpdateFixerConsole(writeCtx, cons)
 }
 
@@ -187,7 +184,7 @@ func relayOutput(ctx context.Context, store db.Store, fs *fixstore.Store, cons *
 			if fs != nil {
 				_ = fs.AppendConsoleRaw(cons.ID, chunk)
 			}
-			rememberURL(ctx, store, cons.ID, string(chunk))
+			rememberURL(ctx, store, cons, string(chunk))
 		}
 		if err != nil {
 			return
@@ -195,20 +192,16 @@ func relayOutput(ctx context.Context, store db.Store, fs *fixstore.Store, cons *
 	}
 }
 
-func rememberURL(ctx context.Context, store db.Store, id, text string) {
+func rememberURL(ctx context.Context, store db.Store, cons *models.FixerConsole, text string) {
 	u := firstURL(text)
-	if u == "" {
+	if u == "" || cons.LastURL == u {
 		return
 	}
-	latest, err := store.GetFixerConsoleByID(ctx, id)
-	if err != nil || latest == nil || latest.LastURL == u {
-		return
-	}
-	latest.LastURL = u
-	_ = store.UpdateFixerConsole(ctx, latest)
+	cons.LastURL = u
+	_ = store.UpdateFixerConsole(ctx, cons)
 }
 
-func pumpStdin(ctx context.Context, store db.Store, id string, w io.WriteCloser) {
+func pumpStdin(ctx context.Context, store db.Store, cons *models.FixerConsole, w io.WriteCloser) {
 	ticker := time.NewTicker(50 * time.Millisecond)
 	defer ticker.Stop()
 	for {
@@ -216,13 +209,9 @@ func pumpStdin(ctx context.Context, store db.Store, id string, w io.WriteCloser)
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			latest, err := store.GetFixerConsoleByID(ctx, id)
-			if err != nil || latest == nil || !models.FixerConsoleActive(latest.Status) {
-				return
-			}
-			chunks, err := store.DrainFixerConsoleStdin(ctx, id)
+			chunks, err := store.DrainFixerConsoleStdin(ctx, cons)
 			if err != nil {
-				continue
+				return
 			}
 			for _, c := range chunks {
 				if _, err := io.WriteString(w, c); err != nil {
@@ -238,11 +227,12 @@ func firstURL(line string) string {
 }
 
 func runInstall(ctx context.Context, store db.Store, fs *fixstore.Store, cons *models.FixerConsole) error {
-	writeCtx := context.WithoutCancel(ctx)
 	now := time.Now().UTC()
 	cons.Status = models.FixerConsoleRunning
 	cons.StartedAt = &now
-	_ = store.UpdateFixerConsole(writeCtx, cons)
+	if err := store.UpdateFixerConsole(ctx, cons); err != nil {
+		return err
+	}
 	logf := func(line string) {
 		if fs != nil {
 			_ = fs.AppendConsole(cons.ID, line)
@@ -259,11 +249,14 @@ func runInstall(ctx context.Context, store db.Store, fs *fixstore.Store, cons *m
 	} else {
 		logf("ready — you can log in now")
 	}
+	writeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+	defer cancel()
 	return store.UpdateFixerConsole(writeCtx, cons)
 }
 
 func failConsole(ctx context.Context, store db.Store, fs *fixstore.Store, cons *models.FixerConsole, msg string) error {
-	writeCtx := context.WithoutCancel(ctx)
+	writeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+	defer cancel()
 	if fs != nil {
 		_ = fs.AppendConsole(cons.ID, msg)
 	}
@@ -274,8 +267,7 @@ func failConsole(ctx context.Context, store db.Store, fs *fixstore.Store, cons *
 	cons.Status = models.FixerConsoleExited
 	cons.FinishedAt = &now
 	cons.Error = msg
-	_ = store.UpdateFixerConsole(writeCtx, cons)
-	return fmt.Errorf("%s", msg)
+	return errors.Join(errors.New(msg), store.UpdateFixerConsole(writeCtx, cons))
 }
 
 func displayName(command string) string {

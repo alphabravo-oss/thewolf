@@ -15,7 +15,7 @@ func (s *PostgresStore) CreateScanSchedule(ctx context.Context, schedule *models
 		`INSERT INTO scan_schedules (id, user_id, repo_id, collection_id, interval_minutes, branch, profile,
 		 quiet_start, quiet_end, enabled, last_run_at, last_sha, created_at, updated_at)
 		 VALUES (:id, :user_id, :repo_id, :collection_id, :interval_minutes, :branch, :profile,
-		 :quiet_start, :quiet_end, :enabled, :last_run_at, :last_sha, :created_at, :updated_at)`,
+		 :quiet_start, :quiet_end, CASE WHEN :enabled THEN 1 ELSE 0 END, :last_run_at, :last_sha, :created_at, :updated_at)`,
 		schedule)
 	return err
 }
@@ -38,7 +38,7 @@ func (s *PostgresStore) ListScanSchedulesByUser(ctx context.Context, userID stri
 
 func (s *PostgresStore) ListEnabledScanSchedules(ctx context.Context) ([]models.ScanSchedule, error) {
 	var rows []models.ScanSchedule
-	err := s.db.SelectContext(ctx, &rows, "SELECT * FROM scan_schedules WHERE enabled = TRUE OR enabled = 1")
+	err := s.db.SelectContext(ctx, &rows, "SELECT * FROM scan_schedules WHERE enabled = 1")
 	return rows, err
 }
 
@@ -46,7 +46,7 @@ func (s *PostgresStore) UpdateScanSchedule(ctx context.Context, schedule *models
 	schedule.UpdatedAt = time.Now().UTC()
 	_, err := s.db.NamedExecContext(ctx,
 		`UPDATE scan_schedules SET repo_id=:repo_id, collection_id=:collection_id, interval_minutes=:interval_minutes,
-		 branch=:branch, profile=:profile, quiet_start=:quiet_start, quiet_end=:quiet_end, enabled=:enabled,
+		 branch=:branch, profile=:profile, quiet_start=:quiet_start, quiet_end=:quiet_end, enabled=CASE WHEN :enabled THEN 1 ELSE 0 END,
 		 last_run_at=:last_run_at, last_sha=:last_sha, updated_at=:updated_at WHERE id=:id`,
 		schedule)
 	return err

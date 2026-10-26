@@ -85,29 +85,7 @@ func (s *SQLiteStore) HeartbeatScanLease(ctx context.Context, scanID, leaseToken
 }
 
 func (s *SQLiteStore) FinalizeScan(ctx context.Context, scan *models.Scan, leaseToken string) (bool, error) {
-	if leaseToken == "" {
-		return false, nil
-	}
-	scan.UpdatedAt = time.Now().UTC()
-	result, err := s.db.ExecContext(ctx,
-		`UPDATE scans SET status = ?, phase = ?, tools_selected = ?, tools_completed = ?,
-		     tools_failed = ?, tools_errors = ?, finding_count = ?, coverage_summary = ?,
-		     source_type = ?, remote_node_id = ?, source_path = ?, commit_sha = ?,
-		     tree_digest = ?, dirty_state = ?, prepared_workspace = ?, failure_code = ?,
-		     failure_message = ?, completed_at = ?, claimed_by = '', lease_token = '',
-		     lease_expires_at = NULL, heartbeat_at = NULL, updated_at = ?
-		 WHERE id = ? AND lease_token = ? AND status = ? AND cancel_requested_at IS NULL`,
-		scan.Status, scan.Phase, scan.ToolsSelected, scan.ToolsCompleted,
-		scan.ToolsFailed, scan.ToolsErrors, scan.FindingCount, scan.CoverageSummary,
-		scan.SourceType, scan.RemoteNodeID, scan.SourcePath, scan.CommitSHA,
-		scan.TreeDigest, scan.DirtyState, scan.PreparedWorkspace, scan.FailureCode, scan.FailureMessage,
-		scan.CompletedAt, scan.UpdatedAt,
-		scan.ID, leaseToken, models.ScanStatusRunning)
-	if err != nil {
-		return false, err
-	}
-	n, _ := result.RowsAffected()
-	return n == 1, nil
+	return finalizeScan(ctx, s.db, scan, leaseToken)
 }
 
 func (s *SQLiteStore) ReclaimStaleScans(ctx context.Context, now time.Time) (int, error) {
@@ -156,14 +134,48 @@ func (s *SQLiteStore) RequestScannerRunCancellation(ctx context.Context, scanID,
 	return err
 }
 
-func (s *SQLiteStore) DeleteFindingsByScanTool(ctx context.Context, scanID, toolName string) error {
-	_, err := s.db.ExecContext(ctx, "DELETE FROM findings WHERE scan_id = ? AND tool_name = ?", scanID, toolName)
-	return err
+func (s *SQLiteStore) DeleteFindingsByScanTool(ctx context.Context, scanID, toolName, leaseToken string) error {
+	tx, err := s.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	// Lock the scan row before deleting evidence: a superseded or cancelled
+	// executor must not erase findings written by the current lease holder.
+	result, err := tx.ExecContext(ctx,
+		`UPDATE scans SET updated_at = updated_at
+		 WHERE id = ? AND status = ? AND lease_token = ? AND cancel_requested_at IS NULL`,
+		scanID, models.ScanStatusRunning, leaseToken)
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected != 1 {
+		return ErrStaleScanLease
+	}
+	if _, err := tx.ExecContext(ctx, "UPDATE findings SET cluster_id = '' WHERE scan_id = ?", scanID); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, "DELETE FROM findings WHERE scan_id = ? AND tool_name = ?", scanID, toolName); err != nil {
+		return err
+	}
+	if err := advanceFindingsRevision(ctx, tx, scanID); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (s *SQLiteStore) CreateFindingsForScanLease(ctx context.Context, findings []models.Finding, scanID, leaseToken string) (bool, error) {
 	if leaseToken == "" {
 		return false, nil
+	}
+	for _, f := range findings {
+		if f.ScanID != scanID {
+			return false, ErrStaleScanLease
+		}
 	}
 	tx, err := s.db.BeginTxx(ctx, nil)
 	if err != nil {

@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
@@ -58,6 +59,10 @@ func TestRemediationOpenFreezeDiscard(t *testing.T) {
 		RemediationID: "rem-1", Status: models.ScanStatusPending,
 		Branch: "wolf-fix/scan-origin", PreparedWorkspace: "/workspaces/ws-1",
 	}
+	if err := store.CreateScan(ctx, child); !errors.Is(err, ErrFixFrozen) {
+		t.Fatalf("live child scan after handoff: %v", err)
+	}
+	child.Status = models.ScanStatusCompleted // historical lineage remains readable
 	if err := store.CreateScan(ctx, child); err != nil {
 		t.Fatalf("CreateScan child: %v", err)
 	}

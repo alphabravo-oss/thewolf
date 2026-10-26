@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	_ "embed"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -191,9 +192,49 @@ var migration058SQL string
 //go:embed migrations/059_enterprise_records.sql
 var migration059SQL string
 
+//go:embed migrations/060_test_coverage.sql
+var migration060SQL string
+
+//go:embed migrations/061_finding_dependency_identity.sql
+var migration061SQL string
+
+//go:embed migrations/062_finding_clusters.sql
+var migration062SQL string
+
+//go:embed migrations/063_finding_revisions.sql
+var migration063SQL string
+
+//go:embed migrations/064_artifact_finding_revision.sql
+var migration064SQL string
+
+//go:embed migrations/065_finding_baseline_snapshot.sql
+var migration065SQL string
+
+//go:embed migrations/066_baseline_identity.sql
+var migration066SQL string
+
+//go:embed migrations/067_gate_scan_status.sql
+var migration067SQL string
+
+//go:embed migrations/068_mfa_replay.sql
+var migration068SQL string
+
+//go:embed migrations/069_scan_ignore_policy.sql
+var migration069SQL string
+
+//go:embed migrations/070_finding_pages.sql
+var migration070SQL string
+
+//go:embed migrations/071_fix_creation.sql
+var migration071SQL string
+
+//go:embed migrations/072_fix_job_revision.sql
+var migration072SQL string
+
 // SQLiteStore implements Store using SQLite.
 type SQLiteStore struct {
-	db *sqlx.DB
+	db     *sqlx.DB
+	reader *sqlx.DB
 }
 
 // NewSQLite creates a new SQLite store. Use ":memory:" for in-memory databases.
@@ -210,30 +251,68 @@ func NewSQLite(dsn string) (*SQLiteStore, error) {
 		db.SetMaxOpenConns(1)
 	}
 	if err := db.Ping(); err != nil {
+		_ = db.Close()
 		return nil, fmt.Errorf("ping sqlite: %w", err)
 	}
 	store := &SQLiteStore{db: db}
 	if err := store.Migrate(); err != nil {
+		_ = db.Close()
 		return nil, fmt.Errorf("migrate: %w", err)
+	}
+	var filename string
+	if err := db.Get(&filename, "SELECT file FROM pragma_database_list WHERE name='main'"); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	if filename != "" {
+		// go-sqlite3 ignores TxOptions.ReadOnly. A dedicated query-only pool uses
+		// deferred transactions so WAL readers do not reserve the writer lock.
+		readDSN := strings.Replace(sqliteConnectionDSN(dsn), "_txlock=immediate", "_txlock=deferred&_query_only=on", 1)
+		reader, err := sqlx.Open("sqlite3", readDSN)
+		if err != nil {
+			_ = db.Close()
+			return nil, err
+		}
+		reader = reader.Unsafe()
+		// ponytail: four concurrent snapshots bound history-read memory; increase
+		// this only after the supported-load benchmark on the deployment hardware.
+		reader.SetMaxOpenConns(4)
+		reader.SetMaxIdleConns(4)
+		if err := reader.Ping(); err != nil {
+			_ = reader.Close()
+			_ = db.Close()
+			return nil, err
+		}
+		store.reader = reader
 	}
 	return store, nil
 }
 
 func sqliteConnectionDSN(dsn string) string {
-	separator := "?"
-	if strings.Contains(dsn, "?") {
-		separator = "&"
+	base, query, _ := strings.Cut(dsn, "?")
+	// The driver reads the FIRST value for each option. Put invariants first
+	// so a supplied option cannot disable WAL/foreign keys or writer reservation.
+	options := "_journal_mode=WAL&_foreign_keys=on&_busy_timeout=5000&_txlock=immediate"
+	if query != "" {
+		options += "&" + query
 	}
-	// SQLite permits one writer at a time. A bounded busy timeout turns normal
-	// writer overlap into backpressure, while immediate transactions reserve the
-	// writer slot before reading and avoid an un-retryable deferred-transaction
-	// upgrade race. Keep these invariants last so caller-supplied DSN options
-	// cannot silently weaken foreign-key or concurrency safety.
-	return dsn + separator +
-		"_journal_mode=WAL&_foreign_keys=on&_busy_timeout=5000&_txlock=immediate"
+	return base + "?" + options
 }
 
-func (s *SQLiteStore) Close() error { return s.db.Close() }
+func (s *SQLiteStore) readDatabase() *sqlx.DB {
+	if s.reader != nil {
+		return s.reader
+	}
+	return s.db // Private in-memory/temporary stores have no shared disk reader.
+}
+
+func (s *SQLiteStore) Close() error {
+	var err error
+	if s.reader != nil {
+		err = s.reader.Close()
+	}
+	return errors.Join(err, s.db.Close())
+}
 
 func (s *SQLiteStore) Ping(ctx context.Context) error { return s.db.PingContext(ctx) }
 
@@ -342,10 +421,8 @@ func (s *SQLiteStore) Migrate() error {
 			return err
 		}
 	}
-	if _, err := s.db.Exec(migration022SQL); err != nil {
-		if !strings.Contains(err.Error(), "duplicate column") && !strings.Contains(err.Error(), "already exists") {
-			return err
-		}
+	if err := execColumnMigration(s.db, migration022SQL); err != nil {
+		return err
 	}
 	if _, err := s.db.Exec(migration023SQL); err != nil {
 		if !strings.Contains(err.Error(), "duplicate column") && !strings.Contains(err.Error(), "already exists") {
@@ -464,13 +541,80 @@ func (s *SQLiteStore) Migrate() error {
 	if err := execAdditiveMigration(s.db, migration059SQL); err != nil {
 		return err
 	}
+	if err := execAdditiveMigration(s.db, migration060SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration061SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration062SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration063SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration064SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration065SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration066SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration067SQL); err != nil {
+		return err
+	}
+	if err := migrateMFAReplay(s.db); err != nil {
+		return err
+	}
+	if err := execColumnMigration(s.db, migration069SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration070SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration071SQL); err != nil {
+		return err
+	}
+	if err := execAdditiveMigration(s.db, migration072SQL); err != nil {
+		return err
+	}
 	return sanitizePersistedSecretMasks(s.db)
+}
+
+// execColumnMigration atomically adds a column and initializes old rows once.
+// An existing column means the data rewrite already ran; replaying it can undo
+// later user decisions (roles) or invalidate current scan results.
+func execColumnMigration(database *sqlx.DB, migration string) error {
+	tx, err := database.Beginx()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.Exec(migration); err != nil {
+		message := strings.ToLower(err.Error())
+		if strings.Contains(message, "duplicate column") || (strings.Contains(message, "column") && strings.Contains(message, "already exists")) {
+			return nil
+		}
+		return err
+	}
+	return tx.Commit()
 }
 
 // execAdditiveMigration executes additive DDL one statement at a time. This
 // makes migrations containing several ALTER TABLE statements safely
 // restartable after an interrupted upgrade.
 func execAdditiveMigration(db *sqlx.DB, migration string) error {
+	// Full-line comments may contain semicolons. They are documentation,
+	// not statement separators (notably in the older user/MFA migrations).
+	lines := strings.Split(migration, "\n")
+	for i, line := range lines {
+		if strings.HasPrefix(strings.TrimSpace(line), "--") {
+			lines[i] = ""
+		}
+	}
+	migration = strings.Join(lines, "\n")
 	for _, statement := range strings.Split(migration, ";") {
 		statement = strings.TrimSpace(statement)
 		if statement == "" {
@@ -523,13 +667,7 @@ func (s *SQLiteStore) GetUserByEmail(ctx context.Context, email string) (*models
 }
 
 func (s *SQLiteStore) UpdateUser(ctx context.Context, user *models.User) error {
-	user.UpdatedAt = time.Now().UTC()
-	if user.Role == "" {
-		user.Role = models.RoleUser
-	}
-	_, err := s.db.NamedExecContext(ctx,
-		`UPDATE users SET email=:email, password_hash=:password_hash, role=:role, scanner_supply_chain_personas=:scanner_supply_chain_personas, updated_at=:updated_at WHERE id=:id`, user)
-	return err
+	return updateUser(ctx, s.db, user)
 }
 
 func (s *SQLiteStore) UpdateUserScannerSupplyChainPersonas(ctx context.Context, userID, encodedPersonas string) error {
@@ -545,13 +683,10 @@ func (s *SQLiteStore) UpdateUserScannerSupplyChainPersonas(ctx context.Context, 
 	return nil
 }
 
-// UpdateUserMFA persists only the TOTP fields, kept separate from UpdateUser so
-// the general profile update never has to carry the secret/recovery columns.
-func (s *SQLiteStore) UpdateUserMFA(ctx context.Context, user *models.User) error {
-	user.UpdatedAt = time.Now().UTC()
-	_, err := s.db.NamedExecContext(ctx,
-		`UPDATE users SET totp_secret=:totp_secret, totp_enabled=:totp_enabled, totp_recovery_codes=:totp_recovery_codes, updated_at=:updated_at WHERE id=:id`, user)
-	return err
+// UpdateUserMFA atomically replaces the MFA fields only if the previous state
+// still matches, so concurrent enrollment/recovery/reset cannot overwrite it.
+func (s *SQLiteStore) UpdateUserMFA(ctx context.Context, user, previous *models.User) error {
+	return updateUserMFA(ctx, s.db, user, previous)
 }
 
 // UpdateUserProfile persists self-service profile fields (email + display name),
@@ -869,7 +1004,16 @@ func (s *SQLiteStore) CreateScan(ctx context.Context, scan *models.Scan) error {
 	scan.CreatedAt = now
 	scan.UpdatedAt = now
 	prepareScanForWrite(scan)
-	_, err := s.db.NamedExecContext(ctx,
+	tx, err := beginRemediationScan(ctx, s.db, scan)
+	if err != nil {
+		return err
+	}
+	var executor sqlx.ExtContext = s.db
+	if tx != nil {
+		defer func() { _ = tx.Rollback() }()
+		executor = tx
+	}
+	_, err = sqlx.NamedExecContext(ctx, executor,
 		`INSERT INTO scans (id, user_id, repo_id, collection_id, loop_id, iteration, branch, status,
 		 source_type, remote_node_id, source_path, commit_sha, tree_digest, dirty_state, prepared_workspace,
 		 request_json, request_digest, client_reference, idempotency_key, phase, claimed_by,
@@ -892,6 +1036,9 @@ func (s *SQLiteStore) CreateScan(ctx context.Context, scan *models.Scan) error {
 		 :categories, :include_paths, :exclude_paths,
 		 :tools_selected, :tools_completed, :tools_failed, :tools_errors, :finding_count, :coverage_summary, :ai_enabled, :ai_summary,
 		 :started_at, :completed_at, :created_at, :updated_at)`, scan)
+	if err == nil && tx != nil {
+		return tx.Commit()
+	}
 	return err
 }
 
@@ -926,10 +1073,11 @@ func (s *SQLiteStore) ListScansByRepo(ctx context.Context, repoID string) ([]mod
 
 func (s *SQLiteStore) ListScansByCollection(ctx context.Context, collectionID string) ([]models.Scan, error) {
 	var scans []models.Scan
-	err := s.db.SelectContext(ctx, &scans, "SELECT * FROM scans WHERE collection_id = ? ORDER BY created_at DESC", collectionID)
+	err := s.db.SelectContext(ctx, &scans, "SELECT * FROM scans WHERE repo_id IN (SELECT repo_id FROM collection_repos WHERE collection_id = ?) ORDER BY created_at DESC, id DESC", collectionID)
 	return scans, err
 }
 
+// UpdateScan never lets a writer that did not see a cancellation (stale whole-row copy) erase it.
 func (s *SQLiteStore) UpdateScan(ctx context.Context, scan *models.Scan) error {
 	scan.UpdatedAt = time.Now().UTC()
 	_, err := s.db.NamedExecContext(ctx,
@@ -952,7 +1100,7 @@ func (s *SQLiteStore) UpdateScan(ctx context.Context, scan *models.Scan) error {
 		 WHERE id=:id AND (
 		   :lease_token = '' OR
 		   (lease_token=:lease_token AND status='running' AND cancel_requested_at IS NULL)
-		 )`, scan)
+		 ) AND (cancel_requested_at IS NULL OR :cancel_requested_at IS NOT NULL)`, scan)
 	return err
 }
 
@@ -964,28 +1112,12 @@ func (s *SQLiteStore) DeleteScan(ctx context.Context, id string) error {
 // --- Findings ---
 
 func (s *SQLiteStore) CreateFinding(ctx context.Context, f *models.Finding) error {
-	now := time.Now().UTC()
-	f.CreatedAt = now
-	f.UpdatedAt = now
-	prepareFindingForWrite(f)
-	_, err := s.db.NamedExecContext(ctx,
-		`INSERT INTO findings (id, scan_id, repo_id, fingerprint, stable_fingerprint, location_fingerprint,
-		 semantic_fingerprint, evidence_fingerprint, identity_version, tool_name, category, severity,
-		 title, description, file_path, line_start, line_end, code_snippet, cwe_id, rule_id,
-		 tool_severity_score, location_weight, ai_context_score, composite_score,
-		 ai_fix_suggestion, status, sarif_data, module_name, function_name, symbol_kind, file_purpose, dependents_json,
-		 fine_category, fix_strategy_id, confidence, corroborated_by_json, suppressed, suppression_id,
-		 suppressed_reason, baseline_state, introduced_in_scan_id, resolved_in_scan_id, source_kind, source_ref,
-		 created_at, updated_at)
-		 VALUES (:id, :scan_id, :repo_id, :fingerprint, :stable_fingerprint, :location_fingerprint,
-		 :semantic_fingerprint, :evidence_fingerprint, :identity_version, :tool_name, :category, :severity,
-		 :title, :description, :file_path, :line_start, :line_end, :code_snippet, :cwe_id, :rule_id,
-		 :tool_severity_score, :location_weight, :ai_context_score, :composite_score,
-		 :ai_fix_suggestion, :status, :sarif_data, :module_name, :function_name, :symbol_kind, :file_purpose, :dependents_json,
-		 :fine_category, :fix_strategy_id, :confidence, :corroborated_by_json, :suppressed, :suppression_id,
-		 :suppressed_reason, :baseline_state, :introduced_in_scan_id, :resolved_in_scan_id, :source_kind, :source_ref,
-		 :created_at, :updated_at)`, f)
-	return err
+	findings := []models.Finding{*f}
+	if err := s.CreateFindings(ctx, findings); err != nil {
+		return err
+	}
+	*f = findings[0]
+	return nil
 }
 
 func (s *SQLiteStore) CreateFindings(ctx context.Context, findings []models.Finding) error {
@@ -1013,7 +1145,7 @@ func (s *SQLiteStore) GetFindingByID(ctx context.Context, id string) (*models.Fi
 func (s *SQLiteStore) ListFindingsByScan(ctx context.Context, scanID string) ([]models.Finding, error) {
 	var findings []models.Finding
 	err := s.db.SelectContext(ctx, &findings,
-		"SELECT * FROM findings WHERE scan_id = ? ORDER BY composite_score DESC", scanID)
+		"SELECT * FROM findings WHERE scan_id = ? AND (cluster_id = '' OR cluster_id = id) ORDER BY composite_score DESC", scanID)
 	hydrateFindingsAfterRead(findings)
 	return findings, err
 }
@@ -1021,37 +1153,17 @@ func (s *SQLiteStore) ListFindingsByScan(ctx context.Context, scanID string) ([]
 func (s *SQLiteStore) ListFindingsByRepo(ctx context.Context, repoID string) ([]models.Finding, error) {
 	var findings []models.Finding
 	err := s.db.SelectContext(ctx, &findings,
-		"SELECT * FROM findings WHERE repo_id = ? ORDER BY composite_score DESC", repoID)
+		"SELECT * FROM findings WHERE repo_id = ? AND (cluster_id = '' OR cluster_id = id) ORDER BY composite_score DESC", repoID)
 	hydrateFindingsAfterRead(findings)
 	return findings, err
 }
 
 func (s *SQLiteStore) UpdateFinding(ctx context.Context, f *models.Finding) error {
-	f.UpdatedAt = time.Now().UTC()
-	prepareFindingForWrite(f)
-	_, err := s.db.ExecContext(ctx,
-		`UPDATE findings SET ai_context_score = ?, ai_fix_suggestion = ?, composite_score = ?,
-		 tool_severity_score = ?, location_weight = ?,
-		 module_name = ?, function_name = ?, symbol_kind = ?, file_purpose = ?, dependents_json = ?,
-		 stable_fingerprint = ?, location_fingerprint = ?, semantic_fingerprint = ?, evidence_fingerprint = ?,
-		 identity_version = ?, fine_category = ?, fix_strategy_id = ?, confidence = ?, corroborated_by_json = ?,
-		 suppressed = ?, suppression_id = ?, suppressed_reason = ?, baseline_state = ?, introduced_in_scan_id = ?,
-		 resolved_in_scan_id = ?, source_kind = ?, source_ref = ?, updated_at = ? WHERE id = ?`,
-		f.AIContextScore, f.AIFixSuggestion, f.CompositeScore,
-		f.ToolSeverityScore, f.LocationWeight,
-		f.ModuleName, f.FunctionName, f.SymbolKind, f.FilePurpose, f.DependentsJSON,
-		f.StableFingerprint, f.LocationFingerprint, f.SemanticFingerprint, f.EvidenceFingerprint,
-		f.IdentityVersion, f.FineCategory, f.FixStrategyID, f.Confidence, f.CorroboratedByJSON,
-		f.Suppressed, f.SuppressionID, f.SuppressedReason, f.BaselineState, f.IntroducedInScanID,
-		f.ResolvedInScanID, f.SourceKind, f.SourceRef, f.UpdatedAt, f.ID)
-	return err
+	return updateFindingWithRevision(ctx, s.db, f)
 }
 
 func (s *SQLiteStore) UpdateFindingStatus(ctx context.Context, id string, status models.Status) error {
-	_, err := s.db.ExecContext(ctx,
-		"UPDATE findings SET status = ?, updated_at = ? WHERE id = ?",
-		status, time.Now().UTC(), id)
-	return err
+	return updateFindingClusterStatus(ctx, s.db, id, status)
 }
 
 // --- Fixes ---
@@ -1128,35 +1240,20 @@ func (s *SQLiteStore) UpdateFixItem(ctx context.Context, item *models.FixItem) e
 // --- ScanArtifacts ---
 
 func (s *SQLiteStore) CreateScanArtifact(ctx context.Context, artifact *models.ScanArtifact) error {
-	now := time.Now().UTC()
-	artifact.CreatedAt = now
-	artifact.UpdatedAt = now
-	if artifact.RedactionLevel == "" {
-		artifact.RedactionLevel = "internal_report"
-	}
-	_, err := s.db.NamedExecContext(ctx,
-		`INSERT INTO scan_artifacts (id, scan_id, artifact_type, file_path, storage_key, file_size, checksum_sha256, redaction_level, created_at, updated_at)
-		 VALUES (:id, :scan_id, :artifact_type, :file_path, :storage_key, :file_size, :checksum_sha256, :redaction_level, :created_at, :updated_at)`, artifact)
-	return err
+	return createScanArtifact(ctx, s.db, artifact)
 }
 
 func (s *SQLiteStore) ListScanArtifacts(ctx context.Context, scanID string) ([]models.ScanArtifact, error) {
 	var artifacts []models.ScanArtifact
 	err := s.db.SelectContext(ctx, &artifacts,
-		"SELECT * FROM scan_artifacts WHERE scan_id = ? ORDER BY created_at", scanID)
+		"SELECT * FROM scan_artifacts WHERE scan_id = ? ORDER BY created_at, id", scanID)
 	return artifacts, err
 }
 
 // --- SARIFImports ---
 
 func (s *SQLiteStore) CreateSARIFImport(ctx context.Context, imp *models.SARIFImport) error {
-	now := time.Now().UTC()
-	imp.CreatedAt = now
-	imp.UpdatedAt = now
-	_, err := s.db.NamedExecContext(ctx,
-		`INSERT INTO sarif_imports (id, repo_id, scan_id, source, checksum_sha256, result_count, imported_count, created_by, created_at, updated_at)
-		 VALUES (:id, :repo_id, :scan_id, :source, :checksum_sha256, :result_count, :imported_count, :created_by, :created_at, :updated_at)`, imp)
-	return err
+	return createSARIFImport(ctx, s.db, imp)
 }
 
 func (s *SQLiteStore) ListSARIFImportsByRepo(ctx context.Context, repoID string) ([]models.SARIFImport, error) {

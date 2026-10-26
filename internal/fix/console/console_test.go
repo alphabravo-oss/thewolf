@@ -2,6 +2,7 @@ package console
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -52,6 +53,10 @@ func TestRunEchoesAndCapturesURL(t *testing.T) {
 	if err := store.EnqueueFixerConsole(context.Background(), cons); err != nil {
 		t.Fatal(err)
 	}
+	cons, err = store.ClaimNextFixerConsole(context.Background(), "test-worker")
+	if err != nil || cons == nil {
+		t.Fatalf("claim: %+v %v", cons, err)
+	}
 	orig := CommandForTest
 	CommandForTest = func(*models.FixerConsole) ([]string, error) {
 		return []string{"/bin/echo", "visit https://example.test/oauth"}, nil
@@ -94,6 +99,10 @@ func TestRunPreservesPTYControlBytes(t *testing.T) {
 	if err := store.EnqueueFixerConsole(context.Background(), cons); err != nil {
 		t.Fatal(err)
 	}
+	cons, err = store.ClaimNextFixerConsole(context.Background(), "test-worker")
+	if err != nil || cons == nil {
+		t.Fatalf("claim: %+v %v", cons, err)
+	}
 	orig := CommandForTest
 	CommandForTest = func(*models.FixerConsole) ([]string, error) {
 		return []string{"/bin/sh", "-c", `printf '\033[2mEnter\r\033[22mconfirm'`}, nil
@@ -123,5 +132,55 @@ func TestFirstURL(t *testing.T) {
 	}
 	if firstURL("no link here") != "" {
 		t.Fatal("expected empty")
+	}
+}
+
+type cancelBeforeConsoleResult struct{ db.Store }
+
+func (s cancelBeforeConsoleResult) UpdateFixerConsole(ctx context.Context, cons *models.FixerConsole) error {
+	if cons.Status == models.FixerConsoleExited {
+		latest, err := s.Store.GetFixerConsoleByID(ctx, cons.ID)
+		if err != nil {
+			return err
+		}
+		latest.Status = models.FixerConsoleCancelled
+		if err := s.Store.UpdateFixerConsole(ctx, latest); err != nil {
+			return err
+		}
+	}
+	return s.Store.UpdateFixerConsole(ctx, cons)
+}
+
+func TestConsoleCancellationWinsOverLateResult(t *testing.T) {
+	store, err := db.NewSQLite(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	ctx := t.Context()
+	cons := &models.FixerConsole{ID: "cancel-at-exit", Kind: models.FixerConsoleShell}
+	if err := store.EnqueueFixerConsole(ctx, cons); err != nil {
+		t.Fatal(err)
+	}
+	cons, err = store.ClaimNextFixerConsole(ctx, "worker")
+	if err != nil || cons == nil {
+		t.Fatalf("claim: %+v %v", cons, err)
+	}
+	original := CommandForTest
+	CommandForTest = func(*models.FixerConsole) ([]string, error) {
+		return []string{"/bin/echo", "https://example.test/login"}, nil
+	}
+	t.Cleanup(func() { CommandForTest = original })
+	err = Run(ctx, cancelBeforeConsoleResult{store}, fixstore.New(t.TempDir()), cons)
+	if !errors.Is(err, db.ErrFixerConsoleConflict) {
+		t.Fatalf("late result: %v", err)
+	}
+	got, err := store.GetFixerConsoleByID(ctx, cons.ID)
+	if err != nil || got.Status != models.FixerConsoleCancelled || got.LastURL != "https://example.test/login" {
+		t.Fatalf("cancelled state lost: %+v %v", got, err)
+	}
+	// A stale runner cannot restart the cancelled session either.
+	if err := Run(ctx, store, nil, cons); !errors.Is(err, db.ErrFixerConsoleConflict) {
+		t.Fatalf("cancelled console restarted: %v", err)
 	}
 }

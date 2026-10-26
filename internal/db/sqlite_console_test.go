@@ -48,14 +48,14 @@ func TestFixerConsoleQueueClaimStdinAndReclaim(t *testing.T) {
 	if err := store.AppendFixerConsoleStdin(ctx, claimed.ID, "n\n"); err != nil {
 		t.Fatalf("stdin: %v", err)
 	}
-	chunks, err := store.DrainFixerConsoleStdin(ctx, claimed.ID)
+	chunks, err := store.DrainFixerConsoleStdin(ctx, claimed)
 	if err != nil {
 		t.Fatalf("drain: %v", err)
 	}
 	if len(chunks) != 2 || chunks[0] != "y\n" || chunks[1] != "n\n" {
 		t.Fatalf("chunks = %#v", chunks)
 	}
-	again, err := store.DrainFixerConsoleStdin(ctx, claimed.ID)
+	again, err := store.DrainFixerConsoleStdin(ctx, claimed)
 	if err != nil {
 		t.Fatalf("second drain: %v", err)
 	}
@@ -63,13 +63,11 @@ func TestFixerConsoleQueueClaimStdinAndReclaim(t *testing.T) {
 		t.Fatalf("expected empty drain, got %#v", again)
 	}
 
-	old := time.Now().UTC().Add(-time.Hour)
 	claimed.Status = models.FixerConsoleRunning
-	claimed.HeartbeatAt = &old
 	if err := store.UpdateFixerConsole(ctx, claimed); err != nil {
 		t.Fatalf("update: %v", err)
 	}
-	n, err := store.ReclaimStaleConsoles(ctx, time.Now().UTC().Add(-time.Minute))
+	n, err := store.ReclaimStaleConsoles(ctx, time.Now().UTC().Add(time.Hour))
 	if err != nil {
 		t.Fatalf("reclaim: %v", err)
 	}
@@ -80,7 +78,7 @@ func TestFixerConsoleQueueClaimStdinAndReclaim(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reload: %v", err)
 	}
-	if got.Status != models.FixerConsoleQueued {
-		t.Fatalf("status = %s, want queued", got.Status)
+	if got.Status != models.FixerConsoleExited {
+		t.Fatalf("status = %s, want exited", got.Status)
 	}
 }

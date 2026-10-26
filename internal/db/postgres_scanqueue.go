@@ -84,29 +84,7 @@ func (s *PostgresStore) HeartbeatScanLease(ctx context.Context, scanID, leaseTok
 }
 
 func (s *PostgresStore) FinalizeScan(ctx context.Context, scan *models.Scan, leaseToken string) (bool, error) {
-	if leaseToken == "" {
-		return false, nil
-	}
-	scan.UpdatedAt = time.Now().UTC()
-	result, err := s.db.ExecContext(ctx,
-		`UPDATE scans SET status = $1, phase = $2, tools_selected = $3, tools_completed = $4,
-		     tools_failed = $5, tools_errors = $6, finding_count = $7, coverage_summary = $8,
-		     source_type = $9, remote_node_id = $10, source_path = $11, commit_sha = $12,
-		     tree_digest = $13, dirty_state = $14, prepared_workspace = $15, failure_code = $16,
-		     failure_message = $17, completed_at = $18, claimed_by = '', lease_token = '',
-		     lease_expires_at = NULL, heartbeat_at = NULL, updated_at = $19
-		 WHERE id = $20 AND lease_token = $21 AND status = $22 AND cancel_requested_at IS NULL`,
-		scan.Status, scan.Phase, scan.ToolsSelected, scan.ToolsCompleted,
-		scan.ToolsFailed, scan.ToolsErrors, scan.FindingCount, scan.CoverageSummary,
-		scan.SourceType, scan.RemoteNodeID, scan.SourcePath, scan.CommitSHA,
-		scan.TreeDigest, scan.DirtyState, scan.PreparedWorkspace, scan.FailureCode, scan.FailureMessage,
-		scan.CompletedAt, scan.UpdatedAt,
-		scan.ID, leaseToken, models.ScanStatusRunning)
-	if err != nil {
-		return false, err
-	}
-	n, _ := result.RowsAffected()
-	return n == 1, nil
+	return finalizeScan(ctx, s.db, scan, leaseToken)
 }
 
 func (s *PostgresStore) ReclaimStaleScans(ctx context.Context, now time.Time) (int, error) {
@@ -154,14 +132,48 @@ func (s *PostgresStore) RequestScannerRunCancellation(ctx context.Context, scanI
 	return err
 }
 
-func (s *PostgresStore) DeleteFindingsByScanTool(ctx context.Context, scanID, toolName string) error {
-	_, err := s.db.ExecContext(ctx, "DELETE FROM findings WHERE scan_id = $1 AND tool_name = $2", scanID, toolName)
-	return err
+func (s *PostgresStore) DeleteFindingsByScanTool(ctx context.Context, scanID, toolName, leaseToken string) error {
+	tx, err := s.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	// Lock the scan row before deleting evidence: a superseded or cancelled
+	// executor must not erase findings written by the current lease holder.
+	result, err := tx.ExecContext(ctx,
+		`UPDATE scans SET updated_at = updated_at
+		 WHERE id = $1 AND status = $2 AND lease_token = $3 AND cancel_requested_at IS NULL`,
+		scanID, models.ScanStatusRunning, leaseToken)
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected != 1 {
+		return ErrStaleScanLease
+	}
+	if _, err := tx.ExecContext(ctx, "UPDATE findings SET cluster_id = '' WHERE scan_id = $1", scanID); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, "DELETE FROM findings WHERE scan_id = $1 AND tool_name = $2", scanID, toolName); err != nil {
+		return err
+	}
+	if err := advanceFindingsRevision(ctx, tx, scanID); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (s *PostgresStore) CreateFindingsForScanLease(ctx context.Context, findings []models.Finding, scanID, leaseToken string) (bool, error) {
 	if leaseToken == "" {
 		return false, nil
+	}
+	for _, f := range findings {
+		if f.ScanID != scanID {
+			return false, ErrStaleScanLease
+		}
 	}
 	tx, err := s.db.BeginTxx(ctx, nil)
 	if err != nil {

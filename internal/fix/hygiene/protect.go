@@ -2,9 +2,10 @@ package hygiene
 
 import (
 	"context"
-	"os/exec"
 	"path/filepath"
 	"strings"
+
+	gitpkg "github.com/alphabravocompany/thewolf/internal/fix/git"
 )
 
 // ProtectedRel is a high-level "do not break the product" path.
@@ -39,7 +40,7 @@ func RestoreProtected(ctx context.Context, repoPath string) []string {
 	if repoPath == "" {
 		return nil
 	}
-	out, err := exec.CommandContext(ctx, "git", "-C", repoPath, "status", "--porcelain").Output() // #nosec G204
+	out, err := gitpkg.Command(ctx, nil, "-C", repoPath, "status", "--porcelain").Output() // #nosec G204
 	if err != nil || len(out) == 0 {
 		return nil
 	}
@@ -48,7 +49,7 @@ func RestoreProtected(ctx context.Context, repoPath string) []string {
 		if !ProtectedRel(rel) {
 			continue
 		}
-		_ = exec.CommandContext(ctx, "git", "-C", repoPath, "checkout", "--", rel).Run() // #nosec G204
+		_ = gitpkg.Command(ctx, nil, "-C", repoPath, "checkout", "--", rel).Run() // #nosec G204
 		// Deleted files need restore from HEAD; checkout -- handles both.
 		restored = append(restored, rel)
 	}

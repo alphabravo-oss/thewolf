@@ -6,6 +6,7 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/base64"
@@ -21,6 +22,8 @@ import (
 	"time"
 
 	"bytes"
+
+	"github.com/alphabravocompany/thewolf/internal/plugin"
 )
 
 const httpTimeout = 3 * time.Minute
@@ -61,7 +64,7 @@ func RemoveBrokenLocalCLIs() {
 			continue
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		err := exec.CommandContext(ctx, p, "--version").Run()
+		err := plugin.CommandContext(ctx, p, "--version").Run()
 		cancel()
 		if err != nil {
 			_ = os.Remove(p)
@@ -140,25 +143,55 @@ func Install(ctx context.Context, name string, logf func(string)) error {
 	if err != nil {
 		return err
 	}
-	dest := filepath.Join(destDir, spec.Command)
-	if err := os.Rename(binPath, dest); err != nil {
-		data, rerr := os.ReadFile(binPath) // #nosec G304
-		if rerr != nil {
-			return fmt.Errorf("install %s: %w", spec.Command, err)
-		}
-		if werr := os.WriteFile(dest, data, 0o750); werr != nil {
-			return fmt.Errorf("write %s: %w", dest, werr)
-		}
-	}
-	if err := os.Chmod(dest, 0o750); err != nil {
+	root, err := os.OpenRoot(destDir)
+	if err != nil {
 		return err
 	}
+	defer func() { _ = root.Close() }()
+	binary, err := os.Open(binPath)
+	if err != nil {
+		return err
+	}
+	defer binary.Close()
+	if err := installBinary(root, spec.Command, binary); err != nil {
+		return fmt.Errorf("install %s: %w", spec.Command, err)
+	}
+	dest := filepath.Join(destDir, spec.Command)
 	EnsureLocalBinOnPATH()
 	if _, err := exec.LookPath(spec.Command); err != nil {
 		return fmt.Errorf("installed %s to %s but it is still not on PATH", spec.Command, dest)
 	}
 	logf(fmt.Sprintf("installed %s to %s", spec.Command, dest))
 	return nil
+}
+
+// installBinary writes on the destination filesystem before atomic publication.
+// Failed copies preserve the previous entry; rename replaces symlinks/hardlinks
+// rather than following them, even when the configured directory is renamed.
+func installBinary(root *os.Root, name string, source io.Reader) error {
+	if name == "" || commandName(name) != name {
+		return fmt.Errorf("unsupported CLI command")
+	}
+	temporary := "." + name + "-" + rand.Text()
+	file, err := root.OpenFile(temporary, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = root.Remove(temporary) }()
+	defer file.Close()
+	if _, err := io.Copy(file, source); err != nil {
+		return err
+	}
+	if err := file.Chmod(0o750); err != nil {
+		return err
+	}
+	if err := file.Sync(); err != nil {
+		return err
+	}
+	if err := file.Close(); err != nil {
+		return err
+	}
+	return root.Rename(temporary, name)
 }
 
 func commandName(name string) string {
@@ -190,7 +223,14 @@ func download(ctx context.Context, url string) ([]byte, error) {
 		return nil, fmt.Errorf("download %s: HTTP %d", url, resp.StatusCode)
 	}
 	const maxBytes = 200 << 20
-	return io.ReadAll(io.LimitReader(resp.Body, maxBytes+1))
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(body) > maxBytes {
+		return nil, fmt.Errorf("CLI download exceeds %d bytes", maxBytes)
+	}
+	return body, nil
 }
 
 func verify(body []byte, spec cliSpec) error {
@@ -237,12 +277,16 @@ func extractNamed(archive []byte, name, destDir string) (string, error) {
 		if base != name && base != name+"-linux" {
 			continue
 		}
+		const maxBinaryBytes = 180 << 20
+		if hdr.Size <= 0 || hdr.Size > maxBinaryBytes {
+			return "", fmt.Errorf("CLI binary size must be between 1 and %d bytes", maxBinaryBytes)
+		}
 		out := filepath.Join(destDir, name)
 		f, err := os.OpenFile(out, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o750) // #nosec G304
 		if err != nil {
 			return "", err
 		}
-		if _, err := io.Copy(f, io.LimitReader(tr, 180<<20)); err != nil {
+		if _, err := io.Copy(f, tr); err != nil {
 			_ = f.Close()
 			return "", err
 		}

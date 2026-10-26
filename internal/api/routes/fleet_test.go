@@ -522,3 +522,31 @@ func seedScanWithFindingsOn(t *testing.T, env *testEnv, repoID, branch string, f
 	}
 	return scanID
 }
+
+func TestSecurityAggregateExcludesQualityBeforeLimiting(t *testing.T) {
+	env := setupTestEnv(t)
+	defer env.Store.Close()
+	ctx := context.Background()
+	repoID := env.createRepo(t)
+	scanID := uuid.NewString()
+	if err := env.Store.CreateScan(ctx, &models.Scan{ID: scanID, UserID: env.UserID, RepoID: repoID, Status: models.ScanStatusCompleted}); err != nil {
+		t.Fatal(err)
+	}
+	for i, category := range []models.Category{models.CategoryQuality, models.CategorySAST} {
+		if err := env.Store.CreateFinding(ctx, &models.Finding{ID: uuid.NewString(), ScanID: scanID, RepoID: repoID, Fingerprint: uuid.NewString(), ToolName: "test", Category: category, Severity: models.SeverityCritical, RuleID: fmt.Sprintf("rule-%d", i), Title: "Test", FilePath: fmt.Sprintf("file-%d", i), Status: models.StatusOpen}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	w := env.doRequest(http.MethodGet, "/api/findings/aggregate?group_by=rule_id&limit=1&security_only=1", nil)
+	var got struct {
+		Data []struct {
+			Key string `json:"key"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if w.Code != http.StatusOK || len(got.Data) != 1 || got.Data[0].Key != "rule-1" {
+		t.Fatalf("security aggregate = %d %s", w.Code, w.Body.String())
+	}
+}

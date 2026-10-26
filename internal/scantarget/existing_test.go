@@ -27,7 +27,7 @@ func TestPrepareExistingUsesWorkspaceWithoutClone(t *testing.T) {
 	run("add", ".")
 	run("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-m", "init")
 
-	got, err := PrepareExisting(dir, models.SourceTypeGitHub)
+	got, err := PrepareExisting(t.Context(), dir, models.SourceTypeGitHub)
 	if err != nil {
 		t.Fatalf("PrepareExisting: %v", err)
 	}

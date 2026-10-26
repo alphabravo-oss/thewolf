@@ -14,6 +14,7 @@ import (
 
 	"github.com/alphabravocompany/thewolf/internal/api/response"
 	"github.com/alphabravocompany/thewolf/internal/api/sse"
+	"github.com/alphabravocompany/thewolf/internal/auth"
 	"github.com/alphabravocompany/thewolf/internal/db"
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/wolflog"
@@ -84,6 +85,9 @@ func streamDurableScanEvents(w http.ResponseWriter, r *http.Request, h *Handler,
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+	fmt.Fprint(w, ": connected\n\n")
+	flusher.Flush()
 
 	var notifications <-chan sse.Event
 	broker := SSEBroker
@@ -97,6 +101,10 @@ func streamDurableScanEvents(w http.ResponseWriter, r *http.Request, h *Handler,
 
 	pollInterval := minDurableScanEventPollInterval
 	for {
+		scan, err := h.Store.GetScanByID(r.Context(), scanID)
+		if err != nil || !canModifyOwned(auth.GetUserFromContext(r.Context()), scan.UserID) {
+			return
+		}
 		events, err := h.Store.ListScanEvents(r.Context(), scanID, after, 200)
 		if err != nil {
 			return
@@ -108,12 +116,17 @@ func streamDurableScanEvents(w http.ResponseWriter, r *http.Request, h *Handler,
 			after = event.Sequence
 		}
 
-		scan, err := h.Store.GetScanByID(r.Context(), scanID)
-		if err != nil {
+		if isTerminalScanStatus(scan.Status) && len(events) == 0 {
+			// Also report terminal state when a worker died before emitting its
+			// final event. This snapshot does not advance the durable cursor.
+			payload, _ := json.Marshal(map[string]string{"type": "scan_status", "status": string(scan.Status)})
+			fmt.Fprintf(w, "data: %s\n\n", payload)
+			flusher.Flush()
 			return
 		}
-		if isTerminalScanStatus(scan.Status) && len(events) == 0 {
-			return
+		if len(events) == 0 {
+			fmt.Fprint(w, ": keepalive\n\n")
+			flusher.Flush()
 		}
 		if isTerminalScanStatus(scan.Status) || len(events) == 200 {
 			pollInterval = minDurableScanEventPollInterval

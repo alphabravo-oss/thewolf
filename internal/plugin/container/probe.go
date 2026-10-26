@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"strings"
 	"sync"
 	"time"
 )
@@ -187,6 +188,28 @@ func imageInspectWithConfig(ctx context.Context, cfg *Config, image string) erro
 	cmd.Stdout = nil
 	cmd.Stderr = nil
 	return cmd.Run()
+}
+
+// LocalImageDigest probes the configured execution daemon with a bounded wait.
+// An empty digest with no error means the image is present but locally built or
+// loaded without registry metadata; it must not be shown as a missing image.
+func LocalImageDigest(ctx context.Context, cfg *Config, image string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	out, err := dockerCommandContext(ctx, cfg, "image", "inspect", "--format", "{{range .RepoDigests}}{{.}}{{println}}{{end}}", image).Output()
+	if err != nil {
+		var exit *exec.ExitError
+		if errors.As(err, &exit) && (strings.Contains(string(exit.Stderr), "No such image:") || strings.Contains(string(exit.Stderr), "No such object:")) {
+			return "", fmt.Errorf("%w: %s", ErrImageMissing, image)
+		}
+		return "", err
+	}
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if _, digest, ok := strings.Cut(line, "@"); ok {
+			return strings.TrimSpace(digest), nil
+		}
+	}
+	return "", nil
 }
 
 // imagePull pulls the named image. The function blocks until the pull

@@ -2,12 +2,72 @@ package routes
 
 import (
 	"encoding/json"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"testing"
 )
+
+func TestBrowseBoundaries(t *testing.T) {
+	allowed, outside := t.TempDir(), t.TempDir()
+	t.Setenv("WOLF_BROWSE_ROOTS", allowed)
+	for _, name := range []string{"escape", "dangling"} {
+		target := outside
+		if name == "dangling" {
+			target = filepath.Join(outside, "missing")
+		}
+		if err := os.Symlink(target, filepath.Join(allowed, name)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, handler := range []http.HandlerFunc{BrowseLocal, GitInfo} {
+		for _, path := range []string{outside, filepath.Join(outside, "missing"), filepath.Join(allowed, "escape"), filepath.Join(allowed, "dangling"), allowed + "-sibling"} {
+			w := httptest.NewRecorder()
+			handler(w, httptest.NewRequest(http.MethodGet, "/?path="+url.QueryEscape(path), nil))
+			if w.Code != http.StatusForbidden {
+				t.Fatalf("%s: status %d, body %s", path, w.Code, w.Body.String())
+			}
+		}
+	}
+	if !isUnderRoot(allowed, []string{string(filepath.Separator)}) {
+		t.Fatal("filesystem root did not admit descendant")
+	}
+	if isUnderRoot(allowed+"-sibling", []string{allowed}) {
+		t.Fatal("sibling prefix admitted")
+	}
+}
+
+func TestBrowseDirectoryRemainsConfinedAfterRename(t *testing.T) {
+	allowed, outside := t.TempDir(), t.TempDir()
+	dir := filepath.Join(allowed, "repo")
+	if err := os.Mkdir(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "inside"), nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(outside, "secret"), nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	root, _, err := openBrowseDirectory(dir, []string{allowed})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	if err := os.Rename(dir, dir+"-old"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, dir); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := fs.ReadDir(root.FS(), ".")
+	if err != nil || len(entries) != 1 || entries[0].Name() != "inside" {
+		t.Fatalf("directory escaped: %v %v", entries, err)
+	}
+}
 
 // TestBrowseLocal_RejectsTraversal verifies the path-containment check.
 // Before the fix, filepath.Clean was the only normalization — but

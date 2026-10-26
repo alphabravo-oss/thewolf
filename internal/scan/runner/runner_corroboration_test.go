@@ -85,9 +85,9 @@ func TestDeduplicate_DifferentFilesStaySeparate(t *testing.T) {
 
 func TestDeduplicate_SCADistinctCVEsStaySeparate(t *testing.T) {
 	in := []models.Finding{
-		{ToolName: "trivy", Category: models.CategorySCA, FilePath: "go.mod", LineStart: 0,
+		{ToolName: "trivy", Category: models.CategorySCA, PackageName: "fixture", PackageVersion: "1", PackageEcosystem: "golang", FilePath: "go.mod", LineStart: 0,
 			FineCategory: "vulnerable-dependency", RuleID: "CVE-1", Severity: models.SeverityHigh},
-		{ToolName: "trivy", Category: models.CategorySCA, FilePath: "go.mod", LineStart: 0,
+		{ToolName: "trivy", Category: models.CategorySCA, PackageName: "fixture", PackageVersion: "1", PackageEcosystem: "golang", FilePath: "go.mod", LineStart: 0,
 			FineCategory: "vulnerable-dependency", RuleID: "CVE-2", Severity: models.SeverityHigh},
 	}
 	out := Deduplicate(in)
@@ -98,9 +98,9 @@ func TestDeduplicate_SCADistinctCVEsStaySeparate(t *testing.T) {
 
 func TestDeduplicate_SCASameCVECrossToolCollapses(t *testing.T) {
 	in := []models.Finding{
-		{ToolName: "trivy", Category: models.CategorySCA, FilePath: "go.mod", LineStart: 0,
+		{ToolName: "trivy", Category: models.CategorySCA, PackageName: "fixture", PackageVersion: "1", PackageEcosystem: "golang", FilePath: "go.mod", LineStart: 0,
 			FineCategory: "vulnerable-dependency", RuleID: "CVE-1", Severity: models.SeverityHigh},
-		{ToolName: "grype", Category: models.CategorySCA, FilePath: "go.mod", LineStart: 0,
+		{ToolName: "grype", Category: models.CategorySCA, PackageName: "fixture", PackageVersion: "1", PackageEcosystem: "golang", FilePath: "go.mod", LineStart: 0,
 			FineCategory: "vulnerable-dependency", RuleID: "CVE-1", Severity: models.SeverityHigh},
 	}
 	out := Deduplicate(in)
@@ -139,5 +139,39 @@ func TestApplyKnowledge_UnknownLeavesEmpty(t *testing.T) {
 	}
 	if f.FineCategory != "" {
 		t.Error("FineCategory should remain empty for unknown rule")
+	}
+}
+
+func TestDeduplicateSCAPackageAndLocation(t *testing.T) {
+	base := models.Finding{ToolName: "trivy", Category: models.CategorySCA, RuleID: "CVE-2026-1234", FineCategory: "vulnerable-dependency", FilePath: "package-lock.json", Title: "CVE-2026-1234 in alpha@1.0"}
+	otherPackage := base
+	otherPackage.Title = "CVE-2026-1234 in beta@1.0"
+	otherLocation := base
+	otherLocation.FilePath = "service/package-lock.json"
+	got := Deduplicate([]models.Finding{base, otherPackage, otherLocation})
+	if len(got) != 3 {
+		t.Fatalf("different dependency occurrences collapsed: got %d, want 3", len(got))
+	}
+}
+
+func TestDeduplicateDoesNotHideOpenEvidenceBehindSuppressedPrimary(t *testing.T) {
+	visible := models.Finding{ID: "visible", ToolName: "visible-tool", Category: models.CategorySCA, PackageName: "alpha", RuleID: "CVE-2026-1001", FilePath: "package-lock.json", Severity: models.SeverityHigh, Status: models.StatusOpen}
+	for _, kind := range []string{"suppressed", "triaged"} {
+		hidden := visible
+		hidden.ID = "hidden"
+		hidden.ToolName = "hidden-tool"
+		hidden.Severity = models.SeverityCritical
+		if kind == "suppressed" {
+			hidden.Suppressed = true
+			hidden.SuppressedReason = "rule-specific suppression"
+		} else {
+			hidden.Status = models.StatusFalsePositive
+		}
+		for _, rows := range [][]models.Finding{{hidden, visible}, {visible, hidden}} {
+			got := Deduplicate(rows)
+			if len(got) != 1 || got[0].ID != visible.ID || got[0].Suppressed || got[0].Status != models.StatusOpen {
+				t.Fatalf("open evidence hidden by %s: %+v", kind, got)
+			}
+		}
 	}
 }

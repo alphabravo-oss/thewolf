@@ -1,7 +1,9 @@
 package auth
 
 import (
+	"github.com/golang-jwt/jwt/v5"
 	"testing"
+	"time"
 )
 
 func TestHashAndVerifyPassword(t *testing.T) {
@@ -90,16 +92,41 @@ func TestJWTRefresh(t *testing.T) {
 		t.Fatalf("GenerateToken failed: %v", err)
 	}
 
-	newPair, err := RefreshToken(pair.RefreshToken)
+	claims, err := ValidateRefreshToken(pair.RefreshToken)
 	if err != nil {
 		t.Fatalf("RefreshToken failed: %v", err)
 	}
 
-	claims, err := ValidateToken(newPair.AccessToken)
-	if err != nil {
-		t.Fatalf("ValidateToken failed: %v", err)
-	}
 	if claims.UserID != "user-456" {
 		t.Fatalf("expected user_id user-456, got %s", claims.UserID)
+	}
+}
+
+func TestTokenPurposesAreNotInterchangeable(t *testing.T) {
+	SetJWTSecret([]byte("test-secret-key-for-jwt-testing!"))
+	pair, err := GenerateToken("user-123", "test@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ValidateToken(pair.RefreshToken); err == nil {
+		t.Fatal("refresh token authenticated as access")
+	}
+	if _, err := ValidateRefreshToken(pair.AccessToken); err == nil {
+		t.Fatal("access token refreshed")
+	}
+	claims, err := ValidateToken(pair.AccessToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ttl := claims.ExpiresAt.Sub(claims.IssuedAt.Time); ttl > 15*time.Minute {
+		t.Fatalf("access lifetime %s", ttl)
+	}
+	claims.Purpose = ""
+	legacy, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(jwtSecret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ValidateToken(legacy); err == nil {
+		t.Fatal("ambiguous legacy token authenticated")
 	}
 }

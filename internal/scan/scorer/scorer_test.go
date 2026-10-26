@@ -53,6 +53,8 @@ func TestLocationWeight_HighPatterns(t *testing.T) {
 		"internal/payment/stripe.go",
 		"pkg/billing/invoice.go",
 		"api/routes/v1.go",
+		"src/api/routes/v1.go",
+		`src\API\routes\v1.go`,
 		"server/middleware/cors.go",
 		"lib/security/tls.go",
 		"internal/crypto/hash.go",
@@ -117,6 +119,8 @@ func TestLocationWeight_Default(t *testing.T) {
 		"lib/config/config.go",
 		"main.go",
 		"README.md",
+		"myapi/routes/v1.go",
+		"api/routes_backup/v1.go",
 	}
 	for _, p := range paths {
 		t.Run(p, func(t *testing.T) {
@@ -204,8 +208,8 @@ func TestScoreFinding_FillsAllFields(t *testing.T) {
 	if f.LocationWeight != 3.0 {
 		t.Errorf("LocationWeight = %v, want 3.0", f.LocationWeight)
 	}
-	if f.AIContextScore != 1.0 {
-		t.Errorf("AIContextScore = %v, want 1.0 (no AI)", f.AIContextScore)
+	if f.AIContextScore != 0 {
+		t.Errorf("AIContextScore = %v, want 0 (no assessment)", f.AIContextScore)
 	}
 	// 10 * 3 * 1 = 30 -> 30/300*100 = 10
 	if !almostEqual(f.CompositeScore, 10.0, eps) {
@@ -229,6 +233,16 @@ func TestScoreFinding_PreservesExistingAIContextScore(t *testing.T) {
 	want := 32.0 / 300.0 * 100.0
 	if !almostEqual(f.CompositeScore, want, eps) {
 		t.Errorf("CompositeScore = %v, want %v", f.CompositeScore, want)
+	}
+}
+
+func TestScoreFindingRejectsInvalidAIContext(t *testing.T) {
+	for _, score := range []float64{-1, 11, math.NaN(), math.Inf(1), math.Inf(-1)} {
+		f := &models.Finding{Severity: models.SeverityCritical, FilePath: "auth/login.go", AIContextScore: score}
+		ScoreFinding(f)
+		if f.AIContextScore != 0 || !almostEqual(f.CompositeScore, 10, eps) {
+			t.Fatalf("invalid AI score %v changed deterministic score: %+v", score, f)
+		}
 	}
 }
 

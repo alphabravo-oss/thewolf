@@ -280,7 +280,7 @@ func applyBaseImageUpdates(
 			}
 		}
 		if updated != string(value) {
-			if err := os.WriteFile(dockerfile, []byte(updated), 0o644); err != nil {
+			if err := os.WriteFile(dockerfile, []byte(updated), 0o644); err != nil { // #nosec G703 -- Dockerfiles are enumerated in a private checkout checked by rejectCheckoutSymlinks and rejectSymlink.
 				return err
 			}
 		}
@@ -352,7 +352,7 @@ func applyGoToolchainUpdate(root string, update scannerproposalworker.SelectedUp
 			return replaceErr
 		}
 	}
-	return os.WriteFile(script, []byte(updated), 0o755)
+	return os.WriteFile(script, []byte(updated), 0o755) // #nosec G703 -- script is a fixed path in a private checkout checked by rejectCheckoutSymlinks and rejectSymlink.
 }
 
 func replaceShellAssignment(value, name, replacement string) (string, error) {

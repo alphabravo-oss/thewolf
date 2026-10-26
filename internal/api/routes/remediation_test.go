@@ -4,9 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"os"
+	"os/exec"
 	"strings"
 	"testing"
 
+	"github.com/alphabravocompany/thewolf/internal/fix/workspace"
 	"github.com/alphabravocompany/thewolf/internal/models"
 )
 
@@ -365,12 +368,64 @@ func TestAcceptRemediationFreezes(t *testing.T) {
 	}
 	_ = json.Unmarshal(w1.Body.Bytes(), &first)
 	job, _ := env.Store.GetFixJobByID(context.Background(), first.Data.ID)
-	job.Status = models.FixJobSucceeded
+	job.Status = models.FixJobAwaitingPush
 	_ = env.Store.UpdateFixJob(context.Background(), job)
 
+	repo, err := env.Store.GetRepoByID(t.Context(), repoID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo.SourcePath = t.TempDir()
+	gitRun := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-c", "user.name=Wolf", "-c", "user.email=wolf@example.test"}, args...)...)
+		cmd.Dir = repo.SourcePath
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %s: %v", args, out, err)
+		}
+	}
+	gitRun("init", "-b", "main")
+	gitRun("commit", "--allow-empty", "-m", "base")
+	if err := env.Store.UpdateRepo(t.Context(), repo); err != nil {
+		t.Fatal(err)
+	}
+	rem, err := env.Store.GetRemediationByID(t.Context(), first.Data.RemediationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ws, err := workspace.Prepare(t.Context(), workspace.Options{Repo: repo, Branch: rem.Branch, BaseDir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rem.WorkspacePath = ws.Path()
+	if err := env.Store.UpdateRemediation(t.Context(), rem); err != nil {
+		t.Fatal(err)
+	}
+	gitRun("worktree", "lock", ws.Path())
+	failed := env.doRequest(http.MethodPost, "/api/remediations/"+rem.ID+"/accept", nil)
+	if failed.Code != http.StatusInternalServerError {
+		t.Fatalf("locked handoff: %d %s", failed.Code, failed.Body.String())
+	}
+	retained, err := env.Store.GetRemediationByID(t.Context(), rem.ID)
+	if err != nil || retained.State != models.RemediationOpen || retained.WorkspacePath != ws.Path() {
+		t.Fatalf("failed handoff lost workspace: %+v %v", retained, err)
+	}
+	gitRun("worktree", "unlock", ws.Path())
 	wAcc := env.doRequest(http.MethodPost, "/api/remediations/"+first.Data.RemediationID+"/accept", nil)
 	if wAcc.Code != http.StatusOK {
 		t.Fatalf("accept %d: %s", wAcc.Code, wAcc.Body.String())
+	}
+	gitRun("show-ref", "--verify", "refs/heads/"+rem.Branch)
+	if _, err := os.Stat(ws.Path()); !os.IsNotExist(err) {
+		t.Fatalf("accepted workspace remains: %v", err)
+	}
+	saved, err := env.Store.GetFixJobByID(t.Context(), job.ID)
+	if err != nil || saved.Status != models.FixJobSucceeded {
+		t.Fatalf("accepted job still resumable: %+v %v", saved, err)
+	}
+	repeat := env.doRequest(http.MethodPost, "/api/remediations/"+rem.ID+"/accept", nil)
+	if repeat.Code != http.StatusOK {
+		t.Fatalf("repeat handoff: %d", repeat.Code)
 	}
 	w2 := env.doRequest(http.MethodPost, "/api/fixes", map[string]any{
 		"repo_id": repoID, "scan_id": scanID,

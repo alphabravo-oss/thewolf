@@ -49,6 +49,19 @@ func TestCategorize_Unknown(t *testing.T) {
 	}
 }
 
+func TestCategoryFallbackUsesNamespaceTokens(t *testing.T) {
+	for _, rule := range []string{"python.security.xss.rule", "js/sql-injection", "python.security.yaml.load", "generic.private-key"} {
+		if category, _ := Categorize("semgrep", rule); category == "" {
+			t.Errorf("lost family %s", rule)
+		}
+	}
+	for _, rule := range []string{"python.security.notxss.rule", "javascript.secretsauce.rule", "custom.myprivate-keywords"} {
+		if category, _ := Categorize("semgrep", rule); category != "" {
+			t.Errorf("invented category %s for %s", category, rule)
+		}
+	}
+}
+
 func TestGosec_CoreRulesPresent(t *testing.T) {
 	// Quick sanity that the high-impact rules made it in.
 	for _, id := range []string{"G201", "G401", "G404", "G304"} {

@@ -3,7 +3,6 @@ package db
 import (
 	"context"
 	"database/sql"
-	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -58,27 +57,15 @@ func (s *PostgresStore) ClaimNextFixerConsole(ctx context.Context, workerID stri
 }
 
 func (s *PostgresStore) UpdateFixerConsole(ctx context.Context, c *models.FixerConsole) error {
-	c.UpdatedAt = time.Now().UTC()
-	_, err := s.db.NamedExecContext(ctx,
-		`UPDATE fixer_consoles SET
-		   kind=:kind, engine=:engine, status=:status, claimed_by=:claimed_by,
-		   last_url=:last_url, error=:error, claimed_at=:claimed_at, started_at=:started_at,
-		   finished_at=:finished_at, heartbeat_at=:heartbeat_at, updated_at=:updated_at
-		 WHERE id=:id`, c)
-	return err
+	return updateFixerConsole(ctx, s.db, c)
+}
+
+func (s *PostgresStore) HeartbeatFixerConsole(ctx context.Context, id, worker string, claimedAt time.Time) error {
+	return heartbeatFixerConsole(ctx, s.db, id, worker, claimedAt)
 }
 
 func (s *PostgresStore) ReclaimStaleConsoles(ctx context.Context, cutoff time.Time) (int, error) {
-	res, err := s.db.ExecContext(ctx,
-		`UPDATE fixer_consoles SET status = $1, claimed_by = '', updated_at = $2
-		 WHERE status IN ($3, $4) AND (heartbeat_at IS NULL OR heartbeat_at < $5)`,
-		models.FixerConsoleQueued, time.Now().UTC(),
-		models.FixerConsoleClaimed, models.FixerConsoleRunning, cutoff)
-	if err != nil {
-		return 0, err
-	}
-	n, _ := res.RowsAffected()
-	return int(n), nil
+	return reclaimStaleConsoles(ctx, s.db, cutoff)
 }
 
 func (s *PostgresStore) AppendFixerConsoleStdin(ctx context.Context, consoleID, data string) error {
@@ -96,34 +83,6 @@ func (s *PostgresStore) ListActiveFixerConsoles(ctx context.Context) ([]models.F
 	return out, err
 }
 
-func (s *PostgresStore) DrainFixerConsoleStdin(ctx context.Context, consoleID string) ([]string, error) {
-	var rows []struct {
-		ID   string `db:"id"`
-		Data string `db:"data"`
-	}
-	if err := s.db.SelectContext(ctx, &rows,
-		`SELECT id, data FROM fixer_console_stdin WHERE console_id = $1 ORDER BY created_at ASC`, consoleID); err != nil {
-		return nil, err
-	}
-	if len(rows) == 0 {
-		return nil, nil
-	}
-	ids := make([]any, 0, len(rows))
-	out := make([]string, 0, len(rows))
-	for _, r := range rows {
-		ids = append(ids, r.ID)
-		out = append(out, r.Data)
-	}
-	q := "DELETE FROM fixer_console_stdin WHERE id IN ("
-	for i := range ids {
-		if i > 0 {
-			q += ","
-		}
-		q += "$" + strconv.Itoa(i+1)
-	}
-	q += ")"
-	if _, err := s.db.ExecContext(ctx, q, ids...); err != nil {
-		return nil, err
-	}
-	return out, nil
+func (s *PostgresStore) DrainFixerConsoleStdin(ctx context.Context, cons *models.FixerConsole) ([]string, error) {
+	return drainFixerConsoleStdin(ctx, s.db, cons)
 }

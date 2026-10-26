@@ -14,6 +14,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/alphabravocompany/thewolf/internal/plugin"
 )
 
 // wolfOpenCodeConfig is the permission document we force via OPENCODE_CONFIG.
@@ -109,7 +111,7 @@ func (o *OpenCode) Fix(ctx context.Context, req FixRequest) (*FixResult, error) 
 	// prompt as another filename ("File not found: You are Wolf's fixer…").
 	// The review doc is already in the repo at FindingsFile.
 	args = append(args, prompt)
-	cmd := exec.CommandContext(ctx, "opencode", args...) // #nosec G204
+	cmd := plugin.CommandContext(ctx, "opencode", args...) // #nosec G204
 	cmd.Dir = req.RepoPath
 	cmd.Stdin = nil // inherited stdin hangs opencode run indefinitely
 	env := append(cmd.Environ(), "OPENCODE_CONFIG="+cfgPath)

@@ -36,3 +36,18 @@ func TestApplyScanProfileDisablesHeavyToolsForFast(t *testing.T) {
 		t.Fatalf("explicit tools DisabledTools = %#v, want none", explicit.DisabledTools)
 	}
 }
+
+func TestFastAlwaysRetainsSecretsSASTAndLockfiles(t *testing.T) {
+	req := &createScanRequest{Profile: "fast"}
+	applyScanProfile(&Handler{}, req, "never-scanned")
+	for _, tool := range []string{"gitleaks", "detect-secrets", "gosec", "semgrep", "osv-scanner"} {
+		if containsStr(req.DisabledTools, tool) {
+			t.Fatalf("fast excluded %s", tool)
+		}
+	}
+	for _, tool := range []string{"bearer", "codeql", "grype", "trivy", "kubescape", "scorecard"} {
+		if !containsStr(req.DisabledTools, tool) {
+			t.Fatalf("fast retained slow/unrelated %s", tool)
+		}
+	}
+}

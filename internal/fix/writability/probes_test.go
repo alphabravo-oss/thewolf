@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -20,10 +21,15 @@ func TestLocalFSProbe(t *testing.T) {
 
 	t.Run("writable git tree", func(t *testing.T) {
 		dir := t.TempDir()
-		if err := os.MkdirAll(filepath.Join(dir, ".git"), 0o755); err != nil {
-			t.Fatal(err)
+		cmd := exec.Command("git", "-C", dir, "init")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("init: %s %v", out, err)
 		}
-		ok, reason, err := p.Check(dir)
+		cmd = exec.Command("git", "-C", dir, "-c", "user.name=test", "-c", "user.email=test@example.test", "commit", "--allow-empty", "-m", "initial")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("commit: %s %v", out, err)
+		}
+		ok, reason, err := p.Check(t.Context(), dir)
 		if err != nil || !ok {
 			t.Fatalf("want writable, got ok=%v reason=%q err=%v", ok, reason, err)
 		}
@@ -31,14 +37,14 @@ func TestLocalFSProbe(t *testing.T) {
 
 	t.Run("not a git tree", func(t *testing.T) {
 		dir := t.TempDir()
-		ok, reason, _ := p.Check(dir)
+		ok, reason, _ := p.Check(t.Context(), dir)
 		if ok || !strings.Contains(reason, "git work tree") {
 			t.Fatalf("want not-git reason, got ok=%v reason=%q", ok, reason)
 		}
 	})
 
 	t.Run("missing path", func(t *testing.T) {
-		ok, reason, _ := p.Check(filepath.Join(t.TempDir(), "nope"))
+		ok, reason, _ := p.Check(t.Context(), filepath.Join(t.TempDir(), "nope"))
 		if ok || !strings.Contains(reason, "does not exist") {
 			t.Fatalf("want not-exist reason, got ok=%v reason=%q", ok, reason)
 		}
@@ -49,14 +55,14 @@ func TestLocalFSProbe(t *testing.T) {
 		if err := os.WriteFile(f, []byte("x"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		ok, reason, _ := p.Check(f)
+		ok, reason, _ := p.Check(t.Context(), f)
 		if ok || !strings.Contains(reason, "not a directory") {
 			t.Fatalf("want not-dir reason, got ok=%v reason=%q", ok, reason)
 		}
 	})
 
 	t.Run("empty path", func(t *testing.T) {
-		ok, _, _ := p.Check("")
+		ok, _, _ := p.Check(t.Context(), "")
 		if ok {
 			t.Fatal("empty path must be not-writable")
 		}
@@ -152,5 +158,22 @@ func TestSSHRunnerProbe_ConfigError(t *testing.T) {
 	ok, _, err := p.CanPush(context.Background(), node, "/srv/app")
 	if ok || err == nil {
 		t.Fatalf("disabled node must surface a config error: ok=%v err=%v", ok, err)
+	}
+}
+
+func TestLocalFSProbeRejectsFakeOrUnbornGitTree(t *testing.T) {
+	for _, initialized := range []bool{false, true} {
+		dir := t.TempDir()
+		if initialized {
+			if out, err := exec.Command("git", "-C", dir, "init").CombinedOutput(); err != nil {
+				t.Fatalf("init: %s %v", out, err)
+			}
+		} else if err := os.Mkdir(filepath.Join(dir, ".git"), 0700); err != nil {
+			t.Fatal(err)
+		}
+		ok, reason, err := (localFSProbe{}).Check(t.Context(), dir)
+		if ok || err != nil || !strings.Contains(reason, "committed HEAD") {
+			t.Fatalf("fake/unborn repository accepted: %v %q %v", ok, reason, err)
+		}
 	}
 }

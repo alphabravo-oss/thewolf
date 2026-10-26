@@ -29,10 +29,12 @@
 package orchestrator
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -43,13 +45,14 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/alphabravocompany/thewolf/internal/fix"
 	"github.com/alphabravocompany/thewolf/internal/fix/budget"
 	"github.com/alphabravocompany/thewolf/internal/fix/engine"
 	"github.com/alphabravocompany/thewolf/internal/fix/hygiene"
 	"github.com/alphabravocompany/thewolf/internal/fix/pr"
 	"github.com/alphabravocompany/thewolf/internal/fix/verify"
-	"github.com/alphabravocompany/thewolf/internal/fix/workspace"
 	"github.com/alphabravocompany/thewolf/internal/models"
+	"github.com/alphabravocompany/thewolf/internal/plugin"
 )
 
 var githubPR = pr.CreateGitHubPR
@@ -83,17 +86,28 @@ const defaultJobWallClock = 6 * time.Hour
 type Workspace interface {
 	verify.Workspace // Path, ChangedFiles, Rollback
 	Branch() string
+	BranchChangedFiles(ctx context.Context) ([]string, error)
+	Checkpoint(ctx context.Context) error
+	Head(ctx context.Context) (string, error)
 	Diff(ctx context.Context) (string, error)
 	Cleanup(ctx context.Context) error
 	Commit(ctx context.Context, message string) error
 	Push(ctx context.Context) (sha string, err error)
 }
 
+// Verification must include committed agent edits. Cleanup and ordinary Git
+// operations retain the workspace's HEAD-relative dirty-file semantics.
+type branchVerificationWorkspace struct{ Workspace }
+
+func (w branchVerificationWorkspace) ChangedFiles(ctx context.Context) ([]string, error) {
+	return w.Workspace.BranchChangedFiles(ctx)
+}
+
 // WorkspacePreparer materialises an isolated, writable working tree on a NEW
 // fix branch for the job's repo. Production wiring adapts
 // workspace.Prepare; tests return a fake. branch is the fix branch to create.
 type WorkspacePreparer interface {
-	Prepare(ctx context.Context, repo *models.Repo, branch string) (Workspace, error)
+	Prepare(ctx context.Context, repo *models.Repo, branch, baseBranch string) (Workspace, error)
 	Open(ctx context.Context, path string, repo *models.Repo) (Workspace, error)
 }
 
@@ -118,6 +132,7 @@ type EngineSelector interface {
 type Verifier interface {
 	Verify(ctx context.Context, ws verify.Workspace, finding models.Finding) (*verify.VerifyResult, error)
 	VerifyBatch(ctx context.Context, ws verify.Workspace, findings []models.Finding) (map[string]*verify.VerifyResult, error)
+	VerifyBranch(ctx context.Context, ws verify.Workspace, baseline, cleared []models.Finding, tools []string) ([]verify.StageResult, error)
 }
 
 // WritabilityChecker is the preflight: can wolf write a fix branch to this
@@ -137,12 +152,16 @@ type DiffStore interface {
 // findings, record every attempt, and persist the job's final state. The full
 // db.Store satisfies it.
 type Store interface {
+	GetSetting(ctx context.Context, key string) (string, error)
 	GetRepoByID(ctx context.Context, id string) (*models.Repo, error)
 	GetFixJobByID(ctx context.Context, id string) (*models.FixJob, error)
 	GetFindingByID(ctx context.Context, id string) (*models.Finding, error)
+	GetScanByID(ctx context.Context, id string) (*models.Scan, error)
 	ListFindingsByScan(ctx context.Context, scanID string) ([]models.Finding, error)
 	UpdateFixJob(ctx context.Context, job *models.FixJob) error
 	CreateFixAttempt(ctx context.Context, attempt *models.FixAttempt) error
+	UpdateFixAttempt(ctx context.Context, attempt *models.FixAttempt) error
+	ListFixAttempts(ctx context.Context, jobID string) ([]models.FixAttempt, error)
 	GetRemediationByID(ctx context.Context, id string) (*models.Remediation, error)
 	UpdateRemediation(ctx context.Context, rem *models.Remediation) error
 	CreateFindingSuppression(ctx context.Context, s *models.FindingSuppression) error
@@ -162,21 +181,26 @@ type Logf func(format string, args ...any)
 // Deps bundles the orchestrator's injected collaborators. Every field is an
 // interface so the worker wires real implementations and tests inject stubs.
 type Deps struct {
-	Store          Store
-	Writability    WritabilityChecker
-	Workspaces     WorkspacePreparer
-	Engines        EngineSelector
-	Verifier       Verifier
-	GitApply       GitApplier // applies an API engine's returned diff; defaults to git apply
-	Diffs          DiffStore
-	Rescan         Rescanner
-	CLIEnv         []string // API keys injected into CLI engines
-	Model          string
-	Effort         string
-	Variant        string
-	PromptInitial  string
-	PromptFollowup string
-	Log            Logf
+	pendingAttempts  map[string]models.FixAttempt
+	attemptNumbers   map[string]int
+	priorAttempts    []models.FixAttempt
+	Store            Store
+	Writability      WritabilityChecker
+	Workspaces       WorkspacePreparer
+	Engines          EngineSelector
+	Verifier         Verifier
+	GitApply         GitApplier // applies an API engine's returned diff; defaults to git apply
+	Diffs            DiffStore
+	Rescan           Rescanner
+	GitHubToken      func(context.Context, *models.Repo) string
+	PublicationReady func(context.Context, *models.Repo) (bool, string)
+	CLIEnv           []string // API keys injected into CLI engines
+	Model            string
+	Effort           string
+	Variant          string
+	PromptInitial    string
+	PromptFollowup   string
+	Log              Logf
 }
 
 // GitApplier applies a unified diff to a workspace's working tree (for the API
@@ -190,6 +214,9 @@ type GitApplier interface {
 // onto the FixJob (result branch, diff artifact, summary) plus the in-memory
 // attempt records for callers/tests that want them without a store round-trip.
 type Result struct {
+	// cleanup runs only after the result is durably saved. Failed/stale runs
+	// retain the checkout so recovery never depends on an unsaved result.
+	cleanup        func(context.Context) error
 	Branch         string
 	DiffArtifactID string
 	Summary        Summary
@@ -202,23 +229,27 @@ type Result struct {
 // Summary is the job-level rollup persisted as FixJob.Summary (JSON). It is the
 // reviewable "what happened" the UI renders alongside the diff.
 type Summary struct {
-	TotalFindings  int            `json:"total_findings"`
-	Considered     int            `json:"considered"`
-	Skipped        int            `json:"skipped"`
-	Kept           int            `json:"kept"`
-	Unfixable      int            `json:"unfixable"`
-	Muted          int            `json:"muted,omitempty"`
-	Remaining      int            `json:"remaining"`
-	Loops          int            `json:"loops"`
-	Pushed         bool           `json:"pushed,omitempty"`
-	PushSHA        string         `json:"push_sha,omitempty"`
-	Branch         string         `json:"branch"`
-	StopReason     string         `json:"stop_reason,omitempty"`
-	Notes          []string       `json:"notes,omitempty"`
-	Rounds         []RoundSummary `json:"rounds,omitempty"`
-	Tools          []ToolReport   `json:"tools,omitempty"`
-	Open           []FindingNote  `json:"open,omitempty"`
-	ReportMarkdown string         `json:"report_markdown,omitempty"`
+	FinalVerification []verify.StageResult `json:"final_verification,omitempty"`
+	TotalFindings     int                  `json:"total_findings"`
+	Considered        int                  `json:"considered"`
+	Skipped           int                  `json:"skipped"`
+	Kept              int                  `json:"kept"`
+	Unfixable         int                  `json:"unfixable"`
+	Muted             int                  `json:"muted,omitempty"`
+	Remaining         int                  `json:"remaining"`
+	Loops             int                  `json:"loops"`
+	Pushed            bool                 `json:"pushed,omitempty"`
+	PushSHA           string               `json:"push_sha,omitempty"`
+	PublicationError  string               `json:"publication_error,omitempty"`
+	Addressed         []FindingNote        `json:"addressed,omitempty"`
+	PRURL             string               `json:"pr_url,omitempty"`
+	Branch            string               `json:"branch"`
+	StopReason        string               `json:"stop_reason,omitempty"`
+	Notes             []string             `json:"notes,omitempty"`
+	Rounds            []RoundSummary       `json:"rounds,omitempty"`
+	Tools             []ToolReport         `json:"tools,omitempty"`
+	Open              []FindingNote        `json:"open,omitempty"`
+	ReportMarkdown    string               `json:"report_markdown,omitempty"`
 }
 
 // RoundSummary is one fix→rescan cycle inside a job.
@@ -238,7 +269,7 @@ type RoundSummary struct {
 // (preflight or workspace failure); per-finding failures are normal outcomes
 // recorded as attempts, not errors.
 //
-// v1 is branch-only: Run NEVER pushes or opens a PR.
+// Publication requires push mode or an explicit push resume action.
 func Run(ctx context.Context, job *models.FixJob, deps Deps) (*Result, error) {
 	if job == nil {
 		return nil, errors.New("orchestrator: job is required")
@@ -249,6 +280,9 @@ func Run(ctx context.Context, job *models.FixJob, deps Deps) (*Result, error) {
 	if deps.Workspaces == nil || deps.Engines == nil || deps.Verifier == nil {
 		return nil, errors.New("orchestrator: workspace, engine, and verifier dependencies are required")
 	}
+	if err := fix.CheckEnabled(ctx, deps.Store); err != nil {
+		return nil, err
+	}
 	logf := deps.Log
 	if logf == nil {
 		logf = func(string, ...any) {}
@@ -256,35 +290,36 @@ func Run(ctx context.Context, job *models.FixJob, deps Deps) (*Result, error) {
 
 	now := time.Now().UTC()
 	job.Status = models.FixJobRunning
+	job.Error = ""
 	job.StartedAt = &now
 	if err := deps.Store.UpdateFixJob(ctx, job); err != nil {
 		return nil, fmt.Errorf("orchestrator: mark job running: %w", err)
 	}
-
-	res, runErr := run(ctx, job, deps, logf)
+	var res *Result
+	runErr := restoreAttemptHistory(ctx, job, &deps)
+	if runErr == nil {
+		res, runErr = run(ctx, job, deps, logf)
+	}
+	if res != nil && runErr == nil && res.PauseStatus == models.FixJobAwaitingReview {
+		res.Attempts, runErr = deps.Store.ListFixAttempts(ctx, job.ID)
+	}
 	finish := time.Now().UTC()
 	job.FinishedAt = &finish
 
-	if latest, _ := deps.Store.GetFixJobByID(ctx, job.ID); latest != nil && latest.Status == models.FixJobCancelled {
-		logf("job %s: cancelled — discarding branch work", job.ID)
-		discardCancelledWorkspace(ctx, job, deps, logf)
+	if latest, _ := deps.Store.GetFixJobByID(context.WithoutCancel(ctx), job.ID); latest != nil && latest.Status == models.FixJobCancelled {
+		// The worker owns cancellation cleanup after engines stop. Keep our
+		// in-memory path in case cancellation raced workspace persistence.
 		job.Status = models.FixJobCancelled
-		job.PauseReason = ""
-		job.ResumeAction = ""
-		job.ResultBranch = ""
-		job.WorkspacePath = ""
-		_ = deps.Store.UpdateFixJob(ctx, job)
-		if runErr != nil {
-			return res, runErr
-		}
-		return res, context.Canceled
+		return res, errors.Join(runErr, context.Canceled)
 	}
 
 	if runErr != nil {
 		job.Status = models.FixJobFailed
 		job.Error = runErr.Error()
 		// Persist even if the run context was cancelled (deploy, stall kill).
-		_ = deps.Store.UpdateFixJob(context.WithoutCancel(ctx), job)
+		if err := deps.Store.UpdateFixJob(context.WithoutCancel(ctx), job); err != nil {
+			return res, errors.Join(runErr, fmt.Errorf("persist failed job; workspace retained: %w", err))
+		}
 		return res, runErr
 	}
 
@@ -304,7 +339,20 @@ func Run(ctx context.Context, job *models.FixJob, deps Deps) (*Result, error) {
 		}
 	}
 	if err := deps.Store.UpdateFixJob(ctx, job); err != nil {
-		return res, fmt.Errorf("orchestrator: persist job result: %w", err)
+		return res, fmt.Errorf("orchestrator: persist job result; workspace retained: %w", err)
+	}
+	if res != nil && res.cleanup != nil {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+		if err := res.cleanup(cleanupCtx); err != nil {
+			job.Error = fmt.Sprintf("workspace cleanup failed; recovery path retained: %v", err)
+			logf("job %s: %s", job.ID, job.Error)
+		} else {
+			job.WorkspacePath = ""
+		}
+		if err := deps.Store.UpdateFixJob(cleanupCtx, job); err != nil {
+			logf("job %s: result saved, but cleanup metadata could not be saved: %v", job.ID, err)
+		}
+		cancel()
 	}
 	if job.Status == models.FixJobSucceeded {
 		logf("job %s complete: %d kept, %d unfixable on branch %s",
@@ -315,24 +363,8 @@ func Run(ctx context.Context, job *models.FixJob, deps Deps) (*Result, error) {
 	return res, nil
 }
 
-func discardCancelledWorkspace(ctx context.Context, job *models.FixJob, deps Deps, logf Logf) {
-	if err := workspace.DiscardPath(ctx, job.WorkspacePath, job.ResultBranch); err != nil {
-		logf("job %s: discard workspace: %v", job.ID, err)
-	}
-	if deps.Store == nil || job.RepoID == "" {
-		return
-	}
-	repo, err := deps.Store.GetRepoByID(ctx, job.RepoID)
-	if err != nil || repo == nil || repo.SourceType != models.SourceTypeLocal {
-		return
-	}
-	if err := workspace.DiscardLocalBranch(ctx, repo.SourcePath, job.ResultBranch); err != nil {
-		logf("job %s: discard local branch: %v", job.ID, err)
-	}
-}
-
 // run is the core flow, factored out so Run can wrap it with status bookkeeping.
-func run(ctx context.Context, job *models.FixJob, deps Deps, logf Logf) (*Result, error) {
+func run(ctx context.Context, job *models.FixJob, deps Deps, logf Logf) (result *Result, runErr error) {
 	repo, err := deps.Store.GetRepoByID(ctx, job.RepoID)
 	if err != nil {
 		return nil, fmt.Errorf("orchestrator: load repo %s: %w", job.RepoID, err)
@@ -341,7 +373,7 @@ func run(ctx context.Context, job *models.FixJob, deps Deps, logf Logf) (*Result
 		return nil, fmt.Errorf("orchestrator: repo %s not found", job.RepoID)
 	}
 
-	if deps.Writability != nil {
+	if deps.Writability != nil && job.ResumeAction != models.FixResumePush {
 		writable, reason := deps.Writability.Check(ctx, repo)
 		if !writable {
 			logf("job %s: repo not fixable: %s", job.ID, reason)
@@ -359,6 +391,9 @@ func run(ctx context.Context, job *models.FixJob, deps Deps, logf Logf) (*Result
 		}
 	}
 
+	if job.ResumeAction == models.FixResumePush && job.WorkspacePath == "" {
+		return nil, errors.New("orchestrator: reviewed workspace is missing")
+	}
 	ws, resumed, err := openOrPrepare(ctx, job, repo, branch, deps)
 	if err != nil {
 		return nil, err
@@ -366,26 +401,45 @@ func run(ctx context.Context, job *models.FixJob, deps Deps, logf Logf) (*Result
 	// A remediation owns the checkout until publish/discard.
 	cleanup := !resumed && job.RemediationID == ""
 	defer func() {
-		if cleanup {
-			_ = ws.Cleanup(ctx)
+		if cleanup && runErr == nil && result != nil {
+			result.cleanup = ws.Cleanup
 		}
 	}()
 	job.WorkspacePath = ws.Path()
 	job.ResultBranch = ws.Branch()
-	_ = deps.Store.UpdateFixJob(ctx, job)
+	if err := deps.Store.UpdateFixJob(ctx, job); err != nil {
+		cleanup = false
+		return nil, fmt.Errorf("persist workspace ownership: %w", err)
+	}
 	if job.RemediationID != "" {
-		if rem, rerr := deps.Store.GetRemediationByID(ctx, job.RemediationID); rerr == nil && rem != nil {
-			rem.WorkspacePath = ws.Path()
-			rem.Branch = ws.Branch()
-			_ = deps.Store.UpdateRemediation(ctx, rem)
+		rem, err := deps.Store.GetRemediationByID(ctx, job.RemediationID)
+		if err != nil {
+			return nil, fmt.Errorf("load remediation workspace; workspace retained: %w", err)
+		}
+		if rem == nil {
+			return nil, errors.New("remediation missing; workspace retained")
+		}
+		rem.WorkspacePath = ws.Path()
+		rem.Branch = ws.Branch()
+		if err := deps.Store.UpdateRemediation(ctx, rem); err != nil {
+			return nil, fmt.Errorf("persist remediation workspace; workspace retained: %w", err)
 		}
 	}
 	logf("job %s: workspace ready on branch %s", job.ID, ws.Branch())
 
 	// Resume-to-push: human approved the branch; do not run more engines.
 	if job.ResumeAction == models.FixResumePush {
-		return finishWithPush(ctx, job, repo, ws, deps, logf, Summary{Branch: ws.Branch()}, nil, &cleanup)
+		cleanup = false
+		var summary Summary
+		if err := json.Unmarshal([]byte(job.Summary), &summary); err != nil || summary.Branch != ws.Branch() {
+			return nil, errors.New("orchestrator: missing or invalid review summary; workspace retained")
+		}
+		return finishWithPush(ctx, job, repo, ws, deps, logf, summary, &cleanup)
 	}
+	if _, err := ws.BranchChangedFiles(ctx); err != nil {
+		return nil, fmt.Errorf("read verification baseline; workspace retained: %w", err)
+	}
+	ws = branchVerificationWorkspace{ws}
 
 	findings, err := storeFindings{deps.Store}.gatherFindings(ctx, job)
 	if err != nil {
@@ -399,8 +453,36 @@ func run(ctx context.Context, job *models.FixJob, deps Deps, logf Logf) (*Result
 	summary := Summary{TotalFindings: len(findings), Branch: ws.Branch()}
 	floor := severityRank(models.Severity(job.SeverityFloor))
 	rep := newJobReport()
+	if resumed && job.Summary != "" {
+		var previous Summary
+		if err := json.Unmarshal([]byte(job.Summary), &previous); err != nil || previous.Branch != ws.Branch() {
+			return nil, errors.New("invalid retained verification summary; workspace retained")
+		}
+		summary.Rounds = previous.Rounds
+		for _, f := range prFindings(previous) {
+			original, err := deps.Store.GetFindingByID(ctx, f.ID)
+			if err != nil || original == nil {
+				return nil, fmt.Errorf("restore accepted finding %s; workspace retained: %w", f.ID, errors.Join(err, errors.New("finding history unavailable")))
+			}
+			rep.note(*original, models.FixOutcomeKept, "previously verified; final branch check pending")
+		}
+	}
 
 	active := make([]models.Finding, 0, len(findings))
+	// The journal can be newer than the per-tool summary after a worker stops.
+	byID := make(map[string]models.Finding, len(findings))
+	for _, f := range findings {
+		byID[f.ID] = f
+	}
+	for _, att := range deps.priorAttempts {
+		if f, ok := byID[att.FindingID]; ok {
+			if att.Outcome == models.FixOutcomeKept {
+				rep.note(f, models.FixOutcomeKept, "previously verified; final branch check pending")
+			} else if att.Outcome == models.FixOutcomeRolledBack || att.Outcome == models.FixOutcomeUnfixable {
+				rep.note(f, "open", att.DiffExcerpt)
+			}
+		}
+	}
 	unfixable := map[string]bool{}
 	for _, f := range findings {
 		if f.Suppressed {
@@ -439,9 +521,12 @@ func run(ctx context.Context, job *models.FixJob, deps Deps, logf Logf) (*Result
 	if startLoop < 0 {
 		startLoop = 0
 	}
-	if startLoop > 0 {
+	if startLoop > 0 || (resumed && len(deps.priorAttempts) > 0) {
 		seed := RoundSummary{Round: startLoop}
-		active = rescanRound(ctx, ws, deps, logf, active, unfixable, &seed)
+		active, err = rescanRound(ctx, ws, deps, logf, active, unfixable, &seed)
+		if err != nil {
+			return nil, fmt.Errorf("resume verification; workspace retained: %w", err)
+		}
 		logf("job %s: resumed after loop %d with %d findings still open", job.ID, startLoop, len(active))
 	}
 
@@ -449,7 +534,10 @@ func run(ctx context.Context, job *models.FixJob, deps Deps, logf Logf) (*Result
 	for loop := startLoop + 1; loop <= maxLoops && len(active) > 0; loop++ {
 		job.CurrentLoop = loop
 		summary.Loops = loop
-		_ = deps.Store.UpdateFixJob(ctx, job)
+		if err := deps.Store.UpdateFixJob(ctx, job); err != nil {
+			cleanup = false
+			return nil, fmt.Errorf("persist loop progress: %w", err)
+		}
 		kind := "initial"
 		if loop >= 2 {
 			kind = "follow-up"
@@ -493,13 +581,17 @@ func run(ctx context.Context, job *models.FixJob, deps Deps, logf Logf) (*Result
 			outcomes := map[string]string{}
 			work := group
 			if kind != hygiene.KindCode {
-				hyOut, leftover, files := applyToolHygiene(ctx, job, ws, group, deps, logf, rep)
+				hyOut, leftover, files, hygieneErr := applyToolHygiene(ctx, job, ws, group, deps, logf, rep)
+				if hygieneErr != nil {
+					return nil, hygieneErr
+				}
 				outcomes = hyOut
 				if len(files) > 0 {
 					scrubReviewFiles(ws.Path())
 					msg := fmt.Sprintf("wolf-fix: %s hygiene (loop %d)", group.Tool, loop)
 					if err := commitWorkspace(ctx, ws, msg, logf); err != nil {
-						logf("  %s: hygiene commit failed: %v", group.Tool, err)
+						cleanup = false
+						return nil, fmt.Errorf("commit %s hygiene; workspace retained: %w", group.Tool, err)
 					} else {
 						logf("  %s: committed hygiene files on %s", group.Tool, ws.Branch())
 					}
@@ -516,8 +608,12 @@ func run(ctx context.Context, job *models.FixJob, deps Deps, logf Logf) (*Result
 			for _, f := range work.Findings {
 				logf("  queued: %s", engine.FindingLabel(f))
 			}
-			att, more := fixOneTool(ctx, job, ws, work, deps, tracker, logf, loop, rep)
+			att, more, toolErr := fixOneTool(ctx, job, ws, work, deps, tracker, logf, loop, rep)
 			attempts = append(attempts, att...)
+			if toolErr != nil {
+				cleanup = false
+				return nil, fmt.Errorf("fix %s; workspace retained: %w", group.Tool, toolErr)
+			}
 			for id, o := range more {
 				outcomes[id] = o
 			}
@@ -531,23 +627,33 @@ func run(ctx context.Context, job *models.FixJob, deps Deps, logf Logf) (*Result
 				scrubReviewFiles(ws.Path())
 				msg := fmt.Sprintf("wolf-fix: %s (loop %d)", group.Tool, loop)
 				if err := commitWorkspace(ctx, ws, msg, logf); err != nil {
-					logf("  %s: commit failed: %v", group.Tool, err)
+					cleanup = false
+					return nil, fmt.Errorf("commit %s fixes; workspace retained: %w", group.Tool, err)
 				} else {
 					logf("  %s: committed %d kept finding(s) on %s", group.Tool, keptThisTool, ws.Branch())
 					if derr := persistDiff(ctx, job, ws, deps); derr != nil {
-						logf("  %s: persist live diff: %v", group.Tool, derr)
+						cleanup = false
+						return nil, fmt.Errorf("persist %s fixes; workspace retained: %w", group.Tool, derr)
 					}
 				}
 			}
 			rememberKeptLocations(fixedLocs, group.Findings, outcomes)
 			foldOutcomes(group.Findings, outcomes, &summary, &still, unfixable, &roundKept, &roundUnfix, rep)
-			persistLiveSummary(ctx, job, deps, summary, rep)
+			if err := persistLiveSummary(ctx, job, deps, summary, rep); err != nil {
+				cleanup = false
+				return nil, fmt.Errorf("persist live summary: %w", err)
+			}
 		}
 
 		round := RoundSummary{Round: loop, Kept: roundKept, Unfixable: roundUnfix}
-		active = rescanRound(ctx, ws, deps, logf, active, unfixable, &round)
+		active, err = rescanRound(ctx, ws, deps, logf, active, unfixable, &round)
+		if err != nil {
+			return nil, fmt.Errorf("final round verification; workspace retained: %w", err)
+		}
 		summary.Rounds = append(summary.Rounds, round)
 		summary.Remaining = len(active)
+		summary.Addressed = rep.keptList()
+		summary.Kept = len(summary.Addressed)
 		logf("job %s: loop %d rescan: %d remaining, %d cleared this round",
 			job.ID, loop, round.Remaining, len(round.Cleared))
 
@@ -556,8 +662,10 @@ func run(ctx context.Context, job *models.FixJob, deps Deps, logf Logf) (*Result
 		}
 		if loop < maxLoops && job.HumanInTheLoop && job.ResumeAction != models.FixResumeContinue {
 			job.PauseReason = fmt.Sprintf("loop %d complete; %d findings still open — continue or inspect", loop, len(active))
-			_ = persistDiff(ctx, job, ws, deps)
 			cleanup = false
+			if err := persistDiff(ctx, job, ws, deps); err != nil {
+				return nil, fmt.Errorf("persist review diff; workspace retained: %w", err)
+			}
 			return &Result{
 				Branch:         ws.Branch(),
 				DiffArtifactID: job.DiffArtifactID,
@@ -569,6 +677,8 @@ func run(ctx context.Context, job *models.FixJob, deps Deps, logf Logf) (*Result
 		job.ResumeAction = "" // consume a one-shot continue
 	}
 
+	summary.Addressed = rep.keptList()
+	summary.Kept = len(summary.Addressed)
 	summary.Tools = rep.tools()
 	summary.Open = rep.openList()
 	summary.ReportMarkdown = rep.markdown()
@@ -578,16 +688,21 @@ func run(ctx context.Context, job *models.FixJob, deps Deps, logf Logf) (*Result
 		}
 	}
 
-	return finishWithPush(ctx, job, repo, ws, deps, logf, summary, attempts, &cleanup)
+	return finishWithPush(ctx, job, repo, ws, deps, logf, summary, &cleanup)
 }
 
 func openOrPrepare(ctx context.Context, job *models.FixJob, repo *models.Repo, branch string, deps Deps) (Workspace, bool, error) {
 	if job.WorkspacePath != "" && deps.Workspaces != nil {
-		if ws, err := deps.Workspaces.Open(ctx, job.WorkspacePath, repo); err == nil && ws != nil {
-			return ws, true, nil
+		ws, err := deps.Workspaces.Open(ctx, job.WorkspacePath, repo)
+		if err != nil {
+			return nil, true, fmt.Errorf("orchestrator: reopen retained workspace: %w", err)
 		}
+		if ws == nil {
+			return nil, true, errors.New("orchestrator: reopen retained workspace returned no workspace")
+		}
+		return ws, true, nil
 	}
-	ws, err := deps.Workspaces.Prepare(ctx, repo, branch)
+	ws, err := deps.Workspaces.Prepare(ctx, repo, branch, job.BaseBranch)
 	if err != nil {
 		return nil, false, fmt.Errorf("orchestrator: prepare workspace: %w", err)
 	}
@@ -602,56 +717,150 @@ func finishWithPush(
 	deps Deps,
 	logf Logf,
 	summary Summary,
-	attempts []models.FixAttempt,
 	cleanup *bool,
 ) (*Result, error) {
+	// Read the complete durable history before publication, including attempts
+	// from earlier workers and hygiene passes, with their persisted identities.
+	attempts, err := deps.Store.ListFixAttempts(ctx, job.ID)
+	if err != nil {
+		if cleanup != nil {
+			*cleanup = false
+		}
+		return nil, fmt.Errorf("read final attempt history; workspace retained: %w", err)
+	}
 	if err := persistDiff(ctx, job, ws, deps); err != nil {
-		return nil, err
+		if cleanup != nil {
+			*cleanup = false
+		}
+		return nil, fmt.Errorf("persist final diff; workspace retained: %w", err)
+	}
+	stages, err := verifyFinalBranch(ctx, job, ws, deps, summary)
+	if err != nil {
+		if cleanup != nil {
+			*cleanup = false
+		}
+		return nil, fmt.Errorf("final branch verification; workspace retained: %w", err)
+	}
+	summary.FinalVerification = stages
+	// Publication must use the tree that just passed verification, including
+	// surviving extra-file edits that no per-tool keep happened to commit.
+	dirtyWS := ws
+	if wrapped, ok := ws.(branchVerificationWorkspace); ok {
+		dirtyWS = wrapped.Workspace
+	}
+	dirty, err := dirtyWS.ChangedFiles(ctx)
+	if err == nil && job.Pushed {
+		var head string
+		head, err = ws.Head(ctx)
+		if err == nil && (len(dirty) != 0 || head != job.PushSHA) {
+			err = errors.New("published workspace changed; cannot retry PR for a different tree")
+		}
+	} else if err == nil && len(dirty) > 0 {
+		err = ws.Commit(ctx, "wolf-fix: final verified branch")
+	}
+	if err != nil {
+		if cleanup != nil {
+			*cleanup = false
+		}
+		return nil, fmt.Errorf("assemble verified branch; workspace retained: %w", err)
 	}
 	result := &Result{Branch: ws.Branch(), DiffArtifactID: job.DiffArtifactID, Summary: summary, Attempts: attempts}
 
 	wantPush := job.Mode == models.FixModePush || job.ResumeAction == models.FixResumePush
 	if wantPush {
-		sha, err := ws.Push(ctx)
-		if err != nil {
+		if err := fix.CheckEnabled(ctx, deps.Store); err != nil {
 			if cleanup != nil {
 				*cleanup = false
 			}
-			job.Error = err.Error()
-			job.PauseReason = pushFailureReason(err)
-			result.PauseStatus = models.FixJobPushFailed
-			logf("job %s: GitHub push failed — fixes kept on %s: %s", job.ID, ws.Branch(), job.PauseReason)
-			return result, nil
+			return nil, fmt.Errorf("publication stopped; workspace retained: %w", err)
 		}
-		result.Summary.Pushed = true
-		result.Summary.PushSHA = sha
-		job.Pushed = true
-		job.PushSHA = sha
-		logf("job %s: pushed branch %s (%s)", job.ID, ws.Branch(), sha)
+		result.Summary.PublicationError = ""
 		if repo != nil && repo.SourceType == models.SourceTypeGitHub {
-			base := repo.DefaultBranch
+			ready, reason := false, "publication readiness check is not configured"
+			if deps.PublicationReady != nil {
+				ready, reason = deps.PublicationReady(ctx, repo)
+			}
+			if !ready {
+				if cleanup != nil {
+					*cleanup = false
+				}
+				job.Error = reason
+				job.PauseReason = "publication not ready: " + reason
+				result.PauseStatus = models.FixJobPushFailed
+				result.Summary.PublicationError = "publication_not_ready"
+				logf("job %s: %s", job.ID, job.PauseReason)
+				return result, nil
+			}
+		}
+		if !job.Pushed {
+			sha, err := ws.Push(ctx)
+			if err != nil {
+				if cleanup != nil {
+					*cleanup = false
+				}
+				result.Summary.PublicationError = "push_failed"
+				job.Error = err.Error()
+				job.PauseReason = pushFailureReason(err)
+				result.PauseStatus = models.FixJobPushFailed
+				logf("job %s: GitHub push failed — fixes kept on %s: %s", job.ID, ws.Branch(), job.PauseReason)
+				return result, nil
+			}
+			result.Summary.Pushed = true
+			result.Summary.PushSHA = sha
+			job.Pushed = true
+			job.PushSHA = sha
+			logf("job %s: pushed branch %s (%s)", job.ID, ws.Branch(), sha)
+		} else {
+			result.Summary.Pushed = true
+			result.Summary.PushSHA = job.PushSHA
+		}
+		if repo != nil && repo.SourceType == models.SourceTypeGitHub {
+			base := job.BaseBranch
+			if base == "" {
+				base = repo.DefaultBranch
+			}
 			if base == "" {
 				base = "main"
 			}
-			prRes, _ := githubPR(ctx, pr.PRRequest{
+			token := ""
+			if deps.GitHubToken != nil {
+				token = deps.GitHubToken(ctx, repo)
+			}
+			prRes, prErr := githubPR(ctx, pr.PRRequest{
+				Token:      token,
+				Source:     repo.SourcePath,
 				RepoPath:   ws.Path(),
 				BranchName: ws.Branch(),
 				BaseBranch: base,
 				Category:   prCategory(summary),
 				Findings:   prFindings(summary),
+				Evidence:   prEvidence(summary),
+				JobID:      job.ID,
+				ScanID:     job.ScanID,
 				Validation: fmt.Sprintf("%d kept, %d remaining", summary.Kept, summary.Remaining),
 			})
-			if prRes != nil && prRes.Error != "" {
+			if prErr == nil && prRes != nil && prRes.Error != "" {
+				prErr = errors.New(prRes.Error)
+			}
+			if prErr == nil && (prRes == nil || strings.TrimSpace(prRes.URL) == "") {
+				prErr = errors.New("PR creation returned no URL")
+			}
+			if prErr != nil {
 				if cleanup != nil {
 					*cleanup = false
 				}
-				job.Error = prRes.Error
-				job.PauseReason = "pr create failed: " + prRes.Error
+				result.Summary.PublicationError = "pr_create_failed"
+				job.Error = prErr.Error()
+				job.PauseReason = "pr create failed: " + prErr.Error()
 				result.PauseStatus = models.FixJobPushFailed
-				logf("job %s: GitHub PR create failed: %s", job.ID, prRes.Error)
-			} else if prRes != nil && prRes.URL != "" {
+				logf("job %s: GitHub PR create failed: %s", job.ID, prErr)
+			} else {
+				result.Summary.PRURL = prRes.URL
 				logf("job %s: GitHub PR %s", job.ID, prRes.URL)
 			}
+		}
+		if cleanup != nil && result.PauseStatus == "" && job.RemediationID == "" {
+			*cleanup = true
 		}
 		return result, nil
 	}
@@ -670,24 +879,48 @@ func finishWithPush(
 
 func prFindings(summary Summary) []models.Finding {
 	var out []models.Finding
-	for _, round := range summary.Rounds {
-		for _, title := range round.Cleared {
-			out = append(out, models.Finding{Title: title})
-		}
+	for _, n := range summary.Addressed {
+		out = append(out, models.Finding{ID: n.ID, ToolName: n.Tool, RuleID: n.Rule, Category: models.Category(n.Category), Severity: models.Severity(n.Severity), Title: n.Title, FilePath: n.File, LineStart: n.Line})
 	}
-	if len(out) == 0 && summary.Kept > 0 {
-		out = []models.Finding{{Title: "automated fix"}}
+	if len(out) > 0 {
+		return out
+	}
+	// Older summaries retain IDs but have no detailed verification evidence.
+	seen := map[string]bool{}
+	for _, round := range summary.Rounds {
+		for _, id := range round.Cleared {
+			if !seen[id] {
+				out = append(out, models.Finding{ID: id, Title: id})
+				seen[id] = true
+			}
+		}
 	}
 	return out
 }
 
-func prCategory(summary Summary) models.Category {
-	for _, n := range summary.Open {
-		if n.Tool != "" {
-			return models.CategorySAST
-		}
+func prEvidence(summary Summary) map[string]string {
+	evidence := make(map[string]string, len(summary.Addressed))
+	for _, n := range summary.Addressed {
+		evidence[n.ID] = n.Validation
 	}
-	return models.CategorySAST
+	return evidence
+}
+
+func prCategory(summary Summary) models.Category {
+	var category models.Category
+	for _, n := range summary.Addressed {
+		if n.Category == "" {
+			continue
+		}
+		if category != "" && string(category) != n.Category {
+			return "multiple categories"
+		}
+		category = models.Category(n.Category)
+	}
+	if category == "" {
+		return "code"
+	}
+	return category
 }
 
 func pushFailureReason(err error) string {
@@ -747,7 +980,7 @@ func rescanRound(
 	active []models.Finding,
 	unfixable map[string]bool,
 	round *RoundSummary,
-) []models.Finding {
+) ([]models.Finding, error) {
 	if deps.Rescan == nil || len(active) == 0 {
 		var still []models.Finding
 		for _, f := range active {
@@ -757,21 +990,12 @@ func rescanRound(
 			}
 		}
 		round.Remaining = len(still)
-		return still
+		return still, nil
 	}
 	tools := uniqueTools(active)
 	reported, err := deps.Rescan.Rescan(ctx, ws.Path(), tools)
 	if err != nil {
-		logf("rescan failed: %v — treating all non-unfixable as still open", err)
-		var still []models.Finding
-		for _, f := range active {
-			if !unfixable[f.ID] {
-				still = append(still, f)
-				round.StillOpen = append(round.StillOpen, f.ID)
-			}
-		}
-		round.Remaining = len(still)
-		return still
+		return nil, fmt.Errorf("branch rescan failed: %w", err)
 	}
 	present := map[string]bool{}
 	for _, f := range reported {
@@ -790,7 +1014,7 @@ func rescanRound(
 		round.Cleared = append(round.Cleared, f.ID)
 	}
 	round.Remaining = len(still)
-	return still
+	return still, nil
 }
 
 func uniqueTools(findings []models.Finding) []string {
@@ -871,19 +1095,17 @@ func fixOneTool(
 	logf Logf,
 	loop int,
 	rep *jobReport,
-) ([]models.FixAttempt, map[string]string) {
-	outcomes := map[string]string{}
-	var records []models.FixAttempt
+) (records []models.FixAttempt, outcomes map[string]string, runErr error) {
+	outcomes = map[string]string{}
+	defer func() {
+		finishCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+		defer cancel()
+		runErr = errors.Join(runErr, finishPendingAttempts(finishCtx, deps, runErr != nil))
+	}()
 
 	take := append([]models.Finding(nil), group.Findings...)
 	sortFindings(take)
 
-	reviewRel, reviewFile, err := writeFindingsReview(ws.Path(), group.Tool, take)
-	if err != nil {
-		logf("  %s: could not write review file: %v", group.Tool, err)
-	} else {
-		logf("  %s: review file %s (%s)", group.Tool, reviewRel, reviewFile)
-	}
 	defer scrubReviewFiles(ws.Path())
 
 	chain, err := deps.Engines.Select(ctx, job)
@@ -896,12 +1118,14 @@ func fixOneTool(
 				DiffExcerpt: "SKIP: no engine available",
 			}
 			records = append(records, rec)
-			persist(ctx, deps, &rec)
+			if err := persist(ctx, deps, &rec); err != nil {
+				return records, outcomes, err
+			}
 			outcomes[f.ID] = models.FixOutcomeUnfixable
 			rep.note(f, models.FixOutcomeUnfixable, "no engine available")
 			logf("decide SKIP %s — no engine available", engine.FindingLabel(f))
 		}
-		return records, outcomes
+		return records, outcomes, nil
 	}
 
 	maxAttempts := job.MaxAttempts
@@ -917,6 +1141,17 @@ func fixOneTool(
 		logf("  %s: attempt %d with engine %s (%d findings)", group.Tool, attemptNo, eng.Name(), len(remaining))
 
 		work := remaining
+		if err := fix.CheckEnabled(ctx, deps.Store); err != nil {
+			return records, outcomes, err
+		}
+		if err := ws.Checkpoint(ctx); err != nil {
+			return records, outcomes, fmt.Errorf("checkpoint agent workspace: %w", err)
+		}
+		reviewRel, reviewFile, err := writeFindingsReview(ws.Path(), group.Tool, work)
+		if err != nil {
+			return records, outcomes, fmt.Errorf("write agent findings review: %w", err)
+		}
+		logf("  %s: review file %s (%s)", group.Tool, reviewRel, reviewFile)
 
 		fixTO := tracker.InvocationTimeout()
 		if fixTO <= 0 || fixTO > defaultPerToolTimeout {
@@ -941,9 +1176,17 @@ func fixOneTool(
 				logf("  opencode: %s", msg)
 			},
 		}
-		fr, _ := eng.Fix(fixCtx, req)
+		if err := beginAttempts(ctx, job, deps, work, eng); err != nil {
+			cancel()
+			return records, outcomes, err
+		}
+		fr, fixErr := eng.Fix(fixCtx, req)
 		cancel()
+		scrubReviewFiles(ws.Path())
 		elapsed := int(time.Since(start).Milliseconds())
+		if fixErr != nil {
+			return records, outcomes, fmt.Errorf("engine %s failed: %w", eng.Name(), fixErr)
+		}
 
 		if fr != nil && len(work) > 15 && engine.CountTaskToolEvents(fr.Output) == 0 {
 			logf("  %s: warning: no task events on a large batch (%d findings)", group.Tool, len(work))
@@ -953,9 +1196,6 @@ func fixOneTool(
 		if fr != nil {
 			for _, d := range engine.ParseDecisions(fr.Output) {
 				id := engine.MatchDecisionID(d.ID, work)
-				if id == "" && len(work) == 1 {
-					id = work[0].ID
-				}
 				if id == "" {
 					continue
 				}
@@ -981,12 +1221,28 @@ func fixOneTool(
 		if fr != nil && strings.TrimSpace(fr.Error) != "" {
 			logf("  %s: engine error: %s", group.Tool, clipLog(fr.Error, 400))
 		}
-		changedN := 0
-		if fr != nil {
-			changedN = len(fr.FilesChanged)
+		// A patch describes the entire turn, not one patch per finding.
+		if fr != nil && !fr.EditsInPlace && strings.TrimSpace(fr.Diff) != "" {
+			if deps.GitApply == nil {
+				return records, outcomes, errors.New("cannot apply engine patch: no Git applier configured")
+			}
+			if err := deps.GitApply.Apply(ctx, ws.Path(), fr.Diff); err != nil {
+				return records, outcomes, fmt.Errorf("apply engine patch: %w", err)
+			}
 		}
+		changed, err := ws.ChangedFiles(ctx)
+		if err != nil {
+			return records, outcomes, fmt.Errorf("inspect agent edits; workspace retained: %w", err)
+		}
+		if fr == nil {
+			fr = &engine.FixResult{}
+		}
+		fr.FilesChanged = changed
+		changedN := len(changed)
 		if changedN > 0 {
-			formatChangedGo(ctx, ws.Path(), fr.FilesChanged)
+			if err := formatChangedGo(ctx, ws.Path(), changed); err != nil {
+				return records, outcomes, fmt.Errorf("write formatted Go source: %w", err)
+			}
 		}
 		stalled := fr != nil && engine.IsStallMessage(fr.Error)
 		if stalled {
@@ -1021,7 +1277,7 @@ func fixOneTool(
 		var next []models.Finding
 		var untouched []models.Finding
 		for _, f := range work {
-			if reason, ok := skipBy[f.ID]; ok {
+			if reason, ok := skipBy[f.ID]; ok && !findingTouched(f, fr) {
 				att := baseAttempt(job, f, attemptNo, eng, deps, fr, elapsed)
 				logf("decide SKIP %s — %s", engine.FindingLabel(f), reason)
 				if hygiene.NoiseReason(reason) {
@@ -1037,7 +1293,9 @@ func fixOneTool(
 					rep.note(f, models.FixOutcomeUnfixable, "agent skipped: "+reason)
 				}
 				records = append(records, att)
-				persist(ctx, deps, &att)
+				if err := persist(ctx, deps, &att); err != nil {
+					return records, outcomes, err
+				}
 				continue
 			}
 			touched := findingTouched(f, fr)
@@ -1057,18 +1315,14 @@ func fixOneTool(
 			} else {
 				logf("decide FIX  %s — files changed, verifying", engine.FindingLabel(f))
 			}
-			if fr != nil && !fr.EditsInPlace && strings.TrimSpace(fr.Diff) != "" && deps.GitApply != nil {
-				if aerr := deps.GitApply.Apply(ctx, ws.Path(), fr.Diff); aerr != nil {
-					logf("decide FIX  %s — git apply failed: %v", engine.FindingLabel(f), aerr)
-					att := baseAttempt(job, f, attemptNo, eng, deps, fr, elapsed)
-					att.Outcome = models.FixOutcomeRolledBack
-					records = append(records, att)
-					persist(ctx, deps, &att)
-					next = append(next, f)
-					continue
-				}
-			}
 			toVerify = append(toVerify, f)
+		}
+		// Later edits and rollback can invalidate earlier keeps in another file.
+		// Rejudge every accepted finding from this tool, not just same-file peers.
+		for _, f := range take {
+			if outcomes[f.ID] == models.FixOutcomeKept {
+				toVerify = append(toVerify, f)
+			}
 		}
 
 		batch := map[string]*verify.VerifyResult{}
@@ -1079,53 +1333,112 @@ func fixOneTool(
 				logf("  %s: verify batch error: %v", group.Tool, batchErr)
 			}
 		}
+		// Decide at file granularity before recording any keeps. An unavailable
+		// verifier is a failed job with a retained workspace, never a verified fix.
+		rejectedFiles := map[string]string{}
 		for _, f := range toVerify {
-			att := baseAttempt(job, f, attemptNo, eng, deps, fr, elapsed)
 			vr := batch[f.ID]
-			if vr != nil {
-				att.Built = vr.Built
-				att.FindingCleared = vr.FindingCleared
-				if vr.NewFindings {
-					att.NewFindings = 1
+			switch verifyVerdict(vr, batchErr) {
+			case verifyUnjudged:
+				why := verifyWhy(vr, batchErr)
+				att := baseAttempt(job, f, attemptNo, eng, deps, fr, elapsed)
+				att.Outcome = models.FixOutcomeUnfixable
+				att.DiffExcerpt = "verification incomplete; workspace retained: " + why
+				records = append(records, att)
+				if err := persist(context.WithoutCancel(ctx), deps, &att); err != nil {
+					return records, outcomes, err
 				}
-				if f.FilePath != "" {
-					att.FilesChanged = f.FilePath
-				} else {
-					att.FilesChanged = strings.Join(vr.ChangedFiles, ",")
+				return records, outcomes, fmt.Errorf("verification incomplete for %s: %s", f.ID, why)
+			case verifyRollback:
+				rejectedFiles[filepath.Clean(f.FilePath)] = verifyWhy(vr, batchErr)
+			}
+		}
+		rolledBack := map[string]bool{}
+		// Persist every rollback first, then recheck the surviving combined
+		// edits before recording any keep based on the pre-rollback checkout.
+		for _, rollbackPhase := range []bool{true, false} {
+			if !rollbackPhase && len(rolledBack) > 0 {
+				var surviving []models.Finding
+				for _, f := range toVerify {
+					if _, rejected := rejectedFiles[filepath.Clean(f.FilePath)]; !rejected {
+						surviving = append(surviving, f)
+					}
+				}
+				if len(surviving) > 0 {
+					batch, batchErr = deps.Verifier.VerifyBatch(ctx, ws, surviving)
+					for _, f := range surviving {
+						if verifyVerdict(batch[f.ID], batchErr) != verifyKeep {
+							why := "combined verification after rollback failed: " + verifyWhy(batch[f.ID], batchErr)
+							att := baseAttempt(job, f, attemptNo, eng, deps, fr, elapsed)
+							att.Outcome, att.DiffExcerpt = models.FixOutcomeUnfixable, why
+							records = append(records, att)
+							if err := persist(context.WithoutCancel(ctx), deps, &att); err != nil {
+								return records, outcomes, err
+							}
+							return records, outcomes, fmt.Errorf("%s for %s; workspace retained", why, f.ID)
+						}
+					}
 				}
 			}
-			switch verifyVerdict(vr, batchErr) {
-			case verifyRollback:
-				why := verifyWhy(vr, batchErr)
-				logf("  %s: verify rollback %s — %s", group.Tool, engine.FindingLabel(f), why)
-				if rerr := ws.Rollback(ctx, f.FilePath); rerr != nil {
-					logf("finding %s: rollback %s failed: %v", f.ID, f.FilePath, rerr)
+			for _, f := range toVerify {
+				_, rejected := rejectedFiles[filepath.Clean(f.FilePath)]
+				if rejected != rollbackPhase {
+					continue
 				}
-				att.Outcome = models.FixOutcomeRolledBack
-				att.DiffExcerpt = "rolled back: " + why
-				records = append(records, att)
-				persist(ctx, deps, &att)
-				rep.note(f, "open", "edited but "+why+" — rolled back")
-				next = append(next, f)
-			case verifyUnjudged:
-				att.Outcome = models.FixOutcomeKept
-				att.DiffExcerpt = "FIX (unverified): built; scanner could not confirm — left on the branch"
-				if note := notes[f.ID]; note != "" {
-					att.DiffExcerpt = "FIX (unverified): " + note
+				att := baseAttempt(job, f, attemptNo, eng, deps, fr, elapsed)
+				vr := batch[f.ID]
+				if vr != nil {
+					att.Built = vr.Built
+					att.FindingCleared = vr.FindingCleared
+					if vr.NewFindings {
+						att.NewFindings = 1
+					}
+					if f.FilePath != "" {
+						att.FilesChanged = f.FilePath
+					} else {
+						att.FilesChanged = strings.Join(vr.ChangedFiles, ",")
+					}
 				}
-				records = append(records, att)
-				persist(ctx, deps, &att)
-				outcomes[f.ID] = models.FixOutcomeKept
-				rep.note(f, models.FixOutcomeKept, "edited and built; scanner could not verify — kept")
-				logf("decide KEEP %s — built, scanner could not verify — left on the branch", engine.FindingLabel(f))
-			default:
-				att.Outcome = models.FixOutcomeKept
-				if note := notes[f.ID]; note != "" {
-					att.DiffExcerpt = "FIX: " + note
+				file := filepath.Clean(f.FilePath)
+				if why, rejected := rejectedFiles[file]; rejected {
+					logf("  %s: verify rollback %s — %s", group.Tool, engine.FindingLabel(f), why)
+					var rerr error
+					if !rolledBack[file] {
+						rerr = ws.Rollback(ctx, f.FilePath)
+					}
+					if rerr != nil {
+						logf("finding %s: rollback %s failed: %v", f.ID, f.FilePath, rerr)
+						att.Outcome = models.FixOutcomeUnfixable
+						att.DiffExcerpt = "rollback failed; workspace retained: " + rerr.Error()
+						records = append(records, att)
+						if err := persist(context.WithoutCancel(ctx), deps, &att); err != nil {
+							return records, outcomes, err
+						}
+						return records, outcomes, fmt.Errorf("rollback %q: %w", f.FilePath, rerr)
+					}
+					rolledBack[file] = true
+					delete(outcomes, f.ID)
+					att.Outcome = models.FixOutcomeRolledBack
+					att.DiffExcerpt = "rolled back: " + why
+					records = append(records, att)
+					if err := persist(ctx, deps, &att); err != nil {
+						return records, outcomes, err
+					}
+					rep.note(f, "open", "edited but "+why+" — rolled back")
+					next = append(next, f)
+				} else {
+					att.Outcome = models.FixOutcomeKept
+					if note := notes[f.ID]; note != "" {
+						att.DiffExcerpt = "FIX: " + note
+					}
+					records = append(records, att)
+					if err := persist(ctx, deps, &att); err != nil {
+						return records, outcomes, err
+					}
+					outcomes[f.ID] = models.FixOutcomeKept
+					rep.note(f, models.FixOutcomeKept, "verified and kept on the branch")
+					rep.verification(f.ID, vr)
 				}
-				records = append(records, att)
-				persist(ctx, deps, &att)
-				outcomes[f.ID] = models.FixOutcomeKept
 			}
 		}
 
@@ -1141,9 +1454,6 @@ func fixOneTool(
 		// actually look at every file, not just the ones this turn edited.
 		if len(untouched) > 0 && len(remaining) < len(work) && leftoverTurns < maxSameEngineLeftoverTurns {
 			leftoverTurns++
-			if rel, _, err := writeFindingsReview(ws.Path(), group.Tool, remaining); err == nil {
-				reviewRel = rel
-			}
 			logf("  %s: %d leftover after partial turn — sending back to the agent", group.Tool, len(remaining))
 			continue
 		}
@@ -1187,14 +1497,17 @@ func fixOneTool(
 					DiffExcerpt: "SKIP: still open after engine chain",
 				}
 				records = append(records, att)
-				persist(ctx, deps, &att)
+				if err := persist(ctx, deps, &att); err != nil {
+					return records, outcomes, err
+				}
 				outcomes[f.ID] = models.FixOutcomeUnfixable
+				rep.note(f, models.FixOutcomeUnfixable, "still open after engine chain")
 				logf("decide SKIP %s — still open after engine chain", engine.FindingLabel(f))
 			}
 			remaining = nil
 		}
 	}
-	return records, outcomes
+	return records, outcomes, nil
 }
 
 func baseAttempt(job *models.FixJob, f models.Finding, attemptNo int, eng engine.SubprocessEngine, deps Deps, fr *engine.FixResult, elapsed int) models.FixAttempt {
@@ -1227,10 +1540,11 @@ const (
 	verifyRollback
 )
 
-// verifyVerdict keeps a build-clean edit when the scanner cannot judge
-// it (missing image, transport error). Rollback only when the build
-// broke or a successful rescan still sees the finding / a regression.
+// verifyWhy preserves verifier diagnostics for both failed and incomplete checks.
 func verifyWhy(vr *verify.VerifyResult, batchErr error) string {
+	if batchErr != nil {
+		return batchErr.Error()
+	}
 	if vr != nil {
 		for _, s := range vr.Stages {
 			if !s.Skipped && !s.Passed && s.Detail != "" {
@@ -1247,18 +1561,15 @@ func verifyWhy(vr *verify.VerifyResult, batchErr error) string {
 			return "finding still present after fix"
 		}
 	}
-	if batchErr != nil {
-		return batchErr.Error()
-	}
 	return "verify did not pass"
 }
 
 func verifyVerdict(vr *verify.VerifyResult, batchErr error) verifyDecision {
-	if vr != nil && vr.BuildFailed() {
-		return verifyRollback
-	}
 	if batchErr != nil {
 		return verifyUnjudged
+	}
+	if vr != nil && vr.BuildFailed() {
+		return verifyRollback
 	}
 	if vr == nil {
 		return verifyUnjudged
@@ -1311,24 +1622,61 @@ func foldOutcomes(
 	}
 }
 
-var formatChangedGo = func(ctx context.Context, repoPath string, files []string) {
-	var goFiles []string
+func formatChangedGo(ctx context.Context, repoPath string, files []string) error {
+	root, err := os.OpenRoot(repoPath)
+	if err != nil {
+		return nil // Formatting is best-effort; verification still judges the edit.
+	}
+	defer func() { _ = root.Close() }()
 	for _, f := range files {
-		if strings.HasSuffix(f, ".go") {
-			goFiles = append(goFiles, f)
+		if filepath.IsAbs(f) {
+			f, err = filepath.Rel(repoPath, f)
+			if err != nil {
+				continue
+			}
+		}
+		f = filepath.Clean(f)
+		if !filepath.IsLocal(f) || !strings.HasSuffix(f, ".go") || hygiene.ProtectedRel(f) || strings.Contains("/"+filepath.ToSlash(f)+"/", "/.git/") {
+			continue
+		}
+		if err := formatGoFile(ctx, root, f, repoPath); err != nil {
+			return err
 		}
 	}
-	if len(goFiles) == 0 || repoPath == "" {
-		return
+	return nil
+}
+
+func formatGoFile(ctx context.Context, root *os.Root, name, repoPath string) error {
+	file, err := root.OpenFile(name, os.O_RDWR, 0)
+	if err != nil {
+		return nil // Deleted files and escaping symlinks must not be formatted.
 	}
-	args := append([]string{"-w"}, goFiles...)
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil || !info.Mode().IsRegular() {
+		return nil
+	}
+	source, err := io.ReadAll(file)
+	if err != nil {
+		return nil
+	}
 	bin := "gofmt"
 	if _, err := exec.LookPath("goimports"); err == nil {
 		bin = "goimports"
 	}
-	cmd := exec.CommandContext(ctx, bin, args...) // #nosec G204
+	// Never give the formatter agent-controlled output paths or flags. Read
+	// and write through the same confined descriptor even if a path is replaced.
+	cmd := plugin.CommandContext(ctx, bin) // #nosec G204 -- fixed formatter names, source on stdin.
 	cmd.Dir = repoPath
-	_ = cmd.Run()
+	cmd.Stdin = bytes.NewReader(source)
+	formatted, err := cmd.Output()
+	if err != nil || bytes.Equal(source, formatted) {
+		return nil
+	}
+	if _, err := file.WriteAt(formatted, 0); err != nil {
+		return fmt.Errorf("%s: %w", name, err)
+	}
+	return file.Truncate(int64(len(formatted)))
 }
 
 func findingTouched(f models.Finding, fr *engine.FixResult) bool {
@@ -1341,234 +1689,6 @@ func findingTouched(f models.Finding, fr *engine.FixResult) bool {
 		}
 	}
 	return false
-}
-
-// fixOneFinding runs the attempt → verify → keep-or-rollback → escalate cycle
-// for a single finding, walking the engine chain up to job.MaxAttempts. It
-// records a models.FixAttempt for every engine attempt (the audit trail) and
-// returns those records plus the finding's final outcome (kept | unfixable).
-func fixOneFinding(
-	ctx context.Context,
-	job *models.FixJob,
-	ws Workspace,
-	finding models.Finding,
-	deps Deps,
-	tracker *budget.Tracker,
-	logf Logf,
-	loop int,
-) ([]models.FixAttempt, string) {
-	var records []models.FixAttempt
-
-	chain, err := deps.Engines.Select(ctx, job)
-	if err != nil {
-		logf("finding %s: no engine available: %v", finding.ID, err)
-		rec := models.FixAttempt{
-			JobID:     job.ID,
-			FindingID: finding.ID,
-			AttemptNo: 1,
-			Outcome:   models.FixOutcomeUnfixable,
-			CreatedAt: time.Now().UTC(),
-		}
-		records = append(records, rec)
-		persist(ctx, deps, &rec)
-		return records, models.FixOutcomeUnfixable
-	}
-
-	maxAttempts := job.MaxAttempts
-	if maxAttempts <= 0 {
-		maxAttempts = defaultMaxAttempts
-	}
-
-	// Each attempt is persisted exactly once. We hold the attempt until we know
-	// whether it kept (terminal) or rolled back (escalate). When the chain is
-	// exhausted, the FINAL rolled-back attempt is upgraded to the terminal
-	// unfixable verdict before it is persisted — so the audit trail carries one
-	// row per engine attempt, the last reflecting the finding's resolution.
-	eng := chain.Current()
-	for attemptNo := 1; attemptNo <= maxAttempts && eng != nil; attemptNo++ {
-		start := time.Now()
-		logf("finding %s: attempt %d with engine %s", finding.ID, attemptNo, eng.Name())
-
-		att := models.FixAttempt{
-			JobID:      job.ID,
-			FindingID:  finding.ID,
-			AttemptNo:  attemptNo,
-			EngineUsed: engineUsedLabel(eng),
-			CreatedAt:  time.Now().UTC(),
-		}
-
-		outcome := runAttempt(ctx, ws, finding, eng, deps, tracker, &att, logf, loop)
-		att.DurationMS = int(time.Since(start).Milliseconds())
-
-		if outcome == models.FixOutcomeKept {
-			records = append(records, att)
-			persist(ctx, deps, &att)
-			logf("finding %s: KEPT (attempt %d, engine %s)", finding.ID, attemptNo, eng.Name())
-			return records, models.FixOutcomeKept
-		}
-		if outcome == models.FixOutcomeUnfixable {
-			records = append(records, att)
-			persist(ctx, deps, &att)
-			logf("finding %s: skipped as not a real/fixable issue (engine %s)", finding.ID, eng.Name())
-			return records, models.FixOutcomeUnfixable
-		}
-
-		// Rolled back: escalate to the next engine tier (more context / stronger
-		// model / the other engine). When the chain is exhausted (no next tier or
-		// max attempts reached), this rolled-back attempt is the terminal one and
-		// becomes the unfixable verdict.
-		eng = chain.Next()
-		exhausted := eng == nil || attemptNo == maxAttempts
-		if exhausted {
-			att.Outcome = models.FixOutcomeUnfixable
-			records = append(records, att)
-			persist(ctx, deps, &att)
-			logf("finding %s: UNFIXABLE after %d attempt(s)", finding.ID, attemptNo)
-			return records, models.FixOutcomeUnfixable
-		}
-
-		records = append(records, att)
-		persist(ctx, deps, &att)
-		logf("finding %s: rolled back (attempt %d, engine %s); escalating", finding.ID, attemptNo, eng.Name())
-	}
-
-	// Defensive: loop fell through without a terminal verdict (e.g. maxAttempts
-	// <= 0 was somehow passed). Treat as unfixable.
-	return records, models.FixOutcomeUnfixable
-}
-
-// runAttempt performs one engine attempt and the verification gate for it,
-// mutating att with the verify results and returning the outcome (kept |
-// rolled_back). It NEVER trusts the engine's self-report: it applies the API
-// engine's diff (when needed), then judges by verify.Gate, and rolls back on
-// any failure.
-func runAttempt(
-	ctx context.Context,
-	ws Workspace,
-	finding models.Finding,
-	eng engine.SubprocessEngine,
-	deps Deps,
-	tracker *budget.Tracker,
-	att *models.FixAttempt,
-	logf Logf,
-	loop int,
-) string {
-	// Per-fix timeout from the budget.
-	fixCtx := ctx
-	if to := tracker.InvocationTimeout(); to > 0 {
-		var cancel context.CancelFunc
-		fixCtx, cancel = context.WithTimeout(ctx, to)
-		defer cancel()
-	}
-
-	req := engine.FixRequest{
-		Finding:      finding,
-		RepoPath:     ws.Path(),
-		Timeout:      tracker.InvocationTimeout(),
-		Env:          deps.CLIEnv,
-		Model:        deps.Model,
-		Effort:       deps.Effort,
-		Variant:      deps.Variant,
-		Instructions: engine.InstructionForLoop(loop, deps.PromptInitial, deps.PromptFollowup),
-	}
-	fr, err := eng.Fix(fixCtx, req)
-	if err != nil {
-		logf("finding %s: engine %s error: %v", finding.ID, eng.Name(), err)
-		att.Outcome = models.FixOutcomeRolledBack
-		return models.FixOutcomeRolledBack
-	}
-	if fr != nil {
-		if fr.Usage.Model != "" {
-			att.Model = fr.Usage.Model
-		} else if deps.Model != "" {
-			att.Model = deps.Model
-		}
-		att.CostUSD = fr.Usage.CostUSD
-		att.InputTokens = fr.Usage.InputTokens
-		att.OutputTokens = fr.Usage.OutputTokens
-	}
-	if fr != nil && fr.Skipped {
-		reason := fr.SkipReason
-		if reason == "" {
-			reason = fr.Error
-		}
-		logf("finding %s: engine %s skipped (not a real/fixable issue): %s", finding.ID, eng.Name(), reason)
-		att.Outcome = models.FixOutcomeUnfixable
-		return models.FixOutcomeUnfixable
-	}
-	if fr == nil || !fr.Success {
-		detail := ""
-		if fr != nil {
-			detail = fr.Error
-		}
-		logf("finding %s: engine %s did not produce a fix: %s", finding.ID, eng.Name(), detail)
-		att.Outcome = models.FixOutcomeRolledBack
-		return models.FixOutcomeRolledBack
-	}
-
-	// The API engine returns a diff WITHOUT touching the filesystem; apply it
-	// ourselves before verifying. CLI engines edit in place (EditsInPlace=true).
-	if !fr.EditsInPlace && strings.TrimSpace(fr.Diff) != "" {
-		if deps.GitApply == nil {
-			logf("finding %s: engine returned a diff but no git-apply backend is configured", finding.ID)
-			att.Outcome = models.FixOutcomeRolledBack
-			return models.FixOutcomeRolledBack
-		}
-		if aerr := deps.GitApply.Apply(fixCtx, ws.Path(), fr.Diff); aerr != nil {
-			logf("finding %s: git apply failed: %v", finding.ID, aerr)
-			att.Outcome = models.FixOutcomeRolledBack
-			return models.FixOutcomeRolledBack
-		}
-	}
-
-	// --- Verify by what landed on disk (the heart). ---
-	vr, verr := deps.Verifier.Verify(fixCtx, ws, finding)
-	if vr != nil {
-		att.Built = vr.Built
-		att.FindingCleared = vr.FindingCleared
-		if vr.NewFindings {
-			att.NewFindings = 1
-		}
-		if finding.FilePath != "" {
-			att.FilesChanged = finding.FilePath
-		} else {
-			att.FilesChanged = strings.Join(vr.ChangedFiles, ",")
-		}
-	}
-	switch verifyVerdict(vr, verr) {
-	case verifyRollback:
-		rollbackChanged(ctx, ws, vr, logf, finding.ID)
-		att.Outcome = models.FixOutcomeRolledBack
-		return models.FixOutcomeRolledBack
-	case verifyUnjudged:
-		att.Outcome = models.FixOutcomeKept
-		att.DiffExcerpt = "FIX (unverified): built; scanner could not confirm — left on the branch"
-		return models.FixOutcomeKept
-	default:
-		att.Outcome = models.FixOutcomeKept
-		return models.FixOutcomeKept
-	}
-}
-
-// rollbackChanged restores each file a failed attempt touched. It prefers the
-// verify result's changed-file list; when that's empty it falls back to the
-// workspace's own changed-file enumeration so an engine that edited a file the
-// gate didn't surface is still cleaned up.
-func rollbackChanged(ctx context.Context, ws Workspace, vr *verify.VerifyResult, logf Logf, findingID string) {
-	files := []string(nil)
-	if vr != nil {
-		files = vr.ChangedFiles
-	}
-	if len(files) == 0 {
-		if cf, err := ws.ChangedFiles(ctx); err == nil {
-			files = cf
-		}
-	}
-	for _, f := range files {
-		if err := ws.Rollback(ctx, f); err != nil {
-			logf("finding %s: rollback %s failed: %v", findingID, f, err)
-		}
-	}
 }
 
 // gatherFindings resolves the job's target findings. It is a method on the
@@ -1778,31 +1898,48 @@ func perFixTimeout(job *models.FixJob) time.Duration {
 
 // persistLiveSummary writes the per-tool table onto the job so the UI can
 // render it while the agent is still running.
-func persistLiveSummary(ctx context.Context, job *models.FixJob, deps Deps, summary Summary, rep *jobReport) {
+func persistLiveSummary(ctx context.Context, job *models.FixJob, deps Deps, summary Summary, rep *jobReport) error {
 	if job == nil || deps.Store == nil {
-		return
+		return nil
 	}
+	summary.Addressed = rep.keptList()
+	summary.Kept = len(summary.Addressed)
 	summary.Tools = rep.tools()
 	summary.Open = rep.openList()
 	data, err := json.Marshal(summary)
 	if err != nil {
-		return
+		return err
 	}
 	job.Summary = string(data)
-	_ = deps.Store.UpdateFixJob(ctx, job)
+	return deps.Store.UpdateFixJob(ctx, job)
 }
 
-// persist records a FixAttempt via the store, swallowing the error since a
-// failed audit-write must not abort the job. Each attempt is persisted exactly
-// once, after its terminal outcome (kept | rolled_back | unfixable) is set.
-func persist(ctx context.Context, deps Deps, att *models.FixAttempt) {
+// persist records an attempt before later commit/publication can rely on it.
+func persist(ctx context.Context, deps Deps, att *models.FixAttempt) error {
 	if deps.Store == nil || att == nil {
-		return
+		return errors.New("attempt persistence requires a store and attempt")
 	}
 	if att.ID == "" {
+		if pending, ok := deps.pendingAttempts[att.FindingID]; ok {
+			att.ID, att.AttemptNo, att.CreatedAt = pending.ID, pending.AttemptNo, pending.CreatedAt
+			if err := deps.Store.UpdateFixAttempt(ctx, att); err != nil {
+				return fmt.Errorf("finalize fix attempt; workspace retained: %w", err)
+			}
+			delete(deps.pendingAttempts, att.FindingID)
+			return nil
+		}
 		att.ID = uuid.NewString()
 	}
-	_ = deps.Store.CreateFixAttempt(ctx, att)
+	if deps.attemptNumbers != nil {
+		att.AttemptNo = deps.attemptNumbers[att.FindingID] + 1
+	}
+	if err := deps.Store.CreateFixAttempt(ctx, att); err != nil {
+		return fmt.Errorf("persist fix attempt; workspace retained: %w", err)
+	}
+	if deps.attemptNumbers != nil {
+		deps.attemptNumbers[att.FindingID] = att.AttemptNo
+	}
+	return nil
 }
 
 // severityRank returns a numeric rank for severity comparison; higher is more

@@ -8,17 +8,7 @@ import (
 )
 
 func (s *PostgresStore) CreateScanBaseline(ctx context.Context, baseline *models.ScanBaseline) error {
-	now := time.Now().UTC()
-	baseline.CreatedAt = now
-	baseline.UpdatedAt = now
-	if baseline.Strategy == "" {
-		baseline.Strategy = "named"
-	}
-	_, err := s.db.NamedExecContext(ctx,
-		`INSERT INTO scan_baselines (id, repo_id, branch, name, scan_id, strategy, created_by, created_at, updated_at)
-		 VALUES (:id, :repo_id, :branch, :name, :scan_id, :strategy, :created_by, :created_at, :updated_at)`,
-		baseline)
-	return err
+	return createScanBaseline(ctx, s.db, baseline)
 }
 
 func (s *PostgresStore) ListScanBaselines(ctx context.Context, repoID, branch string) ([]models.ScanBaseline, error) {

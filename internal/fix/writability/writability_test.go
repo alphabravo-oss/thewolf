@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/alphabravocompany/thewolf/internal/db"
@@ -27,7 +28,9 @@ type stubLocal struct {
 	err      error
 }
 
-func (s stubLocal) Check(string) (bool, string, error) { return s.writable, s.reason, s.err }
+func (s stubLocal) Check(context.Context, string) (bool, string, error) {
+	return s.writable, s.reason, s.err
+}
 
 type stubGitHub struct {
 	info GitHubPushInfo
@@ -96,7 +99,7 @@ func ghSecret(t *testing.T, value string) models.Secret {
 	if err != nil {
 		t.Fatalf("encrypt: %v", err)
 	}
-	return models.Secret{KeyType: models.KeyTypeGitHubToken, EncryptedValue: enc}
+	return models.Secret{UserID: "u1", KeyType: models.KeyTypeGitHubToken, EncryptedValue: enc}
 }
 
 // --- local -----------------------------------------------------------------
@@ -185,7 +188,7 @@ func TestCheck_GitHub(t *testing.T) {
 		}
 	})
 
-	t.Run("falls back when selected secret cannot decrypt", func(t *testing.T) {
+	t.Run("rejects unreadable selected secret without substituting credentials", func(t *testing.T) {
 		broken := models.Secret{
 			ID:             "sec-broken",
 			UserID:         "u1",
@@ -203,11 +206,8 @@ func TestCheck_GitHub(t *testing.T) {
 		r := *repo
 		r.CredentialSecretID = "sec-broken"
 		res := Check(context.Background(), &r, store, Probes{GitHub: gh, ParseGitHubSource: okParse})
-		if !res.Writable {
-			t.Fatalf("expected fallback token to make repo writable, got %q", res.Reason)
-		}
-		if gh.gotToken != "ghp_other" {
-			t.Fatalf("used token %q, want fallback", gh.gotToken)
+		if res.Writable || gh.gotToken != "" {
+			t.Fatalf("unreadable selected credential must not fall back: %+v", res)
 		}
 	})
 
@@ -255,10 +255,11 @@ func TestCheck_SSH(t *testing.T) {
 	nodeID := "node-1"
 	repo := &models.Repo{
 		SourceType:   models.SourceTypeSSH,
+		UserID:       "u1",
 		SourcePath:   "/srv/app",
 		RemoteNodeID: &nodeID,
 	}
-	node := &models.RemoteNode{ID: nodeID}
+	node := &models.RemoteNode{ID: nodeID, UserID: "u1"}
 
 	t.Run("push accepted", func(t *testing.T) {
 		store := stubStore{node: node}
@@ -315,5 +316,45 @@ func TestCheck_UnsupportedSource(t *testing.T) {
 	res := Check(context.Background(), repo, stubStore{}, Probes{})
 	if res.Writable {
 		t.Fatal("unsupported source must be not-writable")
+	}
+}
+
+func TestSelectedGitHubCredentialOwnership(t *testing.T) {
+	for _, owner := range []string{"another-user", ""} {
+		t.Run("secret-owner-"+owner, func(t *testing.T) {
+			secret := ghSecret(t, "selected-token")
+			secret.UserID = owner
+			store := credStore{byID: map[string]models.Secret{"selected": secret}, stubStore: stubStore{secrets: []models.Secret{ghSecret(t, "fallback-token")}}}
+			repo := &models.Repo{UserID: "u1", CredentialSecretID: "selected"}
+			if token, reason := GitHubToken(t.Context(), store, repo); token != "" || reason == "" {
+				t.Fatalf("unowned credential accepted: %q", reason)
+			}
+			repo.UserID = ""
+			if token, _ := GitHubToken(t.Context(), store, repo); token != "" {
+				t.Fatal("ownerless repo acquired credentials")
+			}
+		})
+	}
+}
+
+func TestDefaultPreflightRejectsUnsupportedSSHWithoutConnecting(t *testing.T) {
+	result := Check(t.Context(), &models.Repo{SourceType: models.SourceTypeSSH}, nil, DefaultProbes(nil))
+	if result.Writable || result.CanPush || !strings.Contains(result.Reason, "register a local clone") {
+		t.Fatalf("misleading SSH readiness: %+v", result)
+	}
+}
+
+func TestSSHPreflightRejectsAnotherOwnersNode(t *testing.T) {
+	nodeID := "node"
+	result := Check(t.Context(), &models.Repo{SourceType: models.SourceTypeSSH, UserID: "u1", RemoteNodeID: &nodeID}, stubStore{node: &models.RemoteNode{ID: nodeID, UserID: "u2"}}, Probes{SSH: stubSSH{ok: true}})
+	if result.Writable || !strings.Contains(result.Reason, "owner") {
+		t.Fatalf("unowned node accepted: %+v", result)
+	}
+}
+
+func TestGitHubProbeErrorDoesNotExposeCredential(t *testing.T) {
+	result := Check(t.Context(), &models.Repo{SourceType: models.SourceTypeGitHub, UserID: "u1", SourcePath: "acme/widget"}, stubStore{secrets: []models.Secret{ghSecret(t, "private-token")}}, Probes{GitHub: &stubGitHub{err: errors.New("rejected private-token")}, ParseGitHubSource: okParse})
+	if result.Writable || strings.Contains(result.Reason, "private-token") {
+		t.Fatalf("unsafe permission response: %+v", result)
 	}
 }

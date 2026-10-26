@@ -15,6 +15,7 @@ func newAuthCmd() *cobra.Command {
 	cmd := group("auth", "Authenticate and manage API tokens")
 	cmd.AddCommand(
 		authLoginCmd(),
+		authRefreshCmd(),
 		authLogoutCmd(),
 		authWhoamiCmd(),
 		authProfileCmd(),
@@ -91,9 +92,10 @@ func authLoginCmd() *cobra.Command {
 				return err
 			}
 			var data struct {
-				AccessToken string `json:"access_token"`
-				MFARequired bool   `json:"mfa_required"`
-				MFAToken    string `json:"mfa_token"`
+				AccessToken  string `json:"access_token"`
+				RefreshToken string `json:"refresh_token"`
+				MFARequired  bool   `json:"mfa_required"`
+				MFAToken     string `json:"mfa_token"`
 			}
 			if err := json.Unmarshal(env.Data, &data); err != nil {
 				return fmt.Errorf("unexpected login response: %w", err)
@@ -127,12 +129,12 @@ func authLoginCmd() *cobra.Command {
 			if ctxName == "" {
 				ctxName = "default"
 			}
-			cfg.Contexts[ctxName] = Context{Server: server, Token: data.AccessToken}
+			cfg.Contexts[ctxName] = Context{Server: server, Token: data.AccessToken, RefreshToken: data.RefreshToken}
 			cfg.CurrentContext = ctxName
 			if err := cfg.Save(); err != nil {
 				return err
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "logged in; JWT stored in context %q\n", ctxName)
+			fmt.Fprintf(cmd.OutOrStdout(), "logged in; credentials stored in context %q (access expires in 15 minutes; renew with wolf auth refresh)\n", ctxName)
 			return nil
 		},
 	}
@@ -153,15 +155,28 @@ func authLogoutCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			// Best-effort server-side logout; ignore its result.
-			_, _ = c.Do(cmd.Context(), "POST", "/auth/logout", nil)
 			cfg, err := LoadConfig()
 			if err != nil {
 				return err
 			}
-			if active, ok := cfg.Active(""); ok {
+			name, _ := cmd.Flags().GetString("context")
+			if name == "" {
+				name = cfg.CurrentContext
+			}
+			if active, ok := cfg.Active(name); ok {
+				var body any
+				if active.RefreshToken != "" {
+					if c.BaseURL != NewClient(active.Server, "").BaseURL {
+						return fmt.Errorf("logout must use the server saved in context %q", name)
+					}
+					body = map[string]string{"refresh_token": active.RefreshToken}
+				}
+				if _, err := c.Do(cmd.Context(), "POST", "/auth/logout", body); err != nil {
+					return fmt.Errorf("server logout failed; credentials retained for retry: %w", err)
+				}
 				active.Token = ""
-				cfg.Contexts[cfg.CurrentContext] = active
+				active.RefreshToken = ""
+				cfg.Contexts[name] = active
 				if err := cfg.Save(); err != nil {
 					return err
 				}

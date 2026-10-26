@@ -7,6 +7,35 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/models"
 )
 
+func TestScanGateRequiresCompleteEvidence(t *testing.T) {
+	for _, tc := range []struct {
+		name                              string
+		status                            models.ScanStatus
+		selected, completed, failed, want string
+	}{
+		{"complete", models.ScanStatusCompleted, `["bandit"]`, `["bandit"]`, `[]`, StatusPass},
+		{"failed", models.ScanStatusFailed, `["bandit"]`, `[]`, `["bandit"]`, StatusIncomplete},
+		{"cancelled", models.ScanStatusCancelled, `["bandit"]`, `[]`, `[]`, StatusIncomplete},
+		{"pending", models.ScanStatusPending, `["bandit"]`, `[]`, `[]`, StatusPending},
+		{"running", models.ScanStatusRunning, `["bandit"]`, `[]`, `[]`, StatusPending},
+		{"missing", models.ScanStatusCompleted, `["bandit","gosec"]`, `["bandit"]`, `[]`, StatusIncomplete},
+		{"wrong tool", models.ScanStatusCompleted, `["bandit"]`, `["gosec"]`, `[]`, StatusIncomplete},
+		{"tool failed", models.ScanStatusCompleted, `["bandit"]`, `["bandit"]`, `["bandit"]`, StatusIncomplete},
+		{"none", models.ScanStatusCompleted, `[]`, `[]`, `[]`, StatusIncomplete},
+		{"invalid", models.ScanStatusCompleted, `{}`, `["bandit"]`, `[]`, StatusIncomplete},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			eval := EvaluateScan(DefaultPolicy(), &models.Scan{Status: tc.status, ToolsSelected: tc.selected, ToolsCompleted: tc.completed, ToolsFailed: tc.failed}, nil)
+			if eval.Status != tc.want || eval.Summary.Status != tc.want {
+				t.Fatalf("got %+v; want %s", eval, tc.want)
+			}
+			if tc.want != StatusPass && eval.Reason == "" {
+				t.Fatal("missing explanation")
+			}
+		})
+	}
+}
+
 func TestDefaultPolicyFailsCriticalHighSecurityAndSecrets(t *testing.T) {
 	findings := []models.Finding{
 		{ID: "critical", Severity: models.SeverityCritical, Category: models.CategorySAST},
@@ -86,5 +115,18 @@ func TestParsePolicyAndConfidenceMinimum(t *testing.T) {
 	}
 	if len(eval.MatchedRules) != 1 || eval.MatchedRules[0].FindingIDs[0] != "high-conf" {
 		t.Fatalf("unexpected matched rules: %+v", eval.MatchedRules)
+	}
+}
+
+func TestUnknownBaselineDoesNotMatchNewOrPassGate(t *testing.T) {
+	finding := models.Finding{ID: "unknown", Severity: models.SeverityHigh, Category: models.CategorySAST}
+	eval := Evaluate(FastPRPolicy(), []models.Finding{finding})
+	if eval.Status != StatusIncomplete || eval.Summary.FailCount != 0 || len(eval.MatchedRules) != 0 {
+		t.Fatalf("unknown baseline asserted a new finding or passed: %+v", eval)
+	}
+	finding.Suppressed = true
+	eval = Evaluate(FastPRPolicy(), []models.Finding{finding})
+	if eval.Status != StatusPass {
+		t.Fatalf("irrelevant suppressed finding blocked policy: %+v", eval)
 	}
 }

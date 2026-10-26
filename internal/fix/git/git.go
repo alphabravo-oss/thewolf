@@ -1,14 +1,18 @@
 package git
 
 import (
+	"bytes"
+	"context"
+	"errors"
 	"fmt"
+	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
 	gogit "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
+	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/transport"
 	"github.com/go-git/go-git/v5/plumbing/transport/http"
 )
@@ -22,7 +26,7 @@ func BranchName(scanID string, category string) string {
 
 // CreateBranch creates a new git branch at the given repo path.
 func CreateBranch(repoPath, branchName string) error {
-	cmd := exec.Command("git", "checkout", "-b", branchName)
+	cmd := Command(context.Background(), nil, "checkout", "-b", branchName)
 	cmd.Dir = repoPath
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -40,13 +44,13 @@ func CreateWorktree(repoPath, branchName string) (string, error) {
 	}
 
 	// Create the branch first
-	cmd := exec.Command("git", "branch", branchName)
+	cmd := Command(context.Background(), nil, "branch", branchName)
 	cmd.Dir = repoPath
 	// Ignore error if branch already exists
 	_, _ = cmd.CombinedOutput() // #nosec G104 -- intentional: response/log write errors are not actionable here
 
 	// #nosec G204 -- command is a configured tool name (docker / claude / codex / scanner binary); args sourced from internal config, not user input
-	cmd = exec.Command("git", "worktree", "add", worktreePath, branchName)
+	cmd = Command(context.Background(), nil, "worktree", "add", worktreePath, branchName)
 	cmd.Dir = repoPath
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -58,7 +62,7 @@ func CreateWorktree(repoPath, branchName string) (string, error) {
 
 // CleanupWorktree removes a git worktree and its directory.
 func CleanupWorktree(repoPath, worktreePath string) error {
-	cmd := exec.Command("git", "worktree", "remove", worktreePath, "--force")
+	cmd := Command(context.Background(), nil, "worktree", "remove", worktreePath, "--force")
 	cmd.Dir = repoPath
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -72,7 +76,7 @@ func CleanupWorktree(repoPath, worktreePath string) error {
 // CaptureDiff returns the git diff for staged and unstaged changes.
 func CaptureDiff(repoPath string) (string, error) {
 	// Get both staged and unstaged diff
-	cmd := exec.Command("git", "diff", "HEAD")
+	cmd := Command(context.Background(), nil, "diff", "--no-ext-diff", "--no-textconv", "HEAD", "--")
 	cmd.Dir = repoPath
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -83,13 +87,13 @@ func CaptureDiff(repoPath string) (string, error) {
 
 // ChangedFiles returns the list of files changed relative to HEAD.
 func ChangedFiles(repoPath string) ([]string, error) {
-	cmd := exec.Command("git", "diff", "--name-only", "HEAD")
+	cmd := Command(context.Background(), nil, "diff", "--no-ext-diff", "--no-textconv", "--name-only", "-z", "HEAD", "--")
 	cmd.Dir = repoPath
-	output, err := cmd.CombinedOutput()
+	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("git diff --name-only: %s: %w", string(output), err)
 	}
-	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	lines := strings.Split(string(output), "\x00")
 	var files []string
 	for _, line := range lines {
 		if line != "" {
@@ -101,13 +105,13 @@ func ChangedFiles(repoPath string) ([]string, error) {
 
 // CommitAll stages and commits all changes.
 func CommitAll(repoPath, message string) error {
-	addCmd := exec.Command("git", "add", "-A")
+	addCmd := Command(context.Background(), nil, "add", "-A")
 	addCmd.Dir = repoPath
 	if out, err := addCmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("git add: %s: %w", string(out), err)
 	}
 
-	commitCmd := exec.Command("git", "commit", "-m", message)
+	commitCmd := Command(context.Background(), nil, "commit", "-m", message)
 	commitCmd.Dir = repoPath
 	if out, err := commitCmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("git commit: %s: %w", string(out), err)
@@ -117,14 +121,14 @@ func CommitAll(repoPath, message string) error {
 
 // RevertChanges discards all uncommitted changes in the working tree.
 func RevertChanges(repoPath string) error {
-	cmd := exec.Command("git", "checkout", "--", ".")
+	cmd := Command(context.Background(), nil, "checkout", "--", ".")
 	cmd.Dir = repoPath
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("git checkout -- .: %s: %w", string(output), err)
 	}
 	// Also remove any untracked files that might have been created.
-	cleanCmd := exec.Command("git", "clean", "-fd")
+	cleanCmd := Command(context.Background(), nil, "clean", "-fd")
 	cleanCmd.Dir = repoPath
 	if out, cleanErr := cleanCmd.CombinedOutput(); cleanErr != nil {
 		return fmt.Errorf("git clean -fd: %s: %w", string(out), cleanErr)
@@ -132,75 +136,112 @@ func RevertChanges(repoPath string) error {
 	return nil
 }
 
-// CurrentBranch returns the name of the currently checked-out branch.
+// CurrentBranch returns the current branch, or HEAD for a detached checkout.
 func CurrentBranch(repoPath string) (string, error) {
-	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
-	cmd.Dir = repoPath
-	output, err := cmd.CombinedOutput()
+	root, err := os.OpenRoot(repoPath)
 	if err != nil {
-		return "", fmt.Errorf("git rev-parse --abbrev-ref HEAD: %s: %w", string(output), err)
+		return "", err
 	}
-	return strings.TrimSpace(string(output)), nil
+	defer func() { _ = root.Close() }()
+	gitdir, err := openWorktreeGitDir(context.Background(), root, os.OpenRoot)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = gitdir.Close() }()
+	data, err := readGitMetadata(context.Background(), gitdir, "HEAD", 4096)
+	if err != nil {
+		return "", err
+	}
+	if err := validateRefValue(data); err != nil {
+		return "", err
+	}
+	ref := plumbing.NewReferenceFromStrings("HEAD", strings.TrimSpace(string(data)))
+	if ref.Type() == plumbing.SymbolicReference {
+		return ref.Target().Short(), nil
+	}
+	return "HEAD", nil
 }
 
-// ListBranches returns all local and remote branch names for a repo.
-// Remote tracking branches are returned without the "origin/" prefix and
-// deduplicated against local branches.
+// ListBranches returns deduplicated local and remote branch names, stripping
+// the remote name prefix and excluding remote HEAD pointers.
 func ListBranches(repoPath string) ([]string, error) {
-	// Local branches
-	cmd := exec.Command("git", "branch", "--format=%(refname:short)")
-	cmd.Dir = repoPath
-	out, err := cmd.CombinedOutput()
+	root, err := os.OpenRoot(repoPath)
 	if err != nil {
-		return nil, fmt.Errorf("git branch: %s: %w", string(out), err)
+		return nil, err
 	}
-
-	seen := make(map[string]bool)
-	var branches []string
-	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
-		line = strings.TrimSpace(line)
-		if line != "" && !seen[line] {
-			seen[line] = true
-			branches = append(branches, line)
-		}
-	}
-
-	// Remote branches (strip "origin/" prefix, skip HEAD pointer)
-	cmd = exec.Command("git", "branch", "-r", "--format=%(refname:short)")
-	cmd.Dir = repoPath
-	out, err = cmd.CombinedOutput()
-	if err == nil {
-		for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
-			line = strings.TrimSpace(line)
-			if line == "" || strings.HasSuffix(line, "/HEAD") {
-				continue
-			}
-			// Strip remote name prefix (e.g. "origin/feature" → "feature")
-			if idx := strings.Index(line, "/"); idx >= 0 {
-				line = line[idx+1:]
-			}
-			if !seen[line] {
-				seen[line] = true
-				branches = append(branches, line)
-			}
-		}
-	}
-
-	return branches, nil
+	defer func() { _ = root.Close() }()
+	// These callers already authorize the registered source, including its
+	// linked worktree. Browse requests instead supply their allowlist opener.
+	branches, _, err := BranchesRoot(context.Background(), root, os.OpenRoot)
+	return branches, err
 }
 
-// OriginURL returns `git remote get-url origin` for a local checkout.
-// Empty means the path has no origin (or is not a git repo).
+// OriginURL returns the origin from local Git configuration. Empty means the
+// source has no origin or its metadata cannot be safely read.
 func OriginURL(repoPath string) string {
-	if strings.TrimSpace(repoPath) == "" {
-		return ""
-	}
-	cmd := exec.Command("git", "-C", repoPath, "remote", "get-url", "origin")
-	out, err := cmd.Output()
+	root, err := os.OpenRoot(repoPath)
 	if err != nil {
 		return ""
 	}
-	return strings.TrimSpace(string(out))
+	defer func() { _ = root.Close() }()
+	origin, _ := OriginURLRoot(context.Background(), root, os.OpenRoot)
+	return origin
+}
+
+// OriginURLRoot reads bounded local configuration without Git subprocesses,
+// global/environment configuration, or includes. Local insteadOf rules retain
+// the existing Git parser's semantics; callers authorize the resolved URL.
+func OriginURLRoot(ctx context.Context, root *os.Root, openExternal func(string) (*os.Root, error)) (string, error) {
+	gitdir, err := openWorktreeGitDir(ctx, root, openExternal)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = gitdir.Close() }()
+	common, err := openCommonGitDir(ctx, gitdir, openExternal)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = common.Close() }()
+	data, err := readGitMetadata(ctx, common, "config", 1<<20)
+	if errors.Is(err, os.ErrNotExist) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	cfg, err := config.ReadConfig(bytes.NewReader(data))
+	if err != nil {
+		return "", errors.New("invalid local Git configuration")
+	}
+	extensions := cfg.Raw.Section("extensions")
+	if extensions.HasOption("worktreeConfig") {
+		switch strings.ToLower(extensions.Option("worktreeConfig")) {
+		case "", "true", "yes", "on", "1":
+			worktreeConfig, readErr := readGitMetadata(ctx, gitdir, "config.worktree", (1<<20)-len(data))
+			if readErr != nil && !errors.Is(readErr, os.ErrNotExist) {
+				return "", readErr
+			}
+			cfg, err = config.ReadConfig(bytes.NewReader(append(append(data, '\n'), worktreeConfig...)))
+			if err != nil {
+				return "", errors.New("invalid local Git worktree configuration")
+			}
+		case "false", "no", "off", "0":
+		default:
+			return "", errors.New("invalid Git worktreeConfig setting")
+		}
+	}
+	if origin := cfg.Remotes["origin"]; origin != nil && len(origin.URLs) > 0 {
+		return origin.URLs[0], nil
+	}
+	return "", nil
+}
+
+// IsGitHubTokenRemote restricts automatic GitHub credentials to their HTTPS
+// origin. Repository names, URL userinfo and lookalike hosts are not authority.
+func IsGitHubTokenRemote(raw string) bool {
+	u, err := url.Parse(raw)
+	return err == nil && u.Scheme == "https" && u.Opaque == "" && u.User == nil &&
+		strings.EqualFold(u.Hostname(), "github.com") && (u.Port() == "" || u.Port() == "443")
 }
 
 // ListRemoteBranches returns branch names advertised by a git remote without
@@ -208,6 +249,9 @@ func OriginURL(repoPath string) string {
 func ListRemoteBranches(remoteURL, token string) ([]string, error) {
 	opts := &gogit.ListOptions{}
 	if token != "" {
+		if !IsGitHubTokenRemote(remoteURL) {
+			return nil, fmt.Errorf("GitHub token requires an HTTPS github.com remote")
+		}
 		opts.Auth = &http.BasicAuth{
 			Username: "x-access-token",
 			Password: token,

@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/alphabravocompany/thewolf/internal/fix/verify"
 	"github.com/alphabravocompany/thewolf/internal/models"
 )
 
@@ -22,13 +23,17 @@ type ToolReport struct {
 
 // FindingNote is one finding's final disposition for the human review report.
 type FindingNote struct {
-	ID       string `json:"id"`
-	Tool     string `json:"tool"`
-	Severity string `json:"severity,omitempty"`
-	File     string `json:"file,omitempty"`
-	Title    string `json:"title,omitempty"`
-	Outcome  string `json:"outcome"` // kept | open | unfixable | muted | deferred
-	Reason   string `json:"reason"`
+	Rule       string `json:"rule,omitempty"`
+	Category   string `json:"category,omitempty"`
+	Line       int    `json:"line,omitempty"`
+	Validation string `json:"validation,omitempty"`
+	ID         string `json:"id"`
+	Tool       string `json:"tool"`
+	Severity   string `json:"severity,omitempty"`
+	File       string `json:"file,omitempty"`
+	Title      string `json:"title,omitempty"`
+	Outcome    string `json:"outcome"` // kept | open | unfixable | muted | deferred
+	Reason     string `json:"reason"`
 }
 
 const maxListedOpen = 80
@@ -47,6 +52,9 @@ func (r *jobReport) note(f models.Finding, outcome, reason string) {
 	}
 	r.notes[f.ID] = FindingNote{
 		ID:       f.ID,
+		Rule:     f.RuleID,
+		Category: string(f.Category),
+		Line:     f.LineStart,
 		Tool:     strings.TrimSpace(f.ToolName),
 		Severity: strings.TrimSpace(string(f.Severity)),
 		File:     strings.TrimSpace(f.FilePath),
@@ -191,4 +199,38 @@ func (r *jobReport) markdown() string {
 		fmt.Fprintf(&b, "- [%s] %s %s — %s — %s\n", n.Severity, n.Tool, file, label, n.Reason)
 	}
 	return b.String()
+}
+
+// Keep only stage outcomes in publication evidence, never raw command output.
+func (r *jobReport) verification(id string, result *verify.VerifyResult) {
+	if r == nil || result == nil {
+		return
+	}
+	var stages []string
+	for _, stage := range result.Stages {
+		status := "failed"
+		if stage.Skipped {
+			status = "skipped"
+		} else if stage.Passed {
+			status = "passed"
+		}
+		stages = append(stages, string(stage.Stage)+": "+status)
+	}
+	n := r.notes[id]
+	n.Validation = strings.Join(stages, "; ")
+	r.notes[id] = n
+}
+
+func (r *jobReport) keptList() []FindingNote {
+	if r == nil {
+		return nil
+	}
+	var out []FindingNote
+	for _, n := range r.notes {
+		if n.Outcome == models.FixOutcomeKept {
+			out = append(out, n)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
 }

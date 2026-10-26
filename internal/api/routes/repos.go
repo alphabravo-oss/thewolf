@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -292,10 +293,6 @@ func UpdateRepo(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if !canModifyOwned(claims, repo.UserID) {
-		response.WriteError(w, http.StatusForbidden, "forbidden", "you can only modify repositories you created")
-		return
-	}
 
 	var req updateRepoRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -366,10 +363,6 @@ func SyncRepo(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if !canModifyOwned(claims, repo.UserID) {
-		response.WriteError(w, http.StatusForbidden, "forbidden", "you can only sync repositories you created")
-		return
-	}
 
 	branch := strings.TrimSpace(r.URL.Query().Get("branch"))
 	if branch == "" {
@@ -434,18 +427,14 @@ func DeleteRepo(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := chi.URLParam(r, "id")
-	repo, err := h.Store.GetRepoByID(r.Context(), id)
-	if err != nil {
-		response.WriteError(w, http.StatusNotFound, "not_found", "repo not found")
-		return
-	}
-	if !canModifyOwned(claims, repo.UserID) {
-		response.WriteError(w, http.StatusForbidden, "forbidden", "you can only delete repositories you created")
+	repo, ok := loadRepoForCaller(w, r, h.Store, id, claims)
+	if !ok {
 		return
 	}
 
 	purge := wantPurgeRecords(r)
 	var scanIDs []string
+	var err error
 	if purge {
 		scanIDs, err = h.Store.DeleteRepoCascade(r.Context(), id)
 		if err != nil {
@@ -568,7 +557,7 @@ func repoBranchList(ctx context.Context, h *Handler, repo *models.Repo) (branche
 			return nil, "", fmt.Errorf("git source path is empty")
 		}
 		token := ""
-		if isGitHubRemoteURL(url) {
+		if gitpkg.IsGitHubTokenRemote(url) {
 			t, terr := githubTokenForRepo(ctx, h, repo)
 			if terr != nil {
 				return nil, "", terr
@@ -581,10 +570,24 @@ func repoBranchList(ctx context.Context, h *Handler, repo *models.Repo) (branche
 		}
 		return branches, repo.DefaultBranch, nil
 	default:
-		origin := gitpkg.OriginURL(repo.SourcePath)
+		roots := browseAllowedRoots()
+		root, err := openBrowseGitDirectory(repo.SourcePath, roots)
+		if err != nil {
+			return nil, "", fmt.Errorf("local source is outside the allowed browse roots or cannot be opened: %w", err)
+		}
+		defer func() { _ = root.Close() }()
+		openMetadata := func(path string) (*os.Root, error) { return openBrowseGitDirectory(path, roots) }
+		branches, current, err := gitpkg.BranchesRoot(ctx, root, openMetadata)
+		if err != nil {
+			return nil, "", fmt.Errorf("failed to read branch metadata: %w", err)
+		}
+		origin, err := gitpkg.OriginURLRoot(ctx, root, openMetadata)
+		if err != nil {
+			return nil, "", fmt.Errorf("failed to read origin metadata: %w", err)
+		}
 		if origin != "" {
 			token := ""
-			if isGitHubRemoteURL(origin) {
+			if gitpkg.IsGitHubTokenRemote(origin) {
 				t, terr := githubTokenForRepo(ctx, h, repo)
 				if terr != nil {
 					return nil, "", terr
@@ -595,20 +598,10 @@ func repoBranchList(ctx context.Context, h *Handler, repo *models.Repo) (branche
 			if err != nil {
 				return nil, "", fmt.Errorf("failed to list remote branches: %w", err)
 			}
-			current, _ = gitpkg.CurrentBranch(repo.SourcePath)
 			return branches, current, nil
 		}
-		branches, err = gitpkg.ListBranches(repo.SourcePath)
-		if err != nil {
-			return nil, "", fmt.Errorf("failed to list branches: %w", err)
-		}
-		current, _ = gitpkg.CurrentBranch(repo.SourcePath)
 		return branches, current, nil
 	}
-}
-
-func isGitHubRemoteURL(raw string) bool {
-	return strings.Contains(strings.ToLower(raw), "github.com")
 }
 
 func githubTokenForRepo(ctx context.Context, h *Handler, repo *models.Repo) (string, error) {

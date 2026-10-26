@@ -3,7 +3,10 @@ package serve
 import (
 	"context"
 	cryptorand "crypto/rand"
+	"database/sql"
+	"errors"
 	"fmt"
+	"net/mail"
 	"os"
 	"path/filepath"
 	"strings"
@@ -65,8 +68,16 @@ func Run(ctx context.Context, opt Options) error {
 			return fmt.Errorf("enable API-only mode: %w", err)
 		}
 	}
+	secret, err := resolveJWTSecret()
+	if err != nil {
+		return err
+	}
+	if err := secrets.LoadMasterKey(); err != nil {
+		return fmt.Errorf("load secrets master key: %w", err)
+	}
+	auth.SetJWTSecret(secret)
 	if !opt.SkipScanInit {
-		if _, err := scanners.LoadAndInstall(ctx); err != nil {
+		if _, err := scanners.LoadAndInstall(ctx, scanners.RuntimeFromEnv()); err != nil {
 			wolflog.L().Warn().Err(err).Msg("scanner backend not ready at startup; UI will surface diagnostics")
 		}
 	}
@@ -96,16 +107,8 @@ func Run(ctx context.Context, opt Options) error {
 		routes.OverlayCommit = opt.OverlayCommit
 	}
 
-	secret, err := resolveJWTSecret()
-	if err != nil {
-		return err
-	}
-	auth.SetJWTSecret(secret)
-	if err := secrets.LoadMasterKey(); err != nil {
-		wolflog.L().Warn().Err(err).Msg("secrets master key unavailable; the secrets store will reject writes")
-	}
 	if err := bootstrapAdmin(ctx, store); err != nil {
-		wolflog.L().Warn().Err(err).Msg("admin bootstrap skipped")
+		return fmt.Errorf("admin bootstrap: %w", err)
 	}
 	wolflog.L().Info().
 		Str("tag", scanners.ResolvedTag()).
@@ -133,29 +136,20 @@ func resolveJWTSecret() ([]byte, error) {
 	if len(secret) > 0 {
 		return secret, nil
 	}
-	home, herr := os.UserHomeDir()
-	if herr != nil || home == "" {
-		secret = make([]byte, 32)
-		if _, err := cryptorand.Read(secret); err != nil {
-			return nil, fmt.Errorf("read CSPRNG for JWT secret: %w", err)
-		}
-		wolflog.L().Warn().Msg("WOLF_MASTER_KEY unset and no home dir; tokens won't survive restart")
-		return secret, nil
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("get home directory for JWT secret: %w", err)
 	}
-	path := filepath.Join(home, ".wolf", "jwt-secret")
-	if data, rerr := os.ReadFile(path); rerr == nil && len(data) >= 32 {
-		return data, nil
+	secret, err = secrets.LoadOrCreateKeyFile(filepath.Join(home, ".wolf", "jwt-secret"), func() ([]byte, error) {
+		key := make([]byte, 32)
+		_, err := cryptorand.Read(key)
+		return key, err
+	})
+	if err != nil {
+		return nil, fmt.Errorf("load JWT secret: %w", err)
 	}
-	secret = make([]byte, 32)
-	if _, err := cryptorand.Read(secret); err != nil {
-		return nil, fmt.Errorf("read CSPRNG for JWT secret: %w", err)
-	}
-	if mkErr := os.MkdirAll(filepath.Dir(path), 0o700); mkErr == nil {
-		if wErr := os.WriteFile(path, secret, 0o600); wErr == nil {
-			wolflog.L().Info().Str("path", path).Msg("JWT secret persisted; tokens will survive restart")
-		} else {
-			wolflog.L().Warn().Err(wErr).Msg("WOLF_MASTER_KEY unset and ~/.wolf/jwt-secret not writable; tokens won't survive restart")
-		}
+	if len(secret) < 32 {
+		return nil, fmt.Errorf("jwt-secret must be at least 32 bytes; existing file was preserved")
 	}
 	return secret, nil
 }
@@ -163,13 +157,24 @@ func resolveJWTSecret() ([]byte, error) {
 func bootstrapAdmin(ctx context.Context, store db.Store) error {
 	email := strings.TrimSpace(strings.ToLower(os.Getenv("WOLF_ADMIN_EMAIL")))
 	password := os.Getenv("WOLF_ADMIN_PASSWORD")
-	if email == "" || password == "" {
+	if email == "" && password == "" {
 		return nil
 	}
-	if len(password) < 12 {
-		return fmt.Errorf("WOLF_ADMIN_PASSWORD must be at least 12 characters")
+	if email == "" || password == "" {
+		return fmt.Errorf("WOLF_ADMIN_EMAIL and WOLF_ADMIN_PASSWORD must both be configured")
 	}
-	if existing, _ := store.GetUserByEmail(ctx, email); existing != nil {
+	address, err := mail.ParseAddress(email)
+	if err != nil || address.Address != email || address.Name != "" {
+		return fmt.Errorf("WOLF_ADMIN_EMAIL must be a valid email address")
+	}
+	if message, ok := auth.ValidatePassword(password); !ok {
+		return fmt.Errorf("WOLF_ADMIN_PASSWORD: %s", message)
+	}
+	existing, err := store.GetUserByEmail(ctx, email)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("look up bootstrap account: %w", err)
+	}
+	if err == nil && existing != nil {
 		return nil
 	}
 	if err := routes.CheckCommunityLimit(ctx, store, "users"); err != nil {

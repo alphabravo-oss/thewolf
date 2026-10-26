@@ -134,6 +134,12 @@ func builtinStrategies() []Strategy {
 			Body:      sRestrictCORSOrigins,
 		},
 		{
+			ID:        "harden-iac",
+			Title:     "Correct the flagged infrastructure configuration",
+			AppliesTo: []string{"iac-misconfiguration"},
+			Body:      "Use the scanner's rule ID and resource location to identify the unsafe setting. Restrict access to the required identities and networks, enable the applicable encryption and logging controls, and review the resulting infrastructure plan before applying it. Rerun the scanner after the change; document any intentional exception with its scope and expiry.",
+		},
+		{
 			ID:        "tool-docs-fallback",
 			Title:     "See the scanner's documentation",
 			AppliesTo: []string{"uncategorized"},

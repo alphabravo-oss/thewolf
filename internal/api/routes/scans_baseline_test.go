@@ -10,9 +10,11 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/alphabravocompany/thewolf/internal/artifacts"
 	"github.com/alphabravocompany/thewolf/internal/db"
 	"github.com/alphabravocompany/thewolf/internal/finding/diff"
 	"github.com/alphabravocompany/thewolf/internal/models"
+	"github.com/alphabravocompany/thewolf/internal/scan/report"
 )
 
 func TestIsZeroToolResult(t *testing.T) {
@@ -79,7 +81,7 @@ func TestPersistBaselineState(t *testing.T) {
 
 	createScan := func(id string, completed time.Time) *models.Scan {
 		t.Helper()
-		scan := &models.Scan{
+		scan := &models.Scan{ToolsSelected: `["a"]`, ToolsCompleted: `["a"]`, ToolsFailed: `[]`,
 			ID: id, UserID: user.ID, RepoID: repo.ID, Branch: "main",
 			Status: models.ScanStatusCompleted, CompletedAt: &completed,
 		}
@@ -113,7 +115,9 @@ func TestPersistBaselineState(t *testing.T) {
 	s1 := createScan("s1", t0)
 	createFinding("f1", "s1", "fp-a")
 	createFinding("f2", "s1", "fp-b")
-	persistBaselineState(ctx, h, s1)
+	if err := persistBaselineState(ctx, h, s1); err != nil {
+		t.Fatal(err)
+	}
 	if f := mustFinding("f1"); f.BaselineState != diff.StateNew || f.IntroducedInScanID != "s1" {
 		t.Fatalf("first scan f1 = %+v", f)
 	}
@@ -121,7 +125,9 @@ func TestPersistBaselineState(t *testing.T) {
 	s2 := createScan("s2", t1)
 	createFinding("f3", "s2", "fp-a")
 	createFinding("f4", "s2", "fp-c")
-	persistBaselineState(ctx, h, s2)
+	if err := persistBaselineState(ctx, h, s2); err != nil {
+		t.Fatal(err)
+	}
 	if f := mustFinding("f3"); f.BaselineState != diff.StateExisting || f.IntroducedInScanID != "s1" {
 		t.Fatalf("existing f3 = %+v", f)
 	}
@@ -131,13 +137,15 @@ func TestPersistBaselineState(t *testing.T) {
 
 	s3 := createScan("s3", t2)
 	createFinding("f5", "s3", "fp-b")
-	persistBaselineState(ctx, h, s3)
-	if f := mustFinding("f5"); f.BaselineState != diff.StateResurfaced {
-		t.Fatalf("resurfaced f5 state = %q", f.BaselineState)
+	if err := persistBaselineState(ctx, h, s3); err != nil {
+		t.Fatal(err)
+	}
+	if f := mustFinding("f5"); f.BaselineState != diff.StateResurfaced || f.IntroducedInScanID != "s1" {
+		t.Fatalf("resurfaced f5 lost original introduction: state=%q introduced=%q", f.BaselineState, f.IntroducedInScanID)
 	}
 }
 
-func TestMaybeAutoCreateBaseline(t *testing.T) {
+func TestCompleteScanCreatesFirstBaseline(t *testing.T) {
 	store, err := db.NewSQLite(":memory:")
 	if err != nil {
 		t.Fatal(err)
@@ -146,6 +154,11 @@ func TestMaybeAutoCreateBaseline(t *testing.T) {
 	if err := store.Migrate(); err != nil {
 		t.Fatal(err)
 	}
+	previous := artifacts.Global
+	if err := artifacts.Init(t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { artifacts.Global = previous })
 	h := &Handler{Store: store}
 	ctx := context.Background()
 	user := &models.User{ID: uuid.NewString(), Email: "auto-base@example.test", PasswordHash: "hash"}
@@ -160,15 +173,18 @@ func TestMaybeAutoCreateBaseline(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Now().UTC()
-	scan := &models.Scan{
+	scan := &models.Scan{ToolsSelected: `["a"]`, ToolsCompleted: `["a"]`, ToolsFailed: `[]`,
 		ID: uuid.NewString(), UserID: user.ID, RepoID: repo.ID, Branch: "main",
-		Status: models.ScanStatusCompleted, Profile: "standard", CompletedAt: &now,
+		Status: models.ScanStatusRunning, Profile: "standard", CompletedAt: &now,
 	}
 	if err := store.CreateScan(ctx, scan); err != nil {
 		t.Fatal(err)
 	}
 
-	maybeAutoCreateBaseline(ctx, h, scan)
+	scan.Status, scan.Phase = models.ScanStatusCompleted, "completed"
+	if _, _, err := publishScanResults(ctx, h, scan, artifactDirForScan(ctx, h, scan), report.ReportConfig{}, report.Manifest{}, db.ScanCompletion{AutoBaseline: true}); err != nil {
+		t.Fatal(err)
+	}
 	baselines, err := store.ListScanBaselines(ctx, repo.ID, "main")
 	if err != nil {
 		t.Fatal(err)
@@ -177,7 +193,15 @@ func TestMaybeAutoCreateBaseline(t *testing.T) {
 		t.Fatalf("first auto baseline = %+v", baselines)
 	}
 
-	maybeAutoCreateBaseline(ctx, h, scan)
+	scan.ID = uuid.NewString()
+	scan.Status = models.ScanStatusRunning
+	if err := store.CreateScan(ctx, scan); err != nil {
+		t.Fatal(err)
+	}
+	scan.Status = models.ScanStatusCompleted
+	if _, _, err := publishScanResults(ctx, h, scan, artifactDirForScan(ctx, h, scan), report.ReportConfig{}, report.Manifest{}, db.ScanCompletion{AutoBaseline: true}); err != nil {
+		t.Fatal(err)
+	}
 	baselines, err = store.ListScanBaselines(ctx, repo.ID, "main")
 	if err != nil {
 		t.Fatal(err)
@@ -195,17 +219,32 @@ func TestMaybeAutoCreateBaseline(t *testing.T) {
 	}
 	fast := &models.Scan{
 		ID: uuid.NewString(), UserID: user.ID, RepoID: fastRepo.ID, Branch: "main",
-		Status: models.ScanStatusCompleted, Profile: "fast", CompletedAt: &now,
+		Status: models.ScanStatusRunning, Profile: "fast", CompletedAt: &now,
 	}
 	if err := store.CreateScan(ctx, fast); err != nil {
 		t.Fatal(err)
 	}
-	maybeAutoCreateBaseline(ctx, h, fast)
+	fast.Status = models.ScanStatusCompleted
+	if _, _, err := publishScanResults(ctx, h, fast, artifactDirForScan(ctx, h, fast), report.ReportConfig{}, report.Manifest{}, db.ScanCompletion{AutoBaseline: true}); err != nil {
+		t.Fatal(err)
+	}
 	fastBaselines, err := store.ListScanBaselines(ctx, fastRepo.ID, "main")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(fastBaselines) != 0 {
 		t.Fatalf("fast profile created baseline: %+v", fastBaselines)
+	}
+}
+
+func TestPaginationRejectsArithmeticOverflow(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/?page=9223372036854775807&per_page=200", nil)
+	page, size := parsePagination(req)
+	if (page-1)*size < 0 {
+		t.Fatal("offset overflow")
+	}
+	start, end := paginateSlice(3, page, size)
+	if start != 3 || end != 3 {
+		t.Fatalf("far page: %d:%d", start, end)
 	}
 }

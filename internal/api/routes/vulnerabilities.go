@@ -2,17 +2,16 @@ package routes
 
 import (
 	"context"
-	"encoding/json"
+	"database/sql"
+	"errors"
 	"net/http"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 
 	"github.com/alphabravocompany/thewolf/internal/api/response"
 	"github.com/alphabravocompany/thewolf/internal/auth"
 	"github.com/alphabravocompany/thewolf/internal/db"
-	"github.com/alphabravocompany/thewolf/internal/finding/identity"
 	"github.com/alphabravocompany/thewolf/internal/models"
 )
 
@@ -30,23 +29,14 @@ func ListVulnerabilities(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	q := r.URL.Query()
-	page := parseIntDefault(q.Get("page"), 1)
-	perPage := parseIntDefault(q.Get("per_page"), 50)
-	if perPage < 1 {
-		perPage = 50
-	}
-	if perPage > 200 {
-		perPage = 200
-	}
-	if page < 1 {
-		page = 1
-	}
+	page, perPage := parsePagination(r)
 	fleet := fleetVisible(r.Context(), h.Store, claims.UserID)
 	filter := db.VulnListQuery{
 		UserID: claims.UserID,
 		Fleet:  fleet,
 		RepoID: q.Get("repo_id"),
 		ScanID: q.Get("scan_id"),
+		Search: q.Get("q"), SortBy: q.Get("sort"), Desc: !strings.EqualFold(q.Get("order"), "asc"),
 		Limit:  perPage,
 		Offset: (page - 1) * perPage,
 	}
@@ -55,8 +45,22 @@ func ListVulnerabilities(w http.ResponseWriter, r *http.Request) {
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to load vulnerabilities")
 		return
 	}
-	if total == 0 {
-		backfillVulnerabilities(r.Context(), h, claims.UserID, fleet)
+	needsBackfill := total == 0
+	if needsBackfill && filter.Search != "" {
+		unfiltered := filter
+		unfiltered.Search, unfiltered.Offset, unfiltered.Limit = "", 0, 1
+		_, existing, err := h.Store.ListVulnerabilitiesPage(r.Context(), unfiltered)
+		if err != nil {
+			response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to load vulnerabilities")
+			return
+		}
+		needsBackfill = existing == 0
+	}
+	if needsBackfill {
+		if err := backfillVulnerabilities(r.Context(), h, claims.UserID, fleet, filter.RepoID, filter.ScanID); err != nil {
+			response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to reconcile vulnerabilities")
+			return
+		}
 		vulns, total, err = h.Store.ListVulnerabilitiesPage(r.Context(), filter)
 		if err != nil {
 			response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to load vulnerabilities")
@@ -90,25 +94,37 @@ func GetVulnerability(w http.ResponseWriter, r *http.Request) {
 	if !vulnerabilityVisibleToCaller(w, r, h, v, claims) {
 		return
 	}
-	attachVulnerabilityEvidence(r.Context(), h, v)
+	if err := attachVulnerabilityEvidence(r.Context(), h, v); err != nil {
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to load evidence")
+		return
+	}
 	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: v})
 }
 
-func attachVulnerabilityEvidence(ctx context.Context, h *Handler, v *models.Vulnerability) {
+func attachVulnerabilityEvidence(ctx context.Context, h *Handler, v *models.Vulnerability) error {
 	if h == nil || h.Store == nil || v == nil {
-		return
+		return errors.New("vulnerability handler is not initialized")
 	}
 	ev, err := h.Store.ListEvidenceByVulnerability(ctx, v.ID)
 	if err != nil {
-		return
+		return err
 	}
 	v.Evidence = ev
 	v.MergeReason = mergeReason(v)
+	return nil
 }
 
 func mergeReason(v *models.Vulnerability) string {
 	if v == nil {
 		return ""
+	}
+	for _, e := range v.Evidence {
+		if e.Reason == "manual merge" {
+			return "Grouped manually by a user."
+		}
+		if e.Reason == "manual split" {
+			return "Split manually by a user."
+		}
 	}
 	if strings.HasPrefix(v.CanonicalKey, "split:") {
 		return "Split out of a previous cluster."
@@ -145,51 +161,19 @@ func SplitVulnerability(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		FindingIDs []string `json:"finding_ids"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.FindingIDs) == 0 {
+	if !scannerDecode(w, r, &req) {
+		return
+	}
+	if len(req.FindingIDs) == 0 {
 		response.WriteError(w, http.StatusBadRequest, "bad_request", "finding_ids is required")
 		return
 	}
-	ev, err := h.Store.ListEvidenceByVulnerability(r.Context(), v.ID)
+	out, err := h.Store.SplitVulnerability(r.Context(), v.RepoID, v.ID, req.FindingIDs)
 	if err != nil {
-		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to load evidence")
+		writeClusterChangeError(w, err)
 		return
 	}
-	want := map[string]struct{}{}
-	for _, id := range req.FindingIDs {
-		want[id] = struct{}{}
-	}
-	var move []string
-	for _, e := range ev {
-		if _, ok := want[e.FindingID]; ok {
-			move = append(move, e.ID)
-		}
-	}
-	if len(move) == 0 || len(move) >= len(ev) {
-		response.WriteError(w, http.StatusBadRequest, "bad_request", "split must move some, not all, evidence")
-		return
-	}
-	neu := *v
-	neu.ID = uuid.NewString()
-	neu.CanonicalKey = "split:" + neu.ID
-	neu.FindingIDsJSON = ""
-	neu.CorroboratedByJSON = ""
-	neu.Evidence = nil
-	if err := h.Store.UpsertVulnerability(r.Context(), &neu); err != nil {
-		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to create split vulnerability")
-		return
-	}
-	if err := h.Store.MoveVulnerabilityEvidence(r.Context(), move, neu.ID); err != nil {
-		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to move evidence")
-		return
-	}
-	_ = h.Store.RefreshVulnerabilityEvidence(r.Context(), v.ID)
-	_ = h.Store.RefreshVulnerabilityEvidence(r.Context(), neu.ID)
-	out, err := h.Store.GetVulnerabilityByID(r.Context(), neu.ID)
-	if err != nil {
-		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to load split vulnerability")
-		return
-	}
-	attachVulnerabilityEvidence(r.Context(), h, out)
+	out.MergeReason = mergeReason(out)
 	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: out})
 }
 
@@ -215,7 +199,10 @@ func MergeVulnerability(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		VulnerabilityID string `json:"vulnerability_id"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.VulnerabilityID) == "" {
+	if !scannerDecode(w, r, &req) {
+		return
+	}
+	if strings.TrimSpace(req.VulnerabilityID) == "" {
 		response.WriteError(w, http.StatusBadRequest, "bad_request", "vulnerability_id is required")
 		return
 	}
@@ -235,27 +222,12 @@ func MergeVulnerability(w http.ResponseWriter, r *http.Request) {
 		response.WriteError(w, http.StatusBadRequest, "bad_request", "can only merge vulnerabilities in the same repo")
 		return
 	}
-	ev, err := h.Store.ListEvidenceByVulnerability(r.Context(), src.ID)
+	out, err := h.Store.MergeVulnerabilities(r.Context(), target.RepoID, src.ID, target.ID)
 	if err != nil {
-		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to load evidence")
+		writeClusterChangeError(w, err)
 		return
 	}
-	ids := make([]string, 0, len(ev))
-	for _, e := range ev {
-		ids = append(ids, e.ID)
-	}
-	if err := h.Store.MoveVulnerabilityEvidence(r.Context(), ids, target.ID); err != nil {
-		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to move evidence")
-		return
-	}
-	_ = h.Store.DeleteVulnerability(r.Context(), src.ID)
-	_ = h.Store.RefreshVulnerabilityEvidence(r.Context(), target.ID)
-	out, err := h.Store.GetVulnerabilityByID(r.Context(), target.ID)
-	if err != nil {
-		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to load merged vulnerability")
-		return
-	}
-	attachVulnerabilityEvidence(r.Context(), h, out)
+	out.MergeReason = mergeReason(out)
 	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: out})
 }
 
@@ -271,144 +243,46 @@ func vulnerabilityVisibleToCaller(w http.ResponseWriter, r *http.Request, h *Han
 	return false
 }
 
-func backfillVulnerabilities(ctx context.Context, h *Handler, userID string, fleet bool) {
+func backfillVulnerabilities(ctx context.Context, h *Handler, userID string, fleet bool, repoID, scanID string) error {
 	if h == nil || h.Store == nil {
-		return
+		return errors.New("scan handler is not initialized")
 	}
 	findings, err := h.Store.ListCurrentOpenFindings(ctx, userID, fleet, "")
-	if err != nil || len(findings) == 0 {
-		return
+	if err != nil {
+		return err
 	}
 	seen := map[string]struct{}{}
 	for _, f := range findings {
+		if (repoID != "" && f.RepoID != repoID) || (scanID != "" && f.ScanID != scanID) {
+			continue
+		}
 		if _, ok := seen[f.ScanID]; ok {
 			continue
 		}
 		seen[f.ScanID] = struct{}{}
-		DualWriteVulnerabilities(ctx, h, &models.Scan{ID: f.ScanID, RepoID: f.RepoID})
+		if err := DualWriteVulnerabilities(ctx, h, &models.Scan{ID: f.ScanID, RepoID: f.RepoID}); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
-func DualWriteVulnerabilities(ctx context.Context, h *Handler, scan *models.Scan) {
+func DualWriteVulnerabilities(ctx context.Context, h *Handler, scan *models.Scan) error {
 	if h == nil || h.Store == nil || scan == nil {
-		return
+		return errors.New("scan handler and scan are required")
 	}
-	findings, err := h.Store.ListFindingsByScan(ctx, scan.ID)
-	if err != nil || len(findings) == 0 {
-		return
-	}
-	grouped := map[string]*models.Vulnerability{}
-	order := make([]string, 0, len(findings))
-	for i := range findings {
-		f := findings[i]
-		key := canonicalVulnerabilityKey(f)
-		if key == "" {
-			continue
-		}
-		existing, ok := grouped[key]
-		if !ok {
-			v := vulnerabilityFromFinding(scan, f, key)
-			grouped[key] = v
-			order = append(order, key)
-			continue
-		}
-		existing.FindingIDs = appendUnique(existing.FindingIDs, f.ID)
-		existing.CorroboratedBy = appendUnique(existing.CorroboratedBy, f.CorroboratedBy...)
-		existing.EvidenceCount = len(existing.FindingIDs)
-		if f.CompositeScore > existing.CompositeScore {
-			existing.CompositeScore = f.CompositeScore
-			existing.Severity = f.Severity
-			existing.Title = f.Title
-		}
-		existing.FindingIDsJSON = ""
-		existing.CorroboratedByJSON = ""
-	}
-	for _, key := range order {
-		g := grouped[key]
-		_ = h.Store.UpsertVulnerability(ctx, g)
-		stored, err := h.Store.GetVulnerabilityByRepoKey(ctx, g.RepoID, g.CanonicalKey)
-		if err != nil {
-			continue
-		}
-		reason := "same identity"
-		for _, fid := range g.FindingIDs {
-			var f models.Finding
-			for i := range findings {
-				if findings[i].ID == fid {
-					f = findings[i]
-					break
-				}
-			}
-			_ = h.Store.InsertVulnerabilityEvidence(ctx, &models.VulnerabilityEvidence{
-				ID:              uuid.NewString(),
-				VulnerabilityID: stored.ID,
-				FindingID:       fid,
-				ToolName:        f.ToolName,
-				Title:           f.Title,
-				FilePath:        f.FilePath,
-				LineStart:       f.LineStart,
-				RuleID:          f.RuleID,
-				Reason:          reason,
-			})
-		}
-		_ = h.Store.RefreshVulnerabilityEvidence(ctx, stored.ID)
-	}
+	return h.Store.ReconcileVulnerabilities(ctx, scan.ID)
 }
 
-func canonicalVulnerabilityKey(f models.Finding) string {
-	if s := strings.TrimSpace(f.StableFingerprint); s != "" {
-		return s
+func writeClusterChangeError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, db.ErrInvalidClusterChange):
+		response.WriteError(w, http.StatusBadRequest, "invalid_cluster_change", "select a nonempty proper subset of source evidence for split, or another cluster in the same repository for merge")
+	case errors.Is(err, db.ErrClusterScanActive):
+		response.WriteError(w, http.StatusConflict, "scan_active", "wait for every affected scan to finish before changing its clusters")
+	case errors.Is(err, sql.ErrNoRows):
+		response.WriteError(w, http.StatusNotFound, "not_found", "vulnerability or evidence no longer exists")
+	default:
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to change cluster membership")
 	}
-	if s := strings.TrimSpace(f.Fingerprint); s != "" {
-		return s
-	}
-	return identity.Build(f).Stable
-}
-
-func vulnerabilityFromFinding(scan *models.Scan, f models.Finding, key string) *models.Vulnerability {
-	tools := f.CorroboratedBy
-	if len(tools) == 0 && f.ToolName != "" {
-		tools = []string{f.ToolName}
-	}
-	ids := []string{f.ID}
-	count := len(tools)
-	if count < 1 {
-		count = 1
-	}
-	return &models.Vulnerability{
-		ID:             uuid.NewString(),
-		RepoID:         f.RepoID,
-		ScanID:         scan.ID,
-		CanonicalKey:   key,
-		Title:          f.Title,
-		Severity:       f.Severity,
-		Category:       f.Category,
-		FineCategory:   f.FineCategory,
-		Confidence:     f.Confidence,
-		BaselineState:  f.BaselineState,
-		CompositeScore: f.CompositeScore,
-		EvidenceCount:  count,
-		FindingIDs:     ids,
-		CorroboratedBy: tools,
-		Suppressed:     f.Suppressed,
-	}
-}
-
-func appendUnique(dst []string, extra ...string) []string {
-	seen := make(map[string]struct{}, len(dst)+len(extra))
-	for _, s := range dst {
-		seen[s] = struct{}{}
-	}
-	for _, s := range extra {
-		s = strings.TrimSpace(s)
-		if s == "" {
-			continue
-		}
-		if _, ok := seen[s]; ok {
-			continue
-		}
-		seen[s] = struct{}{}
-		dst = append(dst, s)
-	}
-	return dst
 }

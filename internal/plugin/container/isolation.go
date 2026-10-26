@@ -4,6 +4,8 @@ import (
 	"os"
 	"strings"
 	"sync"
+
+	"github.com/alphabravocompany/thewolf/internal/scannertools/manifest"
 )
 
 const (
@@ -12,27 +14,16 @@ const (
 	IsolationRelaxed  = "relaxed"  // all tools on bridge (legacy)
 )
 
-var (
-	networkReqMu sync.RWMutex
-	networkReq   map[string]bool
-)
-
-// SetNetworkRequirements records which tools may leave --network none.
-// Called once per scan from the runner using the scanner manifest.
-func SetNetworkRequirements(m map[string]bool) {
-	networkReqMu.Lock()
-	defer networkReqMu.Unlock()
-	networkReq = m
-}
-
-func toolNeedsNetwork(tool string) bool {
-	networkReqMu.RLock()
-	defer networkReqMu.RUnlock()
-	if networkReq == nil {
-		return false
+// Direct plugin executions (including fix verification) use the manifest too.
+var defaultNetworkRequirements = sync.OnceValue(func() map[string]bool {
+	result := map[string]bool{}
+	if m, err := manifest.LoadDefault(); err == nil {
+		for name, tool := range m.Tools {
+			result[name] = tool.NetworkRequired || tool.ResourceClass == "network"
+		}
 	}
-	return networkReq[tool]
-}
+	return result
+})
 
 // IsolationFromEnv reads WOLF_SCAN_ISOLATION (standard|strict|relaxed).
 func IsolationFromEnv() string {
@@ -55,7 +46,11 @@ func ResolveNetwork(cfg *Config, tool string) string {
 		}
 		return "bridge"
 	}
-	if toolNeedsNetwork(tool) {
+	requirements := defaultNetworkRequirements()
+	if cfg != nil && cfg.NetworkRequirements != nil {
+		requirements = cfg.NetworkRequirements
+	}
+	if requirements[tool] {
 		if cfg != nil && strings.TrimSpace(cfg.AllowNetwork) != "" {
 			return cfg.AllowNetwork
 		}

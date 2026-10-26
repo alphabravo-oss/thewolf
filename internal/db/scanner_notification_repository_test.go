@@ -78,7 +78,7 @@ func runScannerNotificationRepositoryContract(
 		t.Fatalf("notification destination states = %#v", destinationStates)
 	}
 
-	now := time.Now().UTC().Add(time.Second)
+	now := time.Now().UTC().Truncate(time.Microsecond).Add(time.Second)
 	claimed, err := repository.ClaimNextNotification(
 		ctx, "notification-worker-a", now, now.Add(time.Minute),
 	)

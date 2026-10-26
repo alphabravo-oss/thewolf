@@ -3,9 +3,9 @@ package repo
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
+
+	gitpkg "github.com/alphabravocompany/thewolf/internal/fix/git"
 )
 
 // LocalInfo contains git information about a local repository.
@@ -45,19 +45,13 @@ func ValidateLocal(path string) (*LocalInfo, error) {
 }
 
 func getGitBranch(dir string) string {
-	cmd := exec.Command("git", "-C", dir, "rev-parse", "--abbrev-ref", "HEAD")
-	out, err := cmd.Output()
+	branch, err := gitpkg.CurrentBranch(dir)
 	if err != nil {
 		return "main"
 	}
-	return strings.TrimSpace(string(out))
+	return branch
 }
 
 func getGitRemote(dir string) string {
-	cmd := exec.Command("git", "-C", dir, "remote", "get-url", "origin")
-	out, err := cmd.Output()
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(out))
+	return gitpkg.OriginURL(dir)
 }
