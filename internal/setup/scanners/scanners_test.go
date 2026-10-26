@@ -367,10 +367,10 @@ func TestActiveImageRefsDefaults(t *testing.T) {
 
 	refs := ActiveImageRefs()
 	want := map[string]string{
-		"default": "ghcr.io/alphabravo-oss/wolf-scanners:"+DefaultScannersTag,
-		"jvm":     "ghcr.io/alphabravo-oss/wolf-scanners-jvm:"+DefaultScannersTag,
-		"rust":    "ghcr.io/alphabravo-oss/wolf-scanners-rust:"+DefaultScannersTag,
-		"codeql":  "ghcr.io/alphabravo-oss/wolf-scanners-codeql:"+DefaultScannersTag,
+		"default": "ghcr.io/alphabravo-oss/wolf-scanners:" + DefaultScannersTag,
+		"jvm":     "ghcr.io/alphabravo-oss/wolf-scanners-jvm:" + DefaultScannersTag,
+		"rust":    "ghcr.io/alphabravo-oss/wolf-scanners-rust:" + DefaultScannersTag,
+		"codeql":  "ghcr.io/alphabravo-oss/wolf-scanners-codeql:" + DefaultScannersTag,
 	}
 	for variant, w := range want {
 		if refs[variant] != w {

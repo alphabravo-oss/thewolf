@@ -35,13 +35,13 @@ Wolf scanner metadata is authored in `scanners/tools.yaml`. This table is genera
 | `scorecard` | sast | upstream | `5.6.0` (`SCORECARD_VERSION`) | `ghcr.io/ossf/scorecard:v5.6.0` | `linux/amd64`, `linux/arm64` | `docker:ghcr.io/ossf/scorecard` |
 | `semgrep` | sast | upstream | `1.180.0` (`SEMGREP_VERSION`) | `semgrep/semgrep:1.180.0` | `linux/amd64`, `linux/arm64` | `docker:semgrep/semgrep` |
 | `spectral` | docs | upstream | `6.17.0` (`SPECTRAL_VERSION`) | `stoplight/spectral:6.17.0` | `linux/amd64` | `docker:stoplight/spectral` |
-| `swiftlint` | quality | upstream | `0.65.1` (`SWIFTLINT_VERSION`) | `ghcr.io/realm/swiftlint:0.65.1@sha256:012687cd214bab0ea50ab0b0bfbf1a803b7d25c90765a04d1d2b56aae78830d9` | `linux/amd64` | `docker:ghcr.io/realm/swiftlint` |
+| `swiftlint` | quality | upstream | `0.65.1` (`SWIFTLINT_VERSION`) | `ghcr.io/realm/swiftlint:0.65.1@sha256:f47e083201e47a136cda5ae847595bfe00226c444ca226fa74fa5dc648a9b057` | `linux/amd64` | `docker:ghcr.io/realm/swiftlint` |
 | `syft` | sbom | upstream | `1.54.1` (`SYFT_VERSION`) | `anchore/syft:v1.54.1` | `linux/amd64`, `linux/arm64` | `docker:anchore/syft` |
 | `tflint` | infra | upstream | `0.64.0` (`TFLINT_VERSION`) | `ghcr.io/terraform-linters/tflint:v0.64.0` | `linux/amd64`, `linux/arm64` | `docker:ghcr.io/terraform-linters/tflint` |
 | `trivy` | sca | upstream | `0.75.0` (`TRIVY_VERSION`) | `aquasec/trivy:0.75.0` | `linux/amd64`, `linux/arm64` | `docker:aquasec/trivy` |
 | `trufflehog` | secrets | upstream | `3.99.2` (`TRUFFLEHOG_VERSION`) | `trufflesecurity/trufflehog:3.99.2` | `linux/amd64`, `linux/arm64` | `docker:trufflesecurity/trufflehog` |
 | `vale` | docs | upstream | `3.24.0` (`VALE_VERSION`) | `jdkato/vale:v3.24.0` | `linux/amd64`, `linux/arm64` | `docker:jdkato/vale` |
-| `zizmor` | sast | upstream | `1.30.1` (`ZIZMOR_VERSION`) | `ghcr.io/zizmorcore/zizmor:1.30.1@sha256:863026d54f91271b10b60b67ad8054cb37120167e162482597db102b3026a284` | `linux/amd64`, `linux/arm64` | `docker:ghcr.io/zizmorcore/zizmor` |
+| `zizmor` | sast | upstream | `1.30.1` (`ZIZMOR_VERSION`) | `ghcr.io/zizmorcore/zizmor:1.30.1@sha256:a2eb396d886c053073405c7a980f2139ba2248ec172243cfa3841e57196e8101` | `linux/amd64`, `linux/arm64` | `docker:ghcr.io/zizmorcore/zizmor` |
 | `bandit` | sast | default | `1.9.4` (`BANDIT_VERSION`) | `pip:bandit` | - | `pypi:bandit` |
 | `brakeman` | sast | default | `8.1.0` (`BRAKEMAN_VERSION`) | `gem:brakeman` | - | `rubygems:brakeman` |
 | `cppcheck` | sast | default | - | `apt:cppcheck` | - | `debian:cppcheck` |

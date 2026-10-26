@@ -67,7 +67,7 @@ func HasKubernetesInputs(dir string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	defer root.Close()
+	defer func() { _ = root.Close() }() // read-only walk; close errors carry no data
 	found := false
 	err = fs.WalkDir(root.FS(), ".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {

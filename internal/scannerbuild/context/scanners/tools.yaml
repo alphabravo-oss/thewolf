@@ -763,7 +763,7 @@ tools:
     pinned_version: "0.65.1"
     version_variable: SWIFTLINT_VERSION
     image:
-      pinned_reference: ghcr.io/realm/swiftlint:0.65.1@sha256:012687cd214bab0ea50ab0b0bfbf1a803b7d25c90765a04d1d2b56aae78830d9
+      pinned_reference: ghcr.io/realm/swiftlint:0.65.1@sha256:f47e083201e47a136cda5ae847595bfe00226c444ca226fa74fa5dc648a9b057
       entrypoint: swiftlint
       platforms: ["linux/amd64"]
     update_source:
@@ -931,7 +931,7 @@ tools:
     pinned_version: "1.30.1"
     version_variable: ZIZMOR_VERSION
     image:
-      pinned_reference: ghcr.io/zizmorcore/zizmor:1.30.1@sha256:863026d54f91271b10b60b67ad8054cb37120167e162482597db102b3026a284
+      pinned_reference: ghcr.io/zizmorcore/zizmor:1.30.1@sha256:a2eb396d886c053073405c7a980f2139ba2248ec172243cfa3841e57196e8101
       platforms: ["linux/amd64", "linux/arm64"]
     update_source:
       type: docker_registry
