@@ -472,3 +472,13 @@ func TestBucketOverridesDeriveFromTag(t *testing.T) {
 		t.Fatalf("explicit bucket override lost: %s", got)
 	}
 }
+
+func TestBucketsFollowPinnedDefaultImageTag(t *testing.T) {
+	for _, k := range []string{"WOLF_SCANNERS_TAG", "WOLF_SCANNERS_IMAGE_JVM", "WOLF_SCANNERS_IMAGE_RUST", "WOLF_SCANNERS_IMAGE_CODEQL"} {
+		t.Setenv(k, "")
+	}
+	t.Setenv("WOLF_SCANNERS_IMAGE", "ghcr.io/alphabravo-oss/wolf-scanners:scanner-set-2026.44.1")
+	if got := envBucketOverrides()["codeql"]; got != "ghcr.io/alphabravo-oss/wolf-scanners-codeql:scanner-set-2026.44.1" {
+		t.Fatalf("buckets must follow a pinned default image release, got %s", got)
+	}
+}

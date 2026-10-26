@@ -149,7 +149,12 @@ func ActiveImageRefs() map[string]string {
 	// Derive bucket refs from the default image's repo base so a custom
 	// WOLF_SCANNERS_IMAGE flows through to the buckets, while an explicit
 	// per-bucket override still wins.
-	base, _ := splitImageTag(defaultImage)
+	base, imageTag := splitImageTag(defaultImage)
+	// A pinned WOLF_SCANNERS_IMAGE (e.g. :scanner-set-2026.44.1) keeps its
+	// buckets on the same release unless WOLF_SCANNERS_TAG says otherwise.
+	if strings.TrimSpace(os.Getenv("WOLF_SCANNERS_TAG")) == "" && imageTag != "" {
+		tag = imageTag
+	}
 	for _, variant := range []string{"jvm", "rust", "codeql"} {
 		if override := strings.TrimSpace(os.Getenv(bucketVariantEnv[variant])); override != "" {
 			refs[variant] = override

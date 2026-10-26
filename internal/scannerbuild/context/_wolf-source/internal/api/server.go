@@ -101,6 +101,7 @@ func NewServer(store db.Store, addr string) *Server {
 		_ = artifacts.Init(filepath.Join(home, ".wolf", "artifacts")) // #nosec G104 -- intentional: response/log write errors are not actionable here
 	}
 	runArtifactRetentionCleanup(store)
+	routes.StartScannerUpdateChecks(context.Background())
 
 	r := chi.NewRouter()
 

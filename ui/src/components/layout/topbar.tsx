@@ -94,7 +94,8 @@ function goNotification(
     return;
   }
   if (href?.startsWith("/")) {
-    void navigate({ to: href });
+    // `href` lets the router parse a query string (e.g. ?tab=scanners).
+    void navigate({ href });
   }
 }
 
