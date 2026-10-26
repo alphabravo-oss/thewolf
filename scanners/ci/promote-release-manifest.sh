@@ -50,30 +50,35 @@ jq -e \
     --arg lock "$lock_digest" \
     --arg definition "$definition_digest" \
     --arg commit "$definition_commit" '
-  .schemaVersion == "wolf.scanners.candidate-verification/v1"
+  . as $report
+  | .schemaVersion == "wolf.scanners.candidate-verification/v1"
   and .candidate.id == $candidate
   and .candidate.ociDigest == $candidate_digest
   and .candidate.manifestSha256 == $manifest_sha
   and .candidate.lockDigest == $lock
   and .candidate.definitionDigest == $definition
   and .candidate.definitionCommit == $commit
-  and .mirrorRequired == true
+  and (.mirrorRequired | type) == "boolean"
   and .closureVerified == true
   and (.aggregate.primary.signatureVerificationSha256 | test("^sha256:[a-f0-9]{64}$"))
   and (.aggregate.primary.provenanceVerificationSha256 | test("^sha256:[a-f0-9]{64}$"))
   and (.aggregate.primary.sbomVerificationSha256 | test("^sha256:[a-f0-9]{64}$"))
   and (.aggregate.primary.referrersSha256 | test("^sha256:[a-f0-9]{64}$"))
-  and (.aggregate.mirror.signatureVerificationSha256 | test("^sha256:[a-f0-9]{64}$"))
-  and (.aggregate.mirror.provenanceVerificationSha256 | test("^sha256:[a-f0-9]{64}$"))
-  and (.aggregate.mirror.sbomVerificationSha256 | test("^sha256:[a-f0-9]{64}$"))
-  and (.aggregate.mirror.referrersSha256 | test("^sha256:[a-f0-9]{64}$"))
+  # GHCR is canonical. Mirror evidence is required exactly when the verified
+  # candidate required a mirror; a GHCR-only candidate must carry none.
+  and (if .mirrorRequired then
+         (.aggregate.mirror.signatureVerificationSha256 | test("^sha256:[a-f0-9]{64}$"))
+         and (.aggregate.mirror.provenanceVerificationSha256 | test("^sha256:[a-f0-9]{64}$"))
+         and (.aggregate.mirror.sbomVerificationSha256 | test("^sha256:[a-f0-9]{64}$"))
+         and (.aggregate.mirror.referrersSha256 | test("^sha256:[a-f0-9]{64}$"))
+       else .aggregate.mirror == null end)
   and (.images | length) == 8
   and all(.images[];
     (.digest | test("^sha256:[a-f0-9]{64}$"))
     and .primaryVerified == true
-    and .mirrorVerified == true)
+    and (.mirrorVerified == true or ($report.mirrorRequired | not)))
 ' "$verification_report" >/dev/null || {
-    echo "candidate verification report does not bind the exact complete mirrored closure" >&2
+    echo "candidate verification report does not bind the exact complete verified closure" >&2
     exit 1
 }
 
@@ -133,7 +138,7 @@ jq -e --arg candidate "$candidate_id" '
     and ((.platforms | sort) == (expected[.variant].platforms | sort))
     and (.digest | test("^sha256:[a-f0-9]{64}$"))
     and .primary.verified == true
-    and .mirror.verified == true)
+    and (.mirror == null or .mirror.verified == true))
 ' "$candidate_manifest" >/dev/null || {
     echo "candidate manifest is not a complete, mirrored, verified candidate closure" >&2
     exit 1

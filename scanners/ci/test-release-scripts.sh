@@ -542,6 +542,41 @@ if RELEASE_ID=scanner-set-2026.31.2 \
     fail "release accepted candidate evidence that changed after approval"
 fi
 
+# GHCR is canonical: a candidate published without a mirror promotes, but only
+# when its verified report consistently says the mirror was not required.
+promote_with() {
+    local report="$1" manifest="$2" out="$3" verification
+    verification="sha256:$(sha256sum "$report" | awk '{print $1}')"
+    jq --arg verification "$verification" '.verificationEvidenceDigest = $verification' \
+        "$tmp/approval.json" >"$tmp/approval-variant.json"
+    RELEASE_ID=scanner-set-2026.31.2 \
+    SOURCE_DATE=2026-07-31T12:00:00Z \
+    PROMOTION_COMMIT=fedcba9876543210fedcba9876543210fedcba98 \
+        scanners/ci/promote-release-manifest.sh \
+        "$manifest" "$candidate_oci_digest" "$report" "$tmp/approval-variant.json" "$out" >/dev/null 2>&1
+}
+jq '.images |= map(.mirror = null)' "$tmp/candidate.json" >"$tmp/candidate-ghcr.json"
+ghcr_manifest_sha="sha256:$(sha256sum "$tmp/candidate-ghcr.json" | awk '{print $1}')"
+jq --arg sha "$ghcr_manifest_sha" '
+    .candidate.manifestSha256 = $sha
+    | .mirrorRequired = false
+    | .aggregate.mirror = null
+    | .images |= map(.mirrorVerified = false)
+  ' "$tmp/candidate-verification.json" >"$tmp/ghcr-verification.json"
+promote_with "$tmp/ghcr-verification.json" "$tmp/candidate-ghcr.json" "$tmp/ghcr-release.json" ||
+    fail "GHCR-only candidate with consistent verification was not promoted"
+jq -e 'all(.images[]; .mirror == null) and .operation == "release"' "$tmp/ghcr-release.json" >/dev/null ||
+    fail "GHCR-only release invented mirror metadata"
+jq '.mirrorRequired = true' "$tmp/ghcr-verification.json" >"$tmp/missing-mirror-verification.json"
+if promote_with "$tmp/missing-mirror-verification.json" "$tmp/candidate-ghcr.json" "$tmp/missing-mirror-release.json"; then
+    fail "release accepted a required mirror without mirror evidence"
+fi
+jq --argjson mirror "$(jq -c .aggregate.mirror "$tmp/candidate-verification.json")" '.aggregate.mirror = $mirror' \
+    "$tmp/ghcr-verification.json" >"$tmp/inconsistent-verification.json"
+if promote_with "$tmp/inconsistent-verification.json" "$tmp/candidate-ghcr.json" "$tmp/inconsistent-release.json"; then
+    fail "release accepted mirror evidence on a GHCR-only verification report"
+fi
+
 # Exercise the remote closure verifier with deterministic registry/signing
 # doubles. This catches argument, schema, source-binding, and promoted-release
 # replay regressions without requiring live registries in the unit suite.
