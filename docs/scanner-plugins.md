@@ -40,7 +40,7 @@ func Skipped(reason string) error       // other skips (e.g. not configured)
 
 ## Edition and redistribution
 
-- Licensed adapters belong in the Enterprise overlay and must be gated by the `enterprise.plugins` entitlement (`pkg/entitlement.Plugins`). Community stays fully usable without them.
+- Licensed adapters belong in the Enterprise overlay. Wolf enforces the `enterprise.plugins` entitlement (`pkg/entitlement.Plugins`): without it, every scanner registered through `scannerapi` is skipped with "requires an Enterprise license", and coverage shows the gap. Community stays fully usable without them.
 - Commercial engines are **customer-supplied only**. Wolf does not build, publish, mirror or redistribute their images, and the scanner factory never includes them.
 
 ## Example
