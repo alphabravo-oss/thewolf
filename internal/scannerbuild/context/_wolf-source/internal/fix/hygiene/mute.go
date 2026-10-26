@@ -20,7 +20,7 @@ type SuppressionWriter interface {
 // accepted noise does not come back on the next scan.
 func Mute(repoPath string, job *models.FixJob, f models.Finding, reason string, write SuppressionWriter) (files []string, err error) {
 	if repoPath != "" && strings.TrimSpace(f.FilePath) != "" && f.LineStart > 0 {
-		if _, werr := addIgnoreComment(join(repoPath, f.FilePath), f); werr == nil {
+		if _, werr := addIgnoreComment(repoPath, f.FilePath, f); werr == nil {
 			files = append(files, f.FilePath)
 		}
 	}
@@ -75,18 +75,13 @@ func MuteRule(job *models.FixJob, tool, rule, reason string, write SuppressionWr
 	return write.CreateFindingSuppression(s)
 }
 
-func join(root, rel string) string {
-	if root == "" {
-		return rel
+func addIgnoreComment(repoPath, path string, f models.Finding) (string, error) {
+	root, rel, err := openRepoFile(repoPath, path)
+	if err != nil {
+		return "", err
 	}
-	if strings.HasPrefix(rel, "/") {
-		return rel
-	}
-	return strings.TrimRight(root, "/") + "/" + rel
-}
-
-func addIgnoreComment(abs string, f models.Finding) (string, error) {
-	data, err := os.ReadFile(abs)
+	defer func() { _ = root.Close() }()
+	data, err := root.ReadFile(rel)
 	if err != nil {
 		return "", err
 	}
@@ -102,7 +97,7 @@ func addIgnoreComment(abs string, f models.Finding) (string, error) {
 	if strings.Contains(lines[idx], strings.TrimSpace(comment)) {
 		return "", nil
 	}
-	ext := strings.ToLower(abs)
+	ext := strings.ToLower(rel)
 	if strings.HasSuffix(ext, ".go") || strings.HasSuffix(ext, ".js") ||
 		strings.HasSuffix(ext, ".ts") || strings.HasSuffix(ext, ".tsx") {
 		lines[idx] = strings.TrimRight(lines[idx], " \t") + " " + comment
@@ -115,10 +110,10 @@ func addIgnoreComment(abs string, f models.Finding) (string, error) {
 		lines = out
 	}
 	mode := os.FileMode(0o644)
-	if info, err := os.Stat(abs); err == nil {
+	if info, err := root.Stat(rel); err == nil {
 		mode = info.Mode()
 	}
-	return abs, os.WriteFile(abs, []byte(strings.Join(lines, "\n")), mode)
+	return path, root.WriteFile(rel, []byte(strings.Join(lines, "\n")), mode)
 }
 
 func ignoreComment(f models.Finding) string {

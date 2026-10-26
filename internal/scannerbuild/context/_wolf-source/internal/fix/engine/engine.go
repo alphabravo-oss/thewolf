@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
+	"github.com/alphabravocompany/thewolf/internal/plugin"
 	"github.com/alphabravocompany/thewolf/internal/wolflog"
 )
 
@@ -144,7 +145,7 @@ func (c *ClaudeCode) Fix(ctx context.Context, req FixRequest) (*FixResult, error
 	}
 	args = append(args, "-p", prompt)
 
-	cmd := exec.CommandContext(ctx, "claude", args...) // #nosec G204 -- command is a configured tool name; args from internal config, not user input
+	cmd := plugin.CommandContext(ctx, "claude", args...) // #nosec G204 -- command is a configured tool name; args from internal config, not user input
 	cmd.Dir = req.RepoPath
 	applyEngineEnv(cmd, req.Env)
 
@@ -221,7 +222,7 @@ func (c *Codex) Fix(ctx context.Context, req FixRequest) (*FixResult, error) {
 	}
 	args = append(args, prompt)
 
-	cmd := exec.CommandContext(ctx, "codex", args...) // #nosec G204 -- command is a configured tool name; args from internal config, not user input
+	cmd := plugin.CommandContext(ctx, "codex", args...) // #nosec G204 -- command is a configured tool name; args from internal config, not user input
 	cmd.Dir = req.RepoPath
 	applyEngineEnv(cmd, req.Env)
 	// Judge by the worktree, not Codex's exit: an empty successful run is
@@ -313,7 +314,7 @@ func (c *Custom) Fix(ctx context.Context, req FixRequest) (*FixResult, error) {
 
 	// #nosec G204 -- command is a configured tool name (docker / claude / codex / scanner binary); args sourced from internal config, not user input
 	// nosemgrep: go.lang.security.audit.dangerous-exec-command.dangerous-exec-command
-	cmd := exec.CommandContext(ctx, c.Command, args...) // #nosec G204 -- command is a configured tool name; args sourced from internal config
+	cmd := plugin.CommandContext(ctx, c.Command, args...) // #nosec G204 -- command is a configured tool name; args sourced from internal config
 	cmd.Dir = req.RepoPath
 	applyEngineEnv(cmd, req.Env)
 

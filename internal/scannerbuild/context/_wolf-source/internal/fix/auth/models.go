@@ -4,13 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"os/exec"
 	"regexp"
 	"strings"
 	"time"
 	"unicode"
 
 	"github.com/alphabravocompany/thewolf/internal/fix/profile"
+	"github.com/alphabravocompany/thewolf/internal/plugin"
 )
 
 var ansiRe = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]`)
@@ -23,11 +23,11 @@ func stripANSI(s string) string {
 func listOpenCodeModels(ctx context.Context) []profile.Model {
 	probeCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(probeCtx, "opencode", "models", "--verbose") // #nosec G204
+	cmd := plugin.CommandContext(probeCtx, "opencode", "models", "--verbose") // #nosec G204
 	cmd.Stdin = nil
 	out, err := cmd.CombinedOutput()
 	if err != nil || len(bytes.TrimSpace(out)) == 0 {
-		cmd = exec.CommandContext(probeCtx, "opencode", "models") // #nosec G204
+		cmd = plugin.CommandContext(probeCtx, "opencode", "models") // #nosec G204
 		cmd.Stdin = nil
 		out, err = cmd.CombinedOutput()
 		if err != nil {

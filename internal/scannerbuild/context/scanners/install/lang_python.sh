@@ -12,8 +12,8 @@ python3 -m venv /opt/wolf-scanners/py-lang
 # shellcheck disable=SC1091
 . /opt/wolf-scanners/py-lang/bin/activate
 
-pip install --no-cache-dir --upgrade pip
-pip install --no-cache-dir \
+pip install --upgrade pip
+pip install \
     "setuptools==83.0.0" \
     "msgpack==1.2.1" \
     "bandit==${BANDIT_VERSION}" \

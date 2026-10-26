@@ -2,8 +2,9 @@ package models
 
 import "time"
 
-// AuthSession is a browser login session. The plaintext cookie value is
-// never persisted; only SessionHash is stored.
+// AuthSession stores a browser session, refresh credential or MFA challenge.
+// Only SessionHash is persisted; JWT purpose separates refresh and MFA tokens
+// from access credentials, and browser cookies require the wfs_ prefix.
 type AuthSession struct {
 	ID            string     `json:"id" db:"id"`
 	UserID        string     `json:"user_id" db:"user_id"`

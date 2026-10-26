@@ -17,14 +17,16 @@
 # (or run under emulation) on arm64 hosts.
 # ============================================================
 
+FROM debian:trixie-slim@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a0c3ccd26f436a0e AS pins
+COPY versions.env /tmp/versions.env
+COPY install/ /tmp/install/
+RUN bash /tmp/install/version-inputs.sh /tmp/versions.env /tmp/install /pins
+
+FROM golang:1.27.3-alpine@sha256:b8c9b82affbbb82a020bbcf998dad2ba9516944ac7e883524642a481a9505e9c AS go-toolchain
+
 FROM debian:trixie-slim@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a0c3ccd26f436a0e AS base
 
-ARG WOLF_VERSION=dev
-LABEL org.opencontainers.image.title="wolf-scanners-codeql" \
-      org.opencontainers.image.description="CodeQL CLI for the Wolf code analysis engine (license-restricted)" \
-      org.opencontainers.image.source="https://github.com/alphabravo-oss/thewolf" \
-      org.opencontainers.image.vendor="AlphaBravo" \
-      org.opencontainers.image.version="${WOLF_VERSION}"
+
 
 ENV DEBIAN_FRONTEND=noninteractive \
     WOLF_SCANNERS_VARIANT=codeql
@@ -34,13 +36,15 @@ COPY install/os-packages.sh /usr/local/bin/install-os-packages
 RUN chmod +x /usr/local/bin/install-os-packages \
     && /usr/local/bin/install-os-packages codeql
 
-COPY versions.env       /etc/wolf-scanners/versions.env
-COPY wolf-tool-entry    /usr/local/bin/wolf-tool-entry
-COPY smoke-test.sh      /usr/local/bin/smoke-test.sh
-RUN chmod +x /usr/local/bin/wolf-tool-entry /usr/local/bin/smoke-test.sh
+COPY --from=pins /pins/codeql.env /etc/wolf-scanners/versions.env
 
 COPY install/codeql.sh  /tmp/install/codeql.sh
 RUN  bash /tmp/install/codeql.sh
+
+COPY versions.env /etc/wolf-scanners/versions.env
+COPY wolf-tool-entry    /usr/local/bin/wolf-tool-entry
+COPY smoke-test.sh      /usr/local/bin/smoke-test.sh
+RUN chmod +x /usr/local/bin/wolf-tool-entry /usr/local/bin/smoke-test.sh
 
 # Smoke test. buildx injects TARGETPLATFORM/BUILDPLATFORM: run STRICT (full
 # version assertions) on the native arch, but lenient on a cross-built /
@@ -54,8 +58,23 @@ RUN STRICT=1; [ -n "$TARGETPLATFORM" ] && [ "$TARGETPLATFORM" != "$BUILDPLATFORM
 
 RUN rm -rf /tmp/install /var/cache/apt/* /usr/share/doc/* /usr/share/man/*
 
+# The Go extractor invokes go list/build; the CLI bundle alone cannot scan Go.
+# Keep this after the bundle install so a Go update reuses that large layer.
+COPY --from=go-toolchain /usr/local/go /usr/local/go-toolchain
+ENV PATH="/usr/local/go-toolchain/bin:${PATH}"
+RUN rm -rf /usr/local/go-toolchain/test /usr/local/go-toolchain/doc /usr/local/go-toolchain/api /usr/local/go-toolchain/misc \
+    && rm -f /usr/local/go-toolchain/src/crypto/x509/platform_root_key.pem \
+    && go version
+
 RUN groupadd -g 1000 wolf && \
     useradd  -u 1000 -g 1000 -m -d /home/wolf -s /bin/bash wolf
+
+ARG WOLF_VERSION=dev
+LABEL org.opencontainers.image.title="wolf-scanners-codeql" \
+      org.opencontainers.image.description="CodeQL CLI for the Wolf code analysis engine (license-restricted)" \
+      org.opencontainers.image.source="https://github.com/alphabravo-oss/thewolf" \
+      org.opencontainers.image.vendor="AlphaBravo" \
+      org.opencontainers.image.version="${WOLF_VERSION}"
 
 USER wolf
 WORKDIR /scan

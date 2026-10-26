@@ -2,7 +2,7 @@
 // plugin.CommandContext (host-exec) helper, used by every scanner plugin
 // after the containerization migration.
 //
-// Design notes (also documented in docs/PLAN-containerized-scanner-execution.md §5.3):
+// Design notes (also documented in docs/archive/2026-10-23/PLAN-containerized-scanner-execution.md §5.3):
 //
 //   - Plugins call CommandContext(ctx, cfg, opts, tool, args...). The returned
 //     *exec.Cmd, when Run/Output is called, invokes `docker run --rm ...
@@ -138,6 +138,9 @@ type Config struct {
 
 	// Isolation is standard (deny-by-default), strict, or relaxed (legacy bridge).
 	Isolation string
+
+	// NetworkRequirements is a per-scan policy snapshot, never process-global.
+	NetworkRequirements map[string]bool
 
 	// UID and GID are the host uid:gid passed via --user. Resolved once at
 	// startup via os.Getuid()/os.Getgid(). Zero values are valid (means root,

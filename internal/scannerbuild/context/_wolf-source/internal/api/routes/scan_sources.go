@@ -352,14 +352,18 @@ func isFastProfile(p string) bool {
 	}
 }
 
-func heavyToolNames() []string {
+func fastExcludedToolNames() []string {
 	m, err := scannermanifest.LoadDefault()
 	if err != nil || m == nil {
 		return nil
 	}
 	var names []string
-	for name, tool := range m.Tools {
-		if tool.ResourceClass == "heavy" {
+	for name := range m.Tools {
+		// Fast always covers secrets, source analysis, and dependency lockfiles,
+		// including the first scan. Language selection still filters Go-only tools.
+		switch name {
+		case "gitleaks", "detect-secrets", "gosec", "semgrep", "osv-scanner":
+		default:
 			names = append(names, name)
 		}
 	}
@@ -377,23 +381,7 @@ func applyScanProfile(h *Handler, req *createScanRequest, repoID string) {
 	if !isFastProfile(req.Profile) {
 		return
 	}
-	if repoID != "" && h.Store != nil {
-		scans, err := h.Store.ListScansByRepo(context.Background(), repoID)
-		if err != nil {
-			return
-		}
-		hasCompleted := false
-		for i := range scans {
-			if scans[i].Status == models.ScanStatusCompleted {
-				hasCompleted = true
-				break
-			}
-		}
-		if !hasCompleted {
-			return
-		}
-	}
-	for _, name := range heavyToolNames() {
+	for _, name := range fastExcludedToolNames() {
 		req.DisabledTools = appendUniqueString(req.DisabledTools, name)
 	}
 }

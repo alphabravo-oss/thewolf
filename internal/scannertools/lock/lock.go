@@ -323,6 +323,9 @@ func Generate(ctx context.Context, root string, opts GenerateOptions) (*Lock, er
 			if err != nil {
 				return nil, fmt.Errorf("resolve upstream image %s: %w", name, err)
 			}
+			if pinned, ok := referenceDigest(def.Image.PinnedReference); ok && pinned != resolved.Digest {
+				return nil, fmt.Errorf("upstream image %s digest resolution differs from its immutable pin", name)
+			}
 			if previous, ok := existingImage(opts.ExistingLock, name, def.Image.PinnedReference); ok &&
 				previous.Digest != "" && previous.Digest != resolved.Digest && !opts.AllowTagMutation {
 				return nil, &TagMutationError{
@@ -333,6 +336,9 @@ func Generate(ctx context.Context, root string, opts GenerateOptions) (*Lock, er
 			image.Digest = resolved.Digest
 			image.ResolvedReference = resolvedReference(def.Image.PinnedReference, resolved.Digest)
 			image.ResolutionStatus = "registry_resolved"
+			if !image.MutableSource {
+				image.ResolutionStatus = "digest_pinned"
+			}
 		}
 		out.UpstreamImages[name] = image
 	}
@@ -1296,15 +1302,15 @@ func parseImageReference(ref string) (registry, repository, identifier string, e
 			repository = "library/" + base
 		}
 	}
-	if identifier == "" {
-		slash := strings.LastIndex(repository, "/")
-		colon := strings.LastIndex(repository, ":")
-		if colon > slash {
+	slash := strings.LastIndex(repository, "/")
+	colon := strings.LastIndex(repository, ":")
+	if colon > slash {
+		if identifier == "" {
 			identifier = repository[colon+1:]
-			repository = repository[:colon]
-		} else {
-			identifier = "latest"
 		}
+		repository = repository[:colon]
+	} else if identifier == "" {
+		identifier = "latest"
 	}
 	if registry == "" || repository == "" || identifier == "" {
 		return "", "", "", fmt.Errorf("invalid image reference %q", ref)

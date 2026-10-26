@@ -17,56 +17,56 @@ Wolf scanner metadata is authored in `scanners/tools.yaml`. This table is genera
 
 | Tool | Category | Tier | Version | Image or install | Platforms | Update source |
 |---|---|---|---|---|---|---|
-| `bearer` | sast | upstream | `1.49.0` (`BEARER_VERSION`) | `bearer/bearer:1.49.0` | `linux/amd64` | `docker:bearer/bearer` |
-| `checkov` | container | upstream | `3.2.527` (`CHECKOV_VERSION`) | `bridgecrew/checkov:3.2.527` | `linux/amd64`, `linux/arm64` | `docker:bridgecrew/checkov` |
-| `conftest` | infra | upstream | `0.56.0` (`CONFTEST_VERSION`) | `openpolicyagent/conftest:v0.56.0` | `linux/amd64`, `linux/arm64` | `docker:openpolicyagent/conftest` |
-| `dockle` | container | upstream | `0.4.14` (`DOCKLE_VERSION`) | `goodwithtech/dockle:v0.4.14` | `linux/amd64`, `linux/arm64` | `docker:goodwithtech/dockle` |
-| `gitleaks` | secrets | upstream | `8.21.2` (`GITLEAKS_VERSION`) | `zricethezav/gitleaks:v8.21.2` | `linux/amd64`, `linux/arm64` | `docker:zricethezav/gitleaks` |
-| `grype` | sca | upstream | `0.84.0` (`GRYPE_VERSION`) | `anchore/grype:v0.84.0` | `linux/amd64`, `linux/arm64` | `docker:anchore/grype` |
-| `hadolint` | container | upstream | `2.12.0` (`HADOLINT_VERSION`) | `hadolint/hadolint:v2.12.0-alpine` | `linux/amd64`, `linux/arm64` | `docker:hadolint/hadolint` |
-| `kics` | infra | upstream | `2.1.3` (`KICS_VERSION`) | `checkmarx/kics:v2.1.3` | `linux/amd64`, `linux/arm64` | `docker:checkmarx/kics` |
-| `kube-linter` | infra | upstream | `0.7.1` (`KUBE_LINTER_VERSION`) | `stackrox/kube-linter:v0.7.1` | `linux/amd64` | `docker:stackrox/kube-linter` |
-| `kubescape` | infra | upstream | `3.0.22` (`KUBESCAPE_VERSION`) | `quay.io/kubescape/kubescape-cli:v3.0.22` | `linux/amd64`, `linux/arm64` | `docker:quay.io/kubescape/kubescape-cli` |
-| `nuclei` | dast | upstream | `3.3.5` (`NUCLEI_VERSION`) | `projectdiscovery/nuclei:v3.3.5` | `linux/amd64`, `linux/arm64` | `docker:projectdiscovery/nuclei` |
-| `osv-scanner` | sca | upstream | `1.9.1` (`OSV_SCANNER_VERSION`) | `ghcr.io/google/osv-scanner:v1.9.1` | `linux/amd64`, `linux/arm64` | `docker:ghcr.io/google/osv-scanner` |
-| `pluto` | infra | upstream | `5.9.0` (`PLUTO_VERSION`) | `us-docker.pkg.dev/fairwinds-ops/oss/pluto:v5.9.0` | `linux/amd64`, `linux/arm64` | `docker:us-docker.pkg.dev/fairwinds-ops/oss/pluto` |
+| `bearer` | sast | upstream | `2.1.2` (`BEARER_VERSION`) | `bearer/bearer:2.1.2` | `linux/amd64` | `docker:bearer/bearer` |
+| `checkov` | container | upstream | `3.3.28` (`CHECKOV_VERSION`) | `bridgecrew/checkov:3.3.28` | `linux/amd64`, `linux/arm64` | `docker:bridgecrew/checkov` |
+| `conftest` | infra | upstream | `0.71.1` (`CONFTEST_VERSION`) | `openpolicyagent/conftest:v0.71.1` | `linux/amd64`, `linux/arm64` | `docker:openpolicyagent/conftest` |
+| `dockle` | container | upstream | `0.4.15` (`DOCKLE_VERSION`) | `goodwithtech/dockle:v0.4.15` | `linux/amd64`, `linux/arm64` | `docker:goodwithtech/dockle` |
+| `gitleaks` | secrets | upstream | `8.30.1` (`GITLEAKS_VERSION`) | `zricethezav/gitleaks:v8.30.1` | `linux/amd64`, `linux/arm64` | `docker:zricethezav/gitleaks` |
+| `grype` | sca | upstream | `0.120.1` (`GRYPE_VERSION`) | `anchore/grype:v0.120.1` | `linux/amd64`, `linux/arm64` | `docker:anchore/grype` |
+| `hadolint` | container | upstream | `2.15.1` (`HADOLINT_VERSION`) | `hadolint/hadolint:v2.15.1-alpine` | `linux/amd64`, `linux/arm64` | `docker:hadolint/hadolint` |
+| `kics` | infra | upstream | `2.1.20` (`KICS_VERSION`) | `checkmarx/kics:v2.1.20` | `linux/amd64`, `linux/arm64` | `docker:checkmarx/kics` |
+| `kube-linter` | infra | upstream | `0.8.3` (`KUBE_LINTER_VERSION`) | `stackrox/kube-linter:v0.8.3` | `linux/amd64` | `docker:stackrox/kube-linter` |
+| `kubescape` | infra | upstream | `4.0.15` (`KUBESCAPE_VERSION`) | `quay.io/kubescape/kubescape-cli:v4.0.15` | `linux/amd64`, `linux/arm64` | `docker:quay.io/kubescape/kubescape-cli` |
+| `nuclei` | dast | upstream | `3.11.1` (`NUCLEI_VERSION`) | `projectdiscovery/nuclei:v3.11.1` | `linux/amd64`, `linux/arm64` | `docker:projectdiscovery/nuclei` |
+| `osv-scanner` | sca | upstream | `2.7.0` (`OSV_SCANNER_VERSION`) | `ghcr.io/google/osv-scanner:v2.7.0` | `linux/amd64`, `linux/arm64` | `docker:ghcr.io/google/osv-scanner` |
+| `pluto` | infra | upstream | `5.24.4` (`PLUTO_VERSION`) | `us-docker.pkg.dev/fairwinds-ops/oss/pluto:v5.24.4` | `linux/amd64`, `linux/arm64` | `docker:us-docker.pkg.dev/fairwinds-ops/oss/pluto` |
 | `poutine` | sast | upstream | `1.1.6` (`POUTINE_VERSION`) | `ghcr.io/boostsecurityio/poutine:1.1.6@sha256:722a8e0999b583c1540fe2974e691032b2d9d21b9256a17965132b6bfd0081b0` | `linux/amd64`, `linux/arm64` | `docker:ghcr.io/boostsecurityio/poutine` |
-| `renovate` | sca | upstream | `39.55.0` (`RENOVATE_VERSION`) | `ghcr.io/renovatebot/renovate:39.55.0` | `linux/amd64`, `linux/arm64` | `docker:ghcr.io/renovatebot/renovate` |
-| `scorecard` | sast | upstream | `5.5.0` (`SCORECARD_VERSION`) | `ghcr.io/ossf/scorecard:v5.5.0` | `linux/amd64`, `linux/arm64` | `docker:ghcr.io/ossf/scorecard` |
-| `semgrep` | sast | upstream | `1.92.0` (`SEMGREP_VERSION`) | `semgrep/semgrep:1.92.0` | `linux/amd64`, `linux/arm64` | `docker:semgrep/semgrep` |
-| `spectral` | docs | upstream | `6.13.1` (`SPECTRAL_VERSION`) | `stoplight/spectral:6.13.1` | `linux/amd64` | `docker:stoplight/spectral` |
-| `swiftlint` | quality | upstream | `0.57.0` (`SWIFTLINT_VERSION`) | `ghcr.io/realm/swiftlint:0.57.0@sha256:012687cd214bab0ea50ab0b0bfbf1a803b7d25c90765a04d1d2b56aae78830d9` | `linux/amd64` | `docker:ghcr.io/realm/swiftlint` |
-| `syft` | sbom | upstream | `1.17.0` (`SYFT_VERSION`) | `anchore/syft:v1.17.0` | `linux/amd64`, `linux/arm64` | `docker:anchore/syft` |
-| `tflint` | infra | upstream | `0.54.0` (`TFLINT_VERSION`) | `ghcr.io/terraform-linters/tflint:v0.54.0` | `linux/amd64`, `linux/arm64` | `docker:ghcr.io/terraform-linters/tflint` |
-| `trivy` | sca | upstream | `0.57.0` (`TRIVY_VERSION`) | `aquasec/trivy:0.57.0` | `linux/amd64`, `linux/arm64` | `docker:aquasec/trivy` |
-| `trufflehog` | secrets | upstream | `3.83.5` (`TRUFFLEHOG_VERSION`) | `trufflesecurity/trufflehog:3.83.5` | `linux/amd64`, `linux/arm64` | `docker:trufflesecurity/trufflehog` |
-| `vale` | docs | upstream | `3.9.1` (`VALE_VERSION`) | `jdkato/vale:v3.9.1` | `linux/amd64`, `linux/arm64` | `docker:jdkato/vale` |
-| `zizmor` | sast | upstream | `1.29.0` (`ZIZMOR_VERSION`) | `ghcr.io/zizmorcore/zizmor:1.29.0@sha256:863026d54f91271b10b60b67ad8054cb37120167e162482597db102b3026a284` | `linux/amd64`, `linux/arm64` | `docker:ghcr.io/zizmorcore/zizmor` |
-| `bandit` | sast | default | `1.7.10` (`BANDIT_VERSION`) | `pip:bandit` | - | `pypi:bandit` |
-| `brakeman` | sast | default | `6.2.2` (`BRAKEMAN_VERSION`) | `gem:brakeman` | - | `rubygems:brakeman` |
+| `renovate` | sca | upstream | `44.155.1` (`RENOVATE_VERSION`) | `ghcr.io/renovatebot/renovate:44.155.1` | `linux/amd64`, `linux/arm64` | `docker:ghcr.io/renovatebot/renovate` |
+| `scorecard` | sast | upstream | `5.6.0` (`SCORECARD_VERSION`) | `ghcr.io/ossf/scorecard:v5.6.0` | `linux/amd64`, `linux/arm64` | `docker:ghcr.io/ossf/scorecard` |
+| `semgrep` | sast | upstream | `1.180.0` (`SEMGREP_VERSION`) | `semgrep/semgrep:1.180.0` | `linux/amd64`, `linux/arm64` | `docker:semgrep/semgrep` |
+| `spectral` | docs | upstream | `6.17.0` (`SPECTRAL_VERSION`) | `stoplight/spectral:6.17.0` | `linux/amd64` | `docker:stoplight/spectral` |
+| `swiftlint` | quality | upstream | `0.65.1` (`SWIFTLINT_VERSION`) | `ghcr.io/realm/swiftlint:0.65.1@sha256:012687cd214bab0ea50ab0b0bfbf1a803b7d25c90765a04d1d2b56aae78830d9` | `linux/amd64` | `docker:ghcr.io/realm/swiftlint` |
+| `syft` | sbom | upstream | `1.54.1` (`SYFT_VERSION`) | `anchore/syft:v1.54.1` | `linux/amd64`, `linux/arm64` | `docker:anchore/syft` |
+| `tflint` | infra | upstream | `0.64.0` (`TFLINT_VERSION`) | `ghcr.io/terraform-linters/tflint:v0.64.0` | `linux/amd64`, `linux/arm64` | `docker:ghcr.io/terraform-linters/tflint` |
+| `trivy` | sca | upstream | `0.75.0` (`TRIVY_VERSION`) | `aquasec/trivy:0.75.0` | `linux/amd64`, `linux/arm64` | `docker:aquasec/trivy` |
+| `trufflehog` | secrets | upstream | `3.99.2` (`TRUFFLEHOG_VERSION`) | `trufflesecurity/trufflehog:3.99.2` | `linux/amd64`, `linux/arm64` | `docker:trufflesecurity/trufflehog` |
+| `vale` | docs | upstream | `3.24.0` (`VALE_VERSION`) | `jdkato/vale:v3.24.0` | `linux/amd64`, `linux/arm64` | `docker:jdkato/vale` |
+| `zizmor` | sast | upstream | `1.30.1` (`ZIZMOR_VERSION`) | `ghcr.io/zizmorcore/zizmor:1.30.1@sha256:863026d54f91271b10b60b67ad8054cb37120167e162482597db102b3026a284` | `linux/amd64`, `linux/arm64` | `docker:ghcr.io/zizmorcore/zizmor` |
+| `bandit` | sast | default | `1.9.4` (`BANDIT_VERSION`) | `pip:bandit` | - | `pypi:bandit` |
+| `brakeman` | sast | default | `8.1.0` (`BRAKEMAN_VERSION`) | `gem:brakeman` | - | `rubygems:brakeman` |
 | `cppcheck` | sast | default | - | `apt:cppcheck` | - | `debian:cppcheck` |
 | `detect-secrets` | secrets | default | `1.5.0` (`DETECT_SECRETS_VERSION`) | `pip:detect-secrets` | - | `pypi:detect-secrets` |
-| `eslint` | quality | default | `10.8.0` (`ESLINT_VERSION`) | `npm:eslint` | - | `npm:eslint` |
+| `eslint` | quality | default | `10.12.0` (`ESLINT_VERSION`) | `npm:eslint` | - | `npm:eslint` |
 | `gokart` | sast | default | `0.5.1` (`GOKART_VERSION`) | `go:github.com/praetorian-inc/gokart` | - | `go:github.com/praetorian-inc/gokart` |
-| `gosec` | sast | default | `2.28.0` (`GOSEC_VERSION`) | `go:github.com/securego/gosec/v2/cmd/gosec` | - | `go:github.com/securego/gosec/v2` |
-| `govulncheck` | sca | default | `1.6.0` (`GOVULNCHECK_VERSION`) | `go:golang.org/x/vuln/cmd/govulncheck` | - | `go:golang.org/x/vuln` |
+| `gosec` | sast | default | `2.29.0` (`GOSEC_VERSION`) | `go:github.com/securego/gosec/v2/cmd/gosec` | - | `go:github.com/securego/gosec/v2` |
+| `govulncheck` | sca | default | `1.9.0` (`GOVULNCHECK_VERSION`) | `go:golang.org/x/vuln/cmd/govulncheck` | - | `go:golang.org/x/vuln` |
 | `markdownlint` | docs | default | `0.49.1` (`MARKDOWNLINT_VERSION`) | `npm:markdownlint-cli` | - | `npm:markdownlint-cli` |
-| `mypy` | quality | default | `1.13.0` (`MYPY_VERSION`) | `pip:mypy` | - | `pypi:mypy` |
-| `npm-audit` | sca | default | `12.0.2` (`NPM_VERSION`) | `nodejs:npm` | - | `toolchain:npm` |
-| `phpstan` | sast | default | `1.12.7` (`PHPSTAN_VERSION`) | `composer:phpstan/phpstan` | - | `packagist:phpstan/phpstan` |
-| `pip-audit` | sca | default | `2.7.3` (`PIP_AUDIT_VERSION`) | `pip:pip-audit` | - | `pypi:pip-audit` |
+| `mypy` | quality | default | `2.4.0` (`MYPY_VERSION`) | `pip:mypy` | - | `pypi:mypy` |
+| `npm-audit` | sca | default | `12.2.0` (`NPM_VERSION`) | `nodejs:npm` | - | `toolchain:npm` |
+| `phpstan` | sast | default | `2.3.1` (`PHPSTAN_VERSION`) | `composer:phpstan/phpstan` | - | `packagist:phpstan/phpstan` |
+| `pip-audit` | sca | default | `2.10.1` (`PIP_AUDIT_VERSION`) | `pip:pip-audit` | - | `pypi:pip-audit` |
 | `radon` | quality | default | `6.0.1` (`RADON_VERSION`) | `pip:radon` | - | `pypi:radon` |
-| `rubocop` | quality | default | `1.66.1` (`RUBOCOP_VERSION`) | `gem:rubocop` | - | `rubygems:rubocop` |
-| `ruff` | quality | default | `0.7.1` (`RUFF_VERSION`) | `pip:ruff` | - | `pypi:ruff` |
+| `rubocop` | quality | default | `1.92.0` (`RUBOCOP_VERSION`) | `gem:rubocop` | - | `rubygems:rubocop` |
+| `ruff` | quality | default | `0.17.0` (`RUFF_VERSION`) | `pip:ruff` | - | `pypi:ruff` |
 | `shellcheck` | quality | default | - | `apt:shellcheck` | - | `debian:shellcheck` |
-| `sqlfluff` | quality | default | `4.2.2` (`SQLFLUFF_VERSION`) | `pip:sqlfluff` | - | `pypi:sqlfluff` |
-| `staticcheck` | quality | default | `0.7.0` (`STATICCHECK_VERSION`) | `go:honnef.co/go/tools/cmd/staticcheck` | - | `go:honnef.co/go/tools` |
-| `vulture` | quality | default | `2.13` (`VULTURE_VERSION`) | `pip:vulture` | - | `pypi:vulture` |
-| `yamllint` | quality | default | `1.35.1` (`YAMLLINT_VERSION`) | `pip:yamllint` | - | `pypi:yamllint` |
+| `sqlfluff` | quality | default | `4.4.0` (`SQLFLUFF_VERSION`) | `pip:sqlfluff` | - | `pypi:sqlfluff` |
+| `staticcheck` | quality | default | `0.8.2` (`STATICCHECK_VERSION`) | `go:honnef.co/go/tools/cmd/staticcheck` | - | `go:honnef.co/go/tools` |
+| `vulture` | quality | default | `2.16` (`VULTURE_VERSION`) | `pip:vulture` | - | `pypi:vulture` |
+| `yamllint` | quality | default | `1.38.0` (`YAMLLINT_VERSION`) | `pip:yamllint` | - | `pypi:yamllint` |
 | `cargo-audit` | sca | rust bucket | `0.22.2` (`CARGO_AUDIT_VERSION`) | `wolf-scanners-rust` | - | `github:rustsec/rustsec` |
 | `cargo-deny` | sca | rust bucket | `0.20.2` (`CARGO_DENY_VERSION`) | `wolf-scanners-rust` | - | `github:EmbarkStudios/cargo-deny` |
-| `clippy` | quality | rust bucket | `1.82.0` (`RUST_TOOLCHAIN`) | `wolf-scanners-rust` | - | `rust:stable` |
-| `codeql` | sast | codeql bucket | `2.26.2` (`CODEQL_VERSION`) | `wolf-scanners-codeql` | - | `github:github/codeql-cli-binaries` |
-| `detekt` | sast | jvm bucket | `1.23.7` (`DETEKT_VERSION`) | `wolf-scanners-jvm` | - | `github:detekt/detekt` |
-| `infer` | sast | jvm bucket | `1.2.0` (`INFER_VERSION`) | `wolf-scanners-jvm` | - | `github:facebook/infer` |
-| `pmd` | quality | jvm bucket | `7.26.0` (`PMD_VERSION`) | `wolf-scanners-jvm` | - | `github:pmd/pmd` |
+| `clippy` | quality | rust bucket | `1.99.0` (`RUST_TOOLCHAIN`) | `wolf-scanners-rust` | - | `rust:stable` |
+| `codeql` | sast | codeql bucket | `2.27.2` (`CODEQL_VERSION`) | `wolf-scanners-codeql` | - | `github:github/codeql-cli-binaries` |
+| `detekt` | sast | jvm bucket | `1.23.8` (`DETEKT_VERSION`) | `wolf-scanners-jvm` | - | `github:detekt/detekt` |
+| `infer` | sast | jvm bucket | `1.3.0` (`INFER_VERSION`) | `wolf-scanners-jvm` | - | `github:facebook/infer` |
+| `pmd` | quality | jvm bucket | `7.28.0` (`PMD_VERSION`) | `wolf-scanners-jvm` | - | `github:pmd/pmd` |

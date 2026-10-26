@@ -5,7 +5,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"os/exec"
+	"strconv"
+	"strings"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
@@ -33,25 +37,27 @@ func (p *SemgrepPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([
 		defer cancel()
 	}
 
-	args := []string{"scan", "--json", "--jobs", "1"}
+	cfg := container.ConfigFromOpts(opts.ContainerCfg)
+	jobs := max(1, int(container.CPUCount(cfg)))
+	args := []string{"--jobs", strconv.Itoa(jobs), "--disable-version-check"}
 	args = append(args, plugin.ExcludeArgs("--exclude")...)
 	args = append(args, "/scan")
 	// semgrep writes first-run settings and registry rule caches to
 	// ~/.semgrep. The image HOME is read-only under our mount. Persist
 	// on the shared wolf-db volume so later scans do not re-fetch
 	// p/ci (and similar) from the registry.
-	cfg := container.ConfigFromOpts(opts.ContainerCfg)
 	home := "/tmp"
-	if cfg.DBVolume != "" {
+	if cfg != nil && cfg.DBVolume != "" {
 		home = "/var/lib/wolf-db/semgrep"
 	}
 	cmd := container.CommandContext(ctx,
 		cfg,
 		container.Options{
-			RepoDir:  opts.RepoPath,
-			ExtraEnv: map[string]string{"HOME": home},
+			RepoDir:            opts.RepoPath,
+			ExtraEnv:           map[string]string{"HOME": home},
+			EntrypointOverride: "sh",
 		},
-		"semgrep", args...)
+		"semgrep", append([]string{"-c", semgrepRulesCommand, "wolf-semgrep", container.ResolveNetwork(cfg, "semgrep")}, args...)...)
 
 	var stdout bytes.Buffer
 	cmd.Stdout = &stdout
@@ -66,34 +72,82 @@ func (p *SemgrepPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([
 	}
 
 	scanner := bufio.NewScanner(stderr)
+	scanner.Buffer(make([]byte, 4096), 1024*1024)
+	var diagnostic string
 	for scanner.Scan() {
 		line := scanner.Text()
+		diagnostic += line + "\n"
+		if len(diagnostic) > 4096 {
+			diagnostic = diagnostic[len(diagnostic)-4096:]
+		}
 		if opts.OnOutput != nil {
 			opts.OnOutput(line)
 		}
 	}
 
-	_ = cmd.Wait()
+	readErr := scanner.Err()
+	if readErr != nil {
+		_ = stderr.Close()
+	}
+	runErr := cmd.Wait()
+	var exitErr *exec.ExitError
+	if errors.As(runErr, &exitErr) {
+		exitErr.Stderr = []byte(diagnostic)
+	}
+	if runErr != nil {
+		runErr = plugin.WrapExecError("semgrep", runErr)
+	}
 
 	out := stdout.Bytes()
 	if len(out) == 0 {
+		if runErr != nil {
+			return nil, runErr
+		}
 		return nil, fmt.Errorf("semgrep produced no output")
 	}
 	plugin.SaveRaw(opts, out, "json")
 
 	findings, perr := parseSemgrepOutput(out)
 	if perr != nil {
-		return nil, perr
+		return nil, errors.Join(runErr, perr)
 	}
 	for i := range findings {
 		findings[i].FilePath = container.NormalizePath(findings[i].FilePath)
 	}
-	return findings, nil
+	var result semgrepOutput
+	if json.Unmarshal(plugin.ExtractJSON(out), &result) == nil {
+		for _, issue := range result.Errors {
+			if opts.OnParseError != nil {
+				opts.OnParseError(fmt.Errorf("semgrep: %s", strings.SplitN(issue.Message, "\n", 2)[0]))
+			}
+		}
+		if len(result.Errors) > 0 {
+			runErr = errors.Join(runErr, fmt.Errorf("semgrep returned %d findings with %d analysis warnings/errors; coverage is incomplete; first: %s", len(findings), len(result.Errors), strings.SplitN(result.Errors[0].Message, "\n", 2)[0]))
+		}
+	}
+	return findings, errors.Join(runErr, readErr)
 }
+
+// Prepared rules belong to the scanner image/cache, never the untrusted repo.
+// Without prepared rules, fall back to the curated registry pack (needs network).
+// Not --config auto: Semgrep refuses auto when metrics are off, which Wolf requires.
+const semgrepRulesCommand = `network=$1; shift
+rules=p/default
+for candidate in /etc/wolf-scanners/semgrep.yml /etc/wolf-scanners/semgrep /var/lib/wolf-db/semgrep/rules.yaml /var/lib/wolf-db/semgrep/rules; do
+  if [ -r "$candidate" ]; then rules=$candidate; break; fi
+done
+if [ "$rules" = p/default ] && [ "$network" = none ]; then
+  echo 'needs network or database: Semgrep has no prepared rules. Install rules at /var/lib/wolf-db/semgrep/rules.yaml or enable scanner network access, then retry.' >&2
+  exit 78
+fi
+exec semgrep scan --json --config "$rules" "$@"`
 
 // semgrepOutput represents the JSON output from semgrep.
 type semgrepOutput struct {
 	Results []semgrepResult `json:"results"`
+	Errors  []struct {
+		Message string `json:"message"`
+	} `json:"errors"`
 }
 
 type semgrepResult struct {
@@ -136,7 +190,7 @@ func parseSemgrepOutput(data []byte) ([]models.Finding, error) {
 			FilePath:    r.Path,
 			LineStart:   r.Start.Line,
 			LineEnd:     r.End.Line,
-			CodeSnippet: r.Extra.Lines,
+			CodeSnippet: semgrepSnippet(r.Extra.Lines),
 			RuleID:      r.CheckID,
 			CWEID:       extractCWE(r.Extra.Metadata.CWE),
 			Status:      models.StatusOpen,
@@ -170,4 +224,12 @@ func extractCWE(cwe interface{}) string {
 		}
 	}
 	return ""
+}
+
+// Semgrep without a login replaces source lines with this placeholder; it is not code.
+func semgrepSnippet(lines string) string {
+	if strings.TrimSpace(lines) == "requires login" {
+		return ""
+	}
+	return lines
 }

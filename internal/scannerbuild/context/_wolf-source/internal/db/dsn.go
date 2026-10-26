@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/jmoiron/sqlx"
-	_ "github.com/lib/pq"
 )
 
 // DatabaseConfig is how Wolf opens the store. Env wins over database.env.
@@ -123,7 +123,7 @@ func PingPostgres(ctx context.Context, dsn string) error {
 	if err := validatePostgresDSN(dsn); err != nil {
 		return err
 	}
-	db, err := sqlx.Open("postgres", dsn)
+	db, err := sqlx.Open("pgx", dsn)
 	if err != nil {
 		return err
 	}

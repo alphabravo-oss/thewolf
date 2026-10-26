@@ -3,6 +3,7 @@ package general
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
@@ -40,24 +41,26 @@ func (p *GitleaksPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) (
 		container.ConfigFromOpts(opts.ContainerCfg),
 		container.Options{RepoDir: opts.RepoPath},
 		"gitleaks", "detect", "--source", "/scan",
-		"--report-format", "json", "--report-path", "/dev/stdout",
+		"--report-format", "json", "--report-path", "-",
 		"--no-git",
 		"--exit-code", "0") // suppress non-zero on findings
 	out, err := cmd.Output()
-	if err != nil && len(out) == 0 {
-		plugin.Infof(opts.OnOutput, "gitleaks", "scan completed, no secrets detected.")
-		return nil, nil
+	if err != nil {
+		err = plugin.WrapExecError("gitleaks", err)
+		if len(out) == 0 {
+			return nil, err
+		}
 	}
 	plugin.SaveRaw(opts, out, "json")
 
 	findings, perr := parseGitleaksOutput(out)
 	if perr != nil {
-		return nil, perr
+		return nil, errors.Join(err, perr)
 	}
 	for i := range findings {
 		findings[i].FilePath = container.NormalizePath(findings[i].FilePath)
 	}
-	return findings, nil
+	return findings, err
 }
 
 type gitleaksFinding struct {

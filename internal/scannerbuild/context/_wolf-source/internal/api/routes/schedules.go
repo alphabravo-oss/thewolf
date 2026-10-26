@@ -391,7 +391,7 @@ func RunDueSchedules(ctx context.Context, h *Handler) {
 	}
 }
 
-// StartScheduleLoop polls due schedules.
+// StartScheduleLoop polls due schedules and expires durable suppressions.
 // ponytail: minute poll; upgrade next_run_at index.
 func StartScheduleLoop(ctx context.Context, h *Handler) {
 	if h == nil {
@@ -399,13 +399,28 @@ func StartScheduleLoop(ctx context.Context, h *Handler) {
 	}
 	ticker := time.NewTicker(60 * time.Second)
 	defer ticker.Stop()
+	runSuppressionExpiry(ctx, h)
 	RunDueSchedules(ctx, h)
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			runSuppressionExpiry(ctx, h)
 			RunDueSchedules(ctx, h)
 		}
+	}
+}
+
+// ponytail: expiry runs on startup and once per minute; expose indexed due-rule
+// scheduling if measured expiry load or tighter latency requires it.
+func runSuppressionExpiry(ctx context.Context, h *Handler) {
+	if h == nil || h.Store == nil {
+		return
+	}
+	expiryCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	if _, err := h.Store.ExpireFindingSuppressions(expiryCtx, time.Now().UTC()); err != nil {
+		wolflog.Error().Err(err).Msg("suppression expiry failed; will retry")
 	}
 }

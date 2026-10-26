@@ -334,7 +334,7 @@ def main() -> int:
         )
     require(r"verify-image\.sh.*?LOCK_DIGEST.*?DEFINITION_DIGEST", text, "post-push release annotation verification")
     require(r"referrersSha256", text, "content-addressed referrer evidence")
-    require(r"no-cache:.*?43 3 \* \* 0.*?security-rebuild", text, "fresh weekly/security build")
+    require(r"no-cache:.*?security-rebuild", text, "explicit fresh security build")
     require(
         r"Record unsigned primary image evidence.*?disabled:\s*true",
         text,

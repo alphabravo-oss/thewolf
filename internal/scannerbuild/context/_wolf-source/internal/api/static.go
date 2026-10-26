@@ -53,23 +53,17 @@ func MountStaticUI(mount interface {
 		return
 	}
 
-	root := os.DirFS(dir)
 	indexPath := filepath.Join(dir, "index.html")
-	if _, err := os.Stat(indexPath); err != nil {
+	if _, err := os.Stat(indexPath); err != nil { // #nosec G703 -- dir is operator WOLF_UI_DIR configuration or a compiled default; this startup probe has no HTTP input.
 		wolflog.Warn().Str("dir", dir).Err(err).Msg("static-ui: index.html missing; SPA fallback disabled")
 		return
 	}
 
-	// Normalize before storing so the path-traversal guard in serve()
-	// compares apples to apples — filepath.Join strips a "./" prefix from
-	// its inputs, so without this, "./ui/dist/index.html" would fail
-	// HasPrefix("./ui/dist") and the handler would 404 every request.
 	dir = filepath.Clean(dir)
-	indexPath = filepath.Join(dir, "index.html")
 
 	wolflog.Info().Str("dir", dir).Msg("static-ui: serving SPA")
 
-	handler := spaHandler{dir: dir, root: root, indexPath: indexPath}
+	handler := spaHandler{dir: dir}
 	// NotFound runs whenever no /api/* route matches — exactly the right
 	// hook for an SPA fallback. Works for GET and HEAD (and any verb the
 	// SPA may need for asset preflight).
@@ -77,9 +71,7 @@ func MountStaticUI(mount interface {
 }
 
 type spaHandler struct {
-	dir       string
-	root      fs.FS
-	indexPath string
+	dir string
 }
 
 // serve dispatches a request to the static file if it exists, otherwise
@@ -98,27 +90,30 @@ func (h spaHandler) serve(w http.ResponseWriter, r *http.Request) {
 		urlPath = "index.html"
 	}
 
-	// Resolve the requested path inside dir. If it points to a regular file,
-	// serve it. Otherwise fall back to index.html.
-	candidate := filepath.Join(h.dir, urlPath)
-	if !strings.HasPrefix(candidate, h.dir) {
-		// Path-traversal guard.
+	if !fs.ValidPath(urlPath) {
 		http.NotFound(w, r)
 		return
 	}
-	if st, err := os.Stat(candidate); err == nil && !st.IsDir() {
-		// Cache hashed JS/CSS assets aggressively; everything else is short.
+	root, err := os.OpenRoot(h.dir)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	defer func() { _ = root.Close() }()
+	// Root confines both the metadata lookup and the subsequent file open,
+	// including symlinks swapped between those operations.
+	if st, err := root.Stat(urlPath); err == nil && st.Mode().IsRegular() {
 		if strings.HasPrefix(urlPath, "assets/") {
 			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 		} else {
 			w.Header().Set("Cache-Control", "no-cache")
 		}
-		http.ServeFile(w, r, candidate)
+		http.ServeFileFS(w, r, root.FS(), urlPath) // #nosec G703 -- fs.ValidPath rejects traversal and root.FS confines all file opens, including symlink resolution.
 		return
 	}
 
 	// SPA fallback.
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
-	http.ServeFile(w, r, h.indexPath)
+	http.ServeFileFS(w, r, root.FS(), "index.html")
 }

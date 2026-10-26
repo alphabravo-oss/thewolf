@@ -20,11 +20,18 @@ func (p *ZizmorPlugin) Languages() []models.Language { return nil }
 
 func (p *ZizmorPlugin) CheckAvailable() bool { return container.IsScannersReady() }
 
-func (p *ZizmorPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
-	if !plugin.HasZizmorInputs(opts.RepoPath) {
-		plugin.Skipf(opts.OnOutput, "zizmor", "no GitHub Actions, Dependabot, composite action, or pre-commit config found.")
-		return nil, nil
+func (p *ZizmorPlugin) Applicability(repoPath, target string) error {
+	if !plugin.HasZizmorInputs(repoPath) {
+		return &plugin.NotApplicableError{Reason: "no GitHub Actions, Dependabot, composite action, or pre-commit configuration found"}
 	}
+	return nil
+}
+
+func (p *ZizmorPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
+	if err := p.Applicability(opts.RepoPath, opts.Target); err != nil {
+		return nil, err
+	}
+
 	if opts.Timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, opts.Timeout)

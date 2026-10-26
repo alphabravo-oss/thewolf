@@ -18,6 +18,9 @@ const (
 	FixJobSuperseded = "superseded"
 )
 
+// FixPauseCancellationCleanup retains branch ownership until cancellation cleanup succeeds.
+const FixPauseCancellationCleanup = "cancellation_cleanup"
+
 // FixJob mode values.
 const (
 	// FixModeDryRun commits on an isolated fix branch and stops before push.
@@ -36,16 +39,22 @@ const (
 
 // FixAttempt outcome values.
 const (
-	FixOutcomeKept       = "kept"
-	FixOutcomeRolledBack = "rolled_back"
-	FixOutcomeUnfixable  = "unfixable"
-	FixOutcomeMuted      = "muted"
+	FixOutcomeKept        = "kept"
+	FixOutcomeRolledBack  = "rolled_back"
+	FixOutcomeUnfixable   = "unfixable"
+	FixOutcomeMuted       = "muted"
+	FixOutcomeRunning     = "running"
+	FixOutcomeInterrupted = "interrupted"
+	FixOutcomeUnverified  = "unverified"
 )
 
 // FixJob is one queued unit of autonomous remediation work. The wolf server
 // enqueues it; a `wolf fixer` worker claims and runs it. Everything is gated
 // by the autofix_enabled setting (default off).
 type FixJob struct {
+	Revision       int64      `json:"-" db:"revision"` // optimistic fence for state changes; heartbeats do not advance it.
+	IdempotencyKey string     `json:"idempotency_key,omitempty" db:"idempotency_key"`
+	RequestDigest  string     `json:"-" db:"request_digest"`
 	ID             string     `json:"id" db:"id"`
 	UserID         string     `json:"user_id" db:"user_id"`
 	Type           string     `json:"type" db:"type"` // fix | loop
@@ -124,7 +133,7 @@ type FixAttempt struct {
 	Built          bool      `json:"built" db:"built"`
 	FindingCleared bool      `json:"finding_cleared" db:"finding_cleared"`
 	NewFindings    int       `json:"new_findings" db:"new_findings"`
-	Outcome        string    `json:"outcome" db:"outcome"` // kept | rolled_back | unfixable
+	Outcome        string    `json:"outcome" db:"outcome"` // FixOutcome* lifecycle and verdict constants
 	FilesChanged   string    `json:"files_changed" db:"files_changed"`
 	DiffExcerpt    string    `json:"diff_excerpt,omitempty" db:"diff_excerpt"`
 	DurationMS     int       `json:"duration_ms" db:"duration_ms"`

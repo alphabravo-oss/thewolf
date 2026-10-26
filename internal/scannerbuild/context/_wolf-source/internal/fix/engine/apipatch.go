@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"os/exec"
 	"strings"
 
 	"github.com/alphabravocompany/thewolf/internal/ai"
+	gitpkg "github.com/alphabravocompany/thewolf/internal/fix/git"
 	"github.com/alphabravocompany/thewolf/internal/models"
 )
 
@@ -117,7 +117,7 @@ func buildPatchPrompt(f models.Finding) string {
 
 // gitApply applies a unified diff to the repo via `git apply`.
 func gitApply(ctx context.Context, repoPath, diff string) error {
-	cmd := exec.CommandContext(ctx, "git", "-C", repoPath, "apply", "--whitespace=nowarn", "-")
+	cmd := gitpkg.Command(ctx, nil, "-C", repoPath, "apply", "--whitespace=nowarn", "-")
 	cmd.Stdin = strings.NewReader(diff)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr

@@ -2,7 +2,10 @@ package routes
 
 import (
 	"encoding/json"
+	"errors"
+	"github.com/alphabravocompany/thewolf/internal/db"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -32,13 +35,7 @@ func ListRepoBaselines(w http.ResponseWriter, r *http.Request) {
 	}
 
 	repoID := chi.URLParam(r, "id")
-	repo, err := h.Store.GetRepoByID(r.Context(), repoID)
-	if err != nil {
-		response.WriteError(w, http.StatusNotFound, "not_found", "repo not found")
-		return
-	}
-	if repo.UserID != claims.UserID {
-		response.WriteError(w, http.StatusForbidden, "forbidden", "repo does not belong to current user")
+	if _, ok := loadRepoForCaller(w, r, h.Store, repoID, claims); !ok {
 		return
 	}
 
@@ -66,13 +63,7 @@ func CreateRepoBaseline(w http.ResponseWriter, r *http.Request) {
 	}
 
 	repoID := chi.URLParam(r, "id")
-	repo, err := h.Store.GetRepoByID(r.Context(), repoID)
-	if err != nil {
-		response.WriteError(w, http.StatusNotFound, "not_found", "repo not found")
-		return
-	}
-	if repo.UserID != claims.UserID {
-		response.WriteError(w, http.StatusForbidden, "forbidden", "repo does not belong to current user")
+	if _, ok := loadRepoForCaller(w, r, h.Store, repoID, claims); !ok {
 		return
 	}
 
@@ -81,17 +72,17 @@ func CreateRepoBaseline(w http.ResponseWriter, r *http.Request) {
 		response.WriteError(w, http.StatusBadRequest, "bad_request", "invalid JSON body")
 		return
 	}
+	req.Name = strings.TrimSpace(req.Name)
 	if req.Name == "" || req.ScanID == "" {
 		response.WriteError(w, http.StatusBadRequest, "bad_request", "name and scan_id are required")
 		return
 	}
 
-	scan, err := h.Store.GetScanByID(r.Context(), req.ScanID)
-	if err != nil {
-		response.WriteError(w, http.StatusNotFound, "not_found", "scan not found")
+	scan, ok := loadScanForCaller(w, r, h.Store, req.ScanID, claims)
+	if !ok {
 		return
 	}
-	if scan.UserID != claims.UserID || scan.RepoID != repoID {
+	if scan.RepoID != repoID {
 		response.WriteError(w, http.StatusBadRequest, "bad_request", "scan does not belong to this repo")
 		return
 	}
@@ -110,7 +101,15 @@ func CreateRepoBaseline(w http.ResponseWriter, r *http.Request) {
 		CreatedBy: claims.UserID,
 	}
 	if err := h.Store.CreateScanBaseline(r.Context(), baseline); err != nil {
-		response.WriteError(w, http.StatusConflict, "conflict", "baseline already exists or could not be created")
+		if errors.Is(err, db.ErrInvalidBaseline) {
+			response.WriteError(w, http.StatusBadRequest, "bad_request", err.Error())
+			return
+		}
+		if isDatabaseUniquenessError(err) {
+			response.WriteError(w, http.StatusConflict, "conflict", "baseline already exists")
+		} else {
+			response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to create baseline")
+		}
 		return
 	}
 

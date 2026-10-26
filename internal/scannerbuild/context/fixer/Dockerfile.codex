@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7
 # check=skip=InvalidDefaultArgInFrom
 # WOLF_FIXER_BASE_REF intentionally has no mutable default; the release
 # pipeline must provide the verified base image by digest.
@@ -23,10 +24,10 @@
 ARG WOLF_FIXER_BASE_REF
 FROM ${WOLF_FIXER_BASE_REF} AS base
 
-ARG CODEX_VERSION=0.146.0
-ARG CODEX_INTEGRITY=sha512-yG3sPWNda/2YAIQIDq9MrrjoCTIQ7rxYM5IasrG3VBcuhCLTkgeg/JzqmJq1V98RE4MJ5jCxDXXQlOjrditFRw==
-ARG CODEX_LINUX_AMD64_INTEGRITY=sha512-fswvyGprAPCMiOEue/7MKMk7pCjh9kZIJfJX5i9atmfnmGYbYCcUhZsEH9LEP0+0t5xyPqDbfNXY7NSxIVuXxA==
-ARG CODEX_LINUX_ARM64_INTEGRITY=sha512-qiYDxkkEFnXG7joadJW6Q+XcgyDXCpGdpa9nk/c+i0gEomur1j7bHvx12NfWWCF/y8Tqri6ay+FLuC2MjdehtA==
+ARG CODEX_VERSION=0.162.1
+ARG CODEX_INTEGRITY=sha512-NWZdi/kxyjv/8EUGFupziGU38YyleugZRM4JXgY5XFH7FUmaFA33NZS2Bmq0HPazf7S3jJQQWsZ/jAK9jsrV3Q==
+ARG CODEX_LINUX_AMD64_INTEGRITY=sha512-cjK2mdHIfEepZ1lQ1MX3aTQC+8ncIsvnacl/6vI2dIIcfP8/MrhTQ2+qRlkXFNDzJSj1d36quIszP+3/4CUJWQ==
+ARG CODEX_LINUX_ARM64_INTEGRITY=sha512-Ss7W/SrKtQFNaMtSojNoiykJgX+iDC8daM+YrcvgmJADtQPk0cd3w6Dna4CYH2CYvf9nQranj69fpcTzZ3sQIQ==
 
 ENV WOLF_FIXER_VARIANT=codex \
     WOLF_FIXER_ENGINE=codex
@@ -37,7 +38,7 @@ LABEL dev.wolf.fixer.variant="codex" \
 
 USER root
 
-RUN set -eux; \
+RUN --mount=type=cache,target=/tmp/npm-cache set -eux; \
     actual_integrity="$(npm --cache /tmp/npm-cache view "@openai/codex@${CODEX_VERSION}" dist.integrity)"; \
     test "$actual_integrity" = "$CODEX_INTEGRITY"; \
     arch="$(dpkg --print-architecture)"; \
@@ -52,8 +53,7 @@ RUN set -eux; \
       "@openai/codex@${CODEX_VERSION}"; \
     ln -s /opt/wolf/codex/node_modules/.bin/codex /usr/local/bin/codex; \
     command -v codex; \
-    codex --version; \
-    rm -rf /tmp/npm-cache
+    codex --version
 
 USER wolf
 WORKDIR /workspace

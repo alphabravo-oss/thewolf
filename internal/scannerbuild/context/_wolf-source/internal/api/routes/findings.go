@@ -1,9 +1,11 @@
 package routes
 
 import (
+	"cmp"
 	"context"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"sort"
@@ -12,10 +14,10 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 
 	"github.com/alphabravocompany/thewolf/internal/api/response"
 	"github.com/alphabravocompany/thewolf/internal/auth"
+	"github.com/alphabravocompany/thewolf/internal/db"
 	"github.com/alphabravocompany/thewolf/internal/finding/knowledge"
 	"github.com/alphabravocompany/thewolf/internal/models"
 )
@@ -47,33 +49,37 @@ func ListFindings(w http.ResponseWriter, r *http.Request) {
 	baselineStateFilter := parseCSV(q.Get("baseline_state"))
 	sortField := q.Get("sort")
 	sortOrder := q.Get("order")
-	page := parseIntDefault(q.Get("page"), 1)
-	perPage := parseIntDefault(q.Get("per_page"), 50)
-
+	page, perPage := parsePagination(r)
 	if sortField == "" {
 		sortField = "composite_score"
 	}
 	if sortOrder == "" {
 		sortOrder = "desc"
 	}
-	if perPage < 1 {
-		perPage = 50
-	}
-	if perPage > 200 {
-		perPage = 200
-	}
-	if page < 1 {
-		page = 1
-	}
 
-	// Path-suppress + current-open dedup happen in Go, so LIMIT cannot move
-	// into SQL without changing which rows are visible. Paginate after drop.
+	result, err := h.Store.QueryCurrentFindings(ctx, claims.UserID, fleetVisible(ctx, h.Store, claims.UserID), collectionID, repoIDFilter, db.FindingListQuery{
+		Severities: severityFilter, Categories: categoryFilter, Tools: toolFilter, Statuses: statusFilter, BaselineStates: baselineStateFilter,
+		Search: q.Get("q"), SortBy: sortField, Desc: strings.EqualFold(sortOrder, "desc"),
+		IncludeSuppressed: q.Get("include_suppressed") == "true", IncludeSARIF: q.Get("include_sarif") == "true", Limit: perPage, Offset: (page - 1) * perPage,
+	})
+	if err == nil {
+		response.WriteJSON(w, http.StatusOK, response.ListResponse{Data: result.Findings, Meta: response.ListMeta{Total: result.Total, Page: page, PerPage: perPage}})
+		return
+	}
+	if !errors.Is(err, db.ErrLiveFindingPolicy) {
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to load findings")
+		return
+	}
+	// Uncaptured live scans must apply filesystem policy before page boundaries.
 	findings, err := gatherUserFindings(ctx, h, claims.UserID)
 	if err != nil {
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to load findings")
 		return
 	}
-	applyPathSuppressionsForFindings(ctx, h, findings)
+	if err := applyPathSuppressionsForFindings(ctx, h, findings); err != nil {
+		response.WriteError(w, http.StatusInternalServerError, "suppression_error", "failed to evaluate suppression rules")
+		return
+	}
 	if q.Get("include_suppressed") != "true" {
 		findings = dropSuppressed(findings)
 	}
@@ -101,6 +107,7 @@ func ListFindings(w http.ResponseWriter, r *http.Request) {
 		statuses:          statusFilter,
 		baselineStates:    baselineStateFilter,
 		collectionRepoIDs: collectionRepoIDs,
+		search:            q.Get("q"),
 	})
 
 	// Sort.
@@ -108,15 +115,13 @@ func ListFindings(w http.ResponseWriter, r *http.Request) {
 
 	// Paginate.
 	total := len(filtered)
-	start := (page - 1) * perPage
-	if start > total {
-		start = total
-	}
-	end := start + perPage
-	if end > total {
-		end = total
-	}
+	start, end := paginateSlice(total, page, perPage)
 	pageData := filtered[start:end]
+	if q.Get("include_sarif") != "true" {
+		for i := range pageData {
+			pageData[i].SARIFData = ""
+		}
+	}
 
 	response.WriteJSON(w, http.StatusOK, response.ListResponse{
 		Data: pageData,
@@ -140,7 +145,7 @@ func GetFinding(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	finding, err := h.Store.GetFindingByID(r.Context(), id)
 	if err != nil {
-		response.WriteError(w, http.StatusNotFound, "not_found", fmt.Sprintf("finding %s not found", id))
+		response.WriteError(w, http.StatusNotFound, "not_found", "finding not found")
 		return
 	}
 	if !findingVisibleToCaller(w, r, h.Store, finding, claims) {
@@ -154,8 +159,23 @@ func GetFinding(w http.ResponseWriter, r *http.Request) {
 	}
 	out := struct {
 		models.Finding
-		FixStrategy *strategyBody `json:"fix_strategy,omitempty"`
+		FixStrategy *strategyBody    `json:"fix_strategy,omitempty"`
+		Evidence    []models.Finding `json:"evidence,omitempty"`
 	}{Finding: *finding}
+	if finding.ClusterID != "" {
+		evidence, err := h.Store.ListFindingClusterEvidence(r.Context(), finding.ID)
+		if err != nil {
+			response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to load finding evidence")
+			return
+		}
+		out.Evidence = evidence
+	}
+	projected := append([]models.Finding{*finding}, out.Evidence...)
+	if err := applyPathSuppressions(r.Context(), h, finding.RepoID, projected); err != nil {
+		response.WriteError(w, http.StatusInternalServerError, "suppression_error", "failed to evaluate suppression rules")
+		return
+	}
+	out.Finding, out.Evidence = projected[0], projected[1:]
 	if finding.FixStrategyID != "" {
 		if s, ok := knowledge.GetStrategy(finding.FixStrategyID); ok {
 			out.FixStrategy = &strategyBody{ID: s.ID, Title: s.Title, Body: s.Body}
@@ -182,7 +202,7 @@ func UpdateFindingStatus(w http.ResponseWriter, r *http.Request) {
 	// Verify finding exists.
 	finding, err := h.Store.GetFindingByID(r.Context(), id)
 	if err != nil {
-		response.WriteError(w, http.StatusNotFound, "not_found", fmt.Sprintf("finding %s not found", id))
+		response.WriteError(w, http.StatusNotFound, "not_found", "finding not found")
 		return
 	}
 	if !findingVisibleToCaller(w, r, h.Store, finding, claims) {
@@ -203,6 +223,12 @@ func UpdateFindingStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate the response projection before committing triage.
+	if err := applyPathSuppressions(r.Context(), h, finding.RepoID, []models.Finding{*finding}); err != nil {
+		response.WriteError(w, http.StatusInternalServerError, "suppression_error", "failed to evaluate suppression rules")
+		return
+	}
+
 	if err := h.Store.UpdateFindingStatus(r.Context(), id, newStatus); err != nil {
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to update finding status")
 		return
@@ -215,7 +241,12 @@ func UpdateFindingStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: updated})
+	visible := []models.Finding{*updated}
+	if err := applyPathSuppressions(r.Context(), h, updated.RepoID, visible); err != nil {
+		response.WriteError(w, http.StatusInternalServerError, "suppression_error", "failed to evaluate suppression rules")
+		return
+	}
+	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: visible[0]})
 }
 
 // trendSeverityCounts holds per-date severity counts for trend data.
@@ -230,86 +261,25 @@ type trendSeverityCounts struct {
 
 // trendEntry represents a single row of trend data.
 type trendEntry struct {
-	Date   string              `json:"date"`
-	Counts trendSeverityCounts `json:"counts"`
+	Date            string              `json:"date"`
+	Counts          trendSeverityCounts `json:"counts"`
+	Repos           int                 `json:"repos"`
+	IncompleteScans int                 `json:"incomplete_scans"`
 }
 
-// computeTrends builds trend data from the user's scans and findings.
-// When fleet_mode is on, scope widens to every scan in the org.
+// computeTrends returns daily snapshots of distinct observed open locations.
+// Missing scans carry forward; partial scans cannot claim a reduction.
 func computeTrends(ctx context.Context, h *Handler, userID, collectionID string) ([]trendEntry, error) {
-	var (
-		scans []models.Scan
-		err   error
-	)
-	if fleetVisible(ctx, h.Store, userID) {
-		scans, err = h.Store.ListAllScans(ctx)
-	} else {
-		scans, err = h.Store.ListScansByUser(ctx, userID)
-	}
+	rows, err := h.Store.FleetFindingTrends(ctx, userID, fleetVisible(ctx, h.Store, userID), collectionID)
 	if err != nil {
 		return nil, err
 	}
-
-	if collectionID != "" {
-		filtered := scans[:0]
-		for _, s := range scans {
-			if s.CollectionID != nil && *s.CollectionID == collectionID {
-				filtered = append(filtered, s)
-			}
-		}
-		scans = filtered
+	out := make([]trendEntry, 0, len(rows))
+	for _, row := range rows {
+		c := row.Counts
+		out = append(out, trendEntry{Date: row.Date, Counts: trendSeverityCounts{Critical: c["critical"], High: c["high"], Medium: c["medium"], Low: c["low"], Info: c["info"], Total: c["total"]}, Repos: row.Repos, IncompleteScans: row.IncompleteScans})
 	}
-
-	scanDateMap := make(map[string]string, len(scans))
-	for _, s := range scans {
-		scanDateMap[s.ID] = s.CreatedAt.Format("2006-01-02")
-	}
-
-	var allFindings []models.Finding
-	for _, s := range scans {
-		findings, err := h.Store.ListFindingsByScan(ctx, s.ID)
-		if err != nil {
-			continue
-		}
-		allFindings = append(allFindings, findings...)
-	}
-
-	grouped := make(map[string]*trendSeverityCounts)
-	for _, f := range allFindings {
-		date := scanDateMap[f.ScanID]
-		if date == "" {
-			date = f.CreatedAt.Format("2006-01-02")
-		}
-
-		counts, ok := grouped[date]
-		if !ok {
-			counts = &trendSeverityCounts{}
-			grouped[date] = counts
-		}
-
-		counts.Total++
-		switch f.Severity {
-		case models.SeverityCritical:
-			counts.Critical++
-		case models.SeverityHigh:
-			counts.High++
-		case models.SeverityMedium:
-			counts.Medium++
-		case models.SeverityLow:
-			counts.Low++
-		case models.SeverityInfo:
-			counts.Info++
-		}
-	}
-
-	trends := make([]trendEntry, 0, len(grouped))
-	for date, counts := range grouped {
-		trends = append(trends, trendEntry{Date: date, Counts: *counts})
-	}
-	sort.Slice(trends, func(i, j int) bool {
-		return trends[i].Date < trends[j].Date
-	})
-	return trends, nil
+	return out, nil
 }
 
 // FindingTrends handles GET /api/findings/trends — findings count grouped by date and severity.
@@ -415,8 +385,7 @@ func ExportFindings(w http.ResponseWriter, r *http.Request) {
 	var err error
 
 	if scanID != "" {
-		if _, serr := h.Store.GetScanByID(ctx, scanID); serr != nil {
-			response.WriteError(w, http.StatusNotFound, "not_found", "scan not found")
+		if _, ok := loadScanForCaller(w, r, h.Store, scanID, claims); !ok {
 			return
 		}
 		findings, err = h.Store.ListFindingsByScan(ctx, scanID)
@@ -427,7 +396,10 @@ func ExportFindings(w http.ResponseWriter, r *http.Request) {
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to load findings")
 		return
 	}
-	applyPathSuppressionsForFindings(ctx, h, findings)
+	if err := applyPathSuppressionsForFindings(ctx, h, findings); err != nil {
+		response.WriteError(w, http.StatusInternalServerError, "suppression_error", "failed to evaluate suppression rules")
+		return
+	}
 	if q.Get("include_suppressed") != "true" {
 		findings = dropSuppressed(findings)
 	}
@@ -462,6 +434,7 @@ func ExportFindings(w http.ResponseWriter, r *http.Request) {
 		statuses:          statusFilter,
 		baselineStates:    baselineStateFilter,
 		collectionRepoIDs: collectionRepoIDs,
+		search:            q.Get("q"),
 	})
 
 	format := q.Get("format")
@@ -591,14 +564,7 @@ func BulkUpdateFindings(w http.ResponseWriter, r *http.Request) {
 				response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to create suppression")
 				return
 			}
-			_ = h.Store.CreateFindingSuppressionAudit(r.Context(), &models.FindingSuppressionAudit{
-				ID:            uuid.New().String(),
-				SuppressionID: s.ID,
-				Action:        "created",
-				ActorID:       claims.UserID,
-				DetailsJSON:   "{}",
-			})
-			applyOneSuppressionToExistingFindings(r, h, *s)
+
 		}
 	}
 
@@ -614,6 +580,7 @@ type updateStatusRequest struct {
 }
 
 type findingFilter struct {
+	search            string
 	severities        []string
 	categories        []string
 	tools             []string
@@ -632,15 +599,28 @@ func gatherUserFindings(ctx context.Context, h *Handler, userID string) ([]model
 // filterFindings returns findings matching all specified filter criteria.
 func filterFindings(findings []models.Finding, f findingFilter) []models.Finding {
 	result := make([]models.Finding, 0, len(findings))
+	search := strings.ToLower(strings.TrimSpace(f.search))
 	for _, finding := range findings {
+		if search != "" && !strings.Contains(strings.ToLower(strings.Join([]string{finding.Title, finding.RuleID, finding.FilePath, finding.ToolName, finding.Description}, " ")), search) {
+			continue
+		}
 		if len(f.severities) > 0 && !containsStr(f.severities, string(finding.Severity)) {
 			continue
 		}
 		if len(f.categories) > 0 && !containsStr(f.categories, string(finding.Category)) {
 			continue
 		}
-		if len(f.tools) > 0 && !containsStr(f.tools, finding.ToolName) {
-			continue
+		if len(f.tools) > 0 {
+			matches := false
+			for _, tool := range finding.ReportingTools() {
+				if containsStr(f.tools, tool) {
+					matches = true
+					break
+				}
+			}
+			if !matches {
+				continue
+			}
 		}
 		if f.repoID != "" && finding.RepoID != f.repoID {
 			continue
@@ -664,25 +644,30 @@ func sortFindings(findings []models.Finding, field, order string) {
 	desc := strings.EqualFold(order, "desc")
 
 	sort.SliceStable(findings, func(i, j int) bool {
-		var less bool
+		var comparison int
 		switch field {
-		case "composite_score":
-			less = findings[i].CompositeScore < findings[j].CompositeScore
 		case "severity":
-			less = severityRank(findings[i].Severity) < severityRank(findings[j].Severity)
+			comparison = cmp.Compare(severityRank(findings[i].Severity), severityRank(findings[j].Severity))
 		case "created_at":
-			less = findings[i].CreatedAt.Before(findings[j].CreatedAt)
+			comparison = findings[i].CreatedAt.Compare(findings[j].CreatedAt)
 		case "tool_name":
-			less = findings[i].ToolName < findings[j].ToolName
+			comparison = strings.Compare(findings[i].ToolName, findings[j].ToolName)
 		case "title":
-			less = findings[i].Title < findings[j].Title
+			comparison = strings.Compare(findings[i].Title, findings[j].Title)
+		case "file_path":
+			comparison = strings.Compare(findings[i].FilePath, findings[j].FilePath)
+		case "line_start":
+			comparison = cmp.Compare(findings[i].LineStart, findings[j].LineStart)
 		default:
-			less = findings[i].CompositeScore < findings[j].CompositeScore
+			comparison = cmp.Compare(findings[i].CompositeScore, findings[j].CompositeScore)
+		}
+		if comparison == 0 {
+			return findings[i].ID < findings[j].ID
 		}
 		if desc {
-			return !less
+			return comparison > 0
 		}
-		return less
+		return comparison < 0
 	})
 }
 

@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	entrySchemaVersion = 1
+	entrySchemaVersion = 2
 	defaultMaxAge      = 7 * 24 * time.Hour
 	maxValidatorLength = 1024
 )
@@ -112,6 +112,17 @@ func Do(ctx context.Context, client *http.Client, req *http.Request, opts Option
 	if opts.MaxBodyBytes < 0 {
 		return Response{}, errors.New("conditional request body limit must not be negative")
 	}
+	// Conditional headers belong to this attempt, never the caller's request.
+	req = req.Clone(ctx)
+	if req.Method != http.MethodGet && req.Method != http.MethodHead ||
+		req.Header.Get("Authorization") != "" || req.Header.Get("Proxy-Authorization") != "" ||
+		req.Header.Get("Cookie") != "" || req.URL.User != nil ||
+		req.Header.Get("If-None-Match") != "" || req.Header.Get("If-Modified-Since") != "" ||
+		!cacheableHeaders(req.Header) || client.Jar != nil {
+		// Discovery caches are shared and deliberately never store credentials.
+		// Do not share private representations between credential identities.
+		opts.Store = nil
+	}
 	now := time.Now().UTC()
 	if opts.Now != nil {
 		now = opts.Now().UTC()
@@ -131,7 +142,26 @@ func Do(ctx context.Context, client *http.Client, req *http.Request, opts Option
 		}
 	}
 
-	response, err := client.Do(req)
+	// Preserve the caller's policy while keeping remote Location headers inside
+	// the selected discovery origin, including its scheme and port.
+	boundedClient := *client
+	previousRedirect := client.CheckRedirect
+	boundedClient.CheckRedirect = func(next *http.Request, via []*http.Request) error {
+		if len(via) >= 10 {
+			return errors.New("discovery redirect limit exceeded")
+		}
+		if next.URL.Scheme != req.URL.Scheme || !strings.EqualFold(next.URL.Host, req.URL.Host) || next.URL.User != nil {
+			return errors.New("discovery redirect escaped configured origin")
+		}
+		if next.Method != req.Method {
+			return errors.New("discovery redirect changed request method")
+		}
+		if previousRedirect != nil {
+			return previousRedirect(next, via)
+		}
+		return nil
+	}
+	response, err := boundedClient.Do(req) // #nosec G704 -- callers select discovery origins; redirects above cannot expand that origin or method.
 	if err != nil {
 		return Response{}, err
 	}
@@ -142,7 +172,11 @@ func Do(ctx context.Context, client *http.Client, req *http.Request, opts Option
 		}
 		cached.StoredAt = now
 		mergeCacheHeaders(cached.Header, response.Header)
-		_ = opts.Store.Save(ctx, key, cached)
+		if cacheableHeaders(response.Header) {
+			_ = opts.Store.Save(ctx, key, cached)
+		} else {
+			_ = opts.Store.Delete(ctx, key)
+		}
 		return responseFromEntry(cached, true), nil
 	}
 
@@ -166,7 +200,7 @@ func Do(ctx context.Context, client *http.Client, req *http.Request, opts Option
 		return result, nil
 	}
 	cacheHeaders := selectedCacheHeaders(response.Header)
-	if !hasValidator(cacheHeaders) {
+	if !hasValidator(cacheHeaders) || !cacheableHeaders(response.Header) {
 		_ = opts.Store.Delete(ctx, key)
 		return result, nil
 	}
@@ -180,6 +214,30 @@ func Do(ctx context.Context, client *http.Client, req *http.Request, opts Option
 	}
 	_ = opts.Store.Save(ctx, key, entry)
 	return result, nil
+}
+
+// The cache key varies only on URL, method, and Accept. Other negotiated
+// representations and private/no-store responses must not enter this cache.
+func cacheableHeaders(headers http.Header) bool {
+	if len(headers.Values("Set-Cookie")) != 0 {
+		return false
+	}
+	for _, value := range headers.Values("Cache-Control") {
+		for _, directive := range strings.Split(value, ",") {
+			name, _, _ := strings.Cut(strings.TrimSpace(directive), "=")
+			if strings.EqualFold(name, "no-store") || strings.EqualFold(name, "private") {
+				return false
+			}
+		}
+	}
+	for _, value := range headers.Values("Vary") {
+		for _, name := range strings.Split(value, ",") {
+			if name = strings.TrimSpace(name); name != "" && !strings.EqualFold(name, "Accept") {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func RequestKey(req *http.Request) (key, fingerprint string) {

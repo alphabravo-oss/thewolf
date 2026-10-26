@@ -186,7 +186,7 @@ func CommandContext(ctx context.Context, cfg *Config, opts Options, tool string,
 	dockerArgs = appendIsolationFlags(dockerArgs, cfg, tool)
 
 	// Resource limits. MemoryOverride wins over cfg.Memory when set.
-	memLimit := cfg.Memory
+	memLimit := MemoryLimitFor(cfg, tool)
 	if opts.MemoryOverride != "" {
 		memLimit = opts.MemoryOverride
 	}
@@ -273,7 +273,7 @@ func CommandContext(ctx context.Context, cfg *Config, opts Options, tool string,
 
 	// Cancel hits the running container directly. `docker kill` is the only
 	// signal that stops the tool *inside* the container (SIGKILL on the docker
-	// CLI process only orphans the container otherwise — see docs/PLAN-containerized-scanner-execution.md §5.7).
+	// CLI process only orphans the container otherwise — see docs/archive/2026-10-23/PLAN-containerized-scanner-execution.md §5.7).
 	cmd.Cancel = func() error {
 		// #nosec G204 -- command is a configured tool name (docker / claude / codex / scanner binary); args sourced from internal config, not user input
 		kill := exec.Command(cfg.dockerPath(), "kill", name) // #nosec G204 -- deployment-owned immutable Docker CLI.
@@ -383,7 +383,7 @@ func BuildDockerArgs(cfg *Config, opts Options, tool string, args ...string) (co
 	dockerArgs = append(dockerArgs, "--workdir", workdir)
 	dockerArgs = appendIsolationFlags(dockerArgs, cfg, tool)
 
-	memLimit := cfg.Memory
+	memLimit := MemoryLimitFor(cfg, tool)
 	if opts.MemoryOverride != "" {
 		memLimit = opts.MemoryOverride
 	}

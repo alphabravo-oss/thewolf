@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
+	"github.com/alphabravocompany/thewolf/internal/plugin"
 )
 
 const yamllintConfig = `extends: default
@@ -242,6 +243,11 @@ func keepTouchedFindings(res *Result, findings []models.Finding, before map[stri
 }
 
 func trimTrailingIn(root string, exts []string) {
+	confined, err := os.OpenRoot(root)
+	if err != nil {
+		return
+	}
+	defer func() { _ = confined.Close() }()
 	_ = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() {
 			if info != nil && (info.Name() == ".git" || info.Name() == "node_modules" || info.Name() == "vendor") {
@@ -259,10 +265,11 @@ func trimTrailingIn(root string, exts []string) {
 		if !ok {
 			return nil
 		}
-		if rel, err := filepath.Rel(root, path); err == nil && ProtectedRel(rel) {
+		rel, err := filepath.Rel(root, path)
+		if err != nil || ProtectedRel(rel) {
 			return nil
 		}
-		data, err := os.ReadFile(path)
+		data, err := confined.ReadFile(rel)
 		if err != nil {
 			return nil
 		}
@@ -276,7 +283,7 @@ func trimTrailingIn(root string, exts []string) {
 			}
 		}
 		if changed {
-			_ = os.WriteFile(path, []byte(strings.Join(lines, "\n")), info.Mode())
+			return confined.WriteFile(rel, []byte(strings.Join(lines, "\n")), info.Mode())
 		}
 		return nil
 	})
@@ -286,7 +293,7 @@ func runOptional(ctx context.Context, dir, name string, args ...string) bool {
 	if _, err := exec.LookPath(name); err != nil {
 		return false
 	}
-	cmd := exec.CommandContext(ctx, name, args...) // #nosec G204
+	cmd := plugin.CommandContext(ctx, name, args...) // #nosec G204
 	cmd.Dir = dir
 	return cmd.Run() == nil
 }

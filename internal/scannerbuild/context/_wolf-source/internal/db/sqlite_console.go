@@ -2,6 +2,8 @@ package db
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
@@ -46,7 +48,10 @@ func (s *SQLiteStore) ClaimNextFixerConsole(ctx context.Context, workerID string
 	if err := tx.QueryRowxContext(ctx,
 		`SELECT id FROM fixer_consoles WHERE status = ? ORDER BY created_at LIMIT 1`,
 		models.FixerConsoleQueued).Scan(&id); err != nil {
-		return nil, nil //nolint:nilerr
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
 	}
 	now := time.Now().UTC()
 	if _, err := tx.ExecContext(ctx,
@@ -55,34 +60,26 @@ func (s *SQLiteStore) ClaimNextFixerConsole(ctx context.Context, workerID string
 		models.FixerConsoleClaimed, workerID, now, now, now, id, models.FixerConsoleQueued); err != nil {
 		return nil, err
 	}
+	var claimed models.FixerConsole
+	if err := tx.GetContext(ctx, &claimed, `SELECT * FROM fixer_consoles WHERE id=?`, id); err != nil {
+		return nil, err
+	}
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
-	return s.GetFixerConsoleByID(ctx, id)
+	return &claimed, nil
 }
 
 func (s *SQLiteStore) UpdateFixerConsole(ctx context.Context, c *models.FixerConsole) error {
-	c.UpdatedAt = time.Now().UTC()
-	_, err := s.db.NamedExecContext(ctx,
-		`UPDATE fixer_consoles SET
-		   kind=:kind, engine=:engine, status=:status, claimed_by=:claimed_by,
-		   last_url=:last_url, error=:error, claimed_at=:claimed_at, started_at=:started_at,
-		   finished_at=:finished_at, heartbeat_at=:heartbeat_at, updated_at=:updated_at
-		 WHERE id=:id`, c)
-	return err
+	return updateFixerConsole(ctx, s.db, c)
+}
+
+func (s *SQLiteStore) HeartbeatFixerConsole(ctx context.Context, id, worker string, claimedAt time.Time) error {
+	return heartbeatFixerConsole(ctx, s.db, id, worker, claimedAt)
 }
 
 func (s *SQLiteStore) ReclaimStaleConsoles(ctx context.Context, cutoff time.Time) (int, error) {
-	res, err := s.db.ExecContext(ctx,
-		`UPDATE fixer_consoles SET status = ?, claimed_by = '', updated_at = ?
-		 WHERE status IN (?, ?) AND (heartbeat_at IS NULL OR heartbeat_at < ?)`,
-		models.FixerConsoleQueued, time.Now().UTC(),
-		models.FixerConsoleClaimed, models.FixerConsoleRunning, cutoff)
-	if err != nil {
-		return 0, err
-	}
-	n, _ := res.RowsAffected()
-	return int(n), nil
+	return reclaimStaleConsoles(ctx, s.db, cutoff)
 }
 
 func (s *SQLiteStore) AppendFixerConsoleStdin(ctx context.Context, consoleID, data string) error {
@@ -100,34 +97,6 @@ func (s *SQLiteStore) ListActiveFixerConsoles(ctx context.Context) ([]models.Fix
 	return out, err
 }
 
-func (s *SQLiteStore) DrainFixerConsoleStdin(ctx context.Context, consoleID string) ([]string, error) {
-	var rows []struct {
-		ID   string `db:"id"`
-		Data string `db:"data"`
-	}
-	if err := s.db.SelectContext(ctx, &rows,
-		`SELECT id, data FROM fixer_console_stdin WHERE console_id = ? ORDER BY created_at ASC`, consoleID); err != nil {
-		return nil, err
-	}
-	if len(rows) == 0 {
-		return nil, nil
-	}
-	ids := make([]any, 0, len(rows))
-	out := make([]string, 0, len(rows))
-	for _, r := range rows {
-		ids = append(ids, r.ID)
-		out = append(out, r.Data)
-	}
-	q := "DELETE FROM fixer_console_stdin WHERE id IN ("
-	for i := range ids {
-		if i > 0 {
-			q += ","
-		}
-		q += "?"
-	}
-	q += ")"
-	if _, err := s.db.ExecContext(ctx, q, ids...); err != nil {
-		return nil, err
-	}
-	return out, nil
+func (s *SQLiteStore) DrainFixerConsoleStdin(ctx context.Context, cons *models.FixerConsole) ([]string, error) {
+	return drainFixerConsoleStdin(ctx, s.db, cons)
 }

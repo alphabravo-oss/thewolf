@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"slices"
 	"strings"
 	"sync"
 
@@ -29,6 +30,7 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/db"
 	fixauth "github.com/alphabravocompany/thewolf/internal/fix/auth"
 	"github.com/alphabravocompany/thewolf/internal/fix/engine"
+	gitpkg "github.com/alphabravocompany/thewolf/internal/fix/git"
 	"github.com/alphabravocompany/thewolf/internal/fix/orchestrator"
 	"github.com/alphabravocompany/thewolf/internal/fix/verify"
 	"github.com/alphabravocompany/thewolf/internal/fix/workspace"
@@ -36,7 +38,7 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
 	"github.com/alphabravocompany/thewolf/internal/scan/runner"
-	"github.com/alphabravocompany/thewolf/internal/secrets"
+	"github.com/alphabravocompany/thewolf/internal/scannerdiscovery"
 )
 
 // Deps assembles the production orchestrator dependencies for the fix worker.
@@ -46,13 +48,15 @@ import (
 // guard test; at runtime the worker always supplies the real store.
 func Deps(store db.Store) orchestrator.Deps {
 	return orchestrator.Deps{
-		Store:       store,
-		Writability: writabilityChecker{store: store},
-		Workspaces:  workspacePreparer{store: store},
-		Engines:     engineSelector{store: store},
-		Verifier:    verifier{scanner: Scanner{}},
-		GitApply:    gitApplier{},
-		Rescan:      branchRescanner{},
+		Store:            store,
+		Writability:      writabilityChecker{store: store},
+		Workspaces:       workspacePreparer{store: store},
+		Engines:          engineSelector{store: store},
+		Verifier:         verifier{scanner: Scanner{}},
+		GitApply:         gitApplier{},
+		Rescan:           branchRescanner{},
+		PublicationReady: writabilityChecker{store: store}.PublicationReady,
+		GitHubToken:      func(ctx context.Context, repo *models.Repo) string { return githubTokenForRepo(ctx, store, repo) },
 	}
 }
 
@@ -65,12 +69,25 @@ func (wc writabilityChecker) Check(ctx context.Context, repo *models.Repo) (bool
 	return r.Writable, r.Reason
 }
 
+func (wc writabilityChecker) PublicationReady(ctx context.Context, repo *models.Repo) (bool, string) {
+	if _, err := exec.LookPath("gh"); err != nil {
+		return false, "GitHub CLI is not installed on this fixer worker"
+	}
+	result := writability.Check(ctx, repo, wc.store, writability.DefaultProbes(wc.store))
+	token := githubTokenForRepo(ctx, wc.store, repo)
+	reason := result.Reason
+	if token != "" {
+		reason = strings.ReplaceAll(reason, token, "[REDACTED]")
+	}
+	return result.Writable && result.CanPush && token != "", scannerdiscovery.RedactText(reason)
+}
+
 // --- Workspace preparer ---
 
 type workspacePreparer struct{ store db.Store }
 
-func (wp workspacePreparer) Prepare(ctx context.Context, repo *models.Repo, branch string) (orchestrator.Workspace, error) {
-	opts := workspace.Options{Repo: repo, Branch: branch, BaseDir: workspaceRoot()}
+func (wp workspacePreparer) Prepare(ctx context.Context, repo *models.Repo, branch, baseBranch string) (orchestrator.Workspace, error) {
+	opts := workspace.Options{Repo: repo, Branch: branch, BaseBranch: baseBranch, BaseDir: workspaceRoot()}
 	if repo != nil && repo.SourceType == models.SourceTypeGitHub {
 		opts.Token = githubTokenForRepo(ctx, wp.store, repo)
 	}
@@ -81,10 +98,10 @@ func workspaceRoot() string {
 	return strings.TrimSpace(os.Getenv("WOLF_WORKSPACE_ROOT"))
 }
 
-func (wp workspacePreparer) Open(_ context.Context, path string, repo *models.Repo) (orchestrator.Workspace, error) {
+func (wp workspacePreparer) Open(ctx context.Context, path string, repo *models.Repo) (orchestrator.Workspace, error) {
 	token := ""
 	if repo != nil && repo.SourceType == models.SourceTypeGitHub {
-		token = githubTokenForRepo(context.Background(), wp.store, repo)
+		token = githubTokenForRepo(ctx, wp.store, repo)
 	}
 	return workspace.Open(path, token)
 }
@@ -116,6 +133,10 @@ func (v verifier) Verify(ctx context.Context, ws verify.Workspace, finding model
 
 func (v verifier) VerifyBatch(ctx context.Context, ws verify.Workspace, findings []models.Finding) (map[string]*verify.VerifyResult, error) {
 	return verify.GateBatch(ctx, ws, findings, v.scanner, verify.Options{})
+}
+
+func (v verifier) VerifyBranch(ctx context.Context, ws verify.Workspace, baseline, cleared []models.Finding, tools []string) ([]verify.StageResult, error) {
+	return verify.GateBranch(ctx, ws, baseline, cleared, tools, branchRescanner{})
 }
 
 // Scanner is the production verify.Scanner: a targeted single-tool rescan over
@@ -185,7 +206,7 @@ func (Scanner) RescanFiles(ctx context.Context, repoPath string, files []string,
 			}
 		}
 	}
-	return out, nil
+	return out, res.ToolsFailed[tool]
 }
 
 func rememberedMissing(tool string) error {
@@ -233,7 +254,7 @@ type gitApplier struct{}
 
 func (gitApplier) Apply(ctx context.Context, repoPath, diff string) error {
 	// #nosec G204 -- repoPath is a server-prepared workspace path; diff is on stdin.
-	cmd := exec.CommandContext(ctx, "git", "-C", repoPath, "apply", "--whitespace=nowarn", "-")
+	cmd := gitpkg.Command(ctx, nil, "-C", repoPath, "apply", "--whitespace=nowarn", "-")
 	cmd.Stdin = strings.NewReader(diff)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
@@ -255,15 +276,31 @@ func (branchRescanner) Rescan(ctx context.Context, repoPath string, tools []stri
 		return nil, nil
 	}
 	res, err := runScan(ctx, runner.RunConfig{
-		RepoPath:    repoPath,
-		Registry:    plugin.Global,
-		Tools:       tools,
-		Concurrency: 1,
+		RepoPath:      repoPath,
+		Registry:      plugin.Global,
+		Tools:         tools,
+		ToolsExplicit: true,
+		Concurrency:   1,
 	})
 	if err != nil {
 		return nil, err
 	}
-	return res.Findings, nil
+	if res == nil {
+		return nil, errors.New("branch scanner returned no result")
+	}
+	var toolErrors []error
+	for _, tool := range tools {
+		if !slices.Contains(res.ToolsRun, tool) {
+			toolErrors = append(toolErrors, fmt.Errorf("%s verification did not run", tool))
+		}
+	}
+	for _, tool := range res.ToolsSkipped {
+		toolErrors = append(toolErrors, fmt.Errorf("%w: %s", verify.ErrMissingImage, tool))
+	}
+	for tool, toolErr := range res.ToolsFailed {
+		toolErrors = append(toolErrors, fmt.Errorf("%s verification failed: %w", tool, toolErr))
+	}
+	return res.Findings, errors.Join(toolErrors...)
 }
 
 // --- per-tenant secret resolution ---
@@ -290,33 +327,6 @@ func resolveCreds(ctx context.Context, store db.Store, userID string) fixauth.Cr
 }
 
 func githubTokenForRepo(ctx context.Context, store db.Store, repo *models.Repo) string {
-	if store == nil || repo == nil {
-		return ""
-	}
-	if id := strings.TrimSpace(repo.CredentialSecretID); id != "" {
-		if sec, err := store.GetSecretByID(ctx, id); err == nil && sec != nil {
-			if dec, derr := secrets.Decrypt(sec.EncryptedValue); derr == nil {
-				return dec
-			}
-		}
-	}
-	return githubToken(ctx, store, repo.UserID)
-}
-
-func githubToken(ctx context.Context, store db.Store, userID string) string {
-	if store == nil || userID == "" {
-		return ""
-	}
-	list, err := store.ListSecretsByUser(ctx, userID)
-	if err != nil {
-		return ""
-	}
-	for _, s := range list {
-		if s.KeyType == models.KeyTypeGitHubToken {
-			if dec, derr := secrets.Decrypt(s.EncryptedValue); derr == nil {
-				return dec
-			}
-		}
-	}
-	return ""
+	token, _ := writability.GitHubToken(ctx, store, repo)
+	return token
 }

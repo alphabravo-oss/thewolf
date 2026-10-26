@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
@@ -112,34 +113,35 @@ func (p *CodeQLPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]
 	}
 
 	// cfg already resolved above for the HasDedicatedImage check.
-	// CodeQL's database create + analyze pipeline writes to disk (it builds an
-	// AST database in a temp directory). We run all three steps inside the
-	// scanner container, using /tmp (the 512 MB tmpfs) for the database.
+	// CodeQL's database create + analyze pipeline writes its AST database to
+	// the container's writable /tmp; repository sources stay read-only.
 	// /scan stays read-only — codeql honors --source-root for the input.
 	dbPath := "/tmp/codeql-db"
 	packName := fmt.Sprintf("codeql/%s-queries", lang)
 	sarifFile := "/tmp/codeql.sarif"
+	threads := strconv.Itoa(max(1, int(container.CPUCount(cfg))))
+	workdir := "/scan"
+	if lang == "go" {
+		if goDir := plugin.FindFile(opts.RepoPath, "go.mod"); goDir != "" {
+			workdir = container.ContainerSubPath(opts.RepoPath, goDir)
+		}
+	}
 
 	// Use sh -c so we can chain the three commands and read the SARIF result
 	// in a single docker run (avoiding 3 container starts).
 	script := fmt.Sprintf(
-		"codeql database create %s --language=%s --source-root=/scan --overwrite && "+
-			"codeql resolve qlpacks | grep -q %s || codeql pack download %s && "+
-			"codeql database analyze %s %s --format=sarif-latest --output=%s && "+
+		"set -e; codeql database create %s --language=%s --source-root=/scan --threads=%s --ram=5120 --overwrite >&2; "+
+			"if ! codeql resolve qlpacks | grep -q %s; then codeql pack download %s >&2; fi; "+
+			"codeql database analyze %s %s --threads=%s --ram=5120 --format=sarif-latest --output=%s >&2; "+
 			"cat %s",
-		dbPath, lang, packName, packName, dbPath, packName, sarifFile, sarifFile)
+		dbPath, lang, threads, packName, packName, dbPath, packName, threads, sarifFile, sarifFile)
 
 	cmd := container.CommandContext(ctx, cfg,
-		container.Options{RepoDir: opts.RepoPath, EntrypointOverride: "sh"},
+		container.Options{RepoDir: opts.RepoPath, WorkDir: workdir, EntrypointOverride: "sh", ExtraEnv: container.GoEnv(cfg)},
 		"codeql", "-c", script)
 	out, err := cmd.Output()
 	if err != nil {
-		if codeQLMissingBuildTool(out) {
-			plugin.Skipf(opts.OnOutput, "codeql",
-				"required language build tool is not available in the CodeQL scanner image. Skipping.")
-			return nil, nil
-		}
-		return nil, fmt.Errorf("codeql failed: %w\n%s", err, truncateOutput(out))
+		return nil, plugin.WrapExecError("codeql", err)
 	}
 
 	findings, perr := parseCodeQLOutput(out)
@@ -156,21 +158,6 @@ func (p *CodeQLPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]
 var _ = os.Open
 var _ = filepath.Join
 var _ = strings.Contains
-
-func codeQLMissingBuildTool(out []byte) bool {
-	text := string(out)
-	return strings.Contains(text, "Unable to run the go command") ||
-		strings.Contains(text, "executable file not found in $PATH")
-}
-
-// truncateOutput limits error output to the last 500 bytes for readability.
-func truncateOutput(out []byte) string {
-	s := strings.TrimSpace(string(out))
-	if len(s) > 500 {
-		return "..." + s[len(s)-500:]
-	}
-	return s
-}
 
 // SARIF types for CodeQL output
 type sarifOutput struct {

@@ -3,6 +3,7 @@ package general
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
@@ -31,39 +32,34 @@ func (p *GrypePlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]m
 		defer cancel()
 	}
 
-	// grype caches its ~1.5GB vuln database. We point it at the
-	// wolf-shared DBVolume mounted at /var/lib/wolf-db (a named Docker
-	// volume that persists across scan runs), with a sub-namespace per
-	// tool. First run downloads (~30s); subsequent runs reuse the cache.
-	// Falling back to /tmp keeps things working when no DBVolume is
-	// configured, at the cost of re-downloading every run.
-	cmd := container.CommandContext(ctx,
-		container.ConfigFromOpts(opts.ContainerCfg),
-		container.Options{
-			RepoDir: opts.RepoPath,
-			ExtraEnv: map[string]string{
-				"HOME":               "/tmp",
-				"XDG_CACHE_HOME":     "/var/lib/wolf-db",
-				"GRYPE_DB_CACHE_DIR": "/var/lib/wolf-db/grype",
-			},
-			// grype loads its full vulnerability DB into memory before
-			// matching. 6g leaves headroom for the DB + scanning state.
-			MemoryOverride: "6g",
-		},
+	cfg := container.ConfigFromOpts(opts.ContainerCfg)
+	env := map[string]string{"HOME": "/tmp", "GRYPE_DB_CACHE_DIR": "/var/lib/wolf-db/grype"}
+	if cfg != nil && cfg.ExtraEnv["GRYPE_DB_CACHE_DIR"] != "" {
+		env["GRYPE_DB_CACHE_DIR"] = cfg.ExtraEnv["GRYPE_DB_CACHE_DIR"]
+	}
+	if container.ResolveNetwork(cfg, "grype") == "none" {
+		env["GRYPE_DB_AUTO_UPDATE"] = "false"
+		env["GRYPE_CHECK_FOR_APP_UPDATE"] = "false"
+	}
+	cmd := container.CommandContext(ctx, cfg, container.Options{RepoDir: opts.RepoPath, ExtraEnv: env},
 		"grype", "dir:/scan", "-o", "json")
 	out, err := cmd.Output()
-	if err != nil && len(out) == 0 {
-		return nil, plugin.WrapExecError("grype", err)
+	if err != nil {
+		err = plugin.WrapExecError("grype", err)
+		if len(out) == 0 {
+			return nil, err
+		}
 	}
 
+	plugin.SaveRaw(opts, out, "json")
 	findings, perr := parseGrypeOutput(out)
 	if perr != nil {
-		return nil, perr
+		return nil, errors.Join(err, perr)
 	}
 	for i := range findings {
 		findings[i].FilePath = container.NormalizePath(findings[i].FilePath)
 	}
-	return findings, nil
+	return findings, err
 }
 
 type grypeOutput struct {
@@ -85,6 +81,7 @@ type grypeVuln struct {
 }
 
 type grypeArtifact struct {
+	PURL      string `json:"purl"`
 	Name      string `json:"name"`
 	Version   string `json:"version"`
 	Type      string `json:"type"`
@@ -101,9 +98,12 @@ func parseGrypeOutput(data []byte) ([]models.Finding, error) {
 
 	findings := make([]models.Finding, 0, len(output.Matches))
 	for _, m := range output.Matches {
-		filePath := ""
+		paths := []string{""}
 		if len(m.Artifact.Locations) > 0 {
-			filePath = m.Artifact.Locations[0].Path
+			paths = nil
+			for _, location := range m.Artifact.Locations {
+				paths = append(paths, location.Path)
+			}
 		}
 
 		desc := m.Vulnerability.Description
@@ -111,16 +111,23 @@ func parseGrypeOutput(data []byte) ([]models.Finding, error) {
 			desc += fmt.Sprintf(" (fix: %s)", m.Vulnerability.Fix.Versions[0])
 		}
 
-		findings = append(findings, models.Finding{
-			ToolName:    "grype",
-			Category:    models.CategorySCA,
-			Severity:    mapGrypeSeverity(m.Vulnerability.Severity),
-			Title:       fmt.Sprintf("%s in %s@%s", m.Vulnerability.ID, m.Artifact.Name, m.Artifact.Version),
-			Description: desc,
-			FilePath:    filePath,
-			RuleID:      m.Vulnerability.ID,
-			Status:      models.StatusOpen,
-		})
+		for _, filePath := range paths {
+			findings = append(findings, models.Finding{
+				ToolName:         "grype",
+				Category:         models.CategorySCA,
+				Severity:         mapGrypeSeverity(m.Vulnerability.Severity),
+				Title:            fmt.Sprintf("%s in %s@%s", m.Vulnerability.ID, m.Artifact.Name, m.Artifact.Version),
+				Description:      desc,
+				FilePath:         filePath,
+				RuleID:           m.Vulnerability.ID,
+				AdvisoryID:       m.Vulnerability.ID,
+				PackageName:      m.Artifact.Name,
+				PackageVersion:   m.Artifact.Version,
+				PackageEcosystem: m.Artifact.Type,
+				PackageURL:       m.Artifact.PURL,
+				Status:           models.StatusOpen,
+			})
+		}
 	}
 	return findings, nil
 }

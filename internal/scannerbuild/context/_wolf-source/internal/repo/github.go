@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
@@ -12,9 +13,22 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/transport/http"
 )
 
+var githubCoordinatePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9_.-]+$`)
+
+// ValidateGitHubCoordinate protects both clone URLs and filesystem cache keys.
+func ValidateGitHubCoordinate(owner, name string) error {
+	if !githubCoordinatePattern.MatchString(owner+"/"+name) || name == "." || name == ".." {
+		return fmt.Errorf("invalid GitHub owner/repository")
+	}
+	return nil
+}
+
 // CloneGitHub clones a GitHub repository into the local cache, or refreshes
 // an existing cache and checks out the requested branch from origin.
 func CloneGitHub(owner, repo, branch, token string) (string, error) {
+	if err := ValidateGitHubCoordinate(owner, repo); err != nil {
+		return "", err
+	}
 	cacheDir, err := getCacheDir()
 	if err != nil {
 		return "", err
@@ -135,9 +149,7 @@ func ensureFetchAllHeads(r *git.Repository) error {
 // CachedGitHubPath returns the on-disk scan clone for owner/repo when it
 // already exists. Empty means the cache has not been populated yet.
 func CachedGitHubPath(owner, repo string) string {
-	owner = filepath.Clean(owner)
-	repo = filepath.Clean(repo)
-	if owner == "." || owner == ".." || repo == "." || repo == ".." {
+	if ValidateGitHubCoordinate(owner, repo) != nil {
 		return ""
 	}
 	cacheDir, err := getCacheDir()

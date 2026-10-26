@@ -185,7 +185,7 @@ func (w *Worker) cleanupReclaimedWorkspaces(ctx context.Context) {
 	for i := range scans {
 		scan := &scans[i]
 		if scan.PreparedWorkspace == "" || scan.FailureCode != "worker_lost" ||
-			(scan.Status != models.ScanStatusPending && scan.Status != models.ScanStatusFailed) {
+			scan.Status != models.ScanStatusFailed {
 			continue
 		}
 		if err := w.cfg.CleanupWorkspace(scan.PreparedWorkspace); err != nil {

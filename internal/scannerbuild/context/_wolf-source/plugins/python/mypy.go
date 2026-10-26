@@ -43,6 +43,7 @@ func (p *MypyPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]mo
 		container.ConfigFromOpts(opts.ContainerCfg),
 		container.Options{RepoDir: opts.RepoPath},
 		"mypy", "/scan",
+		"--cache-dir", "/tmp/mypy",
 		"--no-error-summary", "--show-column-numbers", "--show-error-codes", "--no-color")
 	out, err := cmd.Output()
 	if err != nil && len(out) == 0 {

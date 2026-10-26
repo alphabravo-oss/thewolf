@@ -1,23 +1,26 @@
 package routes
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"net/http"
-	"os"
-	"path/filepath"
-	"sort"
 	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/alphabravocompany/thewolf/internal/api/response"
 	"github.com/alphabravocompany/thewolf/internal/auth"
+	"github.com/alphabravocompany/thewolf/internal/db"
 	"github.com/alphabravocompany/thewolf/internal/finding/sarifio"
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/scan/report"
+	"github.com/alphabravocompany/thewolf/internal/scan/runner"
+	"github.com/alphabravocompany/thewolf/internal/scan/scorer"
+	"github.com/alphabravocompany/thewolf/internal/wolflog"
 )
 
 type sarifImportRequest struct {
@@ -58,12 +61,8 @@ func ImportSARIF(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	repo, err := h.Store.GetRepoByID(r.Context(), req.RepoID)
-	if err != nil {
+	if err != nil || repo == nil || repo.UserID != claims.UserID {
 		response.WriteError(w, http.StatusNotFound, "not_found", "repo not found")
-		return
-	}
-	if repo.UserID != claims.UserID {
-		response.WriteError(w, http.StatusForbidden, "forbidden", "repo does not belong to current user")
 		return
 	}
 
@@ -86,7 +85,7 @@ func ImportSARIF(w http.ResponseWriter, r *http.Request) {
 		source = "sarif-import"
 	}
 	scanID := uuid.New().String()
-	toolsRun := toolsFromFindings(parsed.Findings)
+	toolsRun := parsed.Tools
 	toolsJSON, _ := json.Marshal(toolsRun)
 	scan := &models.Scan{
 		ID:              scanID,
@@ -95,7 +94,8 @@ func ImportSARIF(w http.ResponseWriter, r *http.Request) {
 		Branch:          branch,
 		SourceType:      repo.SourceType,
 		SourcePath:      repo.SourcePath,
-		Status:          models.ScanStatusCompleted,
+		Status:          models.ScanStatusRunning,
+		Phase:           "importing",
 		ToolsSelected:   string(toolsJSON),
 		ToolsCompleted:  string(toolsJSON),
 		ToolsFailed:     "[]",
@@ -109,6 +109,23 @@ func ImportSARIF(w http.ResponseWriter, r *http.Request) {
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to create import scan")
 		return
 	}
+
+	complete := false
+	defer func() {
+		if complete {
+			return
+		}
+		// Client cancellation must not leave a partially imported scan successful.
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 10*time.Second)
+		defer cancel()
+		scan.Status, scan.Phase = models.ScanStatusFailed, "failed"
+		if scan.FailureCode == "" {
+			scan.FailureCode, scan.FailureMessage = "import_failed", "SARIF import did not complete"
+		}
+		if _, err := h.Store.FinalizeScan(ctx, scan, ""); err != nil {
+			wolflog.Error().Err(err).Str("scan_id", scan.ID).Msg("failed to record import failure")
+		}
+	}()
 
 	findings := parsed.Findings
 	for i := range findings {
@@ -141,21 +158,58 @@ func ImportSARIF(w http.ResponseWriter, r *http.Request) {
 		ImportedCount:  len(findings),
 		CreatedBy:      claims.UserID,
 	}
-	if err := h.Store.CreateSARIFImport(r.Context(), imp); err != nil {
-		response.WriteError(w, http.StatusConflict, "conflict", "SARIF import already exists or could not be recorded")
+	if err := h.Store.CaptureScanIgnorePolicy(r.Context(), scanID, "", repo.SourcePath); err != nil {
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to capture scan ignore policy")
 		return
 	}
-
-	recordSARIFImportScannerRuns(r.Context(), h, scanID, toolsRun, findings, source, now)
-	writeSARIFImportArtifacts(r.Context(), h, scan, repo, source, data, findings, toolsRun, now)
+	clusters := runner.Deduplicate(findings)
+	scorer.ScoreFindings(clusters)
+	if err := h.Store.FinalizeFindingClusters(r.Context(), scanID, "", clusters); err != nil {
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to finalize imported findings")
+		return
+	}
+	if err := persistBaselineState(r.Context(), h, scan); err != nil {
+		scan.FailureCode, scan.FailureMessage = "baseline_persist_failed", truncateScanError(err.Error())
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to persist import baseline")
+		return
+	}
+	if err := recordSARIFImportScannerRuns(r.Context(), h, scanID, toolsRun, findings, source, now); err != nil {
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to persist import tool evidence")
+		return
+	}
+	if _, err := publishScanArtifact(r.Context(), h, scan.ID, models.ArtifactSARIF, "imported.sarif", bytes.NewReader(data), nil); err != nil {
+		scan.FailureCode, scan.FailureMessage = "artifact_persist_failed", truncateScanError(err.Error())
+		response.WriteError(w, http.StatusInternalServerError, "artifact_error", "failed to publish imported SARIF")
+		return
+	}
+	manifest := report.Manifest{
+		Source: scanSourceProvenance(scan), RepoName: repo.Name, RepoPath: repo.SourcePath,
+		RepoCommit: scan.CommitSHA, Branch: scan.Branch, StartedAt: now, FinishedAt: now,
+		WolfVersion: "sarif-import", Detection: report.DetectionSummary{Languages: []string{}}, ScannersRun: toolsRun,
+	}
+	config := report.ReportConfig{RepoName: repo.Name, Branch: scan.Branch, ToolsRun: toolsRun}
+	scan.Status, scan.Phase = models.ScanStatusCompleted, "completed"
+	if _, _, err := publishScanResults(r.Context(), h, scan, artifactDirForScan(r.Context(), h, scan), config, manifest, db.ScanCompletion{SARIFImport: imp}); err != nil {
+		scan.FailureCode, scan.FailureMessage = "scan_completion_failed", truncateScanError(err.Error())
+		if isDatabaseUniquenessError(err) {
+			response.WriteError(w, http.StatusConflict, "conflict", "SARIF import already exists")
+		} else if errors.Is(err, errScanArtifactPublication) {
+			scan.FailureCode = "artifact_persist_failed"
+			response.WriteError(w, http.StatusInternalServerError, "artifact_error", "failed to publish imported artifacts")
+		} else {
+			response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to complete import")
+		}
+		return
+	}
+	complete = true
 	response.WriteJSON(w, http.StatusCreated, response.SuccessResponse{Data: sarifImportResponse{
 		Import:       *imp,
 		Scan:         *scan,
-		FindingCount: len(findings),
+		FindingCount: scan.FindingCount,
 	}})
 }
 
-func recordSARIFImportScannerRuns(ctx context.Context, h *Handler, scanID string, toolsRun []string, findings []models.Finding, source string, ts time.Time) {
+func recordSARIFImportScannerRuns(ctx context.Context, h *Handler, scanID string, toolsRun []string, findings []models.Finding, source string, ts time.Time) error {
 	counts := make(map[string]int, len(toolsRun))
 	categories := make(map[string]string, len(toolsRun))
 	for _, finding := range findings {
@@ -169,7 +223,7 @@ func recordSARIFImportScannerRuns(ctx context.Context, h *Handler, scanID string
 		"type":   "sarif_import",
 	})
 	for _, tool := range toolsRun {
-		upsertScannerRunRecord(ctx, h, &models.ScannerRunRecord{
+		if err := h.Store.UpsertScannerRunRecord(ctx, &models.ScannerRunRecord{
 			ID:            uuid.New().String(),
 			ScanID:        scanID,
 			ToolName:      tool,
@@ -181,66 +235,9 @@ func recordSARIFImportScannerRuns(ctx context.Context, h *Handler, scanID string
 			ParserMessage: "imported from SARIF",
 			StartedAt:     &ts,
 			FinishedAt:    &ts,
-		})
-	}
-}
-
-func writeSARIFImportArtifacts(ctx context.Context, h *Handler, scan *models.Scan, repo *models.Repo, source string, data []byte, findings []models.Finding, toolsRun []string, ts time.Time) {
-	dir := artifactDirForScan(ctx, h, scan)
-	if dir == "" {
-		return
-	}
-	if err := os.MkdirAll(dir, 0o750); err != nil {
-		return
-	}
-	rawPath := filepath.Join(dir, "imported.sarif")
-	if err := os.WriteFile(rawPath, data, 0o600); err == nil {
-		recordScanArtifact(ctx, h, scan.ID, models.ArtifactSARIF, rawPath)
-	}
-	mfst := report.Manifest{
-		ScanID:      scan.ID,
-		Source:      scanSourceProvenance(scan),
-		RepoName:    repo.Name,
-		RepoPath:    repo.SourcePath,
-		RepoCommit:  scan.CommitSHA,
-		Branch:      scan.Branch,
-		StartedAt:   ts,
-		FinishedAt:  ts,
-		WolfVersion: "sarif-import",
-		Detection: report.DetectionSummary{
-			Languages: []string{},
-		},
-		ScannersRun: toolsRun,
-		Counts:      report.CountFindings(0, findings),
-	}
-	if w, err := report.WriteAll(dir, report.ReportConfig{
-		ScanID:   scan.ID,
-		RepoName: repo.Name,
-		Branch:   scan.Branch,
-		Findings: findings,
-		ToolsRun: toolsRun,
-	}, mfst); err == nil {
-		recordScanArtifact(ctx, h, scan.ID, models.ArtifactJSON, w.FindingsJSON)
-		recordScanArtifact(ctx, h, scan.ID, models.ArtifactMarkdown, w.RawMarkdown)
-		recordScanArtifact(ctx, h, scan.ID, models.ArtifactSARIF, w.CombinedSARIF)
-		recordScanArtifact(ctx, h, scan.ID, models.ArtifactManifest, w.Manifest)
-		recordScanArtifact(ctx, h, scan.ID, models.ArtifactMarkdown, w.FixHigh)
-		recordScanArtifact(ctx, h, scan.ID, models.ArtifactMarkdown, w.FixAll)
-	}
-	_ = source
-}
-
-func toolsFromFindings(findings []models.Finding) []string {
-	seen := map[string]bool{}
-	for _, finding := range findings {
-		if finding.ToolName != "" {
-			seen[finding.ToolName] = true
+		}); err != nil {
+			return err
 		}
 	}
-	out := make([]string, 0, len(seen))
-	for tool := range seen {
-		out = append(out, tool)
-	}
-	sort.Strings(out)
-	return out
+	return nil
 }

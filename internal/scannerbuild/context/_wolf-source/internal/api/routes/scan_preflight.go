@@ -2,6 +2,7 @@ package routes
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"sort"
 	"strings"
@@ -48,14 +49,15 @@ type scanPreflightResponse struct {
 	Missing      []missingImage `json:"missing"`
 	MissingCount int            `json:"missing_count"`
 	ToolCount    int            `json:"tool_count"`
+	Tools        []string       `json:"tools"`
 }
 
 // ScanPreflight reports which of the scanners a scan WOULD run are missing
 // their container image locally, so the UI can prompt the user to pull them
 // before starting instead of discovering the failures mid-scan (the runner
 // uses --pull never by design). It resolves the tool set exactly the way the
-// runner does (runner.SelectTools), using the repo's cached language detection
-// for the auto-detect case so no clone is required — this is a fast estimate.
+// runner does (runner.SelectTools), detecting the current local tree before
+// falling back to cached languages for sources that require preparation.
 //
 // Route: POST /api/v1/scans/preflight
 func ScanPreflight(w http.ResponseWriter, r *http.Request) {
@@ -98,40 +100,30 @@ func ScanPreflight(w http.ResponseWriter, r *http.Request) {
 	}
 	applyScanProfile(h, &createReq, repo.ID)
 
-	var languages []models.Language
-	var langCounts map[string]int
-	if repo.DetectedLanguages != "" {
-		_ = json.Unmarshal([]byte(repo.DetectedLanguages), &langCounts)
+	languages, _, err := scannerPlanLanguages(r.Context(), h, scannerPlanRequest{RepoID: repo.ID})
+	if err != nil {
+		response.WriteError(w, http.StatusBadRequest, "bad_request", err.Error())
+		return
 	}
-	for language := range langCounts {
-		languages = append(languages, models.Language(language))
+	repoPath := ""
+	if repo.SourceType == models.SourceTypeLocal {
+		repoPath = repo.SourcePath
 	}
-	sort.Slice(languages, func(i, j int) bool { return languages[i] < languages[j] })
-
-	selectedTools := createReq.Tools
-	toolsExplicit := len(createReq.Tools) > 0
-	if createReq.Profile == "full" || len(createReq.Categories) > 0 {
-		selectedTools = toolsForProfile(h, createReq, languages)
-		toolsExplicit = true
+	plugins := runner.SelectTools(scanSelectionConfig(h, createReq, languages, repoPath))
+	tools := make([]string, 0, len(plugins))
+	for _, p := range plugins {
+		// Execution checks availability before publishing its selected list.
+		if p.CheckAvailable() {
+			tools = append(tools, p.Name())
+		}
 	}
-	cfgRun := runner.RunConfig{
-		Registry:      h.Registry,
-		Tools:         selectedTools,
-		ToolsExplicit: toolsExplicit,
-		DisabledTools: createReq.DisabledTools,
-	}
-	// Auto-detect (no explicit tools, not all-scanners): use cached languages
-	// so the estimate matches what the scan would select, without cloning.
-	if !toolsExplicit && !req.AllScanners {
-		cfgRun.Languages = languages
-	}
-	plugins := runner.SelectTools(cfgRun)
+	sort.Strings(tools)
 
 	cc := container.Default()
 	if cc == nil {
 		// No container backend: nothing to pre-pull, report empty.
 		response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: scanPreflightResponse{
-			Missing: []missingImage{}, ToolCount: len(plugins),
+			Missing: []missingImage{}, ToolCount: len(tools), Tools: tools,
 		}})
 		return
 	}
@@ -140,15 +132,16 @@ func ScanPreflight(w http.ResponseWriter, r *http.Request) {
 	// (many tools share the bundled wolf-scanners image) concurrently.
 	toolImage := make(map[string]string, len(plugins))
 	uniq := make(map[string]bool)
-	for _, p := range plugins {
-		img := cc.ImageFor(p.Name())
+	for _, tool := range tools {
+		img := cc.ImageFor(tool)
 		if img == "" {
 			continue
 		}
-		toolImage[p.Name()] = img
+		toolImage[tool] = img
 		uniq[img] = true
 	}
 	present := make(map[string]bool, len(uniq))
+	var probeErr error
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 	for img := range uniq {
@@ -156,14 +149,21 @@ func ScanPreflight(w http.ResponseWriter, r *http.Request) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			// dockerImageDigest returns an error when the image is absent.
-			_, derr := dockerImageDigest(img)
+			// Probe the same Docker endpoint/configuration used for execution.
+			_, derr := container.LocalImageDigest(r.Context(), cc, img)
 			mu.Lock()
 			present[img] = derr == nil
+			if derr != nil && !errors.Is(derr, container.ErrImageMissing) {
+				probeErr = derr
+			}
 			mu.Unlock()
 		}()
 	}
 	wg.Wait()
+	if probeErr != nil {
+		response.WriteError(w, http.StatusServiceUnavailable, "readiness_unavailable", "scanner image readiness could not be checked; verify Docker connectivity")
+		return
+	}
 
 	missing := make([]missingImage, 0)
 	for tool, img := range toolImage {
@@ -176,6 +176,21 @@ func ScanPreflight(w http.ResponseWriter, r *http.Request) {
 	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: scanPreflightResponse{
 		Missing:      missing,
 		MissingCount: len(missing),
-		ToolCount:    len(plugins),
+		ToolCount:    len(tools),
+		Tools:        tools,
 	}})
+}
+
+// scanSelectionConfig is shared by readiness and execution. Source detection
+// and profile policy feed the same runner selector, including explicit empty
+// category selections and repository-specific applicability checks.
+func scanSelectionConfig(h *Handler, req createScanRequest, languages []models.Language, repoPath string) runner.RunConfig {
+	return runner.RunConfig{
+		Registry:      h.Registry,
+		RepoPath:      repoPath,
+		Tools:         toolsForProfile(h, req, languages),
+		ToolsExplicit: req.Profile == "full" || len(req.Categories) > 0 || len(req.Tools) > 0,
+		Languages:     languages,
+		DisabledTools: req.DisabledTools,
+	}
 }

@@ -270,7 +270,7 @@ func cleanupPartialMaterialization(workspace string) error {
 		if !safeMaterializedTopLevel(name) {
 			return errors.New("managed source installation ledger contains an unsafe path")
 		}
-		if err := os.RemoveAll(filepath.Join(workspace, name)); err != nil {
+		if err := os.RemoveAll(filepath.Join(workspace, name)); err != nil { // #nosec G703 -- safeMaterializedTopLevel rejects separators and dot paths; RemoveAll unlinks child symlinks under the controller-owned workspace.
 			return err
 		}
 	}

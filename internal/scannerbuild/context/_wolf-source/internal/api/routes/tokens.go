@@ -196,10 +196,29 @@ func ListAuditLog(w http.ResponseWriter, r *http.Request) {
 	// Default newest / highest-first unless explicitly ascending.
 	desc := q.Get("order") != "asc"
 
+	dates := make(map[string]*time.Time, 2)
+	for _, key := range []string{"from", "before"} {
+		if value := q.Get(key); value != "" {
+			parsed, err := time.Parse(time.RFC3339, value)
+			if err != nil {
+				parsed, err = time.Parse(time.DateOnly, value)
+			}
+			if err != nil {
+				response.WriteError(w, http.StatusBadRequest, "validation_error", "audit dates must be YYYY-MM-DD or RFC3339")
+				return
+			}
+			dates[key] = &parsed
+		}
+	}
+	if dates["from"] != nil && dates["before"] != nil && !dates["from"].Before(*dates["before"]) {
+		response.WriteError(w, http.StatusBadRequest, "validation_error", "from must precede before")
+		return
+	}
 	entries, total, err := h.Store.QueryAuditLog(r.Context(), db.AuditQuery{
 		Search:   q.Get("q"),
 		Method:   q.Get("method"),
 		Category: q.Get("category"),
+		Event:    q.Get("event"), Actor: q.Get("actor"), IP: q.Get("ip"), From: dates["from"], Before: dates["before"],
 		Severity: q.Get("severity"),
 		SortBy:   sortBy,
 		Desc:     desc,

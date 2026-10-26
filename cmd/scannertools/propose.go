@@ -24,7 +24,7 @@ import (
 const proposalSchema = "wolf.scanners.proposal/v1"
 
 var scannerProposalInputs = []string{
-	".dockerignore", "go.mod", "go.sum", "scanners", "fixer", "cmd", "internal", "plugins",
+	".dockerignore", "go.mod", "go.sum", "scanners", "fixer", "cmd", "internal", "plugins", "pkg",
 	"docs/superpowers/changelog/scanner-bumps",
 }
 
@@ -253,7 +253,7 @@ func copyProposalInput(root, workspace, relative string) error {
 		if err := os.MkdirAll(filepath.Dir(target), 0o750); err != nil {
 			return err
 		}
-		return os.WriteFile(target, data, info.Mode().Perm())
+		return os.WriteFile(target, data, info.Mode().Perm()) // #nosec G703 -- target is a compiled input basename inside a fresh private MkdirTemp workspace; source symlinks are rejected.
 	}
 	return filepath.WalkDir(source, func(path string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
@@ -278,7 +278,7 @@ func copyProposalInput(root, workspace, relative string) error {
 		if err != nil {
 			return err
 		}
-		return os.WriteFile(destination, data, info.Mode().Perm())
+		return os.WriteFile(destination, data, info.Mode().Perm()) // #nosec G703 -- destination is derived from walked non-symlink entries inside a fresh private MkdirTemp workspace.
 	})
 }
 

@@ -2,30 +2,37 @@ package routes
 
 import (
 	"context"
+	"crypto/sha256"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/google/uuid"
 
 	"github.com/alphabravocompany/thewolf/internal/api/response"
 	"github.com/alphabravocompany/thewolf/internal/artifacts"
 	"github.com/alphabravocompany/thewolf/internal/auth"
+	"github.com/alphabravocompany/thewolf/internal/db"
 	fixauth "github.com/alphabravocompany/thewolf/internal/fix/auth"
 	fixengine "github.com/alphabravocompany/thewolf/internal/fix/engine"
 	"github.com/alphabravocompany/thewolf/internal/fix/fixstore"
-	"github.com/alphabravocompany/thewolf/internal/fix/lineage"
 	"github.com/alphabravocompany/thewolf/internal/fix/profile"
 	"github.com/alphabravocompany/thewolf/internal/fix/workspace"
 	"github.com/alphabravocompany/thewolf/internal/models"
 )
 
 // createFixRequest is the body of POST /fixes. It enqueues an autonomous fix
-// job (v1: dry-run, branch-only). RepoID + (FindingIDs | ScanID) scopes the
+// job. dry_run retains a local review branch; push also publishes it and opens
+// a GitHub PR. RepoID + (FindingIDs | ScanID) scopes the
 // work; the rest tune the engine chain, severity floor, and attempt budget.
 type createFixRequest struct {
 	RepoID         string   `json:"repo_id"`
@@ -56,8 +63,8 @@ func fixArtifacts() *fixstore.Store {
 
 // CreateFix handles POST /api/fixes — enqueue an autonomous fix job. Gated by
 // the autofix_enabled setting (403 autofix_disabled when off) and write:fixes.
-// The job is durable; a `wolf fixer` worker claims and runs it. v1 mode is
-// dry_run (branch + diff for review, no push/PR).
+// The job is durable; a `wolf fixer` worker claims and runs it. The default
+// dry_run retains a review branch; explicit push also publishes it and opens a GitHub PR.
 func CreateFix(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetUserFromContext(r.Context())
 	if claims == nil {
@@ -78,8 +85,36 @@ func CreateFix(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req createFixRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&req); err != nil {
 		response.WriteError(w, http.StatusBadRequest, "bad_request", "invalid request body")
+		return
+	}
+
+	if decoder.Decode(new(any)) != io.EOF {
+		response.WriteError(w, 400, "bad_request", "expected one fix request")
+		return
+	}
+	req.RepoID, req.ScanID, req.TargetBranch = strings.TrimSpace(req.RepoID), strings.TrimSpace(req.ScanID), strings.TrimSpace(req.TargetBranch)
+	if len(req.FindingIDs) > 5000 {
+		response.WriteError(w, 400, "validation_error", "at most 5000 explicit finding IDs are allowed")
+		return
+	}
+	for i := range req.FindingIDs {
+		req.FindingIDs[i] = strings.TrimSpace(req.FindingIDs[i])
+		if req.FindingIDs[i] == "" {
+			response.WriteError(w, 400, "validation_error", "finding IDs must not be empty")
+			return
+		}
+	}
+	slices.Sort(req.FindingIDs)
+	req.FindingIDs = slices.Compact(req.FindingIDs)
+	if len(req.FindingIDs) == 0 {
+		req.FindingIDs = nil
+	}
+	if req.TargetBranch != "" && (strings.HasPrefix(req.TargetBranch, "-") || plumbing.ReferenceName("refs/heads/"+req.TargetBranch).Validate() != nil) {
+		response.WriteError(w, 400, "validation_error", "invalid target branch")
 		return
 	}
 
@@ -101,6 +136,39 @@ func CreateFix(w http.ResponseWriter, r *http.Request) {
 		response.WriteError(w, http.StatusBadRequest, "validation_error", "mode must be dry_run or push")
 		return
 	}
+	req.Mode = mode
+	repo, err := h.Store.GetRepoByID(r.Context(), req.RepoID)
+	if err != nil || repo == nil || !ownsFixResource(repo.UserID, claims) {
+		response.WriteError(w, 404, "not_found", "repository not found")
+		return
+	}
+	if req.TargetBranch != "" && (strings.EqualFold(req.TargetBranch, "main") || strings.EqualFold(req.TargetBranch, "master") || strings.EqualFold(req.TargetBranch, repo.DefaultBranch)) {
+		response.WriteError(w, 400, "validation_error", "fixes require a separate review branch")
+		return
+	}
+	key := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
+	if len(key) > 255 {
+		response.WriteError(w, 400, "validation_error", "Idempotency-Key must be 255 characters or fewer")
+		return
+	}
+	intent, _ := json.Marshal(req)
+	digest := fmt.Sprintf("fix-create-v1:%x", sha256.Sum256(intent))
+	if key != "" {
+		existing, err := h.Store.FindFixJobByIdempotencyKey(r.Context(), claims.UserID, key)
+		if err == nil {
+			if existing.RequestDigest != digest {
+				writeFixCreationError(w, db.ErrFixIdempotencyConflict)
+				return
+			}
+			response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: existing})
+			return
+		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			response.WriteError(w, 500, "server_error", "failed to check fix request key")
+			return
+		}
+	}
+
 	engine := req.Engine
 	if engine == "" {
 		engine = "auto"
@@ -140,28 +208,13 @@ func CreateFix(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	scanID := strings.TrimSpace(req.ScanID)
-	var clicked *models.Scan
-	if scanID != "" && h.Store != nil {
-		s, serr := h.Store.GetScanByID(r.Context(), scanID)
-		if serr != nil || s == nil || (s.UserID != "" && s.UserID != claims.UserID) {
-			response.WriteError(w, http.StatusNotFound, "not_found", "scan not found")
-			return
-		}
-		clicked = s
-	}
-
+	scanID := req.ScanID
 	findingIDs := req.FindingIDs
-	if len(findingIDs) == 0 && scanID != "" && h.Store != nil {
-		if findings, ferr := h.Store.ListFindingsByScan(r.Context(), scanID); ferr == nil {
-			for _, f := range findings {
-				findingIDs = append(findingIDs, f.ID)
-			}
-		}
-	}
 
 	now := time.Now().UTC()
 	job := &models.FixJob{
+		IdempotencyKey: key,
+		RequestDigest:  digest,
 		ID:             uuid.New().String(),
 		UserID:         claims.UserID,
 		Type:           "fix",
@@ -186,17 +239,16 @@ func CreateFix(w http.ResponseWriter, r *http.Request) {
 		UpdatedAt:      now,
 	}
 
-	if err := attachRemediation(r.Context(), h, claims.UserID, clicked, job); err != nil {
-		writeRemediationError(w, err)
+	created, replayed, err := h.Store.CreateFixJob(r.Context(), job, len(req.FindingIDs) == 0)
+	if err != nil {
+		writeFixCreationError(w, err)
 		return
 	}
-
-	if err := h.Store.EnqueueFixJob(r.Context(), job); err != nil {
-		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to enqueue fix job")
-		return
+	status := http.StatusCreated
+	if replayed {
+		status = http.StatusOK
 	}
-
-	response.WriteJSON(w, http.StatusCreated, response.SuccessResponse{Data: job})
+	response.WriteJSON(w, status, response.SuccessResponse{Data: created})
 }
 
 // ListFixes handles GET /api/fixes — list fix jobs. An optional repo_id query
@@ -242,7 +294,7 @@ func GetFix(w http.ResponseWriter, r *http.Request) {
 
 	id := chi.URLParam(r, "id")
 	job, err := h.Store.GetFixJobByID(r.Context(), id)
-	if err != nil || job == nil || !ownsFixJob(job, claims) {
+	if err != nil || job == nil || !ownsFixResource(job.UserID, claims) {
 		// Not-owned is reported as 404 (not 403) so a caller can't enumerate
 		// which job IDs exist for other tenants.
 		response.WriteError(w, http.StatusNotFound, "not_found", fmt.Sprintf("fix %s not found", id))
@@ -301,7 +353,7 @@ func GetFixDiff(w http.ResponseWriter, r *http.Request) {
 
 	id := chi.URLParam(r, "id")
 	job, err := h.Store.GetFixJobByID(r.Context(), id)
-	if err != nil || job == nil || !ownsFixJob(job, claims) {
+	if err != nil || job == nil || !ownsFixResource(job.UserID, claims) {
 		// Not-owned is reported as 404 (not 403) so a caller can't enumerate
 		// which job IDs exist for other tenants.
 		response.WriteError(w, http.StatusNotFound, "not_found", fmt.Sprintf("fix %s not found", id))
@@ -348,7 +400,7 @@ func GetFixCommits(w http.ResponseWriter, r *http.Request) {
 	}
 	id := chi.URLParam(r, "id")
 	job, err := h.Store.GetFixJobByID(r.Context(), id)
-	if err != nil || job == nil || !ownsFixJob(job, claims) {
+	if err != nil || job == nil || !ownsFixResource(job.UserID, claims) {
 		response.WriteError(w, http.StatusNotFound, "not_found", fmt.Sprintf("fix %s not found", id))
 		return
 	}
@@ -376,7 +428,7 @@ func StreamFix(w http.ResponseWriter, r *http.Request) {
 
 	id := chi.URLParam(r, "id")
 	job, err := h.Store.GetFixJobByID(r.Context(), id)
-	if err != nil || job == nil || !ownsFixJob(job, claims) {
+	if err != nil || job == nil || !ownsFixResource(job.UserID, claims) {
 		// Not-owned is reported as 404 (not 403) so a caller can't enumerate
 		// which job IDs exist for other tenants.
 		response.WriteError(w, http.StatusNotFound, "not_found", fmt.Sprintf("fix %s not found", id))
@@ -440,7 +492,7 @@ func relayTypedLogLines(w http.ResponseWriter, flusher http.Flusher, logPath str
 	if typ == "" {
 		typ = "fix_log"
 	}
-	f, err := os.Open(logPath) // #nosec G304 -- logPath is derived from a server-issued job UUID under the artifacts root
+	f, err := artifacts.Open(logPath)
 	if err != nil {
 		return offset
 	}
@@ -480,7 +532,7 @@ func relayConsoleData(w http.ResponseWriter, flusher http.Flusher, logPath strin
 	if logPath == "" {
 		return offset
 	}
-	f, err := os.Open(logPath) // #nosec G304 -- logPath is derived from a server-issued console UUID
+	f, err := artifacts.Open(logPath)
 	if err != nil {
 		return offset
 	}
@@ -528,53 +580,51 @@ func CancelFix(w http.ResponseWriter, r *http.Request) {
 
 	id := chi.URLParam(r, "id")
 	job, err := h.Store.GetFixJobByID(r.Context(), id)
-	if err != nil || job == nil || !ownsFixJob(job, claims) {
+	if err != nil || job == nil || !ownsFixResource(job.UserID, claims) {
 		// Not-owned is reported as 404 (not 403) so a caller can't enumerate
 		// which job IDs exist for other tenants.
 		response.WriteError(w, http.StatusNotFound, "not_found", fmt.Sprintf("fix %s not found", id))
 		return
 	}
 
-	if isTerminal(job.Status) {
+	if isTerminal(job.Status) && job.Status != models.FixJobCancelled {
 		response.WriteError(w, http.StatusConflict, "conflict", "fix job is already finished")
 		return
 	}
-
-	discardFixBranch(r.Context(), h, job)
-	if rem := loadJobRemediation(r.Context(), h, job); rem != nil && rem.State == models.RemediationOpen {
-		_ = lineage.Discard(r.Context(), rem, h.Store)
+	if job.Status != models.FixJobCancelled {
+		active := job.Status == models.FixJobClaimed || job.Status == models.FixJobRunning
+		now := time.Now().UTC()
+		job.Status = models.FixJobCancelled
+		job.FinishedAt = &now
+		job.PauseReason = models.FixPauseCancellationCleanup
+		job.ResumeAction = ""
+		if !active {
+			job.ClaimedBy = ""
+		}
+		if err := h.Store.UpdateFixJob(r.Context(), job); err != nil {
+			if errors.Is(err, db.ErrFixJobConflict) || errors.Is(err, db.ErrFixBusy) {
+				response.WriteError(w, http.StatusConflict, "conflict", err.Error())
+			} else {
+				response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to cancel fix job")
+			}
+			return
+		}
 	}
-
-	now := time.Now().UTC()
-	job.Status = models.FixJobCancelled
-	job.FinishedAt = &now
-	job.UpdatedAt = now
-	job.PauseReason = ""
-	job.ResumeAction = ""
-	job.ResultBranch = ""
-	job.WorkspacePath = ""
-
-	if err := h.Store.UpdateFixJob(r.Context(), job); err != nil {
-		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to cancel fix job")
-		return
+	// An active worker acknowledges cleanup only after its engine returns.
+	// A repeated DELETE retries failed cleanup, never the fix itself.
+	if job.PauseReason == models.FixPauseCancellationCleanup && job.ClaimedBy == "" {
+		if err := h.Store.CompleteFixCancellation(r.Context(), job, workspace.DiscardFixJob); err != nil {
+			job.Error = "cancellation cleanup pending: " + err.Error()
+			_ = h.Store.UpdateFixJob(context.WithoutCancel(r.Context()), job)
+			status := http.StatusInternalServerError
+			if errors.Is(err, db.ErrFixJobConflict) || errors.Is(err, db.ErrFixBusy) {
+				status = http.StatusConflict
+			}
+			response.WriteError(w, status, "cleanup_pending", "fix cancelled; cleanup is pending and the recovery path is retained; retry cancellation after resolving the cleanup error")
+			return
+		}
 	}
-
 	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: job})
-}
-
-func discardFixBranch(ctx context.Context, h *Handler, job *models.FixJob) {
-	if h == nil || job == nil {
-		return
-	}
-	_ = workspace.DiscardPath(ctx, job.WorkspacePath, job.ResultBranch)
-	if h.Store == nil || job.RepoID == "" {
-		return
-	}
-	repo, err := h.Store.GetRepoByID(ctx, job.RepoID)
-	if err != nil || repo == nil || repo.SourceType != models.SourceTypeLocal {
-		return
-	}
-	_ = workspace.DiscardLocalBranch(ctx, repo.SourcePath, job.ResultBranch)
 }
 
 // fixStatusJSON renders the SSE status payload for a job.
@@ -589,11 +639,10 @@ func fixStatusJSON(job *models.FixJob) string {
 	return string(payload)
 }
 
-// ownsFixJob reports whether the job belongs to the caller. Jobs with an empty
-// UserID (legacy/system-created) are treated as accessible, matching the scans
-// ownership model (scan.UserID != "" && scan.UserID != claims.UserID).
-func ownsFixJob(job *models.FixJob, claims *auth.Claims) bool {
-	return job.UserID == "" || job.UserID == claims.UserID
+// ownsFixResource keeps private fix resources owner-only, including between
+// administrators. Ownerless legacy resources require an administrator session.
+func ownsFixResource(ownerUserID string, claims *auth.Claims) bool {
+	return canModifyOwned(claims, ownerUserID) && (ownerUserID == "" || ownerUserID == claims.UserID)
 }
 
 // isTerminal reports whether a fix job has reached a final state.
@@ -606,7 +655,8 @@ type resumeFixRequest struct {
 }
 
 // ResumeFix handles POST /api/fixes/{id}/resume — re-queue a paused job.
-// action=continue runs the next loop; action=push publishes the fix branch.
+// action=continue runs the next loop; action=push publishes the reviewed branch
+// and opens or recovers its GitHub PR.
 func ResumeFix(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetUserFromContext(r.Context())
 	if claims == nil {
@@ -625,20 +675,28 @@ func ResumeFix(w http.ResponseWriter, r *http.Request) {
 	}
 	id := chi.URLParam(r, "id")
 	job, err := h.Store.GetFixJobByID(r.Context(), id)
-	if err != nil || job == nil || !ownsFixJob(job, claims) {
+	if err != nil || job == nil || !ownsFixResource(job.UserID, claims) {
 		response.WriteError(w, http.StatusNotFound, "not_found", fmt.Sprintf("fix %s not found", id))
 		return
 	}
-	legacyFailedPush := job.Status == models.FixJobFailed && job.ResultBranch != "" && !job.Pushed
-	if !models.FixJobPaused(job.Status) && !legacyFailedPush {
+	if !models.FixJobPaused(job.Status) {
 		response.WriteError(w, http.StatusConflict, "conflict", "fix job is not waiting for review")
 		return
 	}
 	var req resumeFixRequest
-	_ = json.NewDecoder(r.Body).Decode(&req)
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&req); err != nil && err != io.EOF {
+		response.WriteError(w, http.StatusBadRequest, "validation_error", "invalid resume request")
+		return
+	}
+	if decoder.Decode(new(any)) != io.EOF {
+		response.WriteError(w, http.StatusBadRequest, "validation_error", "expected one resume request")
+		return
+	}
 	action := strings.TrimSpace(req.Action)
 	if action == "" {
-		if job.Status == models.FixJobAwaitingPush || job.Status == models.FixJobPushFailed || legacyFailedPush {
+		if job.Status == models.FixJobAwaitingPush || job.Status == models.FixJobPushFailed {
 			action = models.FixResumePush
 		} else {
 			action = models.FixResumeContinue
@@ -648,7 +706,7 @@ func ResumeFix(w http.ResponseWriter, r *http.Request) {
 		response.WriteError(w, http.StatusBadRequest, "validation_error", "action must be continue or push")
 		return
 	}
-	if (legacyFailedPush || job.Status == models.FixJobPushFailed) && action != models.FixResumePush {
+	if job.Status == models.FixJobPushFailed && action != models.FixResumePush {
 		response.WriteError(w, http.StatusConflict, "conflict", "only push can be retried after a failed publish")
 		return
 	}
@@ -658,113 +716,36 @@ func ResumeFix(w http.ResponseWriter, r *http.Request) {
 	job.PauseReason = ""
 	job.Error = ""
 	if err := h.Store.UpdateFixJob(r.Context(), job); err != nil {
-		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to resume fix job")
+		if errors.Is(err, db.ErrFixJobConflict) || errors.Is(err, db.ErrFixBusy) {
+			response.WriteError(w, http.StatusConflict, "conflict", err.Error())
+		} else {
+			response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to resume fix job")
+		}
 		return
 	}
 	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: job})
 }
 
-type remediationConflict struct {
-	code    string
-	message string
-}
-
-func (e *remediationConflict) Error() string { return e.message }
-
-func writeRemediationError(w http.ResponseWriter, err error) {
-	if err == nil {
-		return
+func writeFixCreationError(w http.ResponseWriter, err error) {
+	status, code, message := http.StatusInternalServerError, "server_error", "failed to create fix job"
+	switch {
+	case errors.Is(err, db.ErrFixScope):
+		status, code, message = http.StatusNotFound, "not_found", "repository, scan or finding not found"
+	case errors.Is(err, db.ErrFixIdempotencyConflict):
+		status, code, message = http.StatusConflict, "idempotency_conflict", err.Error()
+	case errors.Is(err, db.ErrFixBusy):
+		status, code, message = http.StatusConflict, "remediation_busy", err.Error()
+	case errors.Is(err, db.ErrFixFrozen):
+		status, code, message = http.StatusConflict, "remediation_frozen", err.Error()
+	case errors.Is(err, db.ErrFixBranchConflict), errors.Is(err, db.ErrFixSourceBranchConflict):
+		status, code, message = http.StatusConflict, "branch_conflict", err.Error()
 	}
-	if c, ok := err.(*remediationConflict); ok {
-		response.WriteError(w, http.StatusConflict, c.code, c.message)
-		return
-	}
-	response.WriteError(w, http.StatusInternalServerError, "server_error", err.Error())
-}
-
-func attachRemediation(ctx context.Context, h *Handler, userID string, clicked *models.Scan, job *models.FixJob) error {
-	if h == nil || h.Store == nil || job == nil || clicked == nil {
-		return nil
-	}
-	originID := lineage.OriginID(clicked)
-	latest, err := h.Store.GetLatestRemediationByOrigin(ctx, originID)
-	if err != nil {
-		return err
-	}
-	if latest != nil && latest.State == models.RemediationFrozen {
-		return &remediationConflict{
-			code:    "remediation_frozen",
-			message: fmt.Sprintf("This scan's branch was handed off. Scan %s again to keep fixing.", latest.Branch),
-		}
-	}
-	if latest != nil && latest.State == models.RemediationOpen {
-		jobs, jerr := h.Store.ListFixJobsByRemediation(ctx, latest.ID)
-		if jerr != nil {
-			return jerr
-		}
-		for _, existing := range jobs {
-			if models.RemediationBusy(existing.Status) {
-				return &remediationConflict{
-					code:    "remediation_busy",
-					message: "An agent is already running on this scan's fix branch",
-				}
-			}
-		}
-		if clicked.ID == originID {
-			if kids, kerr := h.Store.ListScansByOrigin(ctx, originID); kerr == nil {
-				for i := len(kids) - 1; i >= 0; i-- {
-					if kids[i].ID != originID && kids[i].OriginScanID == originID {
-						if findings, ferr := h.Store.ListFindingsByScan(ctx, kids[i].ID); ferr == nil && len(findings) > 0 {
-							ids := make([]string, 0, len(findings))
-							for _, f := range findings {
-								ids = append(ids, f.ID)
-							}
-							job.ScanID = kids[i].ID
-							job.FindingIDList = ids
-							job.FindingIDs = toJSON(ids)
-						}
-						break
-					}
-				}
-			}
-		}
-		job.RemediationID = latest.ID
-		job.TargetBranch = latest.Branch
-		job.WorkspacePath = latest.WorkspacePath
-		_ = lineage.SupersedeSiblings(ctx, h.Store, job)
-		return nil
-	}
-
-	branch := lineage.BranchName(originID)
-	rem := &models.Remediation{
-		ID:           uuid.NewString(),
-		UserID:       userID,
-		RepoID:       job.RepoID,
-		OriginScanID: originID,
-		Branch:       branch,
-		State:        models.RemediationOpen,
-	}
-	if err := h.Store.CreateRemediation(ctx, rem); err != nil {
-		return err
-	}
-	job.RemediationID = rem.ID
-	job.TargetBranch = branch
-	return nil
-}
-
-func loadJobRemediation(ctx context.Context, h *Handler, job *models.FixJob) *models.Remediation {
-	if h == nil || h.Store == nil || job == nil || job.RemediationID == "" {
-		return nil
-	}
-	rem, err := h.Store.GetRemediationByID(ctx, job.RemediationID)
-	if err != nil {
-		return nil
-	}
-	return rem
+	response.WriteError(w, status, code, message)
 }
 
 // AcceptRemediation handles POST /api/v1/remediations/{id}/accept — local
-// hand-off: freeze the origin, remove the worktree, keep the wolf-fix branch.
+// hand-off or published-workspace cleanup retry. The persisted publication or
+// retained local branch must survive releasing the checkout.
 func AcceptRemediation(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetUserFromContext(r.Context())
 	if claims == nil {
@@ -778,39 +759,22 @@ func AcceptRemediation(w http.ResponseWriter, r *http.Request) {
 	}
 	id := chi.URLParam(r, "id")
 	rem, err := h.Store.GetRemediationByID(r.Context(), id)
-	if err != nil || rem == nil || (rem.UserID != "" && rem.UserID != claims.UserID) {
+	if err != nil || rem == nil || !ownsFixResource(rem.UserID, claims) {
 		response.WriteError(w, http.StatusNotFound, "not_found", "remediation not found")
 		return
 	}
-	if rem.State != models.RemediationOpen {
-		response.WriteError(w, http.StatusConflict, "conflict", "remediation is not open")
+	if err := h.Store.AcceptFixRemediation(r.Context(), rem, workspace.AcceptRemediation); err != nil {
+		status, code := http.StatusInternalServerError, "handoff_failed"
+		if errors.Is(err, db.ErrFixBusy) || errors.Is(err, db.ErrFixFrozen) || errors.Is(err, db.ErrFixScope) {
+			status, code = http.StatusConflict, "remediation_busy"
+		}
+		if errors.Is(err, workspace.ErrNoHandoff) {
+			status, code = http.StatusConflict, "nothing_to_handoff"
+		}
+		response.WriteError(w, status, code, "branch handoff was not completed: "+err.Error())
 		return
 	}
-	jobs, _ := h.Store.ListFixJobsByRemediation(r.Context(), rem.ID)
-	for _, j := range jobs {
-		if models.RemediationBusy(j.Status) {
-			response.WriteError(w, http.StatusConflict, "remediation_busy", "an agent is still running")
-			return
-		}
-	}
-	if rem.WorkspacePath != "" {
-		if ws, oerr := workspace.Open(rem.WorkspacePath, ""); oerr == nil && ws != nil {
-			_ = ws.Cleanup(r.Context())
-		}
-	}
-	sha := rem.PublishedSHA
-	for i := len(jobs) - 1; i >= 0; i-- {
-		if jobs[i].PushSHA != "" {
-			sha = jobs[i].PushSHA
-			break
-		}
-	}
-	if err := lineage.Freeze(r.Context(), rem, sha, h.Store); err != nil {
-		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to accept remediation")
-		return
-	}
-	rem.WorkspacePath = ""
-	_ = h.Store.UpdateRemediation(r.Context(), rem)
+
 	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: rem})
 }
 
@@ -825,6 +789,25 @@ func ListFixEngines(w http.ResponseWriter, r *http.Request) {
 	var worker []fixauth.EngineStatus
 	if store, ok := artifacts.Global.(*artifacts.Store); ok && store != nil {
 		worker, _ = fixauth.ReadStatus(store.Root())
+	}
+	if h := DefaultHandler; h != nil && !autofixEnabled(r.Context(), h.Store) {
+		configured := false
+		for _, status := range worker {
+			configured = configured || status.Auth == "oauth" || status.Auth == "api_key"
+		}
+		secrets, err := h.Store.ListSecretsByUser(r.Context(), claims.UserID)
+		if err != nil {
+			response.WriteError(w, 503, "setup_unavailable", "unable to read fixer configuration")
+			return
+		}
+		for _, secret := range secrets {
+			switch secret.KeyType {
+			case models.KeyTypeAnthropicKey, models.KeyTypeOpenAIKey, models.KeyTypeXAIKey:
+				configured = true
+			}
+		}
+		response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: map[string]bool{"configured": configured}})
+		return
 	}
 	creds := fixauth.Credentials{}
 	keys := map[string]bool{}

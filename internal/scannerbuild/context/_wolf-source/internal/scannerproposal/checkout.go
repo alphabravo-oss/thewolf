@@ -666,7 +666,7 @@ func copyParityFile(source, destination string) error {
 	if err := os.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(destination, value, info.Mode().Perm())
+	return os.WriteFile(destination, value, info.Mode().Perm()) // #nosec G703 -- destination is a fixed parity mapping inside a private symlink-rejected checkout; the prior context is removed before copying.
 }
 
 func validateParityContext(root string) error {

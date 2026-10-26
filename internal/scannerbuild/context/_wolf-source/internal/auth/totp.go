@@ -10,8 +10,10 @@ import (
 	"fmt"
 	"image/png"
 	"strings"
+	"time"
 
 	"github.com/pquerna/otp"
+	"github.com/pquerna/otp/hotp"
 	"github.com/pquerna/otp/totp"
 )
 
@@ -49,10 +51,24 @@ func TOTPQRDataURI(key *otp.Key) (string, error) {
 	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(buf.Bytes()), nil
 }
 
-// ValidateTOTP reports whether code is a currently-valid 6-digit token for the
-// given base32 secret (with the library's default ±1 step skew tolerance).
-func ValidateTOTP(code, secret string) bool {
-	return totp.Validate(strings.TrimSpace(code), secret)
+// ValidateTOTP returns the highest matching counter within the standard ±1
+// 30-second window. Callers must atomically persist a step greater than their
+// last accepted step before accepting the factor, including enrollment.
+func ValidateTOTP(code, secret string, now time.Time) (int64, bool) {
+	if now.Unix() < 0 {
+		return -1, false
+	}
+	current := now.Unix() / 30
+	for step := current + 1; step >= current-1 && step >= 0; step-- {
+		ok, err := hotp.ValidateCustom(strings.TrimSpace(code), uint64(step), secret, hotp.ValidateOpts{Digits: otp.DigitsSix, Algorithm: otp.AlgorithmSHA1})
+		if err != nil {
+			return -1, false
+		}
+		if ok {
+			return step, true
+		}
+	}
+	return -1, false
 }
 
 // GenerateRecoveryCodes mints recoveryCodeCount single-use codes. It returns

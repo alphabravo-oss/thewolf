@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
@@ -28,9 +29,11 @@ func (p *NPMAuditPlugin) Languages() []models.Language {
 func (p *NPMAuditPlugin) CheckAvailable() bool { return container.IsScannersReady() }
 
 func (p *NPMAuditPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
-	jsDir := plugin.FindFile(opts.RepoPath, "package-lock.json")
+	manifest := "package-lock.json"
+	jsDir := plugin.FindFile(opts.RepoPath, manifest)
 	if jsDir == "" {
-		jsDir = plugin.FindFile(opts.RepoPath, "package.json")
+		manifest = "package.json"
+		jsDir = plugin.FindFile(opts.RepoPath, manifest)
 	}
 	if jsDir == "" {
 		plugin.Skipf(opts.OnOutput, "npm-audit", "no package.json found in project or immediate subdirectories.")
@@ -55,34 +58,30 @@ func (p *NPMAuditPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) (
 		return nil, plugin.WrapExecError("npm-audit", err)
 	}
 
-	// Compute the repo-relative package.json path so each finding has a
+	// Compute the repo-relative audited manifest path so each finding has a
 	// meaningful location. npm-audit itself reports against packages,
 	// not files; without this the UI shows blank file/line for every
 	// SCA finding. For a monorepo with multiple package.json files, we
-	// use the one whose tree this audit ran in (the same jsDir we
+	// use the lockfile (or manifest fallback) whose tree this audit ran in (the same jsDir we
 	// chose above).
-	relPkg := "package.json"
+	relPkg := manifest
 	if rel, rerr := filepath.Rel(opts.RepoPath, jsDir); rerr == nil && rel != "" && rel != "." {
-		relPkg = filepath.ToSlash(filepath.Join(rel, "package.json"))
+		relPkg = filepath.ToSlash(filepath.Join(rel, manifest))
 	}
 	// container.NormalizePath strips the in-container /scan/ prefix; we
 	// already built relPkg as repo-relative so just trim any leading
 	// slash for consistency.
 	relPkg = strings.TrimPrefix(relPkg, "/")
 
+	plugin.SaveRaw(opts, out, "json")
 	findings, perr := parseNPMAuditOutput(out)
 	if perr != nil {
 		return nil, perr
 	}
 	for i := range findings {
-		// npm-audit emits no file_path; the package.json that declared
-		// the vulnerable dep is the right anchor for the UI's file
+		// npm-audit emits no file_path; the audited lockfile/manifest is the right anchor for the UI's file
 		// column + the click-through to source.
-		if findings[i].FilePath == "" || findings[i].FilePath == "package.json" {
-			findings[i].FilePath = relPkg
-		} else {
-			findings[i].FilePath = container.NormalizePath(findings[i].FilePath)
-		}
+		findings[i].FilePath = relPkg
 	}
 	return findings, nil
 }
@@ -97,11 +96,12 @@ type npmVulnerability struct {
 }
 
 type npmViaEntry struct {
-	Title  string `json:"title"`
-	URL    string `json:"url"`
-	CVE    string `json:"cve"`
-	Range  string `json:"range"`
-	Source int    `json:"source"`
+	Severity string `json:"severity"`
+	Title    string `json:"title"`
+	URL      string `json:"url"`
+	CVE      string `json:"cve"`
+	Range    string `json:"range"`
+	Source   int    `json:"source"`
 }
 
 func parseNPMAuditOutput(data []byte) ([]models.Finding, error) {
@@ -112,6 +112,10 @@ func parseNPMAuditOutput(data []byte) ([]models.Finding, error) {
 
 	var findings []models.Finding
 	for pkgName, vuln := range output.Vulnerabilities {
+		pkgName = strings.TrimSpace(pkgName)
+		if pkgName == "" {
+			return nil, fmt.Errorf("npm audit vulnerability has no package name")
+		}
 		for _, raw := range vuln.Via {
 			// via entries can be strings (transitive deps) — skip those.
 			m, ok := raw.(map[string]interface{})
@@ -128,47 +132,40 @@ func parseNPMAuditOutput(data []byte) ([]models.Finding, error) {
 				continue
 			}
 
-			title := via.Title
+			title := strings.TrimSpace(via.Title)
 			if title == "" {
 				title = pkgName
 			}
-			ruleID := via.CVE
+			ruleID := strings.TrimSpace(via.CVE)
 			if ruleID == "" {
-				ruleID = via.URL
+				ruleID = strings.TrimSpace(via.URL)
+			}
+			if ruleID == "" && via.Source > 0 {
+				ruleID = "npm:" + strconv.Itoa(via.Source)
 			}
 			if ruleID == "" {
 				ruleID = title
 			}
 
+			rating := via.Severity
+			if strings.TrimSpace(rating) == "" {
+				rating = vuln.Severity
+			}
+			severity, provenance := plugin.ResolveSeverity(rating, nil, models.SeverityHigh)
 			findings = append(findings, models.Finding{
-				ToolName:    "npm-audit",
-				Category:    models.CategorySCA,
-				Severity:    mapNPMAuditSeverity(vuln.Severity),
-				Title:       title,
-				Description: fmt.Sprintf("Vulnerable package: %s (range: %s, cve: %s, url: %s)", pkgName, via.Range, via.CVE, via.URL),
-				CWEID:       via.CVE,
-				RuleID:      ruleID,
-				FilePath:    "package.json",
-				Status:      models.StatusOpen,
+				ToolName:         "npm-audit",
+				Category:         models.CategorySCA,
+				Severity:         severity,
+				Title:            title,
+				Description:      fmt.Sprintf("Vulnerable package: %s (range: %s, cve: %s, url: %s)\n\n%s", pkgName, via.Range, via.CVE, via.URL, provenance),
+				RuleID:           ruleID,
+				AdvisoryID:       ruleID,
+				PackageName:      pkgName,
+				PackageEcosystem: "npm",
+				FilePath:         "package-lock.json",
+				Status:           models.StatusOpen,
 			})
 		}
 	}
 	return findings, nil
-}
-
-func mapNPMAuditSeverity(s string) models.Severity {
-	switch s {
-	case "critical":
-		return models.SeverityCritical
-	case "high":
-		return models.SeverityHigh
-	case "moderate":
-		return models.SeverityMedium
-	case "low":
-		return models.SeverityLow
-	case "info":
-		return models.SeverityInfo
-	default:
-		return models.SeverityInfo
-	}
 }

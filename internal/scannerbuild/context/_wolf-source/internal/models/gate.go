@@ -16,13 +16,15 @@ type QualityPolicy struct {
 }
 
 type QualityGateResult struct {
-	ID               string    `json:"id" db:"id"`
-	ScanID           string    `json:"scan_id" db:"scan_id"`
-	PolicyID         string    `json:"policy_id" db:"policy_id"`
-	Status           string    `json:"status" db:"status"`
-	SummaryJSON      string    `json:"summary_json" db:"summary_json"`
-	MatchedRulesJSON string    `json:"matched_rules_json" db:"matched_rules_json"`
-	EvaluatedAt      time.Time `json:"evaluated_at" db:"evaluated_at"`
-	CreatedAt        time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at" db:"updated_at"`
+	ScanStatus       ScanStatus `json:"scan_status" db:"scan_status"`
+	FindingsRevision int64      `json:"findings_revision" db:"findings_revision"`
+	ID               string     `json:"id" db:"id"`
+	ScanID           string     `json:"scan_id" db:"scan_id"`
+	PolicyID         string     `json:"policy_id" db:"policy_id"`
+	Status           string     `json:"status" db:"status"`
+	SummaryJSON      string     `json:"summary_json" db:"summary_json"`
+	MatchedRulesJSON string     `json:"matched_rules_json" db:"matched_rules_json"`
+	EvaluatedAt      time.Time  `json:"evaluated_at" db:"evaluated_at"`
+	CreatedAt        time.Time  `json:"created_at" db:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at" db:"updated_at"`
 }

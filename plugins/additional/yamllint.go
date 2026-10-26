@@ -27,10 +27,16 @@ func (p *YamllintPlugin) Languages() []models.Language { return nil }
 
 func (p *YamllintPlugin) CheckAvailable() bool { return container.IsScannersReady() }
 
+func (p *YamllintPlugin) Applicability(repoPath, _ string) error {
+	if !plugin.HasFilesWithExtension(repoPath, "yaml", "yml") {
+		return &plugin.NotApplicableError{Reason: "no YAML files (*.yaml, *.yml) found"}
+	}
+	return nil
+}
+
 func (p *YamllintPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
-	if !plugin.HasFilesWithExtension(opts.RepoPath, "yaml", "yml") {
-		plugin.Skipf(opts.OnOutput, "yamllint", "no YAML files (*.yaml, *.yml) found.")
-		return nil, nil
+	if err := p.Applicability(opts.RepoPath, opts.Target); err != nil {
+		return nil, err
 	}
 	if opts.Timeout > 0 {
 		var cancel context.CancelFunc

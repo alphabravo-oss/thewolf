@@ -138,6 +138,7 @@ func validateScannerBaseImages(root string) []string {
 			continue
 		}
 		scanner := bufio.NewScanner(input)
+		stages := map[string]bool{}
 		lineNumber := 0
 		for scanner.Scan() {
 			lineNumber++
@@ -154,14 +155,14 @@ func validateScannerBaseImages(root string) []string {
 				continue
 			}
 			base := fields[index]
-			if base == "scratch" || strings.HasPrefix(base, "$") {
-				continue
-			}
-			if !pinnedDockerBasePattern.MatchString(base) {
+			if base != "scratch" && !strings.HasPrefix(base, "$") && !stages[strings.ToLower(base)] && !pinnedDockerBasePattern.MatchString(base) {
 				errs = append(errs, fmt.Sprintf(
 					"%s:%d base image %q is not pinned by sha256 digest",
 					filepath.Base(file), lineNumber, base,
 				))
+			}
+			if len(fields) > index+2 && strings.EqualFold(fields[index+1], "AS") {
+				stages[strings.ToLower(fields[index+2])] = true
 			}
 		}
 		if scanErr := scanner.Err(); scanErr != nil {

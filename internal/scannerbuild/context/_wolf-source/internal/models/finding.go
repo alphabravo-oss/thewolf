@@ -1,43 +1,55 @@
 package models
 
-import "time"
+import (
+	"slices"
+	"time"
+)
 
 // Finding represents a single issue found by a static analysis tool.
 type Finding struct {
-	ID                  string    `json:"id" db:"id"`
-	ScanID              string    `json:"scan_id" db:"scan_id"`
-	RepoID              string    `json:"repo_id" db:"repo_id"`
-	Fingerprint         string    `json:"fingerprint" db:"fingerprint"`
-	StableFingerprint   string    `json:"stable_fingerprint,omitempty" db:"stable_fingerprint"`
-	LocationFingerprint string    `json:"location_fingerprint,omitempty" db:"location_fingerprint"`
-	SemanticFingerprint string    `json:"semantic_fingerprint,omitempty" db:"semantic_fingerprint"`
-	EvidenceFingerprint string    `json:"evidence_fingerprint,omitempty" db:"evidence_fingerprint"`
-	IdentityVersion     int       `json:"identity_version,omitempty" db:"identity_version"`
-	ToolName            string    `json:"tool_name" db:"tool_name"`
-	Category            Category  `json:"category" db:"category"`
-	Severity            Severity  `json:"severity" db:"severity"`
-	Title               string    `json:"title" db:"title"`
-	Description         string    `json:"description" db:"description"`
-	FilePath            string    `json:"file_path" db:"file_path"`
-	LineStart           int       `json:"line_start" db:"line_start"`
-	LineEnd             int       `json:"line_end" db:"line_end"`
-	CodeSnippet         string    `json:"code_snippet" db:"code_snippet"`
-	CWEID               string    `json:"cwe_id,omitempty" db:"cwe_id"`
-	RuleID              string    `json:"rule_id,omitempty" db:"rule_id"`
-	ToolSeverityScore   float64   `json:"tool_severity_score" db:"tool_severity_score"`
-	LocationWeight      float64   `json:"location_weight" db:"location_weight"`
-	AIContextScore      float64   `json:"ai_context_score" db:"ai_context_score"`
-	CompositeScore      float64   `json:"composite_score" db:"composite_score"`
-	AIFixSuggestion     string    `json:"ai_fix_suggestion,omitempty" db:"ai_fix_suggestion"`
-	ModuleName          string    `json:"module_name" db:"module_name"`
-	FunctionName        string    `json:"function_name" db:"function_name"`
-	SymbolKind          string    `json:"symbol_kind" db:"symbol_kind"`
-	FilePurpose         string    `json:"file_purpose" db:"file_purpose"`
-	DependentsJSON      string    `json:"dependents_json" db:"dependents_json"`
-	Status              Status    `json:"status" db:"status"`
-	SARIFData           string    `json:"sarif_data,omitempty" db:"sarif_data"`
-	CreatedAt           time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt           time.Time `json:"updated_at" db:"updated_at"`
+	// ClusterID identifies the persisted primary; empty means provisional or legacy.
+	// Members retain their original IDs and scanner evidence for existing references.
+	ClusterID           string   `json:"cluster_id,omitempty" db:"cluster_id"`
+	ID                  string   `json:"id" db:"id"`
+	ScanID              string   `json:"scan_id" db:"scan_id"`
+	RepoID              string   `json:"repo_id" db:"repo_id"`
+	Fingerprint         string   `json:"fingerprint" db:"fingerprint"`
+	StableFingerprint   string   `json:"stable_fingerprint,omitempty" db:"stable_fingerprint"`
+	LocationFingerprint string   `json:"location_fingerprint,omitempty" db:"location_fingerprint"`
+	SemanticFingerprint string   `json:"semantic_fingerprint,omitempty" db:"semantic_fingerprint"`
+	EvidenceFingerprint string   `json:"evidence_fingerprint,omitempty" db:"evidence_fingerprint"`
+	IdentityVersion     int      `json:"identity_version,omitempty" db:"identity_version"`
+	ToolName            string   `json:"tool_name" db:"tool_name"`
+	Category            Category `json:"category" db:"category"`
+	Severity            Severity `json:"severity" db:"severity"`
+	Title               string   `json:"title" db:"title"`
+	Description         string   `json:"description" db:"description"`
+	FilePath            string   `json:"file_path" db:"file_path"`
+	LineStart           int      `json:"line_start" db:"line_start"`
+	LineEnd             int      `json:"line_end" db:"line_end"`
+	CodeSnippet         string   `json:"code_snippet" db:"code_snippet"`
+	CWEID               string   `json:"cwe_id,omitempty" db:"cwe_id"`
+	RuleID              string   `json:"rule_id,omitempty" db:"rule_id"`
+	// Dependency identity is separate from display text and source-code module enrichment.
+	PackageName       string    `json:"package_name,omitempty" db:"package_name"`
+	PackageVersion    string    `json:"package_version,omitempty" db:"package_version"`
+	PackageEcosystem  string    `json:"package_ecosystem,omitempty" db:"package_ecosystem"`
+	PackageURL        string    `json:"package_url,omitempty" db:"package_url"`
+	AdvisoryID        string    `json:"advisory_id,omitempty" db:"advisory_id"`
+	ToolSeverityScore float64   `json:"tool_severity_score" db:"tool_severity_score"`
+	LocationWeight    float64   `json:"location_weight" db:"location_weight"`
+	AIContextScore    float64   `json:"ai_context_score" db:"ai_context_score"`
+	CompositeScore    float64   `json:"composite_score" db:"composite_score"`
+	AIFixSuggestion   string    `json:"ai_fix_suggestion,omitempty" db:"ai_fix_suggestion"`
+	ModuleName        string    `json:"module_name" db:"module_name"`
+	FunctionName      string    `json:"function_name" db:"function_name"`
+	SymbolKind        string    `json:"symbol_kind" db:"symbol_kind"`
+	FilePurpose       string    `json:"file_purpose" db:"file_purpose"`
+	DependentsJSON    string    `json:"dependents_json" db:"dependents_json"`
+	Status            Status    `json:"status" db:"status"`
+	SARIFData         string    `json:"sarif_data,omitempty" db:"sarif_data"`
+	CreatedAt         time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at" db:"updated_at"`
 
 	// --- Deterministic scan-quality fields. ---
 
@@ -55,14 +67,15 @@ type Finding struct {
 
 	// Confidence is "high" | "medium" | "low" — derived deterministically
 	// from cross-tool agreement at dedupe time. Three or more tools at
-	// the same location → high; two → medium; one → low.
+	// the same location → high; two → medium; one → low. Manual grouping
+	// clears confidence because association does not prove scanner agreement.
 	Confidence string `json:"confidence,omitempty" db:"confidence"`
 
 	// CorroboratedByJSON is the durable form of CorroboratedBy.
 	CorroboratedByJSON string `json:"-" db:"corroborated_by_json"`
 
 	// CorroboratedBy lists every tool that reported a finding matching
-	// this one's (file, line, fine_category) key. The primary record's
+	// this one's automatic key, or manually associated evidence. The primary record's
 	// ToolName is always included.
 	CorroboratedBy []string `json:"corroborated_by,omitempty" db:"-"`
 
@@ -91,12 +104,16 @@ type Finding struct {
 	// BaselineState is assigned by baseline/diff comparison. Expected
 	// values include "new", "existing", "fixed", "resurfaced",
 	// "suppressed", "accepted_risk", and "ignored_by_policy".
-	BaselineState string `json:"baseline_state,omitempty" db:"baseline_state"`
+	// BaselineIdentityKey binds derived history to the primary identity that supplied it.
+	BaselineIdentityKey string `json:"-" db:"baseline_identity_key"`
+	BaselineState       string `json:"baseline_state,omitempty" db:"baseline_state"`
 
-	IntroducedInScanID string `json:"introduced_in_scan_id,omitempty" db:"introduced_in_scan_id"`
-	ResolvedInScanID   string `json:"resolved_in_scan_id,omitempty" db:"resolved_in_scan_id"`
-	SourceKind         string `json:"source_kind,omitempty" db:"source_kind"`
-	SourceRef          string `json:"source_ref,omitempty" db:"source_ref"`
+	FirstSeenAt        *time.Time `json:"first_seen_at,omitempty" db:"first_seen_at"`
+	LastSeenAt         *time.Time `json:"last_seen_at,omitempty" db:"last_seen_at"`
+	IntroducedInScanID string     `json:"introduced_in_scan_id,omitempty" db:"introduced_in_scan_id"`
+	ResolvedInScanID   string     `json:"resolved_in_scan_id,omitempty" db:"resolved_in_scan_id"`
+	SourceKind         string     `json:"source_kind,omitempty" db:"source_kind"`
+	SourceRef          string     `json:"source_ref,omitempty" db:"source_ref"`
 
 	// --- AI integration fields (in-memory / on-disk only). ---
 
@@ -114,4 +131,13 @@ type Finding struct {
 	// AIUnfixable is true when the auto-fix loop exhausted a finding's
 	// per-finding fix budget without clearing it.
 	AIUnfixable bool `json:"ai_unfixable,omitempty" db:"-"`
+}
+
+// ReportingTools returns distinct persisted contributors, including legacy rows
+// that only have ToolName. Tool facets overlap; they do not sum to issue count.
+func (f Finding) ReportingTools() []string {
+	tools := append(slices.Clone(f.CorroboratedBy), f.ToolName)
+	slices.Sort(tools)
+	tools = slices.Compact(tools)
+	return slices.DeleteFunc(tools, func(tool string) bool { return tool == "" })
 }

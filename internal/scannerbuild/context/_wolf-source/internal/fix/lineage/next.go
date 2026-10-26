@@ -2,6 +2,7 @@ package lineage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -71,6 +72,8 @@ func MaybeEnqueueNextRun(ctx context.Context, store db.Store, child *models.Scan
 	now := time.Now().UTC()
 	next := &models.FixJob{
 		ID:             uuid.NewString(),
+		IdempotencyKey: "followup:" + child.ID,
+		RequestDigest:  "followup:v1:" + prev.ID,
 		UserID:         prev.UserID,
 		Type:           "fix",
 		RepoID:         prev.RepoID,
@@ -94,9 +97,15 @@ func MaybeEnqueueNextRun(ctx context.Context, store db.Store, child *models.Scan
 		CreatedAt:      now,
 		UpdatedAt:      now,
 	}
-	if err := store.EnqueueFixJob(ctx, next); err != nil {
+	next, replayed, err := store.CreateFixJob(ctx, next, false)
+	if errors.Is(err, db.ErrFixBusy) || errors.Is(err, db.ErrFixJobConflict) || errors.Is(err, db.ErrFixFrozen) {
+		return nil, nil // another transition won; do not resurrect cancelled work
+	}
+	if err != nil {
 		return nil, fmt.Errorf("lineage: enqueue next run: %w", err)
 	}
-	_ = SupersedeSiblings(ctx, store, next)
+	if replayed {
+		return nil, nil
+	}
 	return next, nil
 }

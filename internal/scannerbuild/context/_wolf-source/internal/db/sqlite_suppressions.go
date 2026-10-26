@@ -8,17 +8,7 @@ import (
 )
 
 func (s *SQLiteStore) CreateFindingSuppression(ctx context.Context, suppression *models.FindingSuppression) error {
-	now := time.Now().UTC()
-	suppression.CreatedAt = now
-	suppression.UpdatedAt = now
-	if suppression.Status == "" {
-		suppression.Status = models.SuppressionStatusActive
-	}
-	_, err := s.db.NamedExecContext(ctx,
-		`INSERT INTO finding_suppressions (id, repo_id, created_by, scope_type, scope_value, branch, reason, expires_at, status, created_at, updated_at)
-		 VALUES (:id, :repo_id, :created_by, :scope_type, :scope_value, :branch, :reason, :expires_at, :status, :created_at, :updated_at)`,
-		suppression)
-	return err
+	return createFindingSuppression(ctx, s.db, suppression)
 }
 
 func (s *SQLiteStore) GetFindingSuppressionByID(ctx context.Context, id string) (*models.FindingSuppression, error) {
@@ -35,20 +25,17 @@ func (s *SQLiteStore) ListFindingSuppressions(ctx context.Context, repoID string
 	var err error
 	if includeInactive {
 		err = s.db.SelectContext(ctx, &suppressions,
-			"SELECT * FROM finding_suppressions WHERE repo_id = ? ORDER BY created_at DESC", repoID)
+			"SELECT * FROM finding_suppressions WHERE repo_id = ? ORDER BY created_at DESC, id", repoID)
 	} else {
 		err = s.db.SelectContext(ctx, &suppressions,
-			"SELECT * FROM finding_suppressions WHERE repo_id = ? AND status = ? ORDER BY created_at DESC",
+			"SELECT * FROM finding_suppressions WHERE repo_id = ? AND status = ? ORDER BY created_at DESC, id",
 			repoID, models.SuppressionStatusActive)
 	}
 	return suppressions, err
 }
 
-func (s *SQLiteStore) RevokeFindingSuppression(ctx context.Context, id string) error {
-	_, err := s.db.ExecContext(ctx,
-		"UPDATE finding_suppressions SET status = ?, updated_at = ? WHERE id = ?",
-		models.SuppressionStatusRevoked, time.Now().UTC(), id)
-	return err
+func (s *SQLiteStore) RevokeFindingSuppression(ctx context.Context, id, actorID string) error {
+	return revokeFindingSuppression(ctx, s.db, id, actorID)
 }
 
 func (s *SQLiteStore) CreateFindingSuppressionAudit(ctx context.Context, entry *models.FindingSuppressionAudit) error {
@@ -60,4 +47,8 @@ func (s *SQLiteStore) CreateFindingSuppressionAudit(ctx context.Context, entry *
 		 VALUES (:id, :suppression_id, :action, :actor_id, :details_json, :created_at)`,
 		entry)
 	return err
+}
+
+func (s *SQLiteStore) ExpireFindingSuppressions(ctx context.Context, now time.Time) (int, error) {
+	return expireFindingSuppressions(ctx, s.db, now)
 }

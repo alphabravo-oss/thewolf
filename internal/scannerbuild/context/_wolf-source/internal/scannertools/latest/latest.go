@@ -173,13 +173,13 @@ func (c Checker) latestNPM(ctx context.Context, pkg string) (string, string, err
 		return "", "", fmt.Errorf("npm package is empty")
 	}
 	var resp struct {
-		DistTags map[string]string `json:"dist-tags"`
+		Version string `json:"version"`
 	}
-	u := "https://registry.npmjs.org/" + strings.ReplaceAll(pkg, "/", "%2f")
+	u := "https://registry.npmjs.org/" + strings.ReplaceAll(pkg, "/", "%2f") + "/latest"
 	if err := c.getJSON(ctx, u, &resp); err != nil {
 		return "", "", err
 	}
-	v := resp.DistTags["latest"]
+	v := resp.Version
 	return v, "npm:" + pkg + "@" + v, nil
 }
 
@@ -196,7 +196,7 @@ func (c Checker) latestGitHubRelease(ctx context.Context, owner, repo, pattern s
 	}
 	if pattern != "" {
 		if ok, _ := regexp.MatchString(pattern, resp.TagName); !ok {
-			return "", "", fmt.Errorf("latest github tag %q does not match %s", resp.TagName, pattern)
+			return c.latestGitHubTag(ctx, owner, repo, pattern)
 		}
 	}
 	return NormalizeVersion(resp.TagName), "github:" + owner + "/" + repo + "@" + resp.TagName, nil
@@ -272,17 +272,17 @@ func (c Checker) latestPackagist(ctx context.Context, pkg string) (string, strin
 		return "", "", fmt.Errorf("packagist package is empty")
 	}
 	var resp struct {
-		Package struct {
-			Versions map[string]json.RawMessage `json:"versions"`
-		} `json:"package"`
+		Packages map[string][]struct {
+			Version string `json:"version"`
+		} `json:"packages"`
 	}
 	u := "https://repo.packagist.org/p2/" + strings.TrimPrefix(pkg, "/") + ".json"
 	if err := c.getJSON(ctx, u, &resp); err != nil {
 		return "", "", err
 	}
-	tags := make([]string, 0, len(resp.Package.Versions))
-	for tag := range resp.Package.Versions {
-		tags = append(tags, tag)
+	tags := make([]string, 0, len(resp.Packages[pkg]))
+	for _, release := range resp.Packages[pkg] {
+		tags = append(tags, release.Version)
 	}
 	best := newestTag(tags, `^v?\d+\.\d+\.\d+`)
 	return NormalizeVersion(best), "packagist:" + pkg + "@" + best, nil
@@ -440,10 +440,11 @@ func (c Checker) getDockerTagsPage(ctx context.Context, tagsURL, registry, path,
 	if err := json.Unmarshal(resp.Body, &payload); err != nil {
 		return nil, "", "", err
 	}
-	return payload.Tags, dockerNextURL(tagsURL, resp.Header.Get("Link")), token, nil
+	nextURL, err = dockerNextURL(tagsURL, resp.Header.Get("Link"))
+	return payload.Tags, nextURL, token, err
 }
 
-func dockerNextURL(currentURL, linkHeader string) string {
+func dockerNextURL(currentURL, linkHeader string) (string, error) {
 	for _, part := range strings.Split(linkHeader, ",") {
 		part = strings.TrimSpace(part)
 		if !strings.Contains(part, `rel="next"`) {
@@ -457,15 +458,19 @@ func dockerNextURL(currentURL, linkHeader string) string {
 		raw := part[start+1 : end]
 		base, err := url.Parse(currentURL)
 		if err != nil {
-			return ""
+			return "", fmt.Errorf("invalid Docker pagination URL")
 		}
 		next, err := url.Parse(raw)
 		if err != nil {
-			return ""
+			return "", fmt.Errorf("invalid Docker pagination URL")
 		}
-		return base.ResolveReference(next).String()
+		next = base.ResolveReference(next)
+		if next.Scheme != base.Scheme || !strings.EqualFold(next.Host, base.Host) || next.User != nil {
+			return "", fmt.Errorf("Docker pagination escaped registry origin")
+		}
+		return next.String(), nil
 	}
-	return ""
+	return "", nil
 }
 
 func (c Checker) dockerBearerToken(ctx context.Context, challenge, registry, path string) (string, error) {
@@ -549,7 +554,9 @@ func sourceURL(source manifest.UpdateSource) string {
 func NormalizeVersion(v string) string {
 	v = strings.TrimSpace(v)
 	v = strings.TrimPrefix(v, "refs/tags/")
-	v = strings.TrimPrefix(v, "pmd_releases/")
+	if slash := strings.LastIndex(v, "/"); slash >= 0 {
+		v = v[slash+1:]
+	}
 	v = strings.TrimPrefix(v, "v")
 	end := len(v)
 	for i, r := range v {

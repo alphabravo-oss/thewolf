@@ -517,3 +517,33 @@ type imageRoundTripFunc func(*http.Request) (*http.Response, error)
 func (f imageRoundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
 	return f(request)
 }
+
+func TestParseImageReferenceTagAndDigest(t *testing.T) {
+	registry, repository, identifier, err := parseImageReference("registry.example:5000/acme/demo:1.0.0@" + digestA)
+	if err != nil || registry != "registry.example:5000" || repository != "acme/demo" || identifier != digestA {
+		t.Fatalf("parse tagged digest = %q %q %q %v", registry, repository, identifier, err)
+	}
+}
+
+func TestRefreshPinnedImageKeepsImmutableIdentity(t *testing.T) {
+	root := fixtureRepo(t)
+	path := filepath.Join(root, "scanners", "tools.yaml")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data = []byte(strings.ReplaceAll(string(data), "pinned_reference: registry.example/acme/demo:1.0.0", "pinned_reference: registry.example/acme/demo:1.0.0@"+digestA))
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	current, err := Generate(context.Background(), root, GenerateOptions{RefreshImages: true, ImageResolver: staticResolver(t, digestA)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if image := current.UpstreamImages["demo"]; image.MutableSource || image.ResolutionStatus != "digest_pinned" {
+		t.Fatalf("lost immutable identity: %+v", image)
+	}
+	if _, err := Generate(context.Background(), root, GenerateOptions{RefreshImages: true, ImageResolver: staticResolver(t, digestB)}); err == nil {
+		t.Fatal("accepted a digest different from the immutable reference")
+	}
+}

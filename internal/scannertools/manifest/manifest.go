@@ -165,7 +165,7 @@ func SupportedUpdateSourceTypes() []string {
 }
 
 func LoadFile(path string) (*Manifest, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G703 -- path is selected by local CLI or worker configuration; remote manifest fields never select this file.
 	if err != nil {
 		return nil, err
 	}

@@ -18,7 +18,7 @@ repositories:
     component: main
   nodesource:
     type: apt_artifact
-    uri: https://deb.nodesource.com/node_22.x
+    uri: https://deb.nodesource.com/node_26.x
     suite: nodistro
     component: main
 variants:

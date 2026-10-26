@@ -37,18 +37,16 @@ func (p *ValePlugin) Languages() []models.Language { return nil }
 
 func (p *ValePlugin) CheckAvailable() bool { return container.IsScannersReady() }
 
-func (p *ValePlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
-	if !plugin.HasFilesWithExtension(opts.RepoPath, "md", "rst", "txt") {
-		plugin.Skipf(opts.OnOutput, "vale", "no documentation files (*.md, *.rst) found. Add Markdown or reStructuredText files to enable prose linting.")
-		return nil, nil
+func (p *ValePlugin) Applicability(repoPath, target string) error {
+	if !plugin.HasFilesWithExtension(repoPath, "md", "rst", "txt") || !valeConfigPresent(repoPath) {
+		return &plugin.NotApplicableError{Reason: "documentation files and a .vale.ini configuration are required"}
 	}
-	// vale exits with E100 "no config file found" and a non-zero status
-	// when neither a project-level .vale.ini nor a workspace ancestor
-	// provides one. That's a *user* configuration choice, not a wolf
-	// failure — skip cleanly so the scan doesn't appear broken.
-	if !valeConfigPresent(opts.RepoPath) {
-		plugin.Skipf(opts.OnOutput, "vale", "no .vale.ini found in repo root. Create one to enable prose linting (https://vale.sh/docs/topics/config/).")
-		return nil, nil
+	return nil
+}
+
+func (p *ValePlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
+	if err := p.Applicability(opts.RepoPath, opts.Target); err != nil {
+		return nil, err
 	}
 
 	timeout := opts.Timeout

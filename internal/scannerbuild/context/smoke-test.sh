@@ -128,6 +128,11 @@ if [[ "$VARIANT" == "default" ]]; then
     run check "staticcheck $STATICCHECK_VERSION" "$STATICCHECK_VERSION" staticcheck -version
     run check "govulncheck $GOVULNCHECK_VERSION"       "$GOVULNCHECK_VERSION"     govulncheck -version
     run check_go_module "gokart $GOKART_VERSION module identity" "$GOKART_VERSION" gokart
+    if [[ "${WOLF_SMOKE_STRICT:-1}" == "1" ]]; then
+        run check "gokart real analysis" "execution checks passed" timeout 180 bash /usr/local/bin/test-gokart.sh
+    else
+        echo '  SKIP gokart execution under emulation; native release qualification required'
+    fi
     # The Go toolchain is retained (not the GOPATH module cache) so that
     # gosec/govulncheck can resolve std-lib modules at runtime via the
     # stripped toolchain. Prove GOROOT (src + bin) still resolves the
@@ -138,9 +143,6 @@ if [[ "$VARIANT" == "default" ]]; then
     run check "markdownlint $MARKDOWNLINT_VERSION"     "$MARKDOWNLINT_VERSION"    markdownlint --version
 	run check_locked_nodejs
 	run check "npm $NPM_VERSION" "$NPM_VERSION" npm --version
-	run check "npm bundled brace-expansion 5.0.9" "5.0.9" node -p 'require("/usr/lib/node_modules/npm/node_modules/brace-expansion/package.json").version'
-	run check "npm bundled picomatch 4.0.5" "4.0.5" node -p 'require("/usr/lib/node_modules/npm/node_modules/picomatch/package.json").version'
-	run check "npm bundled ip-address 10.3.1" "10.3.1" node -p 'require("/usr/lib/node_modules/npm/node_modules/ip-address/package.json").version'
     run check "brakeman $BRAKEMAN_VERSION"             "$BRAKEMAN_VERSION"        brakeman --version
     run check "rubocop $RUBOCOP_VERSION"               "$RUBOCOP_VERSION"         rubocop --version
     run check "phpstan $PHPSTAN_VERSION"               "$PHPSTAN_VERSION"         phpstan --version

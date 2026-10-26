@@ -16,6 +16,7 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/db"
 	"github.com/alphabravocompany/thewolf/internal/fix/profile"
 	"github.com/alphabravocompany/thewolf/internal/models"
+	"github.com/alphabravocompany/thewolf/internal/plugin"
 	"github.com/alphabravocompany/thewolf/internal/secrets"
 )
 
@@ -268,7 +269,7 @@ func oauthAccount(ctx context.Context, command string) (string, bool) {
 	defer cancel()
 	switch command {
 	case "claude":
-		cmd := exec.CommandContext(probeCtx, "claude", "auth", "status", "--text") // #nosec G204
+		cmd := plugin.CommandContext(probeCtx, "claude", "auth", "status", "--text") // #nosec G204
 		out, err := cmd.CombinedOutput()
 		if err == nil && len(bytesTrim(out)) > 0 {
 			return firstLine(string(out)), true
@@ -284,7 +285,7 @@ func oauthAccount(ctx context.Context, command string) (string, bool) {
 		}
 		return "", false
 	case "opencode":
-		cmd := exec.CommandContext(probeCtx, "opencode", "auth", "list") // #nosec G204
+		cmd := plugin.CommandContext(probeCtx, "opencode", "auth", "list") // #nosec G204
 		cmd.Stdin = nil
 		out, err := cmd.CombinedOutput()
 		if err == nil && len(bytesTrim(out)) > 0 && !strings.Contains(strings.ToLower(string(out)), "no provider") {
@@ -304,7 +305,7 @@ func usageHint(ctx context.Context, command string) string {
 	defer cancel()
 	switch command {
 	case "opencode":
-		cmd := exec.CommandContext(probeCtx, "opencode", "stats", "--days", "7") // #nosec G204
+		cmd := plugin.CommandContext(probeCtx, "opencode", "stats", "--days", "7") // #nosec G204
 		cmd.Stdin = nil
 		out, err := cmd.CombinedOutput()
 		if err == nil {
@@ -348,7 +349,7 @@ func Login(ctx context.Context, engine string) error {
 	if _, err := exec.LookPath(spec.Args[0]); err != nil {
 		return fmt.Errorf("%s is not installed on this host: %w", spec.Args[0], err)
 	}
-	cmd := exec.CommandContext(ctx, spec.Args[0], spec.Args[1:]...) // #nosec G204
+	cmd := plugin.CommandContext(ctx, spec.Args[0], spec.Args[1:]...) // #nosec G204
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

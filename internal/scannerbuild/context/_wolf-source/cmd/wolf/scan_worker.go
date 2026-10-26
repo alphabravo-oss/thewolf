@@ -45,6 +45,10 @@ func newScanWorkerCmd() *cobra.Command {
 			ctx, cancel := signal.NotifyContext(cmd.Context(), syscall.SIGINT, syscall.SIGTERM)
 			defer cancel()
 
+			if err := secrets.LoadMasterKey(); err != nil {
+				return fmt.Errorf("load secrets master key: %w", err)
+			}
+
 			store, err := openStore()
 			if err != nil {
 				return fmt.Errorf("open store: %w", err)
@@ -68,18 +72,14 @@ func newScanWorkerCmd() *cobra.Command {
 					return fmt.Errorf("configure Kubernetes scanner runtime: %w", err)
 				}
 				kubernetesConfig = &runtimeConfig
-				scannerCfg, err := scanners.EnvDefaults().ToContainerConfig()
+				_, err = scanners.LoadAndInstall(ctx, backend)
 				if err != nil {
 					return fmt.Errorf("configure scanner images: %w", err)
 				}
-				scannercontainer.SetDefault(scannerCfg)
 				scannercontainer.SetRuntimeAvailable(true)
 				scannercontainer.SetCommandFactory(kubernetesruntime.CommandContext)
 			default:
 				return fmt.Errorf("unsupported scan-worker backend %q (supported: docker, kubernetes)", backend)
-			}
-			if err := secrets.LoadMasterKey(); err != nil {
-				wolflog.Warn().Err(err).Msg("secrets master key unavailable; private source resolution will fail")
 			}
 			if artifactsDir == "" {
 				home, _ := os.UserHomeDir()
@@ -143,7 +143,7 @@ func newScanWorkerCmd() *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&once, "once", false, "process one scan then exit")
 	cmd.Flags().StringVar(&workerID, "worker-id", "", "worker identity (default hostname-pid)")
-	cmd.Flags().StringVar(&backend, "backend", "docker", "scanner runtime backend")
+	cmd.Flags().StringVar(&backend, "backend", scanners.RuntimeFromEnv(), "scanner runtime backend (WOLF_SCAN_RUNTIME; docker or kubernetes)")
 	cmd.Flags().IntVar(&capacity, "capacity", 1, "maximum concurrent scans")
 	cmd.Flags().StringVar(&artifactsDir, "artifacts", "", "shared artifacts root")
 	cmd.Flags().DurationVar(&pollEvery, "poll-interval", 2*time.Second, "queue poll interval")

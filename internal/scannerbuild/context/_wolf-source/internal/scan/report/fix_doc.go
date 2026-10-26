@@ -42,10 +42,8 @@ func isHighPriority(f models.Finding) bool {
 	return f.Severity == models.SeverityCritical || f.Severity == models.SeverityHigh
 }
 
-// RenderFixHigh builds the FIX-HIGH.md markdown body. Findings without a
-// fine_category, or marked Suppressed, are excluded from the HIGH doc —
-// by definition we can't tell engineers what to do about uncategorized
-// findings, and suppressed findings have been deemed noise.
+// RenderFixHigh includes every unsuppressed high/critical finding, even when
+// no curated fix strategy exists yet.
 func RenderFixHigh(cfg FixDocConfig) string {
 	var picked []models.Finding
 	for _, f := range cfg.Findings {
@@ -57,8 +55,8 @@ func RenderFixHigh(cfg FixDocConfig) string {
 		}
 	}
 	return renderFixDoc(cfg, picked, "High Priority",
-		"Findings with severity ∈ {critical, high} that match a curated fix strategy. Confidence (cross-tool corroboration) is shown per location. Suppressed findings are excluded; see findings.json for the full audit trail.",
-		false)
+		"All findings with severity ∈ {critical, high}, including those without a curated fix strategy. Confidence (cross-tool corroboration) is shown per location. Suppressed findings are excluded; see findings.json for the full audit trail.",
+		true)
 }
 
 // RenderFixAll builds the FIX-ALL.md markdown body. The main body contains
@@ -233,7 +231,7 @@ func renderFixDoc(cfg FixDocConfig, in []models.Finding, title, subtitle string,
 		b.WriteString("\n")
 	}
 
-	// --- Uncategorized (FIX-ALL.md only) ---
+	// --- Uncategorized ---
 	if includeUncategorized && len(uncategorized) > 0 {
 		fmt.Fprintf(&b, "## %d. Uncategorized — %d finding%s\n\n",
 			len(cats)+1, len(uncategorized), plural(len(uncategorized)))

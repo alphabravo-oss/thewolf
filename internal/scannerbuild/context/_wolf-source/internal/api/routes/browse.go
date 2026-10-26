@@ -1,6 +1,8 @@
 package routes
 
 import (
+	"errors"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -19,7 +21,7 @@ type dirEntry struct {
 
 // browseAllowedRoots returns the absolute, symlink-evaluated set of
 // directories that authenticated users may browse to pick repos from.
-// Pulled from $WOLF_BROWSE_ROOTS (colon-separated) if set, otherwise
+// Pulled from $WOLF_BROWSE_ROOTS (platform path-list separator) if set, otherwise
 // falls back to the user's home directory. Returning the empty list
 // short-circuits BrowseLocal into a 500.
 func browseAllowedRoots() []string {
@@ -32,13 +34,13 @@ func browseAllowedRoots() []string {
 		if err != nil {
 			return
 		}
-		if resolved, err := filepath.EvalSymlinks(abs); err == nil {
-			abs = resolved
+		if resolved, err := filepath.EvalSymlinks(abs); err == nil && resolved != abs {
+			out = append(out, resolved)
 		}
 		out = append(out, abs)
 	}
 	if env := os.Getenv("WOLF_BROWSE_ROOTS"); env != "" {
-		for _, p := range strings.Split(env, ":") {
+		for _, p := range filepath.SplitList(env) {
 			add(strings.TrimSpace(p))
 		}
 		return out
@@ -55,24 +57,59 @@ func browseAllowedRoots() []string {
 // admit /home/alice-evil/.
 func isUnderRoot(dir string, roots []string) bool {
 	for _, root := range roots {
-		if dir == root {
-			return true
-		}
-		// Append the separator so /home/alice doesn't match /home/alice-evil.
-		if strings.HasPrefix(dir, root+string(filepath.Separator)) {
+		if relative, err := filepath.Rel(root, dir); err == nil && filepath.IsLocal(relative) {
 			return true
 		}
 	}
 	return false
 }
 
+// openBrowseDirectory checks the lexical boundary before any requested-path
+// lookup, then confines every lookup/open to an administrator-configured root.
+// The returned directory stays pinned if a repository path is replaced later.
+func openBrowseDirectory(path string, roots []string) (*os.Root, string, error) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return nil, "", err
+	}
+	for _, allowed := range roots {
+		relative, err := filepath.Rel(allowed, abs)
+		if err != nil || !filepath.IsLocal(relative) {
+			continue
+		}
+		root, err := os.OpenRoot(allowed)
+		if err != nil {
+			return nil, "", err
+		}
+		defer func() { _ = root.Close() }()
+		info, err := root.Stat(relative)
+		if err != nil {
+			return nil, "", err
+		}
+		if !info.IsDir() {
+			abs, relative = filepath.Dir(abs), filepath.Dir(relative)
+		}
+		directory, err := root.OpenRoot(relative)
+		return directory, abs, err
+	}
+	return nil, "", os.ErrPermission
+}
+
+func writeBrowsePathError(w http.ResponseWriter, err error) {
+	if os.IsNotExist(err) {
+		response.WriteError(w, http.StatusNotFound, "not_found", "path not found")
+		return
+	}
+	response.WriteError(w, http.StatusForbidden, "forbidden", "path is outside the allowed browse roots or cannot be opened")
+}
+
 // BrowseLocal lists directories (and identifies git repos) at a given path.
 // Query params:
 //   - path: directory to list (defaults to user home)
 //
-// The path is resolved to an absolute, symlink-evaluated form and then
-// checked against browseAllowedRoots (default: user home; overridable
-// via WOLF_BROWSE_ROOTS). Paths outside the allow-list return 403,
+// The requested path is checked against browseAllowedRoots before lookup,
+// then opened through os.Root to confine symlinks and concurrent renames.
+// Paths outside the allow-list return 403,
 // preventing an authenticated user from enumerating arbitrary
 // directories on the server (e.g. /etc, /var, ../../../).
 func BrowseLocal(w http.ResponseWriter, r *http.Request) {
@@ -87,34 +124,13 @@ func BrowseLocal(w http.ResponseWriter, r *http.Request) {
 		dir = roots[0]
 	}
 
-	// Resolve to an absolute, symlink-evaluated path before any check.
-	// filepath.Clean alone does NOT prevent traversal:
-	// "/home/alice/../../etc" cleans to "/etc", which still resolves.
-	abs, err := filepath.Abs(dir)
+	root, dir, err := openBrowseDirectory(dir, roots)
 	if err != nil {
-		response.WriteError(w, http.StatusBadRequest, "bad_request", "invalid path")
+		writeBrowsePathError(w, err)
 		return
 	}
-	if resolved, rerr := filepath.EvalSymlinks(abs); rerr == nil {
-		abs = resolved
-	}
-	dir = abs
-
-	info, err := os.Stat(dir)
-	if err != nil {
-		response.WriteError(w, http.StatusNotFound, "not_found", "path not found")
-		return
-	}
-	if !info.IsDir() {
-		dir = filepath.Dir(dir)
-	}
-
-	if !isUnderRoot(dir, roots) {
-		response.WriteError(w, http.StatusForbidden, "forbidden", "path is outside the allowed browse roots")
-		return
-	}
-
-	entries, err := os.ReadDir(dir)
+	defer func() { _ = root.Close() }()
+	entries, err := fs.ReadDir(root.FS(), ".")
 	if err != nil {
 		response.WriteError(w, http.StatusForbidden, "forbidden", "cannot read directory")
 		return
@@ -132,7 +148,7 @@ func BrowseLocal(w http.ResponseWriter, r *http.Request) {
 
 		fullPath := filepath.Join(dir, e.Name())
 		isGit := false
-		if _, err := os.Stat(filepath.Join(fullPath, ".git")); err == nil {
+		if _, err := root.Stat(filepath.Join(e.Name(), ".git")); err == nil {
 			isGit = true
 		}
 
@@ -162,4 +178,19 @@ func BrowseLocal(w http.ResponseWriter, r *http.Request) {
 			"entries": result,
 		},
 	})
+}
+
+// Metadata pointers must identify a directory, unlike the picker which also
+// accepts a selected file and browses its parent.
+func openBrowseGitDirectory(path string, roots []string) (*os.Root, error) {
+	absolute, err := filepath.Abs(path)
+	if err != nil {
+		return nil, err
+	}
+	directory, opened, err := openBrowseDirectory(absolute, roots)
+	if err == nil && opened != absolute {
+		_ = directory.Close()
+		return nil, errors.New("Git metadata path is not a directory")
+	}
+	return directory, err
 }

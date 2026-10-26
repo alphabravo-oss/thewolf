@@ -44,7 +44,7 @@ func (r Result) Counts() Counts {
 func Compare(baseline, current []models.Finding) Result {
 	baseByID := make(map[string]models.Finding, len(baseline))
 	for _, f := range baseline {
-		key := keyFor(f)
+		key := Key(f)
 		if key == "" {
 			continue
 		}
@@ -56,7 +56,7 @@ func Compare(baseline, current []models.Finding) Result {
 	seenCurrent := make(map[string]bool, len(current))
 	var result Result
 	for _, f := range current {
-		key := keyFor(f)
+		key := Key(f)
 		if key == "" {
 			f.BaselineState = StateNew
 			result.New = append(result.New, f)
@@ -87,7 +87,8 @@ func Compare(baseline, current []models.Finding) Result {
 	return result
 }
 
-func keyFor(f models.Finding) string {
+// Key returns the shared persisted identity used by comparison and history.
+func Key(f models.Finding) string {
 	if f.StableFingerprint != "" {
 		return f.StableFingerprint
 	}

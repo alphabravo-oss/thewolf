@@ -24,7 +24,14 @@ func (p *KubeLinterPlugin) Languages() []models.Language { return nil }
 
 func (p *KubeLinterPlugin) CheckAvailable() bool { return container.IsScannersReady() }
 
+func (p *KubeLinterPlugin) Applicability(repoPath, _ string) error {
+	return plugin.KubernetesApplicability(repoPath)
+}
+
 func (p *KubeLinterPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
+	if err := p.Applicability(opts.RepoPath, opts.Target); err != nil {
+		return nil, err
+	}
 	if opts.Timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, opts.Timeout)
@@ -37,12 +44,10 @@ func (p *KubeLinterPlugin) Execute(ctx context.Context, opts models.ExecuteOpts)
 		"kube-linter", "lint", "--format", "json", "/scan")
 	out, err := cmd.Output()
 	if err != nil && len(out) == 0 {
-		plugin.Skipf(opts.OnOutput, "kube-linter", "no Kubernetes manifests found. Add YAML files with K8s resources to enable linting.")
-		return nil, nil
+		return nil, plugin.WrapExecError("kube-linter", err)
 	}
 	if len(bytes.TrimSpace(out)) == 0 {
-		plugin.Skipf(opts.OnOutput, "kube-linter", "no Kubernetes manifests found. Add YAML files with K8s resources to enable linting.")
-		return nil, nil
+		return nil, fmt.Errorf("kube-linter produced no report for Kubernetes inputs")
 	}
 
 	findings, perr := parseKubeLinterOutput(out)

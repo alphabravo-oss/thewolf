@@ -9,9 +9,11 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
+	"sync/atomic"
 )
 
-var masterKey []byte
+var masterKey atomic.Value // immutable []byte snapshots
 
 // LoadMasterKey loads the master encryption key from ~/.wolf/master.key or WOLF_MASTER_KEY env.
 // If neither exists, it generates a new key and saves it.
@@ -25,7 +27,7 @@ func LoadMasterKey() error {
 		if len(decoded) != 32 {
 			return fmt.Errorf("WOLF_MASTER_KEY must be 32 bytes (64 hex chars)")
 		}
-		masterKey = decoded
+		SetMasterKey(decoded)
 		return nil
 	}
 
@@ -35,54 +37,40 @@ func LoadMasterKey() error {
 		return fmt.Errorf("get home dir: %w", err)
 	}
 
-	keyDir := filepath.Join(home, ".wolf")
-	keyPath := filepath.Join(keyDir, "master.key")
-
-	// #nosec G304 -- reads secrets file path from validated config
-	data, err := os.ReadFile(keyPath)
-	if err == nil {
-		decoded, err := hex.DecodeString(string(data))
-		if err != nil {
-			return fmt.Errorf("decode master.key: %w", err)
+	data, err := LoadOrCreateKeyFile(filepath.Join(home, ".wolf", "master.key"), func() ([]byte, error) {
+		key := make([]byte, 32)
+		if _, err := rand.Read(key); err != nil {
+			return nil, err
 		}
-		if len(decoded) != 32 {
-			return fmt.Errorf("master.key must be 32 bytes")
-		}
-		masterKey = decoded
-		return nil
+		return []byte(hex.EncodeToString(key)), nil
+	})
+	if err != nil {
+		return fmt.Errorf("load master.key: %w", err)
 	}
-
-	// Generate new key
-	key := make([]byte, 32)
-	if _, err := rand.Read(key); err != nil {
-		return fmt.Errorf("generate key: %w", err)
+	decoded, err := hex.DecodeString(string(data))
+	if err != nil {
+		return fmt.Errorf("decode master.key: %w", err)
 	}
-
-	if err := os.MkdirAll(keyDir, 0700); err != nil {
-		return fmt.Errorf("create ~/.wolf: %w", err)
+	if len(decoded) != 32 {
+		return fmt.Errorf("master.key must be 32 bytes")
 	}
-
-	encoded := hex.EncodeToString(key)
-	if err := os.WriteFile(keyPath, []byte(encoded), 0600); err != nil {
-		return fmt.Errorf("write master.key: %w", err)
-	}
-
-	masterKey = key
+	SetMasterKey(decoded)
 	return nil
 }
 
 // SetMasterKey sets the master key directly (useful for testing).
 func SetMasterKey(key []byte) {
-	masterKey = key
+	masterKey.Store(slices.Clone(key))
 }
 
 // Encrypt encrypts plaintext using AES-256-GCM.
 func Encrypt(plaintext string) (string, error) {
-	if len(masterKey) == 0 {
+	key, _ := masterKey.Load().([]byte)
+	if len(key) == 0 {
 		return "", fmt.Errorf("master key not loaded")
 	}
 
-	block, err := aes.NewCipher(masterKey)
+	block, err := aes.NewCipher(key)
 	if err != nil {
 		return "", fmt.Errorf("create cipher: %w", err)
 	}
@@ -103,7 +91,8 @@ func Encrypt(plaintext string) (string, error) {
 
 // Decrypt decrypts an AES-256-GCM encrypted hex string.
 func Decrypt(encrypted string) (string, error) {
-	if len(masterKey) == 0 {
+	key, _ := masterKey.Load().([]byte)
+	if len(key) == 0 {
 		return "", fmt.Errorf("master key not loaded")
 	}
 
@@ -112,7 +101,7 @@ func Decrypt(encrypted string) (string, error) {
 		return "", fmt.Errorf("decode hex: %w", err)
 	}
 
-	block, err := aes.NewCipher(masterKey)
+	block, err := aes.NewCipher(key)
 	if err != nil {
 		return "", fmt.Errorf("create cipher: %w", err)
 	}

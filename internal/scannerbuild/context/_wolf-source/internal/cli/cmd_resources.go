@@ -710,7 +710,7 @@ func newSuppressCmd() *cobra.Command {
 	}
 	add.Flags().StringVar(&addFinding, "finding", "", "finding ID to suppress")
 	add.Flags().StringVar(&addRepo, "repo", "", "repository ID for scoped suppression")
-	add.Flags().StringVar(&addScopeType, "scope-type", "", "scope type (stable_fingerprint, fingerprint, rule, fine_category, path_glob, package_advisory)")
+	add.Flags().StringVar(&addScopeType, "scope-type", "", "scope type (stable_fingerprint, fingerprint, rule, fine_category, path_glob)")
 	add.Flags().StringVar(&addScopeValue, "scope-value", "", "scope value")
 	add.Flags().StringVar(&addBranch, "branch", "", "optional branch scope")
 	add.Flags().StringVar(&addReason, "reason", "", "required suppression reason")
@@ -858,7 +858,7 @@ func newPolicyCmd() *cobra.Command {
 func newFixCmd() *cobra.Command {
 	cmd := group("fix", "Manage AI fix runs")
 
-	var repoID, scanID, engine, mode, severityFloor, targetBranch, model, effort, variant string
+	var repoID, scanID, engine, mode, severityFloor, targetBranch, model, effort, variant, idempotencyKey string
 	var findingIDs []string
 	var maxAttempts, maxLoops int
 	var humanInTheLoop bool
@@ -911,14 +911,15 @@ func newFixCmd() *cobra.Command {
 			if variant != "" {
 				body["variant"] = variant
 			}
-			return runRender(cmd, "POST", "/fixes", body)
+			return runScannerCommand(cmd, "POST", "/fixes", body, idempotencyKey, "", false)
 		},
 	}
 	create.Flags().StringVar(&repoID, "repo", "", "repository ID to fix (required)")
 	create.Flags().StringVar(&scanID, "scan", "", "scan ID to fix findings from")
 	create.Flags().StringArrayVar(&findingIDs, "finding", nil, "specific finding ID (repeatable)")
 	create.Flags().StringVar(&engine, "engine", "", "fix engine (auto, claude-code, codex, opencode, api)")
-	create.Flags().StringVar(&mode, "mode", "", "fix mode (dry_run or push)")
+	create.Flags().StringVar(&mode, "mode", "", "dry_run (review locally) or push (publish branch and open GitHub PR)")
+	create.Flags().StringVar(&idempotencyKey, "idempotency-key", "", "reuse this key when retrying the same fix request")
 	create.Flags().StringVar(&severityFloor, "severity-floor", "", "only fix findings at or above this severity")
 	create.Flags().StringVar(&targetBranch, "branch", "", "target fix branch name")
 	create.Flags().IntVar(&maxAttempts, "max-attempts", 0, "max engine attempts per finding")
@@ -1036,7 +1037,7 @@ func newFixCmd() *cobra.Command {
 // AddAgentSubcommands attaches API-client agent subcommands. Agents are
 // fixer jobs (`/fixes`); there is no separate loop product.
 func AddAgentSubcommands(agent *cobra.Command) {
-	var repoID, scanID, engine, mode string
+	var repoID, scanID, engine, mode, idempotencyKey string
 	var maxLoops int
 	create := &cobra.Command{
 		Use:         "create",
@@ -1060,13 +1061,14 @@ func AddAgentSubcommands(agent *cobra.Command) {
 			if maxLoops > 0 {
 				body["max_loops"] = maxLoops
 			}
-			return runRender(cmd, "POST", "/fixes", body)
+			return runScannerCommand(cmd, "POST", "/fixes", body, idempotencyKey, "", false)
 		},
 	}
 	create.Flags().StringVar(&repoID, "repo", "", "repository ID")
 	create.Flags().StringVar(&scanID, "scan", "", "origin scan ID to remediate")
 	create.Flags().StringVar(&engine, "engine", "", "fix engine")
-	create.Flags().StringVar(&mode, "mode", "", "dry_run or push")
+	create.Flags().StringVar(&mode, "mode", "", "dry_run (review locally) or push (publish branch and open GitHub PR)")
+	create.Flags().StringVar(&idempotencyKey, "idempotency-key", "", "reuse this key when retrying the same fix request")
 	create.Flags().IntVar(&maxLoops, "max-loops", 0, "fix→rescan rounds")
 
 	accept := &cobra.Command{
@@ -1189,6 +1191,11 @@ func newSettingsCmd() *cobra.Command {
 			Use: "get", Short: "Get all settings",
 			Annotations: apiAnno("GET", "/settings"), Args: cobra.NoArgs,
 			RunE: func(cmd *cobra.Command, _ []string) error { return runRender(cmd, "GET", "/settings", nil) },
+		},
+		&cobra.Command{
+			Use: "scheduling", Short: "Show detected scanner capacity and effective scheduling limits",
+			Annotations: apiAnno("GET", "/settings/scheduling"), Args: cobra.NoArgs,
+			RunE: func(cmd *cobra.Command, _ []string) error { return runRender(cmd, "GET", "/settings/scheduling", nil) },
 		},
 		set,
 		&cobra.Command{
@@ -1568,7 +1575,29 @@ func newAdminCmd() *cobra.Command {
 	}
 	reap.Flags().IntVar(&reapHours, "max-age-hours", 72, "delete workspaces older than this")
 	cmd := group("admin", "Cross-user oversight (admin)")
+	database := group("database", "Inspect, test, and configure the database")
+	database.AddCommand(&cobra.Command{Use: "get", Short: "Show masked database configuration", Args: cobra.NoArgs,
+		Annotations: apiAnno("GET", "/admin/database"), RunE: func(cmd *cobra.Command, _ []string) error {
+			return runRender(cmd, "GET", "/admin/database", nil)
+		}})
+	for _, operation := range []struct{ name, method, path string }{{"test", "POST", "/admin/database/test"}, {"save", "PUT", "/admin/database"}} {
+		var requestFile string
+		command := &cobra.Command{Use: operation.name, Short: "Read a DSN from a JSON/YAML file; save requires restart", Args: cobra.NoArgs,
+			Annotations: apiAnno(operation.method, operation.path), RunE: func(cmd *cobra.Command, _ []string) error {
+				if requestFile == "" {
+					return fmt.Errorf("--file is required")
+				}
+				body, err := readObjectFile(requestFile)
+				if err != nil {
+					return err
+				}
+				return runRender(cmd, operation.method, operation.path, body)
+			}}
+		command.Flags().StringVar(&requestFile, "file", "", "request file containing dsn (keeps credentials out of shell arguments)")
+		database.AddCommand(command)
+	}
 	cmd.AddCommand(
+		database,
 		listCmd("/admin/tokens", "List all users' API tokens"),
 		listCmd("/admin/secrets", "List all users' secrets (masked)"),
 		&cobra.Command{

@@ -59,9 +59,8 @@ func (p *BearerPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]
 	}
 	cmd := container.CommandContext(ctx, cfg,
 		container.Options{
-			RepoDir:        opts.RepoPath,
-			ExtraEnv:       map[string]string{"HOME": home},
-			MemoryOverride: "4g",
+			RepoDir:  opts.RepoPath,
+			ExtraEnv: map[string]string{"HOME": home},
 		},
 		"bearer", "scan", "/scan", "--format", "json", "--quiet", "--exit-code", "0")
 	out, err := cmd.Output()

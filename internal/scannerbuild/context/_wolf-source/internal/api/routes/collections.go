@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -151,7 +152,16 @@ func GetCollection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	repos, _ := h.Store.ListReposInCollection(r.Context(), id)
+	if !canModifyOwned(claims, col.UserID) {
+		response.WriteError(w, http.StatusForbidden, "forbidden", "collection does not belong to current user")
+		return
+	}
+	repos, err := h.Store.ListReposInCollection(r.Context(), id)
+	if err != nil {
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to load collection repositories")
+		return
+	}
+	repos = slices.DeleteFunc(repos, func(repo models.Repo) bool { return !canModifyOwned(claims, repo.UserID) })
 
 	// Build repo lookup for populating scan.Repo.
 	repoMap := make(map[string]*models.Repo, len(repos))
@@ -160,7 +170,11 @@ func GetCollection(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Fetch recent scans for this collection, filtered to currently linked repos.
-	allScans, _ := h.Store.ListScansByCollection(r.Context(), id)
+	allScans, err := h.Store.ListScansByCollection(r.Context(), id)
+	if err != nil {
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to load collection scans")
+		return
+	}
 	recentScans := make([]models.Scan, 0, len(allScans))
 	for i := range allScans {
 		if _, linked := repoMap[allScans[i].RepoID]; linked {
@@ -642,17 +656,26 @@ func CollectionMetrics(w http.ResponseWriter, r *http.Request) {
 	}
 
 	collectionID := chi.URLParam(r, "id")
-	_, err := h.Store.GetCollectionByID(r.Context(), collectionID)
+	col, err := h.Store.GetCollectionByID(r.Context(), collectionID)
 	if err != nil {
 		response.WriteError(w, http.StatusNotFound, "not_found", "collection not found")
 		return
 	}
 
+	if !canModifyOwned(claims, col.UserID) {
+		response.WriteError(w, http.StatusForbidden, "forbidden", "collection does not belong to current user")
+		return
+	}
 	ctx := r.Context()
 	branchFilter := r.URL.Query().Get("branch")
 
 	// Build repo lookup for names — used to filter scans to currently linked repos only.
-	repos, _ := h.Store.ListReposInCollection(ctx, collectionID)
+	repos, err := h.Store.ListReposInCollection(ctx, collectionID)
+	if err != nil {
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to load collection repositories")
+		return
+	}
+	repos = slices.DeleteFunc(repos, func(repo models.Repo) bool { return !canModifyOwned(claims, repo.UserID) })
 	repoNames := make(map[string]string, len(repos))
 	linkedRepoIDs := make(map[string]bool, len(repos))
 	for _, repo := range repos {

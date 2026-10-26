@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"time"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 )
@@ -66,26 +67,37 @@ type sarifSuppression struct {
 }
 
 type sarifResultProperties struct {
-	WolfFindingID       string   `json:"wolfFindingId,omitempty"`
-	WolfFingerprint     string   `json:"wolfFingerprint,omitempty"`
-	StableFingerprint   string   `json:"stableFingerprint,omitempty"`
-	LocationFingerprint string   `json:"locationFingerprint,omitempty"`
-	SemanticFingerprint string   `json:"semanticFingerprint,omitempty"`
-	EvidenceFingerprint string   `json:"evidenceFingerprint,omitempty"`
-	IdentityVersion     int      `json:"identityVersion,omitempty"`
-	Severity            string   `json:"severity,omitempty"`
-	Category            string   `json:"category,omitempty"`
-	FineCategory        string   `json:"fineCategory,omitempty"`
-	FixStrategyID       string   `json:"fixStrategyId,omitempty"`
-	Confidence          string   `json:"confidence,omitempty"`
-	BaselineState       string   `json:"baselineState,omitempty"`
-	Suppressed          bool     `json:"suppressed,omitempty"`
-	SuppressionID       string   `json:"suppressionId,omitempty"`
-	SuppressedReason    string   `json:"suppressedReason,omitempty"`
-	Status              string   `json:"status,omitempty"`
-	SourceKind          string   `json:"sourceKind,omitempty"`
-	SourceRef           string   `json:"sourceRef,omitempty"`
-	CorroboratedBy      []string `json:"corroboratedBy,omitempty"`
+	ClusterID        string `json:"clusterId,omitempty"`
+	PackageName      string `json:"packageName,omitempty"`
+	PackageVersion   string `json:"packageVersion,omitempty"`
+	PackageEcosystem string `json:"packageEcosystem,omitempty"`
+	PackageURL       string `json:"packageUrl,omitempty"`
+	AdvisoryID       string `json:"advisoryId,omitempty"`
+
+	WolfFindingID       string     `json:"wolfFindingId,omitempty"`
+	WolfFingerprint     string     `json:"wolfFingerprint,omitempty"`
+	StableFingerprint   string     `json:"stableFingerprint,omitempty"`
+	LocationFingerprint string     `json:"locationFingerprint,omitempty"`
+	SemanticFingerprint string     `json:"semanticFingerprint,omitempty"`
+	EvidenceFingerprint string     `json:"evidenceFingerprint,omitempty"`
+	IdentityVersion     int        `json:"identityVersion,omitempty"`
+	Severity            string     `json:"severity,omitempty"`
+	Category            string     `json:"category,omitempty"`
+	FineCategory        string     `json:"fineCategory,omitempty"`
+	FixStrategyID       string     `json:"fixStrategyId,omitempty"`
+	Confidence          string     `json:"confidence,omitempty"`
+	FirstSeenAt         *time.Time `json:"firstSeenAt,omitempty"`
+	LastSeenAt          *time.Time `json:"lastSeenAt,omitempty"`
+	IntroducedInScanID  string     `json:"introducedInScanId,omitempty"`
+	ResolvedInScanID    string     `json:"resolvedInScanId,omitempty"`
+	BaselineState       string     `json:"baselineState,omitempty"`
+	Suppressed          bool       `json:"suppressed,omitempty"`
+	SuppressionID       string     `json:"suppressionId,omitempty"`
+	SuppressedReason    string     `json:"suppressedReason,omitempty"`
+	Status              string     `json:"status,omitempty"`
+	SourceKind          string     `json:"sourceKind,omitempty"`
+	SourceRef           string     `json:"sourceRef,omitempty"`
+	CorroboratedBy      []string   `json:"corroboratedBy,omitempty"`
 }
 
 type sarifMessage struct {
@@ -276,6 +288,13 @@ func partialFingerprints(f models.Finding) map[string]string {
 
 func resultProperties(f models.Finding) *sarifResultProperties {
 	props := &sarifResultProperties{
+		ClusterID:        f.ClusterID,
+		PackageName:      f.PackageName,
+		PackageVersion:   f.PackageVersion,
+		PackageEcosystem: f.PackageEcosystem,
+		PackageURL:       f.PackageURL,
+		AdvisoryID:       f.AdvisoryID,
+
 		WolfFindingID:       f.ID,
 		WolfFingerprint:     f.Fingerprint,
 		StableFingerprint:   f.StableFingerprint,
@@ -289,13 +308,14 @@ func resultProperties(f models.Finding) *sarifResultProperties {
 		FixStrategyID:       f.FixStrategyID,
 		Confidence:          f.Confidence,
 		BaselineState:       f.BaselineState,
-		Suppressed:          f.Suppressed,
-		SuppressionID:       f.SuppressionID,
-		SuppressedReason:    f.SuppressedReason,
-		Status:              string(f.Status),
-		SourceKind:          f.SourceKind,
-		SourceRef:           f.SourceRef,
-		CorroboratedBy:      f.CorroboratedBy,
+		FirstSeenAt:         f.FirstSeenAt, LastSeenAt: f.LastSeenAt, IntroducedInScanID: f.IntroducedInScanID, ResolvedInScanID: f.ResolvedInScanID,
+		Suppressed:       f.Suppressed,
+		SuppressionID:    f.SuppressionID,
+		SuppressedReason: f.SuppressedReason,
+		Status:           string(f.Status),
+		SourceKind:       f.SourceKind,
+		SourceRef:        f.SourceRef,
+		CorroboratedBy:   f.CorroboratedBy,
 	}
 	if props.isZero() {
 		return nil
@@ -304,8 +324,13 @@ func resultProperties(f models.Finding) *sarifResultProperties {
 }
 
 func (p sarifResultProperties) isZero() bool {
-	return p.WolfFindingID == "" &&
-		p.WolfFingerprint == "" &&
+	return p.PackageName == "" &&
+		p.PackageVersion == "" &&
+		p.PackageEcosystem == "" &&
+		p.PackageURL == "" &&
+		p.AdvisoryID == "" &&
+		p.WolfFindingID == "" &&
+		p.ClusterID == "" && p.WolfFingerprint == "" &&
 		p.StableFingerprint == "" &&
 		p.LocationFingerprint == "" &&
 		p.SemanticFingerprint == "" &&
@@ -316,7 +341,7 @@ func (p sarifResultProperties) isZero() bool {
 		p.FineCategory == "" &&
 		p.FixStrategyID == "" &&
 		p.Confidence == "" &&
-		p.BaselineState == "" &&
+		p.BaselineState == "" && p.FirstSeenAt == nil && p.LastSeenAt == nil && p.IntroducedInScanID == "" && p.ResolvedInScanID == "" &&
 		!p.Suppressed &&
 		p.SuppressionID == "" &&
 		p.SuppressedReason == "" &&

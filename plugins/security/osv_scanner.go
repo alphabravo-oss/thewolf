@@ -4,9 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strconv"
-	"strings"
 
+	"github.com/alphabravocompany/thewolf/internal/finding/identity"
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
 	"github.com/alphabravocompany/thewolf/internal/plugin/container"
@@ -41,6 +40,7 @@ func (p *OSVScannerPlugin) Execute(ctx context.Context, opts models.ExecuteOpts)
 		return nil, plugin.WrapExecError("osv-scanner", err)
 	}
 
+	plugin.SaveRaw(opts, out, "json")
 	findings, perr := parseOSVScannerOutput(out)
 	if perr != nil {
 		return nil, perr
@@ -73,13 +73,20 @@ type osvPackageResult struct {
 }
 
 type osvVuln struct {
-	ID       string `json:"id"`
-	Summary  string `json:"summary"`
-	Details  string `json:"details"`
-	Severity []struct {
-		Type  string `json:"type"`
-		Score string `json:"score"`
-	} `json:"severity"`
+	ID               string        `json:"id"`
+	Summary          string        `json:"summary"`
+	Details          string        `json:"details"`
+	Severity         []plugin.CVSS `json:"severity"`
+	DatabaseSpecific struct {
+		Severity string `json:"severity"`
+	} `json:"database_specific"`
+	Affected []struct {
+		Package struct {
+			Name      string `json:"name"`
+			Ecosystem string `json:"ecosystem"`
+		} `json:"package"`
+		Severity []plugin.CVSS `json:"severity"`
+	} `json:"affected"`
 	Aliases []string `json:"aliases"`
 }
 
@@ -93,50 +100,30 @@ func parseOSVScannerOutput(data []byte) ([]models.Finding, error) {
 	for _, r := range output.Results {
 		for _, pkg := range r.Packages {
 			for _, v := range pkg.Vulnerabilities {
-				cve := ""
-				for _, alias := range v.Aliases {
-					if strings.HasPrefix(alias, "CVE-") {
-						cve = alias
+				vectors := v.Severity
+				for _, affected := range v.Affected {
+					if affected.Package.Name == pkg.Package.Name && affected.Package.Ecosystem == pkg.Package.Ecosystem && len(affected.Severity) > 0 {
+						vectors = affected.Severity
 						break
 					}
 				}
-
+				severity, provenance := plugin.ResolveSeverity(v.DatabaseSpecific.Severity, vectors, models.SeverityHigh)
 				findings = append(findings, models.Finding{
-					ToolName:    "osv-scanner",
-					Category:    models.CategorySCA,
-					Severity:    mapOSVSeverity(v.Severity),
-					Title:       fmt.Sprintf("%s: %s", v.ID, v.Summary),
-					Description: fmt.Sprintf("Package: %s@%s (%s)\n\n%s", pkg.Package.Name, pkg.Package.Version, pkg.Package.Ecosystem, v.Details),
-					FilePath:    r.Source.Path,
-					CWEID:       cve,
-					RuleID:      v.ID,
-					Status:      models.StatusOpen,
+					ToolName:         "osv-scanner",
+					Category:         models.CategorySCA,
+					Severity:         severity,
+					Title:            fmt.Sprintf("%s: %s", v.ID, v.Summary),
+					Description:      fmt.Sprintf("Package: %s@%s (%s)\n\n%s\n\n%s", pkg.Package.Name, pkg.Package.Version, pkg.Package.Ecosystem, v.Details, provenance),
+					FilePath:         r.Source.Path,
+					RuleID:           v.ID,
+					AdvisoryID:       identity.CanonicalAdvisory(v.ID, v.Aliases...),
+					PackageName:      pkg.Package.Name,
+					PackageVersion:   pkg.Package.Version,
+					PackageEcosystem: pkg.Package.Ecosystem,
+					Status:           models.StatusOpen,
 				})
 			}
 		}
 	}
 	return findings, nil
-}
-
-func mapOSVSeverity(sevs []struct {
-	Type  string `json:"type"`
-	Score string `json:"score"`
-}) models.Severity {
-	for _, s := range sevs {
-		n, err := strconv.ParseFloat(strings.TrimSpace(s.Score), 64)
-		if err != nil {
-			continue
-		}
-		switch {
-		case n >= 9:
-			return models.SeverityCritical
-		case n >= 7:
-			return models.SeverityHigh
-		case n >= 4:
-			return models.SeverityMedium
-		default:
-			return models.SeverityLow
-		}
-	}
-	return models.SeverityHigh
 }

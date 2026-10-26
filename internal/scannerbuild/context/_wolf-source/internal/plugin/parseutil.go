@@ -3,6 +3,7 @@ package plugin
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -152,10 +153,22 @@ func FindFile(dir string, name string) string {
 // WrapExecError creates a detailed error message from an exec failure,
 // including truncated stderr if available.
 func WrapExecError(toolName string, err error) error {
-	if exitErr, ok := err.(*exec.ExitError); ok && len(exitErr.Stderr) > 0 {
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) && len(exitErr.Stderr) > 0 {
 		stderr := strings.TrimSpace(string(exitErr.Stderr))
+		lower := strings.ToLower(stderr)
+		prerequisite := strings.Contains(lower, "needs network or database")
+		switch toolName {
+		case "semgrep":
+			prerequisite = prerequisite || strings.Contains(lower, "semgrep.dev") || strings.Contains(lower, "failed to download")
+		case "grype", "trivy":
+			prerequisite = strings.Contains(lower, "database") || strings.Contains(lower, "db error") || strings.Contains(lower, "db update") || strings.Contains(lower, "db metadata")
+		}
 		if len(stderr) > 500 {
 			stderr = "..." + stderr[len(stderr)-500:]
+		}
+		if prerequisite && !strings.Contains(lower, "no space left on device") && !strings.Contains(lower, "permission denied") {
+			return fmt.Errorf("%s needs network or database (retryable): prepare scanner rules/databases or enable scanner network access, then retry: %w\n%s", toolName, err, stderr)
 		}
 		return fmt.Errorf("%s execution failed: %w\n%s", toolName, err, stderr)
 	}

@@ -1,2 +1,2 @@
 # name<TAB>url<TAB>sha256<TAB>filename; generated, DO NOT EDIT.
-nodejs	https://deb.nodesource.com/node_22.x/pool/main/n/nodejs/nodejs_22.23.2-1nodesource1_arm64.deb	0018ee0bf997fce587042a2382941dcfac9f404fb994a5c3267fe7d12d8d837b	nodejs_22.23.2-1nodesource1_arm64.deb
+nodejs	https://deb.nodesource.com/node_26.x/pool/main/n/nodejs/nodejs_26.11.1-1nodesource1_arm64.deb	c9a33e984c6eec937d4c1accf8a802cf58c3eabebd48c5f9cb4e5eaa681d2906	nodejs_26.11.1-1nodesource1_arm64.deb

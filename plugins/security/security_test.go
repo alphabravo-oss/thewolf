@@ -163,7 +163,7 @@ func TestParseScorecardOutput(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(findings) != 1 || findings[0].ToolName != "scorecard" || findings[0].RuleID != "Branch-Protection" || findings[0].Severity != models.SeverityCritical {
+	if len(findings) != 1 || findings[0].ToolName != "scorecard" || findings[0].RuleID != "Branch-Protection" || findings[0].Severity != models.SeverityHigh || findings[0].Category != models.CategoryQuality {
 		t.Fatalf("scorecard finding = %#v", findings)
 	}
 }
@@ -230,8 +230,8 @@ func TestParseOSVScannerOutput(t *testing.T) {
 	if f.RuleID != "GHSA-xxxx-yyyy" {
 		t.Errorf("expected rule ID GHSA-xxxx-yyyy, got %s", f.RuleID)
 	}
-	if f.CWEID != "CVE-2021-23337" {
-		t.Errorf("expected CVE alias, got %s", f.CWEID)
+	if f.AdvisoryID != "CVE-2021-23337" {
+		t.Errorf("expected CVE alias, got %s", f.AdvisoryID)
 	}
 	if f.FilePath != "package.json" {
 		t.Errorf("expected file path package.json, got %s", f.FilePath)
@@ -241,33 +241,25 @@ func TestParseOSVScannerOutput(t *testing.T) {
 	}
 }
 
-func TestMapOSVSeverity(t *testing.T) {
-	sevs := func(score string) []struct {
-		Type  string `json:"type"`
-		Score string `json:"score"`
-	} {
-		if score == "" {
-			return nil
-		}
-		return []struct {
-			Type  string `json:"type"`
-			Score string `json:"score"`
-		}{{Type: "CVSS_V3", Score: score}}
-	}
-	tests := []struct {
-		score string
+// Posture gaps must not outrank exploitable findings: severity follows Scorecard's own check risk.
+func TestScorecardSeverityFollowsCheckRisk(t *testing.T) {
+	for _, tc := range []struct {
+		check string
+		score int
 		want  models.Severity
 	}{
-		{"9.8", models.SeverityCritical},
-		{"7.5", models.SeverityHigh},
-		{"4.0", models.SeverityMedium},
-		{"3.9", models.SeverityLow},
-		{"", models.SeverityHigh},
-		{"CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H", models.SeverityHigh},
-	}
-	for _, tc := range tests {
-		if got := mapOSVSeverity(sevs(tc.score)); got != tc.want {
-			t.Errorf("mapOSVSeverity(%q) = %s, want %s", tc.score, got, tc.want)
+		{"License", 0, models.SeverityLow},
+		{"Pinned-Dependencies", 0, models.SeverityMedium},
+		{"Security-Policy", 4, models.SeverityLow},
+		{"Branch-Protection", 6, models.SeverityLow},
+		{"Dangerous-Workflow", 0, models.SeverityCritical},
+		{"Maintained", -1, models.SeverityInfo},
+	} {
+		if got := mapScorecardScore(tc.check, tc.score); got != tc.want {
+			t.Errorf("%s %d = %s, want %s", tc.check, tc.score, got, tc.want)
 		}
+	}
+	if scorecardCategory("License") != models.CategoryQuality || scorecardCategory("Dangerous-Workflow") != models.CategorySAST {
+		t.Fatal("scorecard posture must be quality; only Dangerous-Workflow is security")
 	}
 }

@@ -1,22 +1,10 @@
-// Package artifacts is a durable, on-disk store for scan tool output (logs
-// and JSON), keyed by scan ID. It lives at ~/.wolf/artifacts/ by default.
-//
-// This file is a minimal restoration; the package was referenced from several
-// callers (internal/api/server.go, internal/api/routes/{scans,collections,repos}.go)
-// but the package implementation was not committed. The contract below preserves
-// the call sites those files already make:
-//
-//   - artifacts.Init(rootDir)           // sets up the singleton at startup
-//   - artifacts.Global                  // a *Store; nil before Init
-//   - artifacts.Global.ScanDir(id)      // path of a per-scan directory
-//   - artifacts.Global.DeleteScans(ids) // best-effort cleanup of scan dirs
-//
-// If the durable artifact persistence work resumes elsewhere, callers should
-// not need to change — this package simply ensures the build link is intact.
+// Package artifacts stores scan output beneath a configured filesystem root.
+// Published snapshots own unique paths and carry checksums for verified reads.
 package artifacts
 
 import (
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -88,6 +76,17 @@ func (s *Store) Key(path string) (string, error) {
 		return "", errors.New("artifacts: path is outside backend root")
 	}
 	return filepath.ToSlash(relative), nil
+}
+
+// ReadFile reads a stored artifact through the configured filesystem root.
+// A database path is metadata, not authority to read arbitrary host files.
+func ReadFile(path string) ([]byte, error) {
+	file, err := Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = file.Close() }()
+	return io.ReadAll(file)
 }
 
 // ScanDir returns the path of the per-scan subdirectory for scanID. The

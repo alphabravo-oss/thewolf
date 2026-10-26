@@ -10,6 +10,7 @@ package scorer
 
 import (
 	"encoding/json"
+	"math"
 	"strings"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
@@ -75,8 +76,8 @@ func SeverityScore(s models.Severity) float64 {
 //   - 0.5x: vendor, node_modules, generated, mock, fixture, testdata
 //   - 1x: default for all other paths
 //
-// The first matching group wins; patterns match a path segment (or a
-// substring that contains "/" like "api/routes"), not "auth" inside "author.go".
+// The first matching group wins; patterns match complete path segments,
+// including adjacent segments such as "api/routes".
 func LocationWeight(filePath string) float64 {
 	lower := strings.ToLower(strings.ReplaceAll(filePath, "\\", "/"))
 
@@ -100,7 +101,7 @@ func LocationWeight(filePath string) float64 {
 
 func pathHasToken(lowerPath, pattern string) bool {
 	if strings.Contains(pattern, "/") {
-		return strings.Contains(lowerPath, pattern)
+		return strings.Contains("/"+lowerPath+"/", "/"+pattern+"/")
 	}
 	for _, seg := range strings.Split(lowerPath, "/") {
 		if seg == pattern {
@@ -149,16 +150,20 @@ func DependencyBoost(dependentsCount int) float64 {
 }
 
 // ScoreFinding computes and fills in all score fields on a Finding.
-// If AIContextScore is zero, it defaults to 1 (no AI signal — not a fake 5).
+// A missing AI score uses a neutral multiplier without inventing an assessment.
 func ScoreFinding(f *models.Finding) *models.Finding {
 	f.ToolSeverityScore = SeverityScore(f.Severity)
 	f.LocationWeight = LocationWeight(f.FilePath)
-
-	if f.AIContextScore == 0 {
-		f.AIContextScore = 1.0
+	if math.IsNaN(f.AIContextScore) || math.IsInf(f.AIContextScore, 0) || f.AIContextScore < 0 || f.AIContextScore > 10 {
+		f.AIContextScore = 0
 	}
 
-	f.CompositeScore = CompositeScore(f.ToolSeverityScore, f.LocationWeight, f.AIContextScore)
+	aiContext := f.AIContextScore
+	if aiContext == 0 {
+		aiContext = 1
+	}
+
+	f.CompositeScore = CompositeScore(f.ToolSeverityScore, f.LocationWeight, aiContext)
 
 	// Apply dependency boost if enrichment data is available.
 	if f.DependentsJSON != "" && f.DependentsJSON != "[]" {

@@ -4,6 +4,10 @@ import "time"
 
 // Scan represents a single scan operation.
 type Scan struct {
+	IgnorePolicyJSON       string     `json:"-" db:"ignore_policy_json"`
+	BaselineScanID         string     `json:"baseline_scan_id,omitempty" db:"baseline_scan_id"`
+	BaselineResolvedAt     *time.Time `json:"baseline_resolved_at,omitempty" db:"baseline_resolved_at"`
+	FindingsRevision       int64      `json:"findings_revision" db:"findings_revision"`
 	ID                     string     `json:"id" db:"id"`
 	UserID                 string     `json:"user_id" db:"user_id"`
 	RepoID                 string     `json:"repo_id" db:"repo_id"`

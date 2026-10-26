@@ -4,10 +4,29 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 )
+
+func TestNPMAuditRuleFallbacksAndPerAdvisorySeverity(t *testing.T) {
+	fs, err := parseNPMAuditOutput([]byte(`{"vulnerabilities":{"package":{"severity":"critical","via":[{"cve":"CVE-1","severity":"low"},{"url":"https://example.test/advisory"},{"source":42},{"title":"Named issue"},{"title":" "}]}}}`))
+	if err != nil || len(fs) != 5 {
+		t.Fatalf("%+v %v", fs, err)
+	}
+	for i, want := range []string{"CVE-1", "https://example.test/advisory", "npm:42", "Named issue", "package"} {
+		if fs[i].RuleID != want || !strings.Contains(fs[i].Description, "tool rating") {
+			t.Fatalf("%d: %+v", i, fs[i])
+		}
+	}
+	if fs[0].Severity != models.SeverityLow || fs[1].Severity != models.SeverityCritical {
+		t.Fatal("package maximum overwrote an advisory's severity")
+	}
+	if _, err := parseNPMAuditOutput([]byte(`{"vulnerabilities":{" ":{"via":[{}]}}}`)); err == nil {
+		t.Fatal("accepted finding without any identity")
+	}
+}
 
 func testdataPath(name string) string {
 	_, filename, _, _ := runtime.Caller(0)
@@ -85,13 +104,13 @@ func TestParseNPMAuditOutput(t *testing.T) {
 	if f.Title != "Prototype Pollution" {
 		t.Errorf("finding[0].Title = %q, want %q", f.Title, "Prototype Pollution")
 	}
-	if f.CWEID != "CVE-2020-8203" {
-		t.Errorf("finding[0].CWEID = %q, want %q", f.CWEID, "CVE-2020-8203")
+	if f.AdvisoryID != "CVE-2020-8203" {
+		t.Errorf("finding[0].AdvisoryID = %q, want %q", f.AdvisoryID, "CVE-2020-8203")
 	}
 	if f.RuleID != "CVE-2020-8203" {
 		t.Errorf("finding[0].RuleID = %q, want %q", f.RuleID, "CVE-2020-8203")
 	}
-	if f.FilePath != "package.json" {
-		t.Errorf("finding[0].FilePath = %q, want %q", f.FilePath, "package.json")
+	if f.FilePath != "package-lock.json" {
+		t.Errorf("finding[0].FilePath = %q, want %q", f.FilePath, "package-lock.json")
 	}
 }

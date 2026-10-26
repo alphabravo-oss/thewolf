@@ -9,7 +9,7 @@ are classified as `image_kind=fixer`, so scan assignment and scanner rollout
 never treat them as scanner runtime images. See
 [`../docs/scanner-release-management.md`](../docs/scanner-release-management.md).
 
-See [`../docs/PLAN-containerized-scanner-execution.md`](../docs/PLAN-containerized-scanner-execution.md) §5.1
+See [`../docs/archive/2026-10-23/PLAN-containerized-scanner-execution.md`](../docs/archive/2026-10-23/PLAN-containerized-scanner-execution.md) §5.1
 for the full design rationale.
 See `tools.yaml` for the source manifest, `toolchains.yaml` for scanner image
 runtime/toolchain metadata, `build-policy.yaml` for required release variants,

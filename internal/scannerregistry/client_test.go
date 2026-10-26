@@ -333,7 +333,7 @@ func TestCopyManifestGraphResumesAfterInterruptedPublish(t *testing.T) {
 	source.blobs[layerDigest] = layer
 	destination := newFakeOCIRegistry(t, true)
 	client := Client{
-		HTTP: http.DefaultClient,
+		HTTP: source.server.Client(),
 		Endpoints: map[string]Endpoint{
 			source.host:      {BaseURL: source.server.URL},
 			destination.host: {BaseURL: destination.server.URL},
@@ -397,7 +397,7 @@ func TestCopyManifestGraphCopiesAndReadsBackReferrerEvidenceClosure(t *testing.T
 	}}
 	destination := newFakeOCIRegistry(t, false)
 	client := Client{
-		HTTP: http.DefaultClient,
+		HTTP: source.server.Client(),
 		Endpoints: map[string]Endpoint{
 			source.host: {BaseURL: source.server.URL}, destination.host: {BaseURL: destination.server.URL},
 		},

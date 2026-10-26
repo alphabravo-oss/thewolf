@@ -4,6 +4,7 @@ package sarifio
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/alphabravocompany/thewolf/internal/finding/identity"
@@ -16,6 +17,7 @@ const (
 )
 
 type ImportResult struct {
+	Tools       []string         `json:"tools"`
 	Findings    []models.Finding `json:"findings"`
 	ResultCount int              `json:"result_count"`
 }
@@ -94,6 +96,7 @@ func Import(data []byte) (ImportResult, error) {
 		if tool == "" {
 			tool = "sarif"
 		}
+		out.Tools = append(out.Tools, tool)
 		rules := map[string]ruleFile{}
 		for _, rule := range run.Tool.Driver.Rules {
 			rules[rule.ID] = rule
@@ -108,6 +111,8 @@ func Import(data []byte) (ImportResult, error) {
 			out.Findings = append(out.Findings, finding)
 		}
 	}
+	slices.Sort(out.Tools)
+	out.Tools = slices.Compact(out.Tools)
 	return out, nil
 }
 
@@ -180,6 +185,11 @@ func applyLocation(f *models.Finding, result resultFile) {
 }
 
 func applyFingerprints(f *models.Finding, result resultFile) {
+	f.PackageName = stringProp(result.Properties, "packageName")
+	f.PackageVersion = stringProp(result.Properties, "packageVersion")
+	f.PackageEcosystem = stringProp(result.Properties, "packageEcosystem")
+	f.PackageURL = stringProp(result.Properties, "packageUrl")
+	f.AdvisoryID = stringProp(result.Properties, "advisoryId")
 	f.StableFingerprint = firstString(result.PartialFingerprints["wolfStableFingerprint"], stringProp(result.Properties, "stableFingerprint"))
 	f.LocationFingerprint = firstString(result.PartialFingerprints["wolfLocationFingerprint"], stringProp(result.Properties, "locationFingerprint"))
 	f.SemanticFingerprint = firstString(result.PartialFingerprints["wolfSemanticFingerprint"], stringProp(result.Properties, "semanticFingerprint"))

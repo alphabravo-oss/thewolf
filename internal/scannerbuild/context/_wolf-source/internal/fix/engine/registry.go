@@ -8,6 +8,9 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	gitpkg "github.com/alphabravocompany/thewolf/internal/fix/git"
+	"github.com/alphabravocompany/thewolf/internal/plugin"
 )
 
 // ToolDefinition is a config-driven CLI agent definition. It lets an
@@ -99,7 +102,7 @@ func (e *ConfigEngine) Fix(ctx context.Context, req FixRequest) (*FixResult, err
 
 	// #nosec G204 -- Command is an operator-configured tool name; args are
 	// the operator's template with wolf-controlled prompt/repo substitution.
-	cmd := exec.CommandContext(ctx, e.def.Command, args...)
+	cmd := plugin.CommandContext(ctx, e.def.Command, args...)
 	cmd.Dir = workdir
 	if len(e.def.Env) > 0 {
 		env := cmd.Environ()
@@ -152,7 +155,7 @@ func changedFiles(repoPath string) []string {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "git", "-C", repoPath, "status", "--porcelain")
+	cmd := gitpkg.Command(ctx, nil, "-C", repoPath, "status", "--porcelain")
 	out, err := cmd.Output()
 	if err != nil {
 		return nil
