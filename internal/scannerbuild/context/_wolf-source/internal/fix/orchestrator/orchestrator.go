@@ -1756,7 +1756,7 @@ func engineUsedLabel(eng engine.SubprocessEngine) string {
 	switch name {
 	case "api", "api-patch":
 		return "api"
-	case "claude-code", "codex", "opencode":
+	case "claude-code", "codex", "opencode", "grok-build":
 		return "cli:" + name
 	case "grok", "xai":
 		return "api:grok"

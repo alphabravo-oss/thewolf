@@ -187,6 +187,7 @@ func NewRegistry() *Registry {
 	r.Register(&ClaudeCode{})
 	r.Register(&Codex{})
 	r.Register(&OpenCode{})
+	r.Register(&GrokBuild{})
 	r.Register(NewAutoEngine())
 	return r
 }

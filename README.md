@@ -301,10 +301,11 @@ The worker runs inside one of three independently versioned **engine containers*
 
 | Image | Engine | Auth |
 |---|---|---|
-| `wolf-fixer-engines` | Combined Debian worker: Claude + Codex + OpenCode | any of the CLI logins **or** provider keys |
+| `wolf-fixer-engines` | Combined Debian worker: Claude + Codex + OpenCode + Grok Build | any of the CLI logins **or** provider keys |
 | `wolf-fixer-claude` | Anthropic **Claude Code** CLI | `claude login` **or** an `anthropic_key` / `ANTHROPIC_API_KEY` |
 | `wolf-fixer-codex`  | OpenAI **Codex** CLI | `codex login` **or** an `openai_key` / `OPENAI_API_KEY` |
 | `wolf-fixer-opencode` | **OpenCode** CLI (`opencode-ai@1.18.16`) | `opencode auth login` **or** Anthropic/OpenAI keys |
+| (in `wolf-fixer-engines`) | xAI **Grok Build** CLI (`grok` 1.0.70, digest-pinned) | `grok login --device-auth` **or** an `xai_key` / `XAI_API_KEY` |
 | `wolf-fixer-api`    | **API** engine via `internal/ai` — CLI-free | `anthropic_key` or `openai_key` |
 
 Compose and Helm default to `ghcr.io/alphabravo-oss/wolf-fixer-engines`, the combined Debian worker. The single-engine images stay independently versioned in the locked scanner/fixer release; `wolf-fixer-engines` is published alongside them so the worker can scale on its own.
@@ -335,7 +336,7 @@ wolf fixer status            # confirm OAuth / API-key readiness
 
 ### Kubernetes shape
 
-Two supported shapes — persist the agent session on a **PVC** mounted at `/home/wolf` (covers Claude, Codex, and OpenCode session files):
+Two supported shapes — persist the agent session on a **PVC** mounted at `/home/wolf` (covers Claude, Codex, OpenCode, and Grok Build session files):
 
 - **Deployment + PVC** — a long-running worker (or a few) that loop on the queue. Authenticate once with `kubectl exec -it deploy/wolf-fixer -- wolf fixer login claude`; the PVC keeps the session across rollouts.
 - **Job-per-task** — `wolf fixer --once` as a Kubernetes `Job` that claims one job and exits, scaled by the queue depth. Pair the CLI variants with the same session PVC, or use `wolf-fixer-api` (no session needed) for fully ephemeral runs.

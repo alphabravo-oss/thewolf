@@ -33,6 +33,9 @@ func LoginArgs(engine string) ([]string, error) {
 		return []string{"codex", "login"}, nil
 	case "opencode":
 		return []string{"opencode", "auth", "login"}, nil
+	case "grok", "grok-build":
+		// Device-code login: prints a URL and code, no local browser needed.
+		return []string{"grok", "login", "--device-auth"}, nil
 	default:
 		return nil, fmt.Errorf("unknown login engine %q", engine)
 	}
@@ -165,7 +168,7 @@ func maybePTY(args []string) []string {
 		return args
 	}
 	switch args[0] {
-	case "claude", "codex", "opencode":
+	case "claude", "codex", "opencode", "grok":
 	default:
 		return args
 	}
@@ -278,6 +281,8 @@ func displayName(command string) string {
 		return "Codex"
 	case "opencode":
 		return "OpenCode"
+	case "grok":
+		return "Grok Build"
 	default:
 		return command
 	}
