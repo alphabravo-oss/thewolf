@@ -30,8 +30,7 @@ var vultureLineRegex = regexp.MustCompile(`^(.+?):(\d+): (.+?) \((\d+)% confiden
 
 func (p *VulturePlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
 	if !plugin.HasFilesWithExtension(opts.RepoPath, "py") {
-		plugin.Skipf(opts.OnOutput, "vulture", "no Python files (*.py) found. Add Python source files to enable dead code detection.")
-		return nil, nil
+		return nil, p.Applicability(opts.RepoPath, "")
 	}
 
 	if opts.Timeout > 0 {
@@ -96,4 +95,9 @@ func mapVultureSeverity(confidence int) models.Severity {
 		return models.SeverityMedium
 	}
 	return models.SeverityLow
+}
+
+// Applicability keeps absent inputs out of selection and coverage.
+func (p *VulturePlugin) Applicability(repoPath, _ string) error {
+	return plugin.Absent(!plugin.HasFilesWithExtension(repoPath, "py"), "no Python files (*.py) found. Add Python source files to enable dead code detection.")
 }

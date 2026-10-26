@@ -2,13 +2,14 @@ package container
 
 import (
 	"context"
-	"github.com/alphabravocompany/thewolf/internal/models"
-	scannercontainer "github.com/alphabravocompany/thewolf/internal/plugin/container"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/alphabravocompany/thewolf/internal/models"
+	scannercontainer "github.com/alphabravocompany/thewolf/internal/plugin/container"
 )
 
 func TestHadolintInvocationPreservesFailures(t *testing.T) {

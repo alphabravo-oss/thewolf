@@ -10,9 +10,18 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/scan/runner"
 	_ "github.com/alphabravocompany/thewolf/plugins/additional"
 	_ "github.com/alphabravocompany/thewolf/plugins/container"
+	_ "github.com/alphabravocompany/thewolf/plugins/cpp"
 	_ "github.com/alphabravocompany/thewolf/plugins/docs"
+	_ "github.com/alphabravocompany/thewolf/plugins/go"
 	_ "github.com/alphabravocompany/thewolf/plugins/infra"
+	_ "github.com/alphabravocompany/thewolf/plugins/javascript"
+	_ "github.com/alphabravocompany/thewolf/plugins/php"
+	_ "github.com/alphabravocompany/thewolf/plugins/python"
+	_ "github.com/alphabravocompany/thewolf/plugins/ruby"
+	_ "github.com/alphabravocompany/thewolf/plugins/rust"
 	_ "github.com/alphabravocompany/thewolf/plugins/security"
+	_ "github.com/alphabravocompany/thewolf/plugins/sql"
+	_ "github.com/alphabravocompany/thewolf/plugins/swift"
 )
 
 func TestInputGuardsAreSharedBySelectionAndExecution(t *testing.T) {
@@ -30,6 +39,33 @@ func TestInputGuardsAreSharedBySelectionAndExecution(t *testing.T) {
 		{"dockle", "", "", "example:tag"},
 		{"nuclei", "", "", "https://example.invalid"},
 		{"zap", "", "", "https://example.invalid"},
+		// Absent source inputs are not applicable, so they never count
+		// against scan completeness.
+		{"bandit", "app.py", "print(1)", ""},
+		{"ruff", "app.py", "print(1)", ""},
+		{"mypy", "app.py", "print(1)", ""},
+		{"radon", "app.py", "print(1)", ""},
+		{"vulture", "app.py", "print(1)", ""},
+		{"pip-audit", "requirements.txt", "requests==2.32.0", ""},
+		{"eslint", "eslint.config.js", "export default []", ""},
+		{"npm-audit", "web/package.json", "{}", ""},
+		{"gosec", "go.mod", "module x", ""},
+		{"gokart", "go.mod", "module x", ""},
+		{"govulncheck", "go.mod", "module x", ""},
+		{"staticcheck", "svc/go.mod", "module x", ""},
+		{"clippy", "Cargo.toml", "[package]", ""},
+		{"cargo-audit", "Cargo.lock", "", ""},
+		{"cargo-deny", "Cargo.lock", "", ""},
+		{"hadolint", "Dockerfile", "FROM scratch", ""},
+		{"shellcheck", "run.sh", "echo hi", ""},
+		{"markdownlint", "README.md", "# Hi", ""},
+		{"rubocop", "app.rb", "puts 1", ""},
+		{"brakeman", "Gemfile", "source 'https://rubygems.org'", ""},
+		{"phpstan", "index.php", "<?php", ""},
+		{"cppcheck", "main.c", "int main(){}", ""},
+		{"swiftlint", "main.swift", "print(1)", ""},
+		{"sqlfluff", "q.sql", "select 1", ""},
+		{"detekt", "Main.kt", "fun main() {}", ""},
 	} {
 		t.Run(tc.tool, func(t *testing.T) {
 			repo := t.TempDir()

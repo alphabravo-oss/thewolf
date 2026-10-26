@@ -35,8 +35,7 @@ func (p *ScorecardPlugin) CheckAvailable() bool { return container.IsScannersRea
 
 func (p *ScorecardPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
 	if !plugin.HasFile(opts.RepoPath, ".git") {
-		plugin.Skipf(opts.OnOutput, "scorecard", "no .git directory — scorecard needs a git repository to inspect (branch protection, signed releases, etc).")
-		return nil, nil
+		return nil, p.Applicability(opts.RepoPath, "")
 	}
 	if opts.Timeout > 0 {
 		var cancel context.CancelFunc
@@ -135,4 +134,9 @@ func mapScorecardScore(check string, score int) models.Severity {
 	}
 	i := slices.Index(order, risk) + score/3
 	return order[min(i, len(order)-1)]
+}
+
+// Applicability keeps absent inputs out of selection and coverage.
+func (p *ScorecardPlugin) Applicability(repoPath, _ string) error {
+	return plugin.Absent(!plugin.HasFile(repoPath, ".git"), "no .git directory — scorecard needs a git repository to inspect (branch protection, signed releases, etc).")
 }

@@ -31,8 +31,7 @@ func (p *MarkdownlintPlugin) CheckAvailable() bool { return container.IsScanners
 
 func (p *MarkdownlintPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
 	if !plugin.HasFilesWithExtension(opts.RepoPath, "md", "markdown") {
-		plugin.Skipf(opts.OnOutput, "markdownlint", "no Markdown files found.")
-		return nil, nil
+		return nil, p.Applicability(opts.RepoPath, "")
 	}
 	if opts.Timeout > 0 {
 		var cancel context.CancelFunc
@@ -90,4 +89,9 @@ func parseMarkdownlintOutput(data []byte) []models.Finding {
 		})
 	}
 	return findings
+}
+
+// Applicability keeps absent inputs out of selection and coverage.
+func (p *MarkdownlintPlugin) Applicability(repoPath, _ string) error {
+	return plugin.Absent(!plugin.HasFilesWithExtension(repoPath, "md", "markdown"), "no Markdown files found.")
 }

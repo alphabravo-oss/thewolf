@@ -50,8 +50,7 @@ func (p *HadolintPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) (
 		}
 	}
 	if len(unique) == 0 {
-		plugin.Skipf(opts.OnOutput, "hadolint", "no Dockerfiles found (searched for Dockerfile* in all directories). Add a Dockerfile to enable linting.")
-		return nil, nil
+		return nil, p.Applicability(opts.RepoPath, "")
 	}
 
 	var allFindings []models.Finding
@@ -128,4 +127,9 @@ func mapHadolintSeverity(level string) models.Severity {
 	default:
 		return models.SeverityInfo
 	}
+}
+
+// Applicability keeps absent inputs out of selection and coverage.
+func (p *HadolintPlugin) Applicability(repoPath, _ string) error {
+	return plugin.Absent(!plugin.HasGlob(repoPath, "**/Dockerfile*", "Dockerfile*"), "no Dockerfiles found (searched for Dockerfile* in all directories). Add a Dockerfile to enable linting.")
 }

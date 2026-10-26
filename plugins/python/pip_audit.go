@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/alphabravocompany/thewolf/internal/finding/identity"
@@ -27,6 +28,8 @@ func (p *PipAuditPlugin) Languages() []models.Language { return []models.Languag
 
 func (p *PipAuditPlugin) CheckAvailable() bool { return container.IsScannersReady() }
 
+var pipRequirementFiles = []string{"requirements.txt", "requirements/base.txt", "requirements/prod.txt", "requirements-dev.txt"}
+
 func (p *PipAuditPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
 	if opts.Timeout > 0 {
 		var cancel context.CancelFunc
@@ -35,17 +38,15 @@ func (p *PipAuditPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) (
 	}
 
 	// Auto-detect requirements files
-	reqFiles := []string{"requirements.txt", "requirements/base.txt", "requirements/prod.txt", "requirements-dev.txt"}
 	var reqFile string
-	for _, f := range reqFiles {
+	for _, f := range pipRequirementFiles {
 		if _, err := os.Stat(filepath.Join(opts.RepoPath, f)); err == nil {
 			reqFile = f
 			break
 		}
 	}
 	if reqFile == "" {
-		plugin.Skipf(opts.OnOutput, "pip-audit", "no requirements file found (checked requirements.txt, requirements/base.txt, requirements/prod.txt, requirements-dev.txt). Add a requirements file or use pip freeze > requirements.txt to enable dependency auditing.")
-		return nil, nil
+		return nil, p.Applicability(opts.RepoPath, "")
 	}
 
 	// pip-audit needs the workdir set to /scan so its -r is resolved relative
@@ -121,4 +122,9 @@ func parsePipAuditOutput(data []byte) ([]models.Finding, error) {
 		}
 	}
 	return findings, nil
+}
+
+// Applicability keeps absent inputs out of selection and coverage.
+func (p *PipAuditPlugin) Applicability(repoPath, _ string) error {
+	return plugin.Absent(!slices.ContainsFunc(pipRequirementFiles, func(f string) bool { return plugin.HasFile(repoPath, f) }), "no requirements file found (checked requirements.txt, requirements/base.txt, requirements/prod.txt, requirements-dev.txt). Add a requirements file or use pip freeze > requirements.txt to enable dependency auditing.")
 }

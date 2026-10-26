@@ -30,8 +30,7 @@ func (p *GovulncheckPlugin) CheckAvailable() bool { return container.IsScannersR
 func (p *GovulncheckPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
 	goDir := plugin.FindFile(opts.RepoPath, "go.mod")
 	if goDir == "" {
-		plugin.Skipf(opts.OnOutput, "govulncheck", "no go.mod found in project or immediate subdirectories.")
-		return nil, nil
+		return nil, p.Applicability(opts.RepoPath, "")
 	}
 
 	if opts.Timeout > 0 {
@@ -155,4 +154,9 @@ func parseGovulncheckOutputWithMetrics(data []byte, onParseError func(error)) ([
 		return nil, fmt.Errorf("scan govulncheck NDJSON: %w", err)
 	}
 	return findings, nil
+}
+
+// Applicability keeps absent inputs out of selection and coverage.
+func (p *GovulncheckPlugin) Applicability(repoPath, _ string) error {
+	return plugin.Absent(plugin.FindFile(repoPath, "go.mod") == "", "no go.mod found in project or immediate subdirectories.")
 }

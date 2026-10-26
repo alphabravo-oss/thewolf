@@ -108,8 +108,7 @@ func (p *CodeQLPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]
 	// Detect the primary language in the repo
 	lang := detectCodeQLLanguage(opts.RepoPath)
 	if lang == "" {
-		plugin.Skipf(opts.OnOutput, "codeql", "no supported language detected. CodeQL supports: go, python, javascript, java, csharp, cpp, ruby, swift.")
-		return nil, nil
+		return nil, p.Applicability(opts.RepoPath, "")
 	}
 
 	// cfg already resolved above for the HasDedicatedImage check.
@@ -266,4 +265,9 @@ func mapSARIFSeverity(level string) models.Severity {
 	default:
 		return models.SeverityInfo
 	}
+}
+
+// Applicability keeps absent inputs out of selection and coverage.
+func (p *CodeQLPlugin) Applicability(repoPath, _ string) error {
+	return plugin.Absent(detectCodeQLLanguage(repoPath) == "", "no supported language detected. CodeQL supports: go, python, javascript, java, csharp, cpp, ruby, swift.")
 }

@@ -27,8 +27,7 @@ func (p *BrakemanPlugin) CheckAvailable() bool { return container.IsScannersRead
 
 func (p *BrakemanPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
 	if !plugin.HasFile(opts.RepoPath, "Gemfile") {
-		plugin.Skipf(opts.OnOutput, "brakeman", "no Gemfile found — not a Ruby project. Brakeman requires a Rails/Ruby application.")
-		return nil, nil
+		return nil, p.Applicability(opts.RepoPath, "")
 	}
 
 	if opts.Timeout > 0 {
@@ -113,4 +112,9 @@ func mapBrakemanConfidence(c string) models.Severity {
 	default:
 		return models.SeverityInfo
 	}
+}
+
+// Applicability keeps absent inputs out of selection and coverage.
+func (p *BrakemanPlugin) Applicability(repoPath, _ string) error {
+	return plugin.Absent(!plugin.HasFile(repoPath, "Gemfile"), "no Gemfile found — not a Ruby project. Brakeman requires a Rails/Ruby application.")
 }

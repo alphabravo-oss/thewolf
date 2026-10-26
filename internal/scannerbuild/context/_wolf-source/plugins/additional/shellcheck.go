@@ -44,8 +44,7 @@ func (p *ShellcheckPlugin) Execute(ctx context.Context, opts models.ExecuteOpts)
 	shellFiles = append(shellFiles, rootShellFiles...)
 
 	if len(shellFiles) == 0 {
-		plugin.Skipf(opts.OnOutput, "shellcheck", "no shell scripts (*.sh) found in repository. Add .sh files to enable shell script analysis.")
-		return nil, nil
+		return nil, p.Applicability(opts.RepoPath, "")
 	}
 
 	// Translate each host shell-file path to a container /scan-relative path.
@@ -130,4 +129,9 @@ func mapShellcheckSeverity(level string) models.Severity {
 	default:
 		return models.SeverityInfo
 	}
+}
+
+// Applicability keeps absent inputs out of selection and coverage.
+func (p *ShellcheckPlugin) Applicability(repoPath, _ string) error {
+	return plugin.Absent(!plugin.HasGlob(repoPath, "**/*.sh", "*.sh"), "no shell scripts (*.sh) found in repository. Add .sh files to enable shell script analysis.")
 }

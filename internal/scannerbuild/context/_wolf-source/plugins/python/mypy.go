@@ -29,8 +29,7 @@ var mypyLineRegex = regexp.MustCompile(`^(.+?):(\d+):(\d+): (error|warning|note)
 
 func (p *MypyPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
 	if !plugin.HasFilesWithExtension(opts.RepoPath, "py") {
-		plugin.Skipf(opts.OnOutput, "mypy", "no Python files (*.py) found. Add Python source files to enable type checking.")
-		return nil, nil
+		return nil, p.Applicability(opts.RepoPath, "")
 	}
 
 	if opts.Timeout > 0 {
@@ -105,4 +104,9 @@ func mapMypySeverity(level string) models.Severity {
 	default:
 		return models.SeverityInfo
 	}
+}
+
+// Applicability keeps absent inputs out of selection and coverage.
+func (p *MypyPlugin) Applicability(repoPath, _ string) error {
+	return plugin.Absent(!plugin.HasFilesWithExtension(repoPath, "py"), "no Python files (*.py) found. Add Python source files to enable type checking.")
 }

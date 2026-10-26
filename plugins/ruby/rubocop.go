@@ -27,8 +27,7 @@ func (p *RubocopPlugin) CheckAvailable() bool { return container.IsScannersReady
 
 func (p *RubocopPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
 	if !plugin.HasFilesWithExtension(opts.RepoPath, "rb") {
-		plugin.Skipf(opts.OnOutput, "rubocop", "no Ruby files (*.rb) found. Add Ruby source files to enable linting.")
-		return nil, nil
+		return nil, p.Applicability(opts.RepoPath, "")
 	}
 
 	if opts.Timeout > 0 {
@@ -113,4 +112,9 @@ func mapRubocopSeverity(s string) models.Severity {
 	default:
 		return models.SeverityInfo
 	}
+}
+
+// Applicability keeps absent inputs out of selection and coverage.
+func (p *RubocopPlugin) Applicability(repoPath, _ string) error {
+	return plugin.Absent(!plugin.HasFilesWithExtension(repoPath, "rb"), "no Ruby files (*.rb) found. Add Ruby source files to enable linting.")
 }

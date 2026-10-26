@@ -34,8 +34,7 @@ func (p *SQLFluffPlugin) CheckAvailable() bool { return container.IsScannersRead
 
 func (p *SQLFluffPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
 	if !plugin.HasFilesWithExtension(opts.RepoPath, "sql") {
-		plugin.Skipf(opts.OnOutput, "sqlfluff", "no SQL files (*.sql) found. Add SQL files to enable linting.")
-		return nil, nil
+		return nil, p.Applicability(opts.RepoPath, "")
 	}
 
 	if opts.Timeout > 0 {
@@ -149,4 +148,9 @@ func parseSQLFluffOutput(data []byte) ([]models.Finding, error) {
 		}
 	}
 	return findings, nil
+}
+
+// Applicability keeps absent inputs out of selection and coverage.
+func (p *SQLFluffPlugin) Applicability(repoPath, _ string) error {
+	return plugin.Absent(!plugin.HasFilesWithExtension(repoPath, "sql"), "no SQL files (*.sql) found. Add SQL files to enable linting.")
 }

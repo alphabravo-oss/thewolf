@@ -27,8 +27,7 @@ func (p *PHPStanPlugin) CheckAvailable() bool { return container.IsScannersReady
 
 func (p *PHPStanPlugin) Execute(ctx context.Context, opts models.ExecuteOpts) ([]models.Finding, error) {
 	if !plugin.HasFilesWithExtension(opts.RepoPath, "php") {
-		plugin.Skipf(opts.OnOutput, "phpstan", "no PHP files (*.php) found. Add PHP source files to enable static analysis.")
-		return nil, nil
+		return nil, p.Applicability(opts.RepoPath, "")
 	}
 
 	if opts.Timeout > 0 {
@@ -93,4 +92,9 @@ func parsePHPStanOutput(data []byte) ([]models.Finding, error) {
 		}
 	}
 	return findings, nil
+}
+
+// Applicability keeps absent inputs out of selection and coverage.
+func (p *PHPStanPlugin) Applicability(repoPath, _ string) error {
+	return plugin.Absent(!plugin.HasFilesWithExtension(repoPath, "php"), "no PHP files (*.php) found. Add PHP source files to enable static analysis.")
 }
