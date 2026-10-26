@@ -88,10 +88,10 @@ func TestParseStaticcheckOutput(t *testing.T) {
 		t.Fatalf("expected 2 findings, got %d", len(findings))
 	}
 
-	// First finding: SA1000, error severity
+	// First finding: SA1000 (likely bug) is medium; staticcheck's "error" label carries no signal.
 	f := findings[0]
-	if f.Severity != models.SeverityHigh {
-		t.Errorf("finding[0].Severity = %q, want %q", f.Severity, models.SeverityHigh)
+	if f.Severity != models.SeverityMedium {
+		t.Errorf("finding[0].Severity = %q, want %q", f.Severity, models.SeverityMedium)
 	}
 	if f.ToolName != "staticcheck" {
 		t.Errorf("finding[0].ToolName = %q, want %q", f.ToolName, "staticcheck")
@@ -182,5 +182,13 @@ func TestParseGovulncheckOutput(t *testing.T) {
 	}
 	if len(findings) != 1 || findings[0].ToolName != "govulncheck" || findings[0].RuleID != "GO-2026-0001" || findings[0].FilePath != "main.go" || findings[0].LineStart != 14 {
 		t.Fatalf("govulncheck finding = %#v", findings)
+	}
+}
+
+func TestStaticcheckSeverityFollowsCheckFamily(t *testing.T) {
+	for code, want := range map[string]models.Severity{"SA5011": models.SeverityMedium, "U1000": models.SeverityLow, "ST1003": models.SeverityLow, "S1000": models.SeverityLow} {
+		if got := mapStaticcheckSeverity(code); got != want {
+			t.Errorf("%s = %s, want %s", code, got, want)
+		}
 	}
 }

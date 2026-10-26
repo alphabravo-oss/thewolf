@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
@@ -112,7 +113,7 @@ func parseStaticcheckOutputWithMetrics(data []byte, onParseError func(error)) ([
 		findings = append(findings, models.Finding{
 			ToolName:    "staticcheck",
 			Category:    models.CategoryQuality,
-			Severity:    mapStaticcheckSeverity(diag.Severity),
+			Severity:    mapStaticcheckSeverity(diag.Code),
 			Title:       diag.Code,
 			Description: diag.Message,
 			FilePath:    diag.Location.File,
@@ -128,13 +129,12 @@ func parseStaticcheckOutputWithMetrics(data []byte, onParseError func(error)) ([
 	return findings, nil
 }
 
-func mapStaticcheckSeverity(s string) models.Severity {
-	switch s {
-	case "error":
-		return models.SeverityHigh
-	case "warning":
+// staticcheck reports nearly every check as "error", so its severity field
+// says nothing. The check family does: SA* are likely bugs; S*, ST*, QF* and
+// U1000 are simplifications, style, quick fixes and unused code.
+func mapStaticcheckSeverity(code string) models.Severity {
+	if strings.HasPrefix(code, "SA") {
 		return models.SeverityMedium
-	default:
-		return models.SeverityLow
 	}
+	return models.SeverityLow
 }

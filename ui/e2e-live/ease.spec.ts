@@ -92,7 +92,7 @@ test("§9.16: new operator completes the real sample journey", async ({ page, co
     // The workspace is where operators interpret the automatic baseline.
     await navigate(page, /^Repositories$/);
     await page.getByRole("link", { name: /^sample\b/ }).click();
-    await expect(page.getByText(/^[1-9]\d* new$/).first(), "Second scan must report the newly committed issues against the automatic baseline").toBeVisible();
+    await expect(page.getByRole("link", { name: /^[1-9]\d* new since baseline$/ }).first(), "Second scan must report the newly committed issues against the automatic baseline").toBeVisible();
     await screenshot(page, info, "second-scan-dark");
     await page.goto(secondScanURL);
   });
