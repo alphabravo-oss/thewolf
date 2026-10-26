@@ -2602,7 +2602,22 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Log in to required Docker Hub mirror
+      # GHCR is canonical; the mirror follows mirror_mode exactly as candidate
+      # verification does. Unconditional mirror steps here failed every
+      # GHCR-only release after approval, before anything was promoted.
+      - name: Require Docker Hub mirror credentials
+        if: needs.prepare.outputs.mirror_mode == 'required'
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          [[ -n "$DOCKERHUB_USERNAME" && -n "$DOCKERHUB_TOKEN" ]] || {
+            echo "protected release requires complete Docker Hub mirror credentials" >&2
+            exit 1
+          }
+
+      - name: Log in to Docker Hub mirror
+        if: needs.prepare.outputs.mirror_mode != 'disabled'
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ${{ env.MIRROR_REGISTRY }}
@@ -2622,10 +2637,11 @@ jobs:
           CANDIDATE_ID: ${{ needs.prepare.outputs.candidate_id }}
           RELEASE_REPOSITORY: ${{ env.PRIMARY_REGISTRY }}/${{ env.PRIMARY_NAMESPACE }}/wolf-scanner-releases
           MIRROR_RELEASE_REPOSITORY: ${{ env.MIRROR_REGISTRY }}/${{ env.MIRROR_NAMESPACE }}/wolf-scanner-releases
+          REQUIRE_MIRROR: ${{ needs.prepare.outputs.mirror_mode == 'required' }}
         run: |
           scanners/ci/verify-release-closure.sh \
             "$RELEASE_REPOSITORY" "$MIRROR_RELEASE_REPOSITORY" \
-            "$CANDIDATE_ID" build/reverified-candidate true
+            "$CANDIDATE_ID" build/reverified-candidate "$REQUIRE_MIRROR"
 
       - name: Validate approved evidence and create promoted manifest
         env:
@@ -2738,6 +2754,7 @@ jobs:
           fi
 
       - name: Mirror, sign, and verify protected release aggregate
+        if: needs.prepare.outputs.mirror_mode != 'disabled'
         id: mirror
         env:
           RELEASE_REPOSITORY: ${{ steps.aggregate.outputs.repository }}
@@ -2758,6 +2775,7 @@ jobs:
             "${MIRROR_RELEASE_REPOSITORY}@${DIGEST}" >/dev/null
 
       - name: Generate mirror protected release provenance
+        if: needs.prepare.outputs.mirror_mode != 'disabled'
         uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
         with:
           subject-name: ${{ env.MIRROR_REGISTRY }}/${{ env.MIRROR_NAMESPACE }}/wolf-scanner-releases
@@ -2765,6 +2783,7 @@ jobs:
           push-to-registry: true
 
       - name: Attest mirror protected release SPDX SBOM
+        if: needs.prepare.outputs.mirror_mode != 'disabled'
         uses: actions/attest-sbom@bd218ad0dbcb3e146bd073d1d9c6d78e08aa8a0b # v2.4.0
         with:
           subject-name: ${{ env.MIRROR_REGISTRY }}/${{ env.MIRROR_NAMESPACE }}/wolf-scanner-releases
@@ -2773,6 +2792,7 @@ jobs:
           push-to-registry: true
 
       - name: Verify mirror aggregate attestations
+        if: needs.prepare.outputs.mirror_mode != 'disabled'
         env:
           MIRROR_RELEASE_REPOSITORY: ${{ env.MIRROR_REGISTRY }}/${{ env.MIRROR_NAMESPACE }}/wolf-scanner-releases
           DIGEST: ${{ steps.aggregate.outputs.digest }}
@@ -2790,12 +2810,14 @@ jobs:
           RELEASE_ID: ${{ needs.prepare.outputs.immutable_id }}
           RELEASE_REPOSITORY: ${{ env.PRIMARY_REGISTRY }}/${{ env.PRIMARY_NAMESPACE }}/wolf-scanner-releases
           MIRROR_RELEASE_REPOSITORY: ${{ env.MIRROR_REGISTRY }}/${{ env.MIRROR_NAMESPACE }}/wolf-scanner-releases
+          REQUIRE_MIRROR: ${{ needs.prepare.outputs.mirror_mode == 'required' }}
         run: |
           scanners/ci/verify-release-closure.sh \
             "$RELEASE_REPOSITORY" "$MIRROR_RELEASE_REPOSITORY" \
-            "$RELEASE_ID" build/final-release-verification true
+            "$RELEASE_ID" build/final-release-verification "$REQUIRE_MIRROR"
 
       - name: Move mirrored image release and channel aliases
+        if: needs.prepare.outputs.mirror_mode != 'disabled'
         env:
           RELEASE_ID: ${{ needs.prepare.outputs.immutable_id }}
           ALIASES: ${{ needs.prepare.outputs.aliases }}
@@ -2822,6 +2844,7 @@ jobs:
           ] | @tsv' build/scanner-release.json)
 
       - name: Move mirrored aggregate channel alias
+        if: needs.prepare.outputs.mirror_mode != 'disabled'
         env:
           MIRROR_RELEASE_REPOSITORY: ${{ env.MIRROR_REGISTRY }}/${{ env.MIRROR_NAMESPACE }}/wolf-scanner-releases
           DIGEST: ${{ steps.aggregate.outputs.digest }}
@@ -2888,7 +2911,8 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Require and log in to Docker Hub mirror
+      - name: Require Docker Hub mirror credentials
+        if: needs.prepare.outputs.mirror_mode == 'required'
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -2899,6 +2923,7 @@ jobs:
           }
 
       - name: Log in to Docker Hub for release verification
+        if: needs.prepare.outputs.mirror_mode != 'disabled'
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ${{ env.MIRROR_REGISTRY }}
@@ -2917,10 +2942,11 @@ jobs:
           RELEASE_REPOSITORY: ${{ env.PRIMARY_REGISTRY }}/${{ env.PRIMARY_NAMESPACE }}/wolf-scanner-releases
           MIRROR_RELEASE_REPOSITORY: ${{ env.MIRROR_REGISTRY }}/${{ env.MIRROR_NAMESPACE }}/wolf-scanner-releases
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REQUIRE_MIRROR: ${{ needs.prepare.outputs.mirror_mode == 'required' }}
         run: |
           scanners/ci/verify-release-closure.sh \
             "$RELEASE_REPOSITORY" "$MIRROR_RELEASE_REPOSITORY" \
-            "$RELEASE_ID" build/release-verification true
+            "$RELEASE_ID" build/release-verification "$REQUIRE_MIRROR"
 
       - name: Upload replayed release verification evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
