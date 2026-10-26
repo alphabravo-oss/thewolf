@@ -25,8 +25,12 @@ type ExecuteOpts struct {
 	IncludePaths []string
 	ExcludePaths []string
 	Timeout      time.Duration
-	Target       string            // URL or host for DAST scanners (nuclei, etc.)
-	OnOutput     func(line string) // callback for streaming tool stderr/progress lines
+	Target       string // URL or host for DAST scanners (nuclei, etc.)
+	// SecretEnv holds secrets an externally registered scanner declared
+	// (e.g. a commercial license), resolved for this run. Pass them only as
+	// container environment; never log or persist them.
+	SecretEnv map[string]string
+	OnOutput  func(line string) // callback for streaming tool stderr/progress lines
 
 	// OnRawOutput, when set, is called by a plugin with the verbatim bytes
 	// of the tool's output (typically JSON or SARIF) before parsing. ext is
