@@ -74,9 +74,21 @@ func completeScan(ctx context.Context, database *sqlx.DB, scan *models.Scan, com
 	}
 	profile := strings.ToLower(strings.TrimSpace(scan.Profile))
 	if completion.AutoBaseline && profile != "fast" && profile != "pr" && profile != "targeted" {
-		var id string
-		err := tx.GetContext(ctx, &id, tx.Rebind("SELECT id FROM scan_baselines WHERE repo_id = ? AND branch = ? AND name = 'auto'"), scan.RepoID, scan.Branch)
-		if errors.Is(err, sql.ErrNoRows) {
+		var saved struct {
+			ID     string `db:"id"`
+			ScanID string `db:"scan_id"`
+		}
+		err := tx.GetContext(ctx, &saved, tx.Rebind("SELECT id, scan_id FROM scan_baselines WHERE repo_id = ? AND branch = ? AND name = 'auto'"), scan.RepoID, scan.Branch)
+		if err == nil {
+			// Replace an automatic baseline that no longer qualifies (saved by older
+			// rules) once this scan does; otherwise keep the first success.
+			var stale, qualifies bool
+			if stale, err = autoBaselineStale(ctx, tx, scan.RepoID, saved.ScanID); err == nil && stale {
+				if qualifies, err = autoBaselineCandidate(ctx, tx, scan.RepoID, scan.ID); err == nil && qualifies {
+					_, err = tx.ExecContext(ctx, tx.Rebind("UPDATE scan_baselines SET scan_id = ?, strategy = 'auto-first-success', updated_at = ? WHERE id = ?"), scan.ID, time.Now().UTC(), saved.ID)
+				}
+			}
+		} else if errors.Is(err, sql.ErrNoRows) {
 			err = createScanBaselineTx(ctx, tx, &models.ScanBaseline{ID: uuid.NewString(), RepoID: scan.RepoID, Branch: scan.Branch, Name: "auto", ScanID: scan.ID, Strategy: "auto-first-success", CreatedBy: scan.UserID})
 			if errors.Is(err, ErrInvalidBaseline) {
 				err = nil // not a clean first success (failed tool, foreign owner); a later scan qualifies, results still publish
@@ -143,4 +155,30 @@ func createSARIFImport(ctx context.Context, database sqlx.ExtContext, imp *model
 		`INSERT INTO sarif_imports (id, repo_id, scan_id, source, checksum_sha256, result_count, imported_count, created_by, created_at, updated_at)
 		 VALUES (:id, :repo_id, :scan_id, :source, :checksum_sha256, :result_count, :imported_count, :created_by, :created_at, :updated_at)`, imp)
 	return err
+}
+
+// autoBaselineStale reports whether a saved automatic baseline points at a scan
+// that would not qualify today (missing, or not a complete success).
+func autoBaselineStale(ctx context.Context, tx *sqlx.Tx, repoID, scanID string) (bool, error) {
+	saved, err := lockClusterScan(ctx, tx, repoID, scanID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return true, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return !validBaselineScan(*saved), nil
+}
+
+// autoBaselineCandidate applies createScanBaselineTx's rules without inserting.
+func autoBaselineCandidate(ctx context.Context, tx *sqlx.Tx, repoID, scanID string) (bool, error) {
+	current, err := lockClusterScan(ctx, tx, repoID, scanID)
+	if err != nil {
+		return false, err
+	}
+	var owner string
+	if err := tx.GetContext(ctx, &owner, tx.Rebind("SELECT user_id FROM repos WHERE id = ?"), repoID); err != nil {
+		return false, err
+	}
+	return validBaselineScan(*current) && current.UserID == owner, nil
 }
