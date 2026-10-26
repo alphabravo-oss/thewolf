@@ -453,3 +453,22 @@ func testRepoRoot(t *testing.T) string {
 		dir = parent
 	}
 }
+
+// Bucket tools must run without per-bucket env vars: a plain `wolf serve` or Helm
+// install only sets the tag, and execution must agree with the image inventory.
+func TestBucketOverridesDeriveFromTag(t *testing.T) {
+	for _, k := range []string{"WOLF_SCANNERS_IMAGE", "WOLF_SCANNERS_IMAGE_JVM", "WOLF_SCANNERS_IMAGE_RUST", "WOLF_SCANNERS_IMAGE_CODEQL"} {
+		t.Setenv(k, "")
+	}
+	t.Setenv("WOLF_SCANNERS_TAG", "scanner-set-test")
+	got := envBucketOverrides()
+	if got["codeql"] != "ghcr.io/alphabravo-oss/wolf-scanners-codeql:scanner-set-test" ||
+		got["pmd"] != "ghcr.io/alphabravo-oss/wolf-scanners-jvm:scanner-set-test" ||
+		got["clippy"] != "ghcr.io/alphabravo-oss/wolf-scanners-rust:scanner-set-test" {
+		t.Fatalf("bucket tools not derived from the tag: %v", got)
+	}
+	t.Setenv("WOLF_SCANNERS_IMAGE_CODEQL", "registry.example/codeql:pinned")
+	if got := envBucketOverrides()["codeql"]; got != "registry.example/codeql:pinned" {
+		t.Fatalf("explicit bucket override lost: %s", got)
+	}
+}
