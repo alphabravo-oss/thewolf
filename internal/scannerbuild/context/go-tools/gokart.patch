@@ -1,6 +1,6 @@
 --- a/run/run.go
 +++ b/run/run.go
-@@ -25,6 +25,7 @@
+@@ -25,6 +25,7 @@ import (
  
  	"github.com/praetorian-inc/gokart/util"
  	"golang.org/x/tools/go/analysis"
@@ -8,7 +8,7 @@
  	"golang.org/x/tools/go/analysis/passes/buildssa"
  	"golang.org/x/tools/go/packages"
  )
-@@ -54,7 +55,7 @@
+@@ -54,7 +55,7 @@ func Run(analyzers []*analysis.Analyzer, packages ...string) ([]util.Finding, bo
  func LoadPackages(packagesList ...string) ([]*packages.Package, bool, error) {
  	success := true
  	conf := packages.Config{
@@ -17,7 +17,7 @@
  		//Disable loading tests. If we enable this, then packages will be loaded twice. Once with tests, once without.
  		//This causes us to report findings twice, even if there are no tests in the package
  		Tests: false,
-@@ -109,35 +110,21 @@
+@@ -109,35 +110,21 @@ func RemoveBadPackages(allPackages []*packages.Package, badPackages map[*package
  
  // Run analyzers on a package
  func RunAnalyzers(analyzers []*analysis.Analyzer, pkg *packages.Package) ([]util.Finding, error) {
@@ -49,11 +49,11 @@
 +	graph, err := checker.Analyze([]*analysis.Analyzer{buildssa.Analyzer}, []*packages.Package{pkg}, &checker.Options{Sequential: true})
  	if err != nil {
  		return nil, err
-+	}
+ 	}
 +	ssaResult := graph.Roots[0]
 +	if ssaResult.Err != nil {
 +		return nil, ssaResult.Err
- 	}
++	}
  
  	//feed the results of ssa into the other analyzers
  	resultMap := make(map[*analysis.Analyzer]interface{})
@@ -62,9 +62,23 @@
  
  	results := []util.Finding{}
  
+--- a/util/finding.go
++++ b/util/finding.go
+@@ -54,7 +54,10 @@ func IsValidFinding(finding Finding) bool {
+ 	if len(finding.Untrusted_Source) == 0 {
+ 		return false
+ 	}
+-	if finding.Vulnerable_Function.SourceCode == finding.Untrusted_Source[0].SourceCode {
++	// Source text can contain distinct source and sink expressions on one line.
++	if finding.Vulnerable_Function.SourceFilename == finding.Untrusted_Source[0].SourceFilename &&
++		finding.Vulnerable_Function.SourceLineNum == finding.Untrusted_Source[0].SourceLineNum &&
++		finding.Vulnerable_Function.SourceColumn == finding.Untrusted_Source[0].SourceColumn {
+ 		// if the source and sink are the same, return false and do not print out the finding
+ 		return false
+ 	}
 --- a/util/taint.go
 +++ b/util/taint.go
-@@ -29,10 +29,11 @@
+@@ -29,10 +29,11 @@ type TaintedCode struct {
  	SourceCode     string
  	SourceFilename string
  	SourceLineNum  int
@@ -77,7 +91,29 @@
  type MapData struct {
  	Mapped     bool // whether a hash has already been mapped
  	Vulnerable bool // whether a hash has been found vulnerable
-@@ -171,7 +172,7 @@
+@@ -117,12 +118,15 @@ func (ta *TaintAnalyzer) ContainsTaintRecurse(startCall *ssa.CallCommon, val *ss
+ 	case *ssa.Const:
+ 		vulnerable = false
+ 	case *ssa.Parameter:
+-		// Check if this function call is part of the tainted function source list
+-		globalPkgName := (expr).Parent().Pkg.Pkg.Name()
+-		if val, ok := VulnGlobalFuncs[globalPkgName]; ok {
+-			for _, funcName := range val {
+-				if (expr).Name() == funcName {
+-					vulnerable = true
++		// Check if this function call is part of the tainted function source list.
++		// Synthetic functions (wrappers, generic instantiations) have no package.
++		if parent := expr.Parent(); parent != nil && parent.Pkg != nil {
++			globalPkgName := parent.Pkg.Pkg.Name()
++			if val, ok := VulnGlobalFuncs[globalPkgName]; ok {
++				for _, funcName := range val {
++					if (expr).Name() == funcName {
++						vulnerable = true
++					}
+ 				}
+ 			}
+ 		}
+@@ -171,7 +175,7 @@ func (ta *TaintAnalyzer) ContainsTaintRecurse(startCall *ssa.CallCommon, val *ss
  		vulnerable = ta.ContainsTaintRecurse(startCall, &expr.Tuple, cg, depth+1, visitedMutable)
  	case *ssa.Call:
  		callFunc, ok := (expr.Call.Value).(*ssa.Function)
@@ -88,7 +124,7 @@
  				for _, funcName := range val {
 --- a/util/util.go
 +++ b/util/util.go
-@@ -184,6 +184,7 @@
+@@ -184,6 +184,7 @@ func GenerateTaintedCode(pass *analysis.Pass, parent *ssa.Function, position tok
  		SourceCode:     vulnerable_source_code,
  		SourceFilename: vulnerable_code.Filename,
  		SourceLineNum:  vulnerable_code.Line,
@@ -96,17 +132,3 @@
  		ParentFunction: parent_function_name + " " + parent_function_args,
  	}
  	return tainted_code
---- a/util/finding.go
-+++ b/util/finding.go
-@@ -54,7 +54,10 @@
- 	if len(finding.Untrusted_Source) == 0 {
- 		return false
- 	}
--	if finding.Vulnerable_Function.SourceCode == finding.Untrusted_Source[0].SourceCode {
-+	// Source text can contain distinct source and sink expressions on one line.
-+	if finding.Vulnerable_Function.SourceFilename == finding.Untrusted_Source[0].SourceFilename &&
-+		finding.Vulnerable_Function.SourceLineNum == finding.Untrusted_Source[0].SourceLineNum &&
-+		finding.Vulnerable_Function.SourceColumn == finding.Untrusted_Source[0].SourceColumn {
- 		// if the source and sink are the same, return false and do not print out the finding
- 		return false
- 	}
