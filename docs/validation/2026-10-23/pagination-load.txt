@@ -1,0 +1,74 @@
+=== RUN   TestScanFindingPagesPreserveVisibilityAndOrdering
+=== RUN   TestScanFindingPagesPreserveVisibilityAndOrdering/sqlite
+=== RUN   TestScanFindingPagesPreserveVisibilityAndOrdering/sqlite/stable_page
+=== RUN   TestScanFindingPagesPreserveVisibilityAndOrdering/sqlite/contributor
+=== RUN   TestScanFindingPagesPreserveVisibilityAndOrdering/sqlite/exact_tool
+=== RUN   TestScanFindingPagesPreserveVisibilityAndOrdering/sqlite/literal_search
+=== RUN   TestScanFindingPagesPreserveVisibilityAndOrdering/sqlite/category_severity_status
+=== RUN   TestScanFindingPagesPreserveVisibilityAndOrdering/sqlite/empty_page
+=== RUN   TestScanFindingPagesPreserveVisibilityAndOrdering/sqlite/with_suppressed
+=== RUN   TestScanFindingPagesPreserveVisibilityAndOrdering/postgres
+=== RUN   TestScanFindingPagesPreserveVisibilityAndOrdering/postgres/stable_page
+=== RUN   TestScanFindingPagesPreserveVisibilityAndOrdering/postgres/contributor
+=== RUN   TestScanFindingPagesPreserveVisibilityAndOrdering/postgres/exact_tool
+=== RUN   TestScanFindingPagesPreserveVisibilityAndOrdering/postgres/literal_search
+=== RUN   TestScanFindingPagesPreserveVisibilityAndOrdering/postgres/category_severity_status
+=== RUN   TestScanFindingPagesPreserveVisibilityAndOrdering/postgres/empty_page
+=== RUN   TestScanFindingPagesPreserveVisibilityAndOrdering/postgres/with_suppressed
+--- PASS: TestScanFindingPagesPreserveVisibilityAndOrdering (1.91s)
+    --- PASS: TestScanFindingPagesPreserveVisibilityAndOrdering/sqlite (0.27s)
+        --- PASS: TestScanFindingPagesPreserveVisibilityAndOrdering/sqlite/stable_page (0.00s)
+        --- PASS: TestScanFindingPagesPreserveVisibilityAndOrdering/sqlite/contributor (0.00s)
+        --- PASS: TestScanFindingPagesPreserveVisibilityAndOrdering/sqlite/exact_tool (0.00s)
+        --- PASS: TestScanFindingPagesPreserveVisibilityAndOrdering/sqlite/literal_search (0.00s)
+        --- PASS: TestScanFindingPagesPreserveVisibilityAndOrdering/sqlite/category_severity_status (0.00s)
+        --- PASS: TestScanFindingPagesPreserveVisibilityAndOrdering/sqlite/empty_page (0.00s)
+        --- PASS: TestScanFindingPagesPreserveVisibilityAndOrdering/sqlite/with_suppressed (0.00s)
+    --- PASS: TestScanFindingPagesPreserveVisibilityAndOrdering/postgres (1.64s)
+        --- PASS: TestScanFindingPagesPreserveVisibilityAndOrdering/postgres/stable_page (0.01s)
+        --- PASS: TestScanFindingPagesPreserveVisibilityAndOrdering/postgres/contributor (0.01s)
+        --- PASS: TestScanFindingPagesPreserveVisibilityAndOrdering/postgres/exact_tool (0.00s)
+        --- PASS: TestScanFindingPagesPreserveVisibilityAndOrdering/postgres/literal_search (0.00s)
+        --- PASS: TestScanFindingPagesPreserveVisibilityAndOrdering/postgres/category_severity_status (0.00s)
+        --- PASS: TestScanFindingPagesPreserveVisibilityAndOrdering/postgres/empty_page (0.00s)
+        --- PASS: TestScanFindingPagesPreserveVisibilityAndOrdering/postgres/with_suppressed (0.00s)
+=== RUN   TestFindingPageLoad
+=== RUN   TestFindingPageLoad/sqlite
+    finding_pages_test.go:275: repos_added=1 explain=map[detail:SEARCH findings USING INDEX idx_findings_scan_visible_severity (scan_id=? AND suppressed=?) id:5 notused:170 parent:0]
+    finding_pages_test.go:313: repos_added=1 mode=scan_page first_read_ms=5.91 (OS/database caches not flushed)
+    finding_pages_test.go:323: repos_added=1 mode=scan_page concurrency=1 warm_samples=20 p50_ms=8.56 p95_ms=10.09 mean_allocated_bytes=253737 response_bytes=32884
+    finding_pages_test.go:313: repos_added=1 mode=scan_stats first_read_ms=50.44 (OS/database caches not flushed)
+    finding_pages_test.go:323: repos_added=1 mode=scan_stats concurrency=1 warm_samples=20 p50_ms=46.21 p95_ms=63.51 mean_allocated_bytes=17863 response_bytes=188
+    finding_pages_test.go:313: repos_added=1 mode=fleet_page first_read_ms=1224.18 (OS/database caches not flushed)
+    finding_pages_test.go:323: repos_added=1 mode=fleet_page concurrency=1 warm_samples=20 p50_ms=1060.33 p95_ms=1117.68 mean_allocated_bytes=609819054 response_bytes=32884
+    finding_pages_test.go:275: repos_added=10 explain=map[detail:SEARCH findings USING INDEX idx_findings_scan_visible_severity (scan_id=? AND suppressed=?) id:5 notused:145 parent:0]
+    finding_pages_test.go:313: repos_added=10 mode=scan_page first_read_ms=2.36 (OS/database caches not flushed)
+    finding_pages_test.go:323: repos_added=10 mode=scan_page concurrency=1 warm_samples=20 p50_ms=1.55 p95_ms=2.29 mean_allocated_bytes=253036 response_bytes=32686
+    finding_pages_test.go:313: repos_added=10 mode=scan_stats first_read_ms=4.48 (OS/database caches not flushed)
+    finding_pages_test.go:323: repos_added=10 mode=scan_stats concurrency=1 warm_samples=20 p50_ms=4.47 p95_ms=8.37 mean_allocated_bytes=17958 response_bytes=184
+    finding_pages_test.go:313: repos_added=10 mode=fleet_page first_read_ms=2342.77 (OS/database caches not flushed)
+    finding_pages_test.go:323: repos_added=10 mode=fleet_page concurrency=1 warm_samples=20 p50_ms=2272.50 p95_ms=2451.70 mean_allocated_bytes=1221118138 response_bytes=32689
+=== RUN   TestFindingPageLoad/postgres
+    finding_pages_test.go:275: repos_added=1 explain=map[QUERY PLAN:Limit  (cost=0.41..27.67 rows=50 width=271)]
+    finding_pages_test.go:275: repos_added=1 explain=map[QUERY PLAN:  ->  Index Scan using idx_findings_scan_visible_severity on findings  (cost=0.41..26913.76 rows=49372 width=271)]
+    finding_pages_test.go:275: repos_added=1 explain=map[QUERY PLAN:        Index Cond: ((scan_id = '4ad08ffa-a753-4bcf-933d-c1b03b0435b0'::text) AND (suppressed = false))]
+    finding_pages_test.go:313: repos_added=1 mode=scan_page first_read_ms=62.23 (OS/database caches not flushed)
+    finding_pages_test.go:323: repos_added=1 mode=scan_page concurrency=1 warm_samples=20 p50_ms=35.01 p95_ms=40.14 mean_allocated_bytes=240570 response_bytes=33584
+    finding_pages_test.go:313: repos_added=1 mode=scan_stats first_read_ms=38.94 (OS/database caches not flushed)
+    finding_pages_test.go:323: repos_added=1 mode=scan_stats concurrency=1 warm_samples=20 p50_ms=40.57 p95_ms=52.06 mean_allocated_bytes=23676 response_bytes=188
+    finding_pages_test.go:313: repos_added=1 mode=fleet_page first_read_ms=1977.16 (OS/database caches not flushed)
+    finding_pages_test.go:323: repos_added=1 mode=fleet_page concurrency=1 warm_samples=20 p50_ms=2122.26 p95_ms=2261.58 mean_allocated_bytes=616715833 response_bytes=33584
+    finding_pages_test.go:275: repos_added=10 explain=map[QUERY PLAN:Limit  (cost=0.42..167.85 rows=50 width=271)]
+    finding_pages_test.go:275: repos_added=10 explain=map[QUERY PLAN:  ->  Index Scan using idx_findings_scan_visible_severity on findings  (cost=0.42..17135.23 rows=5117 width=271)]
+    finding_pages_test.go:275: repos_added=10 explain=map[QUERY PLAN:        Index Cond: ((scan_id = '9a27b190-d564-4ab3-b4c9-6bd30e0ebecb'::text) AND (suppressed = false))]
+    finding_pages_test.go:313: repos_added=10 mode=scan_page first_read_ms=6.50 (OS/database caches not flushed)
+    finding_pages_test.go:323: repos_added=10 mode=scan_page concurrency=1 warm_samples=20 p50_ms=7.92 p95_ms=9.45 mean_allocated_bytes=240268 response_bytes=33386
+    finding_pages_test.go:313: repos_added=10 mode=scan_stats first_read_ms=6.71 (OS/database caches not flushed)
+    finding_pages_test.go:323: repos_added=10 mode=scan_stats concurrency=1 warm_samples=20 p50_ms=4.99 p95_ms=5.89 mean_allocated_bytes=23691 response_bytes=184
+    finding_pages_test.go:313: repos_added=10 mode=fleet_page first_read_ms=4547.89 (OS/database caches not flushed)
+    finding_pages_test.go:323: repos_added=10 mode=fleet_page concurrency=1 warm_samples=20 p50_ms=4701.09 p95_ms=4819.51 mean_allocated_bytes=1234075414 response_bytes=33389
+--- PASS: TestFindingPageLoad (228.30s)
+    --- PASS: TestFindingPageLoad/sqlite (73.46s)
+    --- PASS: TestFindingPageLoad/postgres (154.83s)
+PASS
+ok  	github.com/alphabravocompany/thewolf/internal/db	230.278s

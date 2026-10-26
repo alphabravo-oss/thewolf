@@ -1,0 +1,22 @@
+--- FAIL: TestWolfIgnoreRejectsInvalidRules (0.00s)
+    --- FAIL: TestWolfIgnoreRejectsInvalidRules/**_categroy=sql-injection (0.00s)
+        wolfignore_errors_test.go:15: invalid file returned rules=[{safe.go [] [] [R1] .wolfignore:safe.go} {** [] [] [] .wolfignore:**}] error=<nil>
+    --- FAIL: TestWolfIgnoreRejectsInvalidRules/**_category= (0.00s)
+        wolfignore_errors_test.go:15: invalid file returned rules=[{safe.go [] [] [R1] .wolfignore:safe.go} {** [] [] [] .wolfignore:**}] error=<nil>
+    --- FAIL: TestWolfIgnoreRejectsInvalidRules/**_rule=, (0.00s)
+        wolfignore_errors_test.go:15: invalid file returned rules=[{safe.go [] [] [R1] .wolfignore:safe.go} {** [] [] [] .wolfignore:**}] error=<nil>
+    --- FAIL: TestWolfIgnoreRejectsInvalidRules/**_unexpected (0.00s)
+        wolfignore_errors_test.go:15: invalid file returned rules=[{safe.go [] [] [R1] .wolfignore:safe.go} {** [] [] [] .wolfignore:**}] error=<nil>
+    --- FAIL: TestWolfIgnoreRejectsInvalidRules/category=xss (0.00s)
+        wolfignore_errors_test.go:15: invalid file returned rules=[{safe.go [] [] [R1] .wolfignore:safe.go} {category=xss [] [] [] .wolfignore:category=xss}] error=<nil>
+    --- FAIL: TestWolfIgnoreRejectsInvalidRules/[invalid_rule=R1 (0.00s)
+        wolfignore_errors_test.go:15: invalid file returned rules=[{safe.go [] [] [R1] .wolfignore:safe.go} {[invalid [] [] [R1] .wolfignore:[invalid}] error=<nil>
+    --- FAIL: TestWolfIgnoreRejectsInvalidRules/**_rule=R1,,R2 (0.00s)
+        wolfignore_errors_test.go:15: invalid file returned rules=[{safe.go [] [] [R1] .wolfignore:safe.go} {** [] [] [R1 R2] .wolfignore:**}] error=<nil>
+    --- FAIL: TestWolfIgnoreRejectsInvalidRules/**_reason= (0.00s)
+        wolfignore_errors_test.go:15: invalid file returned rules=[{safe.go [] [] [R1] .wolfignore:safe.go} {** [] [] [] }] error=<nil>
+    --- FAIL: TestWolfIgnoreRejectsInvalidRules/!keep.go (0.00s)
+        wolfignore_errors_test.go:15: invalid file returned rules=[{safe.go [] [] [R1] .wolfignore:safe.go}] error=<nil>
+FAIL
+FAIL	github.com/alphabravocompany/thewolf/internal/scan/suppress	0.004s
+FAIL

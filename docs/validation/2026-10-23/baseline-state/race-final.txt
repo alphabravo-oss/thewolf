@@ -1,0 +1,152 @@
+==> Running tests...
+go test -race -count=1 -timeout 120s ./...
+ok  	github.com/alphabravocompany/thewolf/cmd/scannertools	8.669s
+ok  	github.com/alphabravocompany/thewolf/cmd/wolf	12.624s
+?   	github.com/alphabravocompany/thewolf/cmd/wolf-scanner-release-fixed-adapter	[no test files]
+?   	github.com/alphabravocompany/thewolf/cmd/wolf-scanner-release-integration-adapter	[no test files]
+?   	github.com/alphabravocompany/thewolf/cmd/wolf-scanner-release-quality-adapter	[no test files]
+ok  	github.com/alphabravocompany/thewolf/internal/ai	1.016s
+ok  	github.com/alphabravocompany/thewolf/internal/api	25.067s
+ok  	github.com/alphabravocompany/thewolf/internal/api/middleware	1.087s
+ok  	github.com/alphabravocompany/thewolf/internal/api/openapi	6.932s
+ok  	github.com/alphabravocompany/thewolf/internal/api/response	1.026s
+ok  	github.com/alphabravocompany/thewolf/internal/api/routes	78.667s
+ok  	github.com/alphabravocompany/thewolf/internal/api/sse	1.102s
+ok  	github.com/alphabravocompany/thewolf/internal/artifacts	1.033s
+ok  	github.com/alphabravocompany/thewolf/internal/auth	1.785s
+ok  	github.com/alphabravocompany/thewolf/internal/auth/apikey	1.025s
+ok  	github.com/alphabravocompany/thewolf/internal/cli	13.706s
+ok  	github.com/alphabravocompany/thewolf/internal/controlbind	2.346s
+ok  	github.com/alphabravocompany/thewolf/internal/db	65.478s
+ok  	github.com/alphabravocompany/thewolf/internal/enrich	1.025s
+ok  	github.com/alphabravocompany/thewolf/internal/finding/diff	1.011s
+ok  	github.com/alphabravocompany/thewolf/internal/finding/gates	1.013s
+ok  	github.com/alphabravocompany/thewolf/internal/finding/identity	1.020s
+ok  	github.com/alphabravocompany/thewolf/internal/finding/knowledge	1.011s
+ok  	github.com/alphabravocompany/thewolf/internal/finding/sarifio	1.620s
+ok  	github.com/alphabravocompany/thewolf/internal/finding/suppression	1.012s
+ok  	github.com/alphabravocompany/thewolf/internal/fix	1.013s
+ok  	github.com/alphabravocompany/thewolf/internal/fix/auth	1.022s
+ok  	github.com/alphabravocompany/thewolf/internal/fix/budget	1.014s
+ok  	github.com/alphabravocompany/thewolf/internal/fix/console	1.515s
+ok  	github.com/alphabravocompany/thewolf/internal/fix/engine	1.292s
+ok  	github.com/alphabravocompany/thewolf/internal/fix/fixstore	1.013s
+ok  	github.com/alphabravocompany/thewolf/internal/fix/git	2.051s
+ok  	github.com/alphabravocompany/thewolf/internal/fix/hygiene	1.051s
+ok  	github.com/alphabravocompany/thewolf/internal/fix/install	1.025s
+ok  	github.com/alphabravocompany/thewolf/internal/fix/lineage	2.083s
+ok  	github.com/alphabravocompany/thewolf/internal/fix/orchestrator	1.290s
+ok  	github.com/alphabravocompany/thewolf/internal/fix/planner	1.014s
+ok  	github.com/alphabravocompany/thewolf/internal/fix/pr	1.016s
+ok  	github.com/alphabravocompany/thewolf/internal/fix/profile	1.010s
+ok  	github.com/alphabravocompany/thewolf/internal/fix/qualification	1.074s
+ok  	github.com/alphabravocompany/thewolf/internal/fix/validator	1.012s
+ok  	github.com/alphabravocompany/thewolf/internal/fix/verify	1.022s
+ok  	github.com/alphabravocompany/thewolf/internal/fix/wiring	1.024s
+ok  	github.com/alphabravocompany/thewolf/internal/fix/worker	3.195s
+ok  	github.com/alphabravocompany/thewolf/internal/fix/workspace	1.370s
+ok  	github.com/alphabravocompany/thewolf/internal/fix/writability	1.029s
+ok  	github.com/alphabravocompany/thewolf/internal/github	1.028s
+ok  	github.com/alphabravocompany/thewolf/internal/models	1.016s
+ok  	github.com/alphabravocompany/thewolf/internal/plugin	1.012s
+ok  	github.com/alphabravocompany/thewolf/internal/plugin/container	1.180s
+ok  	github.com/alphabravocompany/thewolf/internal/prompt	1.013s
+?   	github.com/alphabravocompany/thewolf/internal/remote	[no test files]
+ok  	github.com/alphabravocompany/thewolf/internal/repo	1.282s
+ok  	github.com/alphabravocompany/thewolf/internal/scan/coverage	1.034s
+ok  	github.com/alphabravocompany/thewolf/internal/scan/detector	1.024s
+?   	github.com/alphabravocompany/thewolf/internal/scan/enricher	[no test files]
+ok  	github.com/alphabravocompany/thewolf/internal/scan/mapper	1.022s
+ok  	github.com/alphabravocompany/thewolf/internal/scan/planner	1.017s
+ok  	github.com/alphabravocompany/thewolf/internal/scan/report	1.059s
+ok  	github.com/alphabravocompany/thewolf/internal/scan/runner	1.438s
+ok  	github.com/alphabravocompany/thewolf/internal/scan/scorer	1.014s
+ok  	github.com/alphabravocompany/thewolf/internal/scan/suppress	1.043s
+ok  	github.com/alphabravocompany/thewolf/internal/scan/tui	1.310s
+ok  	github.com/alphabravocompany/thewolf/internal/scanjob	2.695s
+ok  	github.com/alphabravocompany/thewolf/internal/scanneralertworker	1.285s
+ok  	github.com/alphabravocompany/thewolf/internal/scannerbuild	1.507s
+?   	github.com/alphabravocompany/thewolf/internal/scannerbuild/cmd/synccontext	[no test files]
+ok  	github.com/alphabravocompany/thewolf/internal/scannerbundle	1.247s
+ok  	github.com/alphabravocompany/thewolf/internal/scannercontrol	1.103s
+ok  	github.com/alphabravocompany/thewolf/internal/scannercustombuildworker	2.998s
+ok  	github.com/alphabravocompany/thewolf/internal/scannerdiscovery	4.220s
+ok  	github.com/alphabravocompany/thewolf/internal/scannerdiscoveryworker	1.886s
+ok  	github.com/alphabravocompany/thewolf/internal/scannerfeature	1.010s
+ok  	github.com/alphabravocompany/thewolf/internal/scannergit	1.032s
+ok  	github.com/alphabravocompany/thewolf/internal/scannernotification	2.042s
+ok  	github.com/alphabravocompany/thewolf/internal/scannernotificationworker	1.023s
+ok  	github.com/alphabravocompany/thewolf/internal/scannerobservability	1.024s
+ok  	github.com/alphabravocompany/thewolf/internal/scannerpipeline	1.020s
+ok  	github.com/alphabravocompany/thewolf/internal/scannerpolicy	1.028s
+ok  	github.com/alphabravocompany/thewolf/internal/scannerproposal	2.941s
+ok  	github.com/alphabravocompany/thewolf/internal/scannerproposalworker	2.927s
+ok  	github.com/alphabravocompany/thewolf/internal/scannerquality	2.401s
+ok  	github.com/alphabravocompany/thewolf/internal/scannerregistry	1.184s
+ok  	github.com/alphabravocompany/thewolf/internal/scannerregistryworker	1.298s
+ok  	github.com/alphabravocompany/thewolf/internal/scannerrelease	1.019s
+ok  	github.com/alphabravocompany/thewolf/internal/scannerreleaseadapter	1.908s
+ok  	github.com/alphabravocompany/thewolf/internal/scannerreleasebackend	4.108s
+ok  	github.com/alphabravocompany/thewolf/internal/scannerreleasescheduler	6.189s
+ok  	github.com/alphabravocompany/thewolf/internal/scannerreleaseworker	7.802s
+ok  	github.com/alphabravocompany/thewolf/internal/scannerreleaseworkspace	1.034s
+ok  	github.com/alphabravocompany/thewolf/internal/scannerreproducibility	5.419s
+ok  	github.com/alphabravocompany/thewolf/internal/scannerrollout	1.202s
+ok  	github.com/alphabravocompany/thewolf/internal/scannerruntime	1.030s
+ok  	github.com/alphabravocompany/thewolf/internal/scannerruntime/kubernetes	1.130s
+ok  	github.com/alphabravocompany/thewolf/internal/scannerschedule	1.018s
+ok  	github.com/alphabravocompany/thewolf/internal/scannersigning	1.030s
+ok  	github.com/alphabravocompany/thewolf/internal/scannertools/docs	1.012s
+ok  	github.com/alphabravocompany/thewolf/internal/scannertools/httpcache	1.015s
+ok  	github.com/alphabravocompany/thewolf/internal/scannertools/latest	1.027s
+ok  	github.com/alphabravocompany/thewolf/internal/scannertools/lock	1.960s
+ok  	github.com/alphabravocompany/thewolf/internal/scannertools/manifest	1.677s
+ok  	github.com/alphabravocompany/thewolf/internal/scannertools/ospackages	1.478s
+ok  	github.com/alphabravocompany/thewolf/internal/scannertools/registryauth	1.072s
+ok  	github.com/alphabravocompany/thewolf/internal/scannertools/status	1.018s
+ok  	github.com/alphabravocompany/thewolf/internal/scannertools/validate	1.022s
+ok  	github.com/alphabravocompany/thewolf/internal/scannertrace	1.020s
+ok  	github.com/alphabravocompany/thewolf/internal/scantarget	4.130s
+ok  	github.com/alphabravocompany/thewolf/internal/secrets	3.167s
+ok  	github.com/alphabravocompany/thewolf/internal/serve	1.069s
+?   	github.com/alphabravocompany/thewolf/internal/setup	[no test files]
+ok  	github.com/alphabravocompany/thewolf/internal/setup/scanners	1.187s
+ok  	github.com/alphabravocompany/thewolf/internal/sshclient	1.017s
+?   	github.com/alphabravocompany/thewolf/internal/testutil/parsercontract	[no test files]
+ok  	github.com/alphabravocompany/thewolf/internal/wolflog	1.017s
+ok  	github.com/alphabravocompany/thewolf/pkg/authprovider	1.012s
+ok  	github.com/alphabravocompany/thewolf/pkg/cloud	1.011s
+?   	github.com/alphabravocompany/thewolf/pkg/control	[no test files]
+ok  	github.com/alphabravocompany/thewolf/pkg/edition	1.012s
+ok  	github.com/alphabravocompany/thewolf/pkg/entitlement	1.015s
+ok  	github.com/alphabravocompany/thewolf/pkg/eventapi	1.016s
+ok  	github.com/alphabravocompany/thewolf/pkg/fixengine	1.010s
+?   	github.com/alphabravocompany/thewolf/pkg/host	[no test files]
+ok  	github.com/alphabravocompany/thewolf/pkg/intelligence	1.010s
+ok  	github.com/alphabravocompany/thewolf/pkg/license	1.010s
+ok  	github.com/alphabravocompany/thewolf/pkg/packaging	1.013s
+ok  	github.com/alphabravocompany/thewolf/pkg/pluginapi	1.013s
+ok  	github.com/alphabravocompany/thewolf/pkg/policyapi	1.016s
+ok  	github.com/alphabravocompany/thewolf/pkg/reportingapi	1.016s
+?   	github.com/alphabravocompany/thewolf/pkg/scannerreleaseapi	[no test files]
+?   	github.com/alphabravocompany/thewolf/pkg/uiextension	[no test files]
+ok  	github.com/alphabravocompany/thewolf/pkg/verification	1.012s
+?   	github.com/alphabravocompany/thewolf/plugins	[no test files]
+ok  	github.com/alphabravocompany/thewolf/plugins/additional	1.477s
+ok  	github.com/alphabravocompany/thewolf/plugins/container	1.245s
+ok  	github.com/alphabravocompany/thewolf/plugins/cpp	1.325s
+ok  	github.com/alphabravocompany/thewolf/plugins/docs	1.189s
+ok  	github.com/alphabravocompany/thewolf/plugins/general	1.362s
+ok  	github.com/alphabravocompany/thewolf/plugins/go	1.290s
+ok  	github.com/alphabravocompany/thewolf/plugins/infra	1.481s
+ok  	github.com/alphabravocompany/thewolf/plugins/javascript	1.188s
+ok  	github.com/alphabravocompany/thewolf/plugins/php	1.087s
+ok  	github.com/alphabravocompany/thewolf/plugins/python	1.396s
+ok  	github.com/alphabravocompany/thewolf/plugins/ruby	1.162s
+ok  	github.com/alphabravocompany/thewolf/plugins/rust	1.214s
+ok  	github.com/alphabravocompany/thewolf/plugins/sbom	1.091s
+ok  	github.com/alphabravocompany/thewolf/plugins/security	1.609s
+ok  	github.com/alphabravocompany/thewolf/plugins/sql	1.086s
+ok  	github.com/alphabravocompany/thewolf/plugins/swift	1.110s
+?   	github.com/alphabravocompany/thewolf/scanners	[no test files]
+ok  	github.com/alphabravocompany/thewolf/scanners/ci/discover	1.016s

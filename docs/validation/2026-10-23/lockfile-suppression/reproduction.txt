@@ -1,0 +1,52 @@
+--- FAIL: TestApply_LockfileCategories (0.00s)
+    --- FAIL: TestApply_LockfileCategories/Cargo.lock (0.00s)
+        suppress_test.go:196: suppressed 11, want only SAST and secrets
+    --- FAIL: TestApply_LockfileCategories/./Cargo.lock (0.00s)
+        suppress_test.go:196: suppressed 11, want only SAST and secrets
+    --- FAIL: TestApply_LockfileCategories/services/api/Cargo.lock (0.00s)
+        suppress_test.go:196: suppressed 11, want only SAST and secrets
+    --- FAIL: TestApply_LockfileCategories/package-lock.json (0.00s)
+        suppress_test.go:196: suppressed 11, want only SAST and secrets
+    --- FAIL: TestApply_LockfileCategories/./package-lock.json (0.00s)
+        suppress_test.go:196: suppressed 11, want only SAST and secrets
+    --- FAIL: TestApply_LockfileCategories/services/api/package-lock.json (0.00s)
+        suppress_test.go:196: suppressed 11, want only SAST and secrets
+    --- FAIL: TestApply_LockfileCategories/go.sum (0.00s)
+        suppress_test.go:196: suppressed 11, want only SAST and secrets
+    --- FAIL: TestApply_LockfileCategories/./go.sum (0.00s)
+        suppress_test.go:196: suppressed 11, want only SAST and secrets
+    --- FAIL: TestApply_LockfileCategories/services/api/go.sum (0.00s)
+        suppress_test.go:196: suppressed 11, want only SAST and secrets
+    --- FAIL: TestApply_LockfileCategories/pnpm-lock.yaml (0.00s)
+        suppress_test.go:196: suppressed 11, want only SAST and secrets
+    --- FAIL: TestApply_LockfileCategories/./pnpm-lock.yaml (0.00s)
+        suppress_test.go:196: suppressed 11, want only SAST and secrets
+    --- FAIL: TestApply_LockfileCategories/services/api/pnpm-lock.yaml (0.00s)
+        suppress_test.go:196: suppressed 11, want only SAST and secrets
+    --- FAIL: TestApply_LockfileCategories/yarn.lock (0.00s)
+        suppress_test.go:196: suppressed 11, want only SAST and secrets
+    --- FAIL: TestApply_LockfileCategories/./yarn.lock (0.00s)
+        suppress_test.go:196: suppressed 11, want only SAST and secrets
+    --- FAIL: TestApply_LockfileCategories/services/api/yarn.lock (0.00s)
+        suppress_test.go:196: suppressed 11, want only SAST and secrets
+    --- FAIL: TestApply_LockfileCategories/Gemfile.lock (0.00s)
+        suppress_test.go:196: suppressed 11, want only SAST and secrets
+    --- FAIL: TestApply_LockfileCategories/./Gemfile.lock (0.00s)
+        suppress_test.go:196: suppressed 11, want only SAST and secrets
+    --- FAIL: TestApply_LockfileCategories/services/api/Gemfile.lock (0.00s)
+        suppress_test.go:196: suppressed 11, want only SAST and secrets
+    --- FAIL: TestApply_LockfileCategories/composer.lock (0.00s)
+        suppress_test.go:196: suppressed 11, want only SAST and secrets
+    --- FAIL: TestApply_LockfileCategories/./composer.lock (0.00s)
+        suppress_test.go:196: suppressed 11, want only SAST and secrets
+    --- FAIL: TestApply_LockfileCategories/services/api/composer.lock (0.00s)
+        suppress_test.go:196: suppressed 11, want only SAST and secrets
+    --- FAIL: TestApply_LockfileCategories/poetry.lock (0.00s)
+        suppress_test.go:196: suppressed 11, want only SAST and secrets
+    --- FAIL: TestApply_LockfileCategories/./poetry.lock (0.00s)
+        suppress_test.go:196: suppressed 11, want only SAST and secrets
+    --- FAIL: TestApply_LockfileCategories/services/api/poetry.lock (0.00s)
+        suppress_test.go:196: suppressed 11, want only SAST and secrets
+FAIL
+FAIL	github.com/alphabravocompany/thewolf/internal/scan/suppress	0.006s
+FAIL

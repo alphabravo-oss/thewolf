@@ -1,0 +1,26 @@
+{
+  "tasks": 233,
+  "checked": 49,
+  "D02_3_complete": true,
+  "D02_complete": false,
+  "final_go_race_packages": 136,
+  "final_go_race_exit": 0,
+  "go_lint_exit": 0,
+  "scanner_sync_exit": 0,
+  "sqlite_postgres_contracts_exit": 0,
+  "initial_full_suite_exit": 1,
+  "initial_full_suite_failure": "Recovery test fixtures did not initialize artifact storage; fixed without relaxing production publication errors.",
+  "gosec_exit": 1,
+  "gosec_high_high_findings": 29,
+  "gosec_rules": {
+    "G704": 3,
+    "G703": 25,
+    "G702": 1
+  },
+  "gosec_analysis_errors": {},
+  "fixture_removed": true,
+  "source_files": 82,
+  "ui_changed": false,
+  "deployed": false,
+  "diff_check_exit": 0
+}

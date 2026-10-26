@@ -1,0 +1,48 @@
+{
+  "tasks": 255,
+  "checked": 71,
+  "D07_5_complete": true,
+  "D07_complete": false,
+  "full_plan_complete": false,
+  "pre_fix_reproductions_exit": 1,
+  "focused_race_exit": 0,
+  "initial_full_race_packages": 136,
+  "initial_full_race_exit_captured": false,
+  "final_full_go_race_exit": 0,
+  "final_full_go_race_packages": 136,
+  "uncached": true,
+  "backends": [
+    "sqlite",
+    "postgres"
+  ],
+  "final_lint_exit": 0,
+  "final_scanner_sync_exit": 0,
+  "generated_sources_match": true,
+  "gosec_exit": 1,
+  "gosec_high_high_findings": 29,
+  "gosec_rules": {
+    "G704": 3,
+    "G703": 25,
+    "G702": 1
+  },
+  "gosec_analysis_errors": {},
+  "same_prior_security_findings": true,
+  "ui_checks_exit": 0,
+  "ui_tests": 53,
+  "ui_test_files": 11,
+  "browser_exit": 0,
+  "browser_cases": 6,
+  "browser_projects": [
+    "desktop-chromium",
+    "mobile-chromium",
+    "desktop-firefox"
+  ],
+  "browser_api_mocked": true,
+  "browser_server_removed": true,
+  "node": "26.11.1",
+  "pnpm": "12.11.2",
+  "fixture_removed": true,
+  "source_files": 324,
+  "documentation_links_valid": true,
+  "deployed": false
+}

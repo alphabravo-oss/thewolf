@@ -1,0 +1,5 @@
+--- FAIL: TestForwardedContextSurvivesInternalDispatch (0.00s)
+    proxy_test.go:88: validated transport lost on internal dispatch: IP="10.0.0.1" HTTPS=false
+FAIL
+FAIL	github.com/alphabravocompany/thewolf/internal/api/middleware	0.004s
+FAIL

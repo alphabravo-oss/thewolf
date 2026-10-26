@@ -1,0 +1,2 @@
+ok  	github.com/alphabravocompany/thewolf/internal/fix/console	1.778s
+ok  	github.com/alphabravocompany/thewolf/internal/fix/worker	4.438s

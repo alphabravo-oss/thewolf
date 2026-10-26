@@ -1,0 +1,86 @@
+=== RUN   TestRecoveryEvidenceDeletionSQLite
+--- PASS: TestRecoveryEvidenceDeletionSQLite (0.20s)
+=== RUN   TestRecoveryEvidenceDeletionPostgres
+--- PASS: TestRecoveryEvidenceDeletionPostgres (2.07s)
+PASS
+ok  	github.com/alphabravocompany/thewolf/internal/db	3.322s
+=== RUN   TestWorkerRetainsWorkspaceAfterRetryableStaleReclaim
+12:15PM INF scan worker started backend=docker capacity=1 component=scan-worker once=true worker_id=thewolf-dev-1-mj-2677629
+12:15PM INF claimed scan attempt=2 component=scan-worker scan_id=d2108dcc-9baf-44e2-995c-e64cbeb782f0 slot=0 worker_id=thewolf-dev-1-mj-2677629
+12:15PM INF scan executor returned attempt=2 component=scan-worker scan_id=d2108dcc-9baf-44e2-995c-e64cbeb782f0 slot=0 worker_id=thewolf-dev-1-mj-2677629
+--- PASS: TestWorkerRetainsWorkspaceAfterRetryableStaleReclaim (0.21s)
+=== RUN   TestWorkerReclaimRetainsWorkspaceHeldByPriorExecutor
+12:15PM INF scan worker started backend=docker capacity=1 component=scan-worker once=true worker_id=thewolf-dev-1-mj-2677629
+12:15PM INF claimed scan attempt=2 component=scan-worker scan_id=34893f56-984c-4324-99d7-6a526062f859 slot=0 worker_id=thewolf-dev-1-mj-2677629
+12:15PM INF scan executor returned attempt=2 component=scan-worker scan_id=34893f56-984c-4324-99d7-6a526062f859 slot=0 worker_id=thewolf-dev-1-mj-2677629
+--- PASS: TestWorkerReclaimRetainsWorkspaceHeldByPriorExecutor (0.20s)
+=== RUN   TestWorkerReclaimRetainsUnheldRetrySourceAndCleansExhaustedSource
+=== RUN   TestWorkerReclaimRetainsUnheldRetrySourceAndCleansExhaustedSource/retryable
+=== RUN   TestWorkerReclaimRetainsUnheldRetrySourceAndCleansExhaustedSource/exhausted
+--- PASS: TestWorkerReclaimRetainsUnheldRetrySourceAndCleansExhaustedSource (0.39s)
+    --- PASS: TestWorkerReclaimRetainsUnheldRetrySourceAndCleansExhaustedSource/retryable (0.19s)
+    --- PASS: TestWorkerReclaimRetainsUnheldRetrySourceAndCleansExhaustedSource/exhausted (0.19s)
+PASS
+ok  	github.com/alphabravocompany/thewolf/internal/scanjob	1.819s
+=== RUN   TestGitPreparationAndRetainedWorkspaceHaveSameContentIdentity
+--- PASS: TestGitPreparationAndRetainedWorkspaceHaveSameContentIdentity (0.24s)
+=== RUN   TestGitHubPreparationRecordsRetainableContentIdentity
+--- PASS: TestGitHubPreparationRecordsRetainableContentIdentity (0.02s)
+PASS
+ok  	github.com/alphabravocompany/thewolf/internal/scantarget	1.303s
+=== RUN   TestExecuteQueuedScanDoesNotReplaceFailedRetainedSource
+=== RUN   TestExecuteQueuedScanDoesNotReplaceFailedRetainedSource/broken-git
+12:15PM INF scan starting branch=main component=scan repo_id=848ac94b-a34c-43d5-86f5-0b76de4fc786 scan_id=40600ea2-1132-4682-b3fd-0231687cd8cc
+=== RUN   TestExecuteQueuedScanDoesNotReplaceFailedRetainedSource/missing
+12:15PM INF scan starting branch=main component=scan repo_id=c32cbac8-ced6-4f49-af37-7b6fe3f2cbf2 scan_id=889826ed-7f59-457e-a61d-78c2901a440b
+=== RUN   TestExecuteQueuedScanDoesNotReplaceFailedRetainedSource/file
+12:15PM INF scan starting branch=main component=scan repo_id=e6699ed3-89ec-4d97-b787-3f1c02bd6a3a scan_id=03454f10-470b-4014-9c82-40970a90e8eb
+--- PASS: TestExecuteQueuedScanDoesNotReplaceFailedRetainedSource (0.57s)
+    --- PASS: TestExecuteQueuedScanDoesNotReplaceFailedRetainedSource/broken-git (0.20s)
+    --- PASS: TestExecuteQueuedScanDoesNotReplaceFailedRetainedSource/missing (0.19s)
+    --- PASS: TestExecuteQueuedScanDoesNotReplaceFailedRetainedSource/file (0.18s)
+=== RUN   TestExecuteQueuedScanRecoveryPreservesSourceAndEvidence
+=== RUN   TestExecuteQueuedScanRecoveryPreservesSourceAndEvidence/changed
+12:15PM INF scan starting branch=main component=scan repo_id=31a73c09-b712-4fea-90ed-833777322d12 scan_id=6350569a-631b-4bd4-9aad-2bceca55f395
+=== RUN   TestExecuteQueuedScanRecoveryPreservesSourceAndEvidence/missing-identity
+12:15PM INF scan starting branch=main component=scan repo_id=13ca197e-413c-422b-8500-cc588858d67c scan_id=8c4c3c29-5f19-4e3b-bf02-8349e596386e
+=== RUN   TestExecuteQueuedScanRecoveryPreservesSourceAndEvidence/legacy-identity
+12:15PM INF scan starting branch=main component=scan repo_id=ae7c5c99-e09c-401a-9ef7-6212b917890e scan_id=c69bdff5-a086-4284-88a2-2bcd7c2613e4
+=== RUN   TestExecuteQueuedScanRecoveryPreservesSourceAndEvidence/unchanged
+12:15PM INF scan starting branch=main component=scan repo_id=61cc817d-6b1b-4574-a4f0-331fc2b3a766 scan_id=d5edcc2b-5370-4d57-9994-4125d400ed13
+12:15PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=d5edcc2b-5370-4d57-9994-4125d400ed13
+12:15PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+12:15PM INF tools selected for scan component=runner count=1 tools=["resume-pending"]
+12:15PM INF tools selected component=scan count=1 scan_id=d5edcc2b-5370-4d57-9994-4125d400ed13 tools=["resume-pending"]
+12:15PM INF tool starting component=runner resource_class=medium tool=resume-pending
+12:15PM INF tool completed component=runner elapsed=1.790039 findings=0 tool=resume-pending
+12:15PM INF tool completed component=scan findings=0 scan_id=d5edcc2b-5370-4d57-9994-4125d400ed13 tool=resume-pending
+12:15PM INF scan run complete component=runner elapsed=9.740167 findings=0 tools_failed=0 tools_run=1 tools_skipped=0
+12:15PM INF scan run finished component=scan scan_id=d5edcc2b-5370-4d57-9994-4125d400ed13 status=completed
+12:15PM INF Enrichment: completed in background findings=1
+12:15PM INF artifact bundle written component=scan findings_json=/tmp/wolf-scans/001_20261023-121555_d5edcc2b/findings.json manifest=/tmp/wolf-scans/001_20261023-121555_d5edcc2b/manifest.json scan_id=d5edcc2b-5370-4d57-9994-4125d400ed13
+12:15PM INF quality gate evaluated component=scan gate_status=fail scan_id=d5edcc2b-5370-4d57-9994-4125d400ed13
+12:15PM INF scan complete — all tools finished component=scan findings=1 scan_id=d5edcc2b-5370-4d57-9994-4125d400ed13 status=completed
+=== RUN   TestExecuteQueuedScanRecoveryPreservesSourceAndEvidence/ssh-archive
+12:15PM INF scan starting branch=main component=scan repo_id=b439334b-43e5-4492-aa37-aacd7cfb0c21 scan_id=3866c895-1351-45f2-ad0f-9199cbcfd98b
+12:15PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=3866c895-1351-45f2-ad0f-9199cbcfd98b
+12:15PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+12:15PM INF tools selected for scan component=runner count=1 tools=["resume-pending"]
+12:15PM INF tools selected component=scan count=1 scan_id=3866c895-1351-45f2-ad0f-9199cbcfd98b tools=["resume-pending"]
+12:15PM INF tool starting component=runner resource_class=medium tool=resume-pending
+12:15PM INF tool completed component=runner elapsed=0.772955 findings=0 tool=resume-pending
+12:15PM INF tool completed component=scan findings=0 scan_id=3866c895-1351-45f2-ad0f-9199cbcfd98b tool=resume-pending
+12:15PM INF scan run complete component=runner elapsed=4.332616 findings=0 tools_failed=0 tools_run=1 tools_skipped=0
+12:15PM INF scan run finished component=scan scan_id=3866c895-1351-45f2-ad0f-9199cbcfd98b status=completed
+12:15PM INF Enrichment: completed in background findings=1
+12:15PM INF artifact bundle written component=scan findings_json=/tmp/wolf-scans/001_20261023-121555_3866c895/findings.json manifest=/tmp/wolf-scans/001_20261023-121555_3866c895/manifest.json scan_id=3866c895-1351-45f2-ad0f-9199cbcfd98b
+12:15PM INF quality gate evaluated component=scan gate_status=fail scan_id=3866c895-1351-45f2-ad0f-9199cbcfd98b
+12:15PM INF scan complete — all tools finished component=scan findings=1 scan_id=3866c895-1351-45f2-ad0f-9199cbcfd98b status=completed
+--- PASS: TestExecuteQueuedScanRecoveryPreservesSourceAndEvidence (1.17s)
+    --- PASS: TestExecuteQueuedScanRecoveryPreservesSourceAndEvidence/changed (0.18s)
+    --- PASS: TestExecuteQueuedScanRecoveryPreservesSourceAndEvidence/missing-identity (0.20s)
+    --- PASS: TestExecuteQueuedScanRecoveryPreservesSourceAndEvidence/legacy-identity (0.21s)
+    --- PASS: TestExecuteQueuedScanRecoveryPreservesSourceAndEvidence/unchanged (0.29s)
+    --- PASS: TestExecuteQueuedScanRecoveryPreservesSourceAndEvidence/ssh-archive (0.29s)
+PASS
+ok  	github.com/alphabravocompany/thewolf/internal/api/routes	2.834s

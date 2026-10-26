@@ -1,0 +1,7 @@
+{
+  "command": "WOLF_TRUSTED_PROXIES=192.0.2.5/32 docker compose config --format json",
+  "exit_code": 0,
+  "api_environment_pass_through": true,
+  "service": "wolf",
+  "deployed": false
+}

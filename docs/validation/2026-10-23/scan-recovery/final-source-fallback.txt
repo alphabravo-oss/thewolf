@@ -1,0 +1,4 @@
+ok  	github.com/alphabravocompany/thewolf/internal/api/routes	53.539s
+ok  	github.com/alphabravocompany/thewolf/internal/scannerbuild	1.524s
+ok  	github.com/alphabravocompany/thewolf/internal/scannertools/manifest	1.680s
+ok  	github.com/alphabravocompany/thewolf/internal/scannertools/lock	2.024s

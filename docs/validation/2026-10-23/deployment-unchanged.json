@@ -1,0 +1,23 @@
+{
+  "verified_at": "2026-10-23T08:46:11.306201+00:00",
+  "services": [
+    {
+      "name": "thewolf-wolf-1",
+      "image_id": "sha256:3fa26810ffce36705f843714d13bd70a0cc55db49c04867aa2c4dee52c128dcf",
+      "started_at": "2026-10-13T06:43:15.001321961Z",
+      "health": "healthy"
+    },
+    {
+      "name": "thewolf-scan-worker-1",
+      "image_id": "sha256:3fa26810ffce36705f843714d13bd70a0cc55db49c04867aa2c4dee52c128dcf",
+      "started_at": "2026-10-13T06:43:20.696831959Z",
+      "health": "healthy"
+    },
+    {
+      "name": "thewolf-fixer-1",
+      "image_id": "sha256:a643bcb30cf6752e799a99e4bdc099181ace89adb19c7311da9d28712f8eb540",
+      "started_at": "2026-10-13T05:24:19.943518969Z",
+      "health": "not-configured"
+    }
+  ]
+}

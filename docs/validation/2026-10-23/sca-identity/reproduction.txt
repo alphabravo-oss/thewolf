@@ -1,0 +1,5 @@
+--- FAIL: TestDeduplicateSCAPackageAndLocation (0.00s)
+    runner_corroboration_test.go:153: different dependency occurrences collapsed: got 1, want 3
+FAIL
+FAIL	github.com/alphabravocompany/thewolf/internal/scan/runner	0.005s
+FAIL

@@ -1,0 +1,26 @@
+bash scanners/ci/test-build-cache.sh
+installer cache isolation and checksum inputs OK
+==> Checking generated scanner tool docs...
+go run ./cmd/scannertools docs --check
+scanner docs OK
+==> Checking locked scanner OS package snapshot...
+go run ./cmd/scannertools os-packages --check
+OS package lock current: 6 variants, 112 platform package pins, snapshot 20261012T120000Z, sha256:81e5468f383cbcc4bf9c66c49ba3bd9dabe4bbc7d5e85331ca28de4eed769127
+==> Checking locked Trivy vulnerability database identities...
+go run ./cmd/scannertools vulnerability-dbs --check
+ghcr.io/aquasecurity/trivy-db@sha256:9e699fbea6a733d2f93b1c8a1b70a9fbcd19f8c4aef9baab8bc140d98309858d valid through 2026-10-31T07:50:12Z
+ghcr.io/aquasecurity/trivy-java-db@sha256:d491eedaab0eb05ffd4eb1a0d90c97112d0f92836ffa9903be15a5f3543c6cfc valid through 2026-10-31T07:50:12Z
+==> Checking embedded scanner/fixer build context...
+go run ./internal/scannerbuild/cmd/synccontext --check
+==> Validating deterministic scanner quality policy and corpus...
+go run ./cmd/scannertools quality
+scanner quality OK: 53 tools, 23 families, 53/53 hostile/valid parser adapters, 4 scanner and 4 fixer platform tuples
+==> Validating scanner metadata...
+go run ./cmd/scannertools validate
+scanner metadata OK: 53 tools (21 default, 7 bucket, 25 upstream), 51 version pins
+bash deploy/helm/wolf/tests/render-security.sh
+==> Linting /root/wolf-all/thewolf/deploy/helm/wolf
+[INFO] Chart.yaml: icon is recommended
+
+1 chart(s) linted, 0 chart(s) failed
+Helm security render checks passed

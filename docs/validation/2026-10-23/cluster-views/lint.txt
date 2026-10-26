@@ -1,0 +1,6 @@
+internal/api/routes/scans.go:1665:2: SA4006: this value of scan is never used (staticcheck)
+	scan, ok := loadScanForCaller(w, r, h.Store, scanID, claims)
+	^
+1 issues:
+* staticcheck: 1
+exit status 1

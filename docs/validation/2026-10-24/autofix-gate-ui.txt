@@ -1,0 +1,11 @@
+$ vitest run
+
+ RUN  v5.0.4 /root/wolf-all/thewolf/ui
+
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+
+ Test Files  13 passed (13)
+      Tests  55 passed (55)
+   Start at  02:36:24
+   Duration  1.78s (environment 65%, tests 12%, setup 11%, import 9%, transform 3%, worker 1%)
+

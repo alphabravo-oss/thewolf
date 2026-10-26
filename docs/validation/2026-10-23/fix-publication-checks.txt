@@ -1,0 +1,4 @@
+ok  	github.com/alphabravocompany/thewolf/internal/fix/orchestrator	0.039s
+ok  	github.com/alphabravocompany/thewolf/internal/fix/verify	0.003s [no tests to run]
+ok  	github.com/alphabravocompany/thewolf/internal/fix/wiring	0.011s
+ok  	github.com/alphabravocompany/thewolf/internal/api/routes	4.922s

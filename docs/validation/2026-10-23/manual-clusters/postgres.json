@@ -1,0 +1,20 @@
+{
+  "name": "wolf-plan-manual-clusters-pg-20261023",
+  "id": "65932dc70bce59e71b61884e17ed05148e561a0bd4827251b1aa1f362e256d99",
+  "image_reference": "postgres@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873",
+  "image_id": "sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873",
+  "ports": {
+    "5432/tcp": [
+      {
+        "HostIp": "127.0.0.1",
+        "HostPort": "32785"
+      }
+    ]
+  },
+  "created": "2026-10-23T14:09:47.091019946Z",
+  "purpose": "Owned isolated PostgreSQL test fixture; production containers untouched",
+  "removed": true,
+  "anonymous_volumes_removed": true,
+  "absence_verified": true,
+  "removed_at": "2026-10-23T14:22:14.029358+00:00"
+}

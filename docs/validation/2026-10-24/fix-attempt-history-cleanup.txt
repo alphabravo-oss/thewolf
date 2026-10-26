@@ -1,0 +1,61 @@
+=== RUN   TestFixAttemptFinalizationIsAtomic
+=== RUN   TestFixAttemptFinalizationIsAtomic/sqlite
+=== RUN   TestFixAttemptFinalizationIsAtomic/postgres
+--- PASS: TestFixAttemptFinalizationIsAtomic (1.37s)
+    --- PASS: TestFixAttemptFinalizationIsAtomic/sqlite (0.22s)
+    --- PASS: TestFixAttemptFinalizationIsAtomic/postgres (1.15s)
+=== RUN   TestFixCancellationRetainsOwnershipUntilCleanup
+=== RUN   TestFixCancellationRetainsOwnershipUntilCleanup/sqlite
+=== RUN   TestFixCancellationRetainsOwnershipUntilCleanup/postgres
+--- PASS: TestFixCancellationRetainsOwnershipUntilCleanup (1.27s)
+    --- PASS: TestFixCancellationRetainsOwnershipUntilCleanup/sqlite (0.34s)
+    --- PASS: TestFixCancellationRetainsOwnershipUntilCleanup/postgres (0.93s)
+=== RUN   TestFixAttemptRoundTrip
+--- PASS: TestFixAttemptRoundTrip (0.23s)
+PASS
+ok  	github.com/alphabravocompany/thewolf/internal/db	3.908s
+=== RUN   TestWorkerPublicationCleanup
+=== RUN   TestWorkerPublicationCleanup/removed-before-ack
+=== RUN   TestWorkerPublicationCleanup/cleanup-failed
+=== RUN   TestWorkerPublicationCleanup/pr-failed
+--- PASS: TestWorkerPublicationCleanup (0.72s)
+    --- PASS: TestWorkerPublicationCleanup/removed-before-ack (0.26s)
+    --- PASS: TestWorkerPublicationCleanup/cleanup-failed (0.22s)
+    --- PASS: TestWorkerPublicationCleanup/pr-failed (0.24s)
+=== RUN   TestWorkerOnceClaimsRunsStreamsAndStoresDiff
+2:25AM INF fix worker started component=fixer once=true worker=thewolf-dev-1-mj-3659142
+2:25AM INF claimed job component=fixer job=38025ace-7c25-419a-9391-c6784b9f8a7f repo=r1 worker=thewolf-dev-1-mj-3659142
+2:25AM INF job complete component=fixer job=38025ace-7c25-419a-9391-c6784b9f8a7f status=succeeded worker=thewolf-dev-1-mj-3659142
+2:25AM INF --once: one job processed; exiting component=fixer job=38025ace-7c25-419a-9391-c6784b9f8a7f worker=thewolf-dev-1-mj-3659142
+--- PASS: TestWorkerOnceClaimsRunsStreamsAndStoresDiff (0.47s)
+=== RUN   TestWorkerOnceEmptyQueueExits
+2:25AM INF fix worker started component=fixer once=true worker=thewolf-dev-1-mj-3659142
+2:25AM INF queue empty; --once exiting component=fixer worker=thewolf-dev-1-mj-3659142
+--- PASS: TestWorkerOnceEmptyQueueExits (0.43s)
+=== RUN   TestWorkerRecordsFailure
+2:25AM INF fix worker started component=fixer once=true worker=thewolf-dev-1-mj-3659142
+2:25AM INF claimed job component=fixer job=e0530633-0139-400d-a34c-6d4078998711 repo=r1 worker=thewolf-dev-1-mj-3659142
+2:25AM WRN job failed error="context deadline exceeded" component=fixer job=e0530633-0139-400d-a34c-6d4078998711 worker=thewolf-dev-1-mj-3659142
+2:25AM INF --once: one job processed; exiting component=fixer job=e0530633-0139-400d-a34c-6d4078998711 worker=thewolf-dev-1-mj-3659142
+--- PASS: TestWorkerRecordsFailure (0.46s)
+=== RUN   TestWorkerOnceRunsQueuedConsole
+2:25AM INF fix worker started component=fixer once=true worker=thewolf-dev-1-mj-3659142
+2:25AM INF claimed console component=fixer console=4401fce0-88b6-4c17-b83f-5d6505dbebc8 engine= kind=shell worker=thewolf-dev-1-mj-3659142
+2:25AM INF --once: one console processed; exiting component=fixer console=4401fce0-88b6-4c17-b83f-5d6505dbebc8 worker=thewolf-dev-1-mj-3659142
+--- PASS: TestWorkerOnceRunsQueuedConsole (0.69s)
+=== RUN   TestWorkerSkipsPreCancelledJob
+--- PASS: TestWorkerSkipsPreCancelledJob (0.23s)
+=== RUN   TestWorkerStopsLostClaimWithoutOverwritingReplacement
+=== RUN   TestWorkerStopsLostClaimWithoutOverwritingReplacement/reclaimed
+=== RUN   TestWorkerStopsLostClaimWithoutOverwritingReplacement/cancelled
+--- PASS: TestWorkerStopsLostClaimWithoutOverwritingReplacement (0.46s)
+    --- PASS: TestWorkerStopsLostClaimWithoutOverwritingReplacement/reclaimed (0.21s)
+    --- PASS: TestWorkerStopsLostClaimWithoutOverwritingReplacement/cancelled (0.24s)
+=== RUN   TestWorkerAcknowledgesCancellationAfterEngineStops
+=== RUN   TestWorkerAcknowledgesCancellationAfterEngineStops/during-run
+=== RUN   TestWorkerAcknowledgesCancellationAfterEngineStops/before-run
+--- PASS: TestWorkerAcknowledgesCancellationAfterEngineStops (0.45s)
+    --- PASS: TestWorkerAcknowledgesCancellationAfterEngineStops/during-run (0.22s)
+    --- PASS: TestWorkerAcknowledgesCancellationAfterEngineStops/before-run (0.23s)
+PASS
+ok  	github.com/alphabravocompany/thewolf/internal/fix/worker	4.959s

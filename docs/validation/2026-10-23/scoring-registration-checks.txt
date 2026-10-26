@@ -1,0 +1,3 @@
+ok  	github.com/alphabravocompany/thewolf/internal/ai	1.012s
+ok  	github.com/alphabravocompany/thewolf/internal/scan/scorer	1.024s
+ok  	github.com/alphabravocompany/thewolf/internal/api/routes	43.388s

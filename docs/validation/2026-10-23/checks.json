@@ -1,0 +1,121 @@
+{
+  "captured_at": "2026-10-23T08:49:16.508638+00:00",
+  "source_inventory_sha256": "20fdefb8686c519d380492a03b886f1f3a954102b8ac7f3b2f6fda309378efda",
+  "status": "Qualification pass complete; full PLAN and release approval remain open.",
+  "checks": [
+    {
+      "check": "full_go_race",
+      "exit_code": 0,
+      "raw_log_sha256": "7d229a93001dd33dc7c840dbab0cc6bc7ab4ff8ba302fdf1d6612cbdc4ff775f",
+      "command_and_limits": "README.md"
+    },
+    {
+      "check": "final_changed_packages",
+      "exit_code": 0,
+      "raw_log_sha256": "670b1875a16cd62b76be170a8ea95ba6f0af814024b8f6cf76ba6f7d3ccba2c2",
+      "command_and_limits": "README.md"
+    },
+    {
+      "check": "golangci",
+      "exit_code": 0,
+      "raw_log_sha256": "e92606b0bf483111dff0a120c315ea165821348f31365020e2468a0059095c47",
+      "command_and_limits": "README.md"
+    },
+    {
+      "check": "go_vet",
+      "exit_code": 0,
+      "raw_log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "command_and_limits": "README.md"
+    },
+    {
+      "check": "platform_checks",
+      "exit_code": 0,
+      "raw_log_sha256": "96bbc3d445430d8e5ab4f452c5c532e337d7637a88609f099eac9b8f401e75fc",
+      "command_and_limits": "README.md"
+    },
+    {
+      "check": "final_shellcheck",
+      "exit_code": 0,
+      "raw_log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "command_and_limits": "README.md"
+    },
+    {
+      "check": "ui",
+      "exit_code": 0,
+      "raw_log_sha256": "dc4447999dc01314e727a0687487b7e192ceb5f3caeb09417bceb46a3c6bfbf1",
+      "command_and_limits": "README.md"
+    },
+    {
+      "check": "browser",
+      "exit_code": 0,
+      "raw_log_sha256": "12a9885239c983e35a07a16cd8e7dcbb88bc76b468dfabff984fe740959e1b97",
+      "command_and_limits": "README.md"
+    },
+    {
+      "check": "govulncheck",
+      "exit_code": 0,
+      "raw_log_sha256": "7a45c8d8cb91f729377654efcab3c4767caf8dfaba623819508b1f35816986d7",
+      "command_and_limits": "README.md"
+    },
+    {
+      "check": "gitleaks_history",
+      "exit_code": 0,
+      "raw_log_sha256": "8b0dbbce44fed75dcec389ddfa093ef90d9cc62969f66d53c937d06572c19467",
+      "command_and_limits": "README.md"
+    },
+    {
+      "check": "gitleaks_evidence",
+      "exit_code": 0,
+      "raw_log_sha256": "f668c481c76299f778681c9883b0f62fe74adeccda2c86f679d0e4bc203d8f98",
+      "command_and_limits": "README.md"
+    },
+    {
+      "check": "gosec",
+      "exit_code": 1,
+      "raw_log_sha256": "56b71beeaa81debc211547ab11cdf7989cc3bdeb3a8d35b1e8564fa3618afd08",
+      "command_and_limits": "README.md"
+    },
+    {
+      "check": "runtime_image_security",
+      "exit_code": 0,
+      "raw_log_sha256": "c41643ff3b5009d5767a88732e6a1f86eba026e31107c41f9869d84f98124c01",
+      "command_and_limits": "README.md"
+    },
+    {
+      "check": "expired_exception_policy",
+      "exit_code": 1,
+      "raw_log_sha256": "c48476f75d439bca3b53a8a0abb373709293edf45321ef0b24f896229747f427",
+      "command_and_limits": "README.md"
+    },
+    {
+      "check": "runtime_build",
+      "exit_code": 0,
+      "raw_log_sha256": "0b39bbc92cb41addaca75fda81e26a2ad4e3b293d1b0bb289f647ef3e2adb148",
+      "command_and_limits": "README.md"
+    },
+    {
+      "check": "default_scanner_build",
+      "exit_code": 0,
+      "raw_log_sha256": "e0dabb7d6dc0b19e7628cfa86a864f7b82774b125d49c4f116440150c2a09c16",
+      "command_and_limits": "README.md"
+    },
+    {
+      "check": "fixer_base_build",
+      "exit_code": 0,
+      "raw_log_sha256": "d8f718953d56331b7fa52e932d126c16426105acdbc65b063d0729e32646b224",
+      "command_and_limits": "README.md"
+    },
+    {
+      "check": "combined_fixer_build",
+      "exit_code": 0,
+      "raw_log_sha256": "5add395e9e83350d3b67cdb2f0a89e174cf0ec3d19a28638d0a07daec95378ef",
+      "command_and_limits": "README.md"
+    },
+    {
+      "check": "combined_fixer_smoke",
+      "exit_code": 0,
+      "raw_log_sha256": "05a120ed626749444e928ddd41d3e3bb30ecf12fb38a48926367ced7805cb0d8",
+      "command_and_limits": "README.md"
+    }
+  ]
+}

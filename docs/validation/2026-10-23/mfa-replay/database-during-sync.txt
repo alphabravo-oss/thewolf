@@ -1,0 +1,14 @@
+# github.com/alphabravocompany/thewolf/internal/scannerbuild
+internal/scannerbuild/embed.go:24:5: embed context/_wolf-source/cmd/wolf/backup.go: open internal/scannerbuild/context/_wolf-source/cmd/wolf/backup.go: no such file or directory
+internal/scannerbuild/embed.go:24:5: embed context/_wolf-source/cmd/wolf/fixer.go: open internal/scannerbuild/context/_wolf-source/cmd/wolf/fixer.go: no such file or directory
+internal/scannerbuild/embed.go:24:5: embed context/_wolf-source/cmd/wolf/fixer_qualification.go: open internal/scannerbuild/context/_wolf-source/cmd/wolf/fixer_qualification.go: no such file or directory
+internal/scannerbuild/embed.go:24:5: embed context/_wolf-source/cmd/wolf/init.go: open internal/scannerbuild/context/_wolf-source/cmd/wolf/init.go: no such file or directory
+internal/scannerbuild/embed.go:24:5: embed context/_wolf-source/cmd/wolf/main.go: open internal/scannerbuild/context/_wolf-source/cmd/wolf/main.go: no such file or directory
+internal/scannerbuild/embed.go:24:5: embed context/_wolf-source/cmd/wolf/scan_worker.go: open internal/scannerbuild/context/_wolf-source/cmd/wolf/scan_worker.go: no such file or directory
+internal/scannerbuild/embed.go:24:5: embed context/_wolf-source/cmd/wolf/scanner_custom_build_worker.go: open internal/scannerbuild/context/_wolf-source/cmd/wolf/scanner_custom_build_worker.go: no such file or directory
+internal/scannerbuild/embed.go:24:5: embed context/_wolf-source/cmd/wolf/scanner_job.go: open internal/scannerbuild/context/_wolf-source/cmd/wolf/scanner_job.go: no such file or directory
+internal/scannerbuild/embed.go:24:5: embed context/_wolf-source/cmd/wolf/scanner_proposal_executor.go: open internal/scannerbuild/context/_wolf-source/cmd/wolf/scanner_proposal_executor.go: no such file or directory
+internal/scannerbuild/embed.go:24:5: embed context/_wolf-source/cmd/wolf/scanner_registry_factory.go: open internal/scannerbuild/context/_wolf-source/cmd/wolf/scanner_registry_factory.go: no such file or directory
+internal/scannerbuild/embed.go:24:5: too many errors
+FAIL	github.com/alphabravocompany/thewolf/internal/db [build failed]
+FAIL

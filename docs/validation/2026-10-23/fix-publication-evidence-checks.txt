@@ -1,0 +1,3 @@
+ok  	github.com/alphabravocompany/thewolf/internal/fix/orchestrator	0.239s
+ok  	github.com/alphabravocompany/thewolf/internal/fix/pr	0.012s
+ok  	github.com/alphabravocompany/thewolf/internal/fix/wiring	0.007s

@@ -1,0 +1,5 @@
+--- FAIL: TestPersistBaselineState (0.21s)
+    scans_baseline_test.go:136: resurfaced f5 lost original introduction: state="resurfaced" introduced="s3"
+FAIL
+FAIL	github.com/alphabravocompany/thewolf/internal/api/routes	0.217s
+FAIL

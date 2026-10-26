@@ -1,0 +1,8 @@
+ok  	github.com/alphabravocompany/thewolf/internal/finding/knowledge	1.012s
+--- FAIL: TestFixHighRetainsSupportedToolsAndUnknownRules (0.00s)
+    fix_doc_test.go:28: missing guidance for checkov: harden-iac
+FAIL
+FAIL	github.com/alphabravocompany/thewolf/internal/scan/report	0.074s
+ok  	github.com/alphabravocompany/thewolf/internal/scan/scorer	1.016s
+ok  	github.com/alphabravocompany/thewolf/internal/ai	1.013s
+FAIL

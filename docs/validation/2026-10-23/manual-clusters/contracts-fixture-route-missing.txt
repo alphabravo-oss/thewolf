@@ -1,0 +1,195 @@
+ok  	github.com/alphabravocompany/thewolf/internal/db	3.155s
+2:13PM INF scan starting branch=main component=scan repo_id=c0e47616-f834-4bd9-b39b-01d293e70f11 scan_id=e97abc93-b403-474b-a219-90bb750f3bd5
+2:13PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=e97abc93-b403-474b-a219-90bb750f3bd5
+2:13PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+2:13PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+2:13PM INF tools selected component=scan count=2 scan_id=e97abc93-b403-474b-a219-90bb750f3bd5 tools=["cluster-a","cluster-b"]
+2:13PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+2:13PM INF tool completed component=runner elapsed=1.335815 findings=1 tool=cluster-a
+2:13PM INF tool completed component=scan findings=1 scan_id=e97abc93-b403-474b-a219-90bb750f3bd5 tool=cluster-a
+2:13PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+2:13PM INF tool completed component=runner elapsed=1.234624 findings=1 tool=cluster-b
+2:13PM INF tool completed component=scan findings=1 scan_id=e97abc93-b403-474b-a219-90bb750f3bd5 tool=cluster-b
+2:13PM INF scan run complete component=runner elapsed=12.237861 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+2:13PM INF scan run finished component=scan scan_id=e97abc93-b403-474b-a219-90bb750f3bd5 status=completed
+2:13PM INF artifact bundle written component=scan findings_json=/tmp/TestScanFinalizationKeepsPersistedIdentityAndEnrichmentsqlitef3770229492/001/002_20261023-141316_e97abc93/findings.json manifest=/tmp/TestScanFinalizationKeepsPersistedIdentityAndEnrichmentsqlitef3770229492/001/002_20261023-141316_e97abc93/manifest.json scan_id=e97abc93-b403-474b-a219-90bb750f3bd5
+2:13PM INF quality gate evaluated component=scan gate_status=fail scan_id=e97abc93-b403-474b-a219-90bb750f3bd5
+2:13PM INF scan complete — all tools finished component=scan findings=1 scan_id=e97abc93-b403-474b-a219-90bb750f3bd5 status=completed
+2:13PM INF scan starting branch=main component=scan repo_id=dfec3a25-6070-46d8-998f-acd1c18eaa7b scan_id=ce3f2494-6ec6-4036-b131-8c2324dec8e1
+2:13PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=ce3f2494-6ec6-4036-b131-8c2324dec8e1
+2:13PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+2:13PM INF tools selected for scan component=runner count=1 tools=["cluster-b"]
+2:13PM INF tools selected component=scan count=1 scan_id=ce3f2494-6ec6-4036-b131-8c2324dec8e1 tools=["cluster-b"]
+2:13PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+2:13PM INF tool completed component=runner elapsed=0.915003 findings=1 tool=cluster-b
+2:13PM INF tool completed component=scan findings=1 scan_id=ce3f2494-6ec6-4036-b131-8c2324dec8e1 tool=cluster-b
+2:13PM INF scan run complete component=runner elapsed=6.985752 findings=1 tools_failed=0 tools_run=1 tools_skipped=0
+2:13PM INF scan run finished component=scan scan_id=ce3f2494-6ec6-4036-b131-8c2324dec8e1 status=completed
+2:13PM INF artifact bundle written component=scan findings_json=/tmp/TestScanFinalizationKeepsPersistedIdentityAndEnrichmentsqliter1019713343/001/002_20261023-141316_ce3f2494/findings.json manifest=/tmp/TestScanFinalizationKeepsPersistedIdentityAndEnrichmentsqliter1019713343/001/002_20261023-141316_ce3f2494/manifest.json scan_id=ce3f2494-6ec6-4036-b131-8c2324dec8e1
+2:13PM INF quality gate evaluated component=scan gate_status=fail scan_id=ce3f2494-6ec6-4036-b131-8c2324dec8e1
+2:13PM INF scan complete — all tools finished component=scan findings=1 scan_id=ce3f2494-6ec6-4036-b131-8c2324dec8e1 status=completed
+2:13PM INF scan starting branch=main component=scan repo_id=e88787bc-f4cc-48c7-94bb-82052e8a32a5 scan_id=0a619610-6b95-4ca4-a594-d083acaa6a58
+2:13PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=0a619610-6b95-4ca4-a594-d083acaa6a58
+2:13PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+2:13PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+2:13PM INF tools selected component=scan count=2 scan_id=0a619610-6b95-4ca4-a594-d083acaa6a58 tools=["cluster-a","cluster-b"]
+2:13PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+2:13PM INF tool completed component=runner elapsed=1.133323 findings=1 tool=cluster-a
+2:13PM INF tool completed component=scan findings=1 scan_id=0a619610-6b95-4ca4-a594-d083acaa6a58 tool=cluster-a
+2:13PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+2:13PM INF tool completed component=runner elapsed=0.993039 findings=1 tool=cluster-b
+2:13PM INF tool completed component=scan findings=1 scan_id=0a619610-6b95-4ca4-a594-d083acaa6a58 tool=cluster-b
+2:13PM ERR failed to persist tool findings error="fixture persistence failure" component=scan scan_id=0a619610-6b95-4ca4-a594-d083acaa6a58 tool=cluster-b
+2:13PM INF scan run complete component=runner elapsed=10.251272 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+2:13PM ERR scan run failed error="persist cluster-b findings: fixture persistence failure" component=scan scan_id=0a619610-6b95-4ca4-a594-d083acaa6a58
+2:13PM INF artifact bundle written component=scan findings_json=/tmp/TestScanFinalizationKeepsPersistedIdentityAndEnrichmentsqlitei1178725721/001/002_20261023-141316_0a619610/findings.json manifest=/tmp/TestScanFinalizationKeepsPersistedIdentityAndEnrichmentsqlitei1178725721/001/002_20261023-141316_0a619610/manifest.json scan_id=0a619610-6b95-4ca4-a594-d083acaa6a58
+2:13PM INF quality gate evaluated component=scan gate_status=incomplete scan_id=0a619610-6b95-4ca4-a594-d083acaa6a58
+2:13PM INF scan complete — all tools finished component=scan findings=1 scan_id=0a619610-6b95-4ca4-a594-d083acaa6a58 status=failed
+2:13PM INF scan starting branch=main component=scan repo_id=5aa6e494-267e-4d54-8024-622845a50a55 scan_id=5bea785c-a87c-43a8-b514-373903bd8110
+2:13PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=5bea785c-a87c-43a8-b514-373903bd8110
+2:13PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+2:13PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+2:13PM INF tools selected component=scan count=2 scan_id=5bea785c-a87c-43a8-b514-373903bd8110 tools=["cluster-a","cluster-b"]
+2:13PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+2:13PM INF tool completed component=runner elapsed=0.988792 findings=1 tool=cluster-a
+2:13PM INF tool completed component=scan findings=1 scan_id=5bea785c-a87c-43a8-b514-373903bd8110 tool=cluster-a
+2:13PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+2:13PM INF tool completed component=runner elapsed=0.902689 findings=1 tool=cluster-b
+2:13PM INF tool completed component=scan findings=1 scan_id=5bea785c-a87c-43a8-b514-373903bd8110 tool=cluster-b
+2:13PM INF scan run complete component=runner elapsed=9.624761 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+2:13PM ERR scan run failed error="read persisted findings: fixture persistence failure" component=scan scan_id=5bea785c-a87c-43a8-b514-373903bd8110
+2:13PM INF artifact bundle written component=scan findings_json=/tmp/TestScanFinalizationKeepsPersistedIdentityAndEnrichmentsqliter3853779460/001/002_20261023-141317_5bea785c/findings.json manifest=/tmp/TestScanFinalizationKeepsPersistedIdentityAndEnrichmentsqliter3853779460/001/002_20261023-141317_5bea785c/manifest.json scan_id=5bea785c-a87c-43a8-b514-373903bd8110
+2:13PM WRN quality gate evaluation failed error="fixture persistence failure" component=scan scan_id=5bea785c-a87c-43a8-b514-373903bd8110
+2:13PM INF scan complete — all tools finished component=scan findings=2 scan_id=5bea785c-a87c-43a8-b514-373903bd8110 status=failed
+2:13PM INF scan starting branch=main component=scan repo_id=745b2fc8-0e9d-491e-892a-40f61873e063 scan_id=b3ddddd2-53a7-4721-9995-2e81460084c3
+2:13PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=b3ddddd2-53a7-4721-9995-2e81460084c3
+2:13PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+2:13PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+2:13PM INF tools selected component=scan count=2 scan_id=b3ddddd2-53a7-4721-9995-2e81460084c3 tools=["cluster-a","cluster-b"]
+2:13PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+2:13PM INF tool completed component=runner elapsed=0.944188 findings=1 tool=cluster-a
+2:13PM INF tool completed component=scan findings=1 scan_id=b3ddddd2-53a7-4721-9995-2e81460084c3 tool=cluster-a
+2:13PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+2:13PM INF tool completed component=runner elapsed=0.97766 findings=1 tool=cluster-b
+2:13PM INF tool completed component=scan findings=1 scan_id=b3ddddd2-53a7-4721-9995-2e81460084c3 tool=cluster-b
+2:13PM INF scan run complete component=runner elapsed=9.148615 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+2:13PM INF scan run finished component=scan scan_id=b3ddddd2-53a7-4721-9995-2e81460084c3 status=completed
+2:13PM INF artifact bundle written component=scan findings_json=/tmp/TestScanFinalizationKeepsPersistedIdentityAndEnrichmentsqliteu2844545544/001/002_20261023-141317_b3ddddd2/findings.json manifest=/tmp/TestScanFinalizationKeepsPersistedIdentityAndEnrichmentsqliteu2844545544/001/002_20261023-141317_b3ddddd2/manifest.json scan_id=b3ddddd2-53a7-4721-9995-2e81460084c3
+2:13PM INF quality gate evaluated component=scan gate_status=incomplete scan_id=b3ddddd2-53a7-4721-9995-2e81460084c3
+2:13PM INF scan complete — all tools finished component=scan findings=2 scan_id=b3ddddd2-53a7-4721-9995-2e81460084c3 status=failed
+2:13PM INF scan starting branch=main component=scan repo_id=ac2db6cd-f122-4242-a533-ef944b315a2a scan_id=99e76ce6-e323-4ed3-a436-5fa387dd0ba5
+2:13PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=99e76ce6-e323-4ed3-a436-5fa387dd0ba5
+2:13PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+2:13PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+2:13PM INF tools selected component=scan count=2 scan_id=99e76ce6-e323-4ed3-a436-5fa387dd0ba5 tools=["cluster-a","cluster-b"]
+2:13PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+2:13PM INF tool completed component=runner elapsed=2.148044 findings=1 tool=cluster-a
+2:13PM INF tool completed component=scan findings=1 scan_id=99e76ce6-e323-4ed3-a436-5fa387dd0ba5 tool=cluster-a
+2:13PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+2:13PM INF tool completed component=runner elapsed=0.797582 findings=1 tool=cluster-b
+2:13PM INF tool completed component=scan findings=1 scan_id=99e76ce6-e323-4ed3-a436-5fa387dd0ba5 tool=cluster-b
+2:13PM INF scan run complete component=runner elapsed=9.507049 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+2:13PM INF scan run finished component=scan scan_id=99e76ce6-e323-4ed3-a436-5fa387dd0ba5 status=completed
+2:13PM INF artifact bundle written component=scan findings_json=/tmp/TestScanFinalizationKeepsPersistedIdentityAndEnrichmentsqlitec2851514445/001/002_20261023-141317_99e76ce6/findings.json manifest=/tmp/TestScanFinalizationKeepsPersistedIdentityAndEnrichmentsqlitec2851514445/001/002_20261023-141317_99e76ce6/manifest.json scan_id=99e76ce6-e323-4ed3-a436-5fa387dd0ba5
+2:13PM INF quality gate evaluated component=scan gate_status=incomplete scan_id=99e76ce6-e323-4ed3-a436-5fa387dd0ba5
+2:13PM INF scan complete — all tools finished component=scan findings=1 scan_id=99e76ce6-e323-4ed3-a436-5fa387dd0ba5 status=failed
+2:13PM INF scan starting branch=main component=scan repo_id=ac35e60d-5175-476d-8b14-aafb492854a3 scan_id=9663c1e7-c835-4b25-9d3f-14733ed241a0
+2:13PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=9663c1e7-c835-4b25-9d3f-14733ed241a0
+2:13PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+2:13PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+2:13PM INF tools selected component=scan count=2 scan_id=9663c1e7-c835-4b25-9d3f-14733ed241a0 tools=["cluster-a","cluster-b"]
+2:13PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+2:13PM INF tool completed component=runner elapsed=4.254711 findings=1 tool=cluster-a
+2:13PM INF tool completed component=scan findings=1 scan_id=9663c1e7-c835-4b25-9d3f-14733ed241a0 tool=cluster-a
+2:13PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+2:13PM INF tool completed component=runner elapsed=4.299595 findings=1 tool=cluster-b
+2:13PM INF tool completed component=scan findings=1 scan_id=9663c1e7-c835-4b25-9d3f-14733ed241a0 tool=cluster-b
+2:13PM INF scan run complete component=runner elapsed=43.762815 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+2:13PM INF scan run finished component=scan scan_id=9663c1e7-c835-4b25-9d3f-14733ed241a0 status=completed
+2:13PM INF artifact bundle written component=scan findings_json=/tmp/TestScanFinalizationKeepsPersistedIdentityAndEnrichmentpostgres4259209680/001/002_20261023-141318_9663c1e7/findings.json manifest=/tmp/TestScanFinalizationKeepsPersistedIdentityAndEnrichmentpostgres4259209680/001/002_20261023-141318_9663c1e7/manifest.json scan_id=9663c1e7-c835-4b25-9d3f-14733ed241a0
+2:13PM INF quality gate evaluated component=scan gate_status=fail scan_id=9663c1e7-c835-4b25-9d3f-14733ed241a0
+2:13PM INF scan complete — all tools finished component=scan findings=1 scan_id=9663c1e7-c835-4b25-9d3f-14733ed241a0 status=completed
+2:13PM INF scan starting branch=main component=scan repo_id=66017361-aa67-4256-9daf-eceb6c427cf6 scan_id=9f8622cd-c681-4d2f-bc02-ec9b481276bf
+2:13PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=9f8622cd-c681-4d2f-bc02-ec9b481276bf
+2:13PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+2:13PM INF tools selected for scan component=runner count=1 tools=["cluster-b"]
+2:13PM INF tools selected component=scan count=1 scan_id=9f8622cd-c681-4d2f-bc02-ec9b481276bf tools=["cluster-b"]
+2:13PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+2:13PM INF tool completed component=runner elapsed=6.038439 findings=1 tool=cluster-b
+2:13PM INF tool completed component=scan findings=1 scan_id=9f8622cd-c681-4d2f-bc02-ec9b481276bf tool=cluster-b
+2:13PM INF scan run complete component=runner elapsed=33.428919 findings=1 tools_failed=0 tools_run=1 tools_skipped=0
+2:13PM INF scan run finished component=scan scan_id=9f8622cd-c681-4d2f-bc02-ec9b481276bf status=completed
+2:13PM INF artifact bundle written component=scan findings_json=/tmp/TestScanFinalizationKeepsPersistedIdentityAndEnrichmentpostgres3952509077/001/002_20261023-141320_9f8622cd/findings.json manifest=/tmp/TestScanFinalizationKeepsPersistedIdentityAndEnrichmentpostgres3952509077/001/002_20261023-141320_9f8622cd/manifest.json scan_id=9f8622cd-c681-4d2f-bc02-ec9b481276bf
+2:13PM INF quality gate evaluated component=scan gate_status=fail scan_id=9f8622cd-c681-4d2f-bc02-ec9b481276bf
+2:13PM INF scan complete — all tools finished component=scan findings=1 scan_id=9f8622cd-c681-4d2f-bc02-ec9b481276bf status=completed
+2:13PM INF scan starting branch=main component=scan repo_id=5bf0e79b-9187-4b07-a916-42bbbc2dd3b9 scan_id=3e1d1b94-2de3-463b-a08e-bcf3d0bace71
+2:13PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=3e1d1b94-2de3-463b-a08e-bcf3d0bace71
+2:13PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+2:13PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+2:13PM INF tools selected component=scan count=2 scan_id=3e1d1b94-2de3-463b-a08e-bcf3d0bace71 tools=["cluster-a","cluster-b"]
+2:13PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+2:13PM INF tool completed component=runner elapsed=4.756484 findings=1 tool=cluster-b
+2:13PM INF tool completed component=scan findings=1 scan_id=3e1d1b94-2de3-463b-a08e-bcf3d0bace71 tool=cluster-b
+2:13PM ERR failed to persist tool findings error="fixture persistence failure" component=scan scan_id=3e1d1b94-2de3-463b-a08e-bcf3d0bace71 tool=cluster-b
+2:13PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+2:13PM INF tool completed component=runner elapsed=4.463623 findings=1 tool=cluster-a
+2:13PM INF tool completed component=scan findings=1 scan_id=3e1d1b94-2de3-463b-a08e-bcf3d0bace71 tool=cluster-a
+2:13PM INF scan run complete component=runner elapsed=46.396613 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+2:13PM ERR scan run failed error="persist cluster-b findings: fixture persistence failure" component=scan scan_id=3e1d1b94-2de3-463b-a08e-bcf3d0bace71
+2:13PM INF artifact bundle written component=scan findings_json=/tmp/TestScanFinalizationKeepsPersistedIdentityAndEnrichmentpostgres1454123180/001/002_20261023-141321_3e1d1b94/findings.json manifest=/tmp/TestScanFinalizationKeepsPersistedIdentityAndEnrichmentpostgres1454123180/001/002_20261023-141321_3e1d1b94/manifest.json scan_id=3e1d1b94-2de3-463b-a08e-bcf3d0bace71
+2:13PM INF quality gate evaluated component=scan gate_status=incomplete scan_id=3e1d1b94-2de3-463b-a08e-bcf3d0bace71
+2:13PM INF scan complete — all tools finished component=scan findings=1 scan_id=3e1d1b94-2de3-463b-a08e-bcf3d0bace71 status=failed
+2:13PM INF scan starting branch=main component=scan repo_id=ebd1a17e-6e56-476a-a9c5-a67965d24d81 scan_id=756e1464-2a4f-4a7e-b28a-37a5e08d5268
+2:13PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=756e1464-2a4f-4a7e-b28a-37a5e08d5268
+2:13PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+2:13PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+2:13PM INF tools selected component=scan count=2 scan_id=756e1464-2a4f-4a7e-b28a-37a5e08d5268 tools=["cluster-a","cluster-b"]
+2:13PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+2:13PM INF tool completed component=runner elapsed=3.794133 findings=1 tool=cluster-b
+2:13PM INF tool completed component=scan findings=1 scan_id=756e1464-2a4f-4a7e-b28a-37a5e08d5268 tool=cluster-b
+2:13PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+2:13PM INF tool completed component=runner elapsed=3.732117 findings=1 tool=cluster-a
+2:13PM INF tool completed component=scan findings=1 scan_id=756e1464-2a4f-4a7e-b28a-37a5e08d5268 tool=cluster-a
+2:13PM INF scan run complete component=runner elapsed=38.292847 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+2:13PM ERR scan run failed error="read persisted findings: fixture persistence failure" component=scan scan_id=756e1464-2a4f-4a7e-b28a-37a5e08d5268
+2:13PM INF artifact bundle written component=scan findings_json=/tmp/TestScanFinalizationKeepsPersistedIdentityAndEnrichmentpostgres1442386068/001/002_20261023-141322_756e1464/findings.json manifest=/tmp/TestScanFinalizationKeepsPersistedIdentityAndEnrichmentpostgres1442386068/001/002_20261023-141322_756e1464/manifest.json scan_id=756e1464-2a4f-4a7e-b28a-37a5e08d5268
+2:13PM WRN quality gate evaluation failed error="fixture persistence failure" component=scan scan_id=756e1464-2a4f-4a7e-b28a-37a5e08d5268
+2:13PM INF scan complete — all tools finished component=scan findings=2 scan_id=756e1464-2a4f-4a7e-b28a-37a5e08d5268 status=failed
+2:13PM INF scan starting branch=main component=scan repo_id=ca039311-c502-4249-8b27-c34f3ed0cb87 scan_id=1f65ba9a-dc5e-4c92-ab5d-7b338eb90ff9
+2:13PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=1f65ba9a-dc5e-4c92-ab5d-7b338eb90ff9
+2:13PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+2:13PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+2:13PM INF tools selected component=scan count=2 scan_id=1f65ba9a-dc5e-4c92-ab5d-7b338eb90ff9 tools=["cluster-a","cluster-b"]
+2:13PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+2:13PM INF tool completed component=runner elapsed=3.876157 findings=1 tool=cluster-a
+2:13PM INF tool completed component=scan findings=1 scan_id=1f65ba9a-dc5e-4c92-ab5d-7b338eb90ff9 tool=cluster-a
+2:13PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+2:13PM INF tool completed component=runner elapsed=3.698473 findings=1 tool=cluster-b
+2:13PM INF tool completed component=scan findings=1 scan_id=1f65ba9a-dc5e-4c92-ab5d-7b338eb90ff9 tool=cluster-b
+2:13PM INF scan run complete component=runner elapsed=37.676345 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+2:13PM INF scan run finished component=scan scan_id=1f65ba9a-dc5e-4c92-ab5d-7b338eb90ff9 status=completed
+2:13PM INF artifact bundle written component=scan findings_json=/tmp/TestScanFinalizationKeepsPersistedIdentityAndEnrichmentpostgres966164430/001/002_20261023-141324_1f65ba9a/findings.json manifest=/tmp/TestScanFinalizationKeepsPersistedIdentityAndEnrichmentpostgres966164430/001/002_20261023-141324_1f65ba9a/manifest.json scan_id=1f65ba9a-dc5e-4c92-ab5d-7b338eb90ff9
+2:13PM INF quality gate evaluated component=scan gate_status=incomplete scan_id=1f65ba9a-dc5e-4c92-ab5d-7b338eb90ff9
+2:13PM INF scan complete — all tools finished component=scan findings=2 scan_id=1f65ba9a-dc5e-4c92-ab5d-7b338eb90ff9 status=failed
+2:13PM INF scan starting branch=main component=scan repo_id=462d6c6f-fb66-4853-a5d7-187e1a5e2c66 scan_id=1635662e-ea03-4ea4-9b09-53abcfb53f9a
+2:13PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=1635662e-ea03-4ea4-9b09-53abcfb53f9a
+2:13PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+2:13PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+2:13PM INF tools selected component=scan count=2 scan_id=1635662e-ea03-4ea4-9b09-53abcfb53f9a tools=["cluster-a","cluster-b"]
+2:13PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+2:13PM INF tool completed component=runner elapsed=5.66798 findings=1 tool=cluster-a
+2:13PM INF tool completed component=scan findings=1 scan_id=1635662e-ea03-4ea4-9b09-53abcfb53f9a tool=cluster-a
+2:13PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+2:13PM INF tool completed component=runner elapsed=5.506146 findings=1 tool=cluster-b
+2:13PM INF tool completed component=scan findings=1 scan_id=1635662e-ea03-4ea4-9b09-53abcfb53f9a tool=cluster-b
+2:13PM INF scan run complete component=runner elapsed=56.319145 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+2:13PM INF scan run finished component=scan scan_id=1635662e-ea03-4ea4-9b09-53abcfb53f9a status=completed
+2:13PM INF artifact bundle written component=scan findings_json=/tmp/TestScanFinalizationKeepsPersistedIdentityAndEnrichmentpostgres3151224876/001/002_20261023-141325_1635662e/findings.json manifest=/tmp/TestScanFinalizationKeepsPersistedIdentityAndEnrichmentpostgres3151224876/001/002_20261023-141325_1635662e/manifest.json scan_id=1635662e-ea03-4ea4-9b09-53abcfb53f9a
+2:13PM INF quality gate evaluated component=scan gate_status=incomplete scan_id=1635662e-ea03-4ea4-9b09-53abcfb53f9a
+2:13PM INF scan complete — all tools finished component=scan findings=1 scan_id=1635662e-ea03-4ea4-9b09-53abcfb53f9a status=failed
+2:13PM ERR API error code=server_error status=500
+--- FAIL: TestManualClusterChangesReconcileFindingMembership (0.34s)
+    manual_clusters_test.go:137: evidence read failure: 404 404 page not found
+FAIL
+FAIL	github.com/alphabravocompany/thewolf/internal/api/routes	11.159s
+FAIL

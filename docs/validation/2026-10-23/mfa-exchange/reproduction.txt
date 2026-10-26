@@ -1,0 +1,28 @@
+8:43PM INF static-ui: no dist dir found; UI routes disabled (run `npm run dev` separately)
+2026/10/23 20:43:18 [thewolf-dev-1-mj/GfLwZMM4a6-000001] "POST http://example.com/api/v1/auth/register HTTP/1.1" from 192.0.2.1:1234 - 201 961B in 57.419599ms
+2026/10/23 20:43:18 [thewolf-dev-1-mj/GfLwZMM4a6-000002] "POST http://example.com/api/v1/auth/mfa/setup HTTP/1.1" from 192.0.2.1:1234 - 200 3043B in 11.074368ms
+2026/10/23 20:43:18 [thewolf-dev-1-mj/GfLwZMM4a6-000003] "POST http://example.com/api/v1/auth/mfa/activate HTTP/1.1" from 192.0.2.1:1234 - 200 165B in 589.471µs
+2026/10/23 20:43:18 [thewolf-dev-1-mj/GfLwZMM4a6-000004] "POST http://example.com/api/v1/auth/login HTTP/1.1" from 10.52.0.1:1234 - 200 355B in 83.131681ms
+2026/10/23 20:43:18 [thewolf-dev-1-mj/GfLwZMM4a6-000005] "POST http://example.com/api/v1/auth/mfa/login HTTP/1.1" from 10.52.0.2:1234 - 200 960B in 533.215µs
+2026/10/23 20:43:18 [thewolf-dev-1-mj/GfLwZMM4a6-000006] "POST http://example.com/api/v1/auth/mfa/login HTTP/1.1" from 10.52.0.3:1234 - 200 960B in 601.585µs
+8:43PM WRN audit log append failed error="sql: database is closed"
+--- FAIL: TestMFAChallengeSingleUse (0.38s)
+    mfa_exchange_test.go:26: challenge use 2: 200, want 401
+8:43PM INF static-ui: no dist dir found; UI routes disabled (run `npm run dev` separately)
+2026/10/23 20:43:19 [thewolf-dev-1-mj/GfLwZMM4a6-000007] "POST http://example.com/api/v1/auth/register HTTP/1.1" from 192.0.2.1:1234 - 201 961B in 79.649197ms
+2026/10/23 20:43:19 [thewolf-dev-1-mj/GfLwZMM4a6-000008] "POST http://example.com/api/v1/auth/mfa/setup HTTP/1.1" from 192.0.2.1:1234 - 200 3067B in 5.438322ms
+2026/10/23 20:43:19 [thewolf-dev-1-mj/GfLwZMM4a6-000009] "POST http://example.com/api/v1/auth/mfa/activate HTTP/1.1" from 192.0.2.1:1234 - 200 165B in 529.067µs
+2026/10/23 20:43:19 [thewolf-dev-1-mj/GfLwZMM4a6-000010] "POST http://example.com/api/v1/auth/mfa/login HTTP/1.1" from 10.52.1.1:1234 - 200 960B in 428.879µs
+8:43PM WRN audit log append failed error="sql: database is closed"
+--- FAIL: TestMFAChallengeMustBePersisted (0.28s)
+    mfa_exchange_test.go:55: unpersisted challenge: 200
+8:43PM INF static-ui: no dist dir found; UI routes disabled (run `npm run dev` separately)
+2026/10/23 20:43:19 [thewolf-dev-1-mj/GfLwZMM4a6-000011] "POST http://example.com/api/v1/auth/register HTTP/1.1" from 192.0.2.1:1234 - 201 961B in 23.35572ms
+2026/10/23 20:43:19 [thewolf-dev-1-mj/GfLwZMM4a6-000012] "POST http://example.com/api/v1/auth/mfa/setup HTTP/1.1" from 192.0.2.1:1234 - 200 3099B in 7.671713ms
+2026/10/23 20:43:19 [thewolf-dev-1-mj/GfLwZMM4a6-000013] "POST http://example.com/api/v1/auth/mfa/activate HTTP/1.1" from 192.0.2.1:1234 - 200 165B in 569.042µs
+2026/10/23 20:43:19 [thewolf-dev-1-mj/GfLwZMM4a6-000014] "POST http://example.com/api/v1/auth/login HTTP/1.1" from 10.52.2.1:1234 - 200 355B in 30.339927ms
+--- FAIL: TestMFAChallengeStorageFailure (0.27s)
+    mfa_exchange_test.go:80: challenge storage failure: 200
+FAIL
+FAIL	github.com/alphabravocompany/thewolf/internal/api	0.952s
+FAIL

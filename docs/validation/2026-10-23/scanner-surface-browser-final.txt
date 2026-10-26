@@ -1,0 +1,24 @@
+[WebServer] $ vite build
+[WebServer] (node:3490385) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:3490600) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 6 tests using 2 workers
+
+(node:3490746) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3490747) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [desktop-chromium-linux] › e2e/product.spec.ts:6:3 › scanner settings and image inventory › unknown scanner runtime offers retry without Docker actions (1.9s)
+  ✓  2 [desktop-chromium-linux] › e2e/product.spec.ts:21:3 › scanner settings and image inventory › keeps one scoped scanner download surface functional @visual (2.0s)
+(node:3491140) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  3 [desktop-chromium-linux] › e2e/product.spec.ts:93:3 › scanner settings and image inventory › renders the Kubernetes-managed capability branch without Docker actions (1.1s)
+(node:3491257) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  4 [mobile-chromium-linux] › e2e/product.spec.ts:6:3 › scanner settings and image inventory › unknown scanner runtime offers retry without Docker actions (1.9s)
+  ✓  6 [mobile-chromium-linux] › e2e/product.spec.ts:93:3 › scanner settings and image inventory › renders the Kubernetes-managed capability branch without Docker actions (1.1s)
+  ✓  5 [mobile-chromium-linux] › e2e/product.spec.ts:21:3 › scanner settings and image inventory › keeps one scoped scanner download surface functional @visual (2.0s)
+
+  6 passed (11.5s)

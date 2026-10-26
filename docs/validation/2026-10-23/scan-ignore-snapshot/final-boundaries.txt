@@ -1,0 +1,10 @@
+--- FAIL: TestScanIgnorePolicySQLite (0.26s)
+    scan_ignore_policy_test.go:158: scan lease is no longer current
+--- FAIL: TestScanIgnorePolicyPostgres (1.63s)
+    scan_ignore_policy_test.go:158: scan lease is no longer current
+FAIL
+FAIL	github.com/alphabravocompany/thewolf/internal/db	1.934s
+ok  	github.com/alphabravocompany/thewolf/internal/scan/suppress	1.043s
+ok  	github.com/alphabravocompany/thewolf/internal/scan/report	1.022s
+ok  	github.com/alphabravocompany/thewolf/internal/api/routes	1.515s
+FAIL

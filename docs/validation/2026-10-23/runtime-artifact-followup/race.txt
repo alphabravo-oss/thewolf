@@ -1,0 +1,11 @@
+ok  	github.com/alphabravocompany/thewolf/internal/setup/scanners	1.154s
+?   	github.com/alphabravocompany/thewolf/internal/serve	[no test files]
+ok  	github.com/alphabravocompany/thewolf/internal/api	22.982s
+ok  	github.com/alphabravocompany/thewolf/internal/api/routes	46.828s
+ok  	github.com/alphabravocompany/thewolf/cmd/wolf	12.173s
+ok  	github.com/alphabravocompany/thewolf/internal/plugin/container	1.199s
+ok  	github.com/alphabravocompany/thewolf/internal/scannerruntime/kubernetes	1.129s
+ok  	github.com/alphabravocompany/thewolf/internal/artifacts	1.018s
+ok  	github.com/alphabravocompany/thewolf/internal/scannerbuild	1.485s
+ok  	github.com/alphabravocompany/thewolf/internal/scannertools/manifest	1.691s
+ok  	github.com/alphabravocompany/thewolf/internal/scannertools/lock	1.883s

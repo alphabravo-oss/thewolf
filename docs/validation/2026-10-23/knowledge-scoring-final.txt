@@ -1,0 +1,5 @@
+ok  	github.com/alphabravocompany/thewolf/internal/auth	1.685s
+ok  	github.com/alphabravocompany/thewolf/internal/finding/knowledge	1.014s
+ok  	github.com/alphabravocompany/thewolf/internal/scan/report	1.074s
+ok  	github.com/alphabravocompany/thewolf/internal/scan/scorer	1.018s
+ok  	github.com/alphabravocompany/thewolf/internal/ai	1.017s

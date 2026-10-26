@@ -265,7 +265,7 @@ unaffected.
 
 The administrative UI and its legacy Settings rebuild entry points use the
 first-class durable Custom build resources. See
-[durable custom-build UI](scanner-custom-build-ui.md) for create constraints,
+[durable custom builds](scanner-custom-builds.md) for create constraints,
 safe detail fields, reconnect/poll behavior, and automated qualification.
 
 ## Managed and sovereign operation
@@ -283,4 +283,4 @@ See:
 - [offline release bundles](scanner-release-offline-bundles.md)
 - [persistence migration runbook](scanner-release-persistence-runbook.md)
 - [operations runbook](scanner-release-operations-runbook.md)
-- [complete implementation plan](superpowers/plans/2026-07-30-scanner-release-management-platform-plan.md)
+- [complete implementation plan](archive/2026-10-23/superpowers/plans/2026-07-30-scanner-release-management-platform-plan.md)

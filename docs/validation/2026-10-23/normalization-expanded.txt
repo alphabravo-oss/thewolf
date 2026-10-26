@@ -1,0 +1,9 @@
+ok  	github.com/alphabravocompany/thewolf/internal/plugin	1.016s
+ok  	github.com/alphabravocompany/thewolf/internal/finding/identity	1.018s
+ok  	github.com/alphabravocompany/thewolf/internal/finding/knowledge	1.021s
+ok  	github.com/alphabravocompany/thewolf/internal/scan/detector	1.051s
+ok  	github.com/alphabravocompany/thewolf/internal/scan/runner	1.049s
+ok  	github.com/alphabravocompany/thewolf/plugins/security	1.028s
+ok  	github.com/alphabravocompany/thewolf/plugins/python	1.031s
+ok  	github.com/alphabravocompany/thewolf/plugins/javascript	1.039s
+ok  	github.com/alphabravocompany/thewolf/internal/db	1.296s

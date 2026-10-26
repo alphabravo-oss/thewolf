@@ -1,0 +1,6 @@
+ok  	github.com/alphabravocompany/thewolf/internal/secrets	3.159s
+ok  	github.com/alphabravocompany/thewolf/internal/serve	1.036s
+ok  	github.com/alphabravocompany/thewolf/cmd/wolf	11.612s
+ok  	github.com/alphabravocompany/thewolf/internal/scannerbuild	1.523s
+ok  	github.com/alphabravocompany/thewolf/internal/scannertools/manifest	1.660s
+ok  	github.com/alphabravocompany/thewolf/internal/scannertools/lock	1.999s

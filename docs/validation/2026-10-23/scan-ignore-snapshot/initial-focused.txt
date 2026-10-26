@@ -1,0 +1,7 @@
+ok  	github.com/alphabravocompany/thewolf/internal/scan/suppress	1.043s
+ok  	github.com/alphabravocompany/thewolf/internal/scan/report	1.060s
+--- FAIL: TestIgnoreErrorsRollbackSQLite (0.25s)
+    ignore_errors_test.go:115: create did not roll back: <nil>
+FAIL
+FAIL	github.com/alphabravocompany/thewolf/internal/db	1.491s
+FAIL

@@ -1,0 +1,8 @@
+ok  	github.com/alphabravocompany/thewolf/internal/fix	1.018s
+ok  	github.com/alphabravocompany/thewolf/internal/fix/worker	2.312s
+ok  	github.com/alphabravocompany/thewolf/internal/fix/orchestrator	1.062s [no tests to run]
+ok  	github.com/alphabravocompany/thewolf/internal/db	1.308s
+ok  	github.com/alphabravocompany/thewolf/internal/api	6.620s
+ok  	github.com/alphabravocompany/thewolf/internal/api/routes	4.014s
+ok  	github.com/alphabravocompany/thewolf/internal/scan/runner	1.370s
+ok  	github.com/alphabravocompany/thewolf/internal/scanjob	1.258s

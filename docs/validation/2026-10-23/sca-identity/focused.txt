@@ -1,0 +1,23 @@
+ok  	github.com/alphabravocompany/thewolf/internal/finding/identity	0.002s
+ok  	github.com/alphabravocompany/thewolf/internal/scan/runner	0.180s
+--- FAIL: TestFleetEvidenceQueriesAndTrends (0.17s)
+    fleet_evidence_test.go:156: table findings has no column named package_name
+--- FAIL: TestRecoveryEvidenceDeletionSQLite (0.16s)
+    scan_recovery_evidence_test.go:14: table findings has no column named package_name
+--- FAIL: TestCreateFindingsForScanLeaseRejectsStaleOwnership (0.18s)
+    sqlite_scanqueue_test.go:300: current finding insert must succeed, ok=false err=table findings has no column named package_name
+--- FAIL: TestCreateAndGetFinding (0.17s)
+    sqlite_test.go:270: CreateFinding failed: table findings has no column named package_name
+--- FAIL: TestOrphanSummaryCountsFindingsWithoutRepo (0.17s)
+    sqlite_test.go:1015: create finding: table findings has no column named package_name
+FAIL
+FAIL	github.com/alphabravocompany/thewolf/internal/db	15.728s
+ok  	github.com/alphabravocompany/thewolf/plugins/general	0.047s
+ok  	github.com/alphabravocompany/thewolf/plugins/security	0.067s
+ok  	github.com/alphabravocompany/thewolf/plugins/python	0.032s
+--- FAIL: TestParseNPMAuditOutput (0.00s)
+    javascript_test.go:95: finding[0].FilePath = "package-lock.json", want "package.json"
+FAIL
+FAIL	github.com/alphabravocompany/thewolf/plugins/javascript	0.021s
+ok  	github.com/alphabravocompany/thewolf/plugins/rust	0.019s
+FAIL

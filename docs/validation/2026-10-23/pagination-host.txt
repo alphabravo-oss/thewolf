@@ -1,0 +1,4 @@
+Linux-7.0.0-15-generic-x86_64-with-glibc2.43
+visible_logical_cpus 16
+model name	: AMD EPYC-Rome Processor
+MemTotal:       32083964 kB

@@ -1,0 +1,62 @@
+=== RUN   TestDependencyIdentitySQLite
+--- PASS: TestDependencyIdentitySQLite (0.25s)
+=== RUN   TestDependencyIdentityPostgres
+--- PASS: TestDependencyIdentityPostgres (2.34s)
+PASS
+ok  	github.com/alphabravocompany/thewolf/internal/db	2.600s
+=== RUN   TestBuild_SCAUsesCVENotFineCategory
+--- PASS: TestBuild_SCAUsesCVENotFineCategory (0.00s)
+=== RUN   TestSCAV2PreservesPackageLocationCaseAndEvidence
+--- PASS: TestSCAV2PreservesPackageLocationCaseAndEvidence (0.00s)
+=== RUN   TestCanonicalAdvisoryAliasOrderIsStable
+--- PASS: TestCanonicalAdvisoryAliasOrderIsStable (0.00s)
+PASS
+ok  	github.com/alphabravocompany/thewolf/internal/finding/identity	0.003s
+=== RUN   TestDeduplicate_SCADistinctCVEsStaySeparate
+--- PASS: TestDeduplicate_SCADistinctCVEsStaySeparate (0.00s)
+=== RUN   TestDeduplicate_SCASameCVECrossToolCollapses
+--- PASS: TestDeduplicate_SCASameCVECrossToolCollapses (0.00s)
+=== RUN   TestDeduplicateSCAPackageAndLocation
+--- PASS: TestDeduplicateSCAPackageAndLocation (0.00s)
+PASS
+ok  	github.com/alphabravocompany/thewolf/internal/scan/runner	0.005s
+=== RUN   TestDependencyIdentitySurvivesJSONAndSARIF
+--- PASS: TestDependencyIdentitySurvivesJSONAndSARIF (0.00s)
+PASS
+ok  	github.com/alphabravocompany/thewolf/internal/scan/report	0.005s
+=== RUN   TestSCAClusterMatchesPackageAdvisoryAndLocation
+--- PASS: TestSCAClusterMatchesPackageAdvisoryAndLocation (0.00s)
+=== RUN   TestFindingAPIKeepsDependencyOccurrencesAndIdentity
+--- PASS: TestFindingAPIKeepsDependencyOccurrencesAndIdentity (0.26s)
+PASS
+ok  	github.com/alphabravocompany/thewolf/internal/api/routes	0.283s
+=== RUN   TestSCADependencyIdentityTrivy
+--- PASS: TestSCADependencyIdentityTrivy (0.00s)
+=== RUN   TestSCADependencyIdentityGrype
+--- PASS: TestSCADependencyIdentityGrype (0.00s)
+PASS
+ok  	github.com/alphabravocompany/thewolf/plugins/general	0.005s
+=== RUN   TestSCADependencyIdentityOSVScanner
+--- PASS: TestSCADependencyIdentityOSVScanner (0.00s)
+PASS
+ok  	github.com/alphabravocompany/thewolf/plugins/security	0.006s
+=== RUN   TestSCADependencyIdentityNPMAudit
+--- PASS: TestSCADependencyIdentityNPMAudit (0.00s)
+=== RUN   TestNPMAuditExecuteAnchorsTheAuditedManifest
+=== RUN   TestNPMAuditExecuteAnchorsTheAuditedManifest/package-lock.json
+=== RUN   TestNPMAuditExecuteAnchorsTheAuditedManifest/package.json
+--- PASS: TestNPMAuditExecuteAnchorsTheAuditedManifest (0.01s)
+    --- PASS: TestNPMAuditExecuteAnchorsTheAuditedManifest/package-lock.json (0.00s)
+    --- PASS: TestNPMAuditExecuteAnchorsTheAuditedManifest/package.json (0.00s)
+PASS
+ok  	github.com/alphabravocompany/thewolf/plugins/javascript	0.011s
+=== RUN   TestSCADependencyIdentityPipAudit
+--- PASS: TestSCADependencyIdentityPipAudit (0.00s)
+=== RUN   TestPipAuditExecuteAnchorsSelectedRequirements
+--- PASS: TestPipAuditExecuteAnchorsSelectedRequirements (0.00s)
+PASS
+ok  	github.com/alphabravocompany/thewolf/plugins/python	0.011s
+=== RUN   TestSCADependencyIdentityCargoAudit
+--- PASS: TestSCADependencyIdentityCargoAudit (0.00s)
+PASS
+ok  	github.com/alphabravocompany/thewolf/plugins/rust	0.007s

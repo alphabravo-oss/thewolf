@@ -1,0 +1,26 @@
+[WebServer] $ vite build
+[WebServer] (node:3482879) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:3483120) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 6 tests using 2 workers
+
+(node:3483182) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3483183) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [desktop-chromium-linux] › e2e/audit.spec.ts:4:1 › audit uses full-history server pages and URL filters @browser-matrix (1.5s)
+(node:3483384) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  3 [mobile-chromium-linux] › e2e/audit.spec.ts:4:1 › audit uses full-history server pages and URL filters @browser-matrix (1.3s)
+  ✓  2 [desktop-chromium-linux] › e2e/audit.spec.ts:36:1 › audit distinguishes denied, failed and empty history @browser-matrix (3.5s)
+(node:3483534) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  4 [mobile-chromium-linux] › e2e/audit.spec.ts:36:1 › audit distinguishes denied, failed and empty history @browser-matrix (3.4s)
+(node:3483761) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  5 [desktop-firefox-linux] › e2e/audit.spec.ts:4:1 › audit uses full-history server pages and URL filters @browser-matrix (3.0s)
+  ✓  6 [desktop-firefox-linux] › e2e/audit.spec.ts:36:1 › audit distinguishes denied, failed and empty history @browser-matrix (4.4s)
+
+  6 passed (18.0s)

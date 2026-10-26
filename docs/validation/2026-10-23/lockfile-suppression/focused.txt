@@ -1,0 +1,626 @@
+ok  	github.com/alphabravocompany/thewolf/internal/scan/suppress	1.022s
+5:25PM INF scan starting branch=main component=scan repo_id=3db09ed3-ea48-448a-94dc-7601197df90a scan_id=84c7c4dd-1104-468a-8949-a4c0f13792d1
+5:25PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=84c7c4dd-1104-468a-8949-a4c0f13792d1
+5:25PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+5:25PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+5:25PM INF tools selected component=scan count=2 scan_id=84c7c4dd-1104-468a-8949-a4c0f13792d1 tools=["cluster-a","cluster-b"]
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+5:25PM INF tool completed component=runner elapsed=2.408519 findings=1 tool=cluster-a
+5:25PM INF tool completed component=scan findings=1 scan_id=84c7c4dd-1104-468a-8949-a4c0f13792d1 tool=cluster-a
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+5:25PM INF tool completed component=runner elapsed=1.693301 findings=1 tool=cluster-b
+5:25PM INF tool completed component=scan findings=1 scan_id=84c7c4dd-1104-468a-8949-a4c0f13792d1 tool=cluster-b
+5:25PM INF scan run complete component=runner elapsed=13.063043 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+5:25PM INF scan run finished component=scan scan_id=84c7c4dd-1104-468a-8949-a4c0f13792d1 status=completed
+5:25PM INF scan complete — all tools finished component=scan findings=1 scan_id=84c7c4dd-1104-468a-8949-a4c0f13792d1 status=completed
+5:25PM INF scan starting branch=main component=scan repo_id=7a934659-09c2-4be9-8ff6-6acfe961b49a scan_id=1a0aa026-0ccc-466f-9f97-f3f8c5844a7c
+5:25PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=1a0aa026-0ccc-466f-9f97-f3f8c5844a7c
+5:25PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+5:25PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+5:25PM INF tools selected component=scan count=2 scan_id=1a0aa026-0ccc-466f-9f97-f3f8c5844a7c tools=["cluster-a","cluster-b"]
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+5:25PM INF tool completed component=runner elapsed=3.383575 findings=1 tool=cluster-b
+5:25PM INF tool completed component=scan findings=1 scan_id=1a0aa026-0ccc-466f-9f97-f3f8c5844a7c tool=cluster-b
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+5:25PM INF tool completed component=runner elapsed=3.078571 findings=1 tool=cluster-a
+5:25PM INF tool completed component=scan findings=1 scan_id=1a0aa026-0ccc-466f-9f97-f3f8c5844a7c tool=cluster-a
+5:25PM INF scan run complete component=runner elapsed=24.240646 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+5:25PM INF scan run finished component=scan scan_id=1a0aa026-0ccc-466f-9f97-f3f8c5844a7c status=completed
+5:25PM INF scan complete — all tools finished component=scan findings=1 scan_id=1a0aa026-0ccc-466f-9f97-f3f8c5844a7c status=completed
+5:25PM INF scan starting branch=main component=scan repo_id=25e15bd0-db69-4ad4-891e-d6217cf4bfeb scan_id=32f0fb33-3af8-4683-bc32-94e7d17811f1
+5:25PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=32f0fb33-3af8-4683-bc32-94e7d17811f1
+5:25PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+5:25PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+5:25PM INF tools selected component=scan count=2 scan_id=32f0fb33-3af8-4683-bc32-94e7d17811f1 tools=["cluster-a","cluster-b"]
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+5:25PM INF tool completed component=runner elapsed=2.923419 findings=1 tool=cluster-b
+5:25PM INF tool completed component=scan findings=1 scan_id=32f0fb33-3af8-4683-bc32-94e7d17811f1 tool=cluster-b
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+5:25PM INF tool completed component=runner elapsed=2.539496 findings=1 tool=cluster-a
+5:25PM INF tool completed component=scan findings=1 scan_id=32f0fb33-3af8-4683-bc32-94e7d17811f1 tool=cluster-a
+5:25PM INF scan run complete component=runner elapsed=18.243916 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+5:25PM INF scan run finished component=scan scan_id=32f0fb33-3af8-4683-bc32-94e7d17811f1 status=completed
+5:25PM INF scan complete — all tools finished component=scan findings=1 scan_id=32f0fb33-3af8-4683-bc32-94e7d17811f1 status=completed
+5:25PM INF scan starting branch=main component=scan repo_id=e1a8c4cc-ec09-46ca-bcfa-1c3b61cd6dbe scan_id=df48cd79-70d2-4411-9cf7-4f110f28d33a
+5:25PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=df48cd79-70d2-4411-9cf7-4f110f28d33a
+5:25PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+5:25PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+5:25PM INF tools selected component=scan count=2 scan_id=df48cd79-70d2-4411-9cf7-4f110f28d33a tools=["cluster-a","cluster-b"]
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+5:25PM INF tool completed component=runner elapsed=2.296978 findings=1 tool=cluster-a
+5:25PM INF tool completed component=scan findings=1 scan_id=df48cd79-70d2-4411-9cf7-4f110f28d33a tool=cluster-a
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+5:25PM INF tool completed component=runner elapsed=3.682217 findings=1 tool=cluster-b
+5:25PM INF tool completed component=scan findings=1 scan_id=df48cd79-70d2-4411-9cf7-4f110f28d33a tool=cluster-b
+5:25PM INF scan run complete component=runner elapsed=16.273081 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+5:25PM INF scan run finished component=scan scan_id=df48cd79-70d2-4411-9cf7-4f110f28d33a status=completed
+5:25PM INF scan complete — all tools finished component=scan findings=1 scan_id=df48cd79-70d2-4411-9cf7-4f110f28d33a status=completed
+5:25PM INF scan starting branch=main component=scan repo_id=68fe3297-537f-4feb-97e1-483eb39da2a6 scan_id=b761d29c-9bc6-4bef-a104-3b7b7d0cf567
+5:25PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=b761d29c-9bc6-4bef-a104-3b7b7d0cf567
+5:25PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+5:25PM INF tools selected for scan component=runner count=1 tools=["cluster-b"]
+5:25PM INF tools selected component=scan count=1 scan_id=b761d29c-9bc6-4bef-a104-3b7b7d0cf567 tools=["cluster-b"]
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+5:25PM INF tool completed component=runner elapsed=1.883038 findings=1 tool=cluster-b
+5:25PM INF tool completed component=scan findings=1 scan_id=b761d29c-9bc6-4bef-a104-3b7b7d0cf567 tool=cluster-b
+5:25PM INF scan run complete component=runner elapsed=9.02221 findings=1 tools_failed=0 tools_run=1 tools_skipped=0
+5:25PM INF scan run finished component=scan scan_id=b761d29c-9bc6-4bef-a104-3b7b7d0cf567 status=completed
+5:25PM INF scan complete — all tools finished component=scan findings=1 scan_id=b761d29c-9bc6-4bef-a104-3b7b7d0cf567 status=completed
+5:25PM INF scan starting branch=main component=scan repo_id=1bb9afed-12a4-43e2-be43-ffc475c3f4fa scan_id=e27c72f0-39c6-4960-bfc7-aa78cfe0fad7
+5:25PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=e27c72f0-39c6-4960-bfc7-aa78cfe0fad7
+5:25PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+5:25PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+5:25PM INF tools selected component=scan count=2 scan_id=e27c72f0-39c6-4960-bfc7-aa78cfe0fad7 tools=["cluster-a","cluster-b"]
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+5:25PM INF tool completed component=runner elapsed=1.293537 findings=1 tool=cluster-a
+5:25PM INF tool completed component=scan findings=1 scan_id=e27c72f0-39c6-4960-bfc7-aa78cfe0fad7 tool=cluster-a
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+5:25PM INF tool completed component=runner elapsed=1.287054 findings=1 tool=cluster-b
+5:25PM INF tool completed component=scan findings=1 scan_id=e27c72f0-39c6-4960-bfc7-aa78cfe0fad7 tool=cluster-b
+5:25PM INF scan run complete component=runner elapsed=9.194144 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+5:25PM INF scan run finished component=scan scan_id=e27c72f0-39c6-4960-bfc7-aa78cfe0fad7 status=completed
+5:25PM INF scan complete — all tools finished component=scan findings=0 scan_id=e27c72f0-39c6-4960-bfc7-aa78cfe0fad7 status=completed
+5:25PM INF scan starting branch=main component=scan repo_id=6e5d8c86-634b-455b-88e3-ea6547379d7d scan_id=31cad070-bb06-44d7-adb1-a450a114e4a0
+5:25PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=31cad070-bb06-44d7-adb1-a450a114e4a0
+5:25PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+5:25PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+5:25PM INF tools selected component=scan count=2 scan_id=31cad070-bb06-44d7-adb1-a450a114e4a0 tools=["cluster-a","cluster-b"]
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+5:25PM INF tool completed component=runner elapsed=1.970383 findings=1 tool=cluster-b
+5:25PM INF tool completed component=scan findings=1 scan_id=31cad070-bb06-44d7-adb1-a450a114e4a0 tool=cluster-b
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+5:25PM INF tool completed component=runner elapsed=3.320556 findings=1 tool=cluster-a
+5:25PM INF tool completed component=scan findings=1 scan_id=31cad070-bb06-44d7-adb1-a450a114e4a0 tool=cluster-a
+5:25PM INF scan run complete component=runner elapsed=17.073532 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+5:25PM INF scan run finished component=scan scan_id=31cad070-bb06-44d7-adb1-a450a114e4a0 status=completed
+5:25PM ERR scan result publication failed error="scan or findings changed during evaluation; retry with a fresh snapshot" component=scan scan_id=31cad070-bb06-44d7-adb1-a450a114e4a0
+5:25PM INF scan complete — all tools finished component=scan findings=0 scan_id=31cad070-bb06-44d7-adb1-a450a114e4a0 status=failed
+5:25PM INF scan starting branch=main component=scan repo_id=27b9b691-4cab-4b00-baf5-e1ba00155acf scan_id=f10473ed-c03e-4aaa-9b5c-c2a070deb212
+5:25PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=f10473ed-c03e-4aaa-9b5c-c2a070deb212
+5:25PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+5:25PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+5:25PM INF tools selected component=scan count=2 scan_id=f10473ed-c03e-4aaa-9b5c-c2a070deb212 tools=["cluster-a","cluster-b"]
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+5:25PM INF tool completed component=runner elapsed=1.35324 findings=1 tool=cluster-b
+5:25PM INF tool completed component=scan findings=1 scan_id=f10473ed-c03e-4aaa-9b5c-c2a070deb212 tool=cluster-b
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+5:25PM INF tool completed component=runner elapsed=2.300514 findings=1 tool=cluster-a
+5:25PM INF tool completed component=scan findings=1 scan_id=f10473ed-c03e-4aaa-9b5c-c2a070deb212 tool=cluster-a
+5:25PM INF scan run complete component=runner elapsed=15.107866 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+5:25PM INF scan run finished component=scan scan_id=f10473ed-c03e-4aaa-9b5c-c2a070deb212 status=completed
+5:25PM INF scan starting branch=main component=scan repo_id=3b07356b-92f5-4f29-966c-d80c65328ce6 scan_id=01b49aaa-7189-4e48-92c1-d7d02867d91f
+5:25PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=01b49aaa-7189-4e48-92c1-d7d02867d91f
+5:25PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+5:25PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+5:25PM INF tools selected component=scan count=2 scan_id=01b49aaa-7189-4e48-92c1-d7d02867d91f tools=["cluster-a","cluster-b"]
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+5:25PM INF tool completed component=runner elapsed=4.325279 findings=1 tool=cluster-b
+5:25PM INF tool completed component=scan findings=1 scan_id=01b49aaa-7189-4e48-92c1-d7d02867d91f tool=cluster-b
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+5:25PM INF tool completed component=runner elapsed=3.334263 findings=1 tool=cluster-a
+5:25PM INF tool completed component=scan findings=1 scan_id=01b49aaa-7189-4e48-92c1-d7d02867d91f tool=cluster-a
+5:25PM INF scan run complete component=runner elapsed=22.169554 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+5:25PM INF scan run finished component=scan scan_id=01b49aaa-7189-4e48-92c1-d7d02867d91f status=completed
+5:25PM INF scan starting branch=main component=scan repo_id=ee5d871f-38dc-4ca1-921e-f279d0a8be76 scan_id=6704a749-b0c3-42a7-8c92-a82e9c1bd7c9
+5:25PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=6704a749-b0c3-42a7-8c92-a82e9c1bd7c9
+5:25PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+5:25PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+5:25PM INF tools selected component=scan count=2 scan_id=6704a749-b0c3-42a7-8c92-a82e9c1bd7c9 tools=["cluster-a","cluster-b"]
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+5:25PM INF tool completed component=runner elapsed=1.621395 findings=1 tool=cluster-a
+5:25PM INF tool completed component=scan findings=1 scan_id=6704a749-b0c3-42a7-8c92-a82e9c1bd7c9 tool=cluster-a
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+5:25PM INF tool completed component=runner elapsed=1.659337 findings=1 tool=cluster-b
+5:25PM INF tool completed component=scan findings=1 scan_id=6704a749-b0c3-42a7-8c92-a82e9c1bd7c9 tool=cluster-b
+5:25PM INF scan run complete component=runner elapsed=12.607294 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+5:25PM INF scan run finished component=scan scan_id=6704a749-b0c3-42a7-8c92-a82e9c1bd7c9 status=completed
+5:25PM ERR artifact persistence failed error="scan artifact publication failed: fixture artifact persistence failure" component=scan scan_id=6704a749-b0c3-42a7-8c92-a82e9c1bd7c9
+5:25PM ERR scan result publication failed error="scan artifact publication failed: fixture artifact persistence failure" component=scan scan_id=6704a749-b0c3-42a7-8c92-a82e9c1bd7c9
+5:25PM ERR failed scan gate artifact publication failed error="fixture artifact persistence failure" component=scan scan_id=6704a749-b0c3-42a7-8c92-a82e9c1bd7c9
+5:25PM INF scan complete — all tools finished component=scan findings=1 scan_id=6704a749-b0c3-42a7-8c92-a82e9c1bd7c9 status=failed
+5:25PM INF scan starting branch=main component=scan repo_id=f1f74c2c-88d0-482e-8f2c-cf719e512790 scan_id=27784bf2-5426-49a7-93d0-c2f73750c9f7
+5:25PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=27784bf2-5426-49a7-93d0-c2f73750c9f7
+5:25PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+5:25PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+5:25PM INF tools selected component=scan count=2 scan_id=27784bf2-5426-49a7-93d0-c2f73750c9f7 tools=["cluster-a","cluster-b"]
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+5:25PM INF tool completed component=runner elapsed=1.756529 findings=1 tool=cluster-b
+5:25PM INF tool completed component=scan findings=1 scan_id=27784bf2-5426-49a7-93d0-c2f73750c9f7 tool=cluster-b
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+5:25PM INF tool completed component=runner elapsed=3.314444 findings=1 tool=cluster-a
+5:25PM INF tool completed component=scan findings=1 scan_id=27784bf2-5426-49a7-93d0-c2f73750c9f7 tool=cluster-a
+5:25PM INF scan run complete component=runner elapsed=15.084893 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+5:25PM INF scan run finished component=scan scan_id=27784bf2-5426-49a7-93d0-c2f73750c9f7 status=completed
+5:25PM ERR scan result publication failed error="evaluate final gate: fixture gate policy read failure" component=scan scan_id=27784bf2-5426-49a7-93d0-c2f73750c9f7
+5:25PM ERR failed scan gate evaluation failed error="fixture gate policy read failure" component=scan scan_id=27784bf2-5426-49a7-93d0-c2f73750c9f7
+5:25PM INF scan complete — all tools finished component=scan findings=0 scan_id=27784bf2-5426-49a7-93d0-c2f73750c9f7 status=failed
+5:25PM INF scan starting branch=main component=scan repo_id=da5c84bf-3f17-4542-814a-d52b47b9cdce scan_id=4bfc0fbd-43f0-452a-b4b2-7b152e1ff1b1
+5:25PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=4bfc0fbd-43f0-452a-b4b2-7b152e1ff1b1
+5:25PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+5:25PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+5:25PM INF tools selected component=scan count=2 scan_id=4bfc0fbd-43f0-452a-b4b2-7b152e1ff1b1 tools=["cluster-a","cluster-b"]
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+5:25PM INF tool completed component=runner elapsed=1.562304 findings=1 tool=cluster-b
+5:25PM INF tool completed component=scan findings=1 scan_id=4bfc0fbd-43f0-452a-b4b2-7b152e1ff1b1 tool=cluster-b
+5:25PM ERR failed to persist tool findings error="fixture persistence failure" component=scan scan_id=4bfc0fbd-43f0-452a-b4b2-7b152e1ff1b1 tool=cluster-b
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+5:25PM INF tool completed component=runner elapsed=1.548318 findings=1 tool=cluster-a
+5:25PM INF tool completed component=scan findings=1 scan_id=4bfc0fbd-43f0-452a-b4b2-7b152e1ff1b1 tool=cluster-a
+5:25PM INF scan run complete component=runner elapsed=10.001204 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+5:25PM ERR scan run failed error="persist cluster-b findings: fixture persistence failure" component=scan scan_id=4bfc0fbd-43f0-452a-b4b2-7b152e1ff1b1
+5:25PM INF scan complete — all tools finished component=scan findings=1 scan_id=4bfc0fbd-43f0-452a-b4b2-7b152e1ff1b1 status=failed
+5:25PM INF scan starting branch=main component=scan repo_id=64e9a1a7-c735-473d-a43a-551d6db9f63a scan_id=511a0140-68b7-4f46-9fa1-223d4a970f39
+5:25PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=511a0140-68b7-4f46-9fa1-223d4a970f39
+5:25PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+5:25PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+5:25PM INF tools selected component=scan count=2 scan_id=511a0140-68b7-4f46-9fa1-223d4a970f39 tools=["cluster-a","cluster-b"]
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+5:25PM INF tool completed component=runner elapsed=2.082745 findings=1 tool=cluster-b
+5:25PM INF tool completed component=scan findings=1 scan_id=511a0140-68b7-4f46-9fa1-223d4a970f39 tool=cluster-b
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+5:25PM INF tool completed component=runner elapsed=2.809594 findings=1 tool=cluster-a
+5:25PM INF tool completed component=scan findings=1 scan_id=511a0140-68b7-4f46-9fa1-223d4a970f39 tool=cluster-a
+5:25PM INF scan run complete component=runner elapsed=17.048152 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+5:25PM ERR scan run failed error="read persisted findings: fixture persistence failure" component=scan scan_id=511a0140-68b7-4f46-9fa1-223d4a970f39
+5:25PM INF scan complete — all tools finished component=scan findings=2 scan_id=511a0140-68b7-4f46-9fa1-223d4a970f39 status=failed
+5:25PM INF scan starting branch=main component=scan repo_id=b5a06d77-8ee8-45d2-b36f-e3ac2ed52ece scan_id=ac78bd37-472d-4a63-9699-a32d927ba797
+5:25PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=ac78bd37-472d-4a63-9699-a32d927ba797
+5:25PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+5:25PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+5:25PM INF tools selected component=scan count=2 scan_id=ac78bd37-472d-4a63-9699-a32d927ba797 tools=["cluster-a","cluster-b"]
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+5:25PM INF tool completed component=runner elapsed=1.316241 findings=1 tool=cluster-a
+5:25PM INF tool completed component=scan findings=1 scan_id=ac78bd37-472d-4a63-9699-a32d927ba797 tool=cluster-a
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+5:25PM INF tool completed component=runner elapsed=1.420626 findings=1 tool=cluster-b
+5:25PM INF tool completed component=scan findings=1 scan_id=ac78bd37-472d-4a63-9699-a32d927ba797 tool=cluster-b
+5:25PM INF scan run complete component=runner elapsed=11.964786 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+5:25PM INF scan run finished component=scan scan_id=ac78bd37-472d-4a63-9699-a32d927ba797 status=completed
+5:25PM INF scan complete — all tools finished component=scan findings=2 scan_id=ac78bd37-472d-4a63-9699-a32d927ba797 status=failed
+5:25PM INF scan starting branch=main component=scan repo_id=9cdf5492-90a9-4350-98cf-55d1b7d7d37f scan_id=9142741c-a591-45f3-b3f1-70fbfeabbedb
+5:25PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=9142741c-a591-45f3-b3f1-70fbfeabbedb
+5:25PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+5:25PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+5:25PM INF tools selected component=scan count=2 scan_id=9142741c-a591-45f3-b3f1-70fbfeabbedb tools=["cluster-a","cluster-b"]
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+5:25PM INF tool completed component=runner elapsed=2.366549 findings=1 tool=cluster-b
+5:25PM INF tool completed component=scan findings=1 scan_id=9142741c-a591-45f3-b3f1-70fbfeabbedb tool=cluster-b
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+5:25PM INF tool completed component=runner elapsed=1.557154 findings=1 tool=cluster-a
+5:25PM INF tool completed component=scan findings=1 scan_id=9142741c-a591-45f3-b3f1-70fbfeabbedb tool=cluster-a
+5:25PM INF scan run complete component=runner elapsed=14.027311 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+5:25PM INF scan run finished component=scan scan_id=9142741c-a591-45f3-b3f1-70fbfeabbedb status=completed
+5:25PM ERR scan result publication failed error="commit scan completion: fixture completion persistence failure" component=scan scan_id=9142741c-a591-45f3-b3f1-70fbfeabbedb
+5:25PM INF scan complete — all tools finished component=scan findings=1 scan_id=9142741c-a591-45f3-b3f1-70fbfeabbedb status=failed
+5:25PM INF scan starting branch=main component=scan repo_id=3388ec68-27aa-4d3c-9b0e-fe659bfc306d scan_id=e3d33305-3efb-4b2d-97e5-d8d3a744b614
+5:25PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=e3d33305-3efb-4b2d-97e5-d8d3a744b614
+5:25PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+5:25PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+5:25PM INF tools selected component=scan count=2 scan_id=e3d33305-3efb-4b2d-97e5-d8d3a744b614 tools=["cluster-a","cluster-b"]
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+5:25PM INF tool completed component=runner elapsed=1.785113 findings=1 tool=cluster-b
+5:25PM INF tool completed component=scan findings=1 scan_id=e3d33305-3efb-4b2d-97e5-d8d3a744b614 tool=cluster-b
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+5:25PM INF tool completed component=runner elapsed=1.655018 findings=1 tool=cluster-a
+5:25PM INF tool completed component=scan findings=1 scan_id=e3d33305-3efb-4b2d-97e5-d8d3a744b614 tool=cluster-a
+5:25PM INF scan run complete component=runner elapsed=11.904491 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+5:25PM INF scan run finished component=scan scan_id=e3d33305-3efb-4b2d-97e5-d8d3a744b614 status=completed
+5:25PM INF scan complete — all tools finished component=scan findings=1 scan_id=e3d33305-3efb-4b2d-97e5-d8d3a744b614 status=failed
+5:25PM INF scan starting branch=main component=scan repo_id=5d7b3232-a7d6-48ef-8290-b3d5d498ec5e scan_id=0f7b1246-f9a7-4f49-adc5-456562ddc95d
+5:25PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=0f7b1246-f9a7-4f49-adc5-456562ddc95d
+5:25PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+5:25PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+5:25PM INF tools selected component=scan count=2 scan_id=0f7b1246-f9a7-4f49-adc5-456562ddc95d tools=["cluster-a","cluster-b"]
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+5:25PM INF tool completed component=runner elapsed=2.242776 findings=1 tool=cluster-a
+5:25PM INF tool completed component=scan findings=1 scan_id=0f7b1246-f9a7-4f49-adc5-456562ddc95d tool=cluster-a
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+5:25PM INF tool completed component=runner elapsed=1.826451 findings=1 tool=cluster-b
+5:25PM INF tool completed component=scan findings=1 scan_id=0f7b1246-f9a7-4f49-adc5-456562ddc95d tool=cluster-b
+5:25PM INF scan run complete component=runner elapsed=14.270008 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+5:25PM INF scan run finished component=scan scan_id=0f7b1246-f9a7-4f49-adc5-456562ddc95d status=completed
+5:25PM ERR scan result publication failed error="commit scan completion: fixture completion persistence failure" component=scan scan_id=0f7b1246-f9a7-4f49-adc5-456562ddc95d
+5:25PM INF scan complete — all tools finished component=scan findings=1 scan_id=0f7b1246-f9a7-4f49-adc5-456562ddc95d status=failed
+5:25PM INF scan starting branch=main component=scan repo_id=1e33494d-36cc-4e8f-9558-607ff59b9958 scan_id=437bc189-ae5b-403f-8d08-e6b9074baffb
+5:25PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=437bc189-ae5b-403f-8d08-e6b9074baffb
+5:25PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+5:25PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+5:25PM INF tools selected component=scan count=2 scan_id=437bc189-ae5b-403f-8d08-e6b9074baffb tools=["cluster-a","cluster-b"]
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+5:25PM INF tool completed component=runner elapsed=1.263521 findings=1 tool=cluster-a
+5:25PM INF tool completed component=scan findings=1 scan_id=437bc189-ae5b-403f-8d08-e6b9074baffb tool=cluster-a
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+5:25PM INF tool completed component=runner elapsed=1.258462 findings=1 tool=cluster-b
+5:25PM INF tool completed component=scan findings=1 scan_id=437bc189-ae5b-403f-8d08-e6b9074baffb tool=cluster-b
+5:25PM INF scan run complete component=runner elapsed=8.567112 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+5:25PM INF scan run finished component=scan scan_id=437bc189-ae5b-403f-8d08-e6b9074baffb status=completed
+5:25PM ERR scan result publication failed error="evaluate final gate: fixture gate policy read failure" component=scan scan_id=437bc189-ae5b-403f-8d08-e6b9074baffb
+5:25PM ERR failed scan gate evaluation failed error="fixture gate policy read failure" component=scan scan_id=437bc189-ae5b-403f-8d08-e6b9074baffb
+5:25PM INF scan complete — all tools finished component=scan findings=1 scan_id=437bc189-ae5b-403f-8d08-e6b9074baffb status=failed
+5:25PM INF scan starting branch=main component=scan repo_id=5a284a8d-bf7b-43ca-9105-2b36b693ba77 scan_id=9ba7ef5a-6fdf-4a60-aeca-7a6fb3539b02
+5:25PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=9ba7ef5a-6fdf-4a60-aeca-7a6fb3539b02
+5:25PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+5:25PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+5:25PM INF tools selected component=scan count=2 scan_id=9ba7ef5a-6fdf-4a60-aeca-7a6fb3539b02 tools=["cluster-a","cluster-b"]
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+5:25PM INF tool completed component=runner elapsed=1.614243 findings=1 tool=cluster-b
+5:25PM INF tool completed component=scan findings=1 scan_id=9ba7ef5a-6fdf-4a60-aeca-7a6fb3539b02 tool=cluster-b
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+5:25PM INF tool completed component=runner elapsed=1.570821 findings=1 tool=cluster-a
+5:25PM INF tool completed component=scan findings=1 scan_id=9ba7ef5a-6fdf-4a60-aeca-7a6fb3539b02 tool=cluster-a
+5:25PM INF scan run complete component=runner elapsed=11.149299 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+5:25PM INF scan run finished component=scan scan_id=9ba7ef5a-6fdf-4a60-aeca-7a6fb3539b02 status=completed
+5:25PM ERR artifact persistence failed error="fixture artifact persistence failure" component=scan scan_id=9ba7ef5a-6fdf-4a60-aeca-7a6fb3539b02
+5:25PM ERR artifact persistence failed error="fixture artifact persistence failure" component=scan scan_id=9ba7ef5a-6fdf-4a60-aeca-7a6fb3539b02
+5:25PM ERR artifact persistence failed error="fixture artifact persistence failure" component=scan scan_id=9ba7ef5a-6fdf-4a60-aeca-7a6fb3539b02
+5:25PM ERR artifact persistence failed error="fixture artifact persistence failure" component=scan scan_id=9ba7ef5a-6fdf-4a60-aeca-7a6fb3539b02
+5:25PM ERR artifact persistence failed error="scan artifact publication failed: fixture artifact persistence failure" component=scan scan_id=9ba7ef5a-6fdf-4a60-aeca-7a6fb3539b02
+5:25PM ERR scan result publication failed error="scan artifact publication failed: fixture artifact persistence failure" component=scan scan_id=9ba7ef5a-6fdf-4a60-aeca-7a6fb3539b02
+5:25PM ERR failed scan gate artifact publication failed error="fixture artifact persistence failure" component=scan scan_id=9ba7ef5a-6fdf-4a60-aeca-7a6fb3539b02
+5:25PM INF scan complete — all tools finished component=scan findings=1 scan_id=9ba7ef5a-6fdf-4a60-aeca-7a6fb3539b02 status=failed
+5:25PM INF scan starting branch=main component=scan repo_id=33c7952e-e1cf-411c-b01c-3d26ff6c5132 scan_id=8744a283-51d5-4bdb-8994-c3a2d62aa1ea
+5:25PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=8744a283-51d5-4bdb-8994-c3a2d62aa1ea
+5:25PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+5:25PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+5:25PM INF tools selected component=scan count=2 scan_id=8744a283-51d5-4bdb-8994-c3a2d62aa1ea tools=["cluster-a","cluster-b"]
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+5:25PM INF tool completed component=runner elapsed=2.549334 findings=1 tool=cluster-b
+5:25PM INF tool completed component=scan findings=1 scan_id=8744a283-51d5-4bdb-8994-c3a2d62aa1ea tool=cluster-b
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+5:25PM INF tool completed component=runner elapsed=2.937856 findings=1 tool=cluster-a
+5:25PM INF tool completed component=scan findings=1 scan_id=8744a283-51d5-4bdb-8994-c3a2d62aa1ea tool=cluster-a
+5:25PM INF scan run complete component=runner elapsed=19.990206 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+5:25PM INF scan run finished component=scan scan_id=8744a283-51d5-4bdb-8994-c3a2d62aa1ea status=completed
+5:25PM ERR scan result publication failed error="commit scan completion: fixture completion persistence failure" component=scan scan_id=8744a283-51d5-4bdb-8994-c3a2d62aa1ea
+5:25PM ERR failed scan gate artifact publication failed error="fixture artifact persistence failure" component=scan scan_id=8744a283-51d5-4bdb-8994-c3a2d62aa1ea
+5:25PM INF scan complete — all tools finished component=scan findings=1 scan_id=8744a283-51d5-4bdb-8994-c3a2d62aa1ea status=failed
+5:25PM INF scan starting branch=main component=scan repo_id=14a99ffd-5537-4e9f-be48-1044147c40b9 scan_id=4b4cc461-f7cb-4fcc-a0ae-c392d47b80b7
+5:25PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=4b4cc461-f7cb-4fcc-a0ae-c392d47b80b7
+5:25PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+5:25PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+5:25PM INF tools selected component=scan count=2 scan_id=4b4cc461-f7cb-4fcc-a0ae-c392d47b80b7 tools=["cluster-a","cluster-b"]
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+5:25PM INF tool completed component=runner elapsed=1.575498 findings=1 tool=cluster-a
+5:25PM INF tool completed component=scan findings=1 scan_id=4b4cc461-f7cb-4fcc-a0ae-c392d47b80b7 tool=cluster-a
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+5:25PM INF tool completed component=runner elapsed=2.253407 findings=1 tool=cluster-b
+5:25PM INF tool completed component=scan findings=1 scan_id=4b4cc461-f7cb-4fcc-a0ae-c392d47b80b7 tool=cluster-b
+5:25PM INF scan run complete component=runner elapsed=11.172182 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+5:25PM INF scan run finished component=scan scan_id=4b4cc461-f7cb-4fcc-a0ae-c392d47b80b7 status=completed
+5:25PM ERR artifact persistence failed error="open /tmp/TestScanFinalizationKeepsPersistedIdentityAndEnrichmentsqlitel2570109284/001/002_20261023-172520_4b4cc461/cluster-a.log: is a directory" component=scan scan_id=4b4cc461-f7cb-4fcc-a0ae-c392d47b80b7
+5:25PM INF scan complete — all tools finished component=scan findings=1 scan_id=4b4cc461-f7cb-4fcc-a0ae-c392d47b80b7 status=failed
+5:25PM INF scan starting branch=main component=scan repo_id=b319682e-ede4-48a1-84a3-76d366320351 scan_id=46c99271-1738-4a80-b0cf-a794833f8cc5
+5:25PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=46c99271-1738-4a80-b0cf-a794833f8cc5
+5:25PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+5:25PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+5:25PM INF tools selected component=scan count=2 scan_id=46c99271-1738-4a80-b0cf-a794833f8cc5 tools=["cluster-a","cluster-b"]
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+5:25PM INF tool completed component=runner elapsed=7.840683 findings=1 tool=cluster-b
+5:25PM INF tool completed component=scan findings=1 scan_id=46c99271-1738-4a80-b0cf-a794833f8cc5 tool=cluster-b
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+5:25PM INF tool completed component=runner elapsed=7.104647 findings=1 tool=cluster-a
+5:25PM INF tool completed component=scan findings=1 scan_id=46c99271-1738-4a80-b0cf-a794833f8cc5 tool=cluster-a
+5:25PM INF scan run complete component=runner elapsed=54.610299 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+5:25PM INF scan run finished component=scan scan_id=46c99271-1738-4a80-b0cf-a794833f8cc5 status=completed
+5:25PM INF scan complete — all tools finished component=scan findings=1 scan_id=46c99271-1738-4a80-b0cf-a794833f8cc5 status=completed
+5:25PM INF scan starting branch=main component=scan repo_id=ce3d2269-b0e2-4ee4-be54-c549de36e639 scan_id=5bf08200-5d79-48fc-a240-479538e552a5
+5:25PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=5bf08200-5d79-48fc-a240-479538e552a5
+5:25PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+5:25PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+5:25PM INF tools selected component=scan count=2 scan_id=5bf08200-5d79-48fc-a240-479538e552a5 tools=["cluster-a","cluster-b"]
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+5:25PM INF tool completed component=runner elapsed=9.206998 findings=1 tool=cluster-a
+5:25PM INF tool completed component=scan findings=1 scan_id=5bf08200-5d79-48fc-a240-479538e552a5 tool=cluster-a
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+5:25PM INF tool completed component=runner elapsed=6.464641 findings=1 tool=cluster-b
+5:25PM INF tool completed component=scan findings=1 scan_id=5bf08200-5d79-48fc-a240-479538e552a5 tool=cluster-b
+5:25PM INF scan run complete component=runner elapsed=49.92987 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+5:25PM INF scan run finished component=scan scan_id=5bf08200-5d79-48fc-a240-479538e552a5 status=completed
+5:25PM INF scan complete — all tools finished component=scan findings=1 scan_id=5bf08200-5d79-48fc-a240-479538e552a5 status=completed
+5:25PM INF scan starting branch=main component=scan repo_id=c191c4c6-d84f-437c-9430-7ee1cfff3cf6 scan_id=db39c374-9421-4bfd-84ae-ebfdf4b0bb5b
+5:25PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=db39c374-9421-4bfd-84ae-ebfdf4b0bb5b
+5:25PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+5:25PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+5:25PM INF tools selected component=scan count=2 scan_id=db39c374-9421-4bfd-84ae-ebfdf4b0bb5b tools=["cluster-a","cluster-b"]
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+5:25PM INF tool completed component=runner elapsed=8.415125 findings=1 tool=cluster-b
+5:25PM INF tool completed component=scan findings=1 scan_id=db39c374-9421-4bfd-84ae-ebfdf4b0bb5b tool=cluster-b
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+5:25PM INF tool completed component=runner elapsed=7.15957 findings=1 tool=cluster-a
+5:25PM INF tool completed component=scan findings=1 scan_id=db39c374-9421-4bfd-84ae-ebfdf4b0bb5b tool=cluster-a
+5:25PM INF scan run complete component=runner elapsed=54.538684 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+5:25PM INF scan run finished component=scan scan_id=db39c374-9421-4bfd-84ae-ebfdf4b0bb5b status=completed
+5:25PM INF scan complete — all tools finished component=scan findings=1 scan_id=db39c374-9421-4bfd-84ae-ebfdf4b0bb5b status=completed
+5:25PM INF scan starting branch=main component=scan repo_id=f935d889-7d5c-48a9-a881-bc275fef04a7 scan_id=5893a86f-4f83-41e5-aee7-acdde982afbf
+5:25PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=5893a86f-4f83-41e5-aee7-acdde982afbf
+5:25PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+5:25PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+5:25PM INF tools selected component=scan count=2 scan_id=5893a86f-4f83-41e5-aee7-acdde982afbf tools=["cluster-a","cluster-b"]
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+5:25PM INF tool completed component=runner elapsed=11.978872 findings=1 tool=cluster-a
+5:25PM INF tool completed component=scan findings=1 scan_id=5893a86f-4f83-41e5-aee7-acdde982afbf tool=cluster-a
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+5:25PM INF tool completed component=runner elapsed=9.879606 findings=1 tool=cluster-b
+5:25PM INF tool completed component=scan findings=1 scan_id=5893a86f-4f83-41e5-aee7-acdde982afbf tool=cluster-b
+5:25PM INF scan run complete component=runner elapsed=65.713098 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+5:25PM INF scan run finished component=scan scan_id=5893a86f-4f83-41e5-aee7-acdde982afbf status=completed
+5:25PM INF scan complete — all tools finished component=scan findings=1 scan_id=5893a86f-4f83-41e5-aee7-acdde982afbf status=completed
+5:25PM INF scan starting branch=main component=scan repo_id=338586ed-3842-4fc1-aa71-d73655e1cbd0 scan_id=fbd785db-020b-47d4-8962-b8413d28ad28
+5:25PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=fbd785db-020b-47d4-8962-b8413d28ad28
+5:25PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+5:25PM INF tools selected for scan component=runner count=1 tools=["cluster-b"]
+5:25PM INF tools selected component=scan count=1 scan_id=fbd785db-020b-47d4-8962-b8413d28ad28 tools=["cluster-b"]
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+5:25PM INF tool completed component=runner elapsed=7.837508 findings=1 tool=cluster-b
+5:25PM INF tool completed component=scan findings=1 scan_id=fbd785db-020b-47d4-8962-b8413d28ad28 tool=cluster-b
+5:25PM INF scan run complete component=runner elapsed=26.898733 findings=1 tools_failed=0 tools_run=1 tools_skipped=0
+5:25PM INF scan run finished component=scan scan_id=fbd785db-020b-47d4-8962-b8413d28ad28 status=completed
+5:25PM INF scan complete — all tools finished component=scan findings=1 scan_id=fbd785db-020b-47d4-8962-b8413d28ad28 status=completed
+5:25PM INF scan starting branch=main component=scan repo_id=8a9679f1-dbfc-444c-b821-a62b13c28cb5 scan_id=bc337f01-6a2d-4858-b8fb-5c2a158f0e65
+5:25PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=bc337f01-6a2d-4858-b8fb-5c2a158f0e65
+5:25PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+5:25PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+5:25PM INF tools selected component=scan count=2 scan_id=bc337f01-6a2d-4858-b8fb-5c2a158f0e65 tools=["cluster-a","cluster-b"]
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+5:25PM INF tool completed component=runner elapsed=9.476867 findings=1 tool=cluster-a
+5:25PM INF tool completed component=scan findings=1 scan_id=bc337f01-6a2d-4858-b8fb-5c2a158f0e65 tool=cluster-a
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+5:25PM INF tool completed component=runner elapsed=8.882626 findings=1 tool=cluster-b
+5:25PM INF tool completed component=scan findings=1 scan_id=bc337f01-6a2d-4858-b8fb-5c2a158f0e65 tool=cluster-b
+5:25PM INF scan run complete component=runner elapsed=57.261164 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+5:25PM INF scan run finished component=scan scan_id=bc337f01-6a2d-4858-b8fb-5c2a158f0e65 status=completed
+5:25PM INF scan complete — all tools finished component=scan findings=0 scan_id=bc337f01-6a2d-4858-b8fb-5c2a158f0e65 status=completed
+5:25PM INF scan starting branch=main component=scan repo_id=aff5c47e-508d-424f-9f48-30409f4d0cae scan_id=cd326b01-15eb-4f6d-9373-dfe76aba6380
+5:25PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=cd326b01-15eb-4f6d-9373-dfe76aba6380
+5:25PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+5:25PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+5:25PM INF tools selected component=scan count=2 scan_id=cd326b01-15eb-4f6d-9373-dfe76aba6380 tools=["cluster-a","cluster-b"]
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+5:25PM INF tool completed component=runner elapsed=7.12752 findings=1 tool=cluster-b
+5:25PM INF tool completed component=scan findings=1 scan_id=cd326b01-15eb-4f6d-9373-dfe76aba6380 tool=cluster-b
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+5:25PM INF tool completed component=runner elapsed=6.322303 findings=1 tool=cluster-a
+5:25PM INF tool completed component=scan findings=1 scan_id=cd326b01-15eb-4f6d-9373-dfe76aba6380 tool=cluster-a
+5:25PM INF scan run complete component=runner elapsed=45.310626 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+5:25PM INF scan run finished component=scan scan_id=cd326b01-15eb-4f6d-9373-dfe76aba6380 status=completed
+5:25PM ERR scan result publication failed error="scan or findings changed during evaluation; retry with a fresh snapshot" component=scan scan_id=cd326b01-15eb-4f6d-9373-dfe76aba6380
+5:25PM INF scan complete — all tools finished component=scan findings=0 scan_id=cd326b01-15eb-4f6d-9373-dfe76aba6380 status=failed
+5:25PM INF scan starting branch=main component=scan repo_id=ee064349-21ba-45fd-83e7-da1faddce6f9 scan_id=2f1f68d5-4e2a-49e3-a249-16d8ae717e9d
+5:25PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=2f1f68d5-4e2a-49e3-a249-16d8ae717e9d
+5:25PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+5:25PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+5:25PM INF tools selected component=scan count=2 scan_id=2f1f68d5-4e2a-49e3-a249-16d8ae717e9d tools=["cluster-a","cluster-b"]
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+5:25PM INF tool completed component=runner elapsed=11.519337 findings=1 tool=cluster-a
+5:25PM INF tool completed component=scan findings=1 scan_id=2f1f68d5-4e2a-49e3-a249-16d8ae717e9d tool=cluster-a
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+5:25PM INF tool completed component=runner elapsed=10.785874 findings=1 tool=cluster-b
+5:25PM INF tool completed component=scan findings=1 scan_id=2f1f68d5-4e2a-49e3-a249-16d8ae717e9d tool=cluster-b
+5:25PM INF scan run complete component=runner elapsed=78.661467 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+5:25PM INF scan run finished component=scan scan_id=2f1f68d5-4e2a-49e3-a249-16d8ae717e9d status=completed
+5:25PM INF scan starting branch=main component=scan repo_id=46ad6fb7-b91e-48b6-b71f-10def6e95e7b scan_id=73c459ce-5081-4d15-ae7b-db72e7ace40a
+5:25PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=73c459ce-5081-4d15-ae7b-db72e7ace40a
+5:25PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+5:25PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+5:25PM INF tools selected component=scan count=2 scan_id=73c459ce-5081-4d15-ae7b-db72e7ace40a tools=["cluster-a","cluster-b"]
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+5:25PM INF tool completed component=runner elapsed=11.53736 findings=1 tool=cluster-b
+5:25PM INF tool completed component=scan findings=1 scan_id=73c459ce-5081-4d15-ae7b-db72e7ace40a tool=cluster-b
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+5:25PM INF tool completed component=runner elapsed=10.294348 findings=1 tool=cluster-a
+5:25PM INF tool completed component=scan findings=1 scan_id=73c459ce-5081-4d15-ae7b-db72e7ace40a tool=cluster-a
+5:25PM INF scan run complete component=runner elapsed=63.233648 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+5:25PM INF scan run finished component=scan scan_id=73c459ce-5081-4d15-ae7b-db72e7ace40a status=completed
+5:25PM INF scan starting branch=main component=scan repo_id=6205d358-3e86-45a3-a809-daf2a9fafdcd scan_id=6b9e18ad-973d-4980-82dc-f48a9ff4e09b
+5:25PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=6b9e18ad-973d-4980-82dc-f48a9ff4e09b
+5:25PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+5:25PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+5:25PM INF tools selected component=scan count=2 scan_id=6b9e18ad-973d-4980-82dc-f48a9ff4e09b tools=["cluster-a","cluster-b"]
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+5:25PM INF tool completed component=runner elapsed=7.4942 findings=1 tool=cluster-b
+5:25PM INF tool completed component=scan findings=1 scan_id=6b9e18ad-973d-4980-82dc-f48a9ff4e09b tool=cluster-b
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+5:25PM INF tool completed component=runner elapsed=9.037268 findings=1 tool=cluster-a
+5:25PM INF tool completed component=scan findings=1 scan_id=6b9e18ad-973d-4980-82dc-f48a9ff4e09b tool=cluster-a
+5:25PM INF scan run complete component=runner elapsed=55.498764 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+5:25PM INF scan run finished component=scan scan_id=6b9e18ad-973d-4980-82dc-f48a9ff4e09b status=completed
+5:25PM ERR artifact persistence failed error="scan artifact publication failed: fixture artifact persistence failure" component=scan scan_id=6b9e18ad-973d-4980-82dc-f48a9ff4e09b
+5:25PM ERR scan result publication failed error="scan artifact publication failed: fixture artifact persistence failure" component=scan scan_id=6b9e18ad-973d-4980-82dc-f48a9ff4e09b
+5:25PM ERR failed scan gate artifact publication failed error="fixture artifact persistence failure" component=scan scan_id=6b9e18ad-973d-4980-82dc-f48a9ff4e09b
+5:25PM INF scan complete — all tools finished component=scan findings=1 scan_id=6b9e18ad-973d-4980-82dc-f48a9ff4e09b status=failed
+5:25PM INF scan starting branch=main component=scan repo_id=94a7af84-c71a-48db-9af8-7568917720ca scan_id=dff3fd13-50a0-4b68-892c-b3bf367ef7bb
+5:25PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=dff3fd13-50a0-4b68-892c-b3bf367ef7bb
+5:25PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+5:25PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+5:25PM INF tools selected component=scan count=2 scan_id=dff3fd13-50a0-4b68-892c-b3bf367ef7bb tools=["cluster-a","cluster-b"]
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+5:25PM INF tool completed component=runner elapsed=12.305618 findings=1 tool=cluster-a
+5:25PM INF tool completed component=scan findings=1 scan_id=dff3fd13-50a0-4b68-892c-b3bf367ef7bb tool=cluster-a
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+5:25PM INF tool completed component=runner elapsed=9.883682 findings=1 tool=cluster-b
+5:25PM INF tool completed component=scan findings=1 scan_id=dff3fd13-50a0-4b68-892c-b3bf367ef7bb tool=cluster-b
+5:25PM INF scan run complete component=runner elapsed=64.291301 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+5:25PM INF scan run finished component=scan scan_id=dff3fd13-50a0-4b68-892c-b3bf367ef7bb status=completed
+5:25PM ERR scan result publication failed error="evaluate final gate: fixture gate policy read failure" component=scan scan_id=dff3fd13-50a0-4b68-892c-b3bf367ef7bb
+5:25PM ERR failed scan gate evaluation failed error="fixture gate policy read failure" component=scan scan_id=dff3fd13-50a0-4b68-892c-b3bf367ef7bb
+5:25PM INF scan complete — all tools finished component=scan findings=0 scan_id=dff3fd13-50a0-4b68-892c-b3bf367ef7bb status=failed
+5:25PM INF scan starting branch=main component=scan repo_id=5cfdd8d2-89dc-461f-b874-0ea1b3015963 scan_id=fa30943f-6ac8-4369-b595-aa4dd6c47909
+5:25PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=fa30943f-6ac8-4369-b595-aa4dd6c47909
+5:25PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+5:25PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+5:25PM INF tools selected component=scan count=2 scan_id=fa30943f-6ac8-4369-b595-aa4dd6c47909 tools=["cluster-a","cluster-b"]
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+5:25PM INF tool completed component=runner elapsed=8.856298 findings=1 tool=cluster-b
+5:25PM INF tool completed component=scan findings=1 scan_id=fa30943f-6ac8-4369-b595-aa4dd6c47909 tool=cluster-b
+5:25PM ERR failed to persist tool findings error="fixture persistence failure" component=scan scan_id=fa30943f-6ac8-4369-b595-aa4dd6c47909 tool=cluster-b
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+5:25PM INF tool completed component=runner elapsed=7.062026 findings=1 tool=cluster-a
+5:25PM INF tool completed component=scan findings=1 scan_id=fa30943f-6ac8-4369-b595-aa4dd6c47909 tool=cluster-a
+5:25PM INF scan run complete component=runner elapsed=50.39213 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+5:25PM ERR scan run failed error="persist cluster-b findings: fixture persistence failure" component=scan scan_id=fa30943f-6ac8-4369-b595-aa4dd6c47909
+5:25PM INF scan complete — all tools finished component=scan findings=1 scan_id=fa30943f-6ac8-4369-b595-aa4dd6c47909 status=failed
+5:25PM INF scan starting branch=main component=scan repo_id=f90c0d95-7763-47f2-b3b3-130a80300b78 scan_id=9615895a-30c6-4057-a992-d810ac767b9c
+5:25PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=9615895a-30c6-4057-a992-d810ac767b9c
+5:25PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+5:25PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+5:25PM INF tools selected component=scan count=2 scan_id=9615895a-30c6-4057-a992-d810ac767b9c tools=["cluster-a","cluster-b"]
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+5:25PM INF tool completed component=runner elapsed=7.798584 findings=1 tool=cluster-b
+5:25PM INF tool completed component=scan findings=1 scan_id=9615895a-30c6-4057-a992-d810ac767b9c tool=cluster-b
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+5:25PM INF tool completed component=runner elapsed=7.273095 findings=1 tool=cluster-a
+5:25PM INF tool completed component=scan findings=1 scan_id=9615895a-30c6-4057-a992-d810ac767b9c tool=cluster-a
+5:25PM INF scan run complete component=runner elapsed=53.392414 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+5:25PM ERR scan run failed error="read persisted findings: fixture persistence failure" component=scan scan_id=9615895a-30c6-4057-a992-d810ac767b9c
+5:25PM INF scan complete — all tools finished component=scan findings=2 scan_id=9615895a-30c6-4057-a992-d810ac767b9c status=failed
+5:25PM INF scan starting branch=main component=scan repo_id=c2db68e8-e733-4b3d-9065-5f6d946a0fd6 scan_id=56932d45-a6d7-4452-9e51-185efdea9efc
+5:25PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=56932d45-a6d7-4452-9e51-185efdea9efc
+5:25PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+5:25PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+5:25PM INF tools selected component=scan count=2 scan_id=56932d45-a6d7-4452-9e51-185efdea9efc tools=["cluster-a","cluster-b"]
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+5:25PM INF tool completed component=runner elapsed=7.575053 findings=1 tool=cluster-b
+5:25PM INF tool completed component=scan findings=1 scan_id=56932d45-a6d7-4452-9e51-185efdea9efc tool=cluster-b
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+5:25PM INF tool completed component=runner elapsed=6.10891 findings=1 tool=cluster-a
+5:25PM INF tool completed component=scan findings=1 scan_id=56932d45-a6d7-4452-9e51-185efdea9efc tool=cluster-a
+5:25PM INF scan run complete component=runner elapsed=45.25378 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+5:25PM INF scan run finished component=scan scan_id=56932d45-a6d7-4452-9e51-185efdea9efc status=completed
+5:25PM INF scan complete — all tools finished component=scan findings=2 scan_id=56932d45-a6d7-4452-9e51-185efdea9efc status=failed
+5:25PM INF scan starting branch=main component=scan repo_id=75a621bf-adc2-45bc-9006-520a45e6a52d scan_id=f5d41d6c-0509-4c22-bc6d-22f7fc1a08eb
+5:25PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=f5d41d6c-0509-4c22-bc6d-22f7fc1a08eb
+5:25PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+5:25PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+5:25PM INF tools selected component=scan count=2 scan_id=f5d41d6c-0509-4c22-bc6d-22f7fc1a08eb tools=["cluster-a","cluster-b"]
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+5:25PM INF tool completed component=runner elapsed=6.981936 findings=1 tool=cluster-a
+5:25PM INF tool completed component=scan findings=1 scan_id=f5d41d6c-0509-4c22-bc6d-22f7fc1a08eb tool=cluster-a
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+5:25PM INF tool completed component=runner elapsed=6.864134 findings=1 tool=cluster-b
+5:25PM INF tool completed component=scan findings=1 scan_id=f5d41d6c-0509-4c22-bc6d-22f7fc1a08eb tool=cluster-b
+5:25PM INF scan run complete component=runner elapsed=44.459744 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+5:25PM INF scan run finished component=scan scan_id=f5d41d6c-0509-4c22-bc6d-22f7fc1a08eb status=completed
+5:25PM ERR scan result publication failed error="commit scan completion: fixture completion persistence failure" component=scan scan_id=f5d41d6c-0509-4c22-bc6d-22f7fc1a08eb
+5:25PM INF scan complete — all tools finished component=scan findings=1 scan_id=f5d41d6c-0509-4c22-bc6d-22f7fc1a08eb status=failed
+5:25PM INF scan starting branch=main component=scan repo_id=21a5268d-2b72-49b0-ae3a-c0f8a4b1c1cc scan_id=4aca616b-6a1c-49c2-9ec4-072fa6455e58
+5:25PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=4aca616b-6a1c-49c2-9ec4-072fa6455e58
+5:25PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+5:25PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+5:25PM INF tools selected component=scan count=2 scan_id=4aca616b-6a1c-49c2-9ec4-072fa6455e58 tools=["cluster-a","cluster-b"]
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+5:25PM INF tool completed component=runner elapsed=6.841551 findings=1 tool=cluster-b
+5:25PM INF tool completed component=scan findings=1 scan_id=4aca616b-6a1c-49c2-9ec4-072fa6455e58 tool=cluster-b
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+5:25PM INF tool completed component=runner elapsed=6.073163 findings=1 tool=cluster-a
+5:25PM INF tool completed component=scan findings=1 scan_id=4aca616b-6a1c-49c2-9ec4-072fa6455e58 tool=cluster-a
+5:25PM INF scan run complete component=runner elapsed=43.708289 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+5:25PM INF scan run finished component=scan scan_id=4aca616b-6a1c-49c2-9ec4-072fa6455e58 status=completed
+5:25PM INF scan complete — all tools finished component=scan findings=1 scan_id=4aca616b-6a1c-49c2-9ec4-072fa6455e58 status=failed
+5:25PM INF scan starting branch=main component=scan repo_id=d8faf4ef-59f1-44be-8533-0cbb2eca44e0 scan_id=c1f2399b-bf10-4e42-abd7-691f430a31dd
+5:25PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=c1f2399b-bf10-4e42-abd7-691f430a31dd
+5:25PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+5:25PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+5:25PM INF tools selected component=scan count=2 scan_id=c1f2399b-bf10-4e42-abd7-691f430a31dd tools=["cluster-a","cluster-b"]
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+5:25PM INF tool completed component=runner elapsed=10.946447 findings=1 tool=cluster-b
+5:25PM INF tool completed component=scan findings=1 scan_id=c1f2399b-bf10-4e42-abd7-691f430a31dd tool=cluster-b
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+5:25PM INF tool completed component=runner elapsed=11.535936 findings=1 tool=cluster-a
+5:25PM INF tool completed component=scan findings=1 scan_id=c1f2399b-bf10-4e42-abd7-691f430a31dd tool=cluster-a
+5:25PM INF scan run complete component=runner elapsed=72.059688 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+5:25PM INF scan run finished component=scan scan_id=c1f2399b-bf10-4e42-abd7-691f430a31dd status=completed
+5:25PM ERR scan result publication failed error="commit scan completion: fixture completion persistence failure" component=scan scan_id=c1f2399b-bf10-4e42-abd7-691f430a31dd
+5:25PM INF scan complete — all tools finished component=scan findings=1 scan_id=c1f2399b-bf10-4e42-abd7-691f430a31dd status=failed
+5:25PM INF scan starting branch=main component=scan repo_id=42ca017e-0e25-4f03-ba9f-b9a1546b305a scan_id=6701d7ad-3381-485a-afc0-81f2ede6c866
+5:25PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=6701d7ad-3381-485a-afc0-81f2ede6c866
+5:25PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+5:25PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+5:25PM INF tools selected component=scan count=2 scan_id=6701d7ad-3381-485a-afc0-81f2ede6c866 tools=["cluster-a","cluster-b"]
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+5:25PM INF tool completed component=runner elapsed=8.743123 findings=1 tool=cluster-b
+5:25PM INF tool completed component=scan findings=1 scan_id=6701d7ad-3381-485a-afc0-81f2ede6c866 tool=cluster-b
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+5:25PM INF tool completed component=runner elapsed=7.882382 findings=1 tool=cluster-a
+5:25PM INF tool completed component=scan findings=1 scan_id=6701d7ad-3381-485a-afc0-81f2ede6c866 tool=cluster-a
+5:25PM INF scan run complete component=runner elapsed=51.659529 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+5:25PM INF scan run finished component=scan scan_id=6701d7ad-3381-485a-afc0-81f2ede6c866 status=completed
+5:25PM ERR scan result publication failed error="evaluate final gate: fixture gate policy read failure" component=scan scan_id=6701d7ad-3381-485a-afc0-81f2ede6c866
+5:25PM ERR failed scan gate evaluation failed error="fixture gate policy read failure" component=scan scan_id=6701d7ad-3381-485a-afc0-81f2ede6c866
+5:25PM INF scan complete — all tools finished component=scan findings=1 scan_id=6701d7ad-3381-485a-afc0-81f2ede6c866 status=failed
+5:25PM INF scan starting branch=main component=scan repo_id=dc583f71-9dd4-4119-bc28-34a2d14f3ab5 scan_id=bde81595-901d-4bf4-a540-d964bf89e226
+5:25PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=bde81595-901d-4bf4-a540-d964bf89e226
+5:25PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+5:25PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+5:25PM INF tools selected component=scan count=2 scan_id=bde81595-901d-4bf4-a540-d964bf89e226 tools=["cluster-a","cluster-b"]
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+5:25PM INF tool completed component=runner elapsed=9.031108 findings=1 tool=cluster-b
+5:25PM INF tool completed component=scan findings=1 scan_id=bde81595-901d-4bf4-a540-d964bf89e226 tool=cluster-b
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+5:25PM INF tool completed component=runner elapsed=5.923741 findings=1 tool=cluster-a
+5:25PM INF tool completed component=scan findings=1 scan_id=bde81595-901d-4bf4-a540-d964bf89e226 tool=cluster-a
+5:25PM INF scan run complete component=runner elapsed=49.940861 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+5:25PM INF scan run finished component=scan scan_id=bde81595-901d-4bf4-a540-d964bf89e226 status=completed
+5:25PM ERR artifact persistence failed error="fixture artifact persistence failure" component=scan scan_id=bde81595-901d-4bf4-a540-d964bf89e226
+5:25PM ERR artifact persistence failed error="fixture artifact persistence failure" component=scan scan_id=bde81595-901d-4bf4-a540-d964bf89e226
+5:25PM ERR artifact persistence failed error="fixture artifact persistence failure" component=scan scan_id=bde81595-901d-4bf4-a540-d964bf89e226
+5:25PM ERR artifact persistence failed error="fixture artifact persistence failure" component=scan scan_id=bde81595-901d-4bf4-a540-d964bf89e226
+5:25PM ERR artifact persistence failed error="scan artifact publication failed: fixture artifact persistence failure" component=scan scan_id=bde81595-901d-4bf4-a540-d964bf89e226
+5:25PM ERR scan result publication failed error="scan artifact publication failed: fixture artifact persistence failure" component=scan scan_id=bde81595-901d-4bf4-a540-d964bf89e226
+5:25PM ERR failed scan gate artifact publication failed error="fixture artifact persistence failure" component=scan scan_id=bde81595-901d-4bf4-a540-d964bf89e226
+5:25PM INF scan complete — all tools finished component=scan findings=1 scan_id=bde81595-901d-4bf4-a540-d964bf89e226 status=failed
+5:25PM INF scan starting branch=main component=scan repo_id=6e5f2d1c-122f-4a10-9fe0-aab8d0360bde scan_id=b6e9c919-0fb3-47a4-b282-fc7d9b591265
+5:25PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=b6e9c919-0fb3-47a4-b282-fc7d9b591265
+5:25PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+5:25PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+5:25PM INF tools selected component=scan count=2 scan_id=b6e9c919-0fb3-47a4-b282-fc7d9b591265 tools=["cluster-a","cluster-b"]
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+5:25PM INF tool completed component=runner elapsed=11.6865 findings=1 tool=cluster-a
+5:25PM INF tool completed component=scan findings=1 scan_id=b6e9c919-0fb3-47a4-b282-fc7d9b591265 tool=cluster-a
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+5:25PM INF tool completed component=runner elapsed=11.936001 findings=1 tool=cluster-b
+5:25PM INF tool completed component=scan findings=1 scan_id=b6e9c919-0fb3-47a4-b282-fc7d9b591265 tool=cluster-b
+5:25PM INF scan run complete component=runner elapsed=74.300811 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+5:25PM INF scan run finished component=scan scan_id=b6e9c919-0fb3-47a4-b282-fc7d9b591265 status=completed
+5:25PM ERR scan result publication failed error="commit scan completion: fixture completion persistence failure" component=scan scan_id=b6e9c919-0fb3-47a4-b282-fc7d9b591265
+5:25PM ERR failed scan gate artifact publication failed error="fixture artifact persistence failure" component=scan scan_id=b6e9c919-0fb3-47a4-b282-fc7d9b591265
+5:25PM INF scan complete — all tools finished component=scan findings=1 scan_id=b6e9c919-0fb3-47a4-b282-fc7d9b591265 status=failed
+5:25PM INF scan starting branch=main component=scan repo_id=9591b67f-5fbf-456e-a7de-7fa44db38b97 scan_id=8ad32483-2303-4a0e-8976-26d3db67982d
+5:25PM INF scan concurrency configured component=scan concurrency=0 heavy_concurrency=0 network_concurrency=0 scan_id=8ad32483-2303-4a0e-8976-26d3db67982d
+5:25PM INF scanner scheduling configured component=runner scheduling={"concurrency":2,"cpu_budget":0,"heavy_concurrency":1,"host_cpus":0,"host_memory_bytes":0,"memory_budget_bytes":0,"network_concurrency":2,"source":"conservative fallback","workers":1}
+5:25PM INF tools selected for scan component=runner count=2 tools=["cluster-a","cluster-b"]
+5:25PM INF tools selected component=scan count=2 scan_id=8ad32483-2303-4a0e-8976-26d3db67982d tools=["cluster-a","cluster-b"]
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-b
+5:25PM INF tool completed component=runner elapsed=6.907145 findings=1 tool=cluster-b
+5:25PM INF tool completed component=scan findings=1 scan_id=8ad32483-2303-4a0e-8976-26d3db67982d tool=cluster-b
+5:25PM INF tool starting component=runner resource_class=heavy tool=cluster-a
+5:25PM INF tool completed component=runner elapsed=6.077531 findings=1 tool=cluster-a
+5:25PM INF tool completed component=scan findings=1 scan_id=8ad32483-2303-4a0e-8976-26d3db67982d tool=cluster-a
+5:25PM INF scan run complete component=runner elapsed=44.933044 findings=1 tools_failed=0 tools_run=2 tools_skipped=0
+5:25PM INF scan run finished component=scan scan_id=8ad32483-2303-4a0e-8976-26d3db67982d status=completed
+5:25PM ERR artifact persistence failed error="open /tmp/TestScanFinalizationKeepsPersistedIdentityAndEnrichmentpostgres3586478788/001/002_20261023-172550_8ad32483/cluster-b.log: is a directory" component=scan scan_id=8ad32483-2303-4a0e-8976-26d3db67982d
+5:25PM INF scan complete — all tools finished component=scan findings=1 scan_id=8ad32483-2303-4a0e-8976-26d3db67982d status=failed
+--- FAIL: TestLockfileSuppressionViewsAndArtifacts (0.52s)
+    lockfile_suppression_test.go:116: gate lost lockfile issues: 200 {"data":{"result":{"scan_status":"completed","findings_revision":3,"id":"f7bbe3cd-94f2-4f29-abbf-60843bb7a3d8","scan_id":"4feeabb0-0fa0-44c8-ba85-adcf625d5ddf","policy_id":"default","status":"fail","summary_json":"{\"status\":\"fail\",\"fail_count\":3,\"warn_count\":0,\"pass_count\":0,\"ignored\":0,\"by_severity\":{\"high\":3}}","matched_rules_json":"[{\"rule_id\":\"fail-high-security\",\"action\":\"fail\",\"finding_ids\":[\"104ae5b3-c3de-4536-89ca-a9700e695a5a\",\"db087e81-8877-4d21-919a-50c4b4a7a10d\",\"e5246c2c-e50f-4801-adb1-74123350560b\"],\"finding_count\":3}]","evaluated_at":"2026-10-23T17:25:51.645156697Z","created_at":"2026-10-23T17:25:51.645156697Z","updated_at":"2026-10-23T17:25:51.645287023Z"},"evaluation":{"status":"fail","summary":{"status":"fail","fail_count":3,"warn_count":0,"pass_count":0,"ignored":0,"by_severity":{"high":3}},"matched_rules":[{"rule_id":"fail-high-security","action":"fail","finding_ids":["104ae5b3-c3de-4536-89ca-a9700e695a5a","db087e81-8877-4d21-919a-50c4b4a7a10d","e5246c2c-e50f-4801-adb1-74123350560b"],"finding_count":3}]},"policy":{"id":"default","name":"default-security-gate","scope":"global","scope_id":"","mode":"warn","rules_json":"[{\"id\":\"fail-unsuppressed-secrets\",\"category\":[\"secrets\"],\"suppressed\":false,\"action\":\"fail\"},{\"id\":\"fail-hardcoded-secret\",\"fine_category\":[\"hardcoded-secret\"],\"suppressed\":false,\"action\":\"fail\"},{\"id\":\"fail-critical\",\"severity\":[\"critical\"],\"suppressed\":false,\"action\":\"fail\"},{\"id\":\"fail-high-security\",\"severity\":[\"high\"],\"category\":[\"sast\",\"sca\",\"secrets\",\"container\",\"infra\",\"dast\"],\"suppressed\":false,\"action\":\"fail\"},{\"id\":\"warn-medium-security\",\"severity\":[\"medium\"],\"category\":[\"sast\",\"sca\",\"secrets\",\"container\",\"infra\",\"dast\"],\"suppressed\":false,\"action\":\"warn\"}]","enabled":true,"created_by":"","created_at":"0001-01-01T00:00:00Z","updated_at":"0001-01-01T00:00:00Z"},"persisted":true,"finding_count":6}}
+FAIL
+FAIL	github.com/alphabravocompany/thewolf/internal/api/routes	38.294s
+FAIL

@@ -1,5 +1,214 @@
 # Changelog
 
+## [Unreleased]
+
+- Keep scan totals, quality gates and finding detail on one suppression projection
+  per operation. Refresh live manifest counts after rule/default edits while retaining
+  recorded producer metadata and immutable historical downloads.
+
+
+- Evaluate Git ignores with literal NUL-delimited paths, controlled Git settings,
+  validated policy files and bounded cancellation. Failures leave suppression
+  projections unchanged and reach live views, report publication and rule transactions.
+
+
+- Reject malformed or unreadable `.wolfignore` rules without partial suppression;
+  propagate failures through live views, gates, report/CLI publication and durable
+  rule transactions. Suppression previews share one parsed ruleset, and scan
+  statistics now match path-suppressed finding lists.
+
+
+- Keep partially suppressed persisted clusters visible by selecting an open,
+  unsuppressed representative using the runner's existing preference. Retain native
+  finding IDs, fix references, evidence membership and canonical issue identity.
+  Recompute promoted scores/history from their own inputs and roll back all changes
+  together. Preview now distinguishes matched issues/evidence from newly hidden
+  issues; the UI confirmation and saved-message reflect that distinction.
+
+- Make durable suppression creation, revocation and expiry transactional with
+  finding flags, counts, revisions, existing canonical visibility and audit records.
+  Preserve concurrent triage and reapply overlapping active rules. Native/import
+  inserts read current rules inside their transaction. Run expiry at server startup
+  and once per minute; retry failures. Preview only the newest scan in the requested
+  branch or repository and return its identity, including empty scans. Reject past
+  expiry dates and stop advertising unsupported advisory scope/ignore negation.
+
+- Limit built-in lockfile suppression to SAST and secrets using explicit analysis
+  category predicates. SCA, license, container and unknown-category findings remain
+  visible unless another rule applies. Custom reason labels no longer change rule
+  behavior. Finding detail, evidence and triage responses now use the same path
+  suppression matcher as lists, gates and reports.
+
+- Retry finding-revision conflicts during native/import finalization from fresh
+  persisted snapshots, rerendering reports and the gate without rerunning scanners.
+  Bound retries to three attempts and preserve cancellation/lease-loss guards.
+  Publish original SARIF bytes through the existing immutable artifact writer.
+  Executor-process recovery immediately before/after commit is qualified on
+  SQLite/PostgreSQL; broader deployment and failure-matrix work remains open.
+
+- Commit scan completion, canonical evidence, final gate/artifact reference,
+  first-success baseline and import claim together. Keep execution ownership until
+  publication succeeds; reject stale/cancelled completion. Migration 067 binds gate
+  caches to scan status as well as finding revision, preventing a late running gate
+  from replacing the final result. Failed imports leave no checksum reservation;
+  identical uploads can retry, and clean SARIF runs retain tool metadata.
+
+- Reconcile baseline history transactionally during manual merges and splits.
+  Migration 066 binds derived dates to their source identity so a joined member
+  cannot retain or propagate another issue's history. Regrouped legacy observations
+  without a pinned baseline become unknown; unrelated history is preserved.
+  Baseline-sensitive gates report incomplete when relevant state is unknown.
+
+- Persist baseline classification and observation dates transactionally on both
+  databases. Keep the selected branch baseline across replay, retain original
+  introduction on resurfacing, include history beyond 20 scans, and preserve
+  triage and native evidence. Migration 065 leaves legacy dates unknown. Validate
+  saved baseline execution/ownership, propagate failures, derive imported baseline
+  state locally, and include persisted history in JSON/SARIF reports. Fixed/resolved
+  transitions and canonical timeline/backfill qualification remain open.
+
+- Publish recorded scan artifacts at unique paths with matching checksums; repeated
+  gate/diff requests and retries cannot overwrite earlier downloads. Reject corrupt
+  content with HTTP 409 and expose known finding revisions. Migration 064 retains
+  unversioned legacy rows. Propagate bundle/log/metadata write failures, preserve
+  current finding state on late scan failure, and regenerate stale live manifests
+  while keeping historical downloads. Whole-scan/recovery qualification remains open.
+
+- Reconcile scan headers after manual grouping and evaluate compact scan results
+  from a consistent finding snapshot. Migration 063 versions persisted findings
+  and gates, invalidates unversioned gate caches and rejects stale gate writes.
+  Propagate policy/snapshot errors; generated Markdown/SARIF now applies shared
+  path suppressions and identifies its finding revision. Automatic finalization retry and
+  process recovery remain D02 work; upgrade API/workers together.
+
+- Make vulnerability merge/split and canonical persistence transactional on
+  SQLite and PostgreSQL. Keep native finding IDs/evidence, reconcile finding
+  membership, reject invalid subsets and active scans, and preserve manual
+  decisions during replay. Clear inherited confidence after manual association
+  and propagate evidence-read failures. Whole-scan recovery and
+  future-scan membership policy still require the remaining D02 work.
+
+- Persist finding clusters without deleting native evidence or changing member
+  IDs. Reconcile list, fleet and report counts; retain contributor filters and
+  per-tool artifacts. Serialize triage and recovery with cluster finalization,
+  and keep open evidence visible when another member was suppressed or triaged.
+  Surface canonical-write failures and fix PostgreSQL suppression encoding.
+  Existing scans are not backfilled; full D02 qualification remains open.
+
+- Build final scan aggregates from persisted findings so reports retain database
+  IDs, including resumed scans. Finish enrichment before scoring and reload final
+  database values for artifacts; finding insert/read/update errors fail the scan.
+  Per-tool evidence rows remain intact while full cluster reconciliation is open.
+
+- Preserve vulnerable dependency identity across scanner output, storage, API and
+  JSON/SARIF reports. New SCA fingerprints include package, advisory and location;
+  separate packages and CVEs no longer collapse in one lockfile. Keep all Grype
+  locations and the selected npm/pip manifest path. Migration 061 adds dependency
+  metadata without rewriting historical v1 findings; legacy baseline continuity
+  and final persisted-cluster reconciliation remain separate qualification work.
+
+- Validate retained scan source identity before reusing completed tools or resetting
+  incomplete evidence. Preserve SSH archive provenance, keep retryable workspaces,
+  and guard recovery deletions with the scan lease on SQLite and PostgreSQL.
+  Git/GitHub/local/SSH preparation now uses versioned, length-framed content digests
+  that distinguish binary entry boundaries, symlinks and permissions. Legacy
+  in-flight digests require a new scan if recovery cannot verify the source.
+
+- Apply shared native Git defaults to source preparation and fix operations:
+  ignore inherited Git redirection/global configuration, disable repository
+  fsmonitor/hooks/signing/credential helpers, and retain explicitly supplied
+  transport credentials. Source inspection now propagates errors and cancellation;
+  failed or missing retained workspaces fail without silently replacing the source.
+  Repository filters and filesystem/network isolation remain under review.
+
+- Confine local branch and origin metadata reads, including registered repository
+  lookups and linked worktrees, to approved roots without running Git. Existing
+  local sources outside the browse allowlist require configuration before upgrade;
+  reftable support and broader Git isolation remain open.
+- Retain managed scan workspaces while preparation, resumed scans or enrichment
+  still use them. Confine cleanup to the opened workspace root; reject nested
+  path aliases, invalid retention requests and duration overflow. Report cleanup
+  failures and show removed/retained counts in Administration.
+
+- Publish first-run JWT and encryption keys atomically without replacing an
+  existing or concurrently created key. Fail startup on key-loading errors,
+  preserve existing formats, and make concurrent encryption-key reloads safe.
+
+- Respect the configured scanner runtime during API startup and worker default
+  selection. Kubernetes startup no longer probes Docker; explicit worker flags
+  still override the environment and Docker diagnostics remain available.
+- Confine scan artifact downloads, raw tool output and manifest reads to the
+  initialized artifact root, including symlink resolution.
+
+- Restrict automatic GitHub credentials during branch discovery to the exact
+  HTTPS GitHub origin; reject token-bearing lookalike or insecure remotes before
+  transport creation.
+- Install fixer CLIs through a confined, synced temporary file and atomic rename.
+  Preserve existing binaries on failed copies and avoid following destination
+  symlinks or hardlinks; reject invalid binary sizes and oversized downloads.
+
+- Upgrade Alpine deployment packages before installation and verify the rebuilt
+  runtime against the locked vulnerability databases. PostgreSQL readiness probes
+  now require TCP so initialization cannot report ready prematurely.
+- Update active Go toolchains to 1.27.3 and refresh pinned vulnerability databases.
+  Confine workspace digest reads and fail local scan preparation on hashing errors.
+- Return the original scan on idempotent retries at Community capacity while
+  preserving limits for new scans and conflicts for changed requests.
+- Fix PostgreSQL schedule enable/disable writes and enabled-only selection.
+  Qualify native and Compose scan/restart flows with both supported databases;
+  correct PostgreSQL 18 test storage and disposable fixture ownership.
+- Qualify genuine Kubernetes scanner Jobs and restart recovery in a fresh Kind
+  cluster; import local OCI images with their correct names and platform.
+- Retain current deployment identities, runner build inventory, security review
+  ledger and reproducible candidate validation evidence under `docs/validation`.
+
+- Fail remediation on incomplete scanner verification, engine errors, or patch
+  application failures while retaining the workspace. Apply API patches once
+  per turn before verification. Same-file rollbacks now invalidate every affected
+  repair, including earlier uncommitted keeps, and reports reflect final retries.
+- Preserve remediation workspaces when diff storage or reopening fails; stop
+  publication of unreviewable work and prevent silent replacement on resume.
+- Confine Go formatter writes to opened workspace files and require exact or
+  unambiguous finding IDs before applying agent decisions or suppressions.
+- Prevent failed remediation checkouts from deleting files. Preserve literal
+  filenames, confine removal of new files, and clear intent-to-add index entries.
+  Rollback and commit failures now stop the job and retain its workspace for
+  recovery instead of reporting success or continuing to push.
+- Validate GitHub repository coordinates at source parsing, cloning, and cache
+  lookup; reuse the same parser for fixer clone URLs and reject extra segments.
+- Restrict OCI registry redirects to the configured origin and request method,
+  including authenticated retries. Cross-origin CDN redirects fail explicitly;
+  registry qualification requirements are documented in the operations runbook.
+  Referrer and token responses now reject oversized bodies and trailing JSON.
+- Keep authenticated/private/negotiated metadata out of the shared discovery
+  cache, honor no-store on revalidation, preserve caller-owned request headers,
+  and propagate cancellation. Old cache entries are invalidated safely.
+- Scan preparation now stops on unavailable or malformed readiness, deduplicates
+  downloads, retries failed images, rechecks readiness, and preserves the request
+  and idempotency key when retrying an uncertain scan submission. Non-admins see
+  actionable download guidance; reduced-coverage scans require an explicit choice.
+- Remove duplicate bulk-download controls from Home and scanner settings. Scope
+  Wolf image updates to the displayed outdated Wolf images; recognize local
+  builds and private registries with ports, and fix narrow-screen image wrapping.
+- Use configured Docker endpoints for local image probes; distinguish absent
+  images from daemon failures and verify presence after a pull. Preserve HTTP
+  status when the UI receives HTML proxy errors or null error bodies.
+- Confine local browse filesystem operations with `os.Root` and check browse and
+  GitInfo paths before lookup. Disable external diff/textconv/fsmonitor helpers
+  during fix diff collection; include staged edits without duplicating committed
+  changes. Broader Git subprocess confinement remains under security review.
+- Local scans now exit nonzero for failed/missing tools, zero-tool execution,
+  incomplete parsing, cancellation, or canonical report-write errors while
+  retaining partial evidence. GoKart raw output is retained, and its finding
+  filter no longer drops distinct source/sink expressions on the same line.
+- Consolidate execution into `docs/PLAN.md` with stable checkbox task IDs,
+  acceptance evidence, and an archive of 18 superseded plans/designs.
+- Fix GoKart's pinned-toolchain analysis crashes and request SARIF on stdout.
+  Preserve partial findings on fatal exits while reporting failed execution;
+  reject missing/malformed reports. Native scanner smoke now exercises unsafe,
+  safe, and invalid-source fixtures. Existing scanner images require rebuild
+  and qualification before deployment.
+
 ## [2.0.0] — TBD
 
 ### Breaking

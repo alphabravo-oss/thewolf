@@ -1,0 +1,35 @@
+{
+  "name": "wolf-plan-finding-clusters-pg-20261023",
+  "id": "15bb444bec7143cf117e720d43810cab8a4044d561dd0d74df24cb97f25e78fe",
+  "image": "postgres@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873",
+  "image_id": "sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873",
+  "ports": {
+    "5432/tcp": [
+      {
+        "HostIp": "127.0.0.1",
+        "HostPort": "32784"
+      }
+    ]
+  },
+  "mounts": [
+    {
+      "Type": "volume",
+      "Name": "823b08f7c640f8c1c40957e552857374da6b57b0333f769a6e484654cf0ea539",
+      "Source": "/var/lib/docker/volumes/823b08f7c640f8c1c40957e552857374da6b57b0333f769a6e484654cf0ea539/_data",
+      "Destination": "/var/lib/postgresql",
+      "Driver": "local",
+      "Mode": "",
+      "RW": true,
+      "Propagation": ""
+    }
+  ],
+  "purpose": "Disposable PostgreSQL cluster migration, transactions, concurrent triage, executor and full race contracts. Fixture trust authentication; production untouched.",
+  "cleanup": {
+    "command": "docker rm -f -v wolf-plan-finding-clusters-pg-20261023",
+    "exit_code": 0,
+    "container_absent": true,
+    "volumes_absent": {
+      "823b08f7c640f8c1c40957e552857374da6b57b0333f769a6e484654cf0ea539": true
+    }
+  }
+}

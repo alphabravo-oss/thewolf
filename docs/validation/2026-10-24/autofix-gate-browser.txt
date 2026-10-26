@@ -1,0 +1,41 @@
+$ playwright test agents-state.spec.ts --workers=3
+[WebServer] $ vite build
+[WebServer] (node:3667721) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:3667980) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 12 tests using 3 workers
+
+(node:3668097) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3668104) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3668098) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   3 [desktop-chromium-linux] › e2e/agents-state.spec.ts:39:1 › verification failures cannot publish and PR failures remain actionable @browser-matrix (1.4s)
+  ✓   4 [desktop-chromium-linux] › e2e/agents-state.spec.ts:116:1 › published agents retry workspace cleanup without republishing @browser-matrix (633ms)
+(node:3668523) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   1 [desktop-chromium-linux] › e2e/agents-state.spec.ts:4:1 › agent failures stay distinct from disabled, unconfigured and empty states @browser-matrix (5.1s)
+  ✓   2 [desktop-chromium-linux] › e2e/agents-state.spec.ts:78:1 › cancelled agents wait for the worker and retry cleanup without restarting @browser-matrix (5.1s)
+(node:3668725) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3668732) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   6 [mobile-chromium-linux] › e2e/agents-state.spec.ts:39:1 › verification failures cannot publish and PR failures remain actionable @browser-matrix (1.4s)
+  ✓   8 [mobile-chromium-linux] › e2e/agents-state.spec.ts:116:1 › published agents retry workspace cleanup without republishing @browser-matrix (549ms)
+  ✓   5 [mobile-chromium-linux] › e2e/agents-state.spec.ts:4:1 › agent failures stay distinct from disabled, unconfigured and empty states @browser-matrix (5.0s)
+(node:3668965) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3668972) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   7 [mobile-chromium-linux] › e2e/agents-state.spec.ts:78:1 › cancelled agents wait for the worker and retry cleanup without restarting @browser-matrix (5.0s)
+(node:3669449) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  10 [desktop-firefox-linux] › e2e/agents-state.spec.ts:39:1 › verification failures cannot publish and PR failures remain actionable @browser-matrix (3.7s)
+  ✓  12 [desktop-firefox-linux] › e2e/agents-state.spec.ts:116:1 › published agents retry workspace cleanup without republishing @browser-matrix (1.1s)
+  ✓   9 [desktop-firefox-linux] › e2e/agents-state.spec.ts:4:1 › agent failures stay distinct from disabled, unconfigured and empty states @browser-matrix (6.8s)
+  ✓  11 [desktop-firefox-linux] › e2e/agents-state.spec.ts:78:1 › cancelled agents wait for the worker and retry cleanup without restarting @browser-matrix (6.3s)
+
+  12 passed (23.8s)

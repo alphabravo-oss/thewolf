@@ -35,8 +35,36 @@ topologies is documented in
 ## TLS
 
 Wolf itself speaks HTTP only — TLS is terminated by the bundled **Caddy** reverse
-proxy (the `proxy` profile). Caddy sets `X-Forwarded-Proto`, which Wolf uses to
-mark session cookies `Secure`. There are two modes, both driven by `.env`.
+proxy (the `proxy` profile). Caddy sets `X-Forwarded-Proto`. Wolf accepts it only
+when the socket peer is explicitly trusted by `WOLF_TRUSTED_PROXIES`, then marks
+session cookies `Secure`. There are two modes, both driven by `.env`.
+
+Before enabling public HTTPS, set `WOLF_TRUSTED_PROXIES` to a comma-separated list
+of the immediate proxy's **actual source IP addresses or CIDRs as seen by Wolf**.
+For a native reverse proxy on the same host, this might be
+`127.0.0.1/32,::1/128`. A Compose Caddy container normally uses a Docker-network
+address, not loopback: use its assigned stable address, or a dedicated subnet
+containing only trusted proxy hops. Do not copy loopback values for a container
+proxy, trust all private networks, or use `0.0.0.0/0` / `::/0`. Compose passes the
+variable from `.env`; native deployments set it in the API service environment.
+Helm can supply it through `extraEnv`.
+
+The default is empty: no forwarded addresses or protocols are trusted. Invalid
+configuration disables all proxy trust and emits a startup warning. Restart the
+API after changing this setting. If proxy addresses change, update the allowlist;
+a stale address fails closed. Existing proxy deployments must configure this
+setting on upgrade to retain per-client rate limits, Secure cookies and HTTPS
+SSO callback URLs.
+
+The final trusted proxy must overwrite `X-Forwarded-Proto` with one `http` or
+`https` value and append the socket client to `X-Forwarded-For` (or replace it
+with that address). Wolf traverses the chain from right to left, through only
+configured trusted hops, stopping at the nearest untrusted address. It ignores
+`X-Real-IP` and `Forwarded`. Malformed trusted-hop addresses fall back to the
+socket peer; duplicate/ambiguous protocol values do not assert HTTPS. Audit
+entries and rate limits share the resolved address; HTTP request logs retain the
+socket peer. Without a trusted proxy, clients behind it share its rate bucket.
+Restrict direct access to the API port at the deployment boundary.
 
 ### Mode 1 — Automatic (Let's Encrypt)  *(default)*
 
@@ -125,6 +153,24 @@ in `docker-compose.hardened.yml`.
    architecture (publish multi-arch images via `make scanners-buildx-all` or
    the `scanners-image` CI workflow).
 9. **Back up** the `wolf-data` (and `pg-data`) volumes.
+
+### Persisted keys and startup failures
+
+Without `WOLF_MASTER_KEY`, Wolf persists two files under `~/.wolf`: `master.key`
+contains the 32-byte encryption key as 64 hexadecimal characters; `jwt-secret`
+contains the raw JWT signing key. Preserve both files with the database and make
+the same keys available to every relevant replica. Newly generated files have
+mode `0600`. Concurrent first starts publish one complete key without replacing
+the winner; creation requires filesystem support for hard links and directory
+sync. Key-file links must resolve within the opened `~/.wolf` directory.
+
+The API, scan worker and fixer stop on key-loading errors. An unreadable,
+malformed or unwritable key is an operator error; startup does not overwrite it
+or fall back to a temporary key. Check the configured home, mount, ownership and
+permissions, or restore the original key from backup. Do not delete an existing
+key to bypass the error: a new encryption key cannot decrypt stored credentials,
+and a changed JWT key invalidates existing tokens. Planned key rotation and
+versioned encryption migration remain tracked in PLAN G04.
 
 ## Kubernetes native scanner Jobs
 
@@ -307,3 +353,72 @@ Operator-requested local/push image builds use the separate durable
 [Custom build workflow](scanner-custom-builds.md). Its Compose and Helm worker
 are independently opt-in; only that worker receives the custom-build engine
 socket and registry-secret resolution capability.
+
+## PostgreSQL 18 upgrade
+
+Compose now pins PostgreSQL 18.6; Go database connections use pgx v5 through the
+existing store interface. SQLite remains available for the Community laptop
+path. PostgreSQL migrations acquire a database advisory lock so concurrent
+control-plane starts cannot race schema changes.
+
+Do not start PostgreSQL 18 against a PostgreSQL 16 data directory. The Compose
+volume path is deliberately retained, with explicit PGDATA, so an incompatible
+old volume fails visibly rather than appearing to be an empty new database.
+For an existing installation: stop application/worker writes; take and verify
+backups with the old database version; restore a logical dump into a separate
+empty PostgreSQL 18 volume; start Wolf against that database; verify users,
+repositories, findings, queued jobs and a scan/gate cycle; then switch the
+service. Keep the old database and backups until acceptance. An in-place major
+upgrade needs a separately tested pg_upgrade procedure. This source change
+has not migrated any existing deployment or deleted any volume.
+
+### Automatic scanner scheduling
+
+Unset or `0` values for `scan_concurrency`, `heavy_scanner_concurrency`, and
+`network_scanner_concurrency` select automatic sizing. Settings → General shows
+host capacity and effective limits; `GET /api/v1/settings/scheduling` exposes the
+same information. Positive values (1–32) impose per-scan ceilings. Changes apply
+to new scans.
+
+The Docker worker queries its selected daemon's CPU count and memory, including
+remote daemons. It reserves 25% for Wolf, the database and the OS (at least one
+CPU and 2 GiB where capacity permits). Tools claim CPU, memory, heavy-tool and
+network slots together; queued tools do not occupy execution slots. Concurrent
+scans in one worker share the daemon budget. The memory reservation matches each
+container's cap, including the larger Bearer, gosec, Grype and CodeQL limits.
+
+Compose defaults to two CPUs per tool and one scan worker. On a 16-CPU, 30-GiB
+host this allows six tools, three heavy tools and four network tools per scan,
+subject to available budget. `WOLF_SCAN_WORKERS` divides the budget between
+Compose replicas; scale with that variable, not a separate `--scale` value.
+Separate deployments/CLI processes on the same daemon do not coordinate budgets.
+This is capacity sizing at scan start, not live host-pressure autoscaling; other
+large workloads require additional capacity reservation or a dedicated host.
+If Docker capacity cannot be read, Wolf reports the failure and falls back to
+two tools, one heavy tool and two network tools. Kubernetes keeps conservative
+or explicit limits and delegates placement to the cluster scheduler.
+
+Tools declared `network_required` use `WOLF_SCANNERS_ALLOW_NETWORK` (default
+`bridge`); other tools use `WOLF_SCANNERS_NETWORK` (default `none`). Semgrep needs
+network access for its automatic rule configuration. Network policy is copied
+per scan so concurrent scans cannot overwrite each other's permissions.
+
+Go analyzers reuse module and build caches on `WOLF_SCANNERS_DB_VOLUME`. CodeQL's
+image includes the Go toolchain and exposes bundled precompiled queries to the
+runtime UID, avoiding a full query recompilation per scan. Mypy uses a writable
+cache under `/tmp`. Detect-secrets scans archive snapshots without requiring Git,
+skips the usual dependency/build directories, and avoids online verification and
+KeywordDetector work whose findings Wolf already discarded. Its timeout is 15
+minutes for large repositories; tool timeouts remain explicit in `tools.yaml`.
+
+Semgrep retains findings when individual files cannot be parsed and reports the
+scan as incomplete. GoKart 0.5.1 needs Wolf's checked-in compatibility patch for
+the pinned `golang.org/x/tools` graph: run SSA prerequisites with the upstream
+analysis driver and handle synthetic functions without a package. The installer
+applies this patch in a temporary source copy without changing dependency pins
+or the module cache. Wolf requests SARIF on stdout and distinguishes findings
+exit 1 from execution failures and retains raw output. The patch also compares
+source/sink positions instead of source-line text to preserve same-line findings.
+Native image smoke tests run unsafe, same-line unsafe, safe, and invalid-source
+fixtures. Older images still contain the crashing binary; rebuild
+and qualify the default scanner image before rollout (current plan R02).

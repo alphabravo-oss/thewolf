@@ -1,0 +1,47 @@
+[
+  {
+    "os": "linux",
+    "arch": "arm64",
+    "command": [
+      "go",
+      "test",
+      "-c",
+      "-o",
+      "/tmp/wolf-scan-recovery-linux-arm64.test",
+      "./internal/scantarget"
+    ],
+    "exit_code": 0,
+    "output": "",
+    "binary_sha256": "3a189f037ae82c57ea450b535cfccfa412984ba2e0569798ce7cb77b2349de8e"
+  },
+  {
+    "os": "windows",
+    "arch": "amd64",
+    "command": [
+      "go",
+      "test",
+      "-c",
+      "-o",
+      "/tmp/wolf-scan-recovery-windows-amd64.test",
+      "./internal/scantarget"
+    ],
+    "exit_code": 0,
+    "output": "",
+    "binary_sha256": "50470d5c469b899eaeb47f18345b1fd3b1fdc8556a93752a75f38aa79f87bb61"
+  },
+  {
+    "os": "darwin",
+    "arch": "arm64",
+    "command": [
+      "go",
+      "test",
+      "-c",
+      "-o",
+      "/tmp/wolf-scan-recovery-darwin-arm64.test",
+      "./internal/scantarget"
+    ],
+    "exit_code": 0,
+    "output": "",
+    "binary_sha256": "5e46a79aa530e915f85c38083f41235f21ea5def1978801c02042bdc6a2cd256"
+  }
+]

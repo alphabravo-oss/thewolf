@@ -1,0 +1,2 @@
+ok  	github.com/alphabravocompany/thewolf/internal/finding/identity	1.018s
+ok  	github.com/alphabravocompany/thewolf/internal/scan/runner	1.415s

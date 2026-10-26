@@ -1,0 +1,37 @@
+$ playwright test scan-live.spec.ts scan-preparation.spec.ts --workers=2
+[WebServer] $ vite build
+[WebServer] (node:3503466) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:3503672) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 14 tests using 2 workers
+
+(node:3503735) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3503736) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   1 [desktop-chromium-linux] › e2e/scan-live.spec.ts:52:1 › scan header exposes attempts, incomplete execution and changed scope @browser-matrix (670ms)
+  ✓   2 [desktop-chromium-linux] › e2e/scan-live.spec.ts:6:1 › live scan reconnects with its cursor, shows output and refreshes terminal state @browser-matrix (769ms)
+  ✓   3 [desktop-chromium-linux] › e2e/scan-live.spec.ts:70:1 › worker warning survives list, submit and queued detail and can recover @browser-matrix (932ms)
+  ✓   5 [desktop-chromium-linux] › e2e/scan-preparation.spec.ts:47:1 › locally built scanner images support private registry ports without a registry digest (580ms)
+  ✓   4 [desktop-chromium-linux] › e2e/scan-preparation.spec.ts:5:1 › readiness failure, shared image download, and idempotent scan recovery @browser-matrix (1.6s)
+(node:3504024) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3504032) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   6 [mobile-chromium-linux] › e2e/scan-live.spec.ts:6:1 › live scan reconnects with its cursor, shows output and refreshes terminal state @browser-matrix (649ms)
+  ✓   7 [mobile-chromium-linux] › e2e/scan-live.spec.ts:52:1 › scan header exposes attempts, incomplete execution and changed scope @browser-matrix (565ms)
+  ✓   8 [mobile-chromium-linux] › e2e/scan-live.spec.ts:70:1 › worker warning survives list, submit and queued detail and can recover @browser-matrix (890ms)
+  ✓  10 [mobile-chromium-linux] › e2e/scan-preparation.spec.ts:47:1 › locally built scanner images support private registry ports without a registry digest (476ms)
+  ✓   9 [mobile-chromium-linux] › e2e/scan-preparation.spec.ts:5:1 › readiness failure, shared image download, and idempotent scan recovery @browser-matrix (1.6s)
+(node:3504314) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3504345) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  12 [desktop-firefox-linux] › e2e/scan-live.spec.ts:52:1 › scan header exposes attempts, incomplete execution and changed scope @browser-matrix (1.9s)
+  ✓  11 [desktop-firefox-linux] › e2e/scan-live.spec.ts:6:1 › live scan reconnects with its cursor, shows output and refreshes terminal state @browser-matrix (2.7s)
+  ✓  13 [desktop-firefox-linux] › e2e/scan-live.spec.ts:70:1 › worker warning survives list, submit and queued detail and can recover @browser-matrix (1.4s)
+  ✓  14 [desktop-firefox-linux] › e2e/scan-preparation.spec.ts:5:1 › readiness failure, shared image download, and idempotent scan recovery @browser-matrix (2.2s)
+
+  14 passed (16.9s)

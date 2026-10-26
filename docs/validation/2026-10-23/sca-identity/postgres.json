@@ -1,0 +1,32 @@
+{
+  "name": "wolf-plan-sca-identity-pg-20261023",
+  "id": "a5fa8af723caaca4474998731f94fc7211ea115b8c25a83e85423483b72e32d9",
+  "image": "postgres@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873",
+  "image_id": "sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873",
+  "ports": {
+    "5432/tcp": [
+      {
+        "HostIp": "127.0.0.1",
+        "HostPort": "32782"
+      }
+    ]
+  },
+  "mounts": [
+    {
+      "Type": "volume",
+      "Name": "cdd1d210924bd16c505c74803b179b3843e0fe4a214e4aa82ff2155c8edd805c",
+      "Source": "/var/lib/docker/volumes/cdd1d210924bd16c505c74803b179b3843e0fe4a214e4aa82ff2155c8edd805c/_data",
+      "Destination": "/var/lib/postgresql",
+      "Driver": "local",
+      "Mode": "",
+      "RW": true,
+      "Propagation": ""
+    }
+  ],
+  "purpose": "Disposable PostgreSQL dependency-identity schema upgrade/persistence contracts and full Go race suite; fixture authentication only; production untouched.",
+  "cleanup": {
+    "command": "docker rm -f -v wolf-plan-sca-identity-pg-20261023",
+    "exit_code": 0,
+    "container_absent": true
+  }
+}

@@ -1,0 +1,11 @@
+
+ RUN  v5.0.4 /root/wolf-all/thewolf/ui
+
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  00:18:53
+   Duration  1.00s (environment 75%, setup 12%, import 7%, transform 3%, tests 3%, worker 1%)
+
+$ tsc --noEmit
+$ eslint src --max-warnings 0

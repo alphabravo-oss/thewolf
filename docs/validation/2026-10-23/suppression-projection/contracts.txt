@@ -1,0 +1,5 @@
+--- FAIL: TestPublicationGateUsesWrittenSuppressionProjection (0.30s)
+    suppression_projection_test.go:178: gate disagrees with written projection: &{ScanStatus:completed FindingsRevision:3 ID:e05c2f63-168f-4402-ac73-20e499959e3d ScanID:736fdaf7-10cc-4e73-9323-dbf7abef1fad PolicyID:default Status:pass SummaryJSON:{"status":"pass","fail_count":0,"warn_count":0,"pass_count":0,"ignored":0,"by_severity":{}} MatchedRulesJSON:[] EvaluatedAt:2026-10-23 18:45:41.331561856 +0000 UTC CreatedAt:2026-10-23 18:45:41.331561856 +0000 UTC UpdatedAt:2026-10-23 18:45:41.334311705 +0000 UTC} <nil>
+FAIL
+FAIL	github.com/alphabravocompany/thewolf/internal/api/routes	1.730s
+FAIL

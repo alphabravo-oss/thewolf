@@ -1,0 +1,7 @@
+--- FAIL: TestWorkspaceDigestDistinguishesEntryBoundariesTypesAndModes (0.00s)
+    digest_framing_test.go:35: different source trees have the same digest
+    --- FAIL: TestWorkspaceDigestDistinguishesEntryBoundariesTypesAndModes/entry-boundaries (0.00s)
+        testing.go:2064: test executed panic(nil) or runtime.Goexit: subtest may have called FailNow on a parent test
+FAIL
+FAIL	github.com/alphabravocompany/thewolf/internal/scantarget	0.009s
+FAIL

@@ -1,0 +1,11 @@
+{
+  "plan_unique_tasks": 230,
+  "plan_checked": 45,
+  "race_packages": 35,
+  "final_race_packages": 4,
+  "lint": "0 issues.",
+  "gosec_findings": 33,
+  "baseline_alerts_retained": 43,
+  "manual_findings": 6,
+  "source_hashes_verified": 25
+}

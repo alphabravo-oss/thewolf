@@ -1,0 +1,6 @@
+ok  	github.com/alphabravocompany/thewolf/internal/fix/git	3.471s
+ok  	github.com/alphabravocompany/thewolf/internal/repo	1.792s
+ok  	github.com/alphabravocompany/thewolf/internal/api/routes	46.808s
+ok  	github.com/alphabravocompany/thewolf/internal/scannerbuild	1.488s
+ok  	github.com/alphabravocompany/thewolf/internal/scannertools/manifest	1.711s
+ok  	github.com/alphabravocompany/thewolf/internal/scannertools/lock	1.928s

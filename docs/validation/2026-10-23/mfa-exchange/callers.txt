@@ -1,0 +1,34 @@
+/root/wolf-all/thewolf/internal/api/routes/auth_refresh.go:95:	token, err := auth.GenerateMFAChallenge(userID, email)
+/root/wolf-all/thewolf/internal/db/mfa.go:44:// CompleteMFALogin commits the verified factor, consumes the challenge and saves
+/root/wolf-all/thewolf/internal/db/mfa.go:46:func (s *SQLiteStore) CompleteMFALogin(ctx context.Context, hash string, user, previous *models.User, refresh, browser *models.AuthSession) error {
+/root/wolf-all/thewolf/internal/db/mfa.go:49:func (s *PostgresStore) CompleteMFALogin(ctx context.Context, hash string, user, previous *models.User, refresh, browser *models.AuthSession) error {
+/root/wolf-all/thewolf/internal/db/sqlite.go:605:// UpdateUserMFA atomically replaces the MFA fields only if the previous state
+/root/wolf-all/thewolf/internal/db/sqlite.go:607:func (s *SQLiteStore) UpdateUserMFA(ctx context.Context, user, previous *models.User) error {
+/root/wolf-all/thewolf/internal/db/mfa_exchange_test.go:44:	if err := store.UpdateUserMFA(ctx, &enabled, user); err != nil {
+/root/wolf-all/thewolf/internal/db/mfa_exchange_test.go:78:			err := store.CompleteMFALogin(ctx, challenge.SessionHash, &next, &previous, refresh, browser)
+/root/wolf-all/thewolf/internal/db/mfa_exchange_test.go:116:				if err := store.CompleteMFALogin(ctx, challenge.SessionHash, &next, &previous, refresh, browser); err != nil {
+/root/wolf-all/thewolf/internal/db/mfa_exchange_test.go:121:				if err := store.UpdateUserMFA(ctx, &restore, &next); err != nil {
+/root/wolf-all/thewolf/internal/db/mfa_exchange_test.go:141:			err := stores[i%len(stores)].CompleteMFALogin(ctx, challenge.SessionHash, &next, &enabled, refresh, browser)
+/root/wolf-all/thewolf/internal/db/postgres.go:326:// UpdateUserMFA atomically replaces the MFA fields only if the previous state
+/root/wolf-all/thewolf/internal/db/postgres.go:328:func (s *PostgresStore) UpdateUserMFA(ctx context.Context, user, previous *models.User) error {
+/root/wolf-all/thewolf/internal/api/routes/mfa.go:266:	if err := h.Store.CompleteMFALogin(r.Context(), auth.HashSessionToken(req.MFAToken), user, &previous, refresh, browser); err != nil {
+/root/wolf-all/thewolf/internal/api/routes/mfa.go:379:	if err := h.Store.UpdateUserMFA(r.Context(), user, previous); err != nil {
+/root/wolf-all/thewolf/internal/db/mfa_test.go:47:	if err := s.UpdateUserMFA(ctx, &enabled, before); err != nil {
+/root/wolf-all/thewolf/internal/db/mfa_test.go:61:			results <- stores[i%len(stores)].UpdateUserMFA(ctx, &next, &enabled)
+/root/wolf-all/thewolf/internal/db/mfa_test.go:90:	if err := stores[len(stores)-1].UpdateUserMFA(ctx, &reset, current); err != nil {
+/root/wolf-all/thewolf/internal/db/mfa_test.go:95:	if err := s.UpdateUserMFA(ctx, &stale, current); !errors.Is(err, ErrMFAChanged) {
+/root/wolf-all/thewolf/internal/db/mfa_test.go:109:		if err := s.UpdateUserMFA(ctx, latest, previous); !errors.Is(err, ErrMFAChanged) {
+/root/wolf-all/thewolf/internal/db/mfa_test.go:117:	if err := s.UpdateUserMFA(canceled, &next, latest); err == nil {
+/root/wolf-all/thewolf/internal/auth/mfa_challenge_test.go:11:	first, err := GenerateMFAChallenge("user", "user@example.test")
+/root/wolf-all/thewolf/internal/auth/mfa_challenge_test.go:15:	second, err := GenerateMFAChallenge("user", "user@example.test")
+/root/wolf-all/thewolf/internal/db/store.go:142:	UpdateUserMFA(ctx context.Context, user, previous *models.User) error
+/root/wolf-all/thewolf/internal/db/store.go:143:	CompleteMFALogin(ctx context.Context, hash string, user, previous *models.User, refresh, browser *models.AuthSession) error
+/root/wolf-all/thewolf/internal/api/mfa_concurrency_test.go:198:func (s mfaWriteFailureStore) UpdateUserMFA(context.Context, *models.User, *models.User) error {
+/root/wolf-all/thewolf/internal/api/mfa_concurrency_test.go:202:func (s mfaWriteFailureStore) CompleteMFALogin(context.Context, string, *models.User, *models.User, *models.AuthSession, *models.AuthSession) error {
+/root/wolf-all/thewolf/internal/api/mfa_concurrency_test.go:225:			if err := store.UpdateUserMFA(t.Context(), user, &initial); err != nil {
+/root/wolf-all/thewolf/internal/api/mfa_concurrency_test.go:228:			challenge, err := auth.GenerateMFAChallenge(user.ID, user.Email)
+/root/wolf-all/thewolf/internal/auth/jwt.go:120:// GenerateMFAChallenge mints a short-lived token proving the password step
+/root/wolf-all/thewolf/internal/auth/jwt.go:123:func GenerateMFAChallenge(userID, email string) (string, error) {
+/root/wolf-all/thewolf/internal/api/mfa_exchange_test.go:48:	challenge, err := auth.GenerateMFAChallenge(user.ID, user.Email)
+/root/wolf-all/thewolf/internal/api/mfa_exchange_test.go:89:func (s mfaSessionInsertFailure) CompleteMFALogin(ctx context.Context, hash string, user, previous *models.User, refresh, browser *models.AuthSession) error {
+/root/wolf-all/thewolf/internal/api/mfa_exchange_test.go:93:	return s.Store.CompleteMFALogin(ctx, hash, user, previous, refresh, browser)

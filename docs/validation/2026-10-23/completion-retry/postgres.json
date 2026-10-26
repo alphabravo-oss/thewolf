@@ -1,0 +1,20 @@
+{
+  "name": "wolf-plan-completion-retry-pg-20261023",
+  "id": "17e02aefc6fc18ed567b3d85ec123934b3dd7df9e5d0dc716a82c5224a85e225",
+  "image_reference": "postgres@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873",
+  "image_id": "sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873",
+  "ports": {
+    "5432/tcp": [
+      {
+        "HostIp": "127.0.0.1",
+        "HostPort": "32791"
+      }
+    ]
+  },
+  "created": "2026-10-23T17:05:01.479196238Z",
+  "purpose": "Owned isolated PostgreSQL fixture; production unchanged",
+  "removed": true,
+  "anonymous_volumes_removed": true,
+  "absence_verified": true,
+  "removed_at": "2026-10-23T17:17:24.675801+00:00"
+}

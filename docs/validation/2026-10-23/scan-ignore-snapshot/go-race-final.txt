@@ -1,0 +1,170 @@
+==> Running tests...
+go test -race -count=1 -timeout 120s ./...
+ok  	github.com/alphabravocompany/thewolf/cmd/scannertools	8.779s
+ok  	github.com/alphabravocompany/thewolf/cmd/wolf	12.299s
+?   	github.com/alphabravocompany/thewolf/cmd/wolf-scanner-release-fixed-adapter	[no test files]
+?   	github.com/alphabravocompany/thewolf/cmd/wolf-scanner-release-integration-adapter	[no test files]
+?   	github.com/alphabravocompany/thewolf/cmd/wolf-scanner-release-quality-adapter	[no test files]
+ok  	github.com/alphabravocompany/thewolf/internal/ai	1.012s
+ok  	github.com/alphabravocompany/thewolf/internal/api	45.548s
+ok  	github.com/alphabravocompany/thewolf/internal/api/middleware	1.082s
+ok  	github.com/alphabravocompany/thewolf/internal/api/openapi	7.414s
+ok  	github.com/alphabravocompany/thewolf/internal/api/response	1.018s
+ok  	github.com/alphabravocompany/thewolf/internal/api/routes	116.480s
+ok  	github.com/alphabravocompany/thewolf/internal/api/sse	1.085s
+ok  	github.com/alphabravocompany/thewolf/internal/artifacts	1.058s
+ok  	github.com/alphabravocompany/thewolf/internal/auth	1.687s
+ok  	github.com/alphabravocompany/thewolf/internal/auth/apikey	1.020s
+ok  	github.com/alphabravocompany/thewolf/internal/cli	12.770s
+ok  	github.com/alphabravocompany/thewolf/internal/controlbind	2.178s
+--- FAIL: TestFindingSnapshotsSQLite (0.43s)
+    finding_snapshots_test.go:80: upgrade snapshot: &{IgnorePolicyJSON: BaselineScanID: BaselineResolvedAt:<nil> FindingsRevision:1 ID:7acd19ae-577e-4e1f-abe4-f5b5dbfa37ed UserID:a098c5dc-4515-49c2-a911-914cbd523598 RepoID:c885171d-4e26-4707-a014-c1f51babcd47 CollectionID:<nil> LoopID:<nil> Iteration:<nil> Branch: SourceType: RemoteNodeID:<nil> SourcePath: CommitSHA: TreeDigest: DirtyState: PreparedWorkspace: RequestJSON:{} RequestDigest: ClientReference: IdempotencyKey: Phase:queued ClaimedBy: LeaseToken: LeaseExpiresAt:<nil> HeartbeatAt:<nil> Attempt:0 MaxAttempts:2 CancelRequestedAt:<nil> FailureCode: FailureMessage: ExecutionBackend: ScannerReleaseID: ReleaseManifestDigest: RescanOfScanID: ReleaseSelectionReason: OriginScanID: PreviousScanID: RemediationID: FixJobID: SourceFingerprint: Profile: Categories:[] IncludePaths:[] ExcludePaths:[] Status:completed ToolsSelected:[] ToolsCompleted:[] ToolsFailed:[] ToolsErrors:{} FindingCount:1 CoverageSummary: AIEnabled:false AISummary: StartedAt:<nil> CompletedAt:<nil> CreatedAt:2026-10-23 22:03:29.895462322 +0000 UTC UpdatedAt:2026-10-23 22:03:29.895462322 +0000 UTC Repo:<nil>} [{ClusterID: ID:fea51b82-592f-4d08-9675-d33a76d7dfb5 ScanID:7acd19ae-577e-4e1f-abe4-f5b5dbfa37ed RepoID:c885171d-4e26-4707-a014-c1f51babcd47 Fingerprint:f277e128b2cfefc6712f4f48dcc77daa225fb5a9f3fc42e86db4056ac86011dc StableFingerprint:f277e128b2cfefc6712f4f48dcc77daa225fb5a9f3fc42e86db4056ac86011dc LocationFingerprint:f277e128b2cfefc6712f4f48dcc77daa225fb5a9f3fc42e86db4056ac86011dc SemanticFingerprint:b5f01d2b65e35c89d4f4d7fc49e213a37161cc866bf7276fafa163343bc225e5 EvidenceFingerprint:493cd35ab8ecfd4c6d867f46e60b5ce3822ab49338800e4da55854a901e65a1c IdentityVersion:1 ToolName:a Category: Severity: Title:evidence Description: FilePath: LineStart:0 LineEnd:0 CodeSnippet: CWEID: RuleID: PackageName: PackageVersion: PackageEcosystem: PackageURL: AdvisoryID: ToolSeverityScore:0 LocationWeight:0 AIContextScore:0 CompositeScore:0 AIFixSuggestion: ModuleName: FunctionName: SymbolKind: FilePurpose: DependentsJSON: Status:open SARIFData: CreatedAt:2026-10-23 22:03:29.896421749 +0000 UTC UpdatedAt:2026-10-23 22:03:29.896421749 +0000 UTC FineCategory: FixStrategyID: Confidence: CorroboratedByJSON:["a"] CorroboratedBy:[a] Suppressed:false SuppressionID: SuppressedReason: BaselineIdentityKey: BaselineState: FirstSeenAt:<nil> LastSeenAt:<nil> IntroducedInScanID: ResolvedInScanID: SourceKind: SourceRef: AIFixPrompt: TriagedBy: AIUnfixable:false}] <nil>
+--- FAIL: TestFindingSnapshotsPostgres (3.14s)
+    finding_snapshots_test.go:80: upgrade snapshot: &{IgnorePolicyJSON: BaselineScanID: BaselineResolvedAt:<nil> FindingsRevision:1 ID:070e5345-b992-498a-a277-40d7c77e4e43 UserID:675516eb-c14b-4fed-95ca-696e85dfd9de RepoID:d3f7b9ed-ef82-4e58-a67f-c07ba06bcdb9 CollectionID:<nil> LoopID:<nil> Iteration:<nil> Branch: SourceType: RemoteNodeID:<nil> SourcePath: CommitSHA: TreeDigest: DirtyState: PreparedWorkspace: RequestJSON:{} RequestDigest: ClientReference: IdempotencyKey: Phase:queued ClaimedBy: LeaseToken: LeaseExpiresAt:<nil> HeartbeatAt:<nil> Attempt:0 MaxAttempts:2 CancelRequestedAt:<nil> FailureCode: FailureMessage: ExecutionBackend: ScannerReleaseID: ReleaseManifestDigest: RescanOfScanID: ReleaseSelectionReason: OriginScanID: PreviousScanID: RemediationID: FixJobID: SourceFingerprint: Profile: Categories:[] IncludePaths:[] ExcludePaths:[] Status:completed ToolsSelected:[] ToolsCompleted:[] ToolsFailed:[] ToolsErrors:{} FindingCount:1 CoverageSummary: AIEnabled:false AISummary: StartedAt:<nil> CompletedAt:<nil> CreatedAt:2026-10-23 22:03:31.373947 +0000 UTC UpdatedAt:2026-10-23 22:03:31.373947 +0000 UTC Repo:<nil>} [{ClusterID: ID:af4349e6-dbe3-4280-a2ae-97aad2421bcd ScanID:070e5345-b992-498a-a277-40d7c77e4e43 RepoID:d3f7b9ed-ef82-4e58-a67f-c07ba06bcdb9 Fingerprint:f277e128b2cfefc6712f4f48dcc77daa225fb5a9f3fc42e86db4056ac86011dc StableFingerprint:f277e128b2cfefc6712f4f48dcc77daa225fb5a9f3fc42e86db4056ac86011dc LocationFingerprint:f277e128b2cfefc6712f4f48dcc77daa225fb5a9f3fc42e86db4056ac86011dc SemanticFingerprint:b5f01d2b65e35c89d4f4d7fc49e213a37161cc866bf7276fafa163343bc225e5 EvidenceFingerprint:493cd35ab8ecfd4c6d867f46e60b5ce3822ab49338800e4da55854a901e65a1c IdentityVersion:1 ToolName:a Category: Severity: Title:evidence Description: FilePath: LineStart:0 LineEnd:0 CodeSnippet: CWEID: RuleID: PackageName: PackageVersion: PackageEcosystem: PackageURL: AdvisoryID: ToolSeverityScore:0 LocationWeight:0 AIContextScore:0 CompositeScore:0 AIFixSuggestion: ModuleName: FunctionName: SymbolKind: FilePurpose: DependentsJSON: Status:open SARIFData: CreatedAt:2026-10-23 22:03:31.383616 +0000 UTC UpdatedAt:2026-10-23 22:03:31.383616 +0000 UTC FineCategory: FixStrategyID: Confidence: CorroboratedByJSON:["a"] CorroboratedBy:[a] Suppressed:false SuppressionID: SuppressedReason: BaselineIdentityKey: BaselineState: FirstSeenAt:<nil> LastSeenAt:<nil> IntroducedInScanID: ResolvedInScanID: SourceKind: SourceRef: AIFixPrompt: TriagedBy: AIUnfixable:false}] <nil>
+--- FAIL: TestScanCompletionSQLite (0.29s)
+    scan_completion_test.go:145: completion did not survive reopening
+--- FAIL: TestScanCompletionPostgres (2.95s)
+    scan_completion_test.go:226: scan or findings changed during evaluation; retry with a fresh snapshot
+FAIL
+FAIL	github.com/alphabravocompany/thewolf/internal/db	94.873s
+ok  	github.com/alphabravocompany/thewolf/internal/enrich	1.039s
+ok  	github.com/alphabravocompany/thewolf/internal/finding/diff	1.017s
+ok  	github.com/alphabravocompany/thewolf/internal/finding/gates	1.018s
+ok  	github.com/alphabravocompany/thewolf/internal/finding/identity	1.014s
+ok  	github.com/alphabravocompany/thewolf/internal/finding/knowledge	1.015s
+ok  	github.com/alphabravocompany/thewolf/internal/finding/sarifio	1.672s
+ok  	github.com/alphabravocompany/thewolf/internal/finding/suppression	1.020s
+ok  	github.com/alphabravocompany/thewolf/internal/fix	1.014s
+ok  	github.com/alphabravocompany/thewolf/internal/fix/auth	1.025s
+ok  	github.com/alphabravocompany/thewolf/internal/fix/budget	1.020s
+ok  	github.com/alphabravocompany/thewolf/internal/fix/console	1.577s
+ok  	github.com/alphabravocompany/thewolf/internal/fix/engine	1.344s
+ok  	github.com/alphabravocompany/thewolf/internal/fix/fixstore	1.012s
+ok  	github.com/alphabravocompany/thewolf/internal/fix/git	2.081s
+ok  	github.com/alphabravocompany/thewolf/internal/fix/hygiene	1.041s
+ok  	github.com/alphabravocompany/thewolf/internal/fix/install	1.027s
+ok  	github.com/alphabravocompany/thewolf/internal/fix/lineage	2.297s
+ok  	github.com/alphabravocompany/thewolf/internal/fix/orchestrator	1.346s
+ok  	github.com/alphabravocompany/thewolf/internal/fix/planner	1.010s
+ok  	github.com/alphabravocompany/thewolf/internal/fix/pr	1.015s
+ok  	github.com/alphabravocompany/thewolf/internal/fix/profile	1.014s
+ok  	github.com/alphabravocompany/thewolf/internal/fix/qualification	1.080s
+ok  	github.com/alphabravocompany/thewolf/internal/fix/validator	1.012s
+ok  	github.com/alphabravocompany/thewolf/internal/fix/verify	1.014s
+ok  	github.com/alphabravocompany/thewolf/internal/fix/wiring	1.025s
+ok  	github.com/alphabravocompany/thewolf/internal/fix/worker	3.372s
+ok  	github.com/alphabravocompany/thewolf/internal/fix/workspace	1.383s
+ok  	github.com/alphabravocompany/thewolf/internal/fix/writability	1.032s
+ok  	github.com/alphabravocompany/thewolf/internal/github	1.031s
+ok  	github.com/alphabravocompany/thewolf/internal/models	1.025s
+ok  	github.com/alphabravocompany/thewolf/internal/plugin	1.013s
+ok  	github.com/alphabravocompany/thewolf/internal/plugin/container	1.194s
+ok  	github.com/alphabravocompany/thewolf/internal/prompt	1.015s
+?   	github.com/alphabravocompany/thewolf/internal/remote	[no test files]
+ok  	github.com/alphabravocompany/thewolf/internal/repo	1.298s
+ok  	github.com/alphabravocompany/thewolf/internal/scan/coverage	1.027s
+ok  	github.com/alphabravocompany/thewolf/internal/scan/detector	1.024s
+?   	github.com/alphabravocompany/thewolf/internal/scan/enricher	[no test files]
+ok  	github.com/alphabravocompany/thewolf/internal/scan/mapper	1.029s
+ok  	github.com/alphabravocompany/thewolf/internal/scan/planner	1.015s
+ok  	github.com/alphabravocompany/thewolf/internal/scan/report	1.081s
+ok  	github.com/alphabravocompany/thewolf/internal/scan/runner	1.406s
+ok  	github.com/alphabravocompany/thewolf/internal/scan/scorer	1.019s
+ok  	github.com/alphabravocompany/thewolf/internal/scan/suppress	1.214s
+ok  	github.com/alphabravocompany/thewolf/internal/scan/tui	1.332s
+ok  	github.com/alphabravocompany/thewolf/internal/scanjob	2.798s
+ok  	github.com/alphabravocompany/thewolf/internal/scanneralertworker	1.284s
+ok  	github.com/alphabravocompany/thewolf/internal/scannerbuild	1.533s
+?   	github.com/alphabravocompany/thewolf/internal/scannerbuild/cmd/synccontext	[no test files]
+ok  	github.com/alphabravocompany/thewolf/internal/scannerbundle	1.237s
+ok  	github.com/alphabravocompany/thewolf/internal/scannercontrol	1.086s
+ok  	github.com/alphabravocompany/thewolf/internal/scannercustombuildworker	3.094s
+ok  	github.com/alphabravocompany/thewolf/internal/scannerdiscovery	4.531s
+ok  	github.com/alphabravocompany/thewolf/internal/scannerdiscoveryworker	1.992s
+ok  	github.com/alphabravocompany/thewolf/internal/scannerfeature	1.012s
+ok  	github.com/alphabravocompany/thewolf/internal/scannergit	1.030s
+ok  	github.com/alphabravocompany/thewolf/internal/scannernotification	2.043s
+ok  	github.com/alphabravocompany/thewolf/internal/scannernotificationworker	1.016s
+ok  	github.com/alphabravocompany/thewolf/internal/scannerobservability	1.021s
+ok  	github.com/alphabravocompany/thewolf/internal/scannerpipeline	1.014s
+ok  	github.com/alphabravocompany/thewolf/internal/scannerpolicy	1.030s
+ok  	github.com/alphabravocompany/thewolf/internal/scannerproposal	3.328s
+ok  	github.com/alphabravocompany/thewolf/internal/scannerproposalworker	3.010s
+ok  	github.com/alphabravocompany/thewolf/internal/scannerquality	2.552s
+ok  	github.com/alphabravocompany/thewolf/internal/scannerregistry	1.233s
+ok  	github.com/alphabravocompany/thewolf/internal/scannerregistryworker	1.394s
+ok  	github.com/alphabravocompany/thewolf/internal/scannerrelease	1.018s
+ok  	github.com/alphabravocompany/thewolf/internal/scannerreleaseadapter	1.924s
+ok  	github.com/alphabravocompany/thewolf/internal/scannerreleasebackend	4.244s
+ok  	github.com/alphabravocompany/thewolf/internal/scannerreleasescheduler	6.828s
+ok  	github.com/alphabravocompany/thewolf/internal/scannerreleaseworker	7.840s
+ok  	github.com/alphabravocompany/thewolf/internal/scannerreleaseworkspace	1.027s
+ok  	github.com/alphabravocompany/thewolf/internal/scannerreproducibility	5.984s
+ok  	github.com/alphabravocompany/thewolf/internal/scannerrollout	1.166s
+ok  	github.com/alphabravocompany/thewolf/internal/scannerruntime	1.019s
+ok  	github.com/alphabravocompany/thewolf/internal/scannerruntime/kubernetes	1.138s
+ok  	github.com/alphabravocompany/thewolf/internal/scannerschedule	1.017s
+ok  	github.com/alphabravocompany/thewolf/internal/scannersigning	1.041s
+ok  	github.com/alphabravocompany/thewolf/internal/scannertools/docs	1.014s
+ok  	github.com/alphabravocompany/thewolf/internal/scannertools/httpcache	1.016s
+ok  	github.com/alphabravocompany/thewolf/internal/scannertools/latest	1.026s
+--- FAIL: TestRepositoryLockIsDeterministicGolden (0.85s)
+    lock_test.go:58: checked-in scanner-lock.yaml is stale
+FAIL
+FAIL	github.com/alphabravocompany/thewolf/internal/scannertools/lock	1.065s
+--- FAIL: TestDefaultManifestValidation (0.65s)
+    manifest_test.go:47: scanner metadata validation failed:
+        - scanners/scanner-lock.yaml is stale; run `go run ./cmd/scannertools lock`
+FAIL
+FAIL	github.com/alphabravocompany/thewolf/internal/scannertools/manifest	0.746s
+ok  	github.com/alphabravocompany/thewolf/internal/scannertools/ospackages	1.484s
+ok  	github.com/alphabravocompany/thewolf/internal/scannertools/registryauth	1.073s
+ok  	github.com/alphabravocompany/thewolf/internal/scannertools/status	1.015s
+ok  	github.com/alphabravocompany/thewolf/internal/scannertools/validate	1.022s
+ok  	github.com/alphabravocompany/thewolf/internal/scannertrace	1.022s
+ok  	github.com/alphabravocompany/thewolf/internal/scantarget	3.967s
+ok  	github.com/alphabravocompany/thewolf/internal/secrets	3.143s
+ok  	github.com/alphabravocompany/thewolf/internal/serve	1.052s
+?   	github.com/alphabravocompany/thewolf/internal/setup	[no test files]
+ok  	github.com/alphabravocompany/thewolf/internal/setup/scanners	1.175s
+ok  	github.com/alphabravocompany/thewolf/internal/sshclient	1.013s
+?   	github.com/alphabravocompany/thewolf/internal/testutil/parsercontract	[no test files]
+ok  	github.com/alphabravocompany/thewolf/internal/wolflog	1.017s
+ok  	github.com/alphabravocompany/thewolf/pkg/authprovider	1.012s
+ok  	github.com/alphabravocompany/thewolf/pkg/cloud	1.014s
+?   	github.com/alphabravocompany/thewolf/pkg/control	[no test files]
+ok  	github.com/alphabravocompany/thewolf/pkg/edition	1.016s
+ok  	github.com/alphabravocompany/thewolf/pkg/entitlement	1.014s
+ok  	github.com/alphabravocompany/thewolf/pkg/eventapi	1.015s
+ok  	github.com/alphabravocompany/thewolf/pkg/fixengine	1.012s
+?   	github.com/alphabravocompany/thewolf/pkg/host	[no test files]
+ok  	github.com/alphabravocompany/thewolf/pkg/intelligence	1.011s
+ok  	github.com/alphabravocompany/thewolf/pkg/license	1.013s
+ok  	github.com/alphabravocompany/thewolf/pkg/packaging	1.017s
+ok  	github.com/alphabravocompany/thewolf/pkg/pluginapi	1.012s
+ok  	github.com/alphabravocompany/thewolf/pkg/policyapi	1.012s
+ok  	github.com/alphabravocompany/thewolf/pkg/reportingapi	1.014s
+?   	github.com/alphabravocompany/thewolf/pkg/scannerreleaseapi	[no test files]
+?   	github.com/alphabravocompany/thewolf/pkg/uiextension	[no test files]
+ok  	github.com/alphabravocompany/thewolf/pkg/verification	1.011s
+?   	github.com/alphabravocompany/thewolf/plugins	[no test files]
+ok  	github.com/alphabravocompany/thewolf/plugins/additional	1.486s
+ok  	github.com/alphabravocompany/thewolf/plugins/container	1.246s
+ok  	github.com/alphabravocompany/thewolf/plugins/cpp	1.333s
+ok  	github.com/alphabravocompany/thewolf/plugins/docs	1.188s
+ok  	github.com/alphabravocompany/thewolf/plugins/general	1.427s
+ok  	github.com/alphabravocompany/thewolf/plugins/go	1.310s
+ok  	github.com/alphabravocompany/thewolf/plugins/infra	1.500s
+ok  	github.com/alphabravocompany/thewolf/plugins/javascript	1.194s
+ok  	github.com/alphabravocompany/thewolf/plugins/php	1.105s
+ok  	github.com/alphabravocompany/thewolf/plugins/python	1.380s
+ok  	github.com/alphabravocompany/thewolf/plugins/ruby	1.160s
+ok  	github.com/alphabravocompany/thewolf/plugins/rust	1.207s
+ok  	github.com/alphabravocompany/thewolf/plugins/sbom	1.122s
+ok  	github.com/alphabravocompany/thewolf/plugins/security	1.621s
+ok  	github.com/alphabravocompany/thewolf/plugins/sql	1.085s
+ok  	github.com/alphabravocompany/thewolf/plugins/swift	1.092s
+?   	github.com/alphabravocompany/thewolf/scanners	[no test files]
+ok  	github.com/alphabravocompany/thewolf/scanners/ci/discover	1.013s
+FAIL
+make: *** [Makefile:51: test] Error 1

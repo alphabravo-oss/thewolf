@@ -1,0 +1,6 @@
+internal/scantarget/git_state_test.go:70:8: ineffectual assignment to run (ineffassign)
+	path, run := gitStateFixture(t)
+	      ^
+1 issues:
+* ineffassign: 1
+exit status 1

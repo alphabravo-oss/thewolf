@@ -1,0 +1,33 @@
+{
+  "Id": "a42efaacef7d3c97f444b1e783a518443979774eb87789f82a42e9b3044cf744",
+  "Name": "/wolf-plan-mfa-exchange-pg-20261023",
+  "Image": "sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873",
+  "Mounts": [
+    {
+      "Type": "volume",
+      "Name": "57c5850ac0d6e8b3bc571f7d7a81ee842b1bdfc8f02be0d87391e17b1afe7200",
+      "Source": "/var/lib/docker/volumes/57c5850ac0d6e8b3bc571f7d7a81ee842b1bdfc8f02be0d87391e17b1afe7200/_data",
+      "Destination": "/var/lib/postgresql",
+      "Driver": "local",
+      "Mode": "",
+      "RW": true,
+      "Propagation": ""
+    }
+  ],
+  "labels": {
+    "wolf.plan.fixture": "mfa-exchange-20261023"
+  },
+  "ports": {
+    "5432/tcp": [
+      {
+        "HostIp": "127.0.0.1",
+        "HostPort": "32806"
+      }
+    ]
+  },
+  "removed": true,
+  "container_absent_verified": true,
+  "volumes_absent_verified": [
+    "57c5850ac0d6e8b3bc571f7d7a81ee842b1bdfc8f02be0d87391e17b1afe7200"
+  ]
+}

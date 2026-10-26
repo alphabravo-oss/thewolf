@@ -1,0 +1,13 @@
+$ tsc --noEmit
+$ eslint src --max-warnings 0
+$ vitest run -- src/lib/fixes.test.tsx
+
+ RUN  v5.0.4 /root/wolf-all/thewolf/ui
+
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+
+ Test Files  13 passed (13)
+      Tests  55 passed (55)
+   Start at  02:21:37
+   Duration  1.90s (environment 64%, tests 13%, setup 10%, import 8%, transform 4%, worker 1%)
+

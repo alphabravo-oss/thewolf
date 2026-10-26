@@ -1,0 +1,19 @@
+Captured terminal session 94223, exit 0.
+Command: pnpm typecheck && pnpm lint && pnpm test && pnpm test:e2e:typecheck
+PATH selected the cached pnpm 12.11.2 launcher and Node 26.11.1.
+
+Downloading the pnpm 12.11.2 binary for linux-x64...
+$ tsc --noEmit
+$ eslint src --max-warnings 0
+$ vitest run
+
+ RUN  v5.0.4 /root/wolf-all/thewolf/ui
+
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+
+ Test Files  11 passed (11)
+      Tests  53 passed (53)
+   Start at  21:30:29
+   Duration  1.68s (environment 61%, tests 14%, setup 11%, import 9%, transform 5%, worker 1%)
+
+$ tsc --noEmit -p tsconfig.playwright.json

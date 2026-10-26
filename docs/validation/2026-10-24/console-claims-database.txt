@@ -1,0 +1,10 @@
+=== RUN   TestFixerConsoleClaimFencing
+=== RUN   TestFixerConsoleClaimFencing/sqlite
+=== RUN   TestFixerConsoleClaimFencing/postgres
+--- PASS: TestFixerConsoleClaimFencing (1.51s)
+    --- PASS: TestFixerConsoleClaimFencing/sqlite (0.23s)
+    --- PASS: TestFixerConsoleClaimFencing/postgres (1.27s)
+=== RUN   TestFixerConsoleQueueClaimStdinAndReclaim
+--- PASS: TestFixerConsoleQueueClaimStdinAndReclaim (0.22s)
+PASS
+ok  	github.com/alphabravocompany/thewolf/internal/db	2.763s

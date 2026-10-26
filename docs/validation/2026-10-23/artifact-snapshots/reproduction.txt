@@ -1,0 +1,5 @@
+--- FAIL: TestGateArtifactSnapshotsPreserveRecordedBytes (0.28s)
+    artifact_snapshots_test.go:51: recorded artifact was overwritten: path=/tmp/TestGateArtifactSnapshotsPreserveRecordedBytes923982170/001/test-repo_20261023-145917_ad968a4f/gate-result.json expected_checksum=50c181edd1891361b2b3743f900b74f43b9fe87bef4fb5cc0c29fd3af619fa95 actual_checksum=d5fc949a4c920e58b4fafcef2446a7047ab330dd1c0fa99d5447596f46bcbaf7
+FAIL
+FAIL	github.com/alphabravocompany/thewolf/internal/api/routes	0.291s
+FAIL

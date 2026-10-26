@@ -1,0 +1,59 @@
+/root/wolf-all/thewolf/internal/controlbind/bind.go:111:	if err := u.store.UpdateUser(ctx, row); err != nil {
+/root/wolf-all/thewolf/internal/db/sqlite.go:588:func (s *SQLiteStore) UpdateUser(ctx context.Context, user *models.User) error {
+/root/wolf-all/thewolf/internal/db/sqlite.go:605:// UpdateUserMFA atomically replaces the MFA fields only if the previous state
+/root/wolf-all/thewolf/internal/db/sqlite.go:607:func (s *SQLiteStore) UpdateUserMFA(ctx context.Context, user, previous *models.User) error {
+/root/wolf-all/thewolf/internal/api/fleet_authorization_test.go:182:	if err := store.UpdateUser(ctx, u); err != nil {
+/root/wolf-all/thewolf/internal/db/mfa_exchange_test.go:44:	if err := store.UpdateUserMFA(ctx, &enabled, user); err != nil {
+/root/wolf-all/thewolf/internal/db/mfa_exchange_test.go:121:				if err := store.UpdateUserMFA(ctx, &restore, &next); err != nil {
+/root/wolf-all/thewolf/internal/db/mfa_replay_test.go:70:	if err := store.UpdateUserMFA(t.Context(), &old, user); !errors.Is(err, ErrMFAChanged) {
+/root/wolf-all/thewolf/internal/db/mfa_replay_test.go:86:	if err := store.UpdateUserMFA(ctx, &reset, initial); err != nil {
+/root/wolf-all/thewolf/internal/db/mfa_replay_test.go:91:	if err := store.UpdateUserMFA(ctx, &stale, initial); !errors.Is(err, ErrMFAChanged) {
+/root/wolf-all/thewolf/internal/db/mfa_replay_test.go:99:	if err := store.UpdateUserMFA(ctx, &enabled, &reset); err != nil {
+/root/wolf-all/thewolf/internal/db/mfa_replay_test.go:158:	if err := store.UpdateUserMFA(ctx, &rollback, current); !errors.Is(err, ErrMFAChanged) {
+/root/wolf-all/thewolf/internal/db/mfa_replay_test.go:163:	if err := store.UpdateUser(ctx, &changed); err != nil {
+/root/wolf-all/thewolf/internal/db/mfa_replay_test.go:171:	if err := store.UpdateUser(ctx, &oldRole); !errors.Is(err, ErrUserChanged) {
+/root/wolf-all/thewolf/internal/db/mfa_replay_test.go:185:	if err := store.UpdateUser(ctx, &changed); err != nil {
+/root/wolf-all/thewolf/internal/db/mfa_replay_test.go:233:	if err := s.UpdateUserMFA(ctx, &next, migrated); err != nil {
+/root/wolf-all/thewolf/internal/db/postgres.go:306:func (s *PostgresStore) UpdateUser(ctx context.Context, user *models.User) error {
+/root/wolf-all/thewolf/internal/db/postgres.go:323:// UpdateUserMFA atomically replaces the MFA fields only if the previous state
+/root/wolf-all/thewolf/internal/db/postgres.go:325:func (s *PostgresStore) UpdateUserMFA(ctx context.Context, user, previous *models.User) error {
+/root/wolf-all/thewolf/internal/db/store.go:140:	UpdateUser(ctx context.Context, user *models.User) error
+/root/wolf-all/thewolf/internal/db/store.go:142:	UpdateUserMFA(ctx context.Context, user, previous *models.User) error
+/root/wolf-all/thewolf/internal/db/mfa_test.go:47:	if err := s.UpdateUserMFA(ctx, &enabled, before); err != nil {
+/root/wolf-all/thewolf/internal/db/mfa_test.go:61:			results <- stores[i%len(stores)].UpdateUserMFA(ctx, &next, &enabled)
+/root/wolf-all/thewolf/internal/db/mfa_test.go:90:	if err := stores[len(stores)-1].UpdateUserMFA(ctx, &reset, current); err != nil {
+/root/wolf-all/thewolf/internal/db/mfa_test.go:95:	if err := s.UpdateUserMFA(ctx, &stale, current); !errors.Is(err, ErrMFAChanged) {
+/root/wolf-all/thewolf/internal/db/mfa_test.go:109:		if err := s.UpdateUserMFA(ctx, latest, previous); !errors.Is(err, ErrMFAChanged) {
+/root/wolf-all/thewolf/internal/db/mfa_test.go:117:	if err := s.UpdateUserMFA(canceled, &next, latest); err == nil {
+/root/wolf-all/thewolf/internal/api/routes/users.go:219:	if err := h.Store.UpdateUser(r.Context(), u); err != nil {
+/root/wolf-all/thewolf/internal/api/mfa_concurrency_test.go:198:func (s mfaWriteFailureStore) UpdateUserMFA(context.Context, *models.User, *models.User) error {
+/root/wolf-all/thewolf/internal/api/mfa_concurrency_test.go:225:			if err := store.UpdateUserMFA(t.Context(), user, &initial); err != nil {
+/root/wolf-all/thewolf/internal/api/mfa_concurrency_test.go:228:			challenge, err := auth.GenerateMFAChallenge(user.ID, user.Email, user.CredentialVersion)
+/root/wolf-all/thewolf/internal/api/mfa_exchange_test.go:48:	challenge, err := auth.GenerateMFAChallenge(user.ID, user.Email, user.CredentialVersion)
+/root/wolf-all/thewolf/internal/api/routes/auth_refresh.go:95:	token, err := auth.GenerateMFAChallenge(user.ID, user.Email, user.CredentialVersion)
+/root/wolf-all/thewolf/internal/api/routes/auth.go:487:	if err := h.Store.UpdateUser(r.Context(), user); err != nil {
+/root/wolf-all/thewolf/internal/api/routes/sso.go:231:		_ = DefaultHandler.Store.UpdateUser(ctx, user)
+/root/wolf-all/thewolf/internal/api/routes/finding_clusters_test.go:21:	if err := e.Store.UpdateUser(ctx, u); err != nil {
+/root/wolf-all/thewolf/internal/api/findings_export_test.go:107:	if err := store.UpdateUser(ctx, u); err != nil {
+/root/wolf-all/thewolf/internal/api/routes/findings_idor_test.go:29:	if err := e.Store.UpdateUser(ctx, u); err != nil {
+/root/wolf-all/thewolf/internal/api/routes/findings_idor_test.go:100:	if err := e.Store.UpdateUser(ctx, u); err != nil {
+/root/wolf-all/thewolf/internal/api/routes/findings_idor_test.go:145:	if err := e.Store.UpdateUser(ctx, u); err != nil {
+/root/wolf-all/thewolf/internal/api/mfa_replay_test.go:108:	if err = s.Store.UpdateUser(ctx, &next); err != nil {
+/root/wolf-all/thewolf/internal/api/mfa_replay_test.go:225:	if err := s.Store.UpdateUser(ctx, &changed); err != nil {
+/root/wolf-all/thewolf/internal/api/routes/vulnerabilities_test.go:25:	if err := e.Store.UpdateUser(ctx, u); err != nil {
+/root/wolf-all/thewolf/internal/api/routes/vulnerabilities_test.go:122:	if err := e.Store.UpdateUser(ctx, u); err != nil {
+/root/wolf-all/thewolf/internal/api/routes/vulnerabilities_test.go:170:	if err := e.Store.UpdateUser(ctx, u); err != nil {
+/root/wolf-all/thewolf/internal/api/routes/mfa.go:147:	step, valid := auth.ValidateTOTP(req.Code, secret, time.Now())
+/root/wolf-all/thewolf/internal/api/routes/mfa.go:356:		if step, ok := auth.ValidateTOTP(code, secret, time.Now()); ok && step > user.TOTPLastStep {
+/root/wolf-all/thewolf/internal/api/routes/mfa.go:386:	if err := h.Store.UpdateUserMFA(r.Context(), user, previous); err != nil {
+/root/wolf-all/thewolf/internal/auth/totp.go:54:// ValidateTOTP returns the highest matching counter within the standard ±1
+/root/wolf-all/thewolf/internal/auth/totp.go:57:func ValidateTOTP(code, secret string, now time.Time) (int64, bool) {
+/root/wolf-all/thewolf/internal/auth/mfa_challenge_test.go:11:	first, err := GenerateMFAChallenge("user", "user@example.test", 0)
+/root/wolf-all/thewolf/internal/auth/mfa_challenge_test.go:15:	second, err := GenerateMFAChallenge("user", "user@example.test", 0)
+/root/wolf-all/thewolf/internal/auth/totp_test.go:23:	if _, ok := ValidateTOTP(code, key.Secret(), time.Now()); !ok {
+/root/wolf-all/thewolf/internal/auth/totp_test.go:26:	if _, ok := ValidateTOTP("not-a-code", key.Secret(), time.Now()); ok {
+/root/wolf-all/thewolf/internal/auth/totp_test.go:69:		step, ok := ValidateTOTP(" "+code+" ", secret, now)
+/root/wolf-all/thewolf/internal/auth/totp_test.go:75:	if _, ok := ValidateTOTP("123456", "invalid!secret", now); ok {
+/root/wolf-all/thewolf/internal/auth/totp_test.go:78:	if _, ok := ValidateTOTP("123456", secret, time.Unix(-1, 0)); ok {
+/root/wolf-all/thewolf/internal/auth/jwt.go:122:// GenerateMFAChallenge mints a short-lived token proving the password step
+/root/wolf-all/thewolf/internal/auth/jwt.go:125:func GenerateMFAChallenge(userID, email string, version int64) (string, error) {

@@ -1,0 +1,46 @@
+=== RUN   TestMFAExchangeSQLite
+=== RUN   TestMFAExchangeSQLite/refresh_insert
+=== RUN   TestMFAExchangeSQLite/browser_insert
+=== RUN   TestMFAExchangeSQLite/expired
+=== RUN   TestMFAExchangeSQLite/revoked
+=== RUN   TestMFAExchangeSQLite/wrong_purpose
+=== RUN   TestMFAExchangeSQLite/absent
+=== RUN   TestMFAExchangeSQLite/stale_MFA
+--- PASS: TestMFAExchangeSQLite (0.33s)
+    --- PASS: TestMFAExchangeSQLite/refresh_insert (0.00s)
+    --- PASS: TestMFAExchangeSQLite/browser_insert (0.00s)
+    --- PASS: TestMFAExchangeSQLite/expired (0.00s)
+    --- PASS: TestMFAExchangeSQLite/revoked (0.00s)
+    --- PASS: TestMFAExchangeSQLite/wrong_purpose (0.00s)
+    --- PASS: TestMFAExchangeSQLite/absent (0.00s)
+    --- PASS: TestMFAExchangeSQLite/stale_MFA (0.00s)
+=== RUN   TestMFAExchangePostgres
+=== RUN   TestMFAExchangePostgres/refresh_insert
+=== RUN   TestMFAExchangePostgres/browser_insert
+=== RUN   TestMFAExchangePostgres/expired
+=== RUN   TestMFAExchangePostgres/revoked
+=== RUN   TestMFAExchangePostgres/wrong_purpose
+=== RUN   TestMFAExchangePostgres/absent
+=== RUN   TestMFAExchangePostgres/stale_MFA
+--- PASS: TestMFAExchangePostgres (2.17s)
+    --- PASS: TestMFAExchangePostgres/refresh_insert (0.02s)
+    --- PASS: TestMFAExchangePostgres/browser_insert (0.01s)
+    --- PASS: TestMFAExchangePostgres/expired (0.01s)
+    --- PASS: TestMFAExchangePostgres/revoked (0.01s)
+    --- PASS: TestMFAExchangePostgres/wrong_purpose (0.00s)
+    --- PASS: TestMFAExchangePostgres/absent (0.00s)
+    --- PASS: TestMFAExchangePostgres/stale_MFA (0.00s)
+=== RUN   TestMFAReplaySQLite
+--- PASS: TestMFAReplaySQLite (0.27s)
+=== RUN   TestMFAReplayPostgres
+--- PASS: TestMFAReplayPostgres (1.90s)
+=== RUN   TestMFAReplayMigrationSQLite
+--- PASS: TestMFAReplayMigrationSQLite (0.26s)
+=== RUN   TestMFAReplayMigrationPostgres
+--- PASS: TestMFAReplayMigrationPostgres (1.63s)
+=== RUN   TestMFAStateSQLite
+--- PASS: TestMFAStateSQLite (0.30s)
+=== RUN   TestMFAStatePostgres
+--- PASS: TestMFAStatePostgres (1.50s)
+PASS
+ok  	github.com/alphabravocompany/thewolf/internal/db	9.393s

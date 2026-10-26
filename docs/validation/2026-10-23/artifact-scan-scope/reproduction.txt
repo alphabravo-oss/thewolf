@@ -1,0 +1,21 @@
+--- FAIL: TestArtifactReadsStayWithinTheirScan (0.00s)
+    --- FAIL: TestArtifactReadsStayWithinTheirScan/absolute_path (0.00s)
+        scan_scope_test.go:34: cross-scan read: "foreign secret" <nil>
+    --- FAIL: TestArtifactReadsStayWithinTheirScan/storage_key (0.00s)
+        scan_scope_test.go:34: cross-scan read: "foreign secret" <nil>
+--- FAIL: TestLegacyNamedArtifactRequiresFullManifestIdentity (0.01s)
+    --- FAIL: TestLegacyNamedArtifactRequiresFullManifestIdentity/same-prefix-foreign (0.00s)
+        scan_scope_test.go:127: unbound legacy read: "legacy evidence" <nil>
+    --- FAIL: TestLegacyNamedArtifactRequiresFullManifestIdentity/missing (0.00s)
+        scan_scope_test.go:127: unbound legacy read: "legacy evidence" <nil>
+    --- FAIL: TestLegacyNamedArtifactRequiresFullManifestIdentity/empty (0.00s)
+        scan_scope_test.go:127: unbound legacy read: "legacy evidence" <nil>
+    --- FAIL: TestLegacyNamedArtifactRequiresFullManifestIdentity/malformed (0.00s)
+        scan_scope_test.go:127: unbound legacy read: "legacy evidence" <nil>
+    --- FAIL: TestLegacyNamedArtifactRequiresFullManifestIdentity/trailing (0.00s)
+        scan_scope_test.go:127: unbound legacy read: "legacy evidence" <nil>
+    --- FAIL: TestLegacyNamedArtifactRequiresFullManifestIdentity/oversized (0.00s)
+        scan_scope_test.go:127: unbound legacy read: "legacy evidence" <nil>
+FAIL
+FAIL	github.com/alphabravocompany/thewolf/internal/artifacts	0.012s
+FAIL

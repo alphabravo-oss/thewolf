@@ -1,0 +1,27 @@
+{
+  "head": "23b64ce09c569b7f49c465b53573e40c791b6fc5",
+  "state": "Uncommitted working tree; not deployed; newer than qualified images",
+  "go_version": "go version go1.27.3 linux/amd64",
+  "files": {
+    "internal/scantarget/workspace.go": "729fb15124538b684e4e41fb73443459bf629ea61703d29b59c5d3cab58135e9",
+    "internal/scantarget/workspace_lock_unix.go": "c9ccb5e81e00fe7b36dfd5007741aade377fd94a3e9c7847f0cfeace2d10e608",
+    "internal/scantarget/workspace_lock_windows.go": "f5cfecd7a3fdf96df3049fb27f1ffe92acacbcba46c24b1481c2199158ed3cc7",
+    "internal/scantarget/workspace_lock_unsupported.go": "fc38a08a61c2559d833183bcbd78d253638f4ebdd687e0220e856789b031bebc",
+    "internal/scantarget/workspace_test.go": "8ff9e18340f5200eb32ee54707593e7fcd1b3bccfbfbb214f458fb45cabd898d",
+    "internal/scantarget/resolver.go": "6d1c38a114926161bbe2d75f5bbe241f26b87ce120fb6282ebc284bf8225f8ca",
+    "internal/scantarget/git.go": "db2560a0d99b3f14adf7206f65c94c6b4292043b3e86bd49a002550cbee92c31",
+    "internal/scanjob/worker_test.go": "9acf335c3f2c3fe9746682c609ba1bf2377a8d9cc5ec3262e73a9c65c350b8ec",
+    "internal/api/routes/admin.go": "ae3489709bfb37d3a829eed8a604e807f11e627fe7e86bd615eaac635214ac10",
+    "internal/api/routes/workspace_reap_test.go": "9b4e66b51e5019358c770167b4683b965c3e9df1663e1c318137a478c4dcbc0c",
+    "internal/api/routes/scans_test.go": "702fd4171c152c43cdc9416cf7e013b9189d6e3b3b16fc841523e156fc2b0984",
+    "cmd/wolf/main.go": "f5ab55b9181b3c9a318315c21d0d1dc1b44497d7f3641a5ba99508d6903c31a8",
+    "cmd/wolf/scan_exit_test.go": "ce53cbb6968cd2039791fd0e5b1facfb2fc7f7f50bdb6c2ed71b50bbfcce8414",
+    "ui/src/routes/_authed.settings.tsx": "d306eca2af54f432a914107dba67704c8792f44c872f6757f1b1561bb727b8eb",
+    "docs/scan-isolation.md": "c84936b0575c565a8b395eeee62f8b0d90c7c3688fd32a47698f82d039bccec8",
+    "docs/PLAN.md": "b1c8582033a12320a2457bff9a9dccda27bdfc24fd51ec3d12a5db734cdfb8f6",
+    "CHANGELOG.md": "86c6d142487b43254e7d7d16e635bb32f52955983ca341480f9f904ea7a6eed0",
+    "scanners/scanner-lock.yaml": "66886db5ea67c515b0373f9b28499727a5b8d61f547ba37707057ac0e699ee35"
+  },
+  "scanner_lock": "sha256:42fcdc39c970a319c4583f34baf6811a554bac50597898634f9585a0b1fbaf5e",
+  "definition_digest": "sha256:5f71c477bb00626b3a58b5b01c5627952682bca8c653f56840762820ba8a4863"
+}

@@ -1,0 +1,20 @@
+{
+  "name": "wolf-plan-artifact-snapshots-pg-20261023",
+  "id": "588b29cba77348fb222fca3c61d625ecee5fd6211d1a679d85b168de3def5527",
+  "image_reference": "postgres@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873",
+  "image_id": "sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873",
+  "ports": {
+    "5432/tcp": [
+      {
+        "HostIp": "127.0.0.1",
+        "HostPort": "32787"
+      }
+    ]
+  },
+  "created": "2026-10-23T15:17:47.927429069Z",
+  "purpose": "Owned isolated PostgreSQL test fixture; production containers untouched",
+  "removed": true,
+  "anonymous_volumes_removed": true,
+  "absence_verified": true,
+  "removed_at": "2026-10-23T15:27:10.530019+00:00"
+}

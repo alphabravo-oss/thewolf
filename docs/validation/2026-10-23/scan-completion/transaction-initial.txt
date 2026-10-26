@@ -1,0 +1,7 @@
+--- FAIL: TestScanCompletionSQLite (0.26s)
+    scan_completion_test.go:106: published gate identity differs: &{FindingsRevision:0 ID:694299c4-e26d-4a65-b92f-a6ae1d40cb4b ScanID:6cd9e163-de05-4b57-87f6-6b8f1ad2a9aa PolicyID:default Status:pass SummaryJSON:{} MatchedRulesJSON:[] EvaluatedAt:2026-10-23 16:39:23.933178049 +0000 UTC CreatedAt:2026-10-23 16:39:23.930573794 +0000 UTC UpdatedAt:2026-10-23 16:39:23.954116161 +0000 UTC} <nil>
+--- FAIL: TestScanCompletionPostgres (2.14s)
+    scan_completion_test.go:106: published gate identity differs: &{FindingsRevision:0 ID:e0acb8e4-703d-462f-82b6-4a2857d35935 ScanID:4a1627cd-f049-4c88-ab92-a67ff6fb3af3 PolicyID:default Status:pass SummaryJSON:{} MatchedRulesJSON:[] EvaluatedAt:2026-10-23 16:39:25.581517 +0000 UTC CreatedAt:2026-10-23 16:39:25.563329 +0000 UTC UpdatedAt:2026-10-23 16:39:25.638355 +0000 UTC} <nil>
+FAIL
+FAIL	github.com/alphabravocompany/thewolf/internal/db	2.425s
+FAIL

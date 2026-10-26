@@ -1,0 +1,58 @@
+{
+  "historical_mfa_state_count": 29,
+  "preceding_mfa_exchange_count": 26,
+  "final_count": 29,
+  "new_relative_to_historical_set": [],
+  "historical_alerts_reported_again": [
+    {
+      "severity": "HIGH",
+      "confidence": "HIGH",
+      "cwe": {
+        "id": "22",
+        "url": "https://cwe.mitre.org/data/definitions/22.html"
+      },
+      "rule_id": "G703",
+      "details": "Path traversal via taint analysis",
+      "file": "/root/wolf-all/thewolf/cmd/scannertools/bump.go",
+      "code": "275: \t}\n276: \treturn os.WriteFile(path, []byte(strings.Join(lines, \"\\n\")), 0o644)\n277: }\n",
+      "line": "276",
+      "column": "21",
+      "nosec": false,
+      "suppressions": null
+    },
+    {
+      "severity": "HIGH",
+      "confidence": "HIGH",
+      "cwe": {
+        "id": "22",
+        "url": "https://cwe.mitre.org/data/definitions/22.html"
+      },
+      "rule_id": "G703",
+      "details": "Path traversal via taint analysis",
+      "file": "/root/wolf-all/thewolf/cmd/scannertools/propose.go",
+      "code": "255: \t\t}\n256: \t\treturn os.WriteFile(target, data, info.Mode().Perm())\n257: \t}\n",
+      "line": "256",
+      "column": "22",
+      "nosec": false,
+      "suppressions": null
+    },
+    {
+      "severity": "HIGH",
+      "confidence": "HIGH",
+      "cwe": {
+        "id": "22",
+        "url": "https://cwe.mitre.org/data/definitions/22.html"
+      },
+      "rule_id": "G703",
+      "details": "Path traversal via taint analysis",
+      "file": "/root/wolf-all/thewolf/cmd/scannertools/propose.go",
+      "code": "280: \t\t}\n281: \t\treturn os.WriteFile(destination, data, info.Mode().Perm())\n282: \t})\n",
+      "line": "281",
+      "column": "22",
+      "nosec": false,
+      "suppressions": null
+    }
+  ],
+  "not_reported_relative_to_historical_set": [],
+  "disposition": "R03 remains release-blocking. Three earlier scanner-release alerts omitted by the preceding run are reported again; they were never resolved or waived."
+}

@@ -1,0 +1,63 @@
+{
+  "tasks": 238,
+  "checked": 55,
+  "D05_1_complete": true,
+  "D05_complete": false,
+  "final_go_race_packages": 136,
+  "final_go_race_command": "WOLF_TEST_POSTGRES_DSN=<owned loopback fixture> make test",
+  "final_go_race_exit": 0,
+  "uncached": true,
+  "go_lint_exit": 0,
+  "scanner_sync_exit": 0,
+  "focused_contracts_exit": 0,
+  "backends": [
+    "sqlite",
+    "postgres"
+  ],
+  "rollback_boundaries": [
+    "rule",
+    "finding",
+    "scan",
+    "canonical",
+    "audit"
+  ],
+  "sqlite_reopen_postgres_reconnect": true,
+  "overlapping_rule_fallback": true,
+  "concurrent_triage_preserved": true,
+  "new_observations_use_transactional_rules": true,
+  "stale_enrichment_cannot_erase_durable_rule": true,
+  "current_preview_scope": [
+    "latest_repository_scan",
+    "latest_branch_scan",
+    "empty_latest_scan",
+    "no_matching_branch"
+  ],
+  "api_checked": [
+    "create",
+    "revoke",
+    "preview",
+    "active_inactive_list",
+    "finding_list",
+    "scan_count",
+    "gate",
+    "manifest_revision",
+    "sarif"
+  ],
+  "expiry_startup_hook_checked": true,
+  "expiry_poll_seconds": 60,
+  "expiry_timeout_seconds": 30,
+  "gosec_exit": 1,
+  "gosec_high_high_findings": 29,
+  "gosec_rules": {
+    "G704": 3,
+    "G703": 25,
+    "G702": 1
+  },
+  "gosec_analysis_errors": {},
+  "fixture_removed": true,
+  "source_files": 123,
+  "ui_changed": false,
+  "deployed": false,
+  "diff_check_exit": 0,
+  "documentation_links_valid": true
+}

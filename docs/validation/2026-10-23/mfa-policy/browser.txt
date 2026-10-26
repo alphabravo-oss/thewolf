@@ -1,0 +1,28 @@
+[WebServer] $ vite build
+[WebServer] (node:3421341) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:3421465) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 6 tests using 2 workers
+
+(node:3421526) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3421527) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [desktop-chromium-linux] › e2e/mfa-policy.spec.ts:10:1 › MFA status failures show unknown state and retry safely @browser-matrix (1.9s)
+  ✓  2 [desktop-chromium-linux] › e2e/mfa-policy.spec.ts:29:1 › MFA status refresh failures preserve one-time recovery codes @browser-matrix (2.1s)
+(node:3421729) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3421738) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  3 [mobile-chromium-linux] › e2e/mfa-policy.spec.ts:10:1 › MFA status failures show unknown state and retry safely @browser-matrix (1.8s)
+(node:3421937) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  4 [mobile-chromium-linux] › e2e/mfa-policy.spec.ts:29:1 › MFA status refresh failures preserve one-time recovery codes @browser-matrix (2.1s)
+(node:3421953) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  5 [desktop-firefox-linux] › e2e/mfa-policy.spec.ts:10:1 › MFA status failures show unknown state and retry safely @browser-matrix (3.3s)
+  ✓  6 [desktop-firefox-linux] › e2e/mfa-policy.spec.ts:29:1 › MFA status refresh failures preserve one-time recovery codes @browser-matrix (3.1s)
+
+  6 passed (14.8s)

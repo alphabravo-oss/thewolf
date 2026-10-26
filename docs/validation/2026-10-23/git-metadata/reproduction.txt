@@ -1,0 +1,5 @@
+--- FAIL: TestGitInfoRejectsExternalWorktreeMetadata (0.02s)
+    git_info_test.go:93: external metadata was exposed: 200 {"data":{"branches":["outside-secret"],"current_branch":"outside-secret","is_git":true,"path":"/tmp/TestGitInfoRejectsExternalWorktreeMetadata919983228/001"}}
+FAIL
+FAIL	github.com/alphabravocompany/thewolf/internal/api/routes	0.037s
+FAIL

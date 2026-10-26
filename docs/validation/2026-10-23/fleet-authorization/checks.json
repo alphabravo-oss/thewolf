@@ -1,0 +1,43 @@
+{
+  "tasks": 244,
+  "checked": 61,
+  "D06_2_complete": true,
+  "D06_complete": false,
+  "reproduction_exit": 1,
+  "focused_contracts_exit": 0,
+  "expanded_contracts_exit": 0,
+  "new_regression_resource_requests": 114,
+  "credential_types": 5,
+  "full_go_race_exit": 0,
+  "full_go_race_packages": 136,
+  "uncached": true,
+  "full_suite_backends": [
+    "sqlite",
+    "postgres"
+  ],
+  "new_http_tests_backend": "sqlite",
+  "production_router_scopes_tested": true,
+  "all_fleet_helper_callers_traced": true,
+  "foreign_single_and_bulk_triage_rejected_without_mutation": true,
+  "foreign_split_merge_rejected_before_validation": true,
+  "owner_token_and_admin_session_mutation_preserved": true,
+  "immediate_human_role_demotion_tested": true,
+  "admin_super_scope_does_not_imply_human_role": true,
+  "go_lint_exit": 0,
+  "scanner_sync_exit": 0,
+  "gosec_exit": 1,
+  "gosec_high_high_findings": 29,
+  "gosec_rules": {
+    "G704": 3,
+    "G703": 25,
+    "G702": 1
+  },
+  "gosec_analysis_errors": {},
+  "legacy_ownerless_semantics_unchanged": true,
+  "fixture_removed": true,
+  "source_files": 159,
+  "ui_changed": false,
+  "deployed": false,
+  "diff_check_exit": 0,
+  "documentation_links_valid": true
+}

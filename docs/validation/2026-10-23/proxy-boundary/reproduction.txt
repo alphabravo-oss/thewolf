@@ -1,0 +1,13 @@
+8:11PM INF static-ui: no dist dir found; UI routes disabled (run `npm run dev` separately)
+2026/10/23 20:11:58 [thewolf-dev-1-mj/nNxgVrnjYD-000001] "POST http://example.com/api/v1/auth/register HTTP/1.1" from 192.0.2.1:1234 - 201 961B in 87.496362ms
+2026/10/23 20:11:58 [thewolf-dev-1-mj/nNxgVrnjYD-000002] "POST http://example.com/api/v1/auth/login HTTP/1.1" from 203.0.114.1 - 400 186B in 44.855µs
+2026/10/23 20:11:58 [thewolf-dev-1-mj/nNxgVrnjYD-000003] "POST http://example.com/api/v1/auth/login HTTP/1.1" from 203.0.114.2 - 400 186B in 11.712µs
+2026/10/23 20:11:58 [thewolf-dev-1-mj/nNxgVrnjYD-000004] "POST http://example.com/api/v1/auth/login HTTP/1.1" from 203.0.114.3 - 400 186B in 10.681µs
+2026/10/23 20:11:58 [thewolf-dev-1-mj/nNxgVrnjYD-000005] "POST http://example.com/api/v1/auth/login HTTP/1.1" from 203.0.114.4 - 400 186B in 15.419µs
+2026/10/23 20:11:58 [thewolf-dev-1-mj/nNxgVrnjYD-000006] "POST http://example.com/api/v1/auth/login HTTP/1.1" from 203.0.114.5 - 400 186B in 12.013µs
+2026/10/23 20:11:58 [thewolf-dev-1-mj/nNxgVrnjYD-000007] "POST http://example.com/api/v1/auth/login HTTP/1.1" from 203.0.114.6 - 400 186B in 9.387µs
+--- FAIL: TestForwardedHeadersCannotBypassAuthenticationRateLimit (0.32s)
+    proxy_boundary_test.go:26: attempt 6: want 429, got 400: {"error":{"code":"validation_error","message":"email and password are required"},"type":"about:blank","title":"validation_error","status":400,"detail":"email and password are required"}
+FAIL
+FAIL	github.com/alphabravocompany/thewolf/internal/api	0.345s
+FAIL

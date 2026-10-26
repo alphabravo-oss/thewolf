@@ -1,0 +1,29 @@
+{
+  "Id": "1ebfe26983d6b0cad19396643c6406b07e7242c8ae00f822e11c2f34b6e88f71",
+  "Name": "/wolf-plan-proxy-pg-20261023",
+  "Image": "sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873",
+  "label": "proxy-boundary-20261023",
+  "ports": {
+    "5432/tcp": [
+      {
+        "HostIp": "127.0.0.1",
+        "HostPort": "32804"
+      }
+    ]
+  },
+  "mounts": [
+    {
+      "Type": "volume",
+      "Name": "f5a34f0be447d6b70f735c1ecc5336919cb04da6ce1aa984b970a5fdbf7cab1d",
+      "Source": "/var/lib/docker/volumes/f5a34f0be447d6b70f735c1ecc5336919cb04da6ce1aa984b970a5fdbf7cab1d/_data",
+      "Destination": "/var/lib/postgresql",
+      "Driver": "local",
+      "Mode": "",
+      "RW": true,
+      "Propagation": ""
+    }
+  ],
+  "removed": true,
+  "container_absence_verified": true,
+  "anonymous_volume_absence_verified": true
+}

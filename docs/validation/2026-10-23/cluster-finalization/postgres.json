@@ -1,0 +1,32 @@
+{
+  "name": "wolf-plan-cluster-finalization-pg-20261023",
+  "id": "56120755b740a4582c46bdbeb7bdd8f6cb12eded86bd3002b2425c43470df8a6",
+  "image": "postgres@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873",
+  "image_id": "sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873",
+  "ports": {
+    "5432/tcp": [
+      {
+        "HostIp": "127.0.0.1",
+        "HostPort": "32783"
+      }
+    ]
+  },
+  "mounts": [
+    {
+      "Type": "volume",
+      "Name": "aab1580148fa15429cb32468f0104a42554a3ef3e6425e99b29c73bf5ab1f9f9",
+      "Source": "/var/lib/docker/volumes/aab1580148fa15429cb32468f0104a42554a3ef3e6425e99b29c73bf5ab1f9f9/_data",
+      "Destination": "/var/lib/postgresql",
+      "Driver": "local",
+      "Mode": "",
+      "RW": true,
+      "Propagation": ""
+    }
+  ],
+  "purpose": "Disposable PostgreSQL finalization contracts and race suite; fixture authentication only; production untouched.",
+  "cleanup": {
+    "command": "docker rm -f -v wolf-plan-cluster-finalization-pg-20261023",
+    "exit_code": 0,
+    "container_absent": true
+  }
+}

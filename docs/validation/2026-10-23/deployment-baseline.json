@@ -1,0 +1,375 @@
+{
+  "captured_at": "2026-10-23T07:59:11.097847+00:00",
+  "source_head": "23b64ce09c569b7f49c465b53573e40c791b6fc5",
+  "source_branch": "postgres-modes",
+  "enterprise_head": "69175243831651f9d3b42bc9a17dd41e8656364d",
+  "enterprise_core_pin": "# Community core this overlay is built against.\n# Bump only via an explicit PR. Do not drift.\nrepository: github.com/alphabravo-oss/thewolf\nmodule: github.com/alphabravocompany/thewolf\ncommit: 5cb9a9fff69d986577d457e3f78dcaec65747b72\nref: main\npinned: 2026-09-04\n",
+  "services": [
+    {
+      "name": "thewolf-wolf-1",
+      "image_id": "sha256:3fa26810ffce36705f843714d13bd70a0cc55db49c04867aa2c4dee52c128dcf",
+      "repository_digests": [
+        "thewolf-scan-worker@sha256:3fa26810ffce36705f843714d13bd70a0cc55db49c04867aa2c4dee52c128dcf",
+        "thewolf-wolf@sha256:3fa26810ffce36705f843714d13bd70a0cc55db49c04867aa2c4dee52c128dcf",
+        "wolf@sha256:3fa26810ffce36705f843714d13bd70a0cc55db49c04867aa2c4dee52c128dcf"
+      ],
+      "platform": "linux/amd64",
+      "started_at": "2026-10-13T06:43:15.001321961Z",
+      "health": "healthy",
+      "version": "wolf 0.2.2-test-coverage-20261013-064155\n  commit:     23b64ce-dirty\n  built:      2026-10-13T06:41:55.975353+00:00\n  edition:    community\n  license:    source-available",
+      "binary_sha256": "4f4b83f107338c6b22cd39f4177a3b883c53009bc82efa795aa414fecce9565c",
+      "compose_files": "/root/wolf-all/thewolf/docker-compose.yml,/root/wolf-all/thewolf/docker-compose.hardened.yml",
+      "mounts": [
+        {
+          "source": "/root/wolf-all/thewolf/deploy/scanner-release-managed/bundle-trust.disabled",
+          "destination": "/run/wolf/offline-bundles/portable/trust-policy.json",
+          "writable": false
+        },
+        {
+          "source": "/root/wolf-all/thewolf/deploy/scanner-release-managed/bundle-image-verifier.disabled",
+          "destination": "/run/wolf/offline-bundles/images/verifier",
+          "writable": false
+        },
+        {
+          "source": "/root/wolf-all/thewolf/deploy/scanner-release-managed/bundle-image-trust.disabled",
+          "destination": "/run/wolf/offline-bundles/images/trust-policy.json",
+          "writable": false
+        },
+        {
+          "source": "/var/lib/docker/volumes/thewolf_wolf-data/_data",
+          "destination": "/home/wolf/.wolf",
+          "writable": true
+        },
+        {
+          "source": "/root/wolf-all/thewolf/repos",
+          "destination": "/repos",
+          "writable": false
+        },
+        {
+          "source": "/root/wolf-all/thewolf/workspaces",
+          "destination": "/workspaces",
+          "writable": true
+        }
+      ]
+    },
+    {
+      "name": "thewolf-scan-worker-1",
+      "image_id": "sha256:3fa26810ffce36705f843714d13bd70a0cc55db49c04867aa2c4dee52c128dcf",
+      "repository_digests": [
+        "thewolf-scan-worker@sha256:3fa26810ffce36705f843714d13bd70a0cc55db49c04867aa2c4dee52c128dcf",
+        "thewolf-wolf@sha256:3fa26810ffce36705f843714d13bd70a0cc55db49c04867aa2c4dee52c128dcf",
+        "wolf@sha256:3fa26810ffce36705f843714d13bd70a0cc55db49c04867aa2c4dee52c128dcf"
+      ],
+      "platform": "linux/amd64",
+      "started_at": "2026-10-13T06:43:20.696831959Z",
+      "health": "healthy",
+      "version": "wolf 0.2.2-test-coverage-20261013-064155\n  commit:     23b64ce-dirty\n  built:      2026-10-13T06:41:55.975353+00:00\n  edition:    community\n  license:    source-available",
+      "binary_sha256": "4f4b83f107338c6b22cd39f4177a3b883c53009bc82efa795aa414fecce9565c",
+      "compose_files": "/root/wolf-all/thewolf/docker-compose.yml,/root/wolf-all/thewolf/docker-compose.hardened.yml",
+      "mounts": [
+        {
+          "source": "/var/lib/docker/volumes/thewolf_wolf-data/_data",
+          "destination": "/home/wolf/.wolf",
+          "writable": true
+        },
+        {
+          "source": "/root/wolf-all/thewolf/repos",
+          "destination": "/repos",
+          "writable": false
+        },
+        {
+          "source": "/root/wolf-all/thewolf/workspaces",
+          "destination": "/workspaces",
+          "writable": true
+        }
+      ]
+    },
+    {
+      "name": "thewolf-fixer-1",
+      "image_id": "sha256:a643bcb30cf6752e799a99e4bdc099181ace89adb19c7311da9d28712f8eb540",
+      "repository_digests": [
+        "wolf-fixer-engines@sha256:a643bcb30cf6752e799a99e4bdc099181ace89adb19c7311da9d28712f8eb540"
+      ],
+      "platform": "linux/amd64",
+      "started_at": "2026-10-13T05:24:19.943518969Z",
+      "health": "not_configured",
+      "version": "wolf 0.2.2-auto-20261013-045023-r2\n  commit:     23b64ce-dirty\n  built:      2026-10-13T05:14:15.706242+00:00\n  edition:    community\n  license:    source-available",
+      "binary_sha256": "c9dc09e9aca110bf8245bd253e27fee1e5f4a7b9d93a21b93ec335b2c8e4f1cd",
+      "compose_files": "/root/wolf-all/thewolf/docker-compose.yml,/root/wolf-all/thewolf/docker-compose.hardened.yml",
+      "mounts": [
+        {
+          "source": "/root/wolf-all/thewolf/workspaces",
+          "destination": "/workspaces",
+          "writable": true
+        },
+        {
+          "source": "/var/run/docker.sock",
+          "destination": "/var/run/docker.sock",
+          "writable": true
+        },
+        {
+          "source": "/usr/bin/docker",
+          "destination": "/usr/local/bin/docker",
+          "writable": false
+        },
+        {
+          "source": "/var/lib/docker/volumes/thewolf_fixer-home/_data",
+          "destination": "/home/wolf",
+          "writable": true
+        },
+        {
+          "source": "/var/lib/docker/volumes/thewolf_wolf-data/_data",
+          "destination": "/home/wolf/.wolf",
+          "writable": true
+        },
+        {
+          "source": "/root/wolf-all/thewolf/repos",
+          "destination": "/repos",
+          "writable": false
+        }
+      ]
+    }
+  ],
+  "endpoints": {
+    "/api/v1/version": {
+      "status": 200,
+      "body": {
+        "data": {
+          "commit": "23b64ce-dirty",
+          "community": {
+            "commit": "23b64ce-dirty",
+            "version": "0.2.2-test-coverage-20261013-064155"
+          },
+          "date": "2026-10-13T06:41:55.975353+00:00",
+          "edition": "community",
+          "license": "source-available",
+          "name": "the-wolf",
+          "product": "Wolf Community",
+          "version": "0.2.2-test-coverage-20261013-064155"
+        }
+      }
+    },
+    "/api/v1/health": {
+      "status": 200,
+      "body": {
+        "data": {
+          "edition": "community",
+          "release_factory": {
+            "status": "disabled",
+            "ready": true,
+            "database": "ok",
+            "maintenance": "normal",
+            "uptime_ms": 868557134,
+            "components": [
+              {
+                "component": "alert",
+                "enabled": false,
+                "status": "disabled",
+                "ready": true
+              },
+              {
+                "component": "build",
+                "enabled": false,
+                "status": "disabled",
+                "ready": true
+              },
+              {
+                "component": "discovery",
+                "enabled": false,
+                "status": "disabled",
+                "ready": true
+              },
+              {
+                "component": "fixed",
+                "enabled": false,
+                "status": "disabled",
+                "ready": true
+              },
+              {
+                "component": "integration",
+                "enabled": false,
+                "status": "disabled",
+                "ready": true
+              },
+              {
+                "component": "notification",
+                "enabled": false,
+                "status": "disabled",
+                "ready": true
+              },
+              {
+                "component": "proposal",
+                "enabled": false,
+                "status": "disabled",
+                "ready": true
+              },
+              {
+                "component": "quality",
+                "enabled": false,
+                "status": "disabled",
+                "ready": true
+              },
+              {
+                "component": "registry",
+                "enabled": false,
+                "status": "disabled",
+                "ready": true
+              },
+              {
+                "component": "rollout",
+                "enabled": false,
+                "status": "disabled",
+                "ready": true
+              },
+              {
+                "component": "scheduler",
+                "enabled": false,
+                "status": "disabled",
+                "ready": true
+              }
+            ]
+          },
+          "scanner_release_alerts": {
+            "counts": {
+              "open_warning": 0,
+              "open_critical": 0,
+              "resolved": 0
+            },
+            "status": "healthy"
+          },
+          "status": "ok",
+          "uptime_ms": 868557132
+        }
+      }
+    },
+    "/api/v1/ready": {
+      "status": 200,
+      "body": {
+        "data": {
+          "database": "ok",
+          "maintenance": "normal",
+          "release_factory": {
+            "status": "disabled",
+            "ready": true,
+            "database": "ok",
+            "maintenance": "normal",
+            "uptime_ms": 868557136,
+            "components": [
+              {
+                "component": "alert",
+                "enabled": false,
+                "status": "disabled",
+                "ready": true
+              },
+              {
+                "component": "build",
+                "enabled": false,
+                "status": "disabled",
+                "ready": true
+              },
+              {
+                "component": "discovery",
+                "enabled": false,
+                "status": "disabled",
+                "ready": true
+              },
+              {
+                "component": "fixed",
+                "enabled": false,
+                "status": "disabled",
+                "ready": true
+              },
+              {
+                "component": "integration",
+                "enabled": false,
+                "status": "disabled",
+                "ready": true
+              },
+              {
+                "component": "notification",
+                "enabled": false,
+                "status": "disabled",
+                "ready": true
+              },
+              {
+                "component": "proposal",
+                "enabled": false,
+                "status": "disabled",
+                "ready": true
+              },
+              {
+                "component": "quality",
+                "enabled": false,
+                "status": "disabled",
+                "ready": true
+              },
+              {
+                "component": "registry",
+                "enabled": false,
+                "status": "disabled",
+                "ready": true
+              },
+              {
+                "component": "rollout",
+                "enabled": false,
+                "status": "disabled",
+                "ready": true
+              },
+              {
+                "component": "scheduler",
+                "enabled": false,
+                "status": "disabled",
+                "ready": true
+              }
+            ]
+          },
+          "scanner_release_alerts": {
+            "counts": {
+              "open_warning": 0,
+              "open_critical": 0,
+              "resolved": 0
+            },
+            "status": "healthy"
+          },
+          "status": "ready"
+        }
+      }
+    }
+  },
+  "ui_index_sha256": "24ec0de0c9cc6f79018e9641abd90f7efe2c5b505df4326b6c7704c1d6fd449c",
+  "configuration_files": [
+    {
+      "path": "docker-compose.yml",
+      "sha256": "777d0e2b2b369d02c54a20151411e90aec8fc5fe544bc7209eff2cb3c741c927"
+    },
+    {
+      "path": "docker-compose.hardened.yml",
+      "sha256": "37454d599a86b3b40df8195894a5209b42fbcdf649519b44323c9a31cddc1672"
+    }
+  ],
+  "database": {
+    "engine": "sqlite",
+    "user_version": 0,
+    "schema_sha256": "124fc5ec955a787113a46f17a018413f83ae523a6c2cbc8e141b890cceea719d",
+    "schema_object_count": 218,
+    "status_counts": {
+      "scans": {
+        "cancelled": 2,
+        "completed": 15
+      },
+      "fix_jobs": {
+        "cancelled": 8,
+        "failed": 3,
+        "succeeded": 5,
+        "superseded": 3
+      }
+    },
+    "limitation": "No migration-version ledger; schema fingerprint is evidence, not proof of an exact applied migration number."
+  },
+  "limitations": [
+    "Running versions report 23b64ce-dirty; the exact October 13 working-tree source is not reconstructible from the commit label alone.",
+    "Current checkout includes newer undeployed changes; no production mutation was performed.",
+    "Environment values, credentials, database row contents, and signing keys are excluded.",
+    "The canonical readiness path is /api/v1/ready; /ready falls through to the SPA."
+  ]
+}

@@ -1,0 +1,184 @@
+{
+  "scope": "Search inventory, not a complete security audit. Literal git/gitPath exec.Command sites plus known indirect executor paths. Generic command dispatch and shell/SSH paths require further tracing.",
+  "literal_and_gitpath_sites": [
+    {
+      "file": "cmd/scannertools/propose.go",
+      "line": 301,
+      "code": "command := exec.CommandContext(ctx, \"git\", args...)",
+      "status": "remaining native Git boundary; command/environment/filesystem/resource review not complete"
+    },
+    {
+      "file": "internal/api/routes/fix_diff.go",
+      "line": 99,
+      "code": "out, err := exec.Command(\"git\", \"-c\", \"core.fsmonitor=false\", \"-C\", repoPath, \"diff\", \"--no-ext-diff\", \"--no-textconv\", \"--find-renames\", base, \"--\").Output() // #nosec G204",
+      "status": "remaining native Git boundary; command/environment/filesystem/resource review not complete"
+    },
+    {
+      "file": "internal/api/routes/fix_diff.go",
+      "line": 108,
+      "code": "out, err := exec.Command(\"git\", \"-C\", repoPath, \"merge-base\", \"HEAD\", ref).Output() // #nosec G204",
+      "status": "remaining native Git boundary; command/environment/filesystem/resource review not complete"
+    },
+    {
+      "file": "internal/api/routes/fix_diff.go",
+      "line": 128,
+      "code": "out, err := exec.Command(\"git\", \"-C\", repoPath, \"log\", \"-50\", \"--format=%H\\t%s\\t%cI\").Output() // #nosec G204",
+      "status": "remaining native Git boundary; command/environment/filesystem/resource review not complete"
+    },
+    {
+      "file": "internal/fix/engine/apipatch.go",
+      "line": 120,
+      "code": "cmd := exec.CommandContext(ctx, \"git\", \"-C\", repoPath, \"apply\", \"--whitespace=nowarn\", \"-\")",
+      "status": "remaining native Git boundary; command/environment/filesystem/resource review not complete"
+    },
+    {
+      "file": "internal/fix/engine/registry.go",
+      "line": 155,
+      "code": "cmd := exec.CommandContext(ctx, \"git\", \"-C\", repoPath, \"status\", \"--porcelain\")",
+      "status": "remaining native Git boundary; command/environment/filesystem/resource review not complete"
+    },
+    {
+      "file": "internal/fix/git/git.go",
+      "line": 30,
+      "code": "cmd := exec.Command(\"git\", \"checkout\", \"-b\", branchName)",
+      "status": "remaining native Git boundary; command/environment/filesystem/resource review not complete"
+    },
+    {
+      "file": "internal/fix/git/git.go",
+      "line": 48,
+      "code": "cmd := exec.Command(\"git\", \"branch\", branchName)",
+      "status": "remaining native Git boundary; command/environment/filesystem/resource review not complete"
+    },
+    {
+      "file": "internal/fix/git/git.go",
+      "line": 54,
+      "code": "cmd = exec.Command(\"git\", \"worktree\", \"add\", worktreePath, branchName)",
+      "status": "remaining native Git boundary; command/environment/filesystem/resource review not complete"
+    },
+    {
+      "file": "internal/fix/git/git.go",
+      "line": 66,
+      "code": "cmd := exec.Command(\"git\", \"worktree\", \"remove\", worktreePath, \"--force\")",
+      "status": "remaining native Git boundary; command/environment/filesystem/resource review not complete"
+    },
+    {
+      "file": "internal/fix/git/git.go",
+      "line": 80,
+      "code": "cmd := exec.Command(\"git\", \"-c\", \"core.fsmonitor=false\", \"diff\", \"--no-ext-diff\", \"--no-textconv\", \"HEAD\", \"--\")",
+      "status": "remaining native Git boundary; command/environment/filesystem/resource review not complete"
+    },
+    {
+      "file": "internal/fix/git/git.go",
+      "line": 91,
+      "code": "cmd := exec.Command(\"git\", \"-c\", \"core.fsmonitor=false\", \"diff\", \"--no-ext-diff\", \"--no-textconv\", \"--name-only\", \"-z\", \"HEAD\", \"--\")",
+      "status": "remaining native Git boundary; command/environment/filesystem/resource review not complete"
+    },
+    {
+      "file": "internal/fix/git/git.go",
+      "line": 109,
+      "code": "addCmd := exec.Command(\"git\", \"add\", \"-A\")",
+      "status": "remaining native Git boundary; command/environment/filesystem/resource review not complete"
+    },
+    {
+      "file": "internal/fix/git/git.go",
+      "line": 115,
+      "code": "commitCmd := exec.Command(\"git\", \"commit\", \"-m\", message)",
+      "status": "remaining native Git boundary; command/environment/filesystem/resource review not complete"
+    },
+    {
+      "file": "internal/fix/git/git.go",
+      "line": 125,
+      "code": "cmd := exec.Command(\"git\", \"checkout\", \"--\", \".\")",
+      "status": "remaining native Git boundary; command/environment/filesystem/resource review not complete"
+    },
+    {
+      "file": "internal/fix/git/git.go",
+      "line": 132,
+      "code": "cleanCmd := exec.Command(\"git\", \"clean\", \"-fd\")",
+      "status": "remaining native Git boundary; command/environment/filesystem/resource review not complete"
+    },
+    {
+      "file": "internal/fix/hygiene/protect.go",
+      "line": 42,
+      "code": "out, err := exec.CommandContext(ctx, \"git\", \"-C\", repoPath, \"status\", \"--porcelain\").Output() // #nosec G204",
+      "status": "remaining native Git boundary; command/environment/filesystem/resource review not complete"
+    },
+    {
+      "file": "internal/fix/hygiene/protect.go",
+      "line": 51,
+      "code": "_ = exec.CommandContext(ctx, \"git\", \"-C\", repoPath, \"checkout\", \"--\", rel).Run() // #nosec G204",
+      "status": "remaining native Git boundary; command/environment/filesystem/resource review not complete"
+    },
+    {
+      "file": "internal/fix/lineage/lineage.go",
+      "line": 122,
+      "code": "cmd := exec.Command(\"git\", \"-C\", dir, \"rev-parse\", \"HEAD\")",
+      "status": "remaining native Git boundary; command/environment/filesystem/resource review not complete"
+    },
+    {
+      "file": "internal/fix/pr/pr.go",
+      "line": 78,
+      "code": "cmd := exec.CommandContext(ctx, \"git\", \"push\", \"-u\", \"origin\", branchName) // #nosec G204 -- command is a configured tool name; args sourced from internal config",
+      "status": "remaining native Git boundary; command/environment/filesystem/resource review not complete"
+    },
+    {
+      "file": "internal/fix/wiring/wiring.go",
+      "line": 236,
+      "code": "cmd := exec.CommandContext(ctx, \"git\", \"-C\", repoPath, \"apply\", \"--whitespace=nowarn\", \"-\")",
+      "status": "remaining native Git boundary; command/environment/filesystem/resource review not complete"
+    },
+    {
+      "file": "internal/fix/workspace/workspace.go",
+      "line": 101,
+      "code": "cmd := exec.CommandContext(ctx, \"git\", append([]string{\"-c\", \"core.fsmonitor=false\"}, args...)...)",
+      "status": "remaining native Git boundary; command/environment/filesystem/resource review not complete"
+    },
+    {
+      "file": "internal/fix/workspace/workspace.go",
+      "line": 119,
+      "code": "cmd := exec.CommandContext(ctx, \"git\", append([]string{\"-c\", \"core.fsmonitor=false\"}, args...)...)",
+      "status": "remaining native Git boundary; command/environment/filesystem/resource review not complete"
+    },
+    {
+      "file": "internal/scan/suppress/gitignore.go",
+      "line": 53,
+      "code": "cmd := exec.Command(\"git\", \"-C\", repoPath, \"check-ignore\", \"--stdin\")",
+      "status": "remaining native Git boundary; command/environment/filesystem/resource review not complete"
+    },
+    {
+      "file": "internal/scannerproposal/checkout.go",
+      "line": 495,
+      "code": "command := exec.CommandContext(ctx, gitPath, fixed...) // #nosec G204 -- no shell; commit is strict-validated and paths are administrator/temp configuration.",
+      "status": "remaining native Git boundary; command/environment/filesystem/resource review not complete"
+    },
+    {
+      "file": "internal/scantarget/git.go",
+      "line": 140,
+      "code": "cmd := exec.CommandContext(ctx, \"git\", args...)",
+      "status": "remaining native Git boundary; command/environment/filesystem/resource review not complete"
+    },
+    {
+      "file": "internal/scantarget/resolver.go",
+      "line": 330,
+      "code": "cmd := exec.Command(\"git\", args...)",
+      "status": "remaining native Git boundary; command/environment/filesystem/resource review not complete"
+    }
+  ],
+  "known_indirect_paths": [
+    {
+      "file": "internal/scannerreleasebackend/source.go",
+      "mechanism": "backend executor request with Command and Environment; clone/fetch/checkout/verification",
+      "status": "isolated executor and fixed environment exist; repository-config and full sandbox qualification pending"
+    },
+    {
+      "file": "internal/scannerreleaseadapter/actions.go",
+      "mechanism": "release adapter command runner; Git binary selected dynamically",
+      "status": "review alongside generic proposal/release command runners"
+    },
+    {
+      "file": "internal/remote/service.go",
+      "mechanism": "SSH Git commands via remote service",
+      "status": "remote node base-path checks exist; GitInfo/discovery/archive shell commands still need repository-config and subprocess isolation review"
+    }
+  ]
+}

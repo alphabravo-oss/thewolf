@@ -1,0 +1,2 @@
+ok  	github.com/alphabravocompany/thewolf/internal/db	2.199s
+ok  	github.com/alphabravocompany/thewolf/internal/finding/gates	1.015s

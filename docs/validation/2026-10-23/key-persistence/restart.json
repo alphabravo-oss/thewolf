@@ -1,0 +1,58 @@
+{
+  "status": "passed",
+  "binary_sha256": "8242d7845a6ff6097e6b8614407e55daf995c9ab940a172bc252c6a37d3739df",
+  "mode": "disposable native SQLite API; no environment key; scanner initialization skipped",
+  "key_formats": {
+    "jwt-secret": "32 raw bytes",
+    "master.key": "64 hexadecimal bytes"
+  },
+  "key_modes": "0600",
+  "keys_unchanged_after_restart": true,
+  "access_token_survived_restart": true,
+  "refresh_token_rotated_after_restart": true,
+  "stored_ciphertext_unchanged": true,
+  "secret_responses_masked": true,
+  "requests": [
+    {
+      "method": "GET",
+      "path": "/ready",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/auth/register",
+      "status": 201
+    },
+    {
+      "method": "POST",
+      "path": "/config/secrets",
+      "status": 201
+    },
+    {
+      "method": "GET",
+      "path": "/ready",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/auth/me",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/auth/refresh",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/auth/me",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/config/secrets",
+      "status": 200
+    }
+  ],
+  "cleanup": "process stopped; temporary home and database removed"
+}

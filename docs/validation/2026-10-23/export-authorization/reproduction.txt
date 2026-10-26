@@ -1,0 +1,340 @@
+7:04PM INF static-ui: no dist dir found; UI routes disabled (run `npm run dev` separately)
+2026/10/23 19:04:33 [thewolf-dev-1-mj/0SPVuB8sKs-000001] "POST http://example.com/api/v1/auth/register HTTP/1.1" from 192.0.2.1:1234 - 201 961B in 86.417942ms
+2026/10/23 19:04:33 [thewolf-dev-1-mj/0SPVuB8sKs-000002] "POST http://example.com/api/v1/auth/tokens HTTP/1.1" from 192.0.2.1:1234 - 201 328B in 356.581µs
+2026/10/23 19:04:33 [thewolf-dev-1-mj/0SPVuB8sKs-000003] "POST http://example.com/api/v1/auth/tokens HTTP/1.1" from 192.0.2.1:1234 - 201 325B in 191.792µs
+2026/10/23 19:04:33 [thewolf-dev-1-mj/0SPVuB8sKs-000004] "POST http://example.com/api/v1/auth/tokens HTTP/1.1" from 192.0.2.1:1234 - 201 327B in 683.648µs
+2026/10/23 19:04:33 [thewolf-dev-1-mj/0SPVuB8sKs-000005] "GET http://example.com/api/v1/findings/export?format=csv&include_suppressed=false&scan_id=e3e9da04-8a4a-4370-add0-84313fcdf686 HTTP/1.1" from 192.0.2.1:1234 - 200 268B in 585.603µs
+2026/10/23 19:04:33 [thewolf-dev-1-mj/0SPVuB8sKs-000006] "GET http://example.com/api/v1/findings/export?format=csv&include_suppressed=false&scan_id=e3e9da04-8a4a-4370-add0-84313fcdf686 HTTP/1.1" from 192.0.2.1:1234 - 200 268B in 969.636µs
+2026/10/23 19:04:33 [thewolf-dev-1-mj/0SPVuB8sKs-000007] "GET http://example.com/api/v1/findings/export?format=csv&include_suppressed=false&scan_id=5ace5302-8894-4b08-a564-86fa4d6a7e40 HTTP/1.1" from 192.0.2.1:1234 - 200 268B in 568.741µs
+2026/10/23 19:04:33 [thewolf-dev-1-mj/0SPVuB8sKs-000008] "GET http://example.com/api/v1/findings/export?format=csv&include_suppressed=false&scan_id=5ace5302-8894-4b08-a564-86fa4d6a7e40 HTTP/1.1" from 192.0.2.1:1234 - 200 268B in 578.67µs
+2026/10/23 19:04:33 [thewolf-dev-1-mj/0SPVuB8sKs-000009] "GET http://example.com/api/v1/findings/export?format=csv&include_suppressed=false&scan_id=e3e9da04-8a4a-4370-add0-84313fcdf686 HTTP/1.1" from 192.0.2.1:1234 - 200 268B in 461.79µs
+2026/10/23 19:04:33 [thewolf-dev-1-mj/0SPVuB8sKs-000010] "GET http://example.com/api/v1/findings/export?format=csv&include_suppressed=false&scan_id=e3e9da04-8a4a-4370-add0-84313fcdf686 HTTP/1.1" from 192.0.2.1:1234 - 200 268B in 937.606µs
+2026/10/23 19:04:33 [thewolf-dev-1-mj/0SPVuB8sKs-000011] "GET http://example.com/api/v1/findings/export?format=csv&include_suppressed=false&scan_id=e3e9da04-8a4a-4370-add0-84313fcdf686 HTTP/1.1" from 192.0.2.1:1234 - 403 95B in 258.758µs
+2026/10/23 19:04:33 [thewolf-dev-1-mj/0SPVuB8sKs-000012] "GET http://example.com/api/v1/findings/export?format=csv&include_suppressed=false&scan_id=e3e9da04-8a4a-4370-add0-84313fcdf686 HTTP/1.1" from 192.0.2.1:1234 - 401 64B in 18.384µs
+2026/10/23 19:04:33 [thewolf-dev-1-mj/0SPVuB8sKs-000013] "GET http://example.com/api/v1/findings/export?format=csv&include_suppressed=false&scan_id=975e1cc4-8c34-412d-bfd8-3a792d3ade86 HTTP/1.1" from 192.0.2.1:1234 - 404 138B in 376.118µs
+2026/10/23 19:04:33 [thewolf-dev-1-mj/0SPVuB8sKs-000014] "GET http://example.com/api/v1/findings/export?format=csv&include_suppressed=false&scan_id= HTTP/1.1" from 192.0.2.1:1234 - 200 268B in 1.013239ms
+2026/10/23 19:04:33 [thewolf-dev-1-mj/0SPVuB8sKs-000015] "GET http://example.com/api/v1/findings/export?format=csv&include_suppressed=true&scan_id=e3e9da04-8a4a-4370-add0-84313fcdf686 HTTP/1.1" from 192.0.2.1:1234 - 200 268B in 530.128µs
+2026/10/23 19:04:33 [thewolf-dev-1-mj/0SPVuB8sKs-000016] "GET http://example.com/api/v1/findings/export?format=csv&include_suppressed=true&scan_id=e3e9da04-8a4a-4370-add0-84313fcdf686 HTTP/1.1" from 192.0.2.1:1234 - 200 268B in 493.44µs
+2026/10/23 19:04:33 [thewolf-dev-1-mj/0SPVuB8sKs-000017] "GET http://example.com/api/v1/findings/export?format=csv&include_suppressed=true&scan_id=5ace5302-8894-4b08-a564-86fa4d6a7e40 HTTP/1.1" from 192.0.2.1:1234 - 200 268B in 493.741µs
+2026/10/23 19:04:33 [thewolf-dev-1-mj/0SPVuB8sKs-000018] "GET http://example.com/api/v1/findings/export?format=csv&include_suppressed=true&scan_id=5ace5302-8894-4b08-a564-86fa4d6a7e40 HTTP/1.1" from 192.0.2.1:1234 - 200 268B in 611.973µs
+2026/10/23 19:04:33 [thewolf-dev-1-mj/0SPVuB8sKs-000019] "GET http://example.com/api/v1/findings/export?format=csv&include_suppressed=true&scan_id=e3e9da04-8a4a-4370-add0-84313fcdf686 HTTP/1.1" from 192.0.2.1:1234 - 200 268B in 460.297µs
+2026/10/23 19:04:33 [thewolf-dev-1-mj/0SPVuB8sKs-000020] "GET http://example.com/api/v1/findings/export?format=csv&include_suppressed=true&scan_id=e3e9da04-8a4a-4370-add0-84313fcdf686 HTTP/1.1" from 192.0.2.1:1234 - 200 268B in 664.06µs
+2026/10/23 19:04:33 [thewolf-dev-1-mj/0SPVuB8sKs-000021] "GET http://example.com/api/v1/findings/export?format=csv&include_suppressed=true&scan_id=e3e9da04-8a4a-4370-add0-84313fcdf686 HTTP/1.1" from 192.0.2.1:1234 - 403 95B in 239.972µs
+2026/10/23 19:04:33 [thewolf-dev-1-mj/0SPVuB8sKs-000022] "GET http://example.com/api/v1/findings/export?format=csv&include_suppressed=true&scan_id=e3e9da04-8a4a-4370-add0-84313fcdf686 HTTP/1.1" from 192.0.2.1:1234 - 401 64B in 26.72µs
+2026/10/23 19:04:33 [thewolf-dev-1-mj/0SPVuB8sKs-000023] "GET http://example.com/api/v1/findings/export?format=csv&include_suppressed=true&scan_id=f5a8b389-ee4c-4af4-906c-afdedf627ded HTTP/1.1" from 192.0.2.1:1234 - 404 138B in 404.542µs
+2026/10/23 19:04:33 [thewolf-dev-1-mj/0SPVuB8sKs-000024] "GET http://example.com/api/v1/findings/export?format=csv&include_suppressed=true&scan_id= HTTP/1.1" from 192.0.2.1:1234 - 200 268B in 1.086598ms
+2026/10/23 19:04:33 [thewolf-dev-1-mj/0SPVuB8sKs-000025] "GET http://example.com/api/v1/findings/export?format=json&include_suppressed=false&scan_id=e3e9da04-8a4a-4370-add0-84313fcdf686 HTTP/1.1" from 192.0.2.1:1234 - 200 1346B in 808.252µs
+2026/10/23 19:04:33 [thewolf-dev-1-mj/0SPVuB8sKs-000026] "GET http://example.com/api/v1/findings/export?format=json&include_suppressed=false&scan_id=e3e9da04-8a4a-4370-add0-84313fcdf686 HTTP/1.1" from 192.0.2.1:1234 - 200 1346B in 675.292µs
+2026/10/23 19:04:33 [thewolf-dev-1-mj/0SPVuB8sKs-000027] "GET http://example.com/api/v1/findings/export?format=json&include_suppressed=false&scan_id=5ace5302-8894-4b08-a564-86fa4d6a7e40 HTTP/1.1" from 192.0.2.1:1234 - 200 1346B in 587.716µs
+2026/10/23 19:04:33 [thewolf-dev-1-mj/0SPVuB8sKs-000028] "GET http://example.com/api/v1/findings/export?format=json&include_suppressed=false&scan_id=5ace5302-8894-4b08-a564-86fa4d6a7e40 HTTP/1.1" from 192.0.2.1:1234 - 200 1346B in 654.102µs
+2026/10/23 19:04:33 [thewolf-dev-1-mj/0SPVuB8sKs-000029] "GET http://example.com/api/v1/findings/export?format=json&include_suppressed=false&scan_id=e3e9da04-8a4a-4370-add0-84313fcdf686 HTTP/1.1" from 192.0.2.1:1234 - 200 1346B in 689.017µs
+2026/10/23 19:04:33 [thewolf-dev-1-mj/0SPVuB8sKs-000030] "GET http://example.com/api/v1/findings/export?format=json&include_suppressed=false&scan_id=e3e9da04-8a4a-4370-add0-84313fcdf686 HTTP/1.1" from 192.0.2.1:1234 - 200 1346B in 667.347µs
+2026/10/23 19:04:33 [thewolf-dev-1-mj/0SPVuB8sKs-000031] "GET http://example.com/api/v1/findings/export?format=json&include_suppressed=false&scan_id=e3e9da04-8a4a-4370-add0-84313fcdf686 HTTP/1.1" from 192.0.2.1:1234 - 403 95B in 218.883µs
+2026/10/23 19:04:33 [thewolf-dev-1-mj/0SPVuB8sKs-000032] "GET http://example.com/api/v1/findings/export?format=json&include_suppressed=false&scan_id=e3e9da04-8a4a-4370-add0-84313fcdf686 HTTP/1.1" from 192.0.2.1:1234 - 401 64B in 22.553µs
+2026/10/23 19:04:33 [thewolf-dev-1-mj/0SPVuB8sKs-000033] "GET http://example.com/api/v1/findings/export?format=json&include_suppressed=false&scan_id=e6ef1013-975c-4757-8d0c-b88c34024160 HTTP/1.1" from 192.0.2.1:1234 - 404 138B in 399.654µs
+2026/10/23 19:04:33 [thewolf-dev-1-mj/0SPVuB8sKs-000034] "GET http://example.com/api/v1/findings/export?format=json&include_suppressed=false&scan_id= HTTP/1.1" from 192.0.2.1:1234 - 200 1346B in 939.58µs
+2026/10/23 19:04:33 [thewolf-dev-1-mj/0SPVuB8sKs-000035] "GET http://example.com/api/v1/findings/export?format=json&include_suppressed=true&scan_id=e3e9da04-8a4a-4370-add0-84313fcdf686 HTTP/1.1" from 192.0.2.1:1234 - 200 1346B in 487.478µs
+2026/10/23 19:04:33 [thewolf-dev-1-mj/0SPVuB8sKs-000036] "GET http://example.com/api/v1/findings/export?format=json&include_suppressed=true&scan_id=e3e9da04-8a4a-4370-add0-84313fcdf686 HTTP/1.1" from 192.0.2.1:1234 - 200 1346B in 609.859µs
+2026/10/23 19:04:33 [thewolf-dev-1-mj/0SPVuB8sKs-000037] "GET http://example.com/api/v1/findings/export?format=json&include_suppressed=true&scan_id=5ace5302-8894-4b08-a564-86fa4d6a7e40 HTTP/1.1" from 192.0.2.1:1234 - 200 1346B in 558.461µs
+2026/10/23 19:04:33 [thewolf-dev-1-mj/0SPVuB8sKs-000038] "GET http://example.com/api/v1/findings/export?format=json&include_suppressed=true&scan_id=5ace5302-8894-4b08-a564-86fa4d6a7e40 HTTP/1.1" from 192.0.2.1:1234 - 200 1346B in 685.17µs
+2026/10/23 19:04:33 [thewolf-dev-1-mj/0SPVuB8sKs-000039] "GET http://example.com/api/v1/findings/export?format=json&include_suppressed=true&scan_id=e3e9da04-8a4a-4370-add0-84313fcdf686 HTTP/1.1" from 192.0.2.1:1234 - 200 1346B in 601.944µs
+2026/10/23 19:04:33 [thewolf-dev-1-mj/0SPVuB8sKs-000040] "GET http://example.com/api/v1/findings/export?format=json&include_suppressed=true&scan_id=e3e9da04-8a4a-4370-add0-84313fcdf686 HTTP/1.1" from 192.0.2.1:1234 - 200 1346B in 665.483µs
+2026/10/23 19:04:33 [thewolf-dev-1-mj/0SPVuB8sKs-000041] "GET http://example.com/api/v1/findings/export?format=json&include_suppressed=true&scan_id=e3e9da04-8a4a-4370-add0-84313fcdf686 HTTP/1.1" from 192.0.2.1:1234 - 403 95B in 213.652µs
+2026/10/23 19:04:33 [thewolf-dev-1-mj/0SPVuB8sKs-000042] "GET http://example.com/api/v1/findings/export?format=json&include_suppressed=true&scan_id=e3e9da04-8a4a-4370-add0-84313fcdf686 HTTP/1.1" from 192.0.2.1:1234 - 401 64B in 17.202µs
+2026/10/23 19:04:33 [thewolf-dev-1-mj/0SPVuB8sKs-000043] "GET http://example.com/api/v1/findings/export?format=json&include_suppressed=true&scan_id=6812e948-cfb5-4df8-875d-575f41425ecf HTTP/1.1" from 192.0.2.1:1234 - 404 138B in 211.098µs
+2026/10/23 19:04:33 [thewolf-dev-1-mj/0SPVuB8sKs-000044] "GET http://example.com/api/v1/findings/export?format=json&include_suppressed=true&scan_id= HTTP/1.1" from 192.0.2.1:1234 - 200 1346B in 1.376222ms
+2026/10/23 19:04:33 [thewolf-dev-1-mj/0SPVuB8sKs-000045] "GET http://example.com/api/v1/findings/export?format=json&scan_id=e3e9da04-8a4a-4370-add0-84313fcdf686 HTTP/1.1" from 192.0.2.1:1234 - 200 1346B in 616.702µs
+--- FAIL: TestFindingExportAuthorization (0.35s)
+    --- FAIL: TestFindingExportAuthorization/csv/suppressed=false/foreign_session (0.00s)
+        findings_export_test.go:78: status = 200, want 403: id,severity,category,tool_name,title,file_path,line_start,line_end,status,composite_score,rule_id,cwe_id,created_at
+            1113a3a4-6fc7-485d-997f-1ba39fd89673,high,sast,test,private-evidence-9b2c5abc-fff5-4fb0-b240-e9bb99d529da,app.go,0,0,open,0.00,R1,,2026-10-23T19:04:33Z
+    --- FAIL: TestFindingExportAuthorization/csv/suppressed=false/foreign_token (0.00s)
+        findings_export_test.go:78: status = 200, want 403: id,severity,category,tool_name,title,file_path,line_start,line_end,status,composite_score,rule_id,cwe_id,created_at
+            1113a3a4-6fc7-485d-997f-1ba39fd89673,high,sast,test,private-evidence-9b2c5abc-fff5-4fb0-b240-e9bb99d529da,app.go,0,0,open,0.00,R1,,2026-10-23T19:04:33Z
+    --- FAIL: TestFindingExportAuthorization/csv/suppressed=false/admin_token_cannot_borrow_role (0.00s)
+        findings_export_test.go:78: status = 200, want 403: id,severity,category,tool_name,title,file_path,line_start,line_end,status,composite_score,rule_id,cwe_id,created_at
+            171798c7-71ca-4aeb-a014-aadb6d99fc83,high,sast,test,private-evidence-05385a2d-a048-420d-bd8a-53b53add82ee,app.go,0,0,open,0.00,R1,,2026-10-23T19:04:33Z
+    --- FAIL: TestFindingExportAuthorization/csv/suppressed=true/foreign_session (0.00s)
+        findings_export_test.go:78: status = 200, want 403: id,severity,category,tool_name,title,file_path,line_start,line_end,status,composite_score,rule_id,cwe_id,created_at
+            1113a3a4-6fc7-485d-997f-1ba39fd89673,high,sast,test,private-evidence-9b2c5abc-fff5-4fb0-b240-e9bb99d529da,app.go,0,0,open,0.00,R1,,2026-10-23T19:04:33Z
+    --- FAIL: TestFindingExportAuthorization/csv/suppressed=true/foreign_token (0.00s)
+        findings_export_test.go:78: status = 200, want 403: id,severity,category,tool_name,title,file_path,line_start,line_end,status,composite_score,rule_id,cwe_id,created_at
+            1113a3a4-6fc7-485d-997f-1ba39fd89673,high,sast,test,private-evidence-9b2c5abc-fff5-4fb0-b240-e9bb99d529da,app.go,0,0,open,0.00,R1,,2026-10-23T19:04:33Z
+    --- FAIL: TestFindingExportAuthorization/csv/suppressed=true/admin_token_cannot_borrow_role (0.00s)
+        findings_export_test.go:78: status = 200, want 403: id,severity,category,tool_name,title,file_path,line_start,line_end,status,composite_score,rule_id,cwe_id,created_at
+            171798c7-71ca-4aeb-a014-aadb6d99fc83,high,sast,test,private-evidence-05385a2d-a048-420d-bd8a-53b53add82ee,app.go,0,0,open,0.00,R1,,2026-10-23T19:04:33Z
+    --- FAIL: TestFindingExportAuthorization/json/suppressed=false/foreign_session (0.00s)
+        findings_export_test.go:78: status = 200, want 403: [
+              {
+                "id": "1113a3a4-6fc7-485d-997f-1ba39fd89673",
+                "scan_id": "5ace5302-8894-4b08-a564-86fa4d6a7e40",
+                "repo_id": "2e66beb2-7afb-4a82-9433-e52dcec497f5",
+                "fingerprint": "b633214c9511f6c338ba2a66d2b5d322d95546e8a8cabf3dd50dc8b4b7986b36",
+                "stable_fingerprint": "b633214c9511f6c338ba2a66d2b5d322d95546e8a8cabf3dd50dc8b4b7986b36",
+                "location_fingerprint": "03c5d808d867a83787ff4b1e915984bb6f78706cdb6581afb9224ff83dad08c0",
+                "semantic_fingerprint": "b633214c9511f6c338ba2a66d2b5d322d95546e8a8cabf3dd50dc8b4b7986b36",
+                "evidence_fingerprint": "6e7c7bf29741b6ee8f3774a08b17e3d9482ded2165adc229a6c7221e3895a821",
+                "identity_version": 1,
+                "tool_name": "test",
+                "category": "sast",
+                "severity": "high",
+                "title": "private-evidence-9b2c5abc-fff5-4fb0-b240-e9bb99d529da",
+                "description": "",
+                "file_path": "app.go",
+                "line_start": 0,
+                "line_end": 0,
+                "code_snippet": "",
+                "rule_id": "R1",
+                "tool_severity_score": 0,
+                "location_weight": 0,
+                "ai_context_score": 0,
+                "composite_score": 0,
+                "module_name": "",
+                "function_name": "",
+                "symbol_kind": "",
+                "file_purpose": "",
+                "dependents_json": "",
+                "status": "open",
+                "created_at": "2026-10-23T19:04:33.965450702Z",
+                "updated_at": "2026-10-23T19:04:33.965450702Z",
+                "corroborated_by": [
+                  "test"
+                ]
+              }
+            ]
+    --- FAIL: TestFindingExportAuthorization/json/suppressed=false/foreign_token (0.00s)
+        findings_export_test.go:78: status = 200, want 403: [
+              {
+                "id": "1113a3a4-6fc7-485d-997f-1ba39fd89673",
+                "scan_id": "5ace5302-8894-4b08-a564-86fa4d6a7e40",
+                "repo_id": "2e66beb2-7afb-4a82-9433-e52dcec497f5",
+                "fingerprint": "b633214c9511f6c338ba2a66d2b5d322d95546e8a8cabf3dd50dc8b4b7986b36",
+                "stable_fingerprint": "b633214c9511f6c338ba2a66d2b5d322d95546e8a8cabf3dd50dc8b4b7986b36",
+                "location_fingerprint": "03c5d808d867a83787ff4b1e915984bb6f78706cdb6581afb9224ff83dad08c0",
+                "semantic_fingerprint": "b633214c9511f6c338ba2a66d2b5d322d95546e8a8cabf3dd50dc8b4b7986b36",
+                "evidence_fingerprint": "6e7c7bf29741b6ee8f3774a08b17e3d9482ded2165adc229a6c7221e3895a821",
+                "identity_version": 1,
+                "tool_name": "test",
+                "category": "sast",
+                "severity": "high",
+                "title": "private-evidence-9b2c5abc-fff5-4fb0-b240-e9bb99d529da",
+                "description": "",
+                "file_path": "app.go",
+                "line_start": 0,
+                "line_end": 0,
+                "code_snippet": "",
+                "rule_id": "R1",
+                "tool_severity_score": 0,
+                "location_weight": 0,
+                "ai_context_score": 0,
+                "composite_score": 0,
+                "module_name": "",
+                "function_name": "",
+                "symbol_kind": "",
+                "file_purpose": "",
+                "dependents_json": "",
+                "status": "open",
+                "created_at": "2026-10-23T19:04:33.965450702Z",
+                "updated_at": "2026-10-23T19:04:33.965450702Z",
+                "corroborated_by": [
+                  "test"
+                ]
+              }
+            ]
+    --- FAIL: TestFindingExportAuthorization/json/suppressed=false/admin_token_cannot_borrow_role (0.00s)
+        findings_export_test.go:78: status = 200, want 403: [
+              {
+                "id": "171798c7-71ca-4aeb-a014-aadb6d99fc83",
+                "scan_id": "e3e9da04-8a4a-4370-add0-84313fcdf686",
+                "repo_id": "bd800508-7182-40a1-a461-aacf6b001ca7",
+                "fingerprint": "b633214c9511f6c338ba2a66d2b5d322d95546e8a8cabf3dd50dc8b4b7986b36",
+                "stable_fingerprint": "b633214c9511f6c338ba2a66d2b5d322d95546e8a8cabf3dd50dc8b4b7986b36",
+                "location_fingerprint": "03c5d808d867a83787ff4b1e915984bb6f78706cdb6581afb9224ff83dad08c0",
+                "semantic_fingerprint": "b633214c9511f6c338ba2a66d2b5d322d95546e8a8cabf3dd50dc8b4b7986b36",
+                "evidence_fingerprint": "8e3edf50a6f677893d67c3aebacf06a3d9a4ac37aa4d339578e2f1bdec2c2c8b",
+                "identity_version": 1,
+                "tool_name": "test",
+                "category": "sast",
+                "severity": "high",
+                "title": "private-evidence-05385a2d-a048-420d-bd8a-53b53add82ee",
+                "description": "",
+                "file_path": "app.go",
+                "line_start": 0,
+                "line_end": 0,
+                "code_snippet": "",
+                "rule_id": "R1",
+                "tool_severity_score": 0,
+                "location_weight": 0,
+                "ai_context_score": 0,
+                "composite_score": 0,
+                "module_name": "",
+                "function_name": "",
+                "symbol_kind": "",
+                "file_purpose": "",
+                "dependents_json": "",
+                "status": "open",
+                "created_at": "2026-10-23T19:04:33.964815896Z",
+                "updated_at": "2026-10-23T19:04:33.964815896Z",
+                "corroborated_by": [
+                  "test"
+                ]
+              }
+            ]
+    --- FAIL: TestFindingExportAuthorization/json/suppressed=true/foreign_session (0.00s)
+        findings_export_test.go:78: status = 200, want 403: [
+              {
+                "id": "1113a3a4-6fc7-485d-997f-1ba39fd89673",
+                "scan_id": "5ace5302-8894-4b08-a564-86fa4d6a7e40",
+                "repo_id": "2e66beb2-7afb-4a82-9433-e52dcec497f5",
+                "fingerprint": "b633214c9511f6c338ba2a66d2b5d322d95546e8a8cabf3dd50dc8b4b7986b36",
+                "stable_fingerprint": "b633214c9511f6c338ba2a66d2b5d322d95546e8a8cabf3dd50dc8b4b7986b36",
+                "location_fingerprint": "03c5d808d867a83787ff4b1e915984bb6f78706cdb6581afb9224ff83dad08c0",
+                "semantic_fingerprint": "b633214c9511f6c338ba2a66d2b5d322d95546e8a8cabf3dd50dc8b4b7986b36",
+                "evidence_fingerprint": "6e7c7bf29741b6ee8f3774a08b17e3d9482ded2165adc229a6c7221e3895a821",
+                "identity_version": 1,
+                "tool_name": "test",
+                "category": "sast",
+                "severity": "high",
+                "title": "private-evidence-9b2c5abc-fff5-4fb0-b240-e9bb99d529da",
+                "description": "",
+                "file_path": "app.go",
+                "line_start": 0,
+                "line_end": 0,
+                "code_snippet": "",
+                "rule_id": "R1",
+                "tool_severity_score": 0,
+                "location_weight": 0,
+                "ai_context_score": 0,
+                "composite_score": 0,
+                "module_name": "",
+                "function_name": "",
+                "symbol_kind": "",
+                "file_purpose": "",
+                "dependents_json": "",
+                "status": "open",
+                "created_at": "2026-10-23T19:04:33.965450702Z",
+                "updated_at": "2026-10-23T19:04:33.965450702Z",
+                "corroborated_by": [
+                  "test"
+                ]
+              }
+            ]
+    --- FAIL: TestFindingExportAuthorization/json/suppressed=true/foreign_token (0.00s)
+        findings_export_test.go:78: status = 200, want 403: [
+              {
+                "id": "1113a3a4-6fc7-485d-997f-1ba39fd89673",
+                "scan_id": "5ace5302-8894-4b08-a564-86fa4d6a7e40",
+                "repo_id": "2e66beb2-7afb-4a82-9433-e52dcec497f5",
+                "fingerprint": "b633214c9511f6c338ba2a66d2b5d322d95546e8a8cabf3dd50dc8b4b7986b36",
+                "stable_fingerprint": "b633214c9511f6c338ba2a66d2b5d322d95546e8a8cabf3dd50dc8b4b7986b36",
+                "location_fingerprint": "03c5d808d867a83787ff4b1e915984bb6f78706cdb6581afb9224ff83dad08c0",
+                "semantic_fingerprint": "b633214c9511f6c338ba2a66d2b5d322d95546e8a8cabf3dd50dc8b4b7986b36",
+                "evidence_fingerprint": "6e7c7bf29741b6ee8f3774a08b17e3d9482ded2165adc229a6c7221e3895a821",
+                "identity_version": 1,
+                "tool_name": "test",
+                "category": "sast",
+                "severity": "high",
+                "title": "private-evidence-9b2c5abc-fff5-4fb0-b240-e9bb99d529da",
+                "description": "",
+                "file_path": "app.go",
+                "line_start": 0,
+                "line_end": 0,
+                "code_snippet": "",
+                "rule_id": "R1",
+                "tool_severity_score": 0,
+                "location_weight": 0,
+                "ai_context_score": 0,
+                "composite_score": 0,
+                "module_name": "",
+                "function_name": "",
+                "symbol_kind": "",
+                "file_purpose": "",
+                "dependents_json": "",
+                "status": "open",
+                "created_at": "2026-10-23T19:04:33.965450702Z",
+                "updated_at": "2026-10-23T19:04:33.965450702Z",
+                "corroborated_by": [
+                  "test"
+                ]
+              }
+            ]
+    --- FAIL: TestFindingExportAuthorization/json/suppressed=true/admin_token_cannot_borrow_role (0.00s)
+        findings_export_test.go:78: status = 200, want 403: [
+              {
+                "id": "171798c7-71ca-4aeb-a014-aadb6d99fc83",
+                "scan_id": "e3e9da04-8a4a-4370-add0-84313fcdf686",
+                "repo_id": "bd800508-7182-40a1-a461-aacf6b001ca7",
+                "fingerprint": "b633214c9511f6c338ba2a66d2b5d322d95546e8a8cabf3dd50dc8b4b7986b36",
+                "stable_fingerprint": "b633214c9511f6c338ba2a66d2b5d322d95546e8a8cabf3dd50dc8b4b7986b36",
+                "location_fingerprint": "03c5d808d867a83787ff4b1e915984bb6f78706cdb6581afb9224ff83dad08c0",
+                "semantic_fingerprint": "b633214c9511f6c338ba2a66d2b5d322d95546e8a8cabf3dd50dc8b4b7986b36",
+                "evidence_fingerprint": "8e3edf50a6f677893d67c3aebacf06a3d9a4ac37aa4d339578e2f1bdec2c2c8b",
+                "identity_version": 1,
+                "tool_name": "test",
+                "category": "sast",
+                "severity": "high",
+                "title": "private-evidence-05385a2d-a048-420d-bd8a-53b53add82ee",
+                "description": "",
+                "file_path": "app.go",
+                "line_start": 0,
+                "line_end": 0,
+                "code_snippet": "",
+                "rule_id": "R1",
+                "tool_severity_score": 0,
+                "location_weight": 0,
+                "ai_context_score": 0,
+                "composite_score": 0,
+                "module_name": "",
+                "function_name": "",
+                "symbol_kind": "",
+                "file_purpose": "",
+                "dependents_json": "",
+                "status": "open",
+                "created_at": "2026-10-23T19:04:33.964815896Z",
+                "updated_at": "2026-10-23T19:04:33.964815896Z",
+                "corroborated_by": [
+                  "test"
+                ]
+              }
+            ]
+    findings_export_test.go:112: demoted session export: 200 [
+          {
+            "id": "171798c7-71ca-4aeb-a014-aadb6d99fc83",
+            "scan_id": "e3e9da04-8a4a-4370-add0-84313fcdf686",
+            "repo_id": "bd800508-7182-40a1-a461-aacf6b001ca7",
+            "fingerprint": "b633214c9511f6c338ba2a66d2b5d322d95546e8a8cabf3dd50dc8b4b7986b36",
+            "stable_fingerprint": "b633214c9511f6c338ba2a66d2b5d322d95546e8a8cabf3dd50dc8b4b7986b36",
+            "location_fingerprint": "03c5d808d867a83787ff4b1e915984bb6f78706cdb6581afb9224ff83dad08c0",
+            "semantic_fingerprint": "b633214c9511f6c338ba2a66d2b5d322d95546e8a8cabf3dd50dc8b4b7986b36",
+            "evidence_fingerprint": "8e3edf50a6f677893d67c3aebacf06a3d9a4ac37aa4d339578e2f1bdec2c2c8b",
+            "identity_version": 1,
+            "tool_name": "test",
+            "category": "sast",
+            "severity": "high",
+            "title": "private-evidence-05385a2d-a048-420d-bd8a-53b53add82ee",
+            "description": "",
+            "file_path": "app.go",
+            "line_start": 0,
+            "line_end": 0,
+            "code_snippet": "",
+            "rule_id": "R1",
+            "tool_severity_score": 0,
+            "location_weight": 0,
+            "ai_context_score": 0,
+            "composite_score": 0,
+            "module_name": "",
+            "function_name": "",
+            "symbol_kind": "",
+            "file_purpose": "",
+            "dependents_json": "",
+            "status": "open",
+            "created_at": "2026-10-23T19:04:33.964815896Z",
+            "updated_at": "2026-10-23T19:04:33.964815896Z",
+            "corroborated_by": [
+              "test"
+            ]
+          }
+        ]
+FAIL
+FAIL	github.com/alphabravocompany/thewolf/internal/api	0.369s
+FAIL

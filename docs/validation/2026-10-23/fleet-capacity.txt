@@ -1,0 +1,40 @@
+=== RUN   TestFindingPageLoad
+=== RUN   TestFindingPageLoad/sqlite
+    finding_pages_test.go:281: repos_added=1 explain=map[detail:SEARCH findings USING INDEX idx_findings_scan_visible_severity (scan_id=? AND suppressed=?) id:5 notused:170 parent:0]
+    finding_pages_test.go:304: repos_added=1 mode=scan_page first_read_ms=7.97 (disk database; OS/database caches not flushed)
+    finding_pages_test.go:375: repos_added=1 mode=scan_page concurrency=2 warm_samples=20 p50_ms=7.74 p95_ms=11.15 mean_allocated_bytes=351445 peak_heap_bytes=7163696 response_bytes=32884 slo_p95_ms=500
+    finding_pages_test.go:304: repos_added=1 mode=scan_stats first_read_ms=73.79 (disk database; OS/database caches not flushed)
+    finding_pages_test.go:375: repos_added=1 mode=scan_stats concurrency=2 warm_samples=20 p50_ms=50.07 p95_ms=63.16 mean_allocated_bytes=47691 peak_heap_bytes=4658256 response_bytes=188 slo_p95_ms=1000
+    finding_pages_test.go:304: repos_added=1 mode=fleet_page first_read_ms=1128.89 (disk database; OS/database caches not flushed)
+    finding_pages_test.go:375: repos_added=1 mode=fleet_page concurrency=2 warm_samples=20 p50_ms=1494.21 p95_ms=1711.51 mean_allocated_bytes=461737884 peak_heap_bytes=473297840 response_bytes=32884 slo_p95_ms=5000
+    finding_pages_test.go:281: repos_added=10 explain=map[detail:SEARCH findings USING INDEX idx_findings_scan_visible_severity (scan_id=? AND suppressed=?) id:5 notused:145 parent:0]
+    finding_pages_test.go:304: repos_added=10 mode=scan_page first_read_ms=1.77 (disk database; OS/database caches not flushed)
+    finding_pages_test.go:375: repos_added=10 mode=scan_page concurrency=2 warm_samples=20 p50_ms=2.07 p95_ms=3.75 mean_allocated_bytes=307706 peak_heap_bytes=12102216 response_bytes=32686 slo_p95_ms=500
+    finding_pages_test.go:304: repos_added=10 mode=scan_stats first_read_ms=6.39 (disk database; OS/database caches not flushed)
+    finding_pages_test.go:375: repos_added=10 mode=scan_stats concurrency=2 warm_samples=20 p50_ms=6.10 p95_ms=7.46 mean_allocated_bytes=17030 peak_heap_bytes=4101928 response_bytes=184 slo_p95_ms=1000
+    finding_pages_test.go:304: repos_added=10 mode=fleet_page first_read_ms=2157.75 (disk database; OS/database caches not flushed)
+    finding_pages_test.go:375: repos_added=10 mode=fleet_page concurrency=2 warm_samples=20 p50_ms=2863.40 p95_ms=3234.95 mean_allocated_bytes=927463118 peak_heap_bytes=927162040 response_bytes=32689 slo_p95_ms=10000
+=== RUN   TestFindingPageLoad/postgres
+    finding_pages_test.go:281: repos_added=1 explain=map[QUERY PLAN:Limit  (cost=0.41..27.64 rows=50 width=271)]
+    finding_pages_test.go:281: repos_added=1 explain=map[QUERY PLAN:  ->  Index Scan using idx_findings_scan_visible_severity on findings  (cost=0.41..26933.10 rows=49462 width=271)]
+    finding_pages_test.go:281: repos_added=1 explain=map[QUERY PLAN:        Index Cond: ((scan_id = '20d14df6-5657-44fe-a60e-8323a07af056'::text) AND (suppressed = false))]
+    finding_pages_test.go:304: repos_added=1 mode=scan_page first_read_ms=42.84 (disk database; OS/database caches not flushed)
+    finding_pages_test.go:375: repos_added=1 mode=scan_page concurrency=2 warm_samples=20 p50_ms=43.76 p95_ms=47.52 mean_allocated_bytes=313513 peak_heap_bytes=15689456 response_bytes=33584 slo_p95_ms=500
+    finding_pages_test.go:304: repos_added=1 mode=scan_stats first_read_ms=42.19 (disk database; OS/database caches not flushed)
+    finding_pages_test.go:375: repos_added=1 mode=scan_stats concurrency=2 warm_samples=20 p50_ms=43.33 p95_ms=58.93 mean_allocated_bytes=22311 peak_heap_bytes=4799600 response_bytes=188 slo_p95_ms=1000
+    finding_pages_test.go:304: repos_added=1 mode=fleet_page first_read_ms=2283.39 (disk database; OS/database caches not flushed)
+    finding_pages_test.go:375: repos_added=1 mode=fleet_page concurrency=2 warm_samples=20 p50_ms=2490.40 p95_ms=2657.23 mean_allocated_bytes=468620028 peak_heap_bytes=477020928 response_bytes=33584 slo_p95_ms=5000
+    finding_pages_test.go:281: repos_added=10 explain=map[QUERY PLAN:Limit  (cost=0.42..116.59 rows=50 width=271)]
+    finding_pages_test.go:281: repos_added=10 explain=map[QUERY PLAN:  ->  Index Scan using idx_findings_scan_visible_severity on findings  (cost=0.42..11474.01 rows=4938 width=271)]
+    finding_pages_test.go:281: repos_added=10 explain=map[QUERY PLAN:        Index Cond: ((scan_id = '85988dfe-a766-45fb-8dfa-46d0cfc39364'::text) AND (suppressed = false))]
+    finding_pages_test.go:304: repos_added=10 mode=scan_page first_read_ms=8.23 (disk database; OS/database caches not flushed)
+    finding_pages_test.go:375: repos_added=10 mode=scan_page concurrency=2 warm_samples=20 p50_ms=7.90 p95_ms=9.59 mean_allocated_bytes=322350 peak_heap_bytes=18410096 response_bytes=33386 slo_p95_ms=500
+    finding_pages_test.go:304: repos_added=10 mode=scan_stats first_read_ms=6.36 (disk database; OS/database caches not flushed)
+    finding_pages_test.go:375: repos_added=10 mode=scan_stats concurrency=2 warm_samples=20 p50_ms=5.38 p95_ms=9.23 mean_allocated_bytes=22045 peak_heap_bytes=4844936 response_bytes=184 slo_p95_ms=1000
+    finding_pages_test.go:304: repos_added=10 mode=fleet_page first_read_ms=5130.69 (disk database; OS/database caches not flushed)
+    finding_pages_test.go:375: repos_added=10 mode=fleet_page concurrency=2 warm_samples=20 p50_ms=5421.42 p95_ms=5998.94 mean_allocated_bytes=939099594 peak_heap_bytes=748696976 response_bytes=33585 slo_p95_ms=10000
+--- PASS: TestFindingPageLoad (147.58s)
+    --- PASS: TestFindingPageLoad/sqlite (49.56s)
+    --- PASS: TestFindingPageLoad/postgres (98.03s)
+PASS
+ok  	github.com/alphabravocompany/thewolf/internal/db	147.664s

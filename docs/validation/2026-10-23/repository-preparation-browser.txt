@@ -1,0 +1,43 @@
+[WebServer] $ vite build
+[WebServer] (node:3486689) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:3486818) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 21 tests using 2 workers
+
+(node:3486903) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3486905) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   2 [desktop-chromium-linux] › e2e/repository-workspace.spec.ts:71:1 › repository setup and scan controls stay in their own views @browser-matrix (1.9s)
+  ✓   1 [desktop-chromium-linux] › e2e/repository-workspace.spec.ts:27:1 › repository findings page, filter and sort on the server @browser-matrix (3.3s)
+  ✓   3 [desktop-chromium-linux] › e2e/repository-workspace.spec.ts:93:1 › repository findings failure does not appear as an empty result (1.8s)
+  ✓   5 [desktop-chromium-linux] › e2e/scan-preparation.spec.ts:47:1 › locally built scanner images support private registry ports without a registry digest (500ms)
+  ✓   4 [desktop-chromium-linux] › e2e/scan-preparation.spec.ts:5:1 › readiness failure, shared image download, and idempotent scan recovery @browser-matrix (1.5s)
+  ✓   6 [desktop-chromium-linux] › e2e/test-coverage.spec.ts:32:1 › measured coverage is scoped, paginated and accessible @browser-matrix (1.9s)
+  ✓   7 [desktop-chromium-linux] › e2e/test-coverage.spec.ts:55:1 › report import and coverage policies preserve security rules @browser-matrix (1.5s)
+(node:3487433) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   8 [desktop-chromium-linux] › e2e/test-coverage.spec.ts:78:1 › coverage API failures stay distinct from missing evidence (1.8s)
+(node:3487532) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   9 [mobile-chromium-linux] › e2e/repository-workspace.spec.ts:27:1 › repository findings page, filter and sort on the server @browser-matrix (3.0s)
+  ✓  10 [mobile-chromium-linux] › e2e/repository-workspace.spec.ts:71:1 › repository setup and scan controls stay in their own views @browser-matrix (1.7s)
+  ✓  11 [mobile-chromium-linux] › e2e/repository-workspace.spec.ts:93:1 › repository findings failure does not appear as an empty result (1.8s)
+  ✓  12 [mobile-chromium-linux] › e2e/scan-preparation.spec.ts:5:1 › readiness failure, shared image download, and idempotent scan recovery @browser-matrix (1.6s)
+  ✓  14 [mobile-chromium-linux] › e2e/scan-preparation.spec.ts:47:1 › locally built scanner images support private registry ports without a registry digest (523ms)
+  ✓  13 [mobile-chromium-linux] › e2e/test-coverage.spec.ts:32:1 › measured coverage is scoped, paginated and accessible @browser-matrix (1.9s)
+  ✓  16 [mobile-chromium-linux] › e2e/test-coverage.spec.ts:78:1 › coverage API failures stay distinct from missing evidence (1.8s)
+(node:3487889) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  15 [mobile-chromium-linux] › e2e/test-coverage.spec.ts:55:1 › report import and coverage policies preserve security rules @browser-matrix (5.6s)
+(node:3488137) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  17 [desktop-firefox-linux] › e2e/repository-workspace.spec.ts:27:1 › repository findings page, filter and sort on the server @browser-matrix (5.3s)
+  ✓  18 [desktop-firefox-linux] › e2e/repository-workspace.spec.ts:71:1 › repository setup and scan controls stay in their own views @browser-matrix (3.4s)
+  ✓  19 [desktop-firefox-linux] › e2e/scan-preparation.spec.ts:5:1 › readiness failure, shared image download, and idempotent scan recovery @browser-matrix (2.4s)
+  ✓  20 [desktop-firefox-linux] › e2e/test-coverage.spec.ts:32:1 › measured coverage is scoped, paginated and accessible @browser-matrix (2.8s)
+  ✓  21 [desktop-firefox-linux] › e2e/test-coverage.spec.ts:55:1 › report import and coverage policies preserve security rules @browser-matrix (2.4s)
+
+  21 passed (32.7s)

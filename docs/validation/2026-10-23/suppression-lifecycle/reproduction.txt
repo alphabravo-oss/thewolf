@@ -1,0 +1,5 @@
+--- FAIL: TestSuppressionScopeAndReevaluation (0.00s)
+    match_test.go:111: unknown branch matched a branch-scoped suppression
+FAIL
+FAIL	github.com/alphabravocompany/thewolf/internal/finding/suppression	0.004s
+FAIL

@@ -1,0 +1,6 @@
+wolf 0.2.2-plan-20261023-r5
+  commit:     23b64ce-dirty-37aac45cd752
+  built:      2026-10-23T08:34:36Z
+  edition:    community
+  license:    source-available
+deployment image smoke passed: wolf@sha256:11f7ec73bfb3cd7714e72631f577d25c4db64059255da7b520a4b1ece0ac8af3 (linux/amd64, runtime)

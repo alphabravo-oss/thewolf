@@ -1,0 +1,47 @@
+[
+  {
+    "os": "linux",
+    "arch": "arm64",
+    "command": [
+      "go",
+      "test",
+      "-c",
+      "-o",
+      "/tmp/wolf-git-command-linux-arm64.test",
+      "./internal/fix/git"
+    ],
+    "exit_code": 0,
+    "output": "",
+    "binary_sha256": "f043270795ab99e03752354adc73c79d98a6b8cc112bb29a4216190fab977412"
+  },
+  {
+    "os": "windows",
+    "arch": "amd64",
+    "command": [
+      "go",
+      "test",
+      "-c",
+      "-o",
+      "/tmp/wolf-git-command-windows-amd64.test",
+      "./internal/fix/git"
+    ],
+    "exit_code": 0,
+    "output": "",
+    "binary_sha256": "3db508f428f0646783ab33998e7d9c0daee415ffb2eea1210ffd0175bd0feb28"
+  },
+  {
+    "os": "darwin",
+    "arch": "arm64",
+    "command": [
+      "go",
+      "test",
+      "-c",
+      "-o",
+      "/tmp/wolf-git-command-darwin-arm64.test",
+      "./internal/fix/git"
+    ],
+    "exit_code": 0,
+    "output": "",
+    "binary_sha256": "440729be7a22763467bbfaee61520f46dece88be865d3f1ab7b1190a4b346c14"
+  }
+]

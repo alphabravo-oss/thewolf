@@ -1,0 +1,5 @@
+# github.com/alphabravocompany/thewolf/internal/api/routes [github.com/alphabravocompany/thewolf/internal/api/routes.test]
+internal/api/routes/gates.go:224:11: undefined: err
+internal/api/routes/gates.go:225:6: undefined: err
+FAIL	github.com/alphabravocompany/thewolf/internal/api/routes [build failed]
+FAIL

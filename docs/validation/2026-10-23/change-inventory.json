@@ -1,0 +1,3716 @@
+{
+  "captured_at": "2026-10-23T08:49:16.507864+00:00",
+  "head": "23b64ce09c569b7f49c465b53573e40c791b6fc5",
+  "branch": "postgres-modes",
+  "scope": "Changed/untracked non-ignored files, excluding this evidence directory to avoid self-reference. Includes all prior edits; no claim of authorship or independent review. Not a complete repository archive.",
+  "inventory_sha256": "20fdefb8686c519d380492a03b886f1f3a954102b8ac7f3b2f6fda309378efda",
+  "deployed_uncommitted_mapping": "UNRESOLVED: running binaries report 23b64ce-dirty but no exact historical working-tree snapshot is available. Deployment baseline records their immutable image and binary identities. Do not attribute individual source units to that deployment.",
+  "review_units": [
+    {
+      "id": "release-factory",
+      "scope": "Scanner metadata, locks, source mirrors, registry/build/release control and workflows",
+      "depends_on": [
+        "security-boundaries"
+      ],
+      "review_status": "pending; path grouping is a starting index, shared files require hunk-level review"
+    },
+    {
+      "id": "scan-contracts",
+      "scope": "Durable scan jobs, source provenance, execution, parsing, API/CLI/MCP and gates",
+      "depends_on": [
+        "database-contracts",
+        "security-boundaries"
+      ],
+      "review_status": "pending; path grouping is a starting index, shared files require hunk-level review"
+    },
+    {
+      "id": "remediation",
+      "scope": "Fix engines, workspace safety, verification, retry/rollback and worker handling",
+      "depends_on": [
+        "scan-contracts",
+        "security-boundaries"
+      ],
+      "review_status": "pending; path grouping is a starting index, shared files require hunk-level review"
+    },
+    {
+      "id": "database-contracts",
+      "scope": "Store/schema/query, finding identity and persisted evidence contracts",
+      "depends_on": [],
+      "review_status": "pending; path grouping is a starting index, shared files require hunk-level review"
+    },
+    {
+      "id": "security-boundaries",
+      "scope": "Authentication, confinement, network/secret and edition trust boundaries",
+      "depends_on": [],
+      "review_status": "pending; path grouping is a starting index, shared files require hunk-level review"
+    },
+    {
+      "id": "ui-workflows",
+      "scope": "Setup/downloads, repositories, findings, coverage and navigation",
+      "depends_on": [
+        "scan-contracts",
+        "database-contracts"
+      ],
+      "review_status": "pending; path grouping is a starting index, shared files require hunk-level review"
+    },
+    {
+      "id": "deployment",
+      "scope": "Images, Compose/Helm, qualification scripts and pinned toolchains",
+      "depends_on": [
+        "scan-contracts",
+        "remediation",
+        "release-factory"
+      ],
+      "review_status": "pending; path grouping is a starting index, shared files require hunk-level review"
+    },
+    {
+      "id": "documentation",
+      "scope": "Consolidation/archive, PRD/operating evidence and release documentation",
+      "depends_on": [
+        "release-factory",
+        "scan-contracts",
+        "remediation",
+        "database-contracts",
+        "security-boundaries",
+        "ui-workflows",
+        "deployment"
+      ],
+      "review_status": "pending; path grouping is a starting index, shared files require hunk-level review"
+    }
+  ],
+  "entries": [
+    {
+      "path": ".dockerignore",
+      "status": " M",
+      "unit": "deployment",
+      "generated": false,
+      "sha256": "05fae332f36651d76681f240a98254c4c86a9f928ae96b6c1a337a30f9739548"
+    },
+    {
+      "path": ".github/workflows/go.yml",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "a840679812da47c3fc4c538fa8b9465f3abf0afc6cbe702fac9dd3ff971ea6b5"
+    },
+    {
+      "path": ".github/workflows/release.yml",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "79fc4c0cdf28951a5c76640bf89d5d69922fa6774712a077a8eae86156b1b833"
+    },
+    {
+      "path": ".github/workflows/remote-scan-deployment-qualification.yml",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "b4d4cd7a1101a5372eac9b0895d63421779ff4a282ec0ce36873f743deb8a824"
+    },
+    {
+      "path": ".github/workflows/scanners-image.yml",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "21a4a8955dcd343ae64da22ca6d6bd6fe08ec2a417269c56e4ce9864903ebb54"
+    },
+    {
+      "path": ".github/workflows/ui-browser.yml",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "c5eddcd5e9a265ba22c5bd309c3449101438720ae0a3a7762da9ae9d15ee3b4d"
+    },
+    {
+      "path": "AGENTS.md",
+      "status": " M",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": "c7e82b174076d1b40b540273d721c15334f85c6f7499d697fc38facab73a84ce"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "status": " M",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": "15df03e5e41a1084f90eeb0f4a14f658216bc5feb571e8fd1556b6344c42ee3f"
+    },
+    {
+      "path": "Dockerfile",
+      "status": " M",
+      "unit": "deployment",
+      "generated": false,
+      "sha256": "de0c4f552df80f1248e1e29b057a061b0c33ff5edd490a4058248f8af30025d3"
+    },
+    {
+      "path": "Makefile",
+      "status": " M",
+      "unit": "deployment",
+      "generated": false,
+      "sha256": "bb383a86cc3aa07eb39863ee593ff6fa441b4125b870ed9462008d640a4ec6a5"
+    },
+    {
+      "path": "README.md",
+      "status": " M",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": "fb5a3e745881ed28a413291cde4f1ff0d8582233af80ede196036330f793bd2d"
+    },
+    {
+      "path": "cmd/scannertools/bump.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "4e63fb398508021fa64bf2661804119a792b368808b7f8d46cea153eebbee2aa"
+    },
+    {
+      "path": "cmd/scannertools/propose.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "306516db50386c789b8e182260130caf2ffc95a01c69e0bb27611a950e885949"
+    },
+    {
+      "path": "cmd/wolf/main.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "99398b63537cdfc278580efcd4d3990555336aa5a04eee1d35d349fb42352597"
+    },
+    {
+      "path": "configs/wolf.yaml",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "bc41384b8f547092ec0dd3bbf25916507ea457f11d6cfd30564d9e6a9f97deac"
+    },
+    {
+      "path": "deploy/helm/wolf/templates/postgres.yaml",
+      "unit": "documentation",
+      "generated": false,
+      "status": " M",
+      "sha256": "967789ee0e884792d72af155ed84aef7818ccd88d729c26772d85af6aad5be45"
+    },
+    {
+      "path": "docker-compose.yml",
+      "status": " M",
+      "unit": "deployment",
+      "generated": false,
+      "sha256": "044872eaf0289d7b37690dd3fae3a1bd00892d639a6867687ebb496978b5b1b8"
+    },
+    {
+      "path": "docs/MIGRATION_2_0.md",
+      "status": " M",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": "57230d786fcabe626c30757e5cac8a6f68d86d06f6d8aaab19c2f1a310905923"
+    },
+    {
+      "path": "docs/PLAN-containerized-scanner-execution.md",
+      "status": " D",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": null
+    },
+    {
+      "path": "docs/PLAN-findings-pipeline.md",
+      "status": " D",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": null
+    },
+    {
+      "path": "docs/authentication.md",
+      "status": " M",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": "6b6bcae25ee505cbdd135dc5999a79320cd0c81d021ee3e5ec5115b54f0ae769"
+    },
+    {
+      "path": "docs/cli.md",
+      "status": " M",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": "070f6a41a81232c18059881008180a42581cd860af46edf51005f94ade2de222"
+    },
+    {
+      "path": "docs/deployment.md",
+      "status": " M",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": "4aa5f3e8b725a941361bd6cc24b1e563536b33a0c4ab08dc2b47db9fd220a273"
+    },
+    {
+      "path": "docs/interface-parity.md",
+      "status": " M",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": "581fa6cb0fe7bdac4ba6f05518e64250a3cad6192b6587b831b16a8b87dc4538"
+    },
+    {
+      "path": "docs/quality-gates.md",
+      "status": " M",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": "acb5344d17304f58184611b6f53dc39b80010b71b620e10d0da2bd450a18e4c2"
+    },
+    {
+      "path": "docs/scanner-factory-reproducibility.md",
+      "status": " M",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": "447e27ea261c115f5babb3b0f5827ed7b31736cfd9dc951181a1ddbc726644dd"
+    },
+    {
+      "path": "docs/scanner-release-management.md",
+      "status": " M",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": "afc9b77982213f4b925c64947a3be3191f47a8095648477d4b3976beb8109b18"
+    },
+    {
+      "path": "docs/scanner-release-operations-runbook.md",
+      "status": " M",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": "1d24dc049120d7f1bbeedbe3447f209e8f7f6cc865e5e1f96ae10f4aea6033b3"
+    },
+    {
+      "path": "docs/specs/2026-05-19-ai-integration-remediation-loop.md",
+      "status": " D",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": null
+    },
+    {
+      "path": "docs/superpowers/plans/2026-06-13-scanner-image-build-push.md",
+      "status": " D",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": null
+    },
+    {
+      "path": "docs/superpowers/plans/2026-06-13-ui-ux-flow-fixes.md",
+      "status": " D",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": null
+    },
+    {
+      "path": "docs/superpowers/plans/2026-06-14-fleet-mode-tailwind4-shadcn.md",
+      "status": " D",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": null
+    },
+    {
+      "path": "docs/superpowers/plans/2026-06-15-autonomous-fix-engine-plan.md",
+      "status": " D",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": null
+    },
+    {
+      "path": "docs/superpowers/plans/2026-06-16-account-vs-admin-settings.md",
+      "status": " D",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": null
+    },
+    {
+      "path": "docs/superpowers/plans/2026-06-17-enterprise-audit-classification.md",
+      "status": " D",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": null
+    },
+    {
+      "path": "docs/superpowers/plans/2026-07-30-remote-code-scanning-api-workers-plan.md",
+      "status": " D",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": null
+    },
+    {
+      "path": "docs/superpowers/plans/2026-07-30-scanner-release-management-platform-plan.md",
+      "status": " D",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": null
+    },
+    {
+      "path": "docs/superpowers/plans/2026-09-04-elite-product-plan.md",
+      "status": " D",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": null
+    },
+    {
+      "path": "docs/superpowers/specs/2026-05-19-repo-branch-filter-ux-design.md",
+      "status": " D",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": null
+    },
+    {
+      "path": "docs/superpowers/specs/2026-05-20-api-cli-swagger-design.md",
+      "status": " D",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": null
+    },
+    {
+      "path": "docs/superpowers/specs/2026-06-12-remote-ssh-nodes-scan-targets-plan.md",
+      "status": " D",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": null
+    },
+    {
+      "path": "docs/superpowers/specs/2026-06-12-scanner-toolchain-management-plan.md",
+      "status": " D",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": null
+    },
+    {
+      "path": "docs/superpowers/specs/2026-06-13-scan-quality-platform-plan.md",
+      "status": " D",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": null
+    },
+    {
+      "path": "docs/superpowers/specs/2026-06-15-autonomous-fix-engine-design.md",
+      "status": " D",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": null
+    },
+    {
+      "path": "fixer/Dockerfile.base",
+      "status": " M",
+      "unit": "deployment",
+      "generated": false,
+      "sha256": "766388a60abd97574ab1eddce1524083dca6ecb5bf09af0bcbf602439990a12f"
+    },
+    {
+      "path": "fixer/Dockerfile.claude",
+      "status": " M",
+      "unit": "deployment",
+      "generated": false,
+      "sha256": "bd4bf6aee52fd7e8c278099ecee4ae106c9ca73f142168a068c1c8fd6dcff7d2"
+    },
+    {
+      "path": "fixer/Dockerfile.codex",
+      "status": " M",
+      "unit": "deployment",
+      "generated": false,
+      "sha256": "2b60124415cacc65ef6ff5636cab2df45b7e20a6307544861c1f8a1e7d2501cb"
+    },
+    {
+      "path": "fixer/Dockerfile.engines",
+      "status": " M",
+      "unit": "deployment",
+      "generated": false,
+      "sha256": "d592f342f74797927b801c6c65c6c3d819b3740d807ebaa30d1a6ab785ae4e3d"
+    },
+    {
+      "path": "fixer/Dockerfile.opencode",
+      "status": " M",
+      "unit": "deployment",
+      "generated": false,
+      "sha256": "38bc3433a6a733d8111540c203f0db44f10609dbdf34002c221cc31828917988"
+    },
+    {
+      "path": "fixer/go-tools/go.mod",
+      "status": " M",
+      "unit": "deployment",
+      "generated": false,
+      "sha256": "9ec19c11b0c3d502ab6907bcbd66e4cbf1851d71af355f53b846260e5f91d16f"
+    },
+    {
+      "path": "fixer/go-tools/go.sum",
+      "status": " M",
+      "unit": "deployment",
+      "generated": false,
+      "sha256": "527a8ab14bb8deb24c1c016b49a64187ead7c5f2a360339f8f27f4bbbc10d775"
+    },
+    {
+      "path": "fixer/install-fix-tools.sh",
+      "status": " M",
+      "unit": "deployment",
+      "generated": false,
+      "sha256": "a732c6c45da40b19e97f21d9664b91ac4e8672962f70ef3a5cab7387ea3d6382"
+    },
+    {
+      "path": "fixer/install-node-tools.sh",
+      "status": " M",
+      "unit": "deployment",
+      "generated": false,
+      "sha256": "9f9294c466c3ff80c0685f6b8569609d39c9581c856a8d7996fbb2cd743d493c"
+    },
+    {
+      "path": "fixer/versions.env",
+      "status": " M",
+      "unit": "deployment",
+      "generated": false,
+      "sha256": "3f858cd661567d9c1e95d2fcd94e51cc21d6fc32314a53a2f2a18263288d7682"
+    },
+    {
+      "path": "go.mod",
+      "status": " M",
+      "unit": "deployment",
+      "generated": false,
+      "sha256": "6631ae2161d6ba4411b131089c404b47ee9b1277fa5e1cbf2cb903961711e7f7"
+    },
+    {
+      "path": "go.sum",
+      "status": " M",
+      "unit": "deployment",
+      "generated": false,
+      "sha256": "13b5f2b63950d85741e78bf992804f482e8d052da9460aa0d13923b8a27dd845"
+    },
+    {
+      "path": "internal/api/openapi/spec.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "95ce1f6838e0b271e1e917978a9a1c394abb72b1e71fa04d9ea70de0394c920c"
+    },
+    {
+      "path": "internal/api/routes/auth.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "d209f4037689874d1123ed5e63616e42a3d5fe2fe82acf19e9419048e56b9804"
+    },
+    {
+      "path": "internal/api/routes/browse.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "547d6cb8148564cb8f63b28deb4dd61b86e11f7e01290203823d92502d4d9ccc"
+    },
+    {
+      "path": "internal/api/routes/browse_test.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "effbdc3f3516702907703c6bad6444252f9ad116de6522e0eb896dcaae44b131"
+    },
+    {
+      "path": "internal/api/routes/collections.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "8353f9818fa1a72eed78018f3d12bc0cce3940d2389d5a9820a8754ef7fceeda"
+    },
+    {
+      "path": "internal/api/routes/edition_test.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "8149ff2e6885c247b3c7b91a3c969bfd740709a5f6854c945af9156cb258ce88"
+    },
+    {
+      "path": "internal/api/routes/findings.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "8cb536bad6110eb614e82f5e7c56ab62e662ebb8e96824f1e1f04aefcd3cc6f6"
+    },
+    {
+      "path": "internal/api/routes/fix_diff.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "c67d9f4b2676a195f741693c36e4e237c981f2adafdd738768264cca43b61843"
+    },
+    {
+      "path": "internal/api/routes/fix_diff_test.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "6bcc17f6180bfa6bfcbd32f10d08eab8c5562218424013d2d59b8f04f799fd18"
+    },
+    {
+      "path": "internal/api/routes/fleet.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "0dd7d3afb569ba7415b7ab60ed7d0cb5efaf2f10042f75ce7f2219ec73492202"
+    },
+    {
+      "path": "internal/api/routes/fleet_test.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "3449125a293640094b09ab9483f2989d15918988f0a778512c0db8df94d518b6"
+    },
+    {
+      "path": "internal/api/routes/gates.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "3d898eed466a4d7d70eb114fbfa70a2ae6722e3c0f5cc13293dc8bcd3a8fff5f"
+    },
+    {
+      "path": "internal/api/routes/git_info.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "e50c1aac2649f2d9d1b8b24850643ecf0392700c82ee08433a9291f996078b27"
+    },
+    {
+      "path": "internal/api/routes/mcp.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "3757997d1598aa3bb8157153bd0092cb67f0623334a20c2ce4fcf85f2133aeb9"
+    },
+    {
+      "path": "internal/api/routes/mfa.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "658947b4aa70af8e1fc41dd988dff9965cf713c776cc560e6d5049ef9fd66818"
+    },
+    {
+      "path": "internal/api/routes/scan_preflight.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "5d4fcf22424dc3a1b3512f6276738007fc9749439dd215c9b1a7375c11667c51"
+    },
+    {
+      "path": "internal/api/routes/scan_preflight_test.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "4a46ed99f2d20b7f8db17c266e3445a779c1d30b366d368c725ad8642765e783"
+    },
+    {
+      "path": "internal/api/routes/scanners.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "9a34deb1e84bddebcf84c04ed96731ed3cc547d585c7110e8dac7b7800994e34"
+    },
+    {
+      "path": "internal/api/routes/scans.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "e3dc563cc38d91559ea78e066f227ceb8a494a3598170052b9f730441325113f"
+    },
+    {
+      "path": "internal/api/routes/scans_test.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "2cbcf979e08135d066b272d4a8280dc3b3f82b078bfefa3084c4cb624510cc42"
+    },
+    {
+      "path": "internal/api/routes/settings.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "15b8c58b7af06cd0f3660f9119113948cbd22b53e635014cda29e260ef0a4595"
+    },
+    {
+      "path": "internal/api/server.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "c70208a72c71fe65d332247f678f3d50ce3585caf821a21aed4cd1e6a04acbb6"
+    },
+    {
+      "path": "internal/api/static.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "6bfe3a6ecb685d825f0fe0dcbe009e3afbdc1e9719206a15aedd0f805b96d44a"
+    },
+    {
+      "path": "internal/auth/auth_test.go",
+      "status": " M",
+      "unit": "security-boundaries",
+      "generated": false,
+      "sha256": "bdd097bab98d69f5cda8c248b2ef99b47a1bda7799b4fe9f9ae3c57cb8a5310e"
+    },
+    {
+      "path": "internal/auth/jwt.go",
+      "status": " M",
+      "unit": "security-boundaries",
+      "generated": false,
+      "sha256": "a2e145dd947ee90bf999287881fbb37878740870eb12262132c7a6d779f154db"
+    },
+    {
+      "path": "internal/cli/cmd_auth.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "d20f4ef09e9371075befa057d0ff9ad157cf326d0e903661fe8c6fca351dea36"
+    },
+    {
+      "path": "internal/cli/cmd_mcp.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "981ad05c49feeea659662707b9d6188895eda650b4178bf6e5c9b4cfc341bce3"
+    },
+    {
+      "path": "internal/cli/cmd_resources.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "0bb03f4b99321b1ff88a2303ff1a7ea8297f1e227facf58fbe972634137fab81"
+    },
+    {
+      "path": "internal/cli/cmd_scan.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "08a49fb978df5f52e06c456a98dd9f48effcea0218b2cc26da91fb4b774dcb6d"
+    },
+    {
+      "path": "internal/cli/config.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "74aa3cebe8251d3251885d94b0a873245c95ddb0fd90f45f0c15b07d197cdc5f"
+    },
+    {
+      "path": "internal/db/dsn.go",
+      "status": " M",
+      "unit": "database-contracts",
+      "generated": false,
+      "sha256": "432893efc0f737b7df8f68553e00e3b6e6a889ce0a775a0ac68408449bcf60c5"
+    },
+    {
+      "path": "internal/db/fleet_current.go",
+      "status": " M",
+      "unit": "database-contracts",
+      "generated": false,
+      "sha256": "41efe459ffef7093df1702a6c19a3df8af6f87e7dc31d866d9076a102879773e"
+    },
+    {
+      "path": "internal/db/migrations/020_fleet_mode.sql",
+      "status": " M",
+      "unit": "database-contracts",
+      "generated": false,
+      "sha256": "4507b41c891e1c6a417a27bf38bc4ba2bed83d607851ee48ba935dbd52fea278"
+    },
+    {
+      "path": "internal/db/migrations/021_autofix.sql",
+      "status": " M",
+      "unit": "database-contracts",
+      "generated": false,
+      "sha256": "6f58890b35ca529f38953ea44f01fb25f6d0660cd4cf1a39c1f0bb94fd78ea7e"
+    },
+    {
+      "path": "internal/db/migrations/056_scan_schedules.sql",
+      "status": " M",
+      "unit": "database-contracts",
+      "generated": false,
+      "sha256": "4050653878cbf9240d31d401bedd763918b1ae0a4d355f7ee66d15ba0e55d7f6"
+    },
+    {
+      "path": "internal/db/migrations/057_vulnerabilities.sql",
+      "status": " M",
+      "unit": "database-contracts",
+      "generated": false,
+      "sha256": "920e1cec7731f63b2d0d926ecb58ef9afb9eae9335c645d0a4f3fe9b4a6a92b0"
+    },
+    {
+      "path": "internal/db/migrations/058_vulnerability_evidence.sql",
+      "status": " M",
+      "unit": "database-contracts",
+      "generated": false,
+      "sha256": "acc1d2c70a37eb1b46a92cf9e420d8d63660309eb79845b7ce94a4c327a98a56"
+    },
+    {
+      "path": "internal/db/migrations/059_enterprise_records.sql",
+      "status": " M",
+      "unit": "database-contracts",
+      "generated": false,
+      "sha256": "20b6faa9152bcad4f2c578389bf9a9ec74e88c67d916480733e17320814fda7f"
+    },
+    {
+      "path": "internal/db/pages.go",
+      "status": " M",
+      "unit": "database-contracts",
+      "generated": false,
+      "sha256": "1d23a2d3d01536122f6fbbb9e245cf291f0fe8f548e632cdf16f69fb62644661"
+    },
+    {
+      "path": "internal/db/postgres.go",
+      "status": " M",
+      "unit": "database-contracts",
+      "generated": false,
+      "sha256": "2a0516717073411fe380796e3d5021352b7978ab8097c20c12b9199fa64c7186"
+    },
+    {
+      "path": "internal/db/postgres_schedules.go",
+      "unit": "database-contracts",
+      "generated": false,
+      "status": " M",
+      "sha256": "dda1c229017a0414605b199ae11ec45af794b12996cf360ed98836784aae4ad0"
+    },
+    {
+      "path": "internal/db/postgres_sessions.go",
+      "status": " M",
+      "unit": "database-contracts",
+      "generated": false,
+      "sha256": "a1929926867b41ca0a3363d25824d061b46dc946b97a75a0949662feba9ee41d"
+    },
+    {
+      "path": "internal/db/scanner_notification_repository_test.go",
+      "status": " M",
+      "unit": "database-contracts",
+      "generated": false,
+      "sha256": "520aeca7ddb8f1e7518a43db0bae291edd15d8c2f00f758fe27ec4d9d78ee350"
+    },
+    {
+      "path": "internal/db/scannerrelease_repository_test.go",
+      "status": " M",
+      "unit": "database-contracts",
+      "generated": false,
+      "sha256": "e045dd21b672a3c842ff3a38bddaf6f3f87b511887f928b90cb7466cb3f6e6b2"
+    },
+    {
+      "path": "internal/db/sqlite.go",
+      "status": " M",
+      "unit": "database-contracts",
+      "generated": false,
+      "sha256": "7a84e481c237f1e8ee1d1d60ad378dd8f4b8b751bdab5e30f88272d8d40383c3"
+    },
+    {
+      "path": "internal/db/sqlite_fleet.go",
+      "status": " M",
+      "unit": "database-contracts",
+      "generated": false,
+      "sha256": "bb039d75368fc931594820ae03d0fb184558a3696709a6995430544cebfcb2b8"
+    },
+    {
+      "path": "internal/db/sqlite_sessions.go",
+      "status": " M",
+      "unit": "database-contracts",
+      "generated": false,
+      "sha256": "c387ec4f2aa6be3730782536243b77ca4059337e6e2b68a7cc3f774517f7df99"
+    },
+    {
+      "path": "internal/db/store.go",
+      "status": " M",
+      "unit": "database-contracts",
+      "generated": false,
+      "sha256": "2b4af41efb7e0f87bc035ef9add8a2c94c83126cc00a24ecc76fb6775a9ec54a"
+    },
+    {
+      "path": "internal/finding/gates/evaluator.go",
+      "status": " M",
+      "unit": "database-contracts",
+      "generated": false,
+      "sha256": "f39ff8b8ace316cd8d5f8c947e7a5deff634c08299919e17130f54532dec80e4"
+    },
+    {
+      "path": "internal/finding/gates/evaluator_test.go",
+      "status": " M",
+      "unit": "database-contracts",
+      "generated": false,
+      "sha256": "caec7d47f7c367691929fc9ae6e7a17e719904c8b88db3688e3909c45208b6ab"
+    },
+    {
+      "path": "internal/fix/engine/prompt.go",
+      "status": " M",
+      "unit": "remediation",
+      "generated": false,
+      "sha256": "20d24d0d66abd52805cec87d03aa9d966f79a62c6dca95244fff45d84df817cc"
+    },
+    {
+      "path": "internal/fix/engine/prompt_test.go",
+      "status": " M",
+      "unit": "remediation",
+      "generated": false,
+      "sha256": "ba36cceb6d463287205aa00037bc7f9d2a11ef41f7d09277f5b8eac8e4d864cd"
+    },
+    {
+      "path": "internal/fix/git/git.go",
+      "status": " M",
+      "unit": "remediation",
+      "generated": false,
+      "sha256": "c1f9bcca78ebe416be525f91db2e09344ff6719020d26e120e1be5b850d7ed01"
+    },
+    {
+      "path": "internal/fix/git/git_test.go",
+      "status": " M",
+      "unit": "remediation",
+      "generated": false,
+      "sha256": "60fa029fef51c4804ec519d8132829a448b8262f6f30d9475dc1889199fa282e"
+    },
+    {
+      "path": "internal/fix/hygiene/bump.go",
+      "status": " M",
+      "unit": "remediation",
+      "generated": false,
+      "sha256": "7e0a794e8941fdb88bf100725adc47baa20e0b22e0dcf891fdf26c3709657c4d"
+    },
+    {
+      "path": "internal/fix/hygiene/lint.go",
+      "status": " M",
+      "unit": "remediation",
+      "generated": false,
+      "sha256": "19db23daffafb894e91f250bf8c0ce735ef366e96bad9cf951df0a93b8156fa8"
+    },
+    {
+      "path": "internal/fix/hygiene/mute.go",
+      "status": " M",
+      "unit": "remediation",
+      "generated": false,
+      "sha256": "9ab0bca4d4d55077205c928c00ac5230777c1b6db289f467a4e75f5bd288806b"
+    },
+    {
+      "path": "internal/fix/install/spec.go",
+      "status": " M",
+      "unit": "remediation",
+      "generated": false,
+      "sha256": "eb52774636a78b7ef91be22bbc48f5263db4fe3f5211a47b98cb11ffc6603efe"
+    },
+    {
+      "path": "internal/fix/orchestrator/orchestrator.go",
+      "status": " M",
+      "unit": "remediation",
+      "generated": false,
+      "sha256": "57c863cb0d9169a20de15656c276ebe26866f405434ba572539df81dda3f13e4"
+    },
+    {
+      "path": "internal/fix/orchestrator/orchestrator_test.go",
+      "status": " M",
+      "unit": "remediation",
+      "generated": false,
+      "sha256": "5a40154e5a7a794f95b641ac2231c5df020941379763915696afc65ae8b4cc18"
+    },
+    {
+      "path": "internal/fix/verify/verify.go",
+      "status": " M",
+      "unit": "remediation",
+      "generated": false,
+      "sha256": "bc140318e1edf7f1c550cdba7dec5cd02fab76da5b1bfc38dd37c1ef9a1eed31"
+    },
+    {
+      "path": "internal/fix/wiring/wiring.go",
+      "status": " M",
+      "unit": "remediation",
+      "generated": false,
+      "sha256": "119932677f6769240ad1eb152f363b7a885fb8c039a7a072fb64e31036a552ea"
+    },
+    {
+      "path": "internal/fix/wiring/wiring_test.go",
+      "status": " M",
+      "unit": "remediation",
+      "generated": false,
+      "sha256": "6d8876abb157306fd7fb885a76aad90c8c64a0a7402688c98bb7ca4cf6e9e961"
+    },
+    {
+      "path": "internal/fix/workspace/workspace.go",
+      "status": " M",
+      "unit": "remediation",
+      "generated": false,
+      "sha256": "4f5b5cbc244fe066bbef16cee89a0f043ed55005a7255813e8c80f4da523c3cc"
+    },
+    {
+      "path": "internal/fix/workspace/workspace_test.go",
+      "status": " M",
+      "unit": "remediation",
+      "generated": false,
+      "sha256": "5eaa594fbd9170e74a718c7081439250c70c23fb314fe8bd34f94913420bff7e"
+    },
+    {
+      "path": "internal/models/plugin.go",
+      "status": " M",
+      "unit": "database-contracts",
+      "generated": false,
+      "sha256": "1d8fc2f88fe177572fdcc91df7db9430d364aee2457855a002e22b0f833c9fbc"
+    },
+    {
+      "path": "internal/plugin/container/buckets.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "51676be0caacf828b470cbf1879b04f7cfe287035ba8015360cc9f5255175651"
+    },
+    {
+      "path": "internal/plugin/container/config.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "b46abe0e9b563f9595f630cbff517d6e30322cc834393c02fa98cee2f98b2f2b"
+    },
+    {
+      "path": "internal/plugin/container/integration_test.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "3f53f3a64ec1c12e81564d2fc0d4957be45ce855213d1fc5bb4d98eba55c95fb"
+    },
+    {
+      "path": "internal/plugin/container/isolation.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "22891d58d7367854b0c3fb29c33e1aa9ccc4ba966e84c68af759a64b73102445"
+    },
+    {
+      "path": "internal/plugin/container/isolation_test.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "79a3ec993b567d10ee07f331c1c690e23f08d8871a7575ad2c5b83569f22f461"
+    },
+    {
+      "path": "internal/plugin/container/probe.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "567ee8115cadccb0337af6094880ee36a2a5862739e074279c5020a3628a44b5"
+    },
+    {
+      "path": "internal/plugin/container/runner.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "15ac76a7d98641ac3663d8fe3a57bb8a8abac4aa5eaf179bcfa552d17aabecfd"
+    },
+    {
+      "path": "internal/repo/github.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "e1fb4bd3e6b18dfd8f668ce62ce1264eb7c85cbf9f7bb906c807091ef7a18cbb"
+    },
+    {
+      "path": "internal/scan/runner/runner.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "f99c6c78cffa03472ec9797a8604b7b4b5bb9802182be1db1aab8c0e36283733"
+    },
+    {
+      "path": "internal/scan/runner/runner_test.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "a5995f4d29351ec41646526c538293b82e99a319de4a3e176159588c223f6515"
+    },
+    {
+      "path": "internal/scan/suppress/suppress.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "547f1309f4ad1add89ae7e4ba7decfbff1a691d8f7685ad471a944eb6b70208a"
+    },
+    {
+      "path": "internal/scan/suppress/suppress_test.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "919ebb96dbb3204c600f78fcc1c143f21db0425aec9d5f2550bb53010a30d37f"
+    },
+    {
+      "path": "internal/scannerbuild/context/.dockerignore",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "05fae332f36651d76681f240a98254c4c86a9f928ae96b6c1a337a30f9739548"
+    },
+    {
+      "path": "internal/scannerbuild/context/Dockerfile",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "39318e7f06acd9b5aa32ef5e80a330674a6108d20ed5928e69596839414a1c17"
+    },
+    {
+      "path": "internal/scannerbuild/context/Dockerfile.codeql",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "e24e53dc0c68c1038bb175bba4b24ffadf28ef4a212b3e1d46a7dd27a3750244"
+    },
+    {
+      "path": "internal/scannerbuild/context/Dockerfile.jvm",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "c698fad2c2c92f02253c19443b55288128ff8330f653c53b020b33c1d2aabdb5"
+    },
+    {
+      "path": "internal/scannerbuild/context/Dockerfile.min",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "75e1b1938e53cd4371b5c3070813cbd81c8975dcb1072d4d7f70374ea75b4a1f"
+    },
+    {
+      "path": "internal/scannerbuild/context/Dockerfile.rust",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "d6b3fc43a3563655a9ece3dbf0813f223825707df1b73d69f94b0ff77578241c"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/cmd/wolf/main.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "99398b63537cdfc278580efcd4d3990555336aa5a04eee1d35d349fb42352597"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/api/openapi/spec.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "95ce1f6838e0b271e1e917978a9a1c394abb72b1e71fa04d9ea70de0394c920c"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/api/routes/auth.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "d209f4037689874d1123ed5e63616e42a3d5fe2fe82acf19e9419048e56b9804"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/api/routes/browse.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "547d6cb8148564cb8f63b28deb4dd61b86e11f7e01290203823d92502d4d9ccc"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/api/routes/collections.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "8353f9818fa1a72eed78018f3d12bc0cce3940d2389d5a9820a8754ef7fceeda"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/api/routes/findings.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "8cb536bad6110eb614e82f5e7c56ab62e662ebb8e96824f1e1f04aefcd3cc6f6"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/api/routes/fix_diff.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "c67d9f4b2676a195f741693c36e4e237c981f2adafdd738768264cca43b61843"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/api/routes/fleet.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "0dd7d3afb569ba7415b7ab60ed7d0cb5efaf2f10042f75ce7f2219ec73492202"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/api/routes/gates.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "3d898eed466a4d7d70eb114fbfa70a2ae6722e3c0f5cc13293dc8bcd3a8fff5f"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/api/routes/git_info.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "e50c1aac2649f2d9d1b8b24850643ecf0392700c82ee08433a9291f996078b27"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/api/routes/mcp.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "3757997d1598aa3bb8157153bd0092cb67f0623334a20c2ce4fcf85f2133aeb9"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/api/routes/mfa.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "658947b4aa70af8e1fc41dd988dff9965cf713c776cc560e6d5049ef9fd66818"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/api/routes/scan_preflight.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "5d4fcf22424dc3a1b3512f6276738007fc9749439dd215c9b1a7375c11667c51"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/api/routes/scanners.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "9a34deb1e84bddebcf84c04ed96731ed3cc547d585c7110e8dac7b7800994e34"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/api/routes/scans.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "e3dc563cc38d91559ea78e066f227ceb8a494a3598170052b9f730441325113f"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/api/routes/settings.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "15b8c58b7af06cd0f3660f9119113948cbd22b53e635014cda29e260ef0a4595"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/api/server.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "c70208a72c71fe65d332247f678f3d50ce3585caf821a21aed4cd1e6a04acbb6"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/api/static.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "6bfe3a6ecb685d825f0fe0dcbe009e3afbdc1e9719206a15aedd0f805b96d44a"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/auth/jwt.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "a2e145dd947ee90bf999287881fbb37878740870eb12262132c7a6d779f154db"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/cli/cmd_auth.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "d20f4ef09e9371075befa057d0ff9ad157cf326d0e903661fe8c6fca351dea36"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/cli/cmd_mcp.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "981ad05c49feeea659662707b9d6188895eda650b4178bf6e5c9b4cfc341bce3"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/cli/cmd_resources.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "0bb03f4b99321b1ff88a2303ff1a7ea8297f1e227facf58fbe972634137fab81"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/cli/cmd_scan.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "08a49fb978df5f52e06c456a98dd9f48effcea0218b2cc26da91fb4b774dcb6d"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/cli/config.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "74aa3cebe8251d3251885d94b0a873245c95ddb0fd90f45f0c15b07d197cdc5f"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/db/dsn.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "432893efc0f737b7df8f68553e00e3b6e6a889ce0a775a0ac68408449bcf60c5"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/db/fleet_current.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "41efe459ffef7093df1702a6c19a3df8af6f87e7dc31d866d9076a102879773e"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/db/migrations/020_fleet_mode.sql",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "4507b41c891e1c6a417a27bf38bc4ba2bed83d607851ee48ba935dbd52fea278"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/db/migrations/021_autofix.sql",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "6f58890b35ca529f38953ea44f01fb25f6d0660cd4cf1a39c1f0bb94fd78ea7e"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/db/migrations/056_scan_schedules.sql",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "4050653878cbf9240d31d401bedd763918b1ae0a4d355f7ee66d15ba0e55d7f6"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/db/migrations/057_vulnerabilities.sql",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "920e1cec7731f63b2d0d926ecb58ef9afb9eae9335c645d0a4f3fe9b4a6a92b0"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/db/migrations/058_vulnerability_evidence.sql",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "acc1d2c70a37eb1b46a92cf9e420d8d63660309eb79845b7ce94a4c327a98a56"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/db/migrations/059_enterprise_records.sql",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "20b6faa9152bcad4f2c578389bf9a9ec74e88c67d916480733e17320814fda7f"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/db/pages.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "1d23a2d3d01536122f6fbbb9e245cf291f0fe8f548e632cdf16f69fb62644661"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/db/postgres.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "2a0516717073411fe380796e3d5021352b7978ab8097c20c12b9199fa64c7186"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/db/postgres_schedules.go",
+      "unit": "documentation",
+      "generated": true,
+      "status": " M",
+      "sha256": "dda1c229017a0414605b199ae11ec45af794b12996cf360ed98836784aae4ad0"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/db/postgres_sessions.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "a1929926867b41ca0a3363d25824d061b46dc946b97a75a0949662feba9ee41d"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/db/sqlite.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "7a84e481c237f1e8ee1d1d60ad378dd8f4b8b751bdab5e30f88272d8d40383c3"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/db/sqlite_fleet.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "bb039d75368fc931594820ae03d0fb184558a3696709a6995430544cebfcb2b8"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/db/sqlite_sessions.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "c387ec4f2aa6be3730782536243b77ca4059337e6e2b68a7cc3f774517f7df99"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/db/store.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "2b4af41efb7e0f87bc035ef9add8a2c94c83126cc00a24ecc76fb6775a9ec54a"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/finding/gates/evaluator.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "f39ff8b8ace316cd8d5f8c947e7a5deff634c08299919e17130f54532dec80e4"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/fix/engine/prompt.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "20d24d0d66abd52805cec87d03aa9d966f79a62c6dca95244fff45d84df817cc"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/fix/git/git.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "c1f9bcca78ebe416be525f91db2e09344ff6719020d26e120e1be5b850d7ed01"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/fix/hygiene/bump.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "7e0a794e8941fdb88bf100725adc47baa20e0b22e0dcf891fdf26c3709657c4d"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/fix/hygiene/lint.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "19db23daffafb894e91f250bf8c0ce735ef366e96bad9cf951df0a93b8156fa8"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/fix/hygiene/mute.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "9ab0bca4d4d55077205c928c00ac5230777c1b6db289f467a4e75f5bd288806b"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/fix/install/spec.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "eb52774636a78b7ef91be22bbc48f5263db4fe3f5211a47b98cb11ffc6603efe"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/fix/orchestrator/orchestrator.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "57c863cb0d9169a20de15656c276ebe26866f405434ba572539df81dda3f13e4"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/fix/verify/verify.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "bc140318e1edf7f1c550cdba7dec5cd02fab76da5b1bfc38dd37c1ef9a1eed31"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/fix/wiring/wiring.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "119932677f6769240ad1eb152f363b7a885fb8c039a7a072fb64e31036a552ea"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/fix/workspace/workspace.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "4f5b5cbc244fe066bbef16cee89a0f043ed55005a7255813e8c80f4da523c3cc"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/models/plugin.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "1d8fc2f88fe177572fdcc91df7db9430d364aee2457855a002e22b0f833c9fbc"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/plugin/container/buckets.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "51676be0caacf828b470cbf1879b04f7cfe287035ba8015360cc9f5255175651"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/plugin/container/config.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "b46abe0e9b563f9595f630cbff517d6e30322cc834393c02fa98cee2f98b2f2b"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/plugin/container/isolation.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "22891d58d7367854b0c3fb29c33e1aa9ccc4ba966e84c68af759a64b73102445"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/plugin/container/probe.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "567ee8115cadccb0337af6094880ee36a2a5862739e074279c5020a3628a44b5"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/plugin/container/runner.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "15ac76a7d98641ac3663d8fe3a57bb8a8abac4aa5eaf179bcfa552d17aabecfd"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/repo/github.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "e1fb4bd3e6b18dfd8f668ce62ce1264eb7c85cbf9f7bb906c807091ef7a18cbb"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/scan/runner/runner.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "f99c6c78cffa03472ec9797a8604b7b4b5bb9802182be1db1aab8c0e36283733"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/scan/suppress/suppress.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "547f1309f4ad1add89ae7e4ba7decfbff1a691d8f7685ad471a944eb6b70208a"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/scannerregistry/client.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "91733d868f554425768d7b13bc87ee97e93395abb56ae3c6897faebf72f75167"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/scannerruntime/kubernetes/kubernetes.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "5739edf775611b32d46e7e8ad32104b735c4ec782004dbbc084562e5e984a10b"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/scannertools/httpcache/cache.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "c876206a118d9e5d513032bbfa481aed0bb9edbb1aca8879fc8cfff888b43b88"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/scannertools/latest/latest.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "6202f1f691eca079c13afcf9e73119e12305051ffc256c444b5dccc897e9b184"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/scannertools/lock/lock.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "fa842bd0b64c400f2dc10b9c6fbf2d62a0aefc5dd6836f42327c7a987549fc5e"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/scantarget/github.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "38f8d5a9659b1850a08574c900da30c3fd47df1965bb87e264534a30c960e084"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/scantarget/resolver.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "0a408616ca9d4402e91564fb96e077b0fa0b020d60f02cd6b7129dd6138f61f6"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/plugins/additional/codeql.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "fe206d5a9505787c5c6c36df594e22bf21964bfffedde3802b0882dfffeb0be4"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/plugins/general/grype.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "2b2131962e4b324bb85568a9cc1045a04dce836c4d1d46796556ed19fb48f49f"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/plugins/general/semgrep.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "a9d2ee1dab5398a999054c853d88fed65c8e34f7cef9651c24128df2bbe167e2"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/plugins/go/gokart.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "e1c9c27d521d38185b288ace0a2951ab8367a726289e49a81176216431e0407c"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/plugins/go/gosec.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "7bc4a4557d72a495d3263102c1637ff7c162a36d32da21fb7d28c4f4e1eaeaae"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/plugins/go/govulncheck.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "b8c32733f51893e4f5f7122b460854963d709412bb6e720adcb707163e3a937c"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/plugins/go/staticcheck.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "a4da5d499bf635474f3685e4b038695677c8623f66be94f7982c47bca88b29e8"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/plugins/infra/kubescape.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "73dc44d020f6ad9f27c34bdc4bd8a413bee6cae4de741274b9683149dc64bb8f"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/plugins/python/mypy.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "f53db45596d9baaef8cdcc6cc2eb01b0b7d5a00533003aa7536d550f9190272b"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/plugins/security/bearer.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "ee93a7d631c54daad27f1a71c60fc7039da0cd8d29806167df8eb6431c6b378d"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/plugins/security/detect_secrets.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "746519864ec1991a1eda4967f34a075273833389e4e57352e1bb397210f01bf1"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/scanners/tools.yaml",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "9b00ec62bf9df30da3880d819e3fa3a50aea0b635fdd92401e50bdfe43ee84b6"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/wolf-root.go.mod",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "6631ae2161d6ba4411b131089c404b47ee9b1277fa5e1cbf2cb903961711e7f7"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/wolf-root.go.sum",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "13b5f2b63950d85741e78bf992804f482e8d052da9460aa0d13923b8a27dd845"
+    },
+    {
+      "path": "internal/scannerbuild/context/fixer/Dockerfile.base",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "766388a60abd97574ab1eddce1524083dca6ecb5bf09af0bcbf602439990a12f"
+    },
+    {
+      "path": "internal/scannerbuild/context/fixer/Dockerfile.claude",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "bd4bf6aee52fd7e8c278099ecee4ae106c9ca73f142168a068c1c8fd6dcff7d2"
+    },
+    {
+      "path": "internal/scannerbuild/context/fixer/Dockerfile.codex",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "2b60124415cacc65ef6ff5636cab2df45b7e20a6307544861c1f8a1e7d2501cb"
+    },
+    {
+      "path": "internal/scannerbuild/context/fixer/go-tools/wolf-embedded.go.mod",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "9ec19c11b0c3d502ab6907bcbd66e4cbf1851d71af355f53b846260e5f91d16f"
+    },
+    {
+      "path": "internal/scannerbuild/context/fixer/go-tools/wolf-embedded.go.sum",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "527a8ab14bb8deb24c1c016b49a64187ead7c5f2a360339f8f27f4bbbc10d775"
+    },
+    {
+      "path": "internal/scannerbuild/context/fixer/install-fix-tools.sh",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "a732c6c45da40b19e97f21d9664b91ac4e8672962f70ef3a5cab7387ea3d6382"
+    },
+    {
+      "path": "internal/scannerbuild/context/fixer/install-node-tools.sh",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "9f9294c466c3ff80c0685f6b8569609d39c9581c856a8d7996fbb2cd743d493c"
+    },
+    {
+      "path": "internal/scannerbuild/context/fixer/versions.env",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "3f858cd661567d9c1e95d2fcd94e51cc21d6fc32314a53a2f2a18263288d7682"
+    },
+    {
+      "path": "internal/scannerbuild/context/go-tools/wolf-embedded.go.mod",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "4f09dea344562b58c7fd6d1d54cf83315b343bc7c3f360f2bc7bb82c16e42df0"
+    },
+    {
+      "path": "internal/scannerbuild/context/go-tools/wolf-embedded.go.sum",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "e0144f82aca8a698c7b3c2a17fe71ead7a3d93545bcc9a9bf9a6215ef0d24f70"
+    },
+    {
+      "path": "internal/scannerbuild/context/install/codeql.sh",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "7743d62a566cc949e93ecc3938abf5e9986538c8c01d35bf48b9742a126f84b3"
+    },
+    {
+      "path": "internal/scannerbuild/context/install/core_python.sh",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "186a14a5ea6c33522b8781b1e934a134d65327d391ed0db03f66b4d533b77f2f"
+    },
+    {
+      "path": "internal/scannerbuild/context/install/go-tools.sh",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "81631a256635a373c1718804f870561cfd5db5ac2435b355a59478439004c7f1"
+    },
+    {
+      "path": "internal/scannerbuild/context/install/lang_node.sh",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "f31a1ddd86079878aed9fea1d9c3db96b23b18c47aa09a9eb754f3a2ffa50bef"
+    },
+    {
+      "path": "internal/scannerbuild/context/install/lang_python.sh",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "42508e6bac444738ee83943db4449e8dfdaa302da06f049ab62b89ff099db074"
+    },
+    {
+      "path": "internal/scannerbuild/context/install/ruby.sh",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "9125764ab00edde4d260b6b6501ba8489ecfaadb775186f737e14f81698b4333"
+    },
+    {
+      "path": "internal/scannerbuild/context/os-packages.lock.yaml",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "fd372fd4464daea727fbf06b682c0681ebc933b920a32f8be0c4f260ba3e5c88"
+    },
+    {
+      "path": "internal/scannerbuild/context/os-packages.yaml",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "76771aa4975d23f8c1a8858df21f3c22846ad16ee3d32b5e0af105ab0e3bfc4c"
+    },
+    {
+      "path": "internal/scannerbuild/context/os-packages/artifacts/default-amd64.txt",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "4e3ab53882534c78b2a4c0334ae50f0c63ee0ac49d0aadffe3137c687653c9ca"
+    },
+    {
+      "path": "internal/scannerbuild/context/os-packages/artifacts/default-arm64.txt",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "712a7caf81fe6f7da47e41884bc8f6fa5a6c2957146b5f704be4bb5e2284675e"
+    },
+    {
+      "path": "internal/scannerbuild/context/os-packages/artifacts/fixer-base-amd64.txt",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "4e3ab53882534c78b2a4c0334ae50f0c63ee0ac49d0aadffe3137c687653c9ca"
+    },
+    {
+      "path": "internal/scannerbuild/context/os-packages/artifacts/fixer-base-arm64.txt",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "712a7caf81fe6f7da47e41884bc8f6fa5a6c2957146b5f704be4bb5e2284675e"
+    },
+    {
+      "path": "internal/scannerbuild/context/os-packages/pins/codeql-amd64.txt",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "ce008a5abb7b4cff3e8eef118b37ae452bcd5a4a4406241e11201d95d31e6444"
+    },
+    {
+      "path": "internal/scannerbuild/context/os-packages/pins/default-amd64.txt",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "f187ef76dc88cf6b59b17899794c5b5f0f3afde588528a74afeb86a13917cfc4"
+    },
+    {
+      "path": "internal/scannerbuild/context/os-packages/pins/default-arm64.txt",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "d8ac697df68fc4007e02200cb70a8849822aa83444b1c306feba965f8d6b3a2e"
+    },
+    {
+      "path": "internal/scannerbuild/context/os-packages/pins/fixer-base-amd64.txt",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "81cee6bb052dbd039799fe2d45bf43399df91b76263e783f4c4796efaf8a15ee"
+    },
+    {
+      "path": "internal/scannerbuild/context/os-packages/pins/fixer-base-arm64.txt",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "5d12bd5ec16c84bdb7a614fe54c340f8cf809a3c742277ebc67e539c7d5b0ff7"
+    },
+    {
+      "path": "internal/scannerbuild/context/os-packages/pins/jvm-amd64.txt",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "e7a99d7e95f96fa33ce9dd1374581b99e51e35eb1c897dc7b15609b08c4a2165"
+    },
+    {
+      "path": "internal/scannerbuild/context/os-packages/pins/jvm-arm64.txt",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "36b0cdaf4e047909650dcae6657bc4e258578807dd8397a0adaf27a7107148ab"
+    },
+    {
+      "path": "internal/scannerbuild/context/os-packages/pins/min-amd64.txt",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "f464bac5fc29707a53b65db0fad979b22417809c689e6546a43b80906a492253"
+    },
+    {
+      "path": "internal/scannerbuild/context/os-packages/pins/min-arm64.txt",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "b5f377a5cf706cd037a8fb200f27eae36e0f0db69413cd3f50b363271669f16c"
+    },
+    {
+      "path": "internal/scannerbuild/context/os-packages/pins/rust-amd64.txt",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "8034ef45b22159180011325bf0829577b3c2a67d271aa47794c975950f8a5204"
+    },
+    {
+      "path": "internal/scannerbuild/context/os-packages/pins/rust-arm64.txt",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "d77ad8959d000afc5618dc76d2b28548340d9d9efd3df27ac6077f85d5cb762a"
+    },
+    {
+      "path": "internal/scannerbuild/context/os-packages/snapshot.sources",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "51c6b52ab716198e028e356fa6dd84cf494704fed4d8a9b0c8128b4b72298b3a"
+    },
+    {
+      "path": "internal/scannerbuild/context/scanners/Dockerfile",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "39318e7f06acd9b5aa32ef5e80a330674a6108d20ed5928e69596839414a1c17"
+    },
+    {
+      "path": "internal/scannerbuild/context/scanners/Dockerfile.codeql",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "e24e53dc0c68c1038bb175bba4b24ffadf28ef4a212b3e1d46a7dd27a3750244"
+    },
+    {
+      "path": "internal/scannerbuild/context/scanners/Dockerfile.jvm",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "c698fad2c2c92f02253c19443b55288128ff8330f653c53b020b33c1d2aabdb5"
+    },
+    {
+      "path": "internal/scannerbuild/context/scanners/Dockerfile.min",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "75e1b1938e53cd4371b5c3070813cbd81c8975dcb1072d4d7f70374ea75b4a1f"
+    },
+    {
+      "path": "internal/scannerbuild/context/scanners/Dockerfile.rust",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "d6b3fc43a3563655a9ece3dbf0813f223825707df1b73d69f94b0ff77578241c"
+    },
+    {
+      "path": "internal/scannerbuild/context/scanners/go-tools/wolf-embedded.go.mod",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "4f09dea344562b58c7fd6d1d54cf83315b343bc7c3f360f2bc7bb82c16e42df0"
+    },
+    {
+      "path": "internal/scannerbuild/context/scanners/go-tools/wolf-embedded.go.sum",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "e0144f82aca8a698c7b3c2a17fe71ead7a3d93545bcc9a9bf9a6215ef0d24f70"
+    },
+    {
+      "path": "internal/scannerbuild/context/scanners/install/codeql.sh",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "7743d62a566cc949e93ecc3938abf5e9986538c8c01d35bf48b9742a126f84b3"
+    },
+    {
+      "path": "internal/scannerbuild/context/scanners/install/core_python.sh",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "186a14a5ea6c33522b8781b1e934a134d65327d391ed0db03f66b4d533b77f2f"
+    },
+    {
+      "path": "internal/scannerbuild/context/scanners/install/go-tools.sh",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "81631a256635a373c1718804f870561cfd5db5ac2435b355a59478439004c7f1"
+    },
+    {
+      "path": "internal/scannerbuild/context/scanners/install/lang_node.sh",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "f31a1ddd86079878aed9fea1d9c3db96b23b18c47aa09a9eb754f3a2ffa50bef"
+    },
+    {
+      "path": "internal/scannerbuild/context/scanners/install/lang_python.sh",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "42508e6bac444738ee83943db4449e8dfdaa302da06f049ab62b89ff099db074"
+    },
+    {
+      "path": "internal/scannerbuild/context/scanners/install/ruby.sh",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "9125764ab00edde4d260b6b6501ba8489ecfaadb775186f737e14f81698b4333"
+    },
+    {
+      "path": "internal/scannerbuild/context/scanners/os-packages.lock.yaml",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "fd372fd4464daea727fbf06b682c0681ebc933b920a32f8be0c4f260ba3e5c88"
+    },
+    {
+      "path": "internal/scannerbuild/context/scanners/os-packages.yaml",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "76771aa4975d23f8c1a8858df21f3c22846ad16ee3d32b5e0af105ab0e3bfc4c"
+    },
+    {
+      "path": "internal/scannerbuild/context/scanners/os-packages/artifacts/default-amd64.txt",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "4e3ab53882534c78b2a4c0334ae50f0c63ee0ac49d0aadffe3137c687653c9ca"
+    },
+    {
+      "path": "internal/scannerbuild/context/scanners/os-packages/artifacts/default-arm64.txt",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "712a7caf81fe6f7da47e41884bc8f6fa5a6c2957146b5f704be4bb5e2284675e"
+    },
+    {
+      "path": "internal/scannerbuild/context/scanners/os-packages/artifacts/fixer-base-amd64.txt",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "4e3ab53882534c78b2a4c0334ae50f0c63ee0ac49d0aadffe3137c687653c9ca"
+    },
+    {
+      "path": "internal/scannerbuild/context/scanners/os-packages/artifacts/fixer-base-arm64.txt",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "712a7caf81fe6f7da47e41884bc8f6fa5a6c2957146b5f704be4bb5e2284675e"
+    },
+    {
+      "path": "internal/scannerbuild/context/scanners/os-packages/pins/codeql-amd64.txt",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "ce008a5abb7b4cff3e8eef118b37ae452bcd5a4a4406241e11201d95d31e6444"
+    },
+    {
+      "path": "internal/scannerbuild/context/scanners/os-packages/pins/default-amd64.txt",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "f187ef76dc88cf6b59b17899794c5b5f0f3afde588528a74afeb86a13917cfc4"
+    },
+    {
+      "path": "internal/scannerbuild/context/scanners/os-packages/pins/default-arm64.txt",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "d8ac697df68fc4007e02200cb70a8849822aa83444b1c306feba965f8d6b3a2e"
+    },
+    {
+      "path": "internal/scannerbuild/context/scanners/os-packages/pins/fixer-base-amd64.txt",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "81cee6bb052dbd039799fe2d45bf43399df91b76263e783f4c4796efaf8a15ee"
+    },
+    {
+      "path": "internal/scannerbuild/context/scanners/os-packages/pins/fixer-base-arm64.txt",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "5d12bd5ec16c84bdb7a614fe54c340f8cf809a3c742277ebc67e539c7d5b0ff7"
+    },
+    {
+      "path": "internal/scannerbuild/context/scanners/os-packages/pins/jvm-amd64.txt",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "e7a99d7e95f96fa33ce9dd1374581b99e51e35eb1c897dc7b15609b08c4a2165"
+    },
+    {
+      "path": "internal/scannerbuild/context/scanners/os-packages/pins/jvm-arm64.txt",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "36b0cdaf4e047909650dcae6657bc4e258578807dd8397a0adaf27a7107148ab"
+    },
+    {
+      "path": "internal/scannerbuild/context/scanners/os-packages/pins/min-amd64.txt",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "f464bac5fc29707a53b65db0fad979b22417809c689e6546a43b80906a492253"
+    },
+    {
+      "path": "internal/scannerbuild/context/scanners/os-packages/pins/min-arm64.txt",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "b5f377a5cf706cd037a8fb200f27eae36e0f0db69413cd3f50b363271669f16c"
+    },
+    {
+      "path": "internal/scannerbuild/context/scanners/os-packages/pins/rust-amd64.txt",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "8034ef45b22159180011325bf0829577b3c2a67d271aa47794c975950f8a5204"
+    },
+    {
+      "path": "internal/scannerbuild/context/scanners/os-packages/pins/rust-arm64.txt",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "d77ad8959d000afc5618dc76d2b28548340d9d9efd3df27ac6077f85d5cb762a"
+    },
+    {
+      "path": "internal/scannerbuild/context/scanners/os-packages/snapshot.sources",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "51c6b52ab716198e028e356fa6dd84cf494704fed4d8a9b0c8128b4b72298b3a"
+    },
+    {
+      "path": "internal/scannerbuild/context/scanners/smoke-test.sh",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "2f287ebcabbc3b5e664fad07b2e8b826c117eca2830eb389cba430086ebf4846"
+    },
+    {
+      "path": "internal/scannerbuild/context/scanners/toolchains.yaml",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "da7939ec9463e3a70d16a818b843ededff157535ccee70a8cfa5504d7c207bfd"
+    },
+    {
+      "path": "internal/scannerbuild/context/scanners/tools.yaml",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "9b00ec62bf9df30da3880d819e3fa3a50aea0b635fdd92401e50bdfe43ee84b6"
+    },
+    {
+      "path": "internal/scannerbuild/context/scanners/versions.env",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "6af9d4719ccb693f97e8292dd87294faa5aad7218d5ddf33727c422824cbba97"
+    },
+    {
+      "path": "internal/scannerbuild/context/smoke-test.sh",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "2f287ebcabbc3b5e664fad07b2e8b826c117eca2830eb389cba430086ebf4846"
+    },
+    {
+      "path": "internal/scannerbuild/context/toolchains.yaml",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "da7939ec9463e3a70d16a818b843ededff157535ccee70a8cfa5504d7c207bfd"
+    },
+    {
+      "path": "internal/scannerbuild/context/tools.yaml",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "9b00ec62bf9df30da3880d819e3fa3a50aea0b635fdd92401e50bdfe43ee84b6"
+    },
+    {
+      "path": "internal/scannerbuild/context/versions.env",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "6af9d4719ccb693f97e8292dd87294faa5aad7218d5ddf33727c422824cbba97"
+    },
+    {
+      "path": "internal/scannerregistry/client.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "91733d868f554425768d7b13bc87ee97e93395abb56ae3c6897faebf72f75167"
+    },
+    {
+      "path": "internal/scannerregistry/client_test.go",
+      "unit": "documentation",
+      "generated": false,
+      "status": " M",
+      "sha256": "30c3905701fa9bf1c78175c6d91bee1fc1d6668a280364726cf81d5204716442"
+    },
+    {
+      "path": "internal/scannerruntime/kubernetes/kubernetes.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "5739edf775611b32d46e7e8ad32104b735c4ec782004dbbc084562e5e984a10b"
+    },
+    {
+      "path": "internal/scannertools/httpcache/cache.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "c876206a118d9e5d513032bbfa481aed0bb9edbb1aca8879fc8cfff888b43b88"
+    },
+    {
+      "path": "internal/scannertools/latest/latest.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "6202f1f691eca079c13afcf9e73119e12305051ffc256c444b5dccc897e9b184"
+    },
+    {
+      "path": "internal/scannertools/latest/latest_test.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "9c36b52175bad4f68979bd41b0bb94a8c952b15856c5300cb076bde3ef706255"
+    },
+    {
+      "path": "internal/scannertools/lock/lock.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "fa842bd0b64c400f2dc10b9c6fbf2d62a0aefc5dd6836f42327c7a987549fc5e"
+    },
+    {
+      "path": "internal/scannertools/lock/lock_test.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "de73cdec756993f7891c8d59905ab8c31435edc3eac4d05d48c12d23d8ac2660"
+    },
+    {
+      "path": "internal/scannertools/validate/validate.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "fe8001611d577c30f33aa8c7db5f1fcaf56b9be29dc3f7f68ec427fa4911093c"
+    },
+    {
+      "path": "internal/scannertools/validate/validate_test.go",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "0f350d500760d35057facd3e1bce2f3d887b9ef080c4d6b35911ca3cbb7f189b"
+    },
+    {
+      "path": "internal/scantarget/github.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "38f8d5a9659b1850a08574c900da30c3fd47df1965bb87e264534a30c960e084"
+    },
+    {
+      "path": "internal/scantarget/github_test.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "7dbb791fc708a5ff78407d03ac08dfd397b0ab74b33e21ec5a67a1c9fce4f20a"
+    },
+    {
+      "path": "internal/scantarget/resolver.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "0a408616ca9d4402e91564fb96e077b0fa0b020d60f02cd6b7129dd6138f61f6"
+    },
+    {
+      "path": "internal/scantarget/resolver_test.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "234286fb740fd1e1b2b2b6f8af836ba804d59545a1735f74852be35bd97232ab"
+    },
+    {
+      "path": "plugins/additional/codeql.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "fe206d5a9505787c5c6c36df594e22bf21964bfffedde3802b0882dfffeb0be4"
+    },
+    {
+      "path": "plugins/general/grype.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "2b2131962e4b324bb85568a9cc1045a04dce836c4d1d46796556ed19fb48f49f"
+    },
+    {
+      "path": "plugins/general/semgrep.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "a9d2ee1dab5398a999054c853d88fed65c8e34f7cef9651c24128df2bbe167e2"
+    },
+    {
+      "path": "plugins/go/go_test.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "79f691da7005f0615eb9435c8bbd7fc4dba3bc4eea1a0dc8d414a6cdc6eaff93"
+    },
+    {
+      "path": "plugins/go/gokart.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "e1c9c27d521d38185b288ace0a2951ab8367a726289e49a81176216431e0407c"
+    },
+    {
+      "path": "plugins/go/gosec.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "7bc4a4557d72a495d3263102c1637ff7c162a36d32da21fb7d28c4f4e1eaeaae"
+    },
+    {
+      "path": "plugins/go/govulncheck.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "b8c32733f51893e4f5f7122b460854963d709412bb6e720adcb707163e3a937c"
+    },
+    {
+      "path": "plugins/go/staticcheck.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "a4da5d499bf635474f3685e4b038695677c8623f66be94f7982c47bca88b29e8"
+    },
+    {
+      "path": "plugins/infra/infra_test.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "9f134dd5d488e1b7c14ffd89ea80227b518972de4fcafa5a9e536dceaf13e9e6"
+    },
+    {
+      "path": "plugins/infra/kubescape.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "73dc44d020f6ad9f27c34bdc4bd8a413bee6cae4de741274b9683149dc64bb8f"
+    },
+    {
+      "path": "plugins/python/mypy.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "f53db45596d9baaef8cdcc6cc2eb01b0b7d5a00533003aa7536d550f9190272b"
+    },
+    {
+      "path": "plugins/security/bearer.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "ee93a7d631c54daad27f1a71c60fc7039da0cd8d29806167df8eb6431c6b378d"
+    },
+    {
+      "path": "plugins/security/detect_secrets.go",
+      "status": " M",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "746519864ec1991a1eda4967f34a075273833389e4e57352e1bb397210f01bf1"
+    },
+    {
+      "path": "scanners/Dockerfile",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "39318e7f06acd9b5aa32ef5e80a330674a6108d20ed5928e69596839414a1c17"
+    },
+    {
+      "path": "scanners/Dockerfile.codeql",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "e24e53dc0c68c1038bb175bba4b24ffadf28ef4a212b3e1d46a7dd27a3750244"
+    },
+    {
+      "path": "scanners/Dockerfile.jvm",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "c698fad2c2c92f02253c19443b55288128ff8330f653c53b020b33c1d2aabdb5"
+    },
+    {
+      "path": "scanners/Dockerfile.min",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "75e1b1938e53cd4371b5c3070813cbd81c8975dcb1072d4d7f70374ea75b4a1f"
+    },
+    {
+      "path": "scanners/Dockerfile.rust",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "d6b3fc43a3563655a9ece3dbf0813f223825707df1b73d69f94b0ff77578241c"
+    },
+    {
+      "path": "scanners/README.md",
+      "status": " M",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": "64ae5aa351edf3ec2afc891054aebd771c0961e10cc1f2b6bf21cbb9bf4fc3f0"
+    },
+    {
+      "path": "scanners/TOOLS.md",
+      "status": " M",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": "10e28de09873c86c233d3f6ccbb054476fc103da457b38da69cd8d11615bc7a7"
+    },
+    {
+      "path": "scanners/build-policy.yaml",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "f336babb2a9fff716a17735c9b7a30c995be4609492ecdf592c18a772fe162f8"
+    },
+    {
+      "path": "scanners/ci/smoke-deployment-image.sh",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "b750742a06176a940e990ddbb778a688afbf8fd4e284668d903a7f0635bb097a"
+    },
+    {
+      "path": "scanners/ci/test-workflow-policy.py",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "aa33b05c1592ebabff0daee22d13efec8c678f5e67eb6745a14ac40e4d0512f1"
+    },
+    {
+      "path": "scanners/go-tools/go.mod",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "4f09dea344562b58c7fd6d1d54cf83315b343bc7c3f360f2bc7bb82c16e42df0"
+    },
+    {
+      "path": "scanners/go-tools/go.sum",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "e0144f82aca8a698c7b3c2a17fe71ead7a3d93545bcc9a9bf9a6215ef0d24f70"
+    },
+    {
+      "path": "scanners/install/codeql.sh",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "7743d62a566cc949e93ecc3938abf5e9986538c8c01d35bf48b9742a126f84b3"
+    },
+    {
+      "path": "scanners/install/core_python.sh",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "186a14a5ea6c33522b8781b1e934a134d65327d391ed0db03f66b4d533b77f2f"
+    },
+    {
+      "path": "scanners/install/go-tools.sh",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "81631a256635a373c1718804f870561cfd5db5ac2435b355a59478439004c7f1"
+    },
+    {
+      "path": "scanners/install/lang_node.sh",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "f31a1ddd86079878aed9fea1d9c3db96b23b18c47aa09a9eb754f3a2ffa50bef"
+    },
+    {
+      "path": "scanners/install/lang_python.sh",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "42508e6bac444738ee83943db4449e8dfdaa302da06f049ab62b89ff099db074"
+    },
+    {
+      "path": "scanners/install/ruby.sh",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "9125764ab00edde4d260b6b6501ba8489ecfaadb775186f737e14f81698b4333"
+    },
+    {
+      "path": "scanners/os-packages.lock.yaml",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "fd372fd4464daea727fbf06b682c0681ebc933b920a32f8be0c4f260ba3e5c88"
+    },
+    {
+      "path": "scanners/os-packages.yaml",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "76771aa4975d23f8c1a8858df21f3c22846ad16ee3d32b5e0af105ab0e3bfc4c"
+    },
+    {
+      "path": "scanners/os-packages/artifacts/default-amd64.txt",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "4e3ab53882534c78b2a4c0334ae50f0c63ee0ac49d0aadffe3137c687653c9ca"
+    },
+    {
+      "path": "scanners/os-packages/artifacts/default-arm64.txt",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "712a7caf81fe6f7da47e41884bc8f6fa5a6c2957146b5f704be4bb5e2284675e"
+    },
+    {
+      "path": "scanners/os-packages/artifacts/fixer-base-amd64.txt",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "4e3ab53882534c78b2a4c0334ae50f0c63ee0ac49d0aadffe3137c687653c9ca"
+    },
+    {
+      "path": "scanners/os-packages/artifacts/fixer-base-arm64.txt",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "712a7caf81fe6f7da47e41884bc8f6fa5a6c2957146b5f704be4bb5e2284675e"
+    },
+    {
+      "path": "scanners/os-packages/pins/codeql-amd64.txt",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "ce008a5abb7b4cff3e8eef118b37ae452bcd5a4a4406241e11201d95d31e6444"
+    },
+    {
+      "path": "scanners/os-packages/pins/default-amd64.txt",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "f187ef76dc88cf6b59b17899794c5b5f0f3afde588528a74afeb86a13917cfc4"
+    },
+    {
+      "path": "scanners/os-packages/pins/default-arm64.txt",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "d8ac697df68fc4007e02200cb70a8849822aa83444b1c306feba965f8d6b3a2e"
+    },
+    {
+      "path": "scanners/os-packages/pins/fixer-base-amd64.txt",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "81cee6bb052dbd039799fe2d45bf43399df91b76263e783f4c4796efaf8a15ee"
+    },
+    {
+      "path": "scanners/os-packages/pins/fixer-base-arm64.txt",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "5d12bd5ec16c84bdb7a614fe54c340f8cf809a3c742277ebc67e539c7d5b0ff7"
+    },
+    {
+      "path": "scanners/os-packages/pins/jvm-amd64.txt",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "e7a99d7e95f96fa33ce9dd1374581b99e51e35eb1c897dc7b15609b08c4a2165"
+    },
+    {
+      "path": "scanners/os-packages/pins/jvm-arm64.txt",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "36b0cdaf4e047909650dcae6657bc4e258578807dd8397a0adaf27a7107148ab"
+    },
+    {
+      "path": "scanners/os-packages/pins/min-amd64.txt",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "f464bac5fc29707a53b65db0fad979b22417809c689e6546a43b80906a492253"
+    },
+    {
+      "path": "scanners/os-packages/pins/min-arm64.txt",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "b5f377a5cf706cd037a8fb200f27eae36e0f0db69413cd3f50b363271669f16c"
+    },
+    {
+      "path": "scanners/os-packages/pins/rust-amd64.txt",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "8034ef45b22159180011325bf0829577b3c2a67d271aa47794c975950f8a5204"
+    },
+    {
+      "path": "scanners/os-packages/pins/rust-arm64.txt",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "d77ad8959d000afc5618dc76d2b28548340d9d9efd3df27ac6077f85d5cb762a"
+    },
+    {
+      "path": "scanners/os-packages/snapshot.sources",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "51c6b52ab716198e028e356fa6dd84cf494704fed4d8a9b0c8128b4b72298b3a"
+    },
+    {
+      "path": "scanners/quality/trivy-db.lock.json",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "d016cb3ec5e1fff2df985d04b4008f335fd8f61dfc4a2774d3ed7a605f3c659a"
+    },
+    {
+      "path": "scanners/quality/trivy-java-db.lock.json",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "799f6f5cda91e0ca684abf89813dee6a81454808f06d5589f0bca25d4c465fbb"
+    },
+    {
+      "path": "scanners/scanner-lock.yaml",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "6546ea69468470f76af1e7150d67b9a894b223a399eacfbc7da25081f92fc6e4"
+    },
+    {
+      "path": "scanners/smoke-test.sh",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "2f287ebcabbc3b5e664fad07b2e8b826c117eca2830eb389cba430086ebf4846"
+    },
+    {
+      "path": "scanners/toolchains.yaml",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "da7939ec9463e3a70d16a818b843ededff157535ccee70a8cfa5504d7c207bfd"
+    },
+    {
+      "path": "scanners/tools.yaml",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "9b00ec62bf9df30da3880d819e3fa3a50aea0b635fdd92401e50bdfe43ee84b6"
+    },
+    {
+      "path": "scanners/versions.env",
+      "status": " M",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "6af9d4719ccb693f97e8292dd87294faa5aad7218d5ddf33727c422824cbba97"
+    },
+    {
+      "path": "scripts/e2e/remote-scan-compose.sh",
+      "unit": "documentation",
+      "generated": false,
+      "status": " M",
+      "sha256": "cb9bd40e453ed5a5084efca16d48bd489e36baa9530cdfdd95a39c62bd970d9c"
+    },
+    {
+      "path": "scripts/e2e/remote-scan-kind.sh",
+      "unit": "documentation",
+      "generated": false,
+      "status": " M",
+      "sha256": "9fe31a7c409859ecd0b922e40275e60c99cfb4492bf13e988ed6fe0ff033df65"
+    },
+    {
+      "path": "scripts/e2e/remote-scan-native.sh",
+      "status": " M",
+      "unit": "deployment",
+      "generated": false,
+      "sha256": "2de21a75b91419c97ea7820dc614379f3bd39d90d7a01d3f4cfeaca581614a11"
+    },
+    {
+      "path": "ui/README.md",
+      "status": " M",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": "c026fe5b44a3a48b68594a1d3d333039e2985c334d7c79969476e00c2432a8f3"
+    },
+    {
+      "path": "ui/e2e/__screenshots__/desktop-chromium-linux/scanner-settings-inventory.png",
+      "status": " M",
+      "unit": "ui-workflows",
+      "generated": false,
+      "sha256": "144dac63ef35580005524ec7badc3c70a2ad968f142a9a4fcfe1b3aa75a33b26"
+    },
+    {
+      "path": "ui/e2e/__screenshots__/mobile-chromium-linux/scanner-settings-inventory.png",
+      "status": " M",
+      "unit": "ui-workflows",
+      "generated": false,
+      "sha256": "09ae10708733cbffa92abdc3fa3d53e2abae34254d27471b734d0fcfc604eda9"
+    },
+    {
+      "path": "ui/e2e/ease.spec.ts",
+      "status": " M",
+      "unit": "ui-workflows",
+      "generated": false,
+      "sha256": "89378c6a695019ebb3357f432da0850161d72c58269ae45d00b68b49ea2f9ba1"
+    },
+    {
+      "path": "ui/e2e/product.spec.ts",
+      "status": " M",
+      "unit": "ui-workflows",
+      "generated": false,
+      "sha256": "acc125e930f4023f6c46c18b60478925e7bf5bb9427daca16d70caa3b8891ccd"
+    },
+    {
+      "path": "ui/package.json",
+      "status": " M",
+      "unit": "ui-workflows",
+      "generated": false,
+      "sha256": "ecf83bdcad2e126ee33b3f3d1a9aee3bf93fcd030f29a5970b1fe59d2e64be9c"
+    },
+    {
+      "path": "ui/pnpm-lock.yaml",
+      "status": " M",
+      "unit": "ui-workflows",
+      "generated": false,
+      "sha256": "765e4f099fa45ae3d5ba7baae75437e8dc3e0bbe67d72561ba59fe1551319068"
+    },
+    {
+      "path": "ui/src/components/command-palette.tsx",
+      "status": " M",
+      "unit": "ui-workflows",
+      "generated": false,
+      "sha256": "8182efca23b39b512997aef19794de3dad091eb03b0c3e564ff92364e2285f91"
+    },
+    {
+      "path": "ui/src/components/fixes/fix-finding-button.tsx",
+      "status": " M",
+      "unit": "ui-workflows",
+      "generated": false,
+      "sha256": "88d427e37f26e2cb00c8d375d22485232b14e16342d5152c4d654f72cbd37680"
+    },
+    {
+      "path": "ui/src/components/fixes/scan-agents-panel.tsx",
+      "status": " M",
+      "unit": "ui-workflows",
+      "generated": false,
+      "sha256": "43910bd821a95d357bf14b3ead5f0d6e867de16c5c422f91eaa2e496e56c499f"
+    },
+    {
+      "path": "ui/src/components/fleet/needs-attention.tsx",
+      "status": " M",
+      "unit": "ui-workflows",
+      "generated": false,
+      "sha256": "f2a9879139e56d2b28783ee682c473b09fcbf468b4819bc957d5de034c6f7e2d"
+    },
+    {
+      "path": "ui/src/components/fleet/posture-cards.tsx",
+      "status": " M",
+      "unit": "ui-workflows",
+      "generated": false,
+      "sha256": "8e94018f9dc7ffcc443806053d164382bd1bfefd40f2e1a42f15c10afb8fdca9"
+    },
+    {
+      "path": "ui/src/components/fleet/top-components.tsx",
+      "status": " M",
+      "unit": "ui-workflows",
+      "generated": false,
+      "sha256": "8e65198ef2668e99b247250ee1d820d7c47ca389e797decb0227f3946e3db4e5"
+    },
+    {
+      "path": "ui/src/components/layout/global-search.tsx",
+      "status": " M",
+      "unit": "ui-workflows",
+      "generated": false,
+      "sha256": "41bdcf28f5833ba8985e1162e467631d6141b39c1e246dcd8e8d1fb64061c143"
+    },
+    {
+      "path": "ui/src/components/layout/sidebar.tsx",
+      "status": " M",
+      "unit": "ui-workflows",
+      "generated": false,
+      "sha256": "a3d5e0dcb7e65d074d314a7d6cbbec8aba5af8919c506fa36751596150b04111"
+    },
+    {
+      "path": "ui/src/components/layout/topbar.tsx",
+      "status": " M",
+      "unit": "ui-workflows",
+      "generated": false,
+      "sha256": "15640cad61e94d1d08352e14ddcbe40c271c0408ebed44fd97b7df44fab12d2a"
+    },
+    {
+      "path": "ui/src/components/scan-preflight.test.tsx",
+      "status": " M",
+      "unit": "ui-workflows",
+      "generated": false,
+      "sha256": "c8f53dfe2b03187b56fa54675d88836585f7ed982895e718e631b0e7b7815876"
+    },
+    {
+      "path": "ui/src/components/scan-preflight.tsx",
+      "status": " M",
+      "unit": "ui-workflows",
+      "generated": false,
+      "sha256": "319e474f256f7a0b8a0b3297778e436d926a0775b02a7e160ac9a1dfe58aab27"
+    },
+    {
+      "path": "ui/src/components/scan-status-pill.tsx",
+      "status": " M",
+      "unit": "ui-workflows",
+      "generated": false,
+      "sha256": "1e1101068f96935b9de40bbd6dd4981c8a0f0143ddde2367986d1e6d3bc118eb"
+    },
+    {
+      "path": "ui/src/components/ui/data-table.tsx",
+      "status": " M",
+      "unit": "ui-workflows",
+      "generated": false,
+      "sha256": "4f380b31246f0877e735b623631d5c3f8a104c214e5f5c0ea5a4208c0d65f7d4"
+    },
+    {
+      "path": "ui/src/lib/api.ts",
+      "status": " M",
+      "unit": "ui-workflows",
+      "generated": false,
+      "sha256": "eaa845f95fe38d54c120f811a3f36751ec9d3315b0660693ab6d02a276a578a4"
+    },
+    {
+      "path": "ui/src/lib/fleet.ts",
+      "status": " M",
+      "unit": "ui-workflows",
+      "generated": false,
+      "sha256": "ee340312af9a96c0f01723dd0eba1fa16107e998f9638d82ad2131835d06b13f"
+    },
+    {
+      "path": "ui/src/lib/store-ui.ts",
+      "status": " M",
+      "unit": "ui-workflows",
+      "generated": false,
+      "sha256": "8755d7cc3899d978040ebbfd7da4ff3ab31c02c21d287485c9c706c189c2a933"
+    },
+    {
+      "path": "ui/src/lib/store.ts",
+      "status": " D",
+      "unit": "ui-workflows",
+      "generated": false,
+      "sha256": null
+    },
+    {
+      "path": "ui/src/routes/_authed.collections.$collectionId.tsx",
+      "status": " M",
+      "unit": "ui-workflows",
+      "generated": false,
+      "sha256": "db9df9f5d7952f6082813f93e9021557f119bf1bad69cbe5eaa183d6bf85d026"
+    },
+    {
+      "path": "ui/src/routes/_authed.coverage.tsx",
+      "status": " M",
+      "unit": "ui-workflows",
+      "generated": false,
+      "sha256": "6272a7d8e27ef6995ceeecc82f0b85e3c8d3e64d945b10c0afcb535662ea91e1"
+    },
+    {
+      "path": "ui/src/routes/_authed.findings.$findingId.tsx",
+      "status": " M",
+      "unit": "ui-workflows",
+      "generated": false,
+      "sha256": "f59ca99d0569f32fe97a2a6c6c1b0e40108c72b04c12e5b0e418aa7d3654648c"
+    },
+    {
+      "path": "ui/src/routes/_authed.findings.index.tsx",
+      "status": " M",
+      "unit": "ui-workflows",
+      "generated": false,
+      "sha256": "9532b5d28dede01a7711c13ea9941881a58aa9c2b1e3dccfb79e3915340db87e"
+    },
+    {
+      "path": "ui/src/routes/_authed.index.tsx",
+      "status": " M",
+      "unit": "ui-workflows",
+      "generated": false,
+      "sha256": "523b3854464d21c000242fa073e0da4b47292202c7ab8e1cd929985e17e14a94"
+    },
+    {
+      "path": "ui/src/routes/_authed.repos.$repoId.tsx",
+      "status": " M",
+      "unit": "ui-workflows",
+      "generated": false,
+      "sha256": "8a880455f2df22897e1f6bb77d6745a12a41066256170753db900ae4b3237382"
+    },
+    {
+      "path": "ui/src/routes/_authed.repos.index.tsx",
+      "status": " M",
+      "unit": "ui-workflows",
+      "generated": false,
+      "sha256": "1570192d0e5f26b86254304df895ca9665a2f55068cfc3c5fb68c72969ef2623"
+    },
+    {
+      "path": "ui/src/routes/_authed.scans.$scanId.index.tsx",
+      "status": " M",
+      "unit": "ui-workflows",
+      "generated": false,
+      "sha256": "cefee6174c75facf0db95d2adda8e6325d90f9e249baa2ceb4dff1fdf81dbb8e"
+    },
+    {
+      "path": "ui/src/routes/_authed.scans.index.tsx",
+      "status": " M",
+      "unit": "ui-workflows",
+      "generated": false,
+      "sha256": "8d659bfa9de6a4ed58d22e0660aecfb2a35fe2d9976480745be1b28386f672cc"
+    },
+    {
+      "path": "ui/src/routes/_authed.settings.tsx",
+      "status": " M",
+      "unit": "ui-workflows",
+      "generated": false,
+      "sha256": "737d12a4a5529bd4062745ae8a0643847a97191cca30c706935105255f7adb37"
+    },
+    {
+      "path": "ui/src/routes/_authed.vulnerabilities.index.tsx",
+      "status": " M",
+      "unit": "ui-workflows",
+      "generated": false,
+      "sha256": "f986741f34e73a1371b7595a963283a9d7b4a341cffa5d1c8c83435b30a03a06"
+    },
+    {
+      "path": "ui/tsconfig.json",
+      "status": " M",
+      "unit": "ui-workflows",
+      "generated": false,
+      "sha256": "4f181963a1ed3df0ec48f6d74b9d87498b900d8f098cb0d34184e8b9cd548ee8"
+    },
+    {
+      "path": "ui/vite.config.ts",
+      "status": " M",
+      "unit": "ui-workflows",
+      "generated": false,
+      "sha256": "3d638365f325dac5671be0c1eb59afabbc06c4e10d0681dae5fed8ab46294861"
+    },
+    {
+      "path": ".gitleaksignore",
+      "status": "??",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "ce39082871e86de9f667c4d06c98c94780f9f4245d738e89df5081737dc428c0"
+    },
+    {
+      "path": ".grok/config.toml",
+      "status": "??",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "87296122b57f784873d286370344e60affc46b0be8213d091d0ce4c7f29f0459"
+    },
+    {
+      "path": "cmd/scannertools/source_integrity.go",
+      "status": "??",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "91687f8c12623b62f79441e1c64fddbcf13a476dd34d7fd7c1dcc7dfc91650e4"
+    },
+    {
+      "path": "cmd/scannertools/source_integrity_test.go",
+      "status": "??",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "8321d94d36fe561a75610528f89fcceb02a43f160f860007bf168f0a7a69a0d3"
+    },
+    {
+      "path": "cmd/wolf/git_commit_test.go",
+      "status": "??",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "226e63521b02ef76b318efada96278b105df708010040c6eed8a622e0a5ae89d"
+    },
+    {
+      "path": "cmd/wolf/scan_exit_test.go",
+      "status": "??",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "0551e4caba76ead007ec468395c72de331788894a05197baeaaab1740624faa1"
+    },
+    {
+      "path": "docs/PLAN.md",
+      "status": "??",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": "db394a9ae450f6774fe878f88cb85c5adca9c579587768aaf11a011a5fa839d9"
+    },
+    {
+      "path": "docs/adr/0002-technology-guide-adoption.md",
+      "status": "??",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": "0319daf519fd41edd9868315075777e483041b1bb56c3f11fb14c5d0ba4ead40"
+    },
+    {
+      "path": "docs/archive/2026-10-23/PLAN-containerized-scanner-execution.md",
+      "status": "??",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": "e908de1162f761cc7878d5d2b1b6e5a5f8c5d2f1300ced5169bc196403934a4d"
+    },
+    {
+      "path": "docs/archive/2026-10-23/PLAN-findings-pipeline.md",
+      "status": "??",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": "cf96936cad5be2617a1a817d07f34216d003d54721cca6783e3220d77ccf8b80"
+    },
+    {
+      "path": "docs/archive/2026-10-23/README.md",
+      "status": "??",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": "5cd3b425e019129a793f0e245ae0d983b7838d459c7708dbc04176a5e433b185"
+    },
+    {
+      "path": "docs/archive/2026-10-23/specs/2026-05-19-ai-integration-remediation-loop.md",
+      "status": "??",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": "d913e03323c9b8a6627907a78c38a7b229462530d7e8d1989219f94ea7041c9d"
+    },
+    {
+      "path": "docs/archive/2026-10-23/superpowers/plans/2026-06-13-scanner-image-build-push.md",
+      "status": "??",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": "d808e99866be31cfab234811204107d02ca4f5f3ab9d2ceb242857f6d4716f0f"
+    },
+    {
+      "path": "docs/archive/2026-10-23/superpowers/plans/2026-06-13-ui-ux-flow-fixes.md",
+      "status": "??",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": "2eec55aac427155d55435d0869e7122d266f1796f043819e4aee7f510ce18b0e"
+    },
+    {
+      "path": "docs/archive/2026-10-23/superpowers/plans/2026-06-14-fleet-mode-tailwind4-shadcn.md",
+      "status": "??",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": "bb9d2ce946ca2c39bb10e11a5d1d17dee2f99650c03643744beb23e2f3a0763a"
+    },
+    {
+      "path": "docs/archive/2026-10-23/superpowers/plans/2026-06-15-autonomous-fix-engine-plan.md",
+      "status": "??",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": "ee06e07523a8e02c83fe6c2aa63532b65b66400624d96cc0f2046be741f97c84"
+    },
+    {
+      "path": "docs/archive/2026-10-23/superpowers/plans/2026-06-16-account-vs-admin-settings.md",
+      "status": "??",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": "e5f38befa0ae9b68e025e63aa8aba63d54d6df25705b86cc8fef616c57da212a"
+    },
+    {
+      "path": "docs/archive/2026-10-23/superpowers/plans/2026-06-17-enterprise-audit-classification.md",
+      "status": "??",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": "ebba3c1a6ffb09e8b386235a0ae5c9bd44d7ce33d6112f1d207d51accc27f5a0"
+    },
+    {
+      "path": "docs/archive/2026-10-23/superpowers/plans/2026-07-30-remote-code-scanning-api-workers-plan.md",
+      "status": "??",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": "11397c41d788e6c07c2f89fa95aeaf9a283f1376c4877ca8f31c3ca3940de6ab"
+    },
+    {
+      "path": "docs/archive/2026-10-23/superpowers/plans/2026-07-30-scanner-release-management-platform-plan.md",
+      "status": "??",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": "270d210255348bbf74f7675baebdc49dca6c365df0dd985e532ab8566043e963"
+    },
+    {
+      "path": "docs/archive/2026-10-23/superpowers/plans/2026-09-04-elite-product-plan.md",
+      "status": "??",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": "8f83fe50fa8abb1e1fc611651dc564d341964b0e3f2b41465d61a365ffb69045"
+    },
+    {
+      "path": "docs/archive/2026-10-23/superpowers/specs/2026-05-19-repo-branch-filter-ux-design.md",
+      "status": "??",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": "93c5e8aba14279b5b0d2ea5bc3537fa3643a667c6dd2316c9626657506cf3f67"
+    },
+    {
+      "path": "docs/archive/2026-10-23/superpowers/specs/2026-05-20-api-cli-swagger-design.md",
+      "status": "??",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": "3c1e5720b7660a733ee7ccf299661c7675119e8e381b0e5eb2227895981e2a92"
+    },
+    {
+      "path": "docs/archive/2026-10-23/superpowers/specs/2026-06-12-remote-ssh-nodes-scan-targets-plan.md",
+      "status": "??",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": "378e8206e851e493107065db55fa1e4ea21c871ea47e56e9b3fd67a7b983a4fc"
+    },
+    {
+      "path": "docs/archive/2026-10-23/superpowers/specs/2026-06-12-scanner-toolchain-management-plan.md",
+      "status": "??",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": "2bd69b042ccef8b6ad69cfe089d87403a6627118f443e45a34e17b934ea69406"
+    },
+    {
+      "path": "docs/archive/2026-10-23/superpowers/specs/2026-06-13-scan-quality-platform-plan.md",
+      "status": "??",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": "6d4a52ba3967e9795326a74b7ea1cdb6e759e1e11dfc501a9bb3a67541640d3d"
+    },
+    {
+      "path": "docs/archive/2026-10-23/superpowers/specs/2026-06-15-autonomous-fix-engine-design.md",
+      "status": "??",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": "fdddebdac71b70bb68f10370b2e9c8a0b8241d2a11366123625d2efcca873fc7"
+    },
+    {
+      "path": "docs/dashboard.md",
+      "status": "??",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": "ce09eb5e207652c06440919c8c8d26f008b9c6a4b3e633f30297ddb022f06ce3"
+    },
+    {
+      "path": "docs/runner-build-matrix.md",
+      "status": "??",
+      "unit": "documentation",
+      "generated": false,
+      "sha256": "8681df952c173f332bdf61fdd67746f57f1203fc4a779271d2c7993991f82331"
+    },
+    {
+      "path": "internal/api/auth_refresh_test.go",
+      "status": "??",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "7ee39b220a217cb7fc0a1efef627827ae0f73462d535cf77c005bda36ff55b45"
+    },
+    {
+      "path": "internal/api/mcp_test.go",
+      "status": "??",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "fab542d5e426ef9833fb51a1e7e270075a30488df57ac8ff549fc9c2caedabf0"
+    },
+    {
+      "path": "internal/api/routes/auth_refresh.go",
+      "status": "??",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "0c56211320485f94fa40bbba07141ae61d2bfc893062d4101eff8cefaaedf9a7"
+    },
+    {
+      "path": "internal/api/routes/collections_test.go",
+      "status": "??",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "0f68523a8bd6e0f90dbc3083819040d9c7fe3bd914be076a589d2b6f09477efa"
+    },
+    {
+      "path": "internal/api/routes/finding_sort_test.go",
+      "status": "??",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "dce8d1ec6ce4c447e03b29607fb6a7a09fde6d6d8da35daadc08215da0215703"
+    },
+    {
+      "path": "internal/api/routes/settings_test.go",
+      "status": "??",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "f5b43caafbb8201ba475b98f5e1b5b5706e81fab520ff622c37a2fb48cdabcb1"
+    },
+    {
+      "path": "internal/api/routes/test_coverage.go",
+      "status": "??",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "763c3b978d2dd6fa82295eb5016b124de636898e337e4e838ad9d864c4e2f019"
+    },
+    {
+      "path": "internal/api/routes/test_coverage_test.go",
+      "status": "??",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "2742be055b088049bba6827d8720f1b5574ad8a061f50c82471ad88f1d9f0a38"
+    },
+    {
+      "path": "internal/api/static_test.go",
+      "status": "??",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "71ef29c42d95f02717e0ec234f5bc9a7fbec63d1613246ba2a3a5a075a32441a"
+    },
+    {
+      "path": "internal/cli/automation_test.go",
+      "status": "??",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "2d18a762491d0ac391c3a31ee8331dfbcbf1e06083bc8faff97154021473d341"
+    },
+    {
+      "path": "internal/cli/cmd_auth_refresh.go",
+      "status": "??",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "045f9c8261774fa1deb73b2ee3fe8309590268760f4f90ace1a29c2f406c594f"
+    },
+    {
+      "path": "internal/cli/cmd_test_coverage.go",
+      "status": "??",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "6ccdc00cc19df7a5c9c6e19c3863a34df41d26e450184769d2fc289c80bef86a"
+    },
+    {
+      "path": "internal/cli/cmd_test_coverage_test.go",
+      "status": "??",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "d44b6875023eef70130537442460518103aa4f120f668d5abeeecaf2777d809c"
+    },
+    {
+      "path": "internal/db/fleet_evidence.go",
+      "status": "??",
+      "unit": "database-contracts",
+      "generated": false,
+      "sha256": "3a8fe5a3cdd06f841baef1f7131ed1c6d6e19708ddf10058903b747715e0a590"
+    },
+    {
+      "path": "internal/db/fleet_evidence_test.go",
+      "status": "??",
+      "unit": "database-contracts",
+      "generated": false,
+      "sha256": "d9ffa5b1e59ed4b75c164d4a641a5863dabecc3c741fe02b11445ad63f6a7c67"
+    },
+    {
+      "path": "internal/db/fleet_languages_test.go",
+      "status": "??",
+      "unit": "database-contracts",
+      "generated": false,
+      "sha256": "0f953a2b28fa91b9cbd473c77ea8d0029872ec5ab86fbbf3f1c0e7ddfa614e6d"
+    },
+    {
+      "path": "internal/db/migrations/060_test_coverage.sql",
+      "status": "??",
+      "unit": "database-contracts",
+      "generated": false,
+      "sha256": "875bec11cdc974f6663dfa3f7a27e465d1ed2df4a07633a32bdb0e79c5a05b4c"
+    },
+    {
+      "path": "internal/db/schedules_test.go",
+      "unit": "database-contracts",
+      "generated": false,
+      "status": "??",
+      "sha256": "bd190f373481348c21d6367a92ecb5ae0b1630ea3604c23f82924be3d34aa0fb"
+    },
+    {
+      "path": "internal/db/test_coverage.go",
+      "status": "??",
+      "unit": "database-contracts",
+      "generated": false,
+      "sha256": "26081d663267aca1190607a7c8501a3dfda015adbb8a93fab9b4e7ed33856fd7"
+    },
+    {
+      "path": "internal/finding/gates/coverage.go",
+      "status": "??",
+      "unit": "database-contracts",
+      "generated": false,
+      "sha256": "34be61be581930559ab683100231b9ff5f893b5e14734572ae71b776505f3ad9"
+    },
+    {
+      "path": "internal/finding/gates/coverage_test.go",
+      "status": "??",
+      "unit": "database-contracts",
+      "generated": false,
+      "sha256": "b7952c2ad0bb01c17e7d2f3a84725eaf6f69f06ef1e8cb32c57589a13da59ac2"
+    },
+    {
+      "path": "internal/fix/hygiene/path.go",
+      "status": "??",
+      "unit": "remediation",
+      "generated": false,
+      "sha256": "65fb43375aabfe66f7c986a5dd579937e639e8a909a32a007cb6ceb74dc38b78"
+    },
+    {
+      "path": "internal/fix/hygiene/path_test.go",
+      "status": "??",
+      "unit": "remediation",
+      "generated": false,
+      "sha256": "72842998b0b1a36843e0c90a08ded823a6b05909be877798dbd4e1326d63dd02"
+    },
+    {
+      "path": "internal/fix/orchestrator/batch_safety_test.go",
+      "status": "??",
+      "unit": "remediation",
+      "generated": false,
+      "sha256": "494c37b22be8ee7c6673f74cddd40745a87b2a01a6e77640abfa92f16dacb31d"
+    },
+    {
+      "path": "internal/fix/orchestrator/recovery_test.go",
+      "status": "??",
+      "unit": "remediation",
+      "generated": false,
+      "sha256": "20f29338078c49e72ad2be63792138a083913abe4875633bbdef0c70861c6fd4"
+    },
+    {
+      "path": "internal/fix/workspace/rollback_safety_test.go",
+      "status": "??",
+      "unit": "remediation",
+      "generated": false,
+      "sha256": "9ab97ff6cc4a821d3ef16ba23e2aafade66d998ad23b1abeb3244caaafc9909a"
+    },
+    {
+      "path": "internal/models/test_coverage.go",
+      "status": "??",
+      "unit": "database-contracts",
+      "generated": false,
+      "sha256": "d94d4225e4fa3b80738fa720d94f8a2c8f4e9a8497694f779e96b8dea67833a7"
+    },
+    {
+      "path": "internal/plugin/container/goenv.go",
+      "status": "??",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "6797959afaa4e90ebc4fd42dcec4016e7047641802a656134e8a6a3aba14b3c4"
+    },
+    {
+      "path": "internal/plugin/container/probe_test.go",
+      "status": "??",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "cbb0dd413b2a7a3bdca42505bf22ed2687cac9cd86ebe588b2532f85d7ec3489"
+    },
+    {
+      "path": "internal/plugin/container/resources.go",
+      "status": "??",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "e7d8f6ea11daa0b617afb61e87489cb1ccebf81bac8d9c4746b9608f2b0c128f"
+    },
+    {
+      "path": "internal/plugin/container/resources_test.go",
+      "status": "??",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "360bd5d395aa21359895dffb7cd87506b84e6f26ee2ec65cdc0a17b324322e10"
+    },
+    {
+      "path": "internal/repo/github_boundary_test.go",
+      "status": "??",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "d58f14ad7f71ace69b70ea2d6a793dc2e68ee0f3c50e713b1d6dd32dd60f2f8f"
+    },
+    {
+      "path": "internal/scan/coverage/changed.go",
+      "status": "??",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "2240a0b5d3f08301a781f3f9da5ce647777104609183d2ed5bd3481ab73205bd"
+    },
+    {
+      "path": "internal/scan/coverage/formats.go",
+      "status": "??",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "28c4339baf6c7116588b38e29f2a488da570f35ef710cb236fd461e7becd1e50"
+    },
+    {
+      "path": "internal/scan/coverage/measured.go",
+      "status": "??",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "1551de4d355cee170916d16eb20c41d8465b7e103218ddff6f9986872b9ba3db"
+    },
+    {
+      "path": "internal/scan/coverage/measured_test.go",
+      "status": "??",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "9d3fd64f4be5b0f68cb6f2a5eeefdf98b0de631ca16064fc18e7daea0fed04eb"
+    },
+    {
+      "path": "internal/scan/runner/scheduling.go",
+      "status": "??",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "7a18908ba1f88a70975df5371e030fbcd576c84bc0b5bb70cce13ff43fb0a814"
+    },
+    {
+      "path": "internal/scan/runner/scheduling_test.go",
+      "status": "??",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "545a39eaf190ae94df2117e6a7cf327ab2c5b24b4fc1f4b8c017349256ddbf36"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/api/routes/auth_refresh.go",
+      "status": "??",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "0c56211320485f94fa40bbba07141ae61d2bfc893062d4101eff8cefaaedf9a7"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/api/routes/test_coverage.go",
+      "status": "??",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "763c3b978d2dd6fa82295eb5016b124de636898e337e4e838ad9d864c4e2f019"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/cli/cmd_auth_refresh.go",
+      "status": "??",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "045f9c8261774fa1deb73b2ee3fe8309590268760f4f90ace1a29c2f406c594f"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/cli/cmd_test_coverage.go",
+      "status": "??",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "6ccdc00cc19df7a5c9c6e19c3863a34df41d26e450184769d2fc289c80bef86a"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/db/fleet_evidence.go",
+      "status": "??",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "3a8fe5a3cdd06f841baef1f7131ed1c6d6e19708ddf10058903b747715e0a590"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/db/migrations/060_test_coverage.sql",
+      "status": "??",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "875bec11cdc974f6663dfa3f7a27e465d1ed2df4a07633a32bdb0e79c5a05b4c"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/db/test_coverage.go",
+      "status": "??",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "26081d663267aca1190607a7c8501a3dfda015adbb8a93fab9b4e7ed33856fd7"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/finding/gates/coverage.go",
+      "status": "??",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "34be61be581930559ab683100231b9ff5f893b5e14734572ae71b776505f3ad9"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/fix/hygiene/path.go",
+      "status": "??",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "65fb43375aabfe66f7c986a5dd579937e639e8a909a32a007cb6ceb74dc38b78"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/models/test_coverage.go",
+      "status": "??",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "d94d4225e4fa3b80738fa720d94f8a2c8f4e9a8497694f779e96b8dea67833a7"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/plugin/container/goenv.go",
+      "status": "??",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "6797959afaa4e90ebc4fd42dcec4016e7047641802a656134e8a6a3aba14b3c4"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/plugin/container/resources.go",
+      "status": "??",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "e7d8f6ea11daa0b617afb61e87489cb1ccebf81bac8d9c4746b9608f2b0c128f"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/scan/coverage/changed.go",
+      "status": "??",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "2240a0b5d3f08301a781f3f9da5ce647777104609183d2ed5bd3481ab73205bd"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/scan/coverage/formats.go",
+      "status": "??",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "28c4339baf6c7116588b38e29f2a488da570f35ef710cb236fd461e7becd1e50"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/scan/coverage/measured.go",
+      "status": "??",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "1551de4d355cee170916d16eb20c41d8465b7e103218ddff6f9986872b9ba3db"
+    },
+    {
+      "path": "internal/scannerbuild/context/_wolf-source/internal/scan/runner/scheduling.go",
+      "status": "??",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "7a18908ba1f88a70975df5371e030fbcd576c84bc0b5bb70cce13ff43fb0a814"
+    },
+    {
+      "path": "internal/scannerbuild/context/go-tools/build-gokart.sh",
+      "status": "??",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "346f258464e8f620f16f99fb39c198f2953b4dd087c405abb5f454736822fd29"
+    },
+    {
+      "path": "internal/scannerbuild/context/go-tools/gokart.patch",
+      "status": "??",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "152d0639ac738af5233754fcc86e38f0fff02e566da618fe2c06aa31569ecf2c"
+    },
+    {
+      "path": "internal/scannerbuild/context/go-tools/test-gokart.sh",
+      "status": "??",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "266dc13bc616a6b48b2f2d96ce39bbd1aa5cff4922e6b8aed0f2eaab71e4b181"
+    },
+    {
+      "path": "internal/scannerbuild/context/install/version-inputs.sh",
+      "status": "??",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "fa112d135a9a00f9d121b90f8556e0b227a5fb5bd94acf25e4d79c4aea9955b7"
+    },
+    {
+      "path": "internal/scannerbuild/context/scanners/go-tools/build-gokart.sh",
+      "status": "??",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "346f258464e8f620f16f99fb39c198f2953b4dd087c405abb5f454736822fd29"
+    },
+    {
+      "path": "internal/scannerbuild/context/scanners/go-tools/gokart.patch",
+      "status": "??",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "152d0639ac738af5233754fcc86e38f0fff02e566da618fe2c06aa31569ecf2c"
+    },
+    {
+      "path": "internal/scannerbuild/context/scanners/go-tools/test-gokart.sh",
+      "status": "??",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "266dc13bc616a6b48b2f2d96ce39bbd1aa5cff4922e6b8aed0f2eaab71e4b181"
+    },
+    {
+      "path": "internal/scannerbuild/context/scanners/install/version-inputs.sh",
+      "status": "??",
+      "unit": "release-factory",
+      "generated": true,
+      "sha256": "fa112d135a9a00f9d121b90f8556e0b227a5fb5bd94acf25e4d79c4aea9955b7"
+    },
+    {
+      "path": "internal/scannerregistry/redirect_test.go",
+      "status": "??",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "80a2a384d81526964a2ef577b3fdded069a6b3331a1ba3f4b6e1ef1a88a18b3c"
+    },
+    {
+      "path": "internal/scannerregistry/response_bounds_test.go",
+      "status": "??",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "a1e0b08d49ac0e0489010b4069fdce1e6918a0b965410c56940dfd80371200bf"
+    },
+    {
+      "path": "internal/scannertools/httpcache/isolation_test.go",
+      "status": "??",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "fac7c52eb92a975ff5ac5c1cedfc774df73dcace90d26baeaee04fb14a5760f9"
+    },
+    {
+      "path": "plugins/general/semgrep_execution_test.go",
+      "status": "??",
+      "unit": "scan-contracts",
+      "generated": false,
+      "sha256": "3832477f95805bc782d10b1c3fc5e188efb46dd753bc80de2a227bc3edfd93a9"
+    },
+    {
+      "path": "scanners/ci/test-build-cache.sh",
+      "status": "??",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "3b944fd760189cba9a36ac724e84da5e1da5604dc057b261ab78741aaba39d43"
+    },
+    {
+      "path": "scanners/go-tools/build-gokart.sh",
+      "status": "??",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "346f258464e8f620f16f99fb39c198f2953b4dd087c405abb5f454736822fd29"
+    },
+    {
+      "path": "scanners/go-tools/gokart.patch",
+      "status": "??",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "152d0639ac738af5233754fcc86e38f0fff02e566da618fe2c06aa31569ecf2c"
+    },
+    {
+      "path": "scanners/go-tools/test-gokart.sh",
+      "status": "??",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "266dc13bc616a6b48b2f2d96ce39bbd1aa5cff4922e6b8aed0f2eaab71e4b181"
+    },
+    {
+      "path": "scanners/install/version-inputs.sh",
+      "status": "??",
+      "unit": "release-factory",
+      "generated": false,
+      "sha256": "fa112d135a9a00f9d121b90f8556e0b227a5fb5bd94acf25e4d79c4aea9955b7"
+    },
+    {
+      "path": "ui/.node-version",
+      "status": "??",
+      "unit": "ui-workflows",
+      "generated": false,
+      "sha256": "45507e6d96329a845faa642c0f485313bcb2ca1e08b043589cde4ddd15969cd6"
+    },
+    {
+      "path": "ui/e2e/automation-readiness.spec.ts",
+      "status": "??",
+      "unit": "ui-workflows",
+      "generated": false,
+      "sha256": "1b8eb64302d6f6beb10147ad588e3a3d25c7f9fb209458e1a34101ed81b6bb8f"
+    },
+    {
+      "path": "ui/e2e/collection-repositories.spec.ts",
+      "status": "??",
+      "unit": "ui-workflows",
+      "generated": false,
+      "sha256": "649379e9ae62b2711e261f5f8e04b0ce2d7588e4c42fef64b2c08fae8ae0a37f"
+    },
+    {
+      "path": "ui/e2e/dashboard-evidence.spec.ts",
+      "status": "??",
+      "unit": "ui-workflows",
+      "generated": false,
+      "sha256": "c5ba1a80c65b2e9587a983421cf04c69670f912f4c99d0ee3cc70b3f2c6f6f76"
+    },
+    {
+      "path": "ui/e2e/repository-workspace.spec.ts",
+      "status": "??",
+      "unit": "ui-workflows",
+      "generated": false,
+      "sha256": "4be53a510699092fcbfc5b12499af9bce68fc234c9bc0eb431cdc7c3136ee3ac"
+    },
+    {
+      "path": "ui/e2e/scan-findings.spec.ts",
+      "status": "??",
+      "unit": "ui-workflows",
+      "generated": false,
+      "sha256": "3421a6a2ff03a52902326b0ee224e0d83f111350a3f4f491e378e4f1e111e3d6"
+    },
+    {
+      "path": "ui/e2e/scan-preparation.spec.ts",
+      "status": "??",
+      "unit": "ui-workflows",
+      "generated": false,
+      "sha256": "1d22b284a153ede182d0aec3b3cf71399ef1ef1e1661e743e5b66f4cd6e01acb"
+    },
+    {
+      "path": "ui/e2e/scheduling.spec.ts",
+      "status": "??",
+      "unit": "ui-workflows",
+      "generated": false,
+      "sha256": "cc4ec49c3237689d22fe1b9991920177ec763f82599baa1b4b85ce28d0b1f17e"
+    },
+    {
+      "path": "ui/e2e/test-coverage.spec.ts",
+      "status": "??",
+      "unit": "ui-workflows",
+      "generated": false,
+      "sha256": "bda0439c119bef758f795e56aac58145782380cd6cbdccd763c487616ce8657e"
+    },
+    {
+      "path": "ui/pnpm-workspace.yaml",
+      "status": "??",
+      "unit": "ui-workflows",
+      "generated": false,
+      "sha256": "d2a1557fda7636875de19afb3b21504bcd71927b9aeb8907bbea847dc4711ba8"
+    },
+    {
+      "path": "ui/src/components/fleet/dashboard-evidence.tsx",
+      "status": "??",
+      "unit": "ui-workflows",
+      "generated": false,
+      "sha256": "3582811a92e159040d26c6a4ce9e3411faf97acdf10246234473c299cd25cf7b"
+    },
+    {
+      "path": "ui/src/components/repos/test-coverage.tsx",
+      "status": "??",
+      "unit": "ui-workflows",
+      "generated": false,
+      "sha256": "784a110bd3838e6eeddb955206e1a7640cfd5eef04eb114805438fd4d2ef5677"
+    },
+    {
+      "path": "ui/src/lib/api.test.ts",
+      "status": "??",
+      "unit": "ui-workflows",
+      "generated": false,
+      "sha256": "2bddd9d00ca6a271f7f1169c53d36aa1828f736def1da7e4141e4a7888f478e7"
+    },
+    {
+      "path": "ui/src/lib/ci-workflow.test.ts",
+      "status": "??",
+      "unit": "ui-workflows",
+      "generated": false,
+      "sha256": "e5ce1f1faabab132bac971f5040c60ef1f475c5a1f3754426e2a5e888a1c84d9"
+    },
+    {
+      "path": "ui/src/lib/ci-workflow.ts",
+      "status": "??",
+      "unit": "ui-workflows",
+      "generated": false,
+      "sha256": "424967cdc185c6236849ca05420bfc0c5ed02061e84bd5a1a700736d3346ef33"
+    }
+  ]
+}

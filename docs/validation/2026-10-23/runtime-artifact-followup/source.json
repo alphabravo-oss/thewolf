@@ -1,0 +1,18 @@
+{
+  "head": "23b64ce09c569b7f49c465b53573e40c791b6fc5",
+  "state": "uncommitted working tree; not deployed; later than r5 image qualification",
+  "files": {
+    "internal/setup/scanners/scanners.go": "99c80125a1f927ed1ee9307d37e277fa0b8a5748642fe5b5a0d2d001be2dca0a",
+    "internal/setup/scanners/scanners_test.go": "452e3d77ca9a78792f10561f7bbeae35f5655cbdca21e6c50a93accca0ccdde6",
+    "internal/serve/serve.go": "efc90dff031cb8237b0d8b603b657a3d472256f1cd614dcb8e3796be4eb6032f",
+    "cmd/wolf/main.go": "0e798467c96551e1a58de57761bfd22feaf4f9f2e16487d295c56d095734ee6b",
+    "cmd/wolf/scan_worker.go": "ab6cdd7a528759f8d90da78e8fd5c1e882b286c0d406ec9ad333afa55a298a7b",
+    "cmd/wolf/scan_worker_test.go": "8be06cc947a261f137e3240a8b92977ab282f4601f9edcf79716f0ba7934bfd9",
+    "internal/api/routes/scan_workers.go": "ee30b37f961c9a93fd1e3dda82d69af89c73625d857d28d795bf8ba1cb9b6653",
+    "internal/artifacts/artifacts.go": "98a6ca6186d8663294ba19df8f0bb2919c4df7e1e3b01c3354bc2e42fbc0aea1",
+    "internal/artifacts/artifacts_test.go": "5fcee02c9cf175e25a6f3b2ef1fa4a8a4d9107bdcc6205ad47642a174b7a80ec",
+    "internal/api/routes/scans.go": "d1a7adcac35a0c5bf8bcd7d2d4e679a3b9c8e1337236af0c964e83876fd9c808",
+    "internal/api/routes/scans_test.go": "702fd4171c152c43cdc9416cf7e013b9189d6e3b3b16fc841523e156fc2b0984",
+    "scanners/scanner-lock.yaml": "5cd15f051f6d37e869bd7e2f28c5bc17bfb13dfe7583fb9d25ccfdb11645c630"
+  }
+}

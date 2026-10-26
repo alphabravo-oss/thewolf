@@ -1,0 +1,18 @@
+12:00AM WRN rate limit exceeded ip=10.0.0.1 path=/
+12:00AM WRN rate limit exceeded ip=10.0.0.1 path=/
+12:00AM WRN rate limit exceeded ip=10.0.0.1 path=/
+12:00AM WRN rate limit exceeded ip=10.0.0.1 path=/
+12:00AM WRN rate limit exceeded ip=10.0.0.1 path=/
+12:00AM WRN token rate limit exceeded path=/ token_id=10.0.0.1
+12:00AM WRN token rate limit exceeded path=/ token_id=10.0.0.1
+12:00AM WRN token rate limit exceeded path=/ token_id=10.0.0.1
+12:00AM WRN token rate limit exceeded path=/ token_id=10.0.0.1
+12:00AM WRN token rate limit exceeded path=/ token_id=10.0.0.1
+--- FAIL: TestRateLimiterRecoveryDuringTraffic (0.00s)
+    --- FAIL: TestRateLimiterRecoveryDuringTraffic/IP (0.00s)
+        ratelimit_recovery_test.go:56: status=429 want=204
+    --- FAIL: TestRateLimiterRecoveryDuringTraffic/token (0.00s)
+        ratelimit_recovery_test.go:56: status=429 want=204
+FAIL
+FAIL	github.com/alphabravocompany/thewolf/internal/api/middleware	0.005s
+FAIL

@@ -1,0 +1,22 @@
+{
+  "container_id": "d2a80dab7ba27d7cb9be814912cd957fd0ddfb896cfd029ab4554fb9727bb5e5",
+  "image_reference": "postgres@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873",
+  "image_id": "sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873",
+  "ports": {
+    "5432/tcp": [
+      {
+        "HostIp": "127.0.0.1",
+        "HostPort": "32781"
+      }
+    ]
+  },
+  "started_at": "2026-10-23T12:14:01.35789218Z",
+  "purpose": "Disposable PostgreSQL contract/full-race verification; loopback ephemeral port, fixture trust auth; no production changes",
+  "dsn": "postgres://postgres@127.0.0.1:32781/postgres?sslmode=disable",
+  "contracts": "contracts.txt",
+  "full_suite": "race.txt",
+  "final_suite": "final-race.txt",
+  "cleanup_exit_code": 0,
+  "cleanup_output": "wolf-plan-scan-recovery-pg-20261023",
+  "captured_at": "2026-10-23T12:23:49.905122+00:00"
+}

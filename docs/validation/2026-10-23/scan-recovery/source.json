@@ -1,0 +1,30 @@
+{
+  "head": "23b64ce09c569b7f49c465b53573e40c791b6fc5",
+  "state": "Uncommitted working tree; not deployed; newer than qualified images",
+  "go_version": "go version go1.27.3 linux/amd64",
+  "git_version": "git version 2.53.0",
+  "files": {
+    "internal/api/routes/scans.go": "64bfe154d0e96ff9e1f8339854274dbe51a6175b7ab32ecdae151626c02edc16",
+    "internal/api/routes/scan_source_recovery_test.go": "7de2a6453effcc80e0847bf92b0db002e71c381f55e2515d411719869e3f60a1",
+    "internal/scanjob/worker.go": "e0793dfe48b30e4c9e0fa9945e957d2a951561c5c3940446351908d3a4d7d943",
+    "internal/scanjob/worker_test.go": "9bf702ad6aaaa4368cc192825951f7d8557708daeb355c59dcafb46f4bb4040d",
+    "internal/scantarget/resolver.go": "a02241f6293aea33fb1219731fd381b6b0aa95ea2d3f4dff96d191b40b9713dc",
+    "internal/scantarget/resolver_test.go": "8255c15c7c7fd292a5fa4a132f3fce079b9205a1d86be11f06059f0a016a8589",
+    "internal/scantarget/digest_framing_test.go": "b4779cc89c730d87d691d93000a61be07ff8d5845e038789c9322db38a0d1e2d",
+    "internal/scantarget/digest_unix_test.go": "5376aab5d573742f0b6dafb3071ce5b5bdcef3e0362d106b9f97ffa1d5b1fc15",
+    "internal/scantarget/git.go": "607bf81ae9c2bb78ba351b6efae7c2414172ba8f1ad170aee6403fd5371d4825",
+    "internal/scantarget/git_test.go": "e691de5a615e7c3dc648cc33f27de5e5e54f96a4dd341f829cba7c0a61c55619",
+    "internal/scantarget/github.go": "0c001399976d031bbe76fc3da31cdab42f187bf11dfd5b069f5a1f330bc762de",
+    "internal/scantarget/github_test.go": "1dac9f4987f0ebdee5d1a2a7a3770632590e9045406b5fd829f8ac733493639e",
+    "internal/db/store.go": "a7e5b42963a7f97b93dffc09c320dddf75b89a99ca9de49a977aa433cd573b71",
+    "internal/db/sqlite_scanqueue.go": "5d98717b21827e287f20ce36620a37ebc945fd0f64633d0d6fd137237bfd5dec",
+    "internal/db/postgres_scanqueue.go": "bbb63dd47712b2212eddb00688c57d7cb2ebed56f952cb486f70b4378f22081b",
+    "internal/db/scan_recovery_evidence_test.go": "c189a119b967158db620734e7339ead45542c70b362ee18a1a661d41c2ef14d9",
+    "docs/PLAN.md": "db499e3258a967b527dbf98be45c98fad17e470d4dd08b5d16f7f7b6591e2e28",
+    "docs/scan-isolation.md": "d2f28fa331fe8310adbbbf3007ca0b4ec2b440bed03b2b98c8208cf8e3b5eb16",
+    "CHANGELOG.md": "507bc900689397bcefe892207e897d87aeb590a360171f64c93aae90573cc6b9",
+    "scanners/scanner-lock.yaml": "2447d7445e205ada52d6b99a4dc8c323ad22c56c8480c0791662302dd3335988"
+  },
+  "scanner_lock": "sha256:1762dd90a9c8807a2090bdfb2697d1e83262fbdeb1866a866239c5a9bf15e3e7",
+  "definition_digest": "sha256:899e5a4018e9fe1a71a5750a51f73ae418d2326d903be962f78e0221ea7ea943"
+}

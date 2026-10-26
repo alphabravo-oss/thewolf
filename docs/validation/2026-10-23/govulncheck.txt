@@ -1,0 +1,245 @@
+Fetching vulnerabilities from the database...
+
+Checking the code against the vulnerabilities...
+
+The package pattern matched the following 150 root packages:
+  github.com/alphabravocompany/thewolf/internal/scannerbuild
+  github.com/alphabravocompany/thewolf/scanners
+  github.com/alphabravocompany/thewolf/internal/scannertools/manifest
+  github.com/alphabravocompany/thewolf/internal/scannerquality
+  github.com/alphabravocompany/thewolf/internal/scannertools/httpcache
+  github.com/alphabravocompany/thewolf/internal/scannertools/registryauth
+  github.com/alphabravocompany/thewolf/internal/scannertools/lock
+  github.com/alphabravocompany/thewolf/internal/scannerreproducibility
+  github.com/alphabravocompany/thewolf/internal/scannertools/docs
+  github.com/alphabravocompany/thewolf/internal/scannertools/ospackages
+  github.com/alphabravocompany/thewolf/internal/models
+  github.com/alphabravocompany/thewolf/internal/plugin
+  github.com/alphabravocompany/thewolf/internal/plugin/container
+  github.com/alphabravocompany/thewolf/internal/scannertools/validate
+  github.com/alphabravocompany/thewolf/plugins/additional
+  github.com/alphabravocompany/thewolf/plugins/container
+  github.com/alphabravocompany/thewolf/plugins/cpp
+  github.com/alphabravocompany/thewolf/plugins/docs
+  github.com/alphabravocompany/thewolf/plugins/general
+  github.com/alphabravocompany/thewolf/plugins/go
+  github.com/alphabravocompany/thewolf/plugins/infra
+  github.com/alphabravocompany/thewolf/plugins/javascript
+  github.com/alphabravocompany/thewolf/plugins/php
+  github.com/alphabravocompany/thewolf/plugins/python
+  github.com/alphabravocompany/thewolf/plugins/ruby
+  github.com/alphabravocompany/thewolf/plugins/rust
+  github.com/alphabravocompany/thewolf/plugins/sbom
+  github.com/alphabravocompany/thewolf/plugins/security
+  github.com/alphabravocompany/thewolf/plugins/sql
+  github.com/alphabravocompany/thewolf/plugins/swift
+  github.com/alphabravocompany/thewolf/plugins
+  github.com/alphabravocompany/thewolf/cmd/scannertools
+  github.com/alphabravocompany/thewolf/internal/ai
+  github.com/alphabravocompany/thewolf/internal/wolflog
+  github.com/alphabravocompany/thewolf/internal/api/response
+  github.com/alphabravocompany/thewolf/internal/auth/apikey
+  github.com/alphabravocompany/thewolf/internal/auth
+  github.com/alphabravocompany/thewolf/internal/scannerrelease
+  github.com/alphabravocompany/thewolf/internal/scannertrace
+  github.com/alphabravocompany/thewolf/internal/api/middleware
+  github.com/alphabravocompany/thewolf/internal/api/sse
+  github.com/alphabravocompany/thewolf/internal/artifacts
+  github.com/alphabravocompany/thewolf/internal/finding/identity
+  github.com/alphabravocompany/thewolf/internal/finding/diff
+  github.com/alphabravocompany/thewolf/internal/scan/coverage
+  github.com/alphabravocompany/thewolf/internal/finding/gates
+  github.com/alphabravocompany/thewolf/internal/scannerpolicy
+  github.com/alphabravocompany/thewolf/internal/scannerbundle
+  github.com/alphabravocompany/thewolf/internal/scannersigning
+  github.com/alphabravocompany/thewolf/internal/db
+  github.com/alphabravocompany/thewolf/internal/finding/knowledge
+  github.com/alphabravocompany/thewolf/internal/finding/sarifio
+  github.com/alphabravocompany/thewolf/internal/scan/suppress
+  github.com/alphabravocompany/thewolf/internal/finding/suppression
+  github.com/alphabravocompany/thewolf/internal/fix/profile
+  github.com/alphabravocompany/thewolf/internal/secrets
+  github.com/alphabravocompany/thewolf/internal/fix/auth
+  github.com/alphabravocompany/thewolf/internal/fix/fixstore
+  github.com/alphabravocompany/thewolf/internal/fix/install
+  github.com/alphabravocompany/thewolf/internal/fix/console
+  github.com/alphabravocompany/thewolf/pkg/fixengine
+  github.com/alphabravocompany/thewolf/internal/fix/engine
+  github.com/alphabravocompany/thewolf/internal/fix/git
+  github.com/alphabravocompany/thewolf/internal/fix/lineage
+  github.com/alphabravocompany/thewolf/internal/repo
+  github.com/alphabravocompany/thewolf/internal/sshclient
+  github.com/alphabravocompany/thewolf/internal/remote
+  github.com/alphabravocompany/thewolf/internal/scantarget
+  github.com/alphabravocompany/thewolf/internal/fix/workspace
+  github.com/alphabravocompany/thewolf/internal/github
+  github.com/alphabravocompany/thewolf/internal/fix/writability
+  github.com/alphabravocompany/thewolf/internal/prompt
+  github.com/alphabravocompany/thewolf/internal/scan/detector
+  github.com/alphabravocompany/thewolf/internal/scan/mapper
+  github.com/alphabravocompany/thewolf/internal/scan/enricher
+  github.com/alphabravocompany/thewolf/internal/scan/report
+  github.com/alphabravocompany/thewolf/internal/scan/planner
+  github.com/alphabravocompany/thewolf/internal/scannerregistry
+  github.com/alphabravocompany/thewolf/internal/scannerruntime
+  github.com/alphabravocompany/thewolf/internal/scan/runner
+  github.com/alphabravocompany/thewolf/internal/scan/scorer
+  github.com/alphabravocompany/thewolf/internal/scannerpipeline
+  github.com/alphabravocompany/thewolf/internal/scannercontrol
+  github.com/alphabravocompany/thewolf/internal/scannercustombuildworker
+  github.com/alphabravocompany/thewolf/internal/scannerfeature
+  github.com/alphabravocompany/thewolf/internal/scannerobservability
+  github.com/alphabravocompany/thewolf/internal/scannertools/latest
+  github.com/alphabravocompany/thewolf/internal/scannerdiscovery
+  github.com/alphabravocompany/thewolf/internal/scannerrollout
+  github.com/alphabravocompany/thewolf/internal/scannerruntime/kubernetes
+  github.com/alphabravocompany/thewolf/internal/scannertools/status
+  github.com/alphabravocompany/thewolf/internal/setup
+  github.com/alphabravocompany/thewolf/internal/setup/scanners
+  github.com/alphabravocompany/thewolf/pkg/authprovider
+  github.com/alphabravocompany/thewolf/pkg/control
+  github.com/alphabravocompany/thewolf/pkg/edition
+  github.com/alphabravocompany/thewolf/pkg/entitlement
+  github.com/alphabravocompany/thewolf/pkg/intelligence
+  github.com/alphabravocompany/thewolf/pkg/license
+  github.com/alphabravocompany/thewolf/pkg/pluginapi
+  github.com/alphabravocompany/thewolf/pkg/verification
+  github.com/alphabravocompany/thewolf/internal/api/routes
+  github.com/alphabravocompany/thewolf/internal/cli
+  github.com/alphabravocompany/thewolf/internal/enrich
+  github.com/alphabravocompany/thewolf/internal/fix/qualification
+  github.com/alphabravocompany/thewolf/internal/fix/budget
+  github.com/alphabravocompany/thewolf/internal/fix/hygiene
+  github.com/alphabravocompany/thewolf/internal/fix/pr
+  github.com/alphabravocompany/thewolf/internal/fix/verify
+  github.com/alphabravocompany/thewolf/internal/fix/orchestrator
+  github.com/alphabravocompany/thewolf/internal/fix/wiring
+  github.com/alphabravocompany/thewolf/internal/fix/worker
+  github.com/alphabravocompany/thewolf/internal/scanjob
+  github.com/alphabravocompany/thewolf/internal/scanneralertworker
+  github.com/alphabravocompany/thewolf/internal/scannerdiscoveryworker
+  github.com/alphabravocompany/thewolf/internal/scannergit
+  github.com/alphabravocompany/thewolf/internal/scannernotification
+  github.com/alphabravocompany/thewolf/internal/scannernotificationworker
+  github.com/alphabravocompany/thewolf/internal/scannerproposalworker
+  github.com/alphabravocompany/thewolf/internal/scannerproposal
+  github.com/alphabravocompany/thewolf/internal/scannerregistryworker
+  github.com/alphabravocompany/thewolf/internal/scannerreleaseworkspace
+  github.com/alphabravocompany/thewolf/internal/scannerreleaseworker
+  github.com/alphabravocompany/thewolf/internal/scannerreleasebackend
+  github.com/alphabravocompany/thewolf/internal/scannerschedule
+  github.com/alphabravocompany/thewolf/internal/scannerreleasescheduler
+  github.com/alphabravocompany/thewolf/internal/api/openapi
+  github.com/alphabravocompany/thewolf/internal/api
+  github.com/alphabravocompany/thewolf/internal/controlbind
+  github.com/alphabravocompany/thewolf/internal/serve
+  github.com/alphabravocompany/thewolf/cmd/wolf
+  github.com/alphabravocompany/thewolf/internal/scannerreleaseadapter
+  github.com/alphabravocompany/thewolf/cmd/wolf-scanner-release-fixed-adapter
+  github.com/alphabravocompany/thewolf/cmd/wolf-scanner-release-integration-adapter
+  github.com/alphabravocompany/thewolf/cmd/wolf-scanner-release-quality-adapter
+  github.com/alphabravocompany/thewolf/internal/fix
+  github.com/alphabravocompany/thewolf/internal/fix/planner
+  github.com/alphabravocompany/thewolf/internal/fix/validator
+  github.com/alphabravocompany/thewolf/internal/scan/tui
+  github.com/alphabravocompany/thewolf/internal/scannerbuild/cmd/synccontext
+  github.com/alphabravocompany/thewolf/internal/testutil/parsercontract
+  github.com/alphabravocompany/thewolf/pkg/cloud
+  github.com/alphabravocompany/thewolf/pkg/eventapi
+  github.com/alphabravocompany/thewolf/pkg/host
+  github.com/alphabravocompany/thewolf/pkg/packaging
+  github.com/alphabravocompany/thewolf/pkg/policyapi
+  github.com/alphabravocompany/thewolf/pkg/reportingapi
+  github.com/alphabravocompany/thewolf/pkg/scannerreleaseapi
+  github.com/alphabravocompany/thewolf/pkg/uiextension
+  github.com/alphabravocompany/thewolf/scanners/ci/discover
+Govulncheck scanned the following 66 modules and the go1.27.3 standard library:
+  github.com/alphabravocompany/thewolf
+  dario.cat/mergo@v1.0.2
+  github.com/ProtonMail/go-crypto@v1.4.1
+  github.com/aymanbagabas/go-osc52/v2@v2.0.1
+  github.com/boombuler/barcode@v1.1.0
+  github.com/charmbracelet/bubbletea@v1.3.10
+  github.com/charmbracelet/colorprofile@v0.4.3
+  github.com/charmbracelet/lipgloss@v1.1.0
+  github.com/charmbracelet/x/ansi@v0.11.7
+  github.com/charmbracelet/x/cellbuf@v0.0.15
+  github.com/charmbracelet/x/term@v0.2.2
+  github.com/clipperhouse/displaywidth@v0.11.0
+  github.com/clipperhouse/uax29/v2@v2.7.0
+  github.com/cloudflare/circl@v1.6.5
+  github.com/cyphar/filepath-securejoin@v0.7.0
+  github.com/emirpasic/gods@v1.18.1
+  github.com/go-chi/chi/v5@v5.4.0
+  github.com/go-chi/cors@v1.2.2
+  github.com/go-git/gcfg@v1.5.1-0.20230307220236-3a3c6141e376
+  github.com/go-git/go-billy/v5@v5.9.2
+  github.com/go-git/go-git/v5@v5.19.3
+  github.com/golang-jwt/jwt/v5@v5.3.1
+  github.com/golang/groupcache@v0.0.0-20241129210726-2c02b8208cf8
+  github.com/google/jsonschema-go@v0.4.3
+  github.com/google/uuid@v1.6.0
+  github.com/jackc/pgpassfile@v1.0.0
+  github.com/jackc/pgservicefile@v0.0.0-20240606120523-5a60cdf6a761
+  github.com/jackc/pgx/v5@v5.11.0
+  github.com/jackc/puddle/v2@v2.2.2
+  github.com/jbenet/go-context@v0.0.0-20150711004518-d14ea06fba99
+  github.com/jmoiron/sqlx@v1.4.0
+  github.com/kevinburke/ssh_config@v1.6.0
+  github.com/klauspost/compress@v1.20.3
+  github.com/lucasb-eyer/go-colorful@v1.4.1
+  github.com/mattn/go-colorable@v0.1.15
+  github.com/mattn/go-isatty@v0.0.24
+  github.com/mattn/go-runewidth@v0.0.27
+  github.com/mattn/go-sqlite3@v1.14.52
+  github.com/modelcontextprotocol/go-sdk@v1.8.0
+  github.com/muesli/ansi@v0.0.0-20230316100256-276c6243b2f6
+  github.com/muesli/cancelreader@v0.2.2
+  github.com/muesli/termenv@v0.16.0
+  github.com/pjbgf/sha1cd@v0.7.0
+  github.com/pquerna/otp@v1.5.0
+  github.com/rivo/uniseg@v0.4.7
+  github.com/robfig/cron/v3@v3.0.1
+  github.com/rs/zerolog@v1.35.1
+  github.com/segmentio/asm@v1.1.3
+  github.com/segmentio/encoding@v0.5.4
+  github.com/sergi/go-diff@v1.4.0
+  github.com/skeema/knownhosts@v1.3.2
+  github.com/spf13/cobra@v1.10.2
+  github.com/spf13/pflag@v1.0.10
+  github.com/ulikunitz/xz@v0.5.17
+  github.com/xanzy/ssh-agent@v0.3.3
+  github.com/xo/terminfo@v1.0.0
+  github.com/yosida95/uritemplate/v3@v3.0.2
+  golang.org/x/crypto@v0.58.0
+  golang.org/x/net@v0.60.0
+  golang.org/x/oauth2@v0.35.0
+  golang.org/x/sync@v0.24.0
+  golang.org/x/sys@v0.49.0
+  golang.org/x/text@v0.43.0
+  golang.org/x/time@v0.15.0
+  gopkg.in/warnings.v0@v0.1.2
+  gopkg.in/yaml.v3@v3.0.1
+
+=== Symbol Results ===
+
+No vulnerabilities found.
+
+=== Package Results ===
+
+No other vulnerabilities found.
+
+=== Module Results ===
+
+Vulnerability #1: GO-2026-5932
+    The golang.org/x/crypto/openpgp package is unmaintained, unsafe by design,
+    and has known security issues
+  More info: https://pkg.go.dev/vuln/GO-2026-5932
+  Module: golang.org/x/crypto
+    Found in: golang.org/x/crypto@v0.58.0
+    Fixed in: N/A
+
+Your code is affected by 0 vulnerabilities.
+This scan also found 0 vulnerabilities in packages you import and 1
+vulnerability in modules you require, but your code doesn't appear to call these
+vulnerabilities.

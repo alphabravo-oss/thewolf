@@ -1,0 +1,86 @@
+{
+  "captured_at": "2026-10-23T08:19:59.623933+00:00",
+  "qualification": "Local native AMD64 artifacts; neither signed registry publication nor production deployment. Runtime r5 contains schedule/idempotency fixes, lint cleanup and OS security upgrades. Engines r2 predates schedule/lint/OS changes; base predates idempotency/schedule fixes.",
+  "images": [
+    {
+      "role": "runtime",
+      "local_tag": "wolf:plan-20261023-r5",
+      "id": "sha256:11f7ec73bfb3cd7714e72631f577d25c4db64059255da7b520a4b1ece0ac8af3",
+      "repository_digests": [
+        "wolf@sha256:11f7ec73bfb3cd7714e72631f577d25c4db64059255da7b520a4b1ece0ac8af3"
+      ],
+      "platform": "linux/amd64",
+      "created": "2026-10-23T08:34:40.835856903Z",
+      "user": "wolf",
+      "labels": {
+        "org.opencontainers.image.description": "The Wolf Community. Source available, not OSI open source. 53 scanners.",
+        "org.opencontainers.image.licenses": "LicenseRef-Source-Available",
+        "org.opencontainers.image.source": "https://github.com/alphabravo-oss/thewolf",
+        "org.opencontainers.image.title": "The Wolf",
+        "org.opencontainers.image.vendor": "AlphaBravo"
+      },
+      "size_bytes": 66136243
+    },
+    {
+      "role": "scanner-default",
+      "local_tag": "wolf-scanners:plan-20261023",
+      "id": "sha256:7daf286f883b35cd4bfa1c7e5c43f368035e66878019b1a51f72e5a288403644",
+      "repository_digests": [
+        "wolf-scanners@sha256:7daf286f883b35cd4bfa1c7e5c43f368035e66878019b1a51f72e5a288403644"
+      ],
+      "platform": "linux/amd64",
+      "created": "2026-10-23T08:04:28.121064197Z",
+      "user": "wolf",
+      "labels": {
+        "org.opencontainers.image.description": "Language scanners for the Wolf code analysis engine",
+        "org.opencontainers.image.source": "https://github.com/alphabravo-oss/thewolf",
+        "org.opencontainers.image.title": "wolf-scanners",
+        "org.opencontainers.image.vendor": "AlphaBravo",
+        "org.opencontainers.image.version": "plan-20261023"
+      },
+      "size_bytes": 524584183
+    },
+    {
+      "role": "fixer-base",
+      "local_tag": "wolf-fixer:plan-20261023",
+      "id": "sha256:98ee6cd6410f4656280bb69b61f3981bd28496689c1e6defe5f58834b2fcfac1",
+      "repository_digests": [
+        "wolf-fixer@sha256:98ee6cd6410f4656280bb69b61f3981bd28496689c1e6defe5f58834b2fcfac1"
+      ],
+      "platform": "linux/amd64",
+      "created": "2026-10-23T08:06:49.066594645Z",
+      "user": "wolf",
+      "labels": {
+        "dev.wolf.fixer.auth-mode": "none",
+        "dev.wolf.fixer.variant": "base",
+        "org.opencontainers.image.description": "Autonomous remediation worker base for The Wolf",
+        "org.opencontainers.image.source": "https://github.com/alphabravo-oss/thewolf",
+        "org.opencontainers.image.title": "wolf-fixer",
+        "org.opencontainers.image.vendor": "AlphaBravo",
+        "org.opencontainers.image.version": "plan-20261023"
+      },
+      "size_bytes": 491703240
+    },
+    {
+      "role": "fixer-engines",
+      "local_tag": "wolf-fixer-engines:plan-20261023-r2",
+      "id": "sha256:52156fa78fba45fb900dbdf9885a4648933ff650bf14921471f954b50a409a14",
+      "repository_digests": [
+        "wolf-fixer-engines@sha256:52156fa78fba45fb900dbdf9885a4648933ff650bf14921471f954b50a409a14"
+      ],
+      "platform": "linux/amd64",
+      "created": "2026-10-23T08:18:02.323150015Z",
+      "user": "wolf",
+      "labels": {
+        "dev.wolf.fixer.auth-mode": "oauth-or-api-key",
+        "dev.wolf.fixer.variant": "engines",
+        "org.opencontainers.image.description": "Autonomous remediation worker base for The Wolf",
+        "org.opencontainers.image.source": "https://github.com/alphabravo-oss/thewolf",
+        "org.opencontainers.image.title": "wolf-fixer",
+        "org.opencontainers.image.vendor": "AlphaBravo",
+        "org.opencontainers.image.version": "plan-20261023"
+      },
+      "size_bytes": 986302505
+    }
+  ]
+}

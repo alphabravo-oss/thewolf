@@ -1,0 +1,47 @@
+{
+  "tasks": 249,
+  "checked": 67,
+  "D07_1_complete": true,
+  "D07_complete": false,
+  "new_router_requests_excluding_setup": 18,
+  "table_proxy_cases": 18,
+  "additional_proxy_checks": [
+    "direct_TLS_and_IP_without_middleware",
+    "duplicate_header_values",
+    "internal_dispatch_context"
+  ],
+  "initial_router_reproduction_exit": 1,
+  "initial_repair_contracts_exit": 0,
+  "expanded_contracts_exit": 0,
+  "pre_dispatch_full_race_exit": 0,
+  "internal_dispatch_reproduction_exit": 1,
+  "final_focused_race_exit": 0,
+  "final_focused_packages": 3,
+  "full_go_race_exit": 0,
+  "full_go_race_packages": 136,
+  "uncached": true,
+  "full_suite_backends": [
+    "sqlite",
+    "postgres"
+  ],
+  "new_http_tests_backend": "sqlite",
+  "go_lint_exit": 0,
+  "scanner_sync_exit": 0,
+  "compose_render_exit": 0,
+  "compose_or_ingress_deployed": false,
+  "gosec_exit": 1,
+  "gosec_high_high_findings": 29,
+  "gosec_rules": {
+    "G704": 3,
+    "G703": 25,
+    "G702": 1
+  },
+  "gosec_analysis_errors": {},
+  "fixture_removed": true,
+  "source_files": 196,
+  "ui_changed": false,
+  "deployed": false,
+  "proxy_upgrade_configuration_required": true,
+  "diff_check_exit": 0,
+  "documentation_links_valid": true
+}

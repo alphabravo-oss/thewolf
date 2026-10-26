@@ -1,0 +1,34 @@
+ok  	github.com/alphabravocompany/thewolf/internal/artifacts	1.017s
+ok  	github.com/alphabravocompany/thewolf/internal/scan/report	1.035s
+3:17PM ERR API error code=artifact_error status=500
+3:17PM ERR API error code=artifact_error status=500
+3:17PM ERR API error code=server_error status=500
+--- FAIL: TestManifestUsesCurrentRevisionAndPreservesSavedDownload (0.39s)
+    artifact_snapshots_test.go:190: stale live manifest: 200 {
+          "scan_id": "a08c79a8-9f20-4e38-815a-ea19fd73f234",
+          "source": {
+            "kind": "local_path",
+            "repo_id": "96dbd2a8-dad4-4add-be0a-f0fd6ccf71c3",
+            "snapshot_strategy": "working_tree"
+          },
+          "repo_name": "test-repo",
+          "repo_path": "",
+          "started_at": "2026-10-23T15:17:24.880359968Z",
+          "finished_at": "2026-10-23T15:17:24.886451822Z",
+          "detection": {
+            "languages": [],
+            "test_files": 0,
+            "total_files": 0
+          },
+          "scanners_run": [],
+          "counts": {
+            "raw_findings": 1,
+            "after_dedupe": 1,
+            "suppressed": 0,
+            "visible": 1,
+            "high_severity": 1
+          }
+        }
+FAIL
+FAIL	github.com/alphabravocompany/thewolf/internal/api/routes	1.218s
+FAIL

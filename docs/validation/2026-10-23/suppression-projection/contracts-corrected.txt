@@ -1,0 +1,22 @@
+--- FAIL: TestLiveManifestCountsFollowPolicyWithoutLosingProducerMetadata (0.37s)
+    suppression_projection_test.go:109: revision refresh lost metadata: 200 {
+          "counts": {
+            "raw_findings": 7,
+            "after_dedupe": 1,
+            "suppressed": 0,
+            "visible": 1,
+            "high_severity": 1
+          },
+          "findings_revision": 2,
+          "producer_extension": {
+            "trace": "preserve"
+          },
+          "scan_id": "d5c1d766-c417-4497-b660-bc1a6d660079",
+          "scanners_run": [
+            "alpha"
+          ]
+        }
+FAIL
+FAIL	github.com/alphabravocompany/thewolf/internal/api/routes	1.901s
+ok  	github.com/alphabravocompany/thewolf/internal/scan/report	1.024s
+FAIL

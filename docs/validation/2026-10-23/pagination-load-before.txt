@@ -1,0 +1,32 @@
+=== RUN   TestFindingPageLoad
+=== RUN   TestFindingPageLoad/sqlite
+    finding_pages_test.go:279: repos_added=1 mode=scan_page first_read_ms=52.20 (OS/database caches not flushed)
+    finding_pages_test.go:289: repos_added=1 mode=scan_page concurrency=1 warm_samples=20 p50_ms=46.76 p95_ms=59.80 mean_allocated_bytes=254894 response_bytes=32884
+    finding_pages_test.go:279: repos_added=1 mode=scan_stats first_read_ms=45.44 (OS/database caches not flushed)
+    finding_pages_test.go:289: repos_added=1 mode=scan_stats concurrency=1 warm_samples=20 p50_ms=43.97 p95_ms=65.11 mean_allocated_bytes=18271 response_bytes=188
+    finding_pages_test.go:279: repos_added=1 mode=fleet_page first_read_ms=1214.50 (OS/database caches not flushed)
+    finding_pages_test.go:289: repos_added=1 mode=fleet_page concurrency=1 warm_samples=20 p50_ms=1180.45 p95_ms=1294.55 mean_allocated_bytes=1006759186 response_bytes=32884
+    finding_pages_test.go:279: repos_added=10 mode=scan_page first_read_ms=65.17 (OS/database caches not flushed)
+    finding_pages_test.go:289: repos_added=10 mode=scan_page concurrency=1 warm_samples=20 p50_ms=65.62 p95_ms=76.28 mean_allocated_bytes=253123 response_bytes=32686
+    finding_pages_test.go:279: repos_added=10 mode=scan_stats first_read_ms=31.62 (OS/database caches not flushed)
+    finding_pages_test.go:289: repos_added=10 mode=scan_stats concurrency=1 warm_samples=20 p50_ms=32.07 p95_ms=40.07 mean_allocated_bytes=17932 response_bytes=184
+    finding_pages_test.go:279: repos_added=10 mode=fleet_page first_read_ms=2494.32 (OS/database caches not flushed)
+    finding_pages_test.go:289: repos_added=10 mode=fleet_page concurrency=1 warm_samples=20 p50_ms=2340.85 p95_ms=2517.13 mean_allocated_bytes=1956919566 response_bytes=32689
+=== RUN   TestFindingPageLoad/postgres
+    finding_pages_test.go:279: repos_added=1 mode=scan_page first_read_ms=140.50 (OS/database caches not flushed)
+    finding_pages_test.go:289: repos_added=1 mode=scan_page concurrency=1 warm_samples=20 p50_ms=135.45 p95_ms=156.85 mean_allocated_bytes=240504 response_bytes=33584
+    finding_pages_test.go:279: repos_added=1 mode=scan_stats first_read_ms=53.71 (OS/database caches not flushed)
+    finding_pages_test.go:289: repos_added=1 mode=scan_stats concurrency=1 warm_samples=20 p50_ms=55.60 p95_ms=72.93 mean_allocated_bytes=23653 response_bytes=188
+    finding_pages_test.go:279: repos_added=1 mode=fleet_page first_read_ms=2352.70 (OS/database caches not flushed)
+    finding_pages_test.go:289: repos_added=1 mode=fleet_page concurrency=1 warm_samples=20 p50_ms=2332.75 p95_ms=2432.12 mean_allocated_bytes=1013747676 response_bytes=33584
+    finding_pages_test.go:279: repos_added=10 mode=scan_page first_read_ms=35.90 (OS/database caches not flushed)
+    finding_pages_test.go:289: repos_added=10 mode=scan_page concurrency=1 warm_samples=20 p50_ms=25.15 p95_ms=34.65 mean_allocated_bytes=240225 response_bytes=33386
+    finding_pages_test.go:279: repos_added=10 mode=scan_stats first_read_ms=9.72 (OS/database caches not flushed)
+    finding_pages_test.go:289: repos_added=10 mode=scan_stats concurrency=1 warm_samples=20 p50_ms=9.11 p95_ms=20.16 mean_allocated_bytes=23784 response_bytes=184
+    finding_pages_test.go:279: repos_added=10 mode=fleet_page first_read_ms=5149.89 (OS/database caches not flushed)
+    finding_pages_test.go:289: repos_added=10 mode=fleet_page concurrency=1 warm_samples=20 p50_ms=5090.54 p95_ms=5276.19 mean_allocated_bytes=1969886426 response_bytes=33389
+--- PASS: TestFindingPageLoad (249.53s)
+    --- PASS: TestFindingPageLoad/sqlite (80.38s)
+    --- PASS: TestFindingPageLoad/postgres (169.15s)
+PASS
+ok  	github.com/alphabravocompany/thewolf/internal/db	249.601s

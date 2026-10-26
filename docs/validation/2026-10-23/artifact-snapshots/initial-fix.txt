@@ -1,0 +1,5 @@
+ok  	github.com/alphabravocompany/thewolf/internal/artifacts	0.003s
+# github.com/alphabravocompany/thewolf/internal/api/routes [github.com/alphabravocompany/thewolf/internal/api/routes.test]
+internal/api/routes/scans.go:3138:86: undefined: bytes
+FAIL	github.com/alphabravocompany/thewolf/internal/api/routes [build failed]
+FAIL

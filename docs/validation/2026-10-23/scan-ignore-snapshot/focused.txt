@@ -1,0 +1,15 @@
+9:52PM ERR API error code=artifact_error status=500
+9:52PM ERR API error code=artifact_error status=500
+9:52PM ERR API error code=server_error status=500
+9:52PM ERR API error code=server_error status=500
+9:52PM ERR API error code=suppression_error status=500
+9:52PM ERR API error code=suppression_error status=500
+--- FAIL: TestIgnoreErrorsRejectNewScansWithoutChangingCompletedViews (0.39s)
+    ignore_errors_test.go:67: completed view reread invalid ignore /api/findings: 500 {"error":{"code":"suppression_error","message":"failed to evaluate suppression rules"},"type":"about:blank","title":"suppression_error","status":500,"detail":"failed to evaluate suppression rules"}
+    ignore_errors_test.go:72: preview with frozen policy: 500 {"error":{"code":"suppression_error","message":"failed to evaluate suppression rules"},"type":"about:blank","title":"suppression_error","status":500,"detail":"failed to evaluate suppression rules"}
+FAIL
+FAIL	github.com/alphabravocompany/thewolf/internal/api/routes	6.007s
+ok  	github.com/alphabravocompany/thewolf/internal/db	2.992s
+ok  	github.com/alphabravocompany/thewolf/internal/scan/suppress	1.064s
+ok  	github.com/alphabravocompany/thewolf/internal/scan/report	1.045s
+FAIL

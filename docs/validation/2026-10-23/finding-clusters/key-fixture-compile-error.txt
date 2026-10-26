@@ -1,0 +1,4 @@
+# github.com/alphabravocompany/thewolf/internal/finding/identity [github.com/alphabravocompany/thewolf/internal/finding/identity.test]
+internal/finding/identity/identity_test.go:175:22: undefined: models.CategorySecret
+FAIL	github.com/alphabravocompany/thewolf/internal/finding/identity [build failed]
+FAIL

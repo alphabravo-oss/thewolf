@@ -1,0 +1,32 @@
+{
+  "Id": "ee6a80bc69cf884120f6072a5be213b61a472df9653feedce7f59daa303dce46",
+  "Name": "/wolf-plan-scan-ignore-pg-20261023",
+  "Image": "sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873",
+  "Mounts": [
+    {
+      "Type": "volume",
+      "Name": "4ad117bc29b606368ef1ca7d7cf63fa693b0466ed45d95e388829be780406f86",
+      "Source": "/var/lib/docker/volumes/4ad117bc29b606368ef1ca7d7cf63fa693b0466ed45d95e388829be780406f86/_data",
+      "Destination": "/var/lib/postgresql",
+      "Driver": "local",
+      "Mode": "",
+      "RW": true,
+      "Propagation": ""
+    }
+  ],
+  "labels": {
+    "wolf.plan.fixture": "scan-ignore-20261023"
+  },
+  "ports": {
+    "5432/tcp": [
+      {
+        "HostIp": "127.0.0.1",
+        "HostPort": "32810"
+      }
+    ]
+  },
+  "cleanup": {
+    "removed_container_and_anonymous_volumes": true,
+    "time": "2026-10-23T22:20:16.938301+00:00"
+  }
+}
