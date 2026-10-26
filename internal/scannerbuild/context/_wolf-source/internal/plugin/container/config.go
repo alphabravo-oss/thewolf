@@ -286,6 +286,9 @@ func (c *Config) ImageFor(tool string) string {
 	if img, ok := c.ImageOverrides[tool]; ok && img != "" {
 		return img
 	}
+	if img := externalImage(tool); img != "" {
+		return img
+	}
 	return c.Image
 }
 
@@ -305,7 +308,7 @@ func (c *Config) HasDedicatedImage(tool string) bool {
 	if img, ok := c.ImageOverrides[tool]; ok && img != "" {
 		return true
 	}
-	return false
+	return externalImage(tool) != ""
 }
 
 // UpstreamSpec returns the upstream image spec for the named tool, or
@@ -348,6 +351,9 @@ func (c *Config) AllImages() []string {
 	}
 	for _, spec := range c.UpstreamTools {
 		add(spec.Image)
+	}
+	for _, img := range externalImageList() {
+		add(img)
 	}
 	return out
 }
