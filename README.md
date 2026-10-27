@@ -353,6 +353,4 @@ A single Go binary serves the API, the web console, and the embedded documentati
 
 Apache License 2.0. See [`LICENSE`](LICENSE), [`LICENSE_POLICY.md`](LICENSE_POLICY.md) and [`NOTICE`](NOTICE). Copyright © 2026 AlphaBravo, Inc.
 
-Community evaluation is capped at 5 repositories, 3 users, and 1 concurrent scan worker. Set `WOLF_COMMUNITY_LIMITS=0` to lift it; a signed Enterprise license also lifts it.
-
 <p align="center"><sub>The Wolf — built by <a href="https://alphabravo.io">AlphaBravo</a>.</sub></p>

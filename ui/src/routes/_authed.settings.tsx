@@ -43,7 +43,7 @@ import { formatBytes } from "@/lib/utils";
 import { useSettingsMap } from "@/lib/flags";
 import { FixerSettings } from "@/components/fixes/fixer-settings";
 import { useRuntimeCapabilities } from "@/lib/runtime-capabilities";
-import { COMMUNITY_LIMIT_COPY, isCommunityLimit, safeErrorMessage } from "@/lib/safe-display";
+import { safeErrorMessage } from "@/lib/safe-display";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PageHeader } from "@/components/ui/page";
 import { LicenseTab } from "@/components/license-settings";
@@ -2242,9 +2242,7 @@ function UsersTab() {
       qc.invalidateQueries({ queryKey: ["users"] });
     },
     onError: (e) =>
-      toast.error(
-        isCommunityLimit(e) ? COMMUNITY_LIMIT_COPY : e instanceof Error ? e.message : "Create failed",
-      ),
+      toast.error(e instanceof Error ? e.message : "Create failed"),
   });
   const setRole = useMutation({
     mutationFn: ({ id, role }: { id: string; role: string }) =>

@@ -92,7 +92,6 @@ func GetEdition(w http.ResponseWriter, r *http.Request) {
 			"contract_version": edition.ContractVersion,
 			"modules":          edition.Default.Modules(),
 			"entitlements":     granted,
-			"limits":           entitlement.CommunityLimits(),
 			"mcp":              map[string]any{"enabled": mcpEnabled()},
 			"ui_routes":        visibleUIRoutes(checker),
 			"isolation":        map[string]any{"profile": iso, "scanner_network": netw},

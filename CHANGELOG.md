@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- Remove the Community evaluation caps (5 repositories, 3 users, 1 concurrent scan
+  worker). Community is uncapped; Enterprise is differentiated by capabilities, not
+  limits. `WOLF_COMMUNITY_LIMITS`, the `community_limit` error and the `limits` field
+  of `GET /api/edition` are gone.
+
 - License Community under Apache-2.0: add `LICENSE`, replace the source-available/BSL
   wording in `NOTICE`, `LICENSE_POLICY.md`, README, CONTRIBUTING and image metadata.
 

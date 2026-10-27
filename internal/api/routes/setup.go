@@ -93,9 +93,6 @@ func CreateSampleRepo(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if rejectCommunityLimit(w, r.Context(), h.Store, limitRepos) {
-		return
-	}
 	if err := ensureSampleRepo(r.Context(), dir); err != nil {
 		response.WriteError(w, http.StatusInternalServerError, "server_error", err.Error())
 		return
