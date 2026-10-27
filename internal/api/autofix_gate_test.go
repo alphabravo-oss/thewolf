@@ -10,6 +10,7 @@ import (
 
 func TestAutofixPublicExecutionGate(t *testing.T) {
 	srv, store, jwt := newTestServer(t)
+	grantRemediation(t)
 	read := createToken(t, srv, jwt, []string{apikey.ScopeReadFixes})
 	write := createToken(t, srv, jwt, []string{apikey.ScopeWriteFixes})
 	if value, err := store.GetSetting(t.Context(), "autofix_enabled"); err != nil || value != "false" {

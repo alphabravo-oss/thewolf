@@ -1,8 +1,18 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { installScannerApiMock } from "./scanner-api-mock";
+
+// AI remediation is an Enterprise capability; the UI reads it from /edition.
+async function editionWith(page: Page, remediation: boolean) {
+  await page.route(/\/api(?:\/v1)?\/edition$/, route => route.fulfill({ json: { data: {
+    edition: remediation ? "enterprise" : "community",
+    product: remediation ? "Wolf Enterprise" : "Wolf Community",
+    entitlements: { "enterprise.remediation": remediation },
+  } } }));
+}
 
 test("disabled autofix keeps review and cleanup accessible with role-aware setup @browser-matrix", async ({ page }) => {
   const state = await installScannerApiMock(page, { currentUser: { role: "user" } });
+  await editionWith(page, true);
   const job = { id: "fix-disabled", repo_id: "repo-disabled", status: "awaiting_review", pushed: false, result_branch: "wolf-fix/review", engine: "codex", error: "", summary: "{}", finding_ids: [], attempts: [], pause_reason: "", claimed_by: "" };
   let deleted = false;
   let resumed = false;
@@ -40,6 +50,7 @@ test("disabled autofix keeps review and cleanup accessible with role-aware setup
 
 test("agent failures stay distinct from disabled, unconfigured and empty states @browser-matrix", async ({ page }) => {
   await installScannerApiMock(page);
+  await editionWith(page, true);
   let settingsFailed = false;
   let enginesFailed = false;
   let jobsFailed = true;
@@ -75,6 +86,7 @@ test("agent failures stay distinct from disabled, unconfigured and empty states 
 
 test("verification failures cannot publish and PR failures remain actionable @browser-matrix", async ({ page }) => {
   await installScannerApiMock(page);
+  await editionWith(page, true);
   const job = { id: "fix-review", repo_id: "repo-review", status: "failed", pushed: false, result_branch: "wolf-fix/review", engine: "codex", error: "Verification image unavailable", summary: "{}", finding_ids: [], attempts: [] };
   await page.route(/\/api(?:\/v1)?\/settings$/, route => route.fulfill({ json: { data: { autofix_enabled: "true" } } }));
   await page.route(/\/api(?:\/v1)?\/repos\/repo-review$/, route => route.fulfill({ json: { data: { name: "Review repository", source_path: "example/repo" } } }));
@@ -114,6 +126,7 @@ test("verification failures cannot publish and PR failures remain actionable @br
 
 test("cancelled agents wait for the worker and retry cleanup without restarting @browser-matrix", async ({ page }) => {
   await installScannerApiMock(page);
+  await editionWith(page, true);
   const job = { id: "fix-cleanup", repo_id: "repo-cleanup", status: "cancelled", pause_reason: "cancellation_cleanup", claimed_by: "worker", pushed: false, result_branch: "wolf-fix/cleanup", engine: "codex", error: "", summary: "{}", finding_ids: [], attempts: [] };
   let deletes = 0;
   let restarted = false;
@@ -152,6 +165,7 @@ test("cancelled agents wait for the worker and retry cleanup without restarting 
 
 test("published agents retry workspace cleanup without republishing @browser-matrix", async ({ page }) => {
   await installScannerApiMock(page);
+  await editionWith(page, true);
   const job = { id: "fix-published", repo_id: "repo-published", scan_id: "scan-published", remediation_id: "rem-published", status: "succeeded", pushed: true, workspace_path: "/retained/clone", result_branch: "wolf-fix/published", engine: "codex", error: "workspace cleanup failed; recovery path retained: workspace locked", summary: JSON.stringify({ pr_url: "https://github.com/example/repo/pull/1" }), finding_ids: [], attempts: [] };
   const remediation = { id: "rem-published", state: "frozen", workspace_path: job.workspace_path };
   let cleanups = 0;
@@ -183,4 +197,13 @@ test("published agents retry workspace cleanup without republishing @browser-mat
   await expect(page.getByRole("alert")).toHaveCount(0);
   expect(cleanups).toBe(2);
   expect(republished).toBe(false);
+});
+
+test("Community shows AI fixing as an Enterprise feature @browser-matrix", async ({ page }) => {
+  await installScannerApiMock(page, { currentUser: { role: "admin" } });
+  await editionWith(page, false);
+  await page.route(/\/api(?:\/v1)?\/settings$/, route => route.fulfill({ json: { data: { autofix_enabled: "true" } } }));
+  await page.goto("/agents");
+  await expect(page.getByText(/Autonomous AI fixing is a Wolf Enterprise feature/)).toBeVisible();
+  await expect(page.getByRole("link", { name: "Fixes", exact: true })).toHaveCount(0);
 });

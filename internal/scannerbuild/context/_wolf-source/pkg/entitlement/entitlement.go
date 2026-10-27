@@ -18,6 +18,9 @@ const (
 	Verification = "enterprise.verification"
 	Tenancy      = "enterprise.tenancy"
 	Plugins      = "enterprise.plugins"
+	// Remediation is autonomous AI fixing: the fixer worker, its engines and
+	// the fix queue. Community scans and reports; Enterprise fixes.
+	Remediation  = "enterprise.remediation"
 	Compliance   = "enterprise.compliance"
 	Support      = "enterprise.support"
 	Packaging    = "enterprise.packaging"
@@ -39,7 +42,7 @@ func Catalog() []string {
 	return []string{
 		Scan, Fix, Factory,
 		Identity, Intelligence, Verification, Tenancy,
-		Plugins, Compliance, Support, Packaging, Integrations, Residency,
+		Plugins, Remediation, Compliance, Support, Packaging, Integrations, Residency,
 		CloudTenancy,
 	}
 }

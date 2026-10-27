@@ -2013,6 +2013,9 @@ func TestFindingTrends(t *testing.T) {
 
 func (e *testEnv) enableAutofix(t *testing.T) {
 	t.Helper()
+	// AI remediation is an Enterprise capability.
+	entitlement.SetActive(allowCap{cap: entitlement.Remediation})
+	t.Cleanup(func() { entitlement.SetActive(nil) })
 	if err := e.Store.SetSetting(context.Background(), "autofix_enabled", "true"); err != nil {
 		t.Fatalf("enable autofix: %v", err)
 	}
@@ -2659,9 +2662,7 @@ func TestScanHeaderAndResultExposeExecutionEvidence(t *testing.T) {
 func TestResumeFixOnlyPublishesPausedJobs(t *testing.T) {
 	env := setupTestEnv(t)
 	defer env.Store.Close()
-	if err := env.Store.SetSetting(t.Context(), "autofix_enabled", "true"); err != nil {
-		t.Fatal(err)
-	}
+	env.enableAutofix(t)
 	repoID := env.createRepo(t)
 	for _, tc := range []struct {
 		status, body string
