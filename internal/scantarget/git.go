@@ -125,7 +125,7 @@ func (r Resolver) prepareGit(ctx context.Context, repo *models.Repo, ref string)
 	if err != nil {
 		return Prepared{}, fmt.Errorf("create Git workspace: %w", err)
 	}
-	var env []string
+	env := gitpkg.CAEnv() // private-CA self-hosted servers
 	credentialCleanup := func() {}
 	if repo.CredentialSecretID != "" {
 		env, credentialCleanup, err = r.gitCredentialEnv(ctx, repo, host, canonical, dir, env)

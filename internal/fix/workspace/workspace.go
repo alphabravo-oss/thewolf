@@ -64,12 +64,12 @@ type Options struct {
 	Branch string
 	// BaseBranch is the scan's source branch. Empty preserves the checkout HEAD.
 	BaseBranch string
-	// Token is the GitHub token used for a clone-for-write. Required for github
-	// repos, ignored otherwise.
+	// Token is the forge token (GitHub or GitLab) used for a clone-for-write.
+	// Required for github, git and gitlab repos, ignored otherwise.
 	Token string
-	// CloneURL overrides the derived GitHub clone URL (host/owner/repo). When
-	// empty, it is derived from Repo.SourcePath as
-	// https://github.com/<owner>/<repo>.git. Mainly a test seam.
+	// CloneURL overrides the derived clone URL. When empty it is derived from
+	// Repo.SourcePath: https://github.com/<owner>/<repo>.git for GitHub, the
+	// validated https URL for git/gitlab sources. Mainly a test seam.
 	CloneURL string
 	// BaseDir is the parent directory for the worktree / clone. When empty,
 	// os.MkdirTemp's default (the OS temp dir) is used.
@@ -91,8 +91,10 @@ type Workspace struct {
 	// Cleanup. For a worktree it is the worktree dir's parent; for a clone it is
 	// the clone dir itself's parent.
 	tmpRoot string
-	// token is the GitHub token used for clone/push. Empty for local.
+	// token is the forge token used for clone/push. Empty for local.
 	token string
+	// username is the HTTPS username paired with token (forge specific).
+	username string
 	// defaultBranch is the repo's default branch; Push refuses to push it.
 	defaultBranch string
 	// verificationBase pins the pre-agent commit across commits and restarts.
@@ -163,8 +165,8 @@ func Prepare(ctx context.Context, opts Options) (*Workspace, error) {
 	switch opts.Repo.SourceType {
 	case models.SourceTypeLocal:
 		return prepareLocal(ctx, opts)
-	case models.SourceTypeGitHub:
-		return prepareGitHub(ctx, opts)
+	case models.SourceTypeGitHub, models.SourceTypeGit, models.SourceTypeGitLab:
+		return prepareClone(ctx, opts)
 	case models.SourceTypeSSH:
 		return nil, ErrSSHUnsupported
 	default:
@@ -210,7 +212,15 @@ func prepareLocal(ctx context.Context, opts Options) (*Workspace, error) {
 	return ws, nil
 }
 
-func prepareGitHub(ctx context.Context, opts Options) (*Workspace, error) {
+// tokenUsername is the HTTPS username each forge expects alongside a token.
+func tokenUsername(repo *models.Repo) string {
+	if repo != nil && (repo.SourceType == models.SourceTypeGit || repo.SourceType == models.SourceTypeGitLab) {
+		return "oauth2"
+	}
+	return "x-access-token"
+}
+
+func prepareClone(ctx context.Context, opts Options) (*Workspace, error) {
 	if opts.Token == "" {
 		if cache := cachedGitHubWorktree(opts.Repo); cache != "" {
 			local := *opts.Repo
@@ -219,23 +229,24 @@ func prepareGitHub(ctx context.Context, opts Options) (*Workspace, error) {
 			opts.Repo = &local
 			return prepareLocal(ctx, opts)
 		}
-		return nil, errors.New("workspace: github write-clone requires a token")
+		return nil, errors.New("workspace: write-clone requires a token")
 	}
 	cloneURL := opts.CloneURL
 	if cloneURL == "" {
-		derived, err := githubCloneURL(opts.Repo.SourcePath)
+		derived, err := cloneURLFor(ctx, opts.Repo)
 		if err != nil {
 			return nil, err
 		}
 		cloneURL = derived
 	}
+	username := tokenUsername(opts.Repo)
 	tmpRoot, err := mkTempRoot(opts.BaseDir)
 	if err != nil {
 		return nil, err
 	}
 	clonePath := filepath.Join(tmpRoot, "clone")
 
-	env, cleanup, err := githubAuthEnv(tmpRoot, opts.Token)
+	env, cleanup, err := tokenAuthEnv(tmpRoot, username, opts.Token)
 	if err != nil {
 		_ = os.RemoveAll(tmpRoot)
 		return nil, err
@@ -262,6 +273,7 @@ func prepareGitHub(ctx context.Context, opts Options) (*Workspace, error) {
 		kind:          KindClone,
 		tmpRoot:       tmpRoot,
 		token:         opts.Token,
+		username:      username,
 		defaultBranch: defaultBranchOf(opts.Repo),
 	}
 	if err := ws.pinVerificationBase(ctx, true); err != nil {
@@ -299,6 +311,7 @@ type workspaceMeta struct {
 	RepoRoot         string `json:"repo_root,omitempty"`
 	TmpRoot          string `json:"tmp_root"`
 	DefaultBranch    string `json:"default_branch,omitempty"`
+	Username         string `json:"username,omitempty"`
 	VerificationBase string `json:"verification_base,omitempty"`
 	RollbackBase     string `json:"rollback_base,omitempty"`
 }
@@ -319,7 +332,7 @@ func writeMeta(w *Workspace) error {
 	}
 	data, err := json.Marshal(workspaceMeta{
 		Path: w.path, Branch: w.branch, Kind: w.kind,
-		RepoRoot: w.repoRoot, TmpRoot: w.tmpRoot, DefaultBranch: w.defaultBranch,
+		RepoRoot: w.repoRoot, TmpRoot: w.tmpRoot, DefaultBranch: w.defaultBranch, Username: w.username,
 		VerificationBase: w.verificationBase,
 		RollbackBase:     w.rollbackBase,
 	})
@@ -363,6 +376,7 @@ func Open(path, token string) (*Workspace, error) {
 		repoRoot:         meta.RepoRoot,
 		tmpRoot:          tmpRoot,
 		token:            token,
+		username:         meta.Username,
 		defaultBranch:    meta.DefaultBranch,
 		verificationBase: meta.VerificationBase,
 		rollbackBase:     meta.RollbackBase,
@@ -435,7 +449,7 @@ func (w *Workspace) Push(ctx context.Context) (sha string, err error) {
 	var cleanup func()
 	if w.token != "" {
 		var cerr error
-		env, cleanup, cerr = githubAuthEnv(w.tmpRoot, w.token)
+		env, cleanup, cerr = tokenAuthEnv(w.tmpRoot, w.username, w.token)
 		if cerr != nil {
 			return "", cerr
 		}
@@ -777,11 +791,35 @@ func githubCloneURL(source string) (string, error) {
 	return fmt.Sprintf("https://github.com/%s/%s.git", owner, repo), nil
 }
 
-func githubAuthEnv(tmpRoot, token string) ([]string, func(), error) {
+// cloneURLFor derives the clone URL for a remote repo. GitHub sources are
+// rebuilt from owner/name; git and gitlab sources must be a plain https URL
+// that passes the shared Git network boundary (private hosts need
+// WOLF_GIT_ALLOWED_CIDRS).
+func cloneURLFor(ctx context.Context, repo *models.Repo) (string, error) {
+	if repo.SourceType == models.SourceTypeGitHub {
+		return githubCloneURL(repo.SourcePath)
+	}
+	canonical, host, err := scantarget.CanonicalGitURL(repo.SourcePath)
+	if err != nil {
+		return "", err
+	}
+	if !strings.HasPrefix(canonical, "https://") {
+		return "", errors.New("workspace: only https Git URLs can be fixed")
+	}
+	if err := scantarget.ValidateRemoteDestination(ctx, host); err != nil {
+		return "", err
+	}
+	return canonical, nil
+}
+
+func tokenAuthEnv(tmpRoot, username, token string) ([]string, func(), error) {
+	if username == "" {
+		username = "x-access-token"
+	}
 	askpass := filepath.Join(tmpRoot, "git-askpass.sh")
 	body := "#!/bin/sh\n" +
 		"case \"$1\" in\n" +
-		"*Username*) printf '%s\\n' 'x-access-token' ;;\n" +
+		"*Username*) printf '%s\\n' " + shellSingleQuote(username) + " ;;\n" +
 		"*Password*) printf '%s\\n' " + shellSingleQuote(token) + " ;;\n" +
 		"*) printf '\\n' ;;\n" +
 		"esac\n"
@@ -789,10 +827,10 @@ func githubAuthEnv(tmpRoot, token string) ([]string, func(), error) {
 		return nil, func() {}, fmt.Errorf("workspace: create git askpass helper: %w", err)
 	}
 	cleanup := func() { _ = os.Remove(askpass) }
-	return []string{
+	return append([]string{
 		"GIT_ASKPASS=" + askpass,
 		"GIT_TERMINAL_PROMPT=0",
-	}, cleanup, nil
+	}, gitpkg.CAEnv()...), cleanup, nil
 }
 
 func shellSingleQuote(s string) string {

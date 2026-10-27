@@ -3,11 +3,14 @@
 // indicator in the UI), it answers "can wolf actually write a fix branch to
 // this repo's source?" with a clear yes/no + reason.
 //
-// The three source kinds get three checks (design §8):
+// The source kinds get these checks (design §8):
 //
 //   - local  — the path is writable (W_OK) and is a git work tree.
 //   - github — a github_token secret exists, the token can push to the repo,
 //     and the repo isn't archived.
+//   - gitlab — a git/gitlab source with an https URL and a gitlab_token
+//     credential bound to its host (gitlab.com or self-hosted) whose role can
+//     push, and the project isn't archived.
 //   - ssh    — disabled in the production probes until remote workspace
 //     preparation is supported; an injected probe can check a remote node.
 //
@@ -20,11 +23,13 @@ package writability
 import (
 	"context"
 	"fmt"
+	"net"
 	"strings"
 
 	"github.com/alphabravocompany/thewolf/internal/db"
 	"github.com/alphabravocompany/thewolf/internal/models"
 	repocache "github.com/alphabravocompany/thewolf/internal/repo"
+	"github.com/alphabravocompany/thewolf/internal/scantarget"
 	"github.com/alphabravocompany/thewolf/internal/secrets"
 )
 
@@ -66,12 +71,25 @@ type SSHProbe interface {
 	CanPush(ctx context.Context, node *models.RemoteNode, remotePath string) (ok bool, reason string, err error)
 }
 
+// GitLabProjectInfo is what the preflight needs to know about a GitLab project.
+type GitLabProjectInfo struct {
+	CanPush       bool
+	Archived      bool
+	MergeRequests bool
+}
+
+// GitLabProbe asks a GitLab instance what the token can do on a project.
+type GitLabProbe interface {
+	ProjectInfo(ctx context.Context, host, token, project string) (GitLabProjectInfo, error)
+}
+
 // Probes bundles the three injectable probes. A zero Probes (all-nil) makes
 // Check return a clear "probe not configured" reason rather than panicking, so
 // the surface degrades safely if wired up incompletely.
 type Probes struct {
 	Local  LocalProbe
 	GitHub GitHubProbe
+	GitLab GitLabProbe
 	SSH    SSHProbe
 
 	// ParseGitHubSource splits a github source string into owner/repo. It is a
@@ -94,6 +112,8 @@ func Check(ctx context.Context, repo *models.Repo, store db.Store, probes Probes
 		return checkLocal(ctx, repo, probes)
 	case models.SourceTypeGitHub:
 		return checkGitHub(ctx, repo, store, probes)
+	case models.SourceTypeGit, models.SourceTypeGitLab:
+		return checkGitLab(ctx, repo, store, probes)
 	case models.SourceTypeSSH:
 		return checkSSH(ctx, repo, store, probes)
 	default:
@@ -158,6 +178,33 @@ func checkGitHub(ctx context.Context, repo *models.Repo, store db.Store, probes 
 		}
 	}
 	return Result{Writable: true, CanPush: true, Reason: "github token can push to this repository"}
+}
+
+func checkGitLab(ctx context.Context, repo *models.Repo, store db.Store, probes Probes) Result {
+	if probes.GitLab == nil {
+		return Result{Reason: "gitlab writability probe not configured"}
+	}
+	host, project, err := scantarget.ParseGitLabSource(repo.SourcePath)
+	if err != nil {
+		return Result{Reason: "only https GitLab project URLs can be fixed: " + err.Error()}
+	}
+	token, reason := GitLabToken(ctx, store, repo)
+	if token == "" {
+		return Result{Reason: reason}
+	}
+	info, err := probes.GitLab.ProjectInfo(ctx, host, token, project)
+	if err != nil {
+		return Result{Reason: "gitlab permission probe failed: " + strings.ReplaceAll(err.Error(), token, "[REDACTED]")}
+	}
+	switch {
+	case info.Archived:
+		return Result{Reason: "gitlab project is archived"}
+	case !info.CanPush:
+		return Result{Writable: true, Reason: "token can read this project but its role is below Developer; use a token with the api and write_repository scopes and at least the Developer role"}
+	case !info.MergeRequests:
+		return Result{Writable: true, Reason: "merge requests are disabled for this GitLab project"}
+	}
+	return Result{Writable: true, CanPush: true, Reason: "gitlab token can push to this project"}
 }
 
 func checkSSH(ctx context.Context, repo *models.Repo, store db.Store, probes Probes) Result {
@@ -255,4 +302,56 @@ func localGitHubClone(ctx context.Context, repo *models.Repo, probes Probes) str
 		}
 	}
 	return path
+}
+
+// GitLabToken returns the repo's selected gitlab_token. It is never guessed:
+// the credential must be bound (allowed_hosts) to the repo URL's host so a
+// token cannot be sent to a different GitLab instance.
+func GitLabToken(ctx context.Context, store db.Store, repo *models.Repo) (token, reason string) {
+	if store == nil || repo == nil || repo.UserID == "" {
+		return "", "no gitlab_token credential available"
+	}
+	id := strings.TrimSpace(repo.CredentialSecretID)
+	if id == "" {
+		return "", "select a gitlab_token credential on this repo (Account → Secrets) to fix a GitLab project"
+	}
+	host, _, err := scantarget.ParseGitLabSource(repo.SourcePath)
+	if err != nil {
+		return "", err.Error()
+	}
+	sec, err := store.GetSecretByID(ctx, id)
+	if err != nil || sec == nil {
+		return "", "selected GitLab credential was not found"
+	}
+	if sec.UserID != repo.UserID {
+		return "", "selected GitLab credential does not belong to this repo's owner"
+	}
+	if sec.KeyType != models.KeyTypeGitLabToken {
+		return "", "selected credential is not a gitlab_token"
+	}
+	hostname := hostOnly(host)
+	if !scantarget.CredentialAllowsHost(sec, hostname) {
+		return "", "selected GitLab credential is not allowed for host " + hostname
+	}
+	plaintext, derr := secrets.Decrypt(sec.EncryptedValue)
+	if derr != nil || plaintext == "" {
+		return "", "selected GitLab token is unreadable or empty; replace it in Account → Secrets"
+	}
+	return plaintext, ""
+}
+
+// hostOnly drops the port from a host[:port] string.
+func hostOnly(host string) string {
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		return h
+	}
+	return host
+}
+
+// ForgeToken returns the publishing token for the repo's source type.
+func ForgeToken(ctx context.Context, store db.Store, repo *models.Repo) (token, reason string) {
+	if repo != nil && (repo.SourceType == models.SourceTypeGit || repo.SourceType == models.SourceTypeGitLab) {
+		return GitLabToken(ctx, store, repo)
+	}
+	return GitHubToken(ctx, store, repo)
 }

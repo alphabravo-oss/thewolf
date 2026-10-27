@@ -157,6 +157,18 @@ func CreateRepo(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if (req.SourceType == models.SourceTypeGit || req.SourceType == models.SourceTypeGitLab) && req.CredentialSecretID != "" {
+		// Bind the credential to the URL's host so a token is never sent to
+		// another server.
+		canonical, host, err := scantarget.CanonicalGitURL(req.SourcePath)
+		if err == nil {
+			err = validateSourceCredential(r.Context(), h, claims.UserID, req.CredentialSecretID, host, gitCredentialTypes(canonical)...)
+		}
+		if err != nil {
+			response.WriteError(w, http.StatusBadRequest, "validation_error", err.Error())
+			return
+		}
+	}
 	if req.DefaultBranch == "" {
 		req.DefaultBranch = "main"
 	}
