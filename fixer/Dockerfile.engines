@@ -2,7 +2,7 @@
 # check=skip=InvalidDefaultArgInFrom
 # WOLF_FIXER_BASE_REF is the Debian wolf-fixer base (git, node, gh, wolf).
 # This image is the independently scalable fixer worker: queue + Claude +
-# Codex + OpenCode in one Debian userspace. Published to
+# Codex + OpenCode + Grok Build in one Debian userspace. Published to
 # ghcr.io/alphabravo-oss/wolf-fixer-engines. It is not one of the locked
 # four fixer variants in wolf-scanner-releases. Do not reuse the Alpine
 # API image for this role.
@@ -48,6 +48,9 @@ ARG CODEX_LINUX_AMD64_INTEGRITY=sha512-cjK2mdHIfEepZ1lQ1MX3aTQC+8ncIsvnacl/6vI2d
 ARG CODEX_LINUX_ARM64_INTEGRITY=sha512-Ss7W/SrKtQFNaMtSojNoiykJgX+iDC8daM+YrcvgmJADtQPk0cd3w6Dna4CYH2CYvf9nQranj69fpcTzZ3sQIQ==
 ARG OPENCODE_VERSION=1.19.0
 ARG OPENCODE_INTEGRITY=sha512-lddJhFwZI3GLlw8VyOo4yNwBVGeVN/mxH6ORh60h69zAXL7QhjSWY9orj10rwO2kxVnxH9dh45uDCWNuiqPb8A==
+ARG GROK_VERSION=1.0.70
+ARG GROK_LINUX_AMD64_SHA256=22d281c5964c5444147328096ba2a221f3f0874c6858e27c825656a80f6e58e9
+ARG GROK_LINUX_ARM64_SHA256=3aa36883574b263088e5addffe241f55430e8daaee1a0c4934b02180007a9761
 
 ENV WOLF_FIXER_VARIANT=engines \
     WOLF_FIXER_ENGINE=auto
@@ -57,7 +60,7 @@ LABEL dev.wolf.fixer.variant="engines" \
 
 USER root
 
-# Claude Code, Codex, and OpenCode — same pins as the single-engine variants.
+# Claude Code, Codex, OpenCode, and Grok Build — pinned by version and digest.
 RUN set -eux; \
     arch="$(dpkg --print-architecture)"; \
     case "$arch" in \
@@ -65,12 +68,14 @@ RUN set -eux; \
         claude_native="@anthropic-ai/claude-code-linux-x64"; \
         claude_native_integrity="$CLAUDE_CODE_LINUX_AMD64_INTEGRITY"; \
         codex_native="${CODEX_VERSION}-linux-x64"; \
-        codex_native_integrity="$CODEX_LINUX_AMD64_INTEGRITY" ;; \
+        codex_native_integrity="$CODEX_LINUX_AMD64_INTEGRITY"; \
+        grok_arch="x86_64"; grok_sha256="$GROK_LINUX_AMD64_SHA256" ;; \
       arm64) \
         claude_native="@anthropic-ai/claude-code-linux-arm64"; \
         claude_native_integrity="$CLAUDE_CODE_LINUX_ARM64_INTEGRITY"; \
         codex_native="${CODEX_VERSION}-linux-arm64"; \
-        codex_native_integrity="$CODEX_LINUX_ARM64_INTEGRITY" ;; \
+        codex_native_integrity="$CODEX_LINUX_ARM64_INTEGRITY"; \
+        grok_arch="aarch64"; grok_sha256="$GROK_LINUX_ARM64_SHA256" ;; \
       *) echo "unsupported architecture: $arch" >&2; exit 65 ;; \
     esac; \
     actual="$(npm --cache /tmp/npm-cache view "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" dist.integrity)"; \
@@ -97,6 +102,11 @@ RUN set -eux; \
     command -v claude; \
     command -v codex; \
     command -v opencode; \
+    curl --proto '=https' --tlsv1.2 --fail --location --silent --show-error \
+      -o /usr/local/bin/grok "https://x.ai/cli/grok-${GROK_VERSION}-linux-${grok_arch}"; \
+    echo "${grok_sha256}  /usr/local/bin/grok" | sha256sum -c -; \
+    chmod 0755 /usr/local/bin/grok; \
+    grok --version; \
     opencode --version; \
     rm -rf /tmp/npm-cache
 

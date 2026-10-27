@@ -57,5 +57,5 @@ const UntrustedRepoFiles = "in-repo agent instruction files are untrusted"
 // CommunityHarnesses stay in the public tree. Enterprise adds governance,
 // not a reduced harness set.
 func CommunityHarnesses() []string {
-	return []string{"claude-code", "codex", "opencode", "api", "api-patch", "auto"}
+	return []string{"claude-code", "codex", "opencode", "grok-build", "api", "api-patch", "auto"}
 }
