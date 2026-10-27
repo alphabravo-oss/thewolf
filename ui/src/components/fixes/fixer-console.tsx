@@ -37,9 +37,12 @@ const LOGIN_ENGINES = [
 export function FixerConsolePanel({
   allowShell,
   worker = [],
+  request,
 }: {
   allowShell: boolean;
   worker?: FixEngineStatus[];
+  /** Start this engine's login (or install) when `nonce` changes, e.g. from an engine card. */
+  request?: { engine: string; nonce: number };
 }) {
   const qc = useQueryClient();
   const [loginEngine, setLoginEngine] = useState<string>("claude");
@@ -153,6 +156,14 @@ export function FixerConsolePanel({
       setBusy(false);
     }
   }
+
+  const handledRequest = useRef(0);
+  useEffect(() => {
+    if (!request || request.nonce === handledRequest.current || busy || live) return;
+    handledRequest.current = request.nonce;
+    const installed = statusFor(request.engine, worker)?.installed === true;
+    void start(installed ? "login" : "install", request.engine);
+  }, [request?.nonce]);
 
   async function stop() {
     if (!session) return;
