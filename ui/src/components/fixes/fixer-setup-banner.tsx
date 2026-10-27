@@ -1,3 +1,4 @@
+import { EditionGate } from "@/components/ui/edition-gate";
 import { ErrorState } from "@/components/ui/empty-state";
 import { Link } from "@tanstack/react-router";
 import { KeyIcon, TerminalIcon, WrenchIcon } from "lucide-react";
@@ -13,9 +14,11 @@ export function FixerSetupBanner() {
   if (flag.isLoading) return null;
   if (flag.isError) return <ErrorState title="Unable to load fixing settings" onRetry={() => void flag.refetch()} />;
   if (!entitled(edition.data, REMEDIATION)) return (
-    <p className="text-sm text-muted-foreground">
-      Autonomous AI fixing is a Wolf Enterprise feature. Scanning, findings, baselines and reports are fully available here.
-    </p>
+    <EditionGate
+      feature="Autonomous AI fixing"
+      capability={REMEDIATION}
+      description="Scanning, findings, baselines and reports are fully available here."
+    />
   );
   if (!flag.enabled) return (
     <p className="text-sm text-muted-foreground">

@@ -28,6 +28,10 @@ export type EditionInfo = VersionInfo & {
   };
 };
 
+/** Where the locked-feature card sends people; override per deployment. */
+export const ENTERPRISE_INFO_URL: string =
+  import.meta.env.VITE_ENTERPRISE_INFO_URL ?? "https://wolf.example/editions";
+
 export function shortRev(s?: string) {
   if (!s) return "";
   if (s === "dev" || s === "unknown") return s;
