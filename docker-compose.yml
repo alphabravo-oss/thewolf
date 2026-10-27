@@ -219,92 +219,6 @@ services:
           cpus: "1.0"
           memory: 512M
 
-  # Separate fixer Deployment/image so it can scale independently of the
-  # API and scan-workers (same shape as the Helm fixer Deployment).
-  # Debian userspace + Claude/Codex/OpenCode, published as
-  # ghcr.io/alphabravo-oss/wolf-fixer-engines. Opt in with:
-  #   docker compose --profile fixer up -d
-  # OAuth files live in /home/wolf (fixer-home volume).
-  # WOLF_FIXER_BASE_REF is the Debian wolf-fixer base (not the Alpine API).
-  fixer:
-    profiles: ["fixer"]
-    image: ${WOLF_FIXER_IMAGE:-ghcr.io/alphabravo-oss/wolf-fixer-engines:latest}
-    build:
-      context: .
-      dockerfile: ${WOLF_FIXER_DOCKERFILE:-fixer/Dockerfile.engines}
-      args:
-        VERSION: ${WOLF_VERSION:-dev}
-        COMMIT: ${WOLF_COMMIT:-unknown}
-        BUILD_DATE: ${WOLF_BUILD_DATE:-unknown}
-        WOLF_FIXER_BASE_REF: ${WOLF_FIXER_BASE_REF:-wolf-fixer:quality-amd64}
-    command: ["fixer"]
-    # Match the Alpine API volume owner on this host. The Debian image
-    # defaults to uid 1000; Helm uses that with a dedicated fixer-home PVC.
-    user: "${WOLF_FIXER_UID:-100}:${WOLF_FIXER_GID:-101}"
-    group_add:
-      - "${DOCKER_GID:-107}"
-    cap_drop:
-      - ALL
-    security_opt:
-      - no-new-privileges:true
-    read_only: true
-    tmpfs:
-      - /tmp
-    volumes:
-      - fixer-home:/home/wolf
-      - wolf-data:/home/wolf/.wolf
-      - ${WOLF_REPOS_ROOT:-./repos}:/repos:ro
-      - ${WOLF_HOST_WORKSPACE_ROOT:-./workspaces}:/workspaces
-      - /var/run/docker.sock:/var/run/docker.sock
-      - ${WOLF_DOCKER_CLI_HOST:-/usr/bin/docker}:/usr/local/bin/docker:ro
-    environment:
-      - HOME=/home/wolf
-      - WOLF_MASTER_KEY=${WOLF_MASTER_KEY:-}
-      - WOLF_DB_DRIVER=${WOLF_DB_DRIVER:-sqlite}
-      - WOLF_DB_DSN=${WOLF_DB_DSN:-}
-      - WOLF_LOG_LEVEL=${WOLF_LOG_LEVEL:-info}
-      - WOLF_ARTIFACTS_ROOT=/home/wolf/.wolf/artifacts
-      - WOLF_WORKSPACE_ROOT=/workspaces
-      - WOLF_SCANNERS_TAG=${WOLF_SCANNERS_TAG:-stable}
-      - WOLF_SCANNERS_IMAGE=${WOLF_SCANNERS_IMAGE:-ghcr.io/alphabravo-oss/wolf-scanners:${WOLF_SCANNERS_TAG:-stable}}
-      - WOLF_SCANNERS_IMAGE_JVM=${WOLF_SCANNERS_IMAGE_JVM:-ghcr.io/alphabravo-oss/wolf-scanners-jvm:${WOLF_SCANNERS_TAG:-stable}}
-      - WOLF_SCANNERS_IMAGE_RUST=${WOLF_SCANNERS_IMAGE_RUST:-ghcr.io/alphabravo-oss/wolf-scanners-rust:${WOLF_SCANNERS_TAG:-stable}}
-      - WOLF_SCANNERS_IMAGE_CODEQL=${WOLF_SCANNERS_IMAGE_CODEQL:-ghcr.io/alphabravo-oss/wolf-scanners-codeql:${WOLF_SCANNERS_TAG:-stable}}
-      - WOLF_SCANNERS_DOCKERHUB_MIRROR=${WOLF_SCANNERS_DOCKERHUB_MIRROR:-}
-      - WOLF_SCANNERS_PULL_POLICY=${WOLF_SCANNERS_PULL_POLICY:-IfNotPresent}
-      - WOLF_SCANNERS_NETWORK=${WOLF_SCANNERS_NETWORK:-none}
-      - WOLF_SCANNERS_ALLOW_NETWORK=${WOLF_SCANNERS_ALLOW_NETWORK:-bridge}
-      - WOLF_SCAN_WORKERS=${WOLF_SCAN_WORKERS:-1}
-      - WOLF_SCAN_ISOLATION=${WOLF_SCAN_ISOLATION:-standard}
-      - WOLF_SCANNERS_MEMORY=${WOLF_SCANNERS_MEMORY:-2g}
-      - WOLF_SCANNERS_CPUS=${WOLF_SCANNERS_CPUS:-2}
-      - WOLF_SCANNERS_DB_VOLUME=${WOLF_SCANNERS_DB_VOLUME:-${HOME}/.wolf/scanner-cache}
-      - WOLF_HOST_REPOS_ROOT=${WOLF_HOST_REPOS_ROOT:-${WOLF_REPOS_ROOT:-./repos}}
-      - WOLF_IN_CONTAINER_REPOS_ROOT=/repos
-      - WOLF_HOST_WORKSPACE_ROOT=${WOLF_HOST_WORKSPACE_ROOT:-${PWD}/workspaces}
-      - WOLF_IN_CONTAINER_WORKSPACE_ROOT=/workspaces
-    depends_on:
-      wolf:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-        required: false
-    networks:
-      - wolf-net
-    restart: unless-stopped
-    # One OpenCode process per fixer. Do not raise replicas until stall
-    # watchdog + batch verify are proven; two OpenCodes will OOM 8g.
-    mem_limit: ${WOLF_FIXER_MEMORY:-8g}
-    deploy:
-      replicas: ${WOLF_FIXER_WORKERS:-1}
-      resources:
-        limits:
-          cpus: "2.0"
-          memory: ${WOLF_FIXER_MEMORY:-8g}
-        reservations:
-          cpus: "0.25"
-          memory: 256M
-
   # Durable daily discovery and weekly candidate scheduler. Opt in with:
   #   docker compose --profile scanner-release up -d
   # Build execution is intentionally a separate role because its executor and
@@ -1025,7 +939,6 @@ networks:
 
 volumes:
   wolf-data:
-  fixer-home:
   pg-data:
   caddy-data:
   caddy-config:
