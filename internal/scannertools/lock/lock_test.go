@@ -85,29 +85,62 @@ func TestCanonicalDigestDetectsTampering(t *testing.T) {
 	}
 }
 
-func TestGenerateRejectsFixerBuildArgumentDrift(t *testing.T) {
+func TestGenerateRejectsFixerVariantsInBuildPolicy(t *testing.T) {
 	root := fixtureRepo(t)
 	policyPath := filepath.Join(root, "scanners", "build-policy.yaml")
 	data, err := os.ReadFile(policyPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	data = []byte(strings.Replace(
-		string(data),
-		"    smokeCommand: [\"/usr/local/bin/wolf\", \"version\"]",
-		"    buildArgs:\n      GO_VERSION: 9.9.9\n    smokeCommand: [\"/usr/local/bin/wolf\", \"version\"]",
-		1,
-	))
+	data = append(data, []byte("fixerVariants:\n  base:\n    dockerfile: fixer/Dockerfile.base\n    platforms: [linux/amd64]\n")...)
 	if err := os.WriteFile(policyPath, data, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	_, err = Generate(context.Background(), root, GenerateOptions{})
-	if err == nil || !strings.Contains(err.Error(), "does not match fixer/versions.env") {
-		t.Fatalf("Generate fixer build-argument drift error = %v", err)
+	if err == nil || !strings.Contains(err.Error(), "fixerVariants") {
+		t.Fatalf("Generate accepted fixer variants in the build policy: %v", err)
 	}
 }
 
-func TestDefinitionInputsCoverFixerAndCompiledWolfSources(t *testing.T) {
+// Locks published through scanner-set-2026.44.2 carry releaseInputs.fixerVariants.
+// They must still parse, validate, and recompute the same lockDigest.
+func TestLegacyFixerLockStillParsesAndVerifies(t *testing.T) {
+	lock := generateFixtureLock(t, GenerateOptions{})
+	if lock.ReleaseInputs.LegacyFixerVariants != nil {
+		t.Fatal("a freshly generated lock must not carry fixer variants")
+	}
+	lock.ReleaseInputs.LegacyFixerVariants = map[string]BuildVariant{
+		"base": {
+			Dockerfile: "fixer/Dockerfile.base", Context: ".", Image: "wolf-fixer",
+			Platforms: []string{"linux/amd64"}, AuthMode: "none",
+			SmokeCommand: []string{"/usr/local/bin/wolf", "version"},
+		},
+		"api": {
+			Dockerfile: "fixer/Dockerfile.api", Context: ".", Image: "wolf-fixer-api",
+			Platforms: []string{"linux/amd64"}, DependsOn: []string{"base"}, AuthMode: "api-key",
+			SmokeCommand: []string{"/usr/local/bin/wolf", "version"},
+		},
+	}
+	if err := lock.SetDigest(); err != nil {
+		t.Fatal(err)
+	}
+	data, err := lock.MarshalYAML()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "fixerVariants:") {
+		t.Fatal("legacy fixer variants were not serialized")
+	}
+	parsed, err := Parse(data)
+	if err != nil {
+		t.Fatalf("legacy lock with fixer variants was rejected: %v", err)
+	}
+	if len(parsed.ReleaseInputs.LegacyFixerVariants) != 2 || parsed.LockDigest != lock.LockDigest {
+		t.Fatalf("legacy lock was not preserved: %#v", parsed.ReleaseInputs)
+	}
+}
+
+func TestDefinitionInputsCoverCompiledWolfSources(t *testing.T) {
 	root := fixtureRepo(t)
 	current, err := Generate(context.Background(), root, GenerateOptions{})
 	if err != nil {
@@ -115,9 +148,6 @@ func TestDefinitionInputsCoverFixerAndCompiledWolfSources(t *testing.T) {
 	}
 	for _, path := range []string{
 		".dockerignore",
-		"fixer/install-node-tools.sh",
-		"fixer/go-tools/go.mod",
-		"fixer/go-tools/go.sum",
 		"cmd/wolf/main.go",
 		"internal/demo/demo.go",
 		"plugins/demo/demo.go",
@@ -128,8 +158,7 @@ func TestDefinitionInputsCoverFixerAndCompiledWolfSources(t *testing.T) {
 	}
 
 	for _, path := range []string{
-		"fixer/install-node-tools.sh",
-		"fixer/go-tools/go.sum",
+		"scanners/install/install.sh",
 		"cmd/wolf/main.go",
 		"internal/demo/demo.go",
 		"plugins/demo/demo.go",
@@ -196,7 +225,7 @@ func TestParseGenerationCacheReusesOnlyWellFormedUpstreamResolution(t *testing.T
 	// Simulate an additive schema transition: the prior lock is no longer
 	// valid release evidence, but its exact upstream resolution remains useful
 	// while producing the replacement lock.
-	lock.ReleaseInputs.FixerVariants = nil
+	lock.ReleaseInputs.Variants = nil
 	data, err := yaml.Marshal(lock)
 	if err != nil {
 		t.Fatal(err)
@@ -440,14 +469,6 @@ variants:
   default:
     dockerfile: scanners/Dockerfile
     platforms: [linux/amd64]
-fixerVariants:
-  base:
-    dockerfile: fixer/Dockerfile.base
-    context: .
-    image: wolf-fixer
-    platforms: [linux/amd64]
-    authMode: none
-    smokeCommand: ["/usr/local/bin/wolf", "version"]
 `,
 		"scanners/toolchains.yaml": `base_images:
   default: registry.example/base@` + digestA + `
@@ -489,11 +510,6 @@ tools:
 		"scanners/trufflehog-excludes.txt":              "\n",
 		"scanners/wolf-tool-entry":                      "#!/bin/sh\n",
 		"scanners/install/install.sh":                   "#!/bin/sh\n",
-		"fixer/Dockerfile.base":                         "FROM registry.example/base@" + digestA + "\n",
-		"fixer/versions.env":                            "GO_VERSION=1.2.3\n",
-		"fixer/install-node-tools.sh":                   "#!/bin/sh\n",
-		"fixer/go-tools/go.mod":                         "module example.invalid/fixer-tools\n\ngo 1.26\n",
-		"fixer/go-tools/go.sum":                         "\n",
 		"cmd/wolf/main.go":                              "package main\n",
 		"internal/demo/demo.go":                         "package demo\n",
 		"plugins/demo/demo.go":                          "package demo\n",

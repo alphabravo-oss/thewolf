@@ -64,7 +64,7 @@ func TestApplyBaseImageUpdatesMovesAllOwnedDockerfiles(t *testing.T) {
 		"base_images:\n  default: "+oldReference+"\n  jvm: "+oldReference+"\ntoolchains:\n  go:\n    version: \"1.2.3\"\n",
 	), 0o644)
 	for _, path := range []string{
-		"scanners/Dockerfile", "scanners/Dockerfile.jvm", "fixer/Dockerfile.base",
+		"scanners/Dockerfile", "scanners/Dockerfile.jvm", "scanners/Dockerfile.rust",
 	} {
 		mustWriteTestFile(t, root, path, []byte("FROM "+oldReference+"\n"), 0o644)
 	}
@@ -76,7 +76,7 @@ func TestApplyBaseImageUpdatesMovesAllOwnedDockerfiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, path := range []string{
-		"scanners/toolchains.yaml", "scanners/Dockerfile", "scanners/Dockerfile.jvm", "fixer/Dockerfile.base",
+		"scanners/toolchains.yaml", "scanners/Dockerfile", "scanners/Dockerfile.jvm", "scanners/Dockerfile.rust",
 	} {
 		value, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
 		if err != nil {

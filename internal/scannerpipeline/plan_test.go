@@ -145,16 +145,11 @@ func TestPlanValidationRejectsCyclesUnknownDependenciesAndInvalidPlatforms(t *te
 	}
 }
 
-func TestDefaultPlanModelsFixerDependencyAndDistinctQualityGates(t *testing.T) {
+func TestDefaultPlanModelsImageDependencyAndNoFixerSteps(t *testing.T) {
 	t.Parallel()
 	plan, err := Default(Inputs{Images: []Image{
 		{Key: "default", Kind: ImageKindScanner, Platforms: []string{"linux/amd64"}},
-		{Key: "fixer-base", Kind: ImageKindFixer, Platforms: []string{"linux/amd64", "linux/arm64"}},
-		{
-			Key: "fixer-codex", Kind: ImageKindFixer,
-			Platforms: []string{"linux/amd64", "linux/arm64"},
-			DependsOn: []string{"fixer-base"},
-		},
+		{Key: "jvm", Platforms: []string{"linux/amd64"}, DependsOn: []string{"default"}},
 	}})
 	if err != nil {
 		t.Fatal(err)
@@ -162,53 +157,36 @@ func TestDefaultPlanModelsFixerDependencyAndDistinctQualityGates(t *testing.T) {
 	steps := make(map[string]Step, len(plan.Steps))
 	for _, step := range plan.Steps {
 		steps[step.Key] = step
-	}
-	build := steps["build/fixer-codex/linux-amd64"]
-	if !containsString(build.DependsOn, "image-manifest/fixer-base") {
-		t.Fatalf("fixer engine build dependencies = %v", build.DependsOn)
-	}
-	for _, key := range []string{
-		"strict-version-smoke/fixer-codex",
-		"invocation-smoke/fixer-codex",
-		"fixer-auth-contract/fixer-codex",
-		"vulnerability-scan/fixer-codex",
-		"sbom/fixer-codex",
-		"provenance/fixer-codex",
-		"fixer-integration",
-	} {
-		if _, exists := steps[key]; !exists {
-			t.Errorf("fixer pipeline missing %q", key)
+		if strings.Contains(step.Key, "fixer") {
+			t.Errorf("plan contains fixer step %q", step.Key)
 		}
 	}
-	for _, key := range []string{
-		"parser-fixtures/fixer-codex",
-		"normalized-golden/fixer-codex",
-		"candidate-stable-comparison/fixer-codex",
-	} {
-		if _, exists := steps[key]; exists {
-			t.Errorf("fixer pipeline incorrectly includes scanner-only gate %q", key)
+	if !containsString(steps["build/jvm/linux-amd64"].DependsOn, "image-manifest/default") {
+		t.Fatalf("dependent build dependencies = %v", steps["build/jvm/linux-amd64"].DependsOn)
+	}
+	if !containsString(steps["finding-regression"].DependsOn, "published-verify/jvm") ||
+		!containsString(steps["aggregate-sbom"].DependsOn, "published-verify/jvm") {
+		t.Fatal("release gates do not cover every image")
+	}
+	for _, image := range ManagedReleaseImages() {
+		if strings.Contains(image.Key, "fixer") {
+			t.Fatalf("managed release inventory contains fixer image %q", image.Key)
 		}
-	}
-	if containsString(steps["finding-regression"].DependsOn, "published-verify/fixer-codex") {
-		t.Fatal("scanner finding regression depends on a fixer image")
-	}
-	if !containsString(steps["aggregate-sbom"].DependsOn, "published-verify/fixer-codex") {
-		t.Fatal("aggregate SBOM does not include fixer evidence")
 	}
 }
 
 func TestDefaultPlanRejectsInvalidImageGraph(t *testing.T) {
 	t.Parallel()
 	for name, images := range map[string][]Image{
-		"fixer-only": {
-			{Key: "fixer-base", Kind: ImageKindFixer, Platforms: []string{"linux/amd64"}},
+		"fixer kind is no longer plannable": {
+			{Key: "fixer-base", Kind: "fixer", Platforms: []string{"linux/amd64"}},
 		},
 		"unknown dependency": {
 			{Key: "default", Platforms: []string{"linux/amd64"}, DependsOn: []string{"missing"}},
 		},
 		"cycle": {
-			{Key: "default", Platforms: []string{"linux/amd64"}, DependsOn: []string{"fixer"}},
-			{Key: "fixer", Kind: ImageKindFixer, Platforms: []string{"linux/amd64"}, DependsOn: []string{"default"}},
+			{Key: "default", Platforms: []string{"linux/amd64"}, DependsOn: []string{"jvm"}},
+			{Key: "jvm", Platforms: []string{"linux/amd64"}, DependsOn: []string{"default"}},
 		},
 		"invalid kind": {
 			{Key: "default", Kind: "job", Platforms: []string{"linux/amd64"}},

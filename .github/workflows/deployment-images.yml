@@ -1,6 +1,6 @@
 # Immutable release transaction for Wolf deployment/control-plane images.
 # This factory deliberately does not modify wolf-scanner-releases: the canonical
-# scanner/fixer release continues to contain exactly its established eight image
+# scanner release continues to contain exactly its established four image
 # variants. Deployment images have an independent aggregate and trust boundary.
 name: wolf deployment images release factory
 

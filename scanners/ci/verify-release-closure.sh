@@ -98,6 +98,11 @@ definition_digest="$(jq -er '.definitionDigest | select(test("^sha256:[a-f0-9]{6
 lock_digest="$(jq -er '.lockDigest | select(test("^sha256:[a-f0-9]{64}$"))' "$manifest")"
 image_release_id="$candidate_id"
 aggregate_source_commit="$definition_commit"
+# Releases published through scanner-set-2026.44.2 also carry four fixer
+# images. They stay verifiable; candidates and new releases are scanner-only.
+scanner_variants='["codeql","default","jvm","rust"]'
+legacy_fixer_variants='["fixer-api","fixer-base","fixer-claude","fixer-codex"]'
+image_count="$(jq -er '.images | length' "$manifest")"
 
 jq -e \
     --arg subject_kind "$subject_kind" \
@@ -130,11 +135,7 @@ if [[ "$subject_kind" == candidate ]]; then
       "default": {kind: "scanner", platforms: ["linux/amd64"]},
       "jvm": {kind: "scanner", platforms: ["linux/amd64"]},
       "rust": {kind: "scanner", platforms: ["linux/amd64"]},
-      "codeql": {kind: "scanner", platforms: ["linux/amd64"]},
-      "fixer-base": {kind: "fixer", platforms: ["linux/amd64"]},
-      "fixer-api": {kind: "fixer", platforms: ["linux/amd64"]},
-      "fixer-claude": {kind: "fixer", platforms: ["linux/amd64"]},
-      "fixer-codex": {kind: "fixer", platforms: ["linux/amd64"]}
+      "codeql": {kind: "scanner", platforms: ["linux/amd64"]}
     };
   . as $root
   | .schemaVersion == "wolf.scanners.release/v1"
@@ -171,7 +172,9 @@ else
       --arg release "$candidate_id" \
       --arg candidate "$image_release_id" \
       --arg approval "$approval_digest" \
-      --arg report "$candidate_report_digest" '
+      --arg report "$candidate_report_digest" \
+      --argjson scanner_variants "$scanner_variants" \
+      --argjson legacy_fixer_variants "$legacy_fixer_variants" '
     . as $root
     | .schemaVersion == "wolf.scanners.release/v1"
     and .releaseId == $release
@@ -181,7 +184,9 @@ else
     and .promotedFrom.verificationEvidenceDigest == $report
     and (.promotedFrom.candidateManifestDigest | test("^sha256:[a-f0-9]{64}$"))
     and (.promotedFrom.candidateManifestSha256 | test("^sha256:[a-f0-9]{64}$"))
-    and ([.images[].variant] | unique | length) == 8
+    and (([.images[].variant] | unique | sort) as $variants
+         | $variants == $scanner_variants
+           or $variants == ($scanner_variants + $legacy_fixer_variants | sort))
     and all(.images[];
       .releaseId == $candidate
       and .lockDigest == $root.lockDigest
@@ -224,7 +229,8 @@ else
       --arg lock "$lock_digest" \
       --arg definition "$definition_digest" \
       --arg commit "$definition_commit" \
-      --argjson require_mirror "$require_mirror" '
+      --argjson require_mirror "$require_mirror" \
+      --argjson image_count "$image_count" '
     .schemaVersion == "wolf.scanners.candidate-verification/v1"
     and .candidate.id == $candidate
     and .candidate.ociDigest == $candidate_digest
@@ -234,7 +240,7 @@ else
     and .candidate.definitionCommit == $commit
     and (.mirrorRequired == true or ($require_mirror | not))
     and .closureVerified == true
-    and (.images | length) == 8
+    and (.images | length) == $image_count
   ' "$candidate_report" >/dev/null
 fi
 
@@ -262,12 +268,13 @@ actual_qualification="$(sha_file "$qualification_receipt")"
 jq -e \
     --arg release "$image_release_id" \
     --arg lock "$lock_digest" \
-    --arg definition "$definition_digest" '
+    --arg definition "$definition_digest" \
+    --argjson image_count "$image_count" '
   .schemaVersion == "wolf.scanners.candidate-qualification/v1"
   and .releaseId == $release
   and .lockDigest == $lock
   and .definitionDigest == $definition
-  and .platformReceiptCount == 8
+  and .platformReceiptCount == $image_count
   and .passed == true
   and all(.evidence[]; test("^sha256:[a-f0-9]{64}$"))
 ' "$qualification_receipt" >/dev/null || {

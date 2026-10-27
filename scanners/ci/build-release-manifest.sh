@@ -56,18 +56,12 @@ jq -s \
         "default": {kind: "scanner", platforms: ["linux/amd64"]},
         "jvm": {kind: "scanner", platforms: ["linux/amd64"]},
         "rust": {kind: "scanner", platforms: ["linux/amd64"]},
-        "codeql": {kind: "scanner", platforms: ["linux/amd64"]},
-        "fixer-base": {kind: "fixer", platforms: ["linux/amd64"]},
-        "fixer-api": {kind: "fixer", platforms: ["linux/amd64"]},
-        "fixer-claude": {kind: "fixer", platforms: ["linux/amd64"]},
-        "fixer-codex": {kind: "fixer", platforms: ["linux/amd64"]}
+        "codeql": {kind: "scanner", platforms: ["linux/amd64"]}
       };
-    def fixer_engine: . == "fixer-api" or . == "fixer-claude" or . == "fixer-codex";
-    (map(select(.variant == "fixer-base"))[0]) as $fixer_base |
     if ($aggregate_sbom | test("^sha256:[a-f0-9]{64}$") | not) then
       error("aggregate SBOM digest is invalid")
-    elif length != 8 then
-      error("release manifest requires exactly eight image variants")
+    elif length != 4 then
+      error("release manifest requires exactly four image variants")
     elif ([.[].variant] | unique | sort) != (expected | keys | sort) then
       error("release manifest image variants are incomplete or duplicated")
     elif any(.[];
@@ -89,10 +83,8 @@ jq -s \
           ((.mirror.repository | length == 0)
            or (.mirror.verified != true)
            or (.mirror.referrersSha256 | test("^sha256:[a-f0-9]{64}$") | not)))
-      or ((.variant | fixer_engine) and
-          .baseReference != ($fixer_base.primary.repository + "@" + $fixer_base.digest))
     ) then
-      error("release manifest contains invalid kind, dependency, digest, SBOM, repository, or platform metadata")
+      error("release manifest contains invalid kind, digest, SBOM, repository, or platform metadata")
     else
       {
         schemaVersion: "wolf.scanners.release/v1",

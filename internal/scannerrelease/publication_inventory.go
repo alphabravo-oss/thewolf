@@ -41,14 +41,10 @@ type requiredReleaseImage struct {
 }
 
 var requiredReleaseImages = map[string]requiredReleaseImage{
-	"default":      {Kind: ReleaseImageScanner, Platforms: []string{"linux/amd64", "linux/arm64"}},
-	"jvm":          {Kind: ReleaseImageScanner, Platforms: []string{"linux/amd64", "linux/arm64"}},
-	"rust":         {Kind: ReleaseImageScanner, Platforms: []string{"linux/amd64", "linux/arm64"}},
-	"codeql":       {Kind: ReleaseImageScanner, Platforms: []string{"linux/amd64"}},
-	"fixer-base":   {Kind: ReleaseImageFixer, Platforms: []string{"linux/amd64", "linux/arm64"}},
-	"fixer-api":    {Kind: ReleaseImageFixer, Platforms: []string{"linux/amd64", "linux/arm64"}},
-	"fixer-claude": {Kind: ReleaseImageFixer, Platforms: []string{"linux/amd64", "linux/arm64"}},
-	"fixer-codex":  {Kind: ReleaseImageFixer, Platforms: []string{"linux/amd64", "linux/arm64"}},
+	"default": {Kind: ReleaseImageScanner, Platforms: []string{"linux/amd64", "linux/arm64"}},
+	"jvm":     {Kind: ReleaseImageScanner, Platforms: []string{"linux/amd64", "linux/arm64"}},
+	"rust":    {Kind: ReleaseImageScanner, Platforms: []string{"linux/amd64", "linux/arm64"}},
+	"codeql":  {Kind: ReleaseImageScanner, Platforms: []string{"linux/amd64"}},
 }
 
 // ValidatePublicationReceiptInventory rejects a final receipt unless it
@@ -80,7 +76,7 @@ func ValidatePublicationReceiptInventory(receipt PublicationReceipt) error {
 		case image.ImageKey == "" || image.RegistryTargetID == "" || image.Repository == "":
 			return fmt.Errorf("release image %d identity is incomplete", index)
 		case kind != ReleaseImageScanner && kind != ReleaseImageFixer:
-			return fmt.Errorf("release image %q kind must be scanner or fixer", image.ImageKey)
+			return fmt.Errorf("release image %q kind must be scanner or legacy fixer", image.ImageKey)
 		case !publicationDigestPattern.MatchString(image.Digest):
 			return fmt.Errorf("release image %q digest is invalid", image.ImageKey)
 		case image.SignatureStatus != "verified":

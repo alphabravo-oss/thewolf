@@ -626,25 +626,6 @@ func parityFiles(root string) ([]parityFile, error) {
 			return nil, err
 		}
 	}
-	fixerEntries, err := os.ReadDir(filepath.Join(root, "fixer"))
-	if err != nil {
-		return nil, err
-	}
-	for _, entry := range fixerEntries {
-		if strings.HasPrefix(entry.Name(), "Dockerfile") {
-			if err := addFile(
-				"fixer/"+entry.Name(),
-				"internal/scannerbuild/context/fixer/"+entry.Name(),
-			); err != nil {
-				return nil, err
-			}
-		}
-	}
-	if err := addFile(
-		"fixer/versions.env", "internal/scannerbuild/context/fixer/versions.env",
-	); err != nil {
-		return nil, err
-	}
 	sort.Slice(files, func(i, j int) bool {
 		return files[i].destination < files[j].destination
 	})
@@ -999,24 +980,6 @@ func lockImages(lock *scannerlock.Lock) []scannerpipeline.Image {
 			Key:       key,
 			Kind:      scannerpipeline.ImageKindScanner,
 			Platforms: append([]string(nil), lock.ReleaseInputs.Variants[key].Platforms...),
-		})
-	}
-	fixerKeys := make([]string, 0, len(lock.ReleaseInputs.FixerVariants))
-	for key := range lock.ReleaseInputs.FixerVariants {
-		fixerKeys = append(fixerKeys, key)
-	}
-	sort.Strings(fixerKeys)
-	for _, key := range fixerKeys {
-		variant := lock.ReleaseInputs.FixerVariants[key]
-		dependencies := make([]string, 0, len(variant.DependsOn))
-		for _, dependency := range variant.DependsOn {
-			dependencies = append(dependencies, "fixer-"+dependency)
-		}
-		images = append(images, scannerpipeline.Image{
-			Key:       "fixer-" + key,
-			Kind:      scannerpipeline.ImageKindFixer,
-			Platforms: append([]string(nil), variant.Platforms...),
-			DependsOn: dependencies,
 		})
 	}
 	return images

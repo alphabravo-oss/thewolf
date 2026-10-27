@@ -169,7 +169,7 @@ func SnapshotFromManifest(manifest scannerbundle.ReleaseManifest) (*ReleaseSnaps
 		AllImages:      make(map[string]string, len(manifest.Images)),
 	}
 	for _, image := range manifest.Images {
-		if image.Kind == "fixer" {
+		if image.Kind == "fixer" { // legacy manifests: fixer images are not scanner runtime images
 			continue
 		}
 		snapshot.AllImages[image.Key] = image.Reference

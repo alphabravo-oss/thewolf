@@ -87,12 +87,12 @@ func AdapterActionPatterns(lane AdapterLane) ([]string, error) {
 		}, nil
 	case AdapterLaneQuality:
 		return []string{
-			"strict-version-smoke/*", "invocation-smoke/*", "fixer-auth-contract/*",
+			"strict-version-smoke/*", "invocation-smoke/*",
 			"parser-fixtures/*", "normalized-golden/*",
 			"candidate-stable-comparison/*", "recorded-resource-gate/*",
 			"vulnerability-scan/*", "vulnerability-db-identity/*",
 			"secret-scan/*", "license-scan/*", "sbom/*", "oci-annotations/*",
-			"provenance/*", "finding-regression", "aggregate-sbom", "fixer-integration",
+			"provenance/*", "finding-regression", "aggregate-sbom",
 		}, nil
 	case AdapterLaneIntegration:
 		return []string{
@@ -257,7 +257,7 @@ func AdapterCommandID(action string) (string, error) {
 		"generated-parity": "scanner-build-context-parity", "update-source-recheck": "scanner-update-source-recheck",
 		"lock-reproducibility": "scannertools-lock-reproducibility", "license-metadata": "scanner-license-metadata",
 		"finding-regression": "scanner-finding-regression", "aggregate-sbom": "scanner-aggregate-sbom",
-		"fixer-integration": "fixer-integration", "compose-integration": "compose-release-integration",
+		"compose-integration":         "compose-release-integration",
 		"compose-scanner-integration": "compose-scanner-integration",
 		"kubernetes-integration":      "kubernetes-release-integration",
 		"kind-scanner-integration":    "kind-scanner-integration",
@@ -271,7 +271,6 @@ func AdapterCommandID(action string) (string, error) {
 	prefixes := []struct{ prefix, command string }{
 		{"strict-version-smoke/", "image-strict-version-smoke"},
 		{"invocation-smoke/", "image-invocation-smoke"},
-		{"fixer-auth-contract/", "fixer-auth-contract"},
 		{"parser-fixtures/", "scanner-parser-fixtures"},
 		{"normalized-golden/", "scanner-normalized-golden"},
 		{"candidate-stable-comparison/", "scanner-candidate-stable-comparison"},

@@ -24,7 +24,7 @@ import (
 const proposalSchema = "wolf.scanners.proposal/v1"
 
 var scannerProposalInputs = []string{
-	".dockerignore", "go.mod", "go.sum", "scanners", "fixer", "cmd", "internal", "plugins", "pkg",
+	".dockerignore", "go.mod", "go.sum", "scanners", "cmd", "internal", "plugins", "pkg",
 	"docs/superpowers/changelog/scanner-bumps",
 }
 

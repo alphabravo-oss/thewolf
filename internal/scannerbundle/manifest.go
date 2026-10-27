@@ -208,6 +208,8 @@ func (m ReleaseManifest) Validate() error {
 				return fmt.Errorf("%s.tools must not be empty for an upstream image", prefix)
 			}
 		case "fixer":
+			// Legacy: manifests published through scanner-set-2026.44.2 carry
+			// fixer images. They stay verifiable and are ignored by the runtime.
 			if len(image.Tools) != 0 || image.Entrypoint != "" {
 				return fmt.Errorf("%s fixer image cannot own scanner tools or an entrypoint", prefix)
 			}

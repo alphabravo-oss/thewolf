@@ -122,8 +122,8 @@ func bumpToolAt(
 }
 
 func synchronizeEmbeddedDefinition(root string) error {
-	// Use the canonical generator: it includes nested scanner files and the
-	// fixer source closure, not just the two top-level metadata files.
+	// Use the canonical generator: it includes nested scanner files, not just
+	// the two top-level metadata files.
 	cmd := exec.Command("go", "run", "./internal/scannerbuild/cmd/synccontext", "--root", root)
 	cmd.Dir = root
 	if output, err := cmd.CombinedOutput(); err != nil {
