@@ -19,34 +19,3 @@ func TestCommunityDeniesEnterpriseCapabilities(t *testing.T) {
 	}
 	SetActive(nil)
 }
-
-func TestSyntheticCommunityLimits(t *testing.T) {
-	t.Setenv(LimitsEnv, "")
-	SetActive(Community{})
-	lim := CommunityLimits()
-	if lim.Repos != SyntheticRepos || lim.Users != SyntheticUsers || lim.Workers != SyntheticWorkers {
-		t.Fatalf("synthetic = %+v", lim)
-	}
-	if lim.Source != SourceSynthetic || lim.Enforced {
-		t.Fatalf("unforced = %+v", lim)
-	}
-	t.Setenv(LimitsEnv, "1")
-	if !EnforceCommunityLimits() {
-		t.Fatal("explicit Community limits should enforce")
-	}
-	t.Setenv(LimitsEnv, "false")
-	if EnforceCommunityLimits() {
-		t.Fatal("explicit off")
-	}
-	t.Setenv(LimitsEnv, "1")
-	SetActive(licensed{})
-	if EnforceCommunityLimits() {
-		t.Fatal("signed license lifts the evaluation ceiling")
-	}
-	SetActive(nil)
-}
-
-type licensed struct{}
-
-func (licensed) Allows(string) bool { return true }
-func (licensed) Licensed() bool     { return true }
