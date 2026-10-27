@@ -179,5 +179,5 @@ func newFixerStatusCmd() *cobra.Command {
 func writeLocalEngineStatus() error {
 	home, _ := os.UserHomeDir()
 	root := envOr("WOLF_ARTIFACTS_ROOT", filepath.Join(home, ".wolf", "artifacts"))
-	return fixauth.WriteStatus(root, fixauth.ProbeAll(context.Background(), fixauth.Resolve(context.Background(), nil, "")))
+	return worker.PublishStatus(root, fixauth.ProbeAll(context.Background(), fixauth.Resolve(context.Background(), nil, "")))
 }

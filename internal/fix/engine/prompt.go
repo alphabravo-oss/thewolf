@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/alphabravocompany/thewolf/internal/fix/profile"
 	"github.com/alphabravocompany/thewolf/internal/models"
 )
 
@@ -27,8 +28,8 @@ const (
 
 // Setting keys for editable instruction templates (org-wide settings KV).
 const (
-	SettingPromptInitial  = "fixer_prompt_initial"
-	SettingPromptFollowup = "fixer_prompt_followup"
+	SettingPromptInitial  = profile.SettingPromptInitial
+	SettingPromptFollowup = profile.SettingPromptFollowup
 )
 
 // HandsOffRules is appended to every rendered prompt, including operator

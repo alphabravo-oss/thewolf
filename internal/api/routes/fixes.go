@@ -22,10 +22,9 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/artifacts"
 	"github.com/alphabravocompany/thewolf/internal/auth"
 	"github.com/alphabravocompany/thewolf/internal/db"
-	fixauth "github.com/alphabravocompany/thewolf/internal/fix/auth"
-	fixengine "github.com/alphabravocompany/thewolf/internal/fix/engine"
 	"github.com/alphabravocompany/thewolf/internal/fix/fixstore"
 	"github.com/alphabravocompany/thewolf/internal/fix/profile"
+	"github.com/alphabravocompany/thewolf/internal/fix/workerstatus"
 	"github.com/alphabravocompany/thewolf/internal/fix/workspace"
 	"github.com/alphabravocompany/thewolf/internal/models"
 )
@@ -786,10 +785,11 @@ func ListFixEngines(w http.ResponseWriter, r *http.Request) {
 		response.WriteError(w, http.StatusUnauthorized, "unauthorized", "missing user context")
 		return
 	}
-	var worker []fixauth.EngineStatus
+	var status workerstatus.Status
 	if store, ok := artifacts.Global.(*artifacts.Store); ok && store != nil {
-		worker, _ = fixauth.ReadStatus(store.Root())
+		status, _ = workerstatus.Read(store.Root())
 	}
+	worker := status.Engines
 	if h := DefaultHandler; h != nil && !autofixEnabled(r.Context(), h.Store) {
 		configured := false
 		for _, status := range worker {
@@ -809,11 +809,9 @@ func ListFixEngines(w http.ResponseWriter, r *http.Request) {
 		response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: map[string]bool{"configured": configured}})
 		return
 	}
-	creds := fixauth.Credentials{}
 	keys := map[string]bool{}
 	defaults := map[string]string{}
 	if h := DefaultHandler; h != nil && h.Store != nil {
-		creds = fixauth.Resolve(r.Context(), h.Store, claims.UserID)
 		if list, err := h.Store.ListSecretsByUser(r.Context(), claims.UserID); err == nil {
 			for _, s := range list {
 				switch s.KeyType {
@@ -828,16 +826,12 @@ func ListFixEngines(w http.ResponseWriter, r *http.Request) {
 		}
 		for _, key := range []string{
 			"fixer_engine", profile.SettingModel, profile.SettingEffort, profile.SettingVariant,
-			fixengine.SettingPromptInitial, fixengine.SettingPromptFollowup,
+			profile.SettingPromptInitial, profile.SettingPromptFollowup,
 		} {
 			if v, err := h.Store.GetSetting(r.Context(), key); err == nil && v != "" {
 				defaults[key] = v
 			}
 		}
-	}
-	if len(worker) == 0 {
-		// Same-host install: the API process can see the user's OAuth files.
-		worker = fixauth.ProbeAll(r.Context(), creds)
 	}
 	home, _ := os.UserHomeDir()
 	live := map[string][]profile.Model{}
@@ -860,19 +854,20 @@ func ListFixEngines(w http.ResponseWriter, r *http.Request) {
 		},
 		"home":          home,
 		"console_shell": fixerConsoleShellEnabled(r, DefaultHandler),
-		"oauth_hint":    "Login with Claude, Codex, or OpenCode in the worker console. Grok uses an xAI API key under Account → Secrets. Sessions live in the fixer worker HOME.",
+		"oauth_hint":    "Log in with Claude, Codex, OpenCode, or Grok Build in the worker console, or add provider API keys under Account → Secrets. Sessions live in the fixer worker HOME.",
 		"prompts": map[string]any{
+			// Defaults come from the worker; empty until a worker has run.
 			"initial": map[string]string{
-				"key":     fixengine.SettingPromptInitial,
-				"value":   firstNonEmpty(defaults[fixengine.SettingPromptInitial], fixengine.DefaultInitialInstructions),
-				"default": fixengine.DefaultInitialInstructions,
+				"key":     profile.SettingPromptInitial,
+				"value":   firstNonEmpty(defaults[profile.SettingPromptInitial], status.Prompts[profile.SettingPromptInitial]),
+				"default": status.Prompts[profile.SettingPromptInitial],
 			},
 			"followup": map[string]string{
-				"key":     fixengine.SettingPromptFollowup,
-				"value":   firstNonEmpty(defaults[fixengine.SettingPromptFollowup], fixengine.DefaultFollowupInstructions),
-				"default": fixengine.DefaultFollowupInstructions,
+				"key":     profile.SettingPromptFollowup,
+				"value":   firstNonEmpty(defaults[profile.SettingPromptFollowup], status.Prompts[profile.SettingPromptFollowup]),
+				"default": status.Prompts[profile.SettingPromptFollowup],
 			},
-			"placeholder": fixengine.FindingsFilePlaceholder,
+			"placeholder": status.Placeholder,
 		},
 	}})
 }

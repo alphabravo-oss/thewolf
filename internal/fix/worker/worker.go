@@ -36,6 +36,7 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/fix/install"
 	"github.com/alphabravocompany/thewolf/internal/fix/lineage"
 	"github.com/alphabravocompany/thewolf/internal/fix/orchestrator"
+	"github.com/alphabravocompany/thewolf/internal/fix/workerstatus"
 	"github.com/alphabravocompany/thewolf/internal/fix/workspace"
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/wolflog"
@@ -127,7 +128,7 @@ func (w *Worker) Run(ctx context.Context) error {
 	log.Info().Bool("once", w.cfg.Once).Msg("fix worker started")
 	if w.cfg.Fixstore != nil {
 		engines := fixauth.ProbeAll(ctx, fixauth.Resolve(ctx, w.cfg.Store, ""))
-		if err := fixauth.WriteStatus(w.cfg.Fixstore.Root(), engines); err != nil {
+		if err := PublishStatus(w.cfg.Fixstore.Root(), engines); err != nil {
 			log.Warn().Err(err).Msg("could not write fixer engine status")
 		}
 	}
@@ -403,7 +404,7 @@ func (w *Worker) processConsole(ctx context.Context, log *zerolog.Logger, cons *
 
 	if w.cfg.Fixstore != nil {
 		engines := fixauth.ProbeAll(done, fixauth.Resolve(done, w.cfg.Store, cons.UserID))
-		if err := fixauth.WriteStatus(w.cfg.Fixstore.Root(), engines); err != nil {
+		if err := PublishStatus(w.cfg.Fixstore.Root(), engines); err != nil {
 			log.Warn().Err(err).Msg("could not refresh fixer engine status")
 		}
 	}
@@ -505,4 +506,17 @@ func sleepCtx(ctx context.Context, d time.Duration) bool {
 	case <-t.C:
 		return true
 	}
+}
+
+// PublishStatus writes engine readiness and the shipped prompt defaults for
+// the API, which never links the engines or their prompt text.
+func PublishStatus(root string, engines []fixauth.EngineStatus) error {
+	return workerstatus.Write(root, workerstatus.Status{
+		Engines: engines,
+		Prompts: map[string]string{
+			engine.SettingPromptInitial:  engine.DefaultInitialInstructions,
+			engine.SettingPromptFollowup: engine.DefaultFollowupInstructions,
+		},
+		Placeholder: engine.FindingsFilePlaceholder,
+	})
 }
