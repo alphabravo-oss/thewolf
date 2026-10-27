@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	gitcmd "github.com/alphabravocompany/thewolf/internal/fix/git"
+	gitcmd "github.com/alphabravocompany/thewolf/internal/gitops"
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"

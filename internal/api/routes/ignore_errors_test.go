@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	gitcmd "github.com/alphabravocompany/thewolf/internal/fix/git"
+	gitcmd "github.com/alphabravocompany/thewolf/internal/gitops"
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/scan/report"
 )

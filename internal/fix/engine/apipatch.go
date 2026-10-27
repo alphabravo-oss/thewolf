@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/alphabravocompany/thewolf/internal/ai"
-	gitpkg "github.com/alphabravocompany/thewolf/internal/fix/git"
+	gitpkg "github.com/alphabravocompany/thewolf/internal/gitops"
 	"github.com/alphabravocompany/thewolf/internal/models"
 )
 
