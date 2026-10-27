@@ -38,6 +38,7 @@ import { useRuntimeCapabilities } from "@/lib/runtime-capabilities";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScanAgentsPanel } from "@/components/fixes/scan-agents-panel";
+import { Section } from "@/components/ui/section";
 
 export const Route = createFileRoute("/_authed/scans/$scanId/")({
   component: ScanDetailPage,
@@ -502,7 +503,7 @@ function ScanDetailPage() {
           {(scan.status === "failed" || scan.status === "cancelled") && <Button variant="outline" onClick={() => retry.mutate()} disabled={retry.isPending || retryTools.busy}><RefreshCwIcon className="size-4" />{retry.isPending ? "Retrying…" : "Retry whole scan"}</Button>}
           {scanLive && <CancelScanButton scanId={scanId} />}
         </div>
-        {!scanLive && retryable.length > 0 && <details className="text-xs text-muted-foreground" id="retry-tools-scope"><summary className="cursor-pointer">Retry scope: {retryable.length} failed, partial or stopped {retryable.length === 1 ? "tool" : "tools"} · new scan on {scan.branch || "the default branch"}</summary><p className="mt-1 break-words">{retryable.map((tool) => tool.name).join(", ")}. Completed tools are not rerun. Original results remain in this scan.</p></details>}
+        {!scanLive && retryable.length > 0 && <Section variant="plain" className="text-xs text-muted-foreground" id="retry-tools-scope" title={<>Retry scope: {retryable.length} failed, partial or stopped {retryable.length === 1 ? "tool" : "tools"} · new scan on {scan.branch || "the default branch"}</>}><p className="mt-1 break-words">{retryable.map((tool) => tool.name).join(", ")}. Completed tools are not rerun. Original results remain in this scan.</p></Section>}
       </header>
 
       <section aria-label="Scanner coverage" className="rounded-lg border border-border px-4 py-3 space-y-2">
@@ -625,8 +626,7 @@ function ScanDetailPage() {
                   {findings.length.toLocaleString()} of {serverTotal.toLocaleString()} shown
                 </div>
               </div>
-              <details>
-                <summary className="cursor-pointer text-muted-foreground">Severity and category filters{excludedSeverities.size + excludedCategories.size > 0 ? ` · ${excludedSeverities.size + excludedCategories.size} excluded` : ""}</summary>
+              <Section variant="plain" title={`Severity and category filters${excludedSeverities.size + excludedCategories.size > 0 ? ` · ${excludedSeverities.size + excludedCategories.size} excluded` : ""}`}>
                 <div className="mt-2 space-y-2">
               <CheckboxFilterRow
                 label="Severity"
@@ -644,7 +644,7 @@ function ScanDetailPage() {
                   counts={categoryCounts}
                 />
               )}                </div>
-              </details>
+              </Section>
             </div>
 
             <DataTable
@@ -669,13 +669,12 @@ function ScanDetailPage() {
           </>
         )}
       </section>
-      {(scan.failure_message || scan.failure_code) && <details className="rounded-md border border-border p-3 text-sm"><summary className="cursor-pointer font-medium">Failure details</summary><p className="mt-2 whitespace-pre-wrap break-words text-muted-foreground">{scan.failure_message || scan.failure_code}</p></details>}
+      {(scan.failure_message || scan.failure_code) && <Section className="text-sm" title="Failure details"><p className="mt-2 whitespace-pre-wrap break-words text-muted-foreground">{scan.failure_message || scan.failure_code}</p></Section>}
       {output.scanId === scanId && output.lines.length > 0 && (
-        <details className="rounded-md border border-border p-3"><summary className="cursor-pointer text-sm font-medium">Tool output · latest 200 lines</summary><pre aria-label="Live tool output" tabIndex={0} className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap break-all text-xs">{output.lines.join("\n")}</pre></details>
+        <Section title="Tool output · latest 200 lines"><pre aria-label="Live tool output" tabIndex={0} className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap break-all text-xs">{output.lines.join("\n")}</pre></Section>
       )}
       {!!scan.scanner_scopes?.length && (
-        <details className="rounded-md border border-border p-3 text-sm">
-          <summary className="cursor-pointer font-medium">Requested and effective scan scope</summary>
+        <Section className="text-sm" title="Requested and effective scan scope">
           <ul className="mt-2 space-y-3">
             {scan.scanner_scopes.map((scope) => <li key={scope.tool_name} className="break-words">
               <strong>{scope.tool_name}</strong>
@@ -684,7 +683,7 @@ function ScanDetailPage() {
               {scope.scope_message && <p className="text-status-warning">{scope.scope_message}</p>}
             </li>)}
           </ul>
-        </details>
+        </Section>
       )}
 
       {autofixEnabled && !scanLive && <ScanAgentsPanel scanId={scan.origin_scan_id || scanId} repoId={scan.repo_id} originFindings={scan.origin_scan_id ? undefined : scan.finding_count} github={scan.source_type === "github" || scan.repo?.source_type === "github"} sourcePath={scan.source_path || scan.repo?.source_path} />}
@@ -816,18 +815,17 @@ function ToolsPanel({ tools, loading, error, onRefresh, scanId, scanStatus }: {
   const cancelled = tools.filter((tool) => tool.status === "cancelled");
   const active = tools.filter((tool) => ["running", "pending", "queued"].includes(tool.status));
   const scanActive = scanStatus === "running" || scanStatus === "pending";
-  return <details>
-    <summary className="cursor-pointer text-sm">
+  return <Section variant="plain" triggerClassName="text-sm text-foreground" title={<>
       <span className="font-medium">Tools ({tools.length})</span>
       <span className="ml-3 text-xs text-muted-foreground">{completed.length} completed · <span className={failed.length ? "text-status-error" : ""}>{failed.length} failed</span> · <span className={partial.length ? "text-status-warning" : ""}>{partial.length} partial</span> · {skipped.length} skipped{cancelled.length > 0 && ` · ${cancelled.length} stopped`}{active.length > 0 && ` · ${active.length} ${scanActive ? "active" : "not run"}`}</span>
       {partial.map((tool) => <span key={tool.name} className="mt-1 block text-xs text-status-warning">{tool.name}: <span>{tool.raw_count ?? tool.finding_count} findings retained · incomplete coverage</span></span>)}
-    </summary>
+    </>}>
     {tools.length === 0 && <p className="mt-2 text-sm text-muted-foreground">{scanActive ? "Scanners are being selected." : "No scanner execution was recorded. This is not a clean result."}</p>}
     <div className="mt-3 space-y-1">
       {[...failed, ...partial, ...active, ...cancelled].map((tool) => <ToolCard key={tool.name} tool={tool} scanId={scanId} cancellable={scanActive} />)}
-      {[{ label: "Completed", tools: completed }, { label: "Skipped", tools: skipped }].filter((group) => group.tools.length > 0).map((group) => <details key={group.label} className="py-2 text-xs text-muted-foreground"><summary className="cursor-pointer">{group.label} tools ({group.tools.length})</summary><div className="mt-2 space-y-1">{group.tools.map((tool) => <ToolCard key={tool.name} tool={tool} scanId={scanId} />)}</div></details>)}
+      {[{ label: "Completed", tools: completed }, { label: "Skipped", tools: skipped }].filter((group) => group.tools.length > 0).map((group) => <Section key={group.label} variant="plain" className="py-2 text-xs text-muted-foreground" title={`${group.label} tools (${group.tools.length})`}><div className="mt-2 space-y-1">{group.tools.map((tool) => <ToolCard key={tool.name} tool={tool} scanId={scanId} />)}</div></Section>)}
     </div>
-  </details>;
+  </Section>;
 }
 
 function ToolCard({

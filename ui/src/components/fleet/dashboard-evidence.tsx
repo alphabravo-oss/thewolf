@@ -15,6 +15,7 @@ import { DataTable, type Column } from "@/components/ui/data-table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { SeverityBadge } from "@/components/severity-badge";
+import { Section } from "@/components/ui/section";
 
 const linkClass = "font-medium text-primary hover:underline underline-offset-4";
 const coverageLabels: Record<FleetCoverageRow["status"], string> = {
@@ -168,9 +169,8 @@ function QualityVolume() {
   });
   if (q.isPending) return <p role="status" className="text-xs text-muted-foreground">Loading code-quality volume…</p>;
   if (q.isError) return <p role="alert" className="text-xs text-muted-foreground">Code-quality volume is unknown. <button className={linkClass} onClick={() => void q.refetch()}>Retry quality count</button></p>;
-  return <details className="rounded-lg border border-border px-4 py-3 text-sm">
-    <summary className="cursor-pointer text-muted-foreground">Code quality · {q.data.total.toLocaleString()} open {q.data.total === 1 ? "issue" : "issues"}</summary>
+  return <Section className="text-sm" triggerClassName="font-normal text-muted-foreground" title={<>Code quality · {q.data.total.toLocaleString()} open {q.data.total === 1 ? "issue" : "issues"}</>}>
     <p className="mt-3 text-xs text-muted-foreground">Quality checks are separate from security risk. Showing {q.data.rows.length} of {q.data.total} current issues.</p>
     <ul className="mt-2 divide-y divide-border">{q.data.rows.map((f) => <li key={f.id} className="py-2"><Link to="/findings/$findingId" params={{ findingId: f.id }} className={linkClass}>{f.title}</Link><p className="mt-1 text-xs text-muted-foreground break-all">{f.file_path}</p></li>)}</ul>
-  </details>;
+  </Section>;
 }

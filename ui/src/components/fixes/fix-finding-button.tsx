@@ -14,6 +14,7 @@ import {
   useFixEngines,
   useRepoFixable,
 } from "@/lib/fixes";
+import { Section } from "@/components/ui/section";
 
 export function FixFindingButton({
   findingId,
@@ -78,8 +79,7 @@ export function FixFindingButton({
   return (
     <div className="flex flex-col items-end gap-2">
       {harness && (
-        <details className="text-xs">
-          <summary className="cursor-pointer text-muted-foreground">Advanced fix options</summary>
+        <Section variant="plain" className="text-xs" title="Advanced fix options">
           <div className="flex flex-wrap justify-end gap-2 mt-2">
           <select
             aria-label="Fix engine"
@@ -125,7 +125,7 @@ export function FixFindingButton({
             ))}
           </select>
           </div>
-        </details>
+        </Section>
       )}
       <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
         <input
