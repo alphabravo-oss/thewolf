@@ -11,7 +11,7 @@ import { FixerTokenScopes } from "@/components/github-token-help";
 import { bareHost } from "@/components/settings/secrets";
 import { Field, RowActions, SettingsCard, SettingsTable } from "@/components/settings/shared";
 import { AddButton } from "@/components/ui/add-button";
-import { FieldError, FormDialog } from "@/components/ui/form-dialog";
+import { FormDialog } from "@/components/ui/form-dialog";
 import { Input } from "@/components/ui/input";
 import { Section } from "@/components/ui/section";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -145,17 +145,14 @@ export function GitAccessCard() {
             <SelectContent>{TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
           </Select>
         </Field>
-        <Field label="Name">
+        <Field label="Name" error={miss(name) ? "Give the credential a name." : undefined}>
           <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. github-fixer" aria-invalid={miss(name)} />
-          <FieldError>{miss(name) ? "Give the credential a name." : undefined}</FieldError>
         </Field>
-        <Field label="Token">
+        <Field label="Token" error={touched && !secret ? "Paste the token." : undefined}>
           <Input type="password" value={secret} onChange={(e) => setSecret(e.target.value)} placeholder="paste token" className="font-mono" autoComplete="off" aria-invalid={touched && !secret} />
-          <FieldError>{touched && !secret ? "Paste the token." : undefined}</FieldError>
         </Field>
-        <Field label="Host" hint={<>Hostname only (e.g. <code className="font-mono">gitlab.example.com</code>). Use your GitHub Enterprise host if you have one.</>}>
+        <Field label="Host" hint={<>Hostname only (e.g. <code className="font-mono">gitlab.example.com</code>). Use your GitHub Enterprise host if you have one.</>} error={touched && !hostBare ? "Enter the hostname." : undefined}>
           <Input value={host} onChange={(e) => setHost(e.target.value)} className="font-mono" aria-invalid={touched && !hostBare} />
-          <FieldError>{touched && !hostBare ? "Enter the hostname." : undefined}</FieldError>
         </Field>
         <ul className="list-disc space-y-1 pl-4 text-xs text-muted-foreground">
           <FixerTokenScopes host={type === "gitlab_token" ? "gitlab" : "github"} />

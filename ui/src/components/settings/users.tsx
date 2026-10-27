@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { AddButton } from "@/components/ui/add-button";
-import { FieldError, FormDialog } from "@/components/ui/form-dialog";
+import { FormDialog } from "@/components/ui/form-dialog";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -145,15 +145,13 @@ export function UsersSection() {
           if (/^\S+@\S+$/.test(form.email.trim()) && form.password.length >= 12) create.mutate(form);
         }}
       >
-        <Field label="Email">
+        <Field label="Email" error={emailInvalid ? "Enter a valid email address." : undefined}>
           <Input type="email" value={form.email} placeholder="user@example.com" autoComplete="off"
             onChange={(e) => setForm({ ...form, email: e.target.value })} aria-invalid={emailInvalid} />
-          <FieldError>{emailInvalid ? "Enter a valid email address." : undefined}</FieldError>
         </Field>
-        <Field label="Password">
+        <Field label="Password" error={pwInvalid ? "Use at least 12 characters." : undefined}>
           <Input type="password" value={form.password} placeholder="At least 12 characters" autoComplete="new-password"
             onChange={(e) => setForm({ ...form, password: e.target.value })} aria-invalid={pwInvalid} />
-          <FieldError>{pwInvalid ? "Use at least 12 characters." : undefined}</FieldError>
         </Field>
         <Field label="Role">
           <Select value={form.role} onValueChange={(role) => setForm({ ...form, role })}>

@@ -3,59 +3,99 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import { ConfirmDialog } from "@/components/confirm-dialog";
+import { EnterpriseChrome, RecordCount, RecordsPanel } from "@/components/enterprise-records";
+import { Field, SettingsCard } from "@/components/settings/shared";
+import { AddButton } from "@/components/ui/add-button";
 import { Button } from "@/components/ui/button";
+import { ErrorState } from "@/components/ui/empty-state";
+import { FormDialog } from "@/components/ui/form-dialog";
 import { Input } from "@/components/ui/input";
-import { PageSection } from "@/components/ui/page";
-import { EnterpriseChrome, RecordsPanel } from "@/components/enterprise-records";
+import { Section } from "@/components/ui/section";
+import { enterpriseModuleMeta } from "@/lib/enterprise-modules";
+import { safeDisplayText, safeErrorMessage } from "@/lib/safe-display";
 
 export const Route = createFileRoute("/_authed/enterprise/$")({
   component: EnterpriseModulePage,
 });
 
-const titles: Record<string, { title: string; description: string }> = {
-  catalogs: { title: "Plugin catalogs", description: "Certified third-party catalogs. Not the first-party scanner factory." },
-  compliance: { title: "Compliance", description: "Mappings, auditor reports, and legal hold." },
-  reports: { title: "Reports", description: "Enterprise compliance reports." },
-  support: { title: "Support", description: "Support cases and live diagnostics." },
-  diagnostics: { title: "Diagnostics", description: "Redacted runtime diagnostics for support." },
-  integrations: { title: "Integrations", description: "SIEM, ticketing, and extra SCM destinations." },
-  siem: { title: "SIEM", description: "Webhook destinations. Send posts JSON to the stored HTTPS URL." },
-  ticketing: { title: "Ticketing", description: "Ticket destinations." },
-  residency: { title: "Residency", description: "Region and customer-managed key references. Do not store key material." },
-  "customer-keys": { title: "Customer keys", description: "KMS/URI references only." },
-  "attack-paths": { title: "Attack paths", description: "Consensus paths from clustered scanner evidence. Not a runtime CPG." },
-  verifications: { title: "Verification", description: "Governed runtime verification. Production is denied by default." },
-  packaging: { title: "Packaging", description: "Authenticated delivery catalog for this overlay." },
-  proof: { title: "Overlay proof", description: "Registration probe. Harmless." },
-};
-
 function EnterpriseModulePage() {
   const { _splat } = Route.useParams();
   const key = _splat ?? "";
-  const meta = titles[key] ?? {
-    title: key.replace(/-/g, " ") || "Enterprise",
-    description: "Enterprise module.",
-  };
+  const meta = enterpriseModuleMeta(key);
   const path = `/enterprise/${key}`;
 
-  return (
-    <EnterpriseChrome title={meta.title} description={meta.description}>
-      {key === "diagnostics" || key === "support" ? <DiagnosticsPanel /> : null}
-      {key === "packaging" ? <PackagingPanel /> : null}
-      {key === "attack-paths" ? <AttackPathPanel /> : null}
-      {key === "verifications" ? <VerifyPanel /> : null}
-      {key === "siem" || key === "ticketing" ? (
-        <RecordsPanel path={path} title={meta.title} send />
-      ) : key === "diagnostics" || key === "packaging" || key === "proof" ? null : (
-        <RecordsPanel path={path} title={meta.title} />
-      )}
-      {key === "support" ? <RecordsPanel path="/enterprise/support" title="Cases" /> : null}
-      {key === "integrations" ? (
+  let kpis;
+  let body;
+  switch (key) {
+    case "siem":
+      body = <RecordsPanel path={path} title="Destinations" noun="destination" description="Send posts JSON to the stored HTTPS URL." send />;
+      break;
+    case "ticketing":
+      body = <RecordsPanel path={path} title="Destinations" noun="destination" description="Where tickets are opened." send />;
+      break;
+    case "integrations":
+      kpis = (
         <>
-          <RecordsPanel path="/enterprise/siem" title="SIEM" send />
-          <RecordsPanel path="/enterprise/ticketing" title="Ticketing" send />
+          <RecordCount title="SIEM destinations" path="/enterprise/siem" />
+          <RecordCount title="Ticketing destinations" path="/enterprise/ticketing" />
         </>
-      ) : null}
+      );
+      body = (
+        <>
+          <RecordsPanel path="/enterprise/siem" title="SIEM" noun="destination" send />
+          <RecordsPanel path="/enterprise/ticketing" title="Ticketing" noun="destination" send />
+        </>
+      );
+      break;
+    case "catalogs":
+      body = <RecordsPanel path={path} title="Catalogs" noun="catalog" />;
+      break;
+    case "residency":
+      body = <RecordsPanel path={path} title="Residency records" noun="residency record" typedDelete />;
+      break;
+    case "customer-keys":
+      body = <RecordsPanel path={path} title="Key references" noun="key reference" description="References only. Do not store key material." typedDelete />;
+      break;
+    case "reports":
+      body = <RecordsPanel path={path} title="Reports" noun="report" />;
+      break;
+    case "compliance":
+      body = <RecordsPanel path={path} title="Compliance records" noun="record" description="Mappings, auditor reports, and legal hold." />;
+      break;
+    case "support":
+      kpis = <RecordCount title="Support cases" path="/enterprise/support" />;
+      body = (
+        <>
+          <RecordsPanel path={path} title="Cases" noun="case" />
+          <DiagnosticsPanel />
+        </>
+      );
+      break;
+    case "diagnostics":
+      body = <DiagnosticsPanel />;
+      break;
+    case "packaging":
+      body = <PackagingPanel />;
+      break;
+    case "attack-paths":
+      kpis = <RecordCount title="Attack paths" path={path} />;
+      body = <RecordsPanel path={path} title="Computed paths" noun="path" addable={false} actions={<ComputeAttackPath />} />;
+      break;
+    case "verifications":
+      kpis = <RecordCount title="Verifications" path={path} />;
+      body = <RecordsPanel path={path} title="Verification runs" noun="verification" addable={false} actions={<RunVerification />} />;
+      break;
+    case "proof":
+      body = null;
+      break;
+    default:
+      body = <RecordsPanel path={path} title={meta.title} />;
+  }
+
+  return (
+    <EnterpriseChrome title={meta.title} description={meta.purpose} kpis={kpis}>
+      {body}
     </EnterpriseChrome>
   );
 }
@@ -64,24 +104,32 @@ function DiagnosticsPanel() {
   const q = useQuery({
     queryKey: ["enterprise", "diagnostics"],
     queryFn: async () => (await api.get<Record<string, unknown>>("/enterprise/diagnostics")).data,
+    retry: false,
   });
-  if (q.isError) {
-    return <p className="text-sm text-muted-foreground">Diagnostics are not available in this edition.</p>;
-  }
+  if (q.isError) return <ErrorState title="Diagnostics are not available in this edition" onRetry={() => void q.refetch()} />;
   const d = q.data ?? {};
   return (
-    <PageSection title="Runtime">
-      <dl className="grid gap-2 sm:grid-cols-2 text-sm">
-        {Object.entries(d).map(([k, v]) =>
-          k === "settings" ? null : (
-            <div key={k} className="glass-card p-3">
-              <dt className="text-xs text-muted-foreground">{k}</dt>
-              <dd className="font-mono text-xs break-all">{typeof v === "string" ? v : JSON.stringify(v)}</dd>
-            </div>
-          ),
-        )}
-      </dl>
-    </PageSection>
+    <SettingsCard title="Runtime" description="Redacted runtime details to attach to a support case.">
+      {q.isLoading ? (
+        <p role="status" className="text-sm text-muted-foreground">Loading…</p>
+      ) : (
+        <>
+          <dl className="grid gap-2 text-sm sm:grid-cols-2">
+            {Object.entries(d).map(([k, v]) =>
+              k === "settings" ? null : (
+                <div key={k} className="rounded-md border border-border p-3">
+                  <dt className="text-xs text-muted-foreground">{k}</dt>
+                  <dd className="break-all font-mono text-xs">{typeof v === "string" ? v : JSON.stringify(v)}</dd>
+                </div>
+              ),
+            )}
+          </dl>
+          <Section title="Raw diagnostics" summary="JSON as returned by the API" variant="plain">
+            <pre className="max-h-96 overflow-auto rounded-md bg-muted/30 p-3 font-mono text-xs">{safeDisplayText(JSON.stringify(d, null, 2), 50_000)}</pre>
+          </Section>
+        </>
+      )}
+    </SettingsCard>
   );
 }
 
@@ -89,75 +137,104 @@ function PackagingPanel() {
   const q = useQuery({
     queryKey: ["enterprise", "packaging"],
     queryFn: async () => (await api.get<Record<string, unknown>>("/enterprise/packaging")).data,
+    retry: false,
   });
-  if (q.isError) {
-    return <p className="text-sm text-muted-foreground">Packaging catalog is not available in this edition.</p>;
-  }
+  if (q.isError) return <ErrorState title="Packaging catalog is not available in this edition" onRetry={() => void q.refetch()} />;
   return (
-    <pre className="glass-card p-4 text-xs overflow-auto">
-      {q.isLoading ? "Loading…" : JSON.stringify(q.data ?? {}, null, 2)}
-    </pre>
+    <SettingsCard title="Delivery catalog" description="Authenticated delivery catalog for this overlay.">
+      <Section title="Raw catalog" summary="JSON as returned by the API" defaultOpen>
+        <pre className="max-h-[32rem] overflow-auto rounded-md bg-muted/30 p-3 font-mono text-xs">
+          {q.isLoading ? "Loading…" : safeDisplayText(JSON.stringify(q.data ?? {}, null, 2), 100_000)}
+        </pre>
+      </Section>
+    </SettingsCard>
   );
 }
 
-function AttackPathPanel() {
+/** A vulnerability-id dialog for the two "run something" modules. */
+function useRunByVulnerability(path: string, body: (id: string) => unknown, success: string) {
   const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
   const [id, setId] = useState("");
-  const run = useMutation({
-    mutationFn: async () =>
-      api.post("/enterprise/attack-paths", { vulnerability_id: id.trim(), evidence: [] }),
-    onSuccess: () => {
+  const [touched, setTouched] = useState(false);
+  const close = (next: boolean) => {
+    setOpen(next);
+    if (!next) {
       setId("");
-      qc.invalidateQueries({ queryKey: ["enterprise", "/enterprise/attack-paths"] });
-      toast.success("Path stored");
+      setTouched(false);
+      run.reset();
+    }
+  };
+  const run = useMutation({
+    mutationFn: async () => api.post(path, body(id.trim())),
+    onSuccess: () => {
+      toast.success(success);
+      close(false);
+      qc.invalidateQueries({ queryKey: ["enterprise", path] });
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
   });
+  return { open, setOpen, id, setId, touched, setTouched, close, run };
+}
+
+function ComputeAttackPath() {
+  const f = useRunByVulnerability("/enterprise/attack-paths", (id) => ({ vulnerability_id: id, evidence: [] }), "Path stored");
   return (
-    <PageSection title="Compute" description="Builds a consensus path from evidence already clustered for that vulnerability id.">
-      <form
-        className="flex flex-wrap gap-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (id.trim()) run.mutate();
+    <>
+      <AddButton thing="attack path" onClick={() => f.setOpen(true)} />
+      <FormDialog
+        open={f.open}
+        onOpenChange={f.close}
+        title="Compute attack path"
+        description="Builds a consensus path from evidence already clustered for that vulnerability id."
+        submitLabel="Compute"
+        pending={f.run.isPending}
+        dirty={!!f.id}
+        error={f.run.isError ? safeErrorMessage(f.run.error, "Failed") : undefined}
+        onSubmit={() => {
+          f.setTouched(true);
+          if (f.id.trim()) f.run.mutate();
         }}
       >
-        <Input value={id} onChange={(e) => setId(e.target.value)} placeholder="Vulnerability id" className="max-w-sm" />
-        <Button type="submit" size="sm" disabled={run.isPending || !id.trim()}>
-          Compute
-        </Button>
-      </form>
-    </PageSection>
+        <Field label="Vulnerability id" error={f.touched && !f.id.trim() ? "Enter a vulnerability id." : undefined}>
+          <Input value={f.id} onChange={(e) => f.setId(e.target.value)} aria-invalid={f.touched && !f.id.trim()} autoComplete="off" />
+        </Field>
+      </FormDialog>
+    </>
   );
 }
 
-function VerifyPanel() {
-  const qc = useQueryClient();
-  const [id, setId] = useState("");
-  const run = useMutation({
-    mutationFn: async () =>
-      api.post("/enterprise/verifications", { vulnerability_id: id.trim(), environment: "production" }),
-    onSuccess: () => {
-      setId("");
-      qc.invalidateQueries({ queryKey: ["enterprise", "/enterprise/verifications"] });
-      toast.success("Verification recorded");
-    },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
-  });
+function RunVerification() {
+  const f = useRunByVulnerability("/enterprise/verifications", (id) => ({ vulnerability_id: id, environment: "production" }), "Verification recorded");
+  const [confirm, setConfirm] = useState(false);
   return (
-    <PageSection title="Run" description="Production-deny is the default. No exploit payload is executed.">
-      <form
-        className="flex flex-wrap gap-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (id.trim()) run.mutate();
+    <>
+      <Button type="button" size="sm" onClick={() => f.setOpen(true)}>Run verification</Button>
+      <FormDialog
+        open={f.open}
+        onOpenChange={f.close}
+        title="Run verification"
+        description="Production-deny is the default. No exploit payload is executed."
+        submitLabel="Review and run"
+        dirty={!!f.id}
+        onSubmit={() => {
+          f.setTouched(true);
+          if (f.id.trim()) setConfirm(true);
         }}
       >
-        <Input value={id} onChange={(e) => setId(e.target.value)} placeholder="Vulnerability id" className="max-w-sm" />
-        <Button type="submit" size="sm" disabled={run.isPending || !id.trim()}>
-          Verify
-        </Button>
-      </form>
-    </PageSection>
+        <Field label="Vulnerability id" error={f.touched && !f.id.trim() ? "Enter a vulnerability id." : undefined}>
+          <Input value={f.id} onChange={(e) => f.setId(e.target.value)} aria-invalid={f.touched && !f.id.trim()} autoComplete="off" />
+        </Field>
+      </FormDialog>
+      <ConfirmDialog
+        open={confirm}
+        onOpenChange={setConfirm}
+        variant="default"
+        title="Run verification?"
+        description={`Records a governed verification for ${f.id.trim()} against production. Production is denied unless policy allows it.`}
+        confirmLabel="Run verification"
+        pending={f.run.isPending}
+        onConfirm={() => f.run.mutate(undefined, { onSettled: () => setConfirm(false) })}
+      />
+    </>
   );
 }

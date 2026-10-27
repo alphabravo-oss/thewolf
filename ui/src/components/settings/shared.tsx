@@ -7,10 +7,11 @@ import { MoreHorizontalIcon, PlusIcon } from "lucide-react";
 import { api } from "@/lib/api";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
+import { FieldError } from "@/components/ui/form-dialog";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
@@ -39,7 +40,7 @@ export function SettingsCard({
     <Card role={label ? "region" : undefined} aria-label={label} className={cn("min-w-0 overflow-hidden", className)}>
       <CardHeader className="items-start">
         <div className="min-w-0 space-y-1">
-          <CardTitle>{title}</CardTitle>
+          <h3 className="text-[0.95rem] font-semibold leading-none tracking-tight">{title}</h3>
           {description ? <CardDescription>{description}</CardDescription> : null}
         </div>
         {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
@@ -63,13 +64,16 @@ export function SettingRow({ label, help, children }: { label: ReactNode; help?:
 }
 
 /** Label above a control for dialog bodies. Wraps the control so the label names it. */
-export function Field({ label, hint, children }: { label: string; hint?: ReactNode; children: ReactNode }) {
+export function Field({ label, hint, error, children }: { label: string; hint?: ReactNode; error?: ReactNode; children: ReactNode }) {
   return (
-    <label className="block space-y-1.5">
-      <span className="block text-xs font-medium text-muted-foreground">{label}</span>
-      {children}
-      {hint ? <span className="block text-xs text-muted-foreground">{hint}</span> : null}
-    </label>
+    <div>
+      <label className="block space-y-1.5">
+        <span className="block text-xs font-medium text-muted-foreground">{label}</span>
+        {children}
+      </label>
+      {hint ? <p className="mt-1.5 text-xs text-muted-foreground">{hint}</p> : null}
+      <FieldError>{error}</FieldError>
+    </div>
   );
 }
 

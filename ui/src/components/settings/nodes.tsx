@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { AddButton } from "@/components/ui/add-button";
-import { FieldError, FormDialog } from "@/components/ui/form-dialog";
+import { FormDialog } from "@/components/ui/form-dialog";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -175,17 +175,14 @@ export function NodesTab() {
         }}
       >
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Name">
+          <Field label="Name" error={missing(draft.name) ? "Name is required." : undefined}>
             <Input value={draft.name} onChange={(e) => set({ name: e.target.value })} placeholder="dev-box" aria-invalid={missing(draft.name)} />
-            <FieldError>{missing(draft.name) ? "Name is required." : undefined}</FieldError>
           </Field>
-          <Field label="Username">
+          <Field label="Username" error={missing(draft.username) ? "Username is required." : undefined}>
             <Input value={draft.username} onChange={(e) => set({ username: e.target.value })} placeholder="alice" aria-invalid={missing(draft.username)} />
-            <FieldError>{missing(draft.username) ? "Username is required." : undefined}</FieldError>
           </Field>
-          <Field label="Host">
+          <Field label="Host" error={missing(draft.host) ? "Host is required." : undefined}>
             <Input value={draft.host} onChange={(e) => set({ host: e.target.value })} placeholder="dev.example.com" className="font-mono" aria-invalid={missing(draft.host)} />
-            <FieldError>{missing(draft.host) ? "Host is required." : undefined}</FieldError>
           </Field>
           <Field label="Port">
             <Input value={draft.port} onChange={(e) => set({ port: e.target.value })} inputMode="numeric" />
@@ -199,12 +196,11 @@ export function NodesTab() {
               </SelectContent>
             </Select>
           </Field>
-          <Field label="Credential secret">
+          <Field label="Credential secret" error={touched && !draft.secretId ? "Pick the SSH secret to use." : undefined}>
             <Select value={draft.secretId} onValueChange={(v) => set({ secretId: v })}>
               <SelectTrigger aria-label="Credential secret" aria-invalid={touched && !draft.secretId}><SelectValue placeholder="Select secret…" /></SelectTrigger>
               <SelectContent>{allowedSecrets.map((s) => <SelectItem key={s.id} value={s.id}>{s.key_name}</SelectItem>)}</SelectContent>
             </Select>
-            <FieldError>{touched && !draft.secretId ? "Pick the SSH secret to use." : undefined}</FieldError>
           </Field>
         </div>
         <Field label="Base path">

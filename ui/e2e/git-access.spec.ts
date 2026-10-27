@@ -9,9 +9,11 @@ test("Fixer settings explain what git tokens the fixer needs @browser-matrix", a
   await enterprise(page);
   await page.route(/\/api(?:\/v1)?\/settings$/, route => route.fulfill({ json: { data: { autofix_enabled: "true" } } }));
   await page.route(/\/api(?:\/v1)?\/fixes\/engines$/, route => route.fulfill({ json: { data: { worker: [], catalog: [], defaults: {}, api_keys: {}, console_shell: false } } }));
-  await page.goto("/settings?tab=fixer");
+  await page.route(/\/api(?:\/v1)?\/credentials$/, route => route.fulfill({ json: { data: [] } }));
+  await page.goto("/settings?tab=git");
 
   const card = page.getByRole("region", { name: "Git access" });
+  await card.getByRole("button", { name: "Token scopes and private hosts" }).click();
   await expect(card).toContainText("Contents: Read and write");
   await expect(card).toContainText("Pull requests: Read and write");
   await expect(card).toContainText("workflow");
@@ -23,8 +25,7 @@ test("Fixer settings explain what git tokens the fixer needs @browser-matrix", a
   await expect(card).toContainText("WOLF_GIT_CA_BUNDLE");
   await expect(card).toContainText("SSH remotes are not supported");
   await expect(card).toContainText("other than GitHub and GitLab");
-  await card.getByRole("link", { name: "Account → Secrets" }).click();
-  await expect(page).toHaveURL(/\/account\?section=secrets/);
+  await expect(card.getByRole("button", { name: "Add credential" }).first()).toBeVisible();
 });
 
 test("a host-bound GitLab token can be created, then picked when adding a git URL repo @browser-matrix", async ({ page }) => {
@@ -50,23 +51,28 @@ test("a host-bound GitLab token can be created, then picked when adding a git UR
   });
 
   // Create a token bound to a self-hosted GitLab.
+  await page.route(/\/api(?:\/v1)?\/config\/secrets$/, route => route.fulfill({ json: { data: [] } }));
   await page.goto("/account?section=secrets");
-  await page.getByRole("combobox", { name: "Type" }).click();
+  await page.getByRole("button", { name: "Add secret" }).first().click();
+  const dialog = page.getByRole("dialog", { name: "Add secret" });
+  await dialog.getByRole("combobox", { name: "Type" }).click();
   await page.getByRole("option", { name: "GitLab token" }).click();
-  await expect(page.getByText("write_repository").first()).toBeVisible();
-  await expect(page.getByLabel("GitLab host")).toHaveValue("gitlab.com");
-  await page.getByLabel("GitLab host").fill("https://GitLab.Example.com/");
-  await page.getByLabel("Name").fill("corp-gitlab");
-  await page.getByLabel("Value").fill("glpat-secret");
-  await page.getByRole("button", { name: "Add" }).click();
+  await expect(dialog.getByText("write_repository").first()).toBeVisible();
+  await expect(dialog.getByLabel("GitLab host")).toHaveValue("gitlab.com");
+  await dialog.getByLabel("GitLab host").fill("https://GitLab.Example.com/");
+  await dialog.getByLabel("Name", { exact: true }).fill("corp-gitlab");
+  await dialog.getByLabel("Value", { exact: true }).fill("glpat-secret");
+  await dialog.getByRole("button", { name: "Add secret" }).click();
   await expect.poll(() => credentialPosts.length).toBe(1);
   expect(credentialPosts[0]).toEqual({ type: "gitlab_token", name: "corp-gitlab", secret: "glpat-secret", allowed_hosts: ["gitlab.example.com"] });
 
   // The GitHub type shows its own scopes, no host field.
-  await page.getByRole("combobox", { name: "Type" }).click();
+  await page.getByRole("button", { name: "Add secret" }).first().click();
+  await page.getByRole("dialog").getByRole("combobox", { name: "Type" }).click();
   await page.getByRole("option", { name: "GitHub token" }).click();
-  await expect(page.getByText("Pull requests: Read and write").first()).toBeVisible();
+  await expect(page.getByRole("dialog").getByText("Pull requests: Read and write").first()).toBeVisible();
   await expect(page.getByLabel("GitLab host")).toHaveCount(0);
+  await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
 
   // Use it from the add-repo form.
   await page.goto("/repos");

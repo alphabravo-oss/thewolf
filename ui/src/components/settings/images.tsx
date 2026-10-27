@@ -60,6 +60,7 @@ function ImagesTable({ title, description, items, probe, onPull, bulk, onRefresh
   return (
     <SettingsCard
       title={title}
+      label={title}
       description={`${description}${stale.length ? ` ${stale.length} of ${items.length} outdated.` : ""}`}
       actions={
         <>

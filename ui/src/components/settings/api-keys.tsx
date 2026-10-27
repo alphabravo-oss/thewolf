@@ -183,9 +183,8 @@ export function ApiKeysTab() {
         }}
       >
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Name">
+          <Field label="Name" error={nameMissing ? "Give the key a name." : undefined}>
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="ci-pipeline" aria-invalid={nameMissing} />
-            <FieldError>{nameMissing ? "Give the key a name." : undefined}</FieldError>
           </Field>
           <Field label="Expires">
             <Select value={String(expiryDays)} onValueChange={(v) => setExpiryDays(Number(v))}>

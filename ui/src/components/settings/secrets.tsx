@@ -9,7 +9,7 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { GitHubTokenHelp } from "@/components/github-token-help";
 import { GitLabTokenHelp } from "@/components/gitlab-token-help";
 import { AddButton } from "@/components/ui/add-button";
-import { FieldError, FormDialog } from "@/components/ui/form-dialog";
+import { FormDialog } from "@/components/ui/form-dialog";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { safeErrorMessage } from "@/lib/safe-display";
@@ -146,18 +146,15 @@ export function SecretsTab() {
             <SelectContent>{KEY_TYPES.map((k) => <SelectItem key={k.value} value={k.value}>{k.label}</SelectItem>)}</SelectContent>
           </Select>
         </Field>
-        <Field label="Name">
+        <Field label="Name" error={touched && !keyName.trim() ? "Give the secret a name." : undefined}>
           <Input value={keyName} onChange={(e) => setKeyName(e.target.value)} placeholder="e.g. github-personal" aria-invalid={touched && !keyName.trim()} />
-          <FieldError>{touched && !keyName.trim() ? "Give the secret a name." : undefined}</FieldError>
         </Field>
-        <Field label="Value">
+        <Field label="Value" error={touched && !value ? "Paste the secret value." : undefined}>
           <Input type="password" value={value} onChange={(e) => setValue(e.target.value)} placeholder="paste secret" className="font-mono" autoComplete="off" aria-invalid={touched && !value} />
-          <FieldError>{touched && !value ? "Paste the secret value." : undefined}</FieldError>
         </Field>
         {keyType === "gitlab_token" && (
-          <Field label="GitLab host" hint={<>Hostname only (e.g. <code className="font-mono">gitlab.example.com</code>). The token is bound to this host and sent nowhere else.</>}>
+          <Field label="GitLab host" hint={<>Hostname only (e.g. <code className="font-mono">gitlab.example.com</code>). The token is bound to this host and sent nowhere else.</>} error={touched && missingHost ? "Enter the GitLab hostname." : undefined}>
             <Input value={gitlabHost} onChange={(e) => setGitlabHost(e.target.value)} placeholder="gitlab.com" className="font-mono" aria-invalid={touched && missingHost} />
-            <FieldError>{touched && missingHost ? "Enter the GitLab hostname." : undefined}</FieldError>
           </Field>
         )}
         {keyType === "github_token" && <GitHubTokenHelp compact />}

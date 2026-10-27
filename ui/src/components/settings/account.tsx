@@ -5,7 +5,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { FieldError, FormDialog } from "@/components/ui/form-dialog";
+import { FormDialog } from "@/components/ui/form-dialog";
 import { Input } from "@/components/ui/input";
 import { useMe } from "@/lib/me";
 import { safeErrorMessage } from "@/lib/safe-display";
@@ -108,9 +108,8 @@ export function AccountTab() {
         <Field label="New password">
           <Input type="password" value={newPw} onChange={(e) => setNewPw(e.target.value)} autoComplete="new-password" minLength={12} />
         </Field>
-        <Field label="Confirm new password">
+        <Field label="Confirm new password" error={pwMismatch ? "Passwords do not match." : undefined}>
           <Input type="password" value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} autoComplete="new-password" aria-invalid={pwMismatch} />
-          <FieldError>{pwMismatch ? "Passwords do not match." : undefined}</FieldError>
         </Field>
       </FormDialog>
     </SettingsCard>

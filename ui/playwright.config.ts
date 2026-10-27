@@ -3,7 +3,7 @@ import { defineConfig, devices } from "@playwright/test";
 // Intentionally avoid Vite's conventional preview port: developers commonly
 // have another workspace running there, and attaching to it would make route
 // failures look like scanner UI regressions.
-const port = 43719;
+const port = Number(process.env.WOLF_E2E_PORT ?? 43719);
 const platform = process.platform;
 
 export default defineConfig({
