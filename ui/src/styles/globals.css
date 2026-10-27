@@ -1,18 +1,18 @@
 /* ============================================================================
-   The Wolf — design system.
+   The Wolf — design system. The ONE global stylesheet for the console.
 
-   Ported wholesale from the Astronomer console so the two products read as one
-   family: the same shadcn/zinc HSL token set, the same Inter + JetBrains Mono
-   pairing, the same light/dark contract (`:root` = light, `.dark` = dark), and
-   the same semantic component classes.
+   Visual language comes from the marketing site (wolf-site/src/styles/
+   editorial.css): cool-gray base, a single steel accent, Archivo / Archivo
+   Narrow / Geist Mono, hard 1px lines. The console is a dense app, so it takes
+   the palette, type, borders and radius, not the site's oversized headings or
+   offset-shadow brutalism.
 
-   Astronomer runs Tailwind v3 with a `tailwind.config.ts`; Wolf runs Tailwind
-   v4, where theme config lives in CSS. The token *values* below are copied
-   verbatim from Astronomer — only the plumbing differs:
+   Contract: `:root` = light, `.dark` = dark. Colour tokens are bare HSL triples
+   so shadcn components and Tailwind alpha (`bg-primary/90`) follow
+   automatically. Colour, type, radius and shadow values live here only; the
+   eslint guard bans hex literals in src/ outside this file.
 
-     v3 `tailwind.config.ts` colors  ->  `@theme inline` below
-     v3 `darkMode: 'class'`          ->  `@custom-variant dark`
-     v3 `@tailwind base/components`  ->  `@import "tailwindcss"`
+   Tailwind v4: theme config lives in CSS (`@theme inline`, `@custom-variant`).
 
    Route components compose the semantic classes here (.page, .panel,
    .glass-card, .nav-item, .data-table, .badge-*, …); they don't redefine them.
@@ -20,115 +20,134 @@
 
 @import "tailwindcss";
 
-/* Astronomer uses `darkMode: 'class'`. Tailwind v4 defaults `dark:` to the
-   prefers-color-scheme media query, so re-point it at the class. */
+/* Tailwind v4 defaults `dark:` to the prefers-color-scheme media query, so
+   re-point it at the `.dark` class the ThemeProvider toggles. */
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* ----------------------------------------------------------------------------
-   Raw token values — copied from astronomer/frontend/src/styles/globals.css.
-   Bare HSL triples (no hsl() wrapper) so Tailwind can compose alpha into them
-   via `hsl(var(--x) / <alpha-value>)`.
+   Raw token values. Bare HSL triples (no hsl() wrapper) so Tailwind can compose
+   alpha into them. Source hex in comments is the site palette.
    ---------------------------------------------------------------------------- */
 :root {
-  --font-inter: "Inter Variable", system-ui, sans-serif;
-  --font-mono-stack: "JetBrains Mono Variable", ui-monospace, monospace;
+  --font-sans-stack: "Archivo", system-ui, sans-serif;
+  --font-narrow-stack: "Archivo Narrow", "Archivo", system-ui, sans-serif;
+  --font-mono-stack: "Geist Mono", ui-monospace, monospace;
 
-  --background: 0 0% 100%;
-  --foreground: 240 10% 3.9%;
-  --card: 0 0% 100%;
-  --card-foreground: 240 10% 3.9%;
-  --popover: 0 0% 100%;
-  --popover-foreground: 240 10% 3.9%;
-  --primary: 240 5.9% 10%;
-  --primary-foreground: 0 0% 98%;
-  --secondary: 240 4.8% 95.9%;
-  --secondary-foreground: 240 5.9% 10%;
-  --muted: 240 4.8% 95.9%;
-  --muted-foreground: 240 3.8% 42%;
-  --accent: 240 4.8% 95.9%;
-  --accent-foreground: 240 5.9% 10%;
-  --destructive: 0 84.2% 60.2%;
+  --background: 216 17.2% 94.3%;          /* #eef0f3 */
+  --foreground: 214.3 17.1% 8%;           /* #111418 ink */
+  --card: 220 23.1% 97.5%;                /* #f7f8fa panel */
+  --card-foreground: 214.3 17.1% 8%;
+  --popover: 220 23.1% 97.5%;
+  --popover-foreground: 214.3 17.1% 8%;
+  --primary: 211.2 17.2% 28.4%;           /* #3c4855 accent fill */
+  --primary-foreground: 210 20% 96.1%;    /* #f3f5f7 */
+  --secondary: 213.3 19.1% 90.8%;         /* #e3e7ec */
+  --secondary-foreground: 214.3 17.1% 8%;
+  --muted: 213.3 19.1% 90.8%;
+  --muted-foreground: 213 10.9% 36.1%;    /* #525b66 */
+  --accent: 213.3 19.1% 90.8%;
+  --accent-foreground: 214.3 17.1% 8%;
+  --destructive: 4.2 76.5% 40%;           /* #b42318, 6.3:1 with white */
   --destructive-foreground: 0 0% 98%;
-  --border: 240 5.9% 90%;
-  --input: 240 5.9% 90%;
-  --ring: 240 5.9% 10%;
-  --radius: 0.5rem;
-  --sidebar: 0 0% 98%;
-  --sidebar-foreground: 240 5.9% 10%;
-  --sidebar-border: 240 5.9% 90%;
-  --sidebar-accent: 240 4.8% 95.9%;
-  --sidebar-accent-foreground: 240 5.9% 10%;
+  --border: 212.3 14.9% 82.9%;            /* #cdd3da line */
+  --input: 211.2 10.6% 53.9%;             /* #7d8996, 3:1 control edge */
+  --ring: 211.2 17.2% 28.4%;
+  --radius: 0.25rem;
+  --sidebar: 220 23.1% 97.5%;
+  --sidebar-foreground: 214.3 17.1% 8%;
+  --sidebar-border: 212.3 14.9% 82.9%;
+  --sidebar-accent: 213.3 19.1% 90.8%;
+  --sidebar-accent-foreground: 214.3 17.1% 8%;
 
-  /* Wolf-only aliases, expressed in the Astronomer palette so existing
-     `bg-elevated` / `text-faint` / `border-border-strong` call sites keep
-     resolving instead of silently dropping to transparent. */
-  --elevated: 240 4.8% 95.9%;
-  --faint: 240 3.8% 42%;
-  --border-strong: 240 5.9% 80%;
-  --destructive-text: 0 72% 45%;
-  --brand: 240 5.9% 10%;
-  --brand-muted: 240 3.8% 46.1%;
-  --brand-foreground: 0 0% 98%;
+  /* Wolf-only aliases so `bg-elevated` / `text-faint` / `border-border-strong`
+     call sites keep resolving. */
+  --elevated: 213.3 19.1% 90.8%;
+  --faint: 213 10.9% 36.1%;
+  --border-strong: 211.6 14.3% 73.9%;
+  --destructive-text: 4.2 76.5% 38%;
+  --brand: 211.2 17.2% 28.4%;
+  --brand-muted: 213 10.9% 36.1%;
+  --brand-foreground: 210 20% 96.1%;
 
-  /* Astronomer's fixed status scale. These are tuned for light surfaces —
-     they are used as pill *text* over a 10%-alpha wash of themselves, which
-     only reads on a light ground. See the dark overrides below. */
-  --status-success: #047857;
-  --status-warning: #92400e;
-  --status-error: #b91c1c;
-  --status-info: #1d4ed8;
+  /* Status scale: pill text over a ~12% wash of itself, on bg/card/muted.
+     Each tone is >= 4.5:1 there (checked, see UI_DESIGN_PLAN T1.1). */
+  --status-success: #045e44;
+  --status-warning: #7c4309;
+  --status-error: #a81919;
+  --status-info: #1e4a9e;
   --status-pending: #4338ca;
-  --status-neutral: #4b5563;
+  --status-neutral: #47515c;
+
+  /* Severity scale: badge text and chart fills (one source for both). */
+  --sev-critical: #a81919;
+  --sev-high: #983407;
+  --sev-medium: #7a4d08;
+  --sev-low: #1e4a9e;
+  --sev-info: #47515c;
+
+  /* Page-header rule and card shadow of the shared shape layer. */
+  --rule: hsl(var(--foreground));
+  --shadow-card: 0 1px 2px hsl(214 17% 8% / 0.06);
+
+  /* Terminal surface (xterm reads these through the computed style). */
+  --terminal-bg: #0e1114;
+  --terminal-fg: #eef1f4;
+  --terminal-muted: #6a7480;
+  --terminal-error: #f87171;
+  --terminal-warn: #fbbf24;
+  --terminal-select: #b8c4d044;
 }
 
 .dark {
-  --background: 240 10% 3.9%;
-  --foreground: 0 0% 98%;
-  --card: 240 10% 5.5%;
-  --card-foreground: 0 0% 98%;
-  --popover: 240 10% 5.5%;
-  --popover-foreground: 0 0% 98%;
-  --primary: 0 0% 98%;
-  --primary-foreground: 240 5.9% 10%;
-  --secondary: 240 3.7% 15.9%;
-  --secondary-foreground: 0 0% 98%;
-  --muted: 240 3.7% 15.9%;
-  --muted-foreground: 240 5% 64.9%;
-  --accent: 240 3.7% 15.9%;
-  --accent-foreground: 0 0% 98%;
-  --destructive: 0 62.8% 30.6%;
+  --background: 210 17.6% 6.7%;           /* #0e1114 */
+  --foreground: 210 21.4% 94.5%;          /* #eef1f4 ink */
+  --card: 210 16% 9.8%;                   /* #15191d panel */
+  --card-foreground: 210 21.4% 94.5%;
+  --popover: 210 16% 9.8%;
+  --popover-foreground: 210 21.4% 94.5%;
+  --primary: 210 20.3% 76.9%;             /* #b8c4d0 accent */
+  --primary-foreground: 210 17.6% 6.7%;   /* #0e1114 */
+  --secondary: 210 15.6% 12.5%;           /* #1b2025 */
+  --secondary-foreground: 210 21.4% 94.5%;
+  --muted: 210 15.6% 12.5%;
+  --muted-foreground: 211.6 12.1% 69.2%;  /* #a7b0ba */
+  --accent: 210 15.6% 12.5%;
+  --accent-foreground: 210 21.4% 94.5%;
+  --destructive: 4.2 64% 36%;
   --destructive-foreground: 0 0% 98%;
-  --border: 240 3.7% 15.9%;
-  --input: 240 3.7% 15.9%;
-  --ring: 240 4.9% 83.9%;
-  --sidebar: 240 10% 4.5%;
-  --sidebar-foreground: 240 4.8% 75%;
-  --sidebar-border: 240 3.7% 12%;
-  --sidebar-accent: 240 3.7% 10%;
-  --sidebar-accent-foreground: 0 0% 98%;
+  --border: 212 12.4% 23.7%;              /* #353c44 line */
+  --input: 212.5 11.8% 42.5%;             /* 3:1 control edge on panel */
+  --ring: 210 20.3% 76.9%;
+  --sidebar: 210 16% 9.8%;
+  --sidebar-foreground: 211.6 12.1% 69.2%;
+  --sidebar-border: 212 12.4% 23.7%;
+  --sidebar-accent: 210 15.6% 12.5%;
+  --sidebar-accent-foreground: 210 21.4% 94.5%;
 
-  --elevated: 240 3.7% 15.9%;
-  --faint: 240 5% 64.9%;
-  --border-strong: 240 3.7% 26%;
-  --destructive-text: 0 84% 70%;
-  --brand: 0 0% 98%;
-  --brand-muted: 240 5% 64.9%;
-  --brand-foreground: 240 5.9% 10%;
+  --elevated: 210 15.6% 12.5%;
+  --faint: 211.6 12.1% 69.2%;
+  --border-strong: 211.6 11.4% 32.7%;
+  --destructive-text: 0 84% 72%;
+  --brand: 210 20.3% 76.9%;
+  --brand-muted: 211.6 12.1% 69.2%;
+  --brand-foreground: 210 17.6% 6.7%;
 
-  /* The one deliberate deviation from Astronomer's palette. Its status scale
-     is a single fixed hex per tone, which is correct on a light ground but
-     fails WCAG AA as pill text on near-black: #6b7280 neutral lands at 3.7:1
-     and #3b82f6 info at ~3.9:1, both under the 4.5:1 floor (caught by the
-     axe check in e2e/product.spec.ts). Each tone shifts to its 300/400-weight
-     counterpart here, which clears 4.5:1 while staying the same hue — so the
-     dot, the 10% wash, and the border all move together and the pills still
-     read as the same colour language across both themes. */
+  /* Lighter tones of the same hues so pill text clears 4.5:1 on near-black. */
   --status-success: #34d399;
   --status-warning: #fbbf24;
   --status-error: #f87171;
-  --status-info: #60a5fa;
+  --status-info: #7cb4f5;
   --status-pending: #a5b4fc;
-  --status-neutral: #9ca3af;
+  --status-neutral: #a7b0ba;
+
+  --sev-critical: #fca5a5;
+  --sev-high: #fdba74;
+  --sev-medium: #fcd34d;
+  --sev-low: #93c5fd;
+  --sev-info: #a7b0ba;
+
+  --rule: hsl(var(--foreground));
+  --shadow-card: none;
 }
 
 /* ----------------------------------------------------------------------------
@@ -158,8 +177,8 @@
   --color-card: hsl(var(--card));
   --color-card-foreground: hsl(var(--card-foreground));
 
-  /* Astronomer's status scale, theme-aware so the pill text stays legible on
-     both grounds (values in :root / .dark above). */
+  /* Status scale, theme-aware so the pill text stays legible on both grounds
+     (values in :root / .dark above). */
   --color-status-success: var(--status-success);
   --color-status-warning: var(--status-warning);
   --color-status-error: var(--status-error);
@@ -182,11 +201,19 @@
   --color-brand-foreground: hsl(var(--brand-foreground));
 
   --radius-lg: var(--radius);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 1px);
+  --radius-sm: calc(var(--radius) - 2px);
 
-  --font-sans: var(--font-inter);
+  --font-sans: var(--font-sans-stack);
+  --font-narrow: var(--font-narrow-stack);
   --font-mono: var(--font-mono-stack);
+
+  --color-sev-critical: var(--sev-critical);
+  --color-sev-high: var(--sev-high);
+  --color-sev-medium: var(--sev-medium);
+  --color-sev-low: var(--sev-low);
+  --color-sev-info: var(--sev-info);
+
 
   --animate-fade-in: fade-in 0.3s ease-out;
   --animate-slide-in-right: slide-in-right 0.3s ease-out;
@@ -217,11 +244,11 @@
 }
 
 /* ----------------------------------------------------------------------------
-   Base layer — Astronomer's `@layer base` block.
+   Base layer.
    ---------------------------------------------------------------------------- */
 @layer base {
-  /* Tailwind v4 defaults `border-*` to currentColor; Astronomer's v3 build
-     applied `@apply border-border` to `*`. Same effect, expressed natively. */
+  /* Tailwind v4 defaults `border-*` to currentColor; make every border the
+     1px `--border` line unless a utility overrides it. */
   *,
   ::before,
   ::after {
@@ -235,7 +262,7 @@
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
-    font-family: var(--font-inter);
+    font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     font-feature-settings: "rlig" 1, "calt" 1;
@@ -281,12 +308,16 @@
   :focus-visible {
     outline: 2px solid var(--color-ring);
     outline-offset: 2px;
-    border-radius: 4px;
+    border-radius: var(--radius);
   }
 
   h1, h2, h3, h4 {
     letter-spacing: -0.02em;
   }
+
+  /* Archivo Narrow carries the "label" voice: table headers, eyebrows, nav
+     section titles. Defined once here so call sites never pick a family. */
+  .font-narrow { font-family: var(--font-narrow); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -301,13 +332,10 @@
 }
 
 /* ----------------------------------------------------------------------------
-   Component classes — Astronomer's `@layer components` block, plus the Wolf
-   semantic classes re-expressed in Astronomer tokens so every existing route
-   inherits the new look without a bespoke rewrite.
+   Component classes. Shape language (T1.3): 1px `--border` lines, `--radius`
+   (0.25rem), restrained shadow, a 2px ink rule under the page header.
    ---------------------------------------------------------------------------- */
 @layer components {
-  /* --- Astronomer originals ------------------------------------------------ */
-
   .text-gradient {
     background-clip: text;
     -webkit-background-clip: text;
@@ -316,16 +344,16 @@
   }
 
   .log-viewer {
-    --muted-foreground: 240 5% 64.9%;
-    background: #0a0a0f;
+    --muted-foreground: 211.6 12.1% 69.2%;
+    background: var(--terminal-bg);
     font-family: var(--font-mono);
     font-size: 13px;
     line-height: 1.25rem;
-    color: var(--color-zinc-300);
+    color: var(--terminal-fg);
   }
-  .log-viewer .log-timestamp { color: var(--color-zinc-600); user-select: none; }
-  .log-viewer .log-error { color: var(--color-red-400); }
-  .log-viewer .log-warn { color: var(--color-yellow-400); }
+  .log-viewer .log-timestamp { color: var(--terminal-muted); user-select: none; }
+  .log-viewer .log-error { color: var(--terminal-error); }
+  .log-viewer .log-warn { color: var(--terminal-warn); }
 
   .gauge-bar {
     height: 0.375rem;
@@ -339,7 +367,7 @@
     transition: all 0.5s ease-out;
   }
 
-  /* Sidebar nav item — the exact Astronomer rule. */
+  /* Sidebar nav item. */
   .nav-item {
     display: flex;
     align-items: center;
@@ -365,7 +393,8 @@
   .nav-section {
     padding: 0.75rem 0.75rem 0.375rem;
     font-size: 0.6875rem;
-    font-weight: 600;
+    font-family: var(--font-narrow);
+    font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.08em;
     color: var(--color-muted-foreground);
@@ -377,13 +406,12 @@
      (Astronomer's layout), so `.page` must NOT re-apply padding or a measure —
      doing so would double the gutter on every route. It survives only as a
      full-width block; the two modifiers narrow the measure for form-heavy
-     pages, which Astronomer has no equivalent of but which keep settings and
-     detail forms readable at 1600px. */
+     pages so settings and detail forms stay readable at 1600px. */
   .page { width: 100%; }
   .page--narrow { max-width: 66rem; margin-inline: auto; }
   .page--mid { max-width: 84rem; margin-inline: auto; }
 
-  /* Astronomer's PageShell is `space-y-6`. */
+  /* PageShell is `space-y-6`. */
   .stack > * + * { margin-top: 1.5rem; }
   .stack-sm > * + * { margin-top: 0.75rem; }
   .stack-lg > * + * { margin-top: 2rem; }
@@ -392,6 +420,8 @@
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid var(--rule);
   }
   @media (min-width: 640px) {
     .page-header { flex-direction: row; align-items: flex-start; justify-content: space-between; }
@@ -419,18 +449,18 @@
   }
   .eyebrow {
     margin-bottom: 0.25rem;
+    font-family: var(--font-narrow);
     font-size: 0.75rem;
-    font-weight: 500;
+    font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.08em;
     color: var(--color-muted-foreground);
   }
 
   /* --- Surfaces ------------------------------------------------------------ */
 
-  /* Astronomer's card idiom is `rounded-lg border border-border bg-card`.
-     `.surface`, `.panel`, and `.glass-card` all collapse onto it — Nocturne's
-     translucency and gradients are gone by design. */
+  /* One card idiom: `rounded-lg border border-border bg-card`. `.surface`,
+     `.panel`, and `.glass-card` all collapse onto it, no translucency. */
   .surface,
   .panel,
   .glass-card {
@@ -438,6 +468,7 @@
     border: 1px solid var(--color-border);
     background: var(--color-card);
     color: var(--color-card-foreground);
+    box-shadow: var(--shadow-card);
   }
   .panel-pad { padding: 1.25rem; }
   .panel-header {
@@ -497,8 +528,11 @@
   :where(.data-table) thead th {
     padding: 0.625rem 1rem;
     text-align: left;
+    font-family: var(--font-narrow);
     font-size: 0.75rem;
-    font-weight: 500;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
     color: var(--color-muted-foreground);
     background: hsl(var(--muted) / 0.4);
     border-bottom: 1px solid var(--color-border);
@@ -626,8 +660,8 @@
   }
 
   /* --- Severity badges ------------------------------------------------------
-     Rebuilt on Astronomer's fixed status scale rather than Nocturne's bespoke
-     hues, and given explicit dark-mode variants the way Astronomer does. */
+     Text is the theme-aware `--sev-*` token over a wash of itself; both themes
+     are >= 4.5:1 (see T1.1). */
 
   .badge {
     display: inline-flex;
@@ -635,24 +669,23 @@
     gap: 0.3rem;
     height: 1.375rem;
     padding-inline: 0.5rem;
-    border-radius: 9999px;
+    border-radius: var(--radius-lg);
     border: 1px solid transparent;
     font-size: 0.6875rem;
     font-weight: 500;
     text-transform: capitalize;
     white-space: nowrap;
   }
-  .badge-critical { color: #b91c1c; background: rgb(239 68 68 / 0.10); border-color: rgb(239 68 68 / 0.30); }
-  .badge-high     { color: #c2410c; background: rgb(245 158 11 / 0.12); border-color: rgb(245 158 11 / 0.30); }
-  .badge-medium   { color: #a16207; background: rgb(245 158 11 / 0.14); border-color: rgb(245 158 11 / 0.32); }
-  .badge-low      { color: #1d4ed8; background: rgb(59 130 246 / 0.12); border-color: rgb(59 130 246 / 0.30); }
-  .badge-info     { color: #4b5563; background: rgb(107 114 128 / 0.12); border-color: rgb(107 114 128 / 0.28); }
-
-  .dark .badge-critical { color: #fca5a5; background: rgb(239 68 68 / 0.15); border-color: rgb(239 68 68 / 0.35); }
-  .dark .badge-high     { color: #fdba74; background: rgb(245 158 11 / 0.15); border-color: rgb(245 158 11 / 0.32); }
-  .dark .badge-medium   { color: #fcd34d; background: rgb(245 158 11 / 0.15); border-color: rgb(245 158 11 / 0.32); }
-  .dark .badge-low      { color: #93c5fd; background: rgb(59 130 246 / 0.15); border-color: rgb(59 130 246 / 0.32); }
-  .dark .badge-info     { color: #d1d5db; background: rgb(107 114 128 / 0.18); border-color: rgb(107 114 128 / 0.30); }
+  .badge-critical { --tone: var(--sev-critical); }
+  .badge-high     { --tone: var(--sev-high); }
+  .badge-medium   { --tone: var(--sev-medium); }
+  .badge-low      { --tone: var(--sev-low); }
+  .badge-info     { --tone: var(--sev-info); }
+  :is(.badge-critical, .badge-high, .badge-medium, .badge-low, .badge-info) {
+    color: var(--tone);
+    background: color-mix(in srgb, var(--tone) 12%, transparent);
+    border-color: color-mix(in srgb, var(--tone) 32%, transparent);
+  }
 
   /* --- Motion -------------------------------------------------------------- */
 
@@ -663,13 +696,12 @@
   .reveal-4 { animation-delay: 0.19s; }
   .reveal-5 { animation-delay: 0.24s; }
 
-  /* Nocturne's ice-blue glow has no Astronomer analogue; neutralised to a
-     plain ring so the class stays valid at its call sites. */
+  /* Legacy glow class, kept as a plain ring so call sites stay valid. */
   .glow-info { box-shadow: 0 0 0 1px hsl(var(--border)); }
 }
 
 /* ----------------------------------------------------------------------------
-   Utilities — Astronomer's `fontSize['2xs']` and `.no-scrollbar`.
+   Utilities.
    ---------------------------------------------------------------------------- */
 @utility text-2xs {
   font-size: 0.625rem;

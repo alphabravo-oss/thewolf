@@ -11,11 +11,15 @@ import { ThemeProvider } from "@/lib/theme";
 
 import { routeTree } from "./routeTree.gen";
 
-// Self-hosted variable fonts (bundled into dist → fully offline, no CDN).
-// Inter for UI and JetBrains Mono for data/IDs/paths — the same pairing
-// Astronomer uses, so type renders identically across the two consoles.
-import "@fontsource-variable/inter";
-import "@fontsource-variable/jetbrains-mono";
+// Self-hosted fonts (bundled into dist → fully offline, no CDN), the marketing
+// site's set: Archivo for UI, Archivo Narrow for labels, Geist Mono for ids.
+import "@fontsource/archivo/400.css";
+import "@fontsource/archivo/500.css";
+import "@fontsource/archivo/600.css";
+import "@fontsource/archivo/700.css";
+import "@fontsource/archivo-narrow/700.css";
+import "@fontsource/geist-mono/400.css";
+import "@fontsource/geist-mono/500.css";
 
 import "./styles/globals.css";
 
