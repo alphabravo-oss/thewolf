@@ -1,5 +1,7 @@
 # Durable custom scanner-image builds
 
+> Kubernetes and Helm packaging is part of Wolf Enterprise. Helm values and chart behavior described in this guide refer to the Enterprise chart (`deploy/helm/wolf` in the private `wolf-enterprise` repository); Community deploys with Docker Compose.
+
 Wolf's Custom build surface is a durable administrative operation for building
 the fixed scanner image variants embedded in the Wolf binary. It is separate
 from managed scanner release candidates: a custom build is an operator-requested
@@ -219,7 +221,6 @@ go test -count=1 ./internal/scannerbuild \
   ./internal/scannercustombuildworker ./internal/db ./internal/api ./internal/cli
 go test -race -count=1 ./internal/scannerbuild \
   ./internal/scannercustombuildworker ./internal/db
-bash deploy/helm/wolf/tests/render-security.sh
 ```
 
 Set `WOLF_TEST_POSTGRES_DSN` and run the custom-build repository and

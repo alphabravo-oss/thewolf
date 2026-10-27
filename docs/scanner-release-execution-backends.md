@@ -1,5 +1,7 @@
 # Scanner release execution backends
 
+> Kubernetes and Helm packaging is part of Wolf Enterprise. Helm values and chart behavior described in this guide refer to the Enterprise chart (`deploy/helm/wolf` in the private `wolf-enterprise` repository); Community deploys with Docker Compose.
+
 Scanner release builds run outside the API process. A durable
 `scanner-release-worker --role=build` claims a persisted pipeline step and
 dispatches it through either the original command executor or a built-in
@@ -522,7 +524,6 @@ labels, with explicit egress controls equivalent to the Helm policies.
 ```bash
 go test -race ./internal/scannerreleasebackend ./internal/scannerreleaseworker
 go test -race ./cmd/wolf
-bash deploy/helm/wolf/tests/render-security.sh
 docker compose config --quiet
 bash deploy/compose/tests/managed-config-test.sh
 ```

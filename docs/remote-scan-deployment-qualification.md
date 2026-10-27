@@ -1,5 +1,9 @@
 # Exact remote-scan deployment qualification
 
+Kubernetes/Helm qualification (a kind cluster running the Helm chart) is part of
+Wolf Enterprise and lives in the private `wolf-enterprise` repository. This
+guide covers the Community native and Compose topologies.
+
 Wolf qualifies the remote code-scanning API as a distributed system, not only
 as an HTTP handler. The qualification matrix starts a real API role and a
 separate durable scan worker, submits a targeted Bandit scan through the
@@ -16,7 +20,7 @@ three `repository@sha256:<64 hex>` inputs from `main`:
 - a qualified PostgreSQL image.
 
 Configure the `scanner-release-qualification` GitHub environment with required
-reviewers. A single authorized dispatch runs all five receipts:
+reviewers. A single authorized dispatch runs all four receipts:
 
 | Receipt | Database | Execution path | Restart proof |
 |---|---|---|---|
@@ -24,9 +28,8 @@ reviewers. A single authorized dispatch runs all five receipts:
 | Native | PostgreSQL | exact runtime binary + Docker scanner | API and worker processes |
 | Compose | SQLite | published runtime containers + Docker scanner | API and worker services |
 | Compose | PostgreSQL | published runtime/PostgreSQL containers + Docker scanner | API and worker services |
-| Kind | PostgreSQL | Helm API/worker/PostgreSQL + native scanner Job | API and worker Deployments |
 
-Every job retains its JSON receipt for 365 days. The closure job requires five
+Every job retains its JSON receipt for 365 days. The closure job requires four
 passing receipts, restart recovery in each, and writes SHA-256 checksums for
 the change record. A failed or skipped lane prevents closure.
 
@@ -79,31 +82,11 @@ WOLF_E2E_DATABASE=postgres \
 scripts/e2e/remote-scan-compose.sh
 ```
 
-Kind requires `docker`, `kind`, `kubectl`, and `helm`:
-
-```sh
-WOLF_RUN_REMOTE_SCAN_KIND_E2E=1 \
-scripts/e2e/remote-scan-kind.sh
-```
-
-By default Kind uses the cluster's real storage provisioner. On a disposable
-developer cluster whose container-engine disk is exhausted, explicitly set
-`WOLF_E2E_KIND_MEMORY_PVS=1`. That mode creates pre-bound `hostPath` PVCs under
-the Kind node's memory-backed `/run`, preserves data across pod rollouts, and
-still exercises PVC binding. It is a local functional workaround and does not
-replace the protected workflow's real-storage qualification.
-
-For a private disposable registry reachable only by its container name, pass
-both `WOLF_E2E_KIND_REGISTRY_CONTAINER` and an HTTP(S)
-`WOLF_E2E_KIND_REGISTRY_ENDPOINT`. The harness configures only the exact input
-registry hosts in containerd and disconnects the registry during cleanup.
-
 ## Failure evidence and cleanup
 
-Native and Compose failures print bounded API/worker or service logs. Kind
-failures print pods, every container's bounded tail, and ordered events before
-deleting its uniquely named cluster. Each harness uses a unique temporary
-directory/project/cluster, terminates only the processes it started, and
+Native and Compose failures print bounded API/worker or service logs. Each
+harness uses a unique temporary directory/project, terminates only the
+processes it started, and
 removes its own disposable volumes. It never performs a broad Docker prune.
 
 Repository-controlled success is necessary but not sufficient for production

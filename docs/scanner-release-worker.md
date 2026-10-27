@@ -1,5 +1,7 @@
 # Scanner release worker and scheduler
 
+> Kubernetes and Helm packaging is part of Wolf Enterprise. Helm values and chart behavior described in this guide refer to the Enterprise chart (`deploy/helm/wolf` in the private `wolf-enterprise` repository); Community deploys with Docker Compose.
+
 The scanner release factory is isolated from normal code-scan execution. The
 `wolf scan-worker` process continues to execute user scans. The new
 `wolf scanner-release-worker` process consumes scanner discovery and build
@@ -906,7 +908,6 @@ go test -race ./internal/scannerdiscoveryworker ./internal/scannerreleaseworker 
 go test -race ./internal/scannerproposalworker ./internal/scannergit ./internal/scannerproposal
 go test -race ./internal/scannernotification ./internal/scannernotificationworker
 go test ./cmd/wolf ./internal/db
-bash deploy/helm/wolf/tests/render-security.sh
 bash deploy/compose/tests/managed-config-test.sh
 ```
 
