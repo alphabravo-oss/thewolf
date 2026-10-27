@@ -31,6 +31,7 @@ const LOGIN_ENGINES = [
   { id: "claude", label: "Claude" },
   { id: "codex", label: "Codex" },
   { id: "opencode", label: "OpenCode" },
+  { id: "grok", label: "Grok Build" },
 ] as const;
 
 export function FixerConsolePanel({
