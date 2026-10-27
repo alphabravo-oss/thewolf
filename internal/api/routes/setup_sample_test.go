@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	gitpkg "github.com/alphabravocompany/thewolf/internal/fix/git"
+	gitpkg "github.com/alphabravocompany/thewolf/internal/gitops"
 )
 
 func TestSampleRepoGitFixture(t *testing.T) {

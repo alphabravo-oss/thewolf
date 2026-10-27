@@ -3,7 +3,7 @@
 package suppress
 
 import (
-	gitcmd "github.com/alphabravocompany/thewolf/internal/fix/git"
+	gitcmd "github.com/alphabravocompany/thewolf/internal/gitops"
 	"os"
 	"path/filepath"
 	"syscall"

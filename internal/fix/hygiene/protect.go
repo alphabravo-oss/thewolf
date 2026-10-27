@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	gitpkg "github.com/alphabravocompany/thewolf/internal/fix/git"
+	gitpkg "github.com/alphabravocompany/thewolf/internal/gitops"
 )
 
 // ProtectedRel is a high-level "do not break the product" path.

@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	gitpkg "github.com/alphabravocompany/thewolf/internal/fix/git"
+	gitpkg "github.com/alphabravocompany/thewolf/internal/gitops"
 )
 
 // filterUnifiedDiff keeps only file sections whose path matches one of files.
