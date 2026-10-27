@@ -252,7 +252,7 @@ func newVersionCmd() *cobra.Command {
 		Use:   "version",
 		Short: "Print version info",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Printf("wolf %s\n  commit:     %s\n  built:      %s\n  edition:    community\n  license:    source-available\n",
+			fmt.Printf("wolf %s\n  commit:     %s\n  built:      %s\n  edition:    community\n  license:    Apache-2.0\n",
 				version, commit, buildDate)
 		},
 	}
