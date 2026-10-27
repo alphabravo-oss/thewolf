@@ -12,7 +12,7 @@
   <img alt="Self-hosted" src="https://img.shields.io/badge/deployment-self--hosted-2ea043?style=flat-square" />
   <img alt="AI" src="https://img.shields.io/badge/AI-assisted%20remediation-8957e5?style=flat-square" />
   <img alt="API" src="https://img.shields.io/badge/API-OpenAPI%203.0-0969da?style=flat-square" />
-  <img alt="License" src="https://img.shields.io/badge/license-source--available-6e7681?style=flat-square" />
+  <img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-6e7681?style=flat-square" />
 </p>
 
 ---
@@ -351,7 +351,7 @@ A single Go binary serves the API, the web console, and the embedded documentati
 
 ## License
 
-Source available. Intended product license is Business Source License 1.1 with a four-year Change Date to Apache License 2.0. Counsel must supply `LICENSE` before a public BSL release. See [`LICENSE_POLICY.md`](LICENSE_POLICY.md) and [`NOTICE`](NOTICE). Copyright © AlphaBravo, Inc. All rights reserved.
+Apache License 2.0. See [`LICENSE`](LICENSE), [`LICENSE_POLICY.md`](LICENSE_POLICY.md) and [`NOTICE`](NOTICE). Copyright © 2026 AlphaBravo, Inc.
 
 Community evaluation is capped at 5 repositories, 3 users, and 1 concurrent scan worker. Set `WOLF_COMMUNITY_LIMITS=0` to lift it; a signed Enterprise license also lifts it.
 

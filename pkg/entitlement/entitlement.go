@@ -28,7 +28,7 @@ const (
 	Residency    = "enterprise.residency"
 	CloudTenancy = "cloud.tenancy"
 
-	// Synthetic BSL evaluation ceilings. Counsel/business owns production
+	// Synthetic Community evaluation ceilings. Business owns production
 	// numbers; these exist so the registry and tests have one source.
 	SyntheticRepos   = 5
 	SyntheticUsers   = 3
