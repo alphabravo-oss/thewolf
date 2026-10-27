@@ -8,7 +8,7 @@
 #   CVE-YYYY-NNNNN # owner=<team/email>; expires=YYYY-MM-DD; reason=<why accepted>; images=<exact-image-scope-or-all>
 #
 # The release workflow validates this source and renders a separate plain
-# Trivy ignore file for each scanner, fixer, runtime, proposal, and adapter
+# Trivy ignore file for each scanner, runtime, proposal, and adapter
 # image. An exception scoped to one image can therefore never suppress the
 # same vulnerability ID in another image.
 #

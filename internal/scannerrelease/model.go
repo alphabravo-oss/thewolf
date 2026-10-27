@@ -502,7 +502,10 @@ type ReleaseImage struct {
 
 const (
 	ReleaseImageScanner = "scanner"
-	ReleaseImageFixer   = "fixer"
+	// ReleaseImageFixer marks fixer images in inventories published before
+	// fixer images moved out of Community. They are read and verified but never
+	// produced, required, or deployed as scanner runtime images.
+	ReleaseImageFixer = "fixer"
 )
 
 // NormalizedImageKind preserves compatibility with inventories published

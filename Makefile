@@ -133,15 +133,14 @@ scanners-validate: scanners-cache-check scanners-docs-check scanners-os-packages
 	go run ./cmd/scannertools validate
 
 ## scanners-sync: Regenerate the embedded build context AND the scanner lock together
-# Any edit to a file inside internal/scannerbuild/context/ — which mirrors
-# cmd/, internal/, plugins/, scanners/ and fixer/ — invalidates BOTH the
-# embedded context and scanner-lock.yaml, because the lock records a hash of
-# every file in that context. Regenerating only one leaves the other stale and
-# the release factory fails in `discovery`, several minutes into a run, with a
-# message that names whichever check happened to run first. Run this instead of
-# either command on its own.
+# The embedded build context (internal/scannerbuild/context/) mirrors scanners/,
+# and scanner-lock.yaml records a hash of every canonical definition input
+# (scanners/, cmd/, internal/, plugins/, go.mod). Regenerating only one leaves
+# the other stale and the release factory fails in `discovery`, several minutes
+# into a run, with a message that names whichever check happened to run first.
+# Run this instead of either command on its own.
 scanners-sync:
-	@echo "==> Regenerating embedded scanner/fixer build context..."
+	@echo "==> Regenerating embedded scanner build context..."
 	go generate ./internal/scannerbuild/...
 	@echo "==> Regenerating scanner lock..."
 	go run ./cmd/scannertools lock
@@ -149,9 +148,9 @@ scanners-sync:
 	go run ./internal/scannerbuild/cmd/synccontext --check
 	go run ./cmd/scannertools validate
 
-## scanners-context-check: Verify the embedded scanner/fixer build context is canonical
+## scanners-context-check: Verify the embedded scanner build context is canonical
 scanners-context-check:
-	@echo "==> Checking embedded scanner/fixer build context..."
+	@echo "==> Checking embedded scanner build context..."
 	go run ./internal/scannerbuild/cmd/synccontext --check
 
 ## scanners-quality: Validate complete tool/variant fixture, parser, threshold, and vulnerability-DB coverage

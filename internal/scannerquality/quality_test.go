@@ -25,7 +25,6 @@ func TestRepositoryCoverageIsComplete(t *testing.T) {
 		coverage.ParserAdapters != 54 || coverage.HostileTestedAdapters != 54 ||
 		coverage.ValidTestedAdapters != 54 ||
 		coverage.ScannerVariants != 4 || coverage.ScannerPlatformTuples != 4 ||
-		coverage.FixerVariants != 4 || coverage.FixerPlatformTuples != 4 ||
 		coverage.Families != 23 || coverage.Fixtures != 54 ||
 		coverage.GoldenExpectations != 23 {
 		t.Fatalf("unexpected coverage: %#v", coverage)
@@ -90,13 +89,6 @@ func TestCoverageFailsClosedOnMissingToolVariantFixtureAndDatabaseIdentity(t *te
 			want: "scanner variant coverage",
 		},
 		{
-			name: "missing fixer variant",
-			mutate: func(policy *Policy, _ *Corpus, _ *buildPolicy, _ *DBLock) {
-				delete(policy.FixerVariants, "api")
-			},
-			want: "fixer variant coverage",
-		},
-		{
 			name: "missing malformed parser case",
 			mutate: func(_ *Policy, corpus *Corpus, _ *buildPolicy, _ *DBLock) {
 				delete(corpus.ParserCases["json"], "malformed")
@@ -134,7 +126,6 @@ func TestCoverageFailsClosedOnMissingToolVariantFixtureAndDatabaseIdentity(t *te
 			policyCopy := policy
 			policyCopy.Tools = cloneMap(policy.Tools)
 			policyCopy.ScannerVariants = cloneMap(policy.ScannerVariants)
-			policyCopy.FixerVariants = cloneMap(policy.FixerVariants)
 			corpusCopy := corpus
 			corpusCopy.Fixtures = cloneMap(corpus.Fixtures)
 			corpusCopy.ParserCases = cloneNestedMap(corpus.ParserCases)

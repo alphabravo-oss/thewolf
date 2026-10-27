@@ -10,9 +10,9 @@ set -euo pipefail
 
 variant="${1:-}"
 case "$variant" in
-    codeql|default|fixer-base|jvm|min|rust) ;;
+    codeql|default|jvm|min|rust) ;;
     *)
-        echo "usage: install-os-packages {codeql|default|fixer-base|jvm|min|rust}" >&2
+        echo "usage: install-os-packages {codeql|default|jvm|min|rust}" >&2
         exit 64
         ;;
 esac

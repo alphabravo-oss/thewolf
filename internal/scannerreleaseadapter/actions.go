@@ -19,7 +19,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alphabravocompany/thewolf/internal/fix/qualification"
 	"github.com/alphabravocompany/thewolf/internal/scannerpipeline"
 	"github.com/alphabravocompany/thewolf/internal/scannerpolicy"
 	"github.com/alphabravocompany/thewolf/internal/scannerquality"
@@ -173,9 +172,6 @@ func executeQuality(
 	if action == "aggregate-sbom" {
 		return aggregateSBOM(ctx, invocation)
 	}
-	if action == "fixer-integration" {
-		return runFixerIntegration(ctx, invocation, commandID, lock)
-	}
 	imageKey := actionImage(action)
 	if imageKey == "" {
 		return ActionResult{}, fmt.Errorf("quality adapter action %q has no image binding", action)
@@ -199,18 +195,10 @@ func executeQuality(
 				"--network", "none", "--read-only", "--cap-drop", "ALL",
 				"--security-opt", "no-new-privileges=true",
 			}
-			if strings.HasPrefix(imageKey, "fixer-") {
-				if len(selection.SmokeCommand) == 0 {
-					return ActionResult{}, fmt.Errorf("fixer image %q has no compiled smoke command", imageKey)
-				}
-				args = append(args, reference)
-				args = append(args, selection.SmokeCommand...)
-			} else {
-				args = append(args,
-					"--env", "WOLF_SMOKE_STRICT=1",
-					"--entrypoint", "/usr/local/bin/smoke-test.sh", reference,
-				)
-			}
+			args = append(args,
+				"--env", "WOLF_SMOKE_STRICT=1",
+				"--entrypoint", "/usr/local/bin/smoke-test.sh", reference,
+			)
 			platformOutput, runErr := runBounded(
 				ctx, invocation.Request.Workspace, dockerPath, args...,
 			)
@@ -220,7 +208,7 @@ func executeQuality(
 			combined = append(combined, []byte(platform+"\x00"+sha256Digest(platformOutput)+"\n")...)
 		}
 		output = combined
-	case strings.HasPrefix(action, "invocation-smoke/"), strings.HasPrefix(action, "fixer-auth-contract/"):
+	case strings.HasPrefix(action, "invocation-smoke/"):
 		output, err = runBounded(
 			ctx, invocation.Request.Workspace, dockerPath,
 			"image", "inspect", "--format", "{{json .Config}}", reference,
@@ -481,17 +469,6 @@ func validateImageRuntimeContract(
 	if strings.TrimSpace(config.User) == "" || config.User == "0" || config.User == "root" {
 		return fmt.Errorf("image %q does not declare a non-root user", image)
 	}
-	if strings.HasPrefix(image, "fixer-") {
-		variant, err := releaseVariant(lock, image)
-		if err != nil {
-			return err
-		}
-		if strings.HasPrefix(action, "fixer-auth-contract/") &&
-			config.Labels["dev.wolf.fixer.auth-mode"] != variant.AuthMode {
-			return fmt.Errorf("fixer image %q authentication boundary label mismatch", image)
-		}
-		return nil
-	}
 	if len(config.Entrypoint) != 1 || config.Entrypoint[0] != "/usr/local/bin/wolf-tool-entry" {
 		return fmt.Errorf("scanner image %q entrypoint contract mismatch", image)
 	}
@@ -565,118 +542,6 @@ func executeIntegration(
 	// represent unexecuted release images as integration coverage.
 	result.ImageDigests = map[string]string{"default": invocation.Request.Dependencies["published-verify/default"].OutputDigest}
 	return result, nil
-}
-
-func runFixerIntegration(
-	ctx context.Context,
-	invocation scannerreleasebackend.Invocation,
-	commandID string,
-	lock *scannerlock.Lock,
-) (ActionResult, error) {
-	variantNames := make([]string, 0, len(lock.ReleaseInputs.FixerVariants))
-	for name := range lock.ReleaseInputs.FixerVariants {
-		variantNames = append(variantNames, name)
-	}
-	sort.Strings(variantNames)
-	if len(variantNames) == 0 {
-		return ActionResult{}, errors.New("fixer integration lock has no fixer variants")
-	}
-	type platformEvidence struct {
-		Image       string               `json:"image"`
-		Platform    string               `json:"platform"`
-		ImageURI    string               `json:"image_uri"`
-		ImageDigest string               `json:"image_digest"`
-		Report      qualification.Report `json:"report"`
-	}
-	reports := make([]platformEvidence, 0)
-	for _, variantName := range variantNames {
-		key := "published-verify/fixer-" + variantName
-		evidence, exists := invocation.Request.Dependencies[key]
-		if !exists {
-			return ActionResult{}, fmt.Errorf("fixer integration is missing dependency %q", key)
-		}
-		image := "fixer-" + variantName
-		if !digest(evidence.OutputDigest) || !strings.HasPrefix(evidence.OutputURI, "oci://") ||
-			!strings.Contains(evidence.OutputURI, evidence.OutputDigest) {
-			return ActionResult{}, fmt.Errorf("fixer integration image %q is not immutable", image)
-		}
-		variant, err := releaseVariant(lock, image)
-		if err != nil {
-			return ActionResult{}, err
-		}
-		if len(variant.Platforms) == 0 || strings.TrimSpace(variant.AuthMode) == "" {
-			return ActionResult{}, fmt.Errorf("fixer integration image %q has incomplete runtime policy", image)
-		}
-		for _, platform := range variant.Platforms {
-			args, err := fixerQualificationArgs(
-				platform, strings.TrimPrefix(evidence.OutputURI, "oci://"), variantName, variant.AuthMode,
-			)
-			if err != nil {
-				return ActionResult{}, err
-			}
-			output, err := runBounded(ctx, invocation.Request.Workspace, dockerPath, args...)
-			if err != nil {
-				return ActionResult{}, fmt.Errorf("fixer integration %s on %s: %w", image, platform, err)
-			}
-			report, err := decodeFixerQualificationReport(output)
-			if err != nil {
-				return ActionResult{}, fmt.Errorf("decode fixer integration %s on %s: %w", image, platform, err)
-			}
-			if err := qualification.ValidateReport(report, variantName, variant.AuthMode); err != nil {
-				return ActionResult{}, fmt.Errorf("validate fixer integration %s on %s: %w", image, platform, err)
-			}
-			reports = append(reports, platformEvidence{
-				Image: image, Platform: platform, ImageURI: evidence.OutputURI,
-				ImageDigest: evidence.OutputDigest, Report: report,
-			})
-		}
-	}
-	payload, err := json.Marshal(struct {
-		SchemaVersion string             `json:"schema_version"`
-		Results       []platformEvidence `json:"results"`
-	}{SchemaVersion: "wolf.fixer-integration-evidence/v1", Results: reports})
-	if err != nil {
-		return ActionResult{}, err
-	}
-	return ActionResult{
-		Payload: payload, MediaType: "application/vnd.wolf.fixer-integration-evidence.v1+json",
-		Summary: map[string]any{
-			"command_id": commandID, "output_digest": sha256Digest(payload),
-			"output_bytes": len(payload), "fixer_count": len(variantNames),
-			"platform_count": len(reports),
-		},
-	}, nil
-}
-
-func fixerQualificationArgs(platform, reference, variant, authMode string) ([]string, error) {
-	if (platform != "linux/amd64" && platform != "linux/arm64") ||
-		!strings.Contains(reference, "@sha256:") || strings.ContainsAny(reference, " \t\r\n") ||
-		strings.TrimSpace(variant) == "" || strings.TrimSpace(authMode) == "" {
-		return nil, errors.New("fixer qualification platform, image, variant, or auth mode is invalid")
-	}
-	return []string{
-		"run", "--rm", "--pull=always", "--platform", platform,
-		"--network", "none", "--read-only", "--cap-drop", "ALL",
-		"--security-opt", "no-new-privileges=true", "--pids-limit", "128",
-		"--memory", "512m", "--cpus", "1",
-		"--tmpfs", "/home/wolf:rw,noexec,nosuid,nodev,size=16777216",
-		"--tmpfs", "/run/wolf-qualification:rw,nosuid,nodev,uid=1000,gid=1000,mode=0700,size=16777216",
-		reference, "qualification", "--expected-variant", variant,
-		"--expected-auth-mode", authMode, "--scratch", "/run/wolf-qualification",
-	}, nil
-}
-
-func decodeFixerQualificationReport(value []byte) (qualification.Report, error) {
-	var report qualification.Report
-	decoder := json.NewDecoder(bytes.NewReader(value))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&report); err != nil {
-		return qualification.Report{}, err
-	}
-	if decoder.Decode(&struct{}{}) != io.EOF {
-		return qualification.Report{}, errors.New("fixer qualification report has trailing JSON")
-	}
-	return report, nil
 }
 
 func commandEvidence(commandID string, output []byte) ActionResult {
@@ -1246,7 +1111,7 @@ func trivyLicenseSummary(value []byte) ([]string, int, error) {
 
 func actionImage(action string) string {
 	prefixes := []string{
-		"strict-version-smoke/", "invocation-smoke/", "fixer-auth-contract/",
+		"strict-version-smoke/", "invocation-smoke/",
 		"parser-fixtures/", "normalized-golden/", "candidate-stable-comparison/",
 		"recorded-resource-gate/", "vulnerability-scan/", "vulnerability-db-identity/",
 		"secret-scan/", "license-scan/", "sbom/", "oci-annotations/", "provenance/",
@@ -1271,11 +1136,6 @@ func imageDependency(invocation scannerreleasebackend.Invocation, image string) 
 func releaseVariant(lock *scannerlock.Lock, image string) (scannerlock.BuildVariant, error) {
 	if variant, ok := lock.ReleaseInputs.Variants[image]; ok {
 		return variant, nil
-	}
-	if strings.HasPrefix(image, "fixer-") {
-		if variant, ok := lock.ReleaseInputs.FixerVariants[strings.TrimPrefix(image, "fixer-")]; ok {
-			return variant, nil
-		}
 	}
 	return scannerlock.BuildVariant{}, fmt.Errorf("scanner lock has no image %q", image)
 }
@@ -1502,14 +1362,6 @@ func assemblePolicyInput(invocation scannerreleasebackend.Invocation) (ActionRes
 	if err := decoder.Decode(&images); err != nil || len(images) == 0 {
 		return ActionResult{}, errors.New("policy input image inventory is invalid")
 	}
-	scannerCount, fixerCount := 0, 0
-	for _, image := range images {
-		if image.Kind == scannerpipeline.ImageKindFixer {
-			fixerCount++
-		} else {
-			scannerCount++
-		}
-	}
 	type gateRule struct {
 		name     string
 		minimum  int
@@ -1530,8 +1382,8 @@ func assemblePolicyInput(invocation scannerreleasebackend.Invocation) (ActionRes
 		{"lock", 3, false, prefix("manifest-validate", "generated-parity", "lock-reproducibility")},
 		{"artifacts", 3*len(images) + 1, false, prefix("image-manifest", "candidate-publish", "published-verify", "release-manifest")},
 		{"platforms", len(images), false, prefix("image-manifest")},
-		{"smoke", 2*len(images) + fixerCount, false, prefix("strict-version-smoke", "invocation-smoke", "fixer-auth-contract", "fixer-integration")},
-		{"parser", 4*scannerCount + 1, false, prefix("parser-fixtures", "normalized-golden", "candidate-stable-comparison", "recorded-resource-gate", "finding-regression")},
+		{"smoke", 2 * len(images), false, prefix("strict-version-smoke", "invocation-smoke")},
+		{"parser", 4*len(images) + 1, false, prefix("parser-fixtures", "normalized-golden", "candidate-stable-comparison", "recorded-resource-gate", "finding-regression")},
 		{"vulnerability", 2 * len(images), false, prefix("vulnerability-scan", "vulnerability-db-identity")},
 		{"license", len(images) + 1, false, prefix("license-metadata", "license-scan")},
 		{"sbom", len(images) + 1, false, prefix("sbom", "aggregate-sbom")},
@@ -2163,10 +2015,6 @@ func releaseImages(
 		if err != nil {
 			return nil, fmt.Errorf("publication image %q platforms: %w", image.Key, err)
 		}
-		kind := scannerrelease.ReleaseImageScanner
-		if image.Kind == scannerpipeline.ImageKindFixer {
-			kind = scannerrelease.ReleaseImageFixer
-		}
 		primaryRepository, err := immutableRepository(published.OutputURI, manifest.OutputDigest)
 		if err != nil {
 			return nil, fmt.Errorf("publication image %q primary repository: %w", image.Key, err)
@@ -2195,7 +2043,7 @@ func releaseImages(
 				return nil, fmt.Errorf("publication image %q signature for target %q: %w", image.Key, target.id, err)
 			}
 			result = append(result, scannerrelease.ReleaseImage{
-				ImageKey: image.Key, ImageKind: kind, RegistryTargetID: target.id,
+				ImageKey: image.Key, ImageKind: scannerrelease.ReleaseImageScanner, RegistryTargetID: target.id,
 				Repository: target.repository,
 				Digest:     manifest.OutputDigest, PlatformDigests: platforms,
 				SignatureStatus:            "verified",

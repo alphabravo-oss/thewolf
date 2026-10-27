@@ -205,7 +205,7 @@ Generation is failure-atomic with respect to the Git provider:
    copied.
 4. Reject symlinks, apply only server-resolved selected edits, regenerate
    `scanners/TOOLS.md`, refresh the canonical resolved scanner lock, and
-   regenerate the complete embedded scanner/fixer context without a shell.
+   regenerate the complete embedded scanner context without a shell.
 5. Run manifest validation, generated-doc checking, byte-for-byte parity
    checking, and resolved-lock checking.
 6. Collect a sorted, bounded file set relative to the exact base. Added,
@@ -215,7 +215,7 @@ Generation is failure-atomic with respect to the Git provider:
 7. Derive tool, base-image, and toolchain changes from the base and proposed
    locks and reject any lock mutation not accounted for by the selected update
    set. Go toolchain updates bind both Linux archive checksums; grouped base
-   updates rewrite all affected owned scanner/fixer Dockerfiles.
+   updates rewrite all affected owned scanner Dockerfiles.
    Canonicalize risk JSON and render a deterministic pull-request body
    containing exact lock/definition/file-set digests, the policy gate plan,
    validation commands, source evidence links, and explicit pending-evidence

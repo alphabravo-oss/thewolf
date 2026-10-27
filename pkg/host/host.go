@@ -6,6 +6,7 @@ import (
 	"context"
 
 	"github.com/alphabravocompany/thewolf/internal/serve"
+	"github.com/alphabravocompany/thewolf/internal/wolfcli"
 )
 
 // Options is the public serve configuration. Overlay must not import internal/serve.
@@ -32,3 +33,13 @@ func Serve(ctx context.Context, opt Options) error {
 		CoreCommit: opt.CoreCommit, OverlayVersion: opt.OverlayVersion, OverlayCommit: opt.OverlayCommit,
 	})
 }
+
+// CLIOptions configure the embedded wolf command tree (see Execute).
+type CLIOptions = wolfcli.Options
+
+// Execute runs the complete wolf command tree - serve, scan, every worker -
+// and exits with the command's exit code on error. An overlay passes Setup
+// (register edition modules, grant entitlements; it runs before every
+// command), identity (overlay and core revisions) and extra Commands, so its
+// binary is a full wolf superset instead of a reduced server.
+func Execute(opt CLIOptions) { wolfcli.Execute(opt) }

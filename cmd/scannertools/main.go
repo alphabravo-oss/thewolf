@@ -70,10 +70,10 @@ func run(args []string) error {
 		}
 		fmt.Printf(
 			"scanner quality OK: %d tools, %d families, %d/%d hostile/valid parser adapters, "+
-				"%d scanner and %d fixer platform tuples\n",
+				"%d scanner platform tuples\n",
 			coverage.Tools, coverage.Families, coverage.HostileTestedAdapters,
 			coverage.ValidTestedAdapters,
-			coverage.ScannerPlatformTuples, coverage.FixerPlatformTuples,
+			coverage.ScannerPlatformTuples,
 		)
 		return nil
 	case "docs":

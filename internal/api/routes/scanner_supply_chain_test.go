@@ -274,12 +274,12 @@ func TestScannerCandidateSelectionViewAllowListsFreshnessEvidence(t *testing.T) 
 }
 
 func TestScannerCandidateVerificationAggregatesActualPipelineStepKeys(t *testing.T) {
-	for _, key := range []string{"signature/default", "signature/fixer-codex", "release-manifest-signature"} {
+	for _, key := range []string{"signature/default", "signature/jvm", "release-manifest-signature"} {
 		if !scannerCandidateSignatureStep(key) {
 			t.Errorf("real signature step %q was not recognized", key)
 		}
 	}
-	for _, key := range []string{"provenance/default", "provenance/fixer-codex"} {
+	for _, key := range []string{"provenance/default", "provenance/jvm"} {
 		if !scannerCandidateProvenanceStep(key) {
 			t.Errorf("real provenance step %q was not recognized", key)
 		}
@@ -293,7 +293,7 @@ func TestScannerCandidateVerificationAggregatesActualPipelineStepKeys(t *testing
 	selected := make(map[string]candidateVerificationStep)
 	for index, key := range []string{
 		"signature/default",
-		"signature/fixer-codex",
+		"signature/jvm",
 		"release-manifest-signature",
 	} {
 		selectCandidateVerificationStep(selected, 2, scannerrelease.BuildStep{

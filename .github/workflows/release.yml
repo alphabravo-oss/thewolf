@@ -178,7 +178,7 @@ jobs:
           Image:
           - `ghcr.io/alphabravo-oss/thewolf`
 
-          Scanner and fixer images are released separately by the scanner release factory and are consumed through the `stable` scanner channel by default.
+          Scanner images are released separately by the scanner release factory and are consumed through the `stable` scanner channel by default.
           NOTES
 
       - name: Create or update release

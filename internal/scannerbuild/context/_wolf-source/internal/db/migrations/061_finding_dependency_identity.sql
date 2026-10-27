@@ -1,5 +1,0 @@
-ALTER TABLE findings ADD COLUMN package_name TEXT NOT NULL DEFAULT '';
-ALTER TABLE findings ADD COLUMN package_version TEXT NOT NULL DEFAULT '';
-ALTER TABLE findings ADD COLUMN package_ecosystem TEXT NOT NULL DEFAULT '';
-ALTER TABLE findings ADD COLUMN package_url TEXT NOT NULL DEFAULT '';
-ALTER TABLE findings ADD COLUMN advisory_id TEXT NOT NULL DEFAULT '';

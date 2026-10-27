@@ -72,7 +72,7 @@ jq -e \
          and (.aggregate.mirror.sbomVerificationSha256 | test("^sha256:[a-f0-9]{64}$"))
          and (.aggregate.mirror.referrersSha256 | test("^sha256:[a-f0-9]{64}$"))
        else .aggregate.mirror == null end)
-  and (.images | length) == 8
+  and (.images | length) == 4
   and all(.images[];
     (.digest | test("^sha256:[a-f0-9]{64}$"))
     and .primaryVerified == true
@@ -115,11 +115,7 @@ jq -e --arg candidate "$candidate_id" '
       "default": {kind: "scanner", platforms: ["linux/amd64"]},
       "jvm": {kind: "scanner", platforms: ["linux/amd64"]},
       "rust": {kind: "scanner", platforms: ["linux/amd64"]},
-      "codeql": {kind: "scanner", platforms: ["linux/amd64"]},
-      "fixer-base": {kind: "fixer", platforms: ["linux/amd64"]},
-      "fixer-api": {kind: "fixer", platforms: ["linux/amd64"]},
-      "fixer-claude": {kind: "fixer", platforms: ["linux/amd64"]},
-      "fixer-codex": {kind: "fixer", platforms: ["linux/amd64"]}
+      "codeql": {kind: "scanner", platforms: ["linux/amd64"]}
     };
   . as $root
   | .schemaVersion == "wolf.scanners.release/v1"

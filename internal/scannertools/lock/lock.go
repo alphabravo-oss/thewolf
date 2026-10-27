@@ -57,7 +57,10 @@ type Definition struct {
 type ReleaseInputs struct {
 	BuildPolicyDigest string                  `json:"buildPolicyDigest" yaml:"buildPolicyDigest"`
 	Variants          map[string]BuildVariant `json:"variants" yaml:"variants"`
-	FixerVariants     map[string]BuildVariant `json:"fixerVariants" yaml:"fixerVariants"`
+	// LegacyFixerVariants is read-only compatibility for locks published
+	// through scanner-set-2026.44.2, which carried fixer images. It is never
+	// generated; keeping it makes the old lockDigest still recompute exactly.
+	LegacyFixerVariants map[string]BuildVariant `json:"fixerVariants,omitempty" yaml:"fixerVariants,omitempty"`
 }
 
 type BuildVariant struct {
@@ -151,7 +154,6 @@ type UpstreamImage struct {
 type buildPolicy struct {
 	SchemaVersion string                  `yaml:"schemaVersion"`
 	Variants      map[string]BuildVariant `yaml:"variants"`
-	FixerVariants map[string]BuildVariant `yaml:"fixerVariants"`
 }
 
 type toolchainFile struct {
@@ -224,9 +226,6 @@ func Generate(ctx context.Context, root string, opts GenerateOptions) (*Lock, er
 	if err != nil {
 		return nil, err
 	}
-	if err := validateFixerBuildArgPins(root, policy); err != nil {
-		return nil, err
-	}
 	parserPolicy, err := loadQualityParserPolicy(
 		filepath.Join(scannerDir, "quality", "policy.yaml"), m,
 	)
@@ -252,7 +251,6 @@ func Generate(ctx context.Context, root string, opts GenerateOptions) (*Lock, er
 		ReleaseInputs: ReleaseInputs{
 			BuildPolicyDigest: policyDigest,
 			Variants:          policy.Variants,
-			FixerVariants:     policy.FixerVariants,
 		},
 		BaseImages:     make(map[string]BaseImage, len(tc.BaseImages)),
 		Toolchains:     make(map[string]Toolchain, len(tc.Toolchains)),
@@ -476,29 +474,8 @@ func loadBuildPolicy(data []byte) (buildPolicy, error) {
 	if len(out.Variants) == 0 {
 		return buildPolicy{}, fmt.Errorf("scanner build policy has no variants")
 	}
-	if len(out.FixerVariants) == 0 {
-		return buildPolicy{}, fmt.Errorf("scanner build policy has no fixer variants")
-	}
-	if err := normalizeBuildVariants("scanner", out.Variants, false); err != nil {
+	if err := normalizeBuildVariants(out.Variants); err != nil {
 		return buildPolicy{}, err
-	}
-	if err := normalizeBuildVariants("fixer", out.FixerVariants, true); err != nil {
-		return buildPolicy{}, err
-	}
-	for name, variant := range out.FixerVariants {
-		for _, dependency := range variant.DependsOn {
-			if dependency == name {
-				return buildPolicy{}, fmt.Errorf("fixer build variant %s depends on itself", name)
-			}
-			if _, ok := out.FixerVariants[dependency]; !ok {
-				return buildPolicy{}, fmt.Errorf(
-					"fixer build variant %s has unknown dependency %s", name, dependency,
-				)
-			}
-		}
-	}
-	if buildVariantCycle(out.FixerVariants) {
-		return buildPolicy{}, fmt.Errorf("fixer build variants contain a dependency cycle")
 	}
 	return out, nil
 }
@@ -534,107 +511,26 @@ func loadQualityParserPolicy(path string, definition *manifest.Manifest) (qualit
 	return policy, nil
 }
 
-func normalizeBuildVariants(
-	kind string,
-	variants map[string]BuildVariant,
-	requireMetadata bool,
-) error {
+func normalizeBuildVariants(variants map[string]BuildVariant) error {
 	for name, variant := range variants {
 		if name == "" || variant.Dockerfile == "" ||
 			filepath.IsAbs(variant.Dockerfile) ||
 			strings.Contains(filepath.Clean(variant.Dockerfile), "..") {
-			return fmt.Errorf("%s build variant %s has invalid dockerfile", kind, name)
+			return fmt.Errorf("scanner build variant %s has invalid dockerfile", name)
 		}
 		if variant.Context != "" &&
 			(filepath.IsAbs(variant.Context) ||
 				strings.Contains(filepath.Clean(variant.Context), "..")) {
-			return fmt.Errorf("%s build variant %s has invalid context", kind, name)
+			return fmt.Errorf("scanner build variant %s has invalid context", name)
 		}
 		if len(variant.Platforms) == 0 {
-			return fmt.Errorf("%s build variant %s has no platforms", kind, name)
+			return fmt.Errorf("scanner build variant %s has no platforms", name)
 		}
 		variant.Platforms = sortedUnique(variant.Platforms)
 		variant.DependsOn = sortedUnique(variant.DependsOn)
-		if requireMetadata {
-			if !regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`).MatchString(variant.Image) {
-				return fmt.Errorf("fixer build variant %s has invalid image", name)
-			}
-			switch variant.AuthMode {
-			case "none", "api-key", "interactive-session":
-			default:
-				return fmt.Errorf("fixer build variant %s has invalid auth mode", name)
-			}
-			if len(variant.SmokeCommand) == 0 {
-				return fmt.Errorf("fixer build variant %s has no smoke command", name)
-			}
-			for key, value := range variant.BuildArgs {
-				if !regexp.MustCompile(`^[A-Z][A-Z0-9_]*$`).MatchString(key) ||
-					strings.TrimSpace(value) == "" {
-					return fmt.Errorf("fixer build variant %s has invalid build argument", name)
-				}
-			}
-		}
 		variants[name] = variant
 	}
 	return nil
-}
-
-func validateFixerBuildArgPins(root string, policy buildPolicy) error {
-	data, err := os.ReadFile(filepath.Join(root, "fixer", "versions.env"))
-	if err != nil {
-		return fmt.Errorf("read fixer version pins: %w", err)
-	}
-	pins, err := manifest.ParseVersionsEnv(data)
-	if err != nil {
-		return fmt.Errorf("parse fixer version pins: %w", err)
-	}
-	for variantName, variant := range policy.FixerVariants {
-		for name, value := range variant.BuildArgs {
-			pinned, ok := pins[name]
-			if !ok {
-				return fmt.Errorf(
-					"fixer build variant %s argument %s has no canonical fixer/versions.env pin",
-					variantName, name,
-				)
-			}
-			if value != pinned {
-				return fmt.Errorf(
-					"fixer build variant %s argument %s=%s does not match fixer/versions.env value %s",
-					variantName, name, value, pinned,
-				)
-			}
-		}
-	}
-	return nil
-}
-
-func buildVariantCycle(variants map[string]BuildVariant) bool {
-	visiting := make(map[string]bool, len(variants))
-	visited := make(map[string]bool, len(variants))
-	var visit func(string) bool
-	visit = func(name string) bool {
-		if visiting[name] {
-			return true
-		}
-		if visited[name] {
-			return false
-		}
-		visiting[name] = true
-		for _, dependency := range variants[name].DependsOn {
-			if visit(dependency) {
-				return true
-			}
-		}
-		visiting[name] = false
-		visited[name] = true
-		return false
-	}
-	for name := range variants {
-		if visit(name) {
-			return true
-		}
-	}
-	return false
 }
 
 func definitionInputs(root string, policy buildPolicy) (map[string]string, error) {
@@ -654,11 +550,8 @@ func definitionInputs(root string, policy buildPolicy) (map[string]string, error
 	for _, variant := range policy.Variants {
 		paths = append(paths, filepath.ToSlash(variant.Dockerfile))
 	}
-	for _, variant := range policy.FixerVariants {
-		paths = append(paths, filepath.ToSlash(variant.Dockerfile))
-	}
-	paths = append(paths, "fixer/versions.env", "go.mod", "go.sum")
-	for _, tree := range []string{"cmd", "fixer", "internal", "plugins", "scanners"} {
+	paths = append(paths, "go.mod", "go.sum")
+	for _, tree := range []string{"cmd", "internal", "plugins", "scanners"} {
 		err := filepath.WalkDir(filepath.Join(root, tree), func(path string, entry os.DirEntry, err error) error {
 			if err != nil {
 				return err
@@ -931,27 +824,6 @@ func (l Lock) Validate() error {
 		if _, ok := l.BaseImages[name]; !ok {
 			errs = append(errs, "release variant "+name+" has no base image")
 		}
-	}
-	if len(l.ReleaseInputs.FixerVariants) == 0 {
-		errs = append(errs, "releaseInputs.fixerVariants is empty")
-	}
-	for name, variant := range l.ReleaseInputs.FixerVariants {
-		if variant.Dockerfile == "" || variant.Image == "" ||
-			len(variant.Platforms) == 0 || len(variant.SmokeCommand) == 0 {
-			errs = append(errs, "fixer release variant "+name+" has incomplete build metadata")
-		}
-		if !isSortedUnique(variant.Platforms) ||
-			(len(variant.DependsOn) > 0 && !isSortedUnique(variant.DependsOn)) {
-			errs = append(errs, "fixer release variant "+name+" platforms and dependencies must be sorted and unique")
-		}
-		for _, dependency := range variant.DependsOn {
-			if _, ok := l.ReleaseInputs.FixerVariants[dependency]; !ok {
-				errs = append(errs, "fixer release variant "+name+" has unknown dependency "+dependency)
-			}
-		}
-	}
-	if buildVariantCycle(l.ReleaseInputs.FixerVariants) {
-		errs = append(errs, "fixer release variants contain a dependency cycle")
 	}
 	if len(l.Tools) == 0 {
 		errs = append(errs, "tools is empty")

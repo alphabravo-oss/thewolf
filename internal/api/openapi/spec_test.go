@@ -220,7 +220,7 @@ func TestScannerRolloutDetailSeparatesSyntheticAndRealScanHealth(t *testing.T) {
 	}
 }
 
-func TestScannerReleaseContractsClassifyCompleteScannerAndFixerImages(t *testing.T) {
+func TestScannerReleaseContractsClassifyCompleteScannerImages(t *testing.T) {
 	var spec map[string]interface{}
 	if err := json.Unmarshal(SpecJSON(), &spec); err != nil {
 		t.Fatal(err)
@@ -229,11 +229,11 @@ func TestScannerReleaseContractsClassifyCompleteScannerAndFixerImages(t *testing
 	pipeline := schemas["ScannerPipelineImage"].(map[string]interface{})
 	pipelineProperties := pipeline["properties"].(map[string]interface{})
 	kinds := pipelineProperties["kind"].(map[string]interface{})["enum"].([]interface{})
-	if len(kinds) != 2 || kinds[0] != "scanner" || kinds[1] != "fixer" {
+	if len(kinds) != 1 || kinds[0] != "scanner" {
 		t.Fatalf("pipeline image kinds = %#v", kinds)
 	}
 	keys := pipelineProperties["key"].(map[string]interface{})["enum"].([]interface{})
-	if len(keys) != 8 {
+	if len(keys) != 4 {
 		t.Fatalf("canonical pipeline image keys = %#v", keys)
 	}
 	release := schemas["ScannerReleaseImage"].(map[string]interface{})
@@ -246,7 +246,7 @@ func TestScannerReleaseContractsClassifyCompleteScannerAndFixerImages(t *testing
 		t.Fatalf("candidate required fields = %#v", candidateRequired)
 	}
 	images := candidate["properties"].(map[string]interface{})["images"].(map[string]interface{})
-	if images["minItems"] != float64(8) || images["maxItems"] != float64(8) {
+	if images["minItems"] != float64(4) || images["maxItems"] != float64(4) {
 		t.Fatalf("candidate image cardinality = %#v", images)
 	}
 }

@@ -34,14 +34,10 @@ var (
 )
 
 var expectedImages = map[string]imageExpectation{
-	"default":      {Kind: "scanner", Platforms: []string{"linux/amd64"}},
-	"jvm":          {Kind: "scanner", Platforms: []string{"linux/amd64"}},
-	"rust":         {Kind: "scanner", Platforms: []string{"linux/amd64"}},
-	"codeql":       {Kind: "scanner", Platforms: []string{"linux/amd64"}},
-	"fixer-base":   {Kind: "fixer", Platforms: []string{"linux/amd64"}},
-	"fixer-api":    {Kind: "fixer", Platforms: []string{"linux/amd64"}},
-	"fixer-claude": {Kind: "fixer", Platforms: []string{"linux/amd64"}},
-	"fixer-codex":  {Kind: "fixer", Platforms: []string{"linux/amd64"}},
+	"default": {Kind: "scanner", Platforms: []string{"linux/amd64"}},
+	"jvm":     {Kind: "scanner", Platforms: []string{"linux/amd64"}},
+	"rust":    {Kind: "scanner", Platforms: []string{"linux/amd64"}},
+	"codeql":  {Kind: "scanner", Platforms: []string{"linux/amd64"}},
 }
 
 type imageExpectation struct {
@@ -95,7 +91,6 @@ type ReleaseImage struct {
 	ApprovalReceiptDigest *string         `json:"approvalReceiptDigest"`
 	Digest                string          `json:"digest"`
 	Platforms             []string        `json:"platforms"`
-	BaseReference         string          `json:"baseReference,omitempty"`
 	Primary               RegistryRecord  `json:"primary"`
 	Mirror                *RegistryRecord `json:"mirror"`
 	SBOMSHA256            string          `json:"sbom_sha256"`
@@ -295,26 +290,15 @@ func Validate(e Evidence) error {
 }
 
 func validateLockImageMatrix(lock scannerlock.Lock) error {
-	if len(lock.ReleaseInputs.Variants) != 4 || len(lock.ReleaseInputs.FixerVariants) != 4 {
-		return errors.New("embedded scanner lock does not declare the canonical eight-image matrix")
+	if len(lock.ReleaseInputs.Variants) != len(expectedImages) {
+		return errors.New("embedded scanner lock does not declare the canonical four-image matrix")
 	}
 	for variant, expected := range expectedImages {
-		var platforms []string
-		if expected.Kind == "scanner" {
-			definition, ok := lock.ReleaseInputs.Variants[variant]
-			if !ok {
-				return fmt.Errorf("embedded scanner lock is missing release variant %q", variant)
-			}
-			platforms = definition.Platforms
-		} else {
-			lockVariant := strings.TrimPrefix(variant, "fixer-")
-			definition, ok := lock.ReleaseInputs.FixerVariants[lockVariant]
-			if !ok {
-				return fmt.Errorf("embedded scanner lock is missing fixer variant %q", lockVariant)
-			}
-			platforms = definition.Platforms
+		definition, ok := lock.ReleaseInputs.Variants[variant]
+		if !ok {
+			return fmt.Errorf("embedded scanner lock is missing release variant %q", variant)
 		}
-		if !equalStrings(platforms, expected.Platforms) {
+		if !equalStrings(definition.Platforms, expected.Platforms) {
 			return fmt.Errorf("embedded scanner lock variant %q has a non-canonical platform matrix", variant)
 		}
 	}
@@ -326,7 +310,7 @@ func validateReleaseImages(release ReleaseManifest) (map[string]ReleaseImage, er
 		!idPattern.MatchString(release.ReleaseID) || !validTimestamp(release.GeneratedAt) ||
 		strings.TrimSpace(release.Operation) == "" ||
 		release.AggregateSBOM.MediaType != "application/spdx+json" || !digestPattern.MatchString(release.AggregateSBOM.SHA256) {
-		return nil, errors.New("release must contain the canonical eight-image manifest")
+		return nil, errors.New("release must contain the canonical four-image manifest")
 	}
 	if release.ApprovalReceiptDigest != nil && !digestPattern.MatchString(*release.ApprovalReceiptDigest) {
 		return nil, errors.New("release approval receipt digest is invalid")
@@ -765,7 +749,6 @@ func nondeterministicFields(managed, customer Evidence) []NondeterministicField 
 		add(prefix+".primary.provenanceVerified", "factory-local registry verification result", left.Primary.ProvenanceVerified, right.Primary.ProvenanceVerified)
 		add(prefix+".primary.sbomVerified", "factory-local registry verification result", left.Primary.SBOMVerified, right.Primary.SBOMVerified)
 		add(prefix+".mirror", "factory-owned mirror namespace and referrer receipts", left.Mirror, right.Mirror)
-		add(prefix+".baseReference", "factory-owned fixer base repository and digest", left.BaseReference, right.BaseReference)
 		add(prefix+".sbom_sha256", "SPDX document metadata changes the document digest", left.SBOMSHA256, right.SBOMSHA256)
 		add(prefix+".evidence", "factory-local signature, attestation, and referrer receipts", left.Evidence, right.Evidence)
 		lp, rp := managedImages[variant].Provenance, customerImages[variant].Provenance
@@ -812,7 +795,6 @@ var nondeterministicAnnotationKeys = []string{
 	"dev.wolf.release.id",
 	"dev.wolf.release.approval-receipt",
 	"dev.wolf.release.factory",
-	"dev.wolf.fixer.base",
 }
 
 func packageSPDXIDs(packages []SPDXPackage) []string {

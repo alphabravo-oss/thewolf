@@ -1,5 +1,5 @@
 // Package scannerquality defines deterministic compatibility and evidence
-// gates for every scanner tool and every Wolf-owned scanner/fixer image.
+// gates for every scanner tool and every Wolf-owned scanner image.
 package scannerquality
 
 import (
@@ -22,7 +22,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alphabravocompany/thewolf/internal/scannerbuild"
 	"github.com/alphabravocompany/thewolf/internal/scannertools/manifest"
 	git "github.com/go-git/go-git/v5"
 	gitconfig "github.com/go-git/go-git/v5/config"
@@ -56,7 +55,6 @@ type Policy struct {
 	ParserContract    ParserInvocationContract    `yaml:"parserContract"`
 	ThresholdProfiles map[string]Threshold        `yaml:"thresholdProfiles"`
 	ScannerVariants   map[string]VariantPolicy    `yaml:"scannerVariants"`
-	FixerVariants     map[string]VariantPolicy    `yaml:"fixerVariants"`
 	ToleratedDeltas   []ToleratedDelta            `yaml:"toleratedDeltas"`
 	VulnerabilityDB   VulnerabilityDatabasePolicy `yaml:"vulnerabilityDatabase"`
 }
@@ -154,9 +152,7 @@ type Coverage struct {
 	Tools                 int
 	Families              int
 	ScannerVariants       int
-	FixerVariants         int
 	ScannerPlatformTuples int
-	FixerPlatformTuples   int
 	ParserOwnedTools      int
 	ParserAdapters        int
 	HostileTestedAdapters int
@@ -176,7 +172,6 @@ type parserAdapter struct {
 type buildPolicy struct {
 	SchemaVersion string                        `yaml:"schemaVersion"`
 	Variants      map[string]buildPolicyVariant `yaml:"variants"`
-	FixerVariants map[string]buildPolicyVariant `yaml:"fixerVariants"`
 }
 
 type buildPolicyVariant struct {
@@ -556,7 +551,7 @@ func validate(
 	coverage := Coverage{
 		Tools: len(policy.Tools), Families: len(corpus.Families),
 		ScannerVariants: len(policy.ScannerVariants),
-		FixerVariants:   len(policy.FixerVariants), Fixtures: len(corpus.Fixtures),
+		Fixtures:        len(corpus.Fixtures),
 	}
 	for name := range toolManifest.Tools {
 		if err := ctx.Err(); err != nil {
@@ -637,11 +632,6 @@ func validate(
 		return Coverage{}, err
 	}
 	coverage.ScannerPlatformTuples = scannerTuples
-	fixerTuples, err := validateFixerVariants(policy.FixerVariants, builds)
-	if err != nil {
-		return Coverage{}, err
-	}
-	coverage.FixerPlatformTuples = fixerTuples
 	if err := validateDatabaseLock(policy.VulnerabilityDB, database, now); err != nil {
 		return Coverage{}, err
 	}
@@ -835,41 +825,6 @@ func validateScannerVariants(
 			return 0, fmt.Errorf("scanner variant %q quality matrix differs from build policy", name)
 		}
 		if err := validateVariantStrategy("scanner", name, actual); err != nil {
-			return 0, err
-		}
-		tuples += len(actual.Platforms)
-	}
-	return tuples, nil
-}
-
-func validateFixerVariants(
-	declared map[string]VariantPolicy,
-	builds buildPolicy,
-) (int, error) {
-	if len(declared) != len(builds.FixerVariants) ||
-		len(builds.FixerVariants) != len(scannerbuild.FixerVariants) {
-		return 0, fmt.Errorf(
-			"fixer variant coverage is %d, build policy declares %d, build table declares %d",
-			len(declared), len(builds.FixerVariants), len(scannerbuild.FixerVariants),
-		)
-	}
-	tuples := 0
-	for _, expected := range scannerbuild.FixerVariants {
-		actual, ok := declared[expected.Name]
-		if !ok {
-			return 0, fmt.Errorf("fixer variant %q has no quality strategy", expected.Name)
-		}
-		build, ok := builds.FixerVariants[expected.Name]
-		if !ok {
-			return 0, fmt.Errorf("fixer variant %q has no canonical build policy", expected.Name)
-		}
-		dockerfile := filepath.ToSlash(filepath.Join(expected.ContextSubdir, expected.Dockerfile))
-		if actual.Dockerfile != dockerfile ||
-			build.Dockerfile != dockerfile ||
-			!equalStrings(actual.Platforms, build.Platforms) {
-			return 0, fmt.Errorf("fixer variant %q quality matrix differs from build policy", expected.Name)
-		}
-		if err := validateVariantStrategy("fixer", expected.Name, actual); err != nil {
 			return 0, err
 		}
 		tuples += len(actual.Platforms)

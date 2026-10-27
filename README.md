@@ -270,6 +270,8 @@ The Wolf also maps source to tests across **13 languages** for coverage-aware sc
 
 The Wolf can go past *finding* a problem to *proposing the fix* — autonomously, but on a short leash. The autonomous fix engine takes a single finding, has an AI coding agent write a patch, **proves the patch is good**, and hands you a review-ready branch and diff. It never trusts the agent's word for it. Architecture and rationale: [`docs/archive/2026-10-23/superpowers/specs/2026-06-15-autonomous-fix-engine-design.md`](docs/archive/2026-10-23/superpowers/specs/2026-06-15-autonomous-fix-engine-design.md).
 
+> **Wolf Enterprise.** Autonomous AI remediation is an Enterprise capability (`enterprise.remediation`). Community scans, triages, baselines and reports; the fixer worker, its engines (Claude Code, Codex, OpenCode, Grok Build) and the fix queue ship with Wolf Enterprise. In Community the fix and remediation endpoints answer `403 enterprise_required` and the UI shows the feature as Enterprise-only. The rest of this section describes the Enterprise behaviour.
+
 **Off by default.** The entire surface is gated behind one master setting, `autofix_enabled` (default **`false`**). With it off, the execute path returns `403 autofix_disabled`, the worker processes nothing, and the UI surface is dark. Flip it on in **Settings > General** or with `wolf settings set autofix_enabled true`.
 
 **Verified, branch-only, then optional push.** The worker operates in an isolated worktree/clone on a fresh fix branch, commits each kept fix, rescans the branch, can pause for a human between loops, and can push *that* branch for review. It never pushes `main`/`master` or the repo default branch.
@@ -295,51 +297,9 @@ wolf fixer            # long-running worker: claim, fix, repeat
 wolf fixer --once     # claim exactly one job, then exit (k8s Job-per-task)
 ```
 
-### The engine containers
+### Engine containers
 
-The worker runs inside one of three independently versioned **engine containers**, built and pushed through the same scanner-image build subsystem as the scanner images (see [`internal/scannerbuild`](internal/scannerbuild) `FixerVariants` and [`fixer/`](fixer/)). All share a base with `git`, `gh`/`glab`, and the language build tools the verify gate needs (`go`, `node`/`tsc`):
-
-| Image | Engine | Auth |
-|---|---|---|
-| `wolf-fixer-engines` | Combined Debian worker: Claude + Codex + OpenCode + Grok Build | any of the CLI logins **or** provider keys |
-| `wolf-fixer-claude` | Anthropic **Claude Code** CLI | `claude login` **or** an `anthropic_key` / `ANTHROPIC_API_KEY` |
-| `wolf-fixer-codex`  | OpenAI **Codex** CLI | `codex login` **or** an `openai_key` / `OPENAI_API_KEY` |
-| `wolf-fixer-opencode` | **OpenCode** CLI (`opencode-ai@1.18.16`) | `opencode auth login` **or** Anthropic/OpenAI keys |
-| (in `wolf-fixer-engines`) | xAI **Grok Build** CLI (`grok` 1.0.70, digest-pinned) | `grok login --device-auth` **or** an `xai_key` / `XAI_API_KEY` |
-| `wolf-fixer-api`    | **API** engine via `internal/ai` — CLI-free | `anthropic_key` or `openai_key` |
-
-Compose defaults to `ghcr.io/alphabravo-oss/wolf-fixer-engines`, the combined Debian worker. The single-engine images stay independently versioned in the locked scanner/fixer release; `wolf-fixer-engines` is published alongside them so the worker can scale on its own.
-
-The engine chain prefers an available, **authenticated** CLI (OAuth session *or* API key) and falls back to the API engine. The API engine returns a unified diff that wolf applies with `git apply`. OpenCode is a first-class engine; the dedicated image is optional (build `fixer/Dockerfile.opencode` against the locked fixer base). A repo-shipped `opencode.json` is stripped from the worktree before the run.
-
-### Auth-then-ready flow
-
-The CLI variants need a **one-time interactive login**; the API variant is the zero-auth fallback for environments where you can't provision a CLI session.
-
-```bash
-# 1. Start the worker container with a volume for the agent session.
-# Resolve the approved release once and use its immutable digest here.
-export WOLF_FIXER_IMAGE='ghcr.io/alphabravo-oss/wolf-fixer-engines@sha256:<approved-digest>'
-docker run -d --name wolf-fixer \
-  -v wolf-fixer-session:/home/wolf \
-  -e WOLF_API_URL=https://wolf.internal \
-  "$WOLF_FIXER_IMAGE"
-
-# 2. Log in once. The session is written under $HOME and reused.
-wolf fixer login claude      # or: docker exec -it wolf-fixer wolf fixer login claude
-wolf fixer login codex
-wolf fixer login opencode
-wolf fixer status            # confirm OAuth / API-key readiness
-
-# 3. Pick model + effort in Settings → Fixer (or per job). Then queue a fix.
-```
-
-### Kubernetes shape
-
-Two supported shapes — persist the agent session on a **PVC** mounted at `/home/wolf` (covers Claude, Codex, OpenCode, and Grok Build session files):
-
-- **Deployment + PVC** — a long-running worker (or a few) that loop on the queue. Authenticate once with `kubectl exec -it deploy/wolf-fixer -- wolf fixer login claude`; the PVC keeps the session across rollouts.
-- **Job-per-task** — `wolf fixer --once` as a Kubernetes `Job` that claims one job and exits, scaled by the queue depth. Pair the CLI variants with the same session PVC, or use `wolf-fixer-api` (no session needed) for fully ephemeral runs.
+The fixer worker's engine container images (Claude, Codex, OpenCode, API) are not built, signed, or published by Community: the scanner release factory only builds the four `wolf-scanners*` images. Releases published through `scanner-set-2026.44.2` still list `wolf-fixer*` images; they remain verifiable but are ignored by scan assignment and rollout.
 
 ---
 
@@ -368,7 +328,8 @@ For the full operations reference — air-gapped installs, network allowlists, r
 ## Architecture
 
 ```text
-cmd/wolf/        CLI + server entrypoint
+cmd/wolf/        CLI + server entrypoint (thin main)
+internal/wolfcli/ the wolf command tree (embedded by the Enterprise overlay via pkg/host)
 internal/
   api/           HTTP API, OpenAPI docs, SSE streaming, auth & audit middleware
   ai/            Pluggable AI providers (Anthropic, OpenAI)
@@ -377,11 +338,10 @@ internal/
   fix/  loop/    AI fix engine, autonomous remediation loops + fix worker/orchestrator
   finding/       Identity, diff, baselines, quality gates, suppressions, SARIF
   scan/          Detection, orchestration, scoring, reporting
-  scannerbuild/  Server-side scanner & fixer image build & publish
+  scannerbuild/  Server-side scanner image build & publish
   setup/scanners/ Container backend
 plugins/         49 tool plugins, by language/category
 scanners/        Wolf-built scanner images + manifests
-fixer/           Autonomous-fix engine container images (claude / codex / api)
 ui/              Vite + React 19 + Tailwind 4 console
 ```
 

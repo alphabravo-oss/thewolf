@@ -22,28 +22,6 @@ repositories:
     suite: nodistro
     component: main
 variants:
-  fixer-base:
-    dockerfile: fixer/Dockerfile.base
-    platforms:
-      - linux/amd64
-      - linux/arm64
-    packages:
-      debian:
-        - build-essential
-        - ca-certificates
-        - curl
-        - git
-        - gzip
-        - jq
-        - openssh-client
-        - pkg-config
-        - python3
-        - python3-venv
-        - tar
-        - unzip
-        - xz-utils
-      nodesource:
-        - nodejs
   codeql:
     dockerfile: scanners/Dockerfile.codeql
     platforms:

@@ -420,15 +420,6 @@ func resolveBuildSelection(lock *scannerlock.Lock, actionImage string) (buildSel
 		}
 		return buildSelection{Kind: "scanner", Key: actionImage, Variant: variant}, nil
 	}
-	if strings.HasPrefix(actionImage, "fixer-") {
-		key := strings.TrimPrefix(actionImage, "fixer-")
-		if variant, ok := lock.ReleaseInputs.FixerVariants[key]; ok {
-			if strings.TrimSpace(variant.Image) == "" {
-				return buildSelection{}, fmt.Errorf("%w: fixer variant %q has no canonical image", ErrBinding, key)
-			}
-			return buildSelection{Kind: "fixer", Key: key, Variant: variant}, nil
-		}
-	}
 	return buildSelection{}, fmt.Errorf("%w: unknown image variant %q", ErrUnsupportedStep, actionImage)
 }
 
@@ -447,38 +438,7 @@ func (b BuildxBackend) resolveBuildArguments(
 	arguments["WOLF_IMAGE_KIND"] = selection.Kind
 	arguments["WOLF_IMAGE_VARIANT"] = invocation.Action.Image
 	arguments["WOLF_BUILD_PLATFORM"] = invocation.Action.Platform
-	if selection.Kind == "scanner" || selection.Key == "base" {
-		arguments["WOLF_VERSION"] = invocation.Request.CandidateID
-	}
-	if selection.Kind != "fixer" || len(selection.Variant.DependsOn) == 0 {
-		return arguments, nil
-	}
-	if !b.Push {
-		return nil, errors.New("dependent fixer builds require a pushed immutable base image")
-	}
-	for _, dependency := range selection.Variant.DependsOn {
-		if dependency != "base" {
-			return nil, fmt.Errorf("%w: unsupported fixer dependency %q", ErrUnsupportedStep, dependency)
-		}
-		base, ok := lock.ReleaseInputs.FixerVariants[dependency]
-		if !ok || strings.TrimSpace(base.Image) == "" {
-			return nil, fmt.Errorf("%w: fixer dependency %q is absent", ErrBinding, dependency)
-		}
-		dependencyKey := "image-manifest/fixer-" + dependency
-		evidence, ok := invocation.Request.Dependencies[dependencyKey]
-		if !ok || !digestPattern.MatchString(evidence.OutputDigest) {
-			return nil, fmt.Errorf(
-				"%w: fixer dependency %q has no verified image-manifest digest",
-				ErrBinding, dependency,
-			)
-		}
-		registry, err := b.registryBase(invocation)
-		if err != nil {
-			return nil, err
-		}
-		arguments["WOLF_FIXER_BASE_REF"] = strings.TrimSuffix(registry, "/") + "/" +
-			base.Image + "@" + evidence.OutputDigest
-	}
+	arguments["WOLF_VERSION"] = invocation.Request.CandidateID
 	return arguments, nil
 }
 

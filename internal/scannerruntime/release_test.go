@@ -231,3 +231,24 @@ func minimalRuntimeManifest() scannerbundle.ReleaseManifest {
 		},
 	}
 }
+
+// Manifests published through scanner-set-2026.44.2 carry fixer images. They
+// must still produce a runtime snapshot, with the fixer images ignored.
+func TestReleaseSnapshotIgnoresLegacyFixerImages(t *testing.T) {
+	t.Parallel()
+	manifest := minimalRuntimeManifest()
+	digest := "sha256:" + strings.Repeat("f", 64)
+	for _, key := range []string{"fixer-base", "fixer-claude"} {
+		manifest.Images = append(manifest.Images, scannerbundle.ReleaseImage{
+			Key: key, Kind: "fixer", Reference: "registry.example/wolf-" + key + "@" + digest,
+			Digest: digest, Platforms: map[string]string{"linux/amd64": digest}, Required: true,
+		})
+	}
+	snapshot, err := SnapshotFromManifest(manifest)
+	if err != nil {
+		t.Fatalf("legacy manifest with fixer images was rejected: %v", err)
+	}
+	if len(snapshot.AllImages) != 1 || snapshot.DefaultImage == "" || len(snapshot.ToolImages) != 0 {
+		t.Fatalf("fixer images leaked into the runtime snapshot: %#v", snapshot)
+	}
+}

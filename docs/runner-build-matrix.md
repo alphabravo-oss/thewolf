@@ -6,8 +6,8 @@ not evidence that its current image has passed runtime qualification.
 
 Run the build commands below from the Community repository root. Replace
 `<image>` with a local review tag. Production qualification uses the resulting
-exact digest, not that tag. `BASE` must be the exact independently qualified
-`wolf-fixer` base reference. Never substitute a floating base tag.
+exact digest, not that tag. Fixer engine image recipes are no longer part of
+Community; they live in the Wolf Enterprise overlay.
 
 | Role | Recipe / target | Build command | Declared platform / consumer | Publication and qualification |
 |---|---|---|---|---|
@@ -21,12 +21,6 @@ exact digest, not that tag. `BASE` must be the exact independently qualified
 | Rust scanners | `scanners/Dockerfile.rust` | `docker build -f scanners/Dockerfile.rust -t <image> scanners` | Release policy: AMD64; Rust assignments | Same workflow, `wolf-scanners-rust`; native executable and representative scanner checks required |
 | CodeQL scanners | `scanners/Dockerfile.codeql` | `docker build -f scanners/Dockerfile.codeql -t <image> scanners` | Release policy: AMD64; CodeQL assignments | Same workflow, `wolf-scanners-codeql`; database extraction/query execution required, not just a version probe |
 | Minimal Bandit shim fixture | `scanners/Dockerfile.min` | `docker build -f scanners/Dockerfile.min -t <image> scanners` | Local integration fixture; not a production complete scanner variant | No production release channel; `TestShim_Bandit_E2E`; Dockerfile explicitly says not for production |
-| Fixer shared base | `fixer/Dockerfile.base` | `docker build -f fixer/Dockerfile.base -t <image> .` | Release policy: AMD64; every locked fixer child | Scanner workflow, `wolf-fixer`; base is built first and qualified by exact digest; `wolf version`, tool inventory, source/write/isolation tests |
-| API fixer | `fixer/Dockerfile.api` | `docker build -f fixer/Dockerfile.api --build-arg WOLF_FIXER_BASE_REF="$BASE" -t <image> .` | Release policy: AMD64; API-key engine | Scanner workflow, `wolf-fixer-api`; `wolf version` plus independent remediation verification and credential-redaction checks |
-| Claude fixer | `fixer/Dockerfile.claude` | `docker build -f fixer/Dockerfile.claude --build-arg WOLF_FIXER_BASE_REF="$BASE" -t <image> .` | Release policy: AMD64; interactive/session engine | Scanner workflow, `wolf-fixer-claude`; `claude --version` plus authenticated, independently verified edit qualification |
-| Codex fixer | `fixer/Dockerfile.codex` | `docker build -f fixer/Dockerfile.codex --build-arg WOLF_FIXER_BASE_REF="$BASE" -t <image> .` | Release policy: AMD64; interactive/session engine | Scanner workflow, `wolf-fixer-codex`; `codex --version` plus authenticated, independently verified edit qualification |
-| Standalone OpenCode fixer | `fixer/Dockerfile.opencode` | `docker build -f fixer/Dockerfile.opencode --build-arg WOLF_FIXER_BASE_REF="$BASE" -t <image> .` | Recipe exists, but absent from the four locked fixer variants | No complete-set publication/qualification claim. Preserve the harness; explicitly qualify this recipe or add it through release-policy review before advertising support |
-| Combined fixer worker | `fixer/Dockerfile.engines` | `docker build -f fixer/Dockerfile.engines --build-arg WOLF_FIXER_BASE_REF="$BASE" -t <image> .` | AMD64 publication; default Compose fixer. Contains Claude/Codex/OpenCode | `publish-fixer-engines.yml` and separate scanner-workflow job, `wolf-fixer-engines`; deliberately outside the locked eight-image aggregate. Each CLI and the actual worker/remediation flow need independent qualification |
 | Legacy AI runner | `Dockerfile.ai-runner` | `docker build -f Dockerfile.ai-runner -t <image> .` | Legacy recipe; no current production matrix consumer found | No qualified publication channel. Node 24 base, unpinned npm agent installs, and tolerated install failure prevent enterprise qualification. Retain for compatibility; do not present it as a current certified fixer |
 | Scanner-analysis test input | `testdata/Dockerfile` | Not an application build | Deliberately scanned test fixture | Excluded from shipped runtime/runner qualification; do not harden away intentional test input |
 
@@ -35,17 +29,14 @@ exact digest, not that tag. `BASE` must be the exact independently qualified
 - The five deployment targets share the root build context. `runtime` includes
   the UI and main Wolf binary; the three release adapters use lane-specific
   executables; proposal includes the source-editing toolchain.
-- `VERSION`, `COMMIT`, and `BUILD_DATE` stamp deployment/combined-worker builds.
+- `VERSION`, `COMMIT`, and `BUILD_DATE` stamp deployment builds.
   Use a recorded source revision and working-tree identity for local evidence;
   protected release sign-off requires a merged source revision.
 - Scanner recipes use `scanners/versions.env`, `tools.yaml`, `toolchains.yaml`,
   the locked OS snapshot, installers, and `go-tools/`. `WOLF_VERSION` is a label
   input, not a substitute for the scanner lock and actual image digest.
-- Fixer base and child tools use `fixer/versions.env`, integrity values, and
-  `fixer/go-tools/`. The base must precede children; the combined worker also
-  recompiles Wolf from the root source context.
-- `scanners/build-policy.yaml` is the owned scanner/fixer platform authority.
-  Its current eight tuples are AMD64 only. The deployment workflow's ten
+- `scanners/build-policy.yaml` is the owned scanner platform authority.
+  Its current four tuples are AMD64 only. The deployment workflow's ten
   AMD64/ARM64 tuples are a separate matrix. Dockerfile architecture arguments
   alone do not add an advertised platform.
 - `internal/scannerbuild/context/` mirrors these inputs for managed builds.

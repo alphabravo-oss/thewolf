@@ -125,11 +125,10 @@ supplier, download location, file-analysis state, and license declarations.
 The report compares canonical SHA-256 projections of:
 
 1. definition commit, definition digest, and scanner-lock digest;
-2. exactly these eight image/platform entries:
-   `default`, `jvm`, `rust`, `codeql`, `fixer-base`, `fixer-api`,
-   `fixer-claude`, and `fixer-codex`;
+2. exactly these four image/platform entries:
+   `default`, `jvm`, `rust`, and `codeql`;
 3. the complete tool objects in the scanner lock;
-4. resolved scanner/fixer build-policy inputs;
+4. resolved scanner build-policy inputs;
 5. declared policy digests;
 6. corpus, reviewed-expectation, vulnerability-database, and controlled-network
    identities from measured quality evidence;
@@ -151,8 +150,7 @@ for the following classes:
 
 - release ID, operation lane, generation time, and approval receipt;
 - aggregate and per-image SPDX document digests;
-- factory ID, image name/digest, registry repository/receipts, and fixer base
-  reference;
+- factory ID, image name/digest, and registry repository/receipts;
 - signature/provenance/SBOM/referrer receipt digests;
 - provenance builder, invocation, timestamps, and output subjects; and
 - SPDX name, namespace, creator, and creation timestamp;
@@ -189,7 +187,7 @@ and air-gapped environments.
 
 ## Cached builds and dependency updates
 
-Use BuildKit for scanner, fixer, and application images. The default scanner
+Use BuildKit for scanner and application images. The default scanner
 image installs language families in independent stages. `install/version-inputs.sh`
 derives each stage's inputs from the canonical `versions.env`; changing an
 upstream image pin does not reinstall local tools, and changing Bandit does not
@@ -225,19 +223,11 @@ go run ./cmd/scannertools lock --refresh-images --require-resolved
 make scanners-validate
 ```
 
-Run `make scanners-sync` after editing installer scripts, Dockerfiles, fixer
-inputs, or compiled Wolf source. Never hand-edit `internal/scannerbuild/context`.
+Run `make scanners-sync` after editing installer scripts, Dockerfiles, or
+other scanner build inputs. Never hand-edit `internal/scannerbuild/context`.
 `make scanners-cache-check` verifies installer dependency isolation. The existing
 discovery/candidate/approval/promotion workflow remains the release authority;
 local builds do not promote the stable channel.
-
-Fixer updates use `fixer/versions.env`, matching Dockerfile arguments and
-`scanners/build-policy.yaml`, the `fixer/go-tools` module, and the on-demand CLI
-pins in `internal/fix/install/spec.go`. Refresh integrity values for both CPU
-architectures and run `make scanners-sync`. TypeScript 7 requires its verified
-architecture-specific npm package as well as the main package. The base image
-smokes every installed tool; engine variants must also pass native-platform
-CLI smoke. Optional OpenCode remains outside the four-variant release table.
 
 On 2026-10-13, all four scanner image builds passed on linux/amd64. A repeat
 default-image build changing only `WOLF_VERSION` completed in 0.60 seconds with

@@ -46,6 +46,7 @@ import { COMMUNITY_LIMIT_COPY, isCommunityLimit, safeErrorMessage } from "@/lib/
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PageHeader } from "@/components/ui/page";
 import { LicenseTab } from "@/components/license-settings";
+import { entitled, REMEDIATION, useEdition } from "@/lib/edition";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -619,6 +620,7 @@ const GENERAL_KNOBS = [
     key: "autofix_enabled",
     label: "Autonomous fixing",
     alpha: true,
+    entitlement: REMEDIATION,
     help: "Turns on Fixes and Agents. Queue work from a scan or finding. Login lives in Settings → Fixer (OAuth on the fixer worker) or store Anthropic/OpenAI keys in Account → Secrets. Default off.",
     type: "bool" as const,
   },
@@ -670,15 +672,7 @@ const GENERAL_KNOBS = [
 function GeneralTab() {
   const qc = useQueryClient();
   const q = useSettingsMap();
-  const editionQ = useQuery({
-    queryKey: ["edition"],
-    queryFn: async () =>
-      (await api.get<{
-        edition?: string;
-        product?: string;
-        licensed?: boolean;
-      }>("/edition")).data,
-  });
+  const editionQ = useEdition();
   const m = useMutation({
     mutationFn: (updates: Record<string, string>) =>
       api.put("/settings", updates),
@@ -715,6 +709,8 @@ function GeneralTab() {
     <section className="glass-card p-5 space-y-5">
       {GENERAL_KNOBS.map((knob) => {
         const current = settings[knob.key] ?? (knob.type === "int" ? "0" : "");
+        const capability = "entitlement" in knob ? knob.entitlement : undefined;
+        const locked = capability !== undefined && !entitled(editionQ.data, capability);
         return (
           <div
             key={knob.key}
@@ -723,6 +719,11 @@ function GeneralTab() {
             <div>
               <label className="text-sm font-medium inline-flex items-center gap-1.5">
                 {knob.label}
+                {locked && (
+                  <span className="rounded px-1.5 py-0.5 text-3xs font-semibold uppercase tracking-wide bg-primary/10 text-primary border border-primary/30">
+                    Enterprise
+                  </span>
+                )}
                 {"alpha" in knob && knob.alpha && (
                   <span className="rounded px-1.5 py-0.5 text-3xs font-semibold uppercase tracking-wide bg-status-warning/15 text-status-warning border border-status-warning/30">
                     Alpha
@@ -736,9 +737,9 @@ function GeneralTab() {
             {knob.type === "bool" ? (
               <BoolToggle
                 label={knob.label}
-                value={current === "true"}
+                value={!locked && current === "true"}
                 onChange={(v) => m.mutateAsync({ [knob.key]: v ? "true" : "false" })}
-                disabled={m.isPending}
+                disabled={m.isPending || locked}
               />
             ) : knob.type === "choice" ? (
               <ChoiceSetting label={knob.label} value={current || knob.options[0]} options={knob.options}

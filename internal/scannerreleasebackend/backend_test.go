@@ -102,11 +102,7 @@ func TestDefaultPolicyCoversEveryPipelineStepAndRejectsUnknown(t *testing.T) {
 	plan, err := scannerpipeline.Default(scannerpipeline.Inputs{
 		Images: []scannerpipeline.Image{
 			{Key: "default", Platforms: []string{"linux/amd64", "linux/arm64"}},
-			{Key: "fixer-base", Kind: scannerpipeline.ImageKindFixer, Platforms: []string{"linux/amd64", "linux/arm64"}},
-			{
-				Key: "fixer-codex", Kind: scannerpipeline.ImageKindFixer,
-				Platforms: []string{"linux/amd64", "linux/arm64"}, DependsOn: []string{"fixer-base"},
-			},
+			{Key: "jvm", Platforms: []string{"linux/amd64", "linux/arm64"}, DependsOn: []string{"default"}},
 		},
 		RequireCompose: true, RequireKubernetes: true, RequireMirror: true,
 	})
@@ -621,63 +617,6 @@ func TestBuildxBackendRendersKubernetesDriverLimitsAndImmutableResult(t *testing
 	}
 }
 
-func TestBuildxBackendBuildsFixerEngineFromExactBaseDependency(t *testing.T) {
-	t.Parallel()
-	root, lock := copyLockFixture(t)
-	request := testRequestAt(root, scannerpipeline.Step{
-		Key: "build/fixer-codex/linux-amd64", Kind: scannerpipeline.StepBuild,
-		DependsOn: []string{"image-manifest/fixer-base"},
-		Timeout:   90 * time.Minute, Required: true,
-	})
-	request.LockDigest = lock.LockDigest
-	request.Dependencies = map[string]scannerreleaseworker.DependencyEvidence{
-		"image-manifest/fixer-base": {OutputDigest: testDigest},
-	}
-	invocation := testInvocationFromRequest(request)
-	runtime := &recordingRuntime{}
-	runtime.run = func(command Command) (CommandOutput, error) {
-		for index, value := range command.Args {
-			if value == "--metadata-file" && index+1 < len(command.Args) {
-				if err := os.WriteFile(
-					command.Args[index+1],
-					[]byte(`{"containerimage.digest":"`+testDigest+`"}`), 0o600,
-				); err != nil {
-					return CommandOutput{}, err
-				}
-			}
-		}
-		return CommandOutput{}, nil
-	}
-	backend := BuildxBackend{
-		Runtime: runtime, BuildxPath: "/usr/bin/docker",
-		Registry:  "registry.example/wolf/scanners",
-		Platforms: []string{"linux/amd64"}, Push: true,
-	}
-	result, err := backend.Execute(context.Background(), invocation)
-	if err != nil {
-		t.Fatal(err)
-	}
-	expectedReference := "oci://registry.example/wolf/scanners/wolf-fixer-codex@" + testDigest
-	if result.Result.OutputURI != expectedReference {
-		t.Fatalf("fixer output URI = %q, want %q", result.Result.OutputURI, expectedReference)
-	}
-	resolvedRoot, err := filepath.EvalSymlinks(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	joined := commandArgs(runtime.commands)
-	for _, expected := range []string{
-		"--file " + filepath.Join(resolvedRoot, "fixer", "Dockerfile.codex"),
-		"--build-arg WOLF_FIXER_BASE_REF=registry.example/wolf/scanners/wolf-fixer@" + testDigest,
-		"--tag registry.example/wolf/scanners/wolf-fixer-codex:operation-",
-		resolvedRoot,
-	} {
-		if !strings.Contains(joined, expected) {
-			t.Fatalf("fixer buildx command missing %q:\n%s", expected, joined)
-		}
-	}
-}
-
 func TestManagedBuildxRequiresPushAndUsesBoundPrimaryRegistry(t *testing.T) {
 	t.Parallel()
 	backend := BuildxBackend{
@@ -720,7 +659,7 @@ func TestManagedBuildxRequiresPushAndUsesBoundPrimaryRegistry(t *testing.T) {
 	}
 }
 
-func TestManagedBuildxDependentFixerUsesBoundWorkspaceRegistry(t *testing.T) {
+func TestManagedBuildxScannerBuildUsesBoundWorkspaceRegistry(t *testing.T) {
 	t.Parallel()
 	root, lock := copyLockFixture(t)
 	if err := scannerreleaseworkspace.WriteContext(root, scannerreleaseworkspace.ExecutionContext{
@@ -737,14 +676,10 @@ func TestManagedBuildxDependentFixerUsesBoundWorkspaceRegistry(t *testing.T) {
 		t.Fatal(err)
 	}
 	request := testRequestAt(root, scannerpipeline.Step{
-		Key: "build/fixer-codex/linux-amd64", Kind: scannerpipeline.StepBuild,
-		DependsOn: []string{"image-manifest/fixer-base"},
-		Timeout:   90 * time.Minute, Required: true,
+		Key: "build/default/linux-amd64", Kind: scannerpipeline.StepBuild,
+		Timeout: 90 * time.Minute, Required: true,
 	})
 	request.LockDigest = lock.LockDigest
-	request.Dependencies = map[string]scannerreleaseworker.DependencyEvidence{
-		"image-manifest/fixer-base": {OutputDigest: testDigest},
-	}
 	runtime := &recordingRuntime{}
 	runtime.run = func(command Command) (CommandOutput, error) {
 		for index, value := range command.Args {
@@ -779,15 +714,13 @@ func TestManagedBuildxDependentFixerUsesBoundWorkspaceRegistry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Result.OutputURI != "oci://registry.bound.example/managed/scanners/wolf-fixer-codex@"+testDigest {
-		t.Fatalf("managed fixer output URI = %q", result.Result.OutputURI)
+	if result.Result.OutputURI != "oci://registry.bound.example/managed/scanners/wolf-scanners@"+testDigest {
+		t.Fatalf("managed scanner output URI = %q", result.Result.OutputURI)
 	}
 	joined := commandArgs(runtime.commands)
-	if !strings.Contains(
-		joined,
-		"--build-arg WOLF_FIXER_BASE_REF=registry.bound.example/managed/scanners/wolf-fixer@"+testDigest,
-	) || strings.Contains(joined, "registry.unbound.example") {
-		t.Fatalf("managed fixer escaped bound registry:\n%s", joined)
+	if !strings.Contains(joined, "registry.bound.example/managed/scanners/wolf-scanners") ||
+		strings.Contains(joined, "registry.unbound.example") {
+		t.Fatalf("managed scanner build escaped bound registry:\n%s", joined)
 	}
 	if !strings.Contains(joined, "namespace=wolf-release-builds") ||
 		!strings.Contains(joined, "serviceaccount=wolf-buildkit") {
@@ -797,7 +730,7 @@ func TestManagedBuildxDependentFixerUsesBoundWorkspaceRegistry(t *testing.T) {
 		"--provenance=mode=max,version=v1,builder-id=" + wolfBuildxBuilderID,
 		"--build-arg WOLF_DEFINITION_COMMIT=" + testCommit,
 		"--build-arg WOLF_LOCK_DIGEST=" + lock.LockDigest,
-		"--build-arg WOLF_IMAGE_VARIANT=fixer-codex",
+		"--build-arg WOLF_IMAGE_VARIANT=default",
 		wolfImageSource + ".git#" + testCommit,
 	} {
 		if !strings.Contains(joined, binding) {
@@ -984,27 +917,6 @@ func TestBuildxProvenanceRejectsHostilePayloadBindings(t *testing.T) {
 				t.Fatal("hostile provenance payload was accepted")
 			}
 		})
-	}
-}
-
-func TestBuildxBackendRejectsFixerEngineWithoutVerifiedBaseDependency(t *testing.T) {
-	t.Parallel()
-	root, lock := copyLockFixture(t)
-	request := testRequestAt(root, scannerpipeline.Step{
-		Key: "build/fixer-api/linux-amd64", Kind: scannerpipeline.StepBuild,
-		DependsOn: []string{"image-manifest/fixer-base"},
-		Timeout:   90 * time.Minute, Required: true,
-	})
-	request.LockDigest = lock.LockDigest
-	backend := BuildxBackend{
-		Runtime: &recordingRuntime{}, BuildxPath: "/usr/bin/docker",
-		Registry:  "registry.example/wolf/scanners",
-		Platforms: []string{"linux/amd64"}, Push: true,
-	}
-	if _, err := backend.Execute(
-		context.Background(), testInvocationFromRequest(request),
-	); !errors.Is(err, ErrBinding) {
-		t.Fatalf("missing fixer dependency error = %v", err)
 	}
 }
 
@@ -1469,10 +1381,6 @@ func copyLockFixture(t *testing.T) (string, *scannerlock.Lock) {
 		"scanners/Dockerfile.jvm",
 		"scanners/Dockerfile.rust",
 		"scanners/Dockerfile.codeql",
-		"fixer/Dockerfile.base",
-		"fixer/Dockerfile.api",
-		"fixer/Dockerfile.claude",
-		"fixer/Dockerfile.codex",
 	} {
 		value, err := os.ReadFile(filepath.Join(source, relative))
 		if err != nil {

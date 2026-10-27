@@ -128,16 +128,6 @@ def main() -> int:
         text,
         "publication validation rejects unresolved upstream image tags",
     )
-    require(
-        r"fixer-quality:.*?variant:\s*base.*?variant:\s*api.*?variant:\s*claude.*?variant:\s*codex",
-        text,
-        "all fixer quality variants",
-    )
-    require(
-        r"fixer-quality:.*?runs-on:\s*\$\{\{ matrix\.runner \}\}.*?runner:\s*ubuntu-24\.04",
-        text,
-        "native amd64 fixer quality runner",
-    )
     runtime_quality = job_block(text, "runtime-quality")
     for variant, target in (
         ("runtime", "runtime"),
@@ -178,7 +168,7 @@ def main() -> int:
         "non-empty SPDX 2.3 evidence for every final runtime",
     )
     require(
-        r"publish:\n.*?needs:\s*\n\s*\[prepare, validate, release-approval, quality, fixer-quality, runtime-quality\].*?"
+        r"publish:\n.*?needs:\s*\n\s*\[prepare, validate, release-approval, quality, runtime-quality\].*?"
         r"needs\.validate\.result == 'success'",
         text,
         "regular image publication is blocked only on validation",
@@ -187,7 +177,7 @@ def main() -> int:
     # they must NOT re-enter the `if`, or the gates disabled in 6f13b47 would
     # silently start blocking publication again.
     reject(
-        r"publish:\n.*?if:\s*>-.*?needs\.(quality|fixer-quality|runtime-quality)\.result == 'success'.*?\n  publish-fixer-engines:",
+        r"publish:\n.*?if:\s*>-.*?needs\.(quality|runtime-quality)\.result == 'success'.*?\n  published-platform-quality:",
         text,
         "publish must not re-block on the disabled quality gates",
     )
@@ -195,7 +185,6 @@ def main() -> int:
     # when those gates actually ran.
     require(
         r"Resolve channel aliases.*?QUALITY:.*?needs\.quality\.result.*?"
-        r"FIXER_QUALITY:.*?needs\['fixer-quality'\]\.result.*?"
         r"RUNTIME_QUALITY:.*?needs\['runtime-quality'\]\.result.*?"
         r"stable.*?latest.*?grep -vxE 'stable\|latest'",
         text,
@@ -212,20 +201,20 @@ def main() -> int:
     # gates here are the deterministic vulnerability/license/SPDX checks, not
     # the supply-chain attestation that 6f13b47 also removed.
     reject(
-        r"\n  (quality|fixer-quality|runtime-quality|published-platform-quality|integration-quality|release-manifest):\n.*?\n    if:\s*false\n",
+        r"\n  (quality|runtime-quality|published-platform-quality|integration-quality|release-manifest):\n.*?\n    if:\s*false\n",
         text,
         "no quality or release-manifest job may be hard-disabled",
     )
-    for job in ("quality", "fixer-quality", "runtime-quality"):
+    for job in ("quality", "runtime-quality"):
         require(
             rf"\n  {job}:\n.*?if: always\(\) && needs\.prepare\.outputs\.run_build == 'true' && needs\.validate\.result == 'success'",
             text,
             f"{job} runs whenever a build is requested",
         )
     require(
-        r"published-platform-quality:.*?needs\.publish\.result == 'success' &&\s*\n\s*needs\.publish-fixer-engines\.result == 'success'",
+        r"published-platform-quality:.*?needs\.publish\.result == 'success'",
         text,
-        "published smoke gates on both publish jobs",
+        "published smoke gates on the publish job",
     )
     require(
         r"integration-quality:.*?needs\.published-platform-quality\.result == 'success'",
@@ -245,56 +234,19 @@ def main() -> int:
         "release manifest must not gate on the non-blocking integration qualification",
     )
     require(
-        r"variant:\s*fixer-base.*?image_kind:\s*fixer.*?image:\s*wolf-fixer.*?platforms:\s*linux/amd64",
-        text,
-        "amd64 fixer base publication",
-    )
-    for variant in ("fixer-api", "fixer-claude", "fixer-codex", "fixer-engines"):
-        require(
-            rf"variant:\s*{variant}.*?platforms:\s*linux/amd64",
-            text,
-            f"amd64 {variant} publication",
-        )
-    require(
-        r"publish-fixer-engines:.*?needs:\s*\[prepare, publish, release-approval\].*?"
-        r"WOLF_FIXER_BASE_REF=\$\{\{ steps\.base\.outputs\.reference \}\}",
-        text,
-        "fixer engines depend on exact published base output",
-    )
-    require(
         r"release-manifest:.*?build-release-manifest\.sh.*?"
-        r"build/release-evidence/fixer-codex\.image\.json",
+        r"build/release-evidence/codeql\.image\.json",
         text,
-        "aggregate release lists the canonical eight images explicitly",
+        "aggregate release lists the canonical four images explicitly",
     )
     reject(
         r"build-release-manifest\.sh\s+\\\s+build/scanner-release\.json\s+\\\s+build/release-evidence/\*\.image\.json",
         text,
         "aggregate release must not glob extra GHCR worker metadata",
     )
-    require(
-        r"fixer-quality:.*?type=oci,dest=\$base_oci.*?"
-        r"--build-context \"wolf-fixer-base=oci-layout://\$base_layout\".*?"
-        r"--build-arg \"WOLF_FIXER_BASE_REF=wolf-fixer-base\"",
-        text,
-        "fixer quality variants use local OCI base handoff instead of registry lookup",
-    )
-    require(
-        r"publish-fixer-engines:.*?if:\s*>-\s*always\(\)\s*&&.*?"
-        r"needs\.publish\.result == 'success'.*?"
-        r"needs\.release-approval\.result == 'success'.*?"
-        r"needs\.release-approval\.outputs\.receipt_digest != ''",
-        text,
-        "candidate fixer publication tolerates skipped approval while release publication requires successful approval evidence",
-    )
-    require(
-        r"Verify and bind exact published fixer base.*?verify-image\.sh",
-        text,
-        "fixer base digest and platform re-verification",
-    )
-    require(r"imageKind:\s*\$image_kind", text, "scanner/fixer manifest classification")
-    require(r'imageKind:\s*"fixer"', text, "fixer engine manifest classification")
-    publish_text = job_block(text, "publish") + "\n" + job_block(text, "publish-fixer-engines")
+    require(r"imageKind:\s*\$image_kind", text, "scanner manifest classification")
+    reject(r"fixer", text, "Community must not build, qualify, or publish fixer images")
+    publish_text = job_block(text, "publish")
     reject(r"scanners:\s*vuln,secret,license", publish_text, "regular image publishing skips Trivy vulnerability, secret, and license gates")
     require(
         r"TRIVY_IGNORED_LICENSES:\s*GPL-1\.0-only,.*LGPL-3\.0-or-later,Sleepycat",
@@ -340,18 +292,12 @@ def main() -> int:
         text,
         "scanner supply-chain verification explicitly disabled",
     )
-    require(
-        r"Record unsigned primary engine evidence.*?disabled:\s*true",
-        text,
-        "fixer supply-chain verification explicitly disabled",
-    )
     reject(
-        r"Write immutable (?:image|engine) metadata\n\s+if:\s*always\(\)",
+        r"Write immutable image metadata\n\s+if:\s*always\(\)",
         text,
         "publication metadata emitted after failed evidence gates",
     )
     require(r"Create or verify immutable primary image tag.*?promote-image\.sh.*?ALIASES", text, "image aliases move during publish")
-    require(r"Create or verify immutable primary engine tag.*?promote-image\.sh.*?ALIASES", text, "engine aliases move during publish")
     require(r"environment:\s*\n\s*name:\s*scanner-release", text, "protected release environment")
     require(
         r"resolve-release-candidate:.*?verify-release-closure\.sh.*?candidate_manifest_digest.*?verification_evidence_digest",

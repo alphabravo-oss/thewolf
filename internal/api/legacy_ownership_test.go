@@ -16,6 +16,7 @@ import (
 )
 
 func TestLegacyOwnerlessResourcesRequireAdministratorSession(t *testing.T) {
+	grantRemediation(t)
 	srv, store, adminJWT := newTestServer(t)
 	ctx := context.Background()
 	// A legacy empty-ID principal permits real FK-backed ownerless rows without

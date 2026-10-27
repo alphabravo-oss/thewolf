@@ -6,6 +6,7 @@ import (
 
 	"github.com/alphabravocompany/thewolf/internal/api/response"
 	"github.com/alphabravocompany/thewolf/internal/scannerfeature"
+	"github.com/alphabravocompany/thewolf/pkg/entitlement"
 )
 
 func requireScannerReleaseCapability(required scannerfeature.Capability) func(http.Handler) http.Handler {
@@ -28,6 +29,21 @@ func requireScannerReleaseCapability(required scannerfeature.Capability) func(ht
 						"required_capability": required,
 					},
 				})
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// requireEntitlement answers 403 enterprise_required for a surface the active
+// edition does not grant. Enterprise-only features stay discoverable (the UI
+// reads the same entitlements) but are never executable from Community.
+func requireEntitlement(capability, feature string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !entitlement.Active().Allows(capability) {
+				response.WriteError(w, http.StatusForbidden, "enterprise_required", feature+" requires Wolf Enterprise")
 				return
 			}
 			next.ServeHTTP(w, r)

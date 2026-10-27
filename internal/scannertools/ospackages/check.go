@@ -309,8 +309,8 @@ func validateDockerfileCoverage(root string, policy Policy) error {
 		seenFiles[filepath.ToSlash(relative)] = struct{}{}
 	}
 	// Scanner Dockerfiles remain exhaustive by convention. Additional
-	// Wolf-owned release artifacts (for example fixer/Dockerfile.base) may
-	// opt into the same immutable OS package policy explicitly.
+	// Wolf-owned release artifacts may opt into the same immutable OS package
+	// policy explicitly.
 	for relative := range expectedDockerfiles {
 		if _, exists := seenFiles[relative]; exists {
 			continue
