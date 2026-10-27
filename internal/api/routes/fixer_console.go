@@ -14,8 +14,7 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/api/response"
 	"github.com/alphabravocompany/thewolf/internal/auth"
 	"github.com/alphabravocompany/thewolf/internal/db"
-	"github.com/alphabravocompany/thewolf/internal/fix/console"
-	"github.com/alphabravocompany/thewolf/internal/fix/install"
+	"github.com/alphabravocompany/thewolf/internal/fix/profile"
 	"github.com/alphabravocompany/thewolf/internal/models"
 )
 
@@ -64,8 +63,8 @@ func CreateFixerConsole(w http.ResponseWriter, r *http.Request) {
 	engine := strings.ToLower(strings.TrimSpace(req.Engine))
 	switch kind {
 	case models.FixerConsoleLogin:
-		if _, err := console.LoginArgs(engine); err != nil {
-			response.WriteError(w, http.StatusBadRequest, "validation_error", err.Error())
+		if !profile.CLIEngine(engine) {
+			response.WriteError(w, http.StatusBadRequest, "validation_error", fmt.Sprintf("unknown login engine %q", engine))
 			return
 		}
 	case models.FixerConsoleShell:
@@ -76,7 +75,7 @@ func CreateFixerConsole(w http.ResponseWriter, r *http.Request) {
 		}
 		engine = ""
 	case models.FixerConsoleInstall:
-		if !install.Supported(engine) {
+		if !profile.CLIEngine(engine) {
 			response.WriteError(w, http.StatusBadRequest, "validation_error",
 				"can install claude, codex, or opencode")
 			return

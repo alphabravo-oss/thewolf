@@ -5,7 +5,6 @@ package auth
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -14,7 +13,7 @@ import (
 	"time"
 
 	"github.com/alphabravocompany/thewolf/internal/db"
-	"github.com/alphabravocompany/thewolf/internal/fix/profile"
+	"github.com/alphabravocompany/thewolf/internal/fix/workerstatus"
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/plugin"
 	"github.com/alphabravocompany/thewolf/internal/secrets"
@@ -107,25 +106,7 @@ func Resolve(ctx context.Context, store db.Store, userID string) Credentials {
 }
 
 // EngineStatus is the worker-local view of one fix engine's readiness.
-type EngineStatus struct {
-	Name         string          `json:"name"`
-	Command      string          `json:"command,omitempty"`
-	Available    bool            `json:"available"`
-	Installed    bool            `json:"installed"`
-	Installable  bool            `json:"installable,omitempty"`
-	Auth         string          `json:"auth"` // oauth | api_key | none
-	Detail       string          `json:"detail,omitempty"`
-	Account      string          `json:"account,omitempty"`
-	Login        []string        `json:"login,omitempty"`
-	SessionPaths []string        `json:"session_paths,omitempty"`
-	Persisted    bool            `json:"persisted"`
-	Usage        string          `json:"usage,omitempty"`
-	Models       []profile.Model `json:"models,omitempty"`
-}
-
-// StatusFileName is written under the artifacts root so the API can surface
-// worker-side OAuth state (the API process does not have the CLIs).
-const StatusFileName = "fixer-engines.json"
+type EngineStatus = workerstatus.EngineStatus
 
 // ProbeAll reports local CLI + key readiness. creds may be empty.
 func ProbeAll(ctx context.Context, creds Credentials) []EngineStatus {
@@ -365,43 +346,4 @@ func Login(ctx context.Context, engine string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
-}
-
-// WriteStatus persists ProbeAll output for the API to read.
-func WriteStatus(artifactsRoot string, engines []EngineStatus) error {
-	if artifactsRoot == "" {
-		return nil
-	}
-	if err := os.MkdirAll(artifactsRoot, 0o750); err != nil {
-		return err
-	}
-	payload, err := json.MarshalIndent(map[string]any{
-		"engines":    engines,
-		"updated_at": time.Now().UTC().Format(time.RFC3339),
-	}, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(filepath.Join(artifactsRoot, StatusFileName), payload, 0o600)
-}
-
-// ReadStatus loads the worker-written engine file. Missing file is (nil, nil).
-func ReadStatus(artifactsRoot string) ([]EngineStatus, error) {
-	if artifactsRoot == "" {
-		return nil, nil
-	}
-	data, err := os.ReadFile(filepath.Join(artifactsRoot, StatusFileName)) // #nosec G304
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	var payload struct {
-		Engines []EngineStatus `json:"engines"`
-	}
-	if err := json.Unmarshal(data, &payload); err != nil {
-		return nil, err
-	}
-	return payload.Engines, nil
 }
