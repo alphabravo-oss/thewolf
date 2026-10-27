@@ -1,4 +1,3 @@
-import { ApiError } from "./api";
 
 const ASSIGNMENT_SECRET =
   /(\b(?:authorization|credential|password|passwd|private[_-]?key|access[_-]?key|token|secret|api[_-]?key)\b["']?\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^\s,;}]+)/gi;
