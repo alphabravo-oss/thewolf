@@ -355,7 +355,7 @@ The July platform supersedes the June updater/build plans. Preserve its full pro
 
 ## 14. E — Enterprise edition, identity, and compatibility
 
-- [ ] E01 Reconcile counsel-approved BSL terms, Additional Use Grant/thresholds, four-year change-date process, Apache conversion, NOTICE/trademarks, third-party inventory, contribution grant, artifact metadata, and source-available language. Legal/business approval remains a real dependency.
+- [x] E01 **Superseded 2026-10-27 by owner decision:** Community is licensed Apache-2.0 now (no BSL, no Additional Use Grant, no change date). `LICENSE`, `NOTICE`, `LICENSE_POLICY.md`, README, CONTRIBUTING and image metadata updated. Inbound contributions are Apache-2.0 §5 (no separate agreement). Counsel may still review trademarks and the third-party inventory.
 - [ ] E02 Verify public core/private overlay boundaries, extension contracts and conformance, unique private migrations, pinned-core builds, private CI/registry access, accidental-publication procedure, and no private source/secrets in public builds.
 - [ ] E03 Verify edition/capabilities (Community caps removed 2026-10-27) and core+overlay versions consistently through UI/API/CLI/MCP/audit/metrics; backend enforcement must not rely on hidden UI controls. Keep Community behavior complete within the approved policy.
 - [ ] E04 Complete and qualify signed offline entitlement lifecycle where required by the PRD: issuer/trust roots, customer/scope/expiry/limits, verification, rotation/revocation, audit and safe failure. Current binary-as-entitlement packaging is not silently equated with that requirement.

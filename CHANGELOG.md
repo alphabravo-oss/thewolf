@@ -7,6 +7,9 @@
   limits. `WOLF_COMMUNITY_LIMITS`, the `community_limit` error and the `limits` field
   of `GET /api/edition` are gone.
 
+- License Community under Apache-2.0: add `LICENSE`, replace the source-available/BSL
+  wording in `NOTICE`, `LICENSE_POLICY.md`, README, CONTRIBUTING and image metadata.
+
 - Let AI remediation (Enterprise) fix GitLab projects on gitlab.com or a self-hosted
   instance: Git/GitLab repos accept a host-bound `gitlab_token` credential, the
   writability preflight checks the token's role through the GitLab API, and fix
