@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"sync"
+
+	"github.com/alphabravocompany/thewolf/pkg/entitlement"
 )
 
 // Externally registered scanners (pkg/scannerapi) declare their scheduling and
@@ -25,6 +27,13 @@ func RegisterExternalSecrets(tool string, envToSecret map[string]string) {
 		copied[env] = name
 	}
 	externalSecrets.Store(tool, copied)
+}
+
+// externalUnlicensed reports an externally registered scanner run without the
+// enterprise.plugins entitlement. Commercial engines are Enterprise-only.
+func externalUnlicensed(tool string) bool {
+	_, external := externalSecrets.Load(tool)
+	return external && !entitlement.Active().Allows(entitlement.Plugins)
 }
 
 func externalResourceSpec(tool string) (ResourceSpec, bool) {

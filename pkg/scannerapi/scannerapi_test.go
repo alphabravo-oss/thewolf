@@ -11,8 +11,13 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/plugin"
 	"github.com/alphabravocompany/thewolf/internal/plugin/container"
 	"github.com/alphabravocompany/thewolf/internal/scan/runner"
+	"github.com/alphabravocompany/thewolf/pkg/entitlement"
 	"github.com/alphabravocompany/thewolf/pkg/scannerapi"
 )
+
+type grants string
+
+func (g grants) Allows(capability string) bool { return capability == string(g) }
 
 // licensedSARIF is what an Enterprise adapter for a customer-licensed engine
 // looks like: run the customer's image, read SARIF from stdout.
@@ -72,7 +77,16 @@ func TestRegisteredScannerRunsThroughRunner(t *testing.T) {
 		}
 		return result
 	}
-	result := run(func(_ context.Context, name string) (string, error) {
+	// Commercial scanners are Enterprise-only: without enterprise.plugins the
+	// run skips the scanner with a license reason instead of executing it.
+	result := run(nil)
+	if !slices.Contains(result.ToolsSkipped, "example-licensed-sast") || !strings.Contains(result.ToolSkipReasons["example-licensed-sast"], "Enterprise license") {
+		t.Fatalf("unlicensed commercial scanner was not gated: %+v", result)
+	}
+	entitlement.SetActive(grants(entitlement.Plugins))
+	t.Cleanup(func() { entitlement.SetActive(nil) })
+
+	result = run(func(_ context.Context, name string) (string, error) {
 		if name != "vendor-license" {
 			t.Fatalf("unexpected secret %q", name)
 		}
