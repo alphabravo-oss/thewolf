@@ -854,7 +854,7 @@ func ListFixEngines(w http.ResponseWriter, r *http.Request) {
 		},
 		"home":          home,
 		"console_shell": fixerConsoleShellEnabled(r, DefaultHandler),
-		"oauth_hint":    "Login with Claude, Codex, or OpenCode in the worker console. Grok uses an xAI API key under Account → Secrets. Sessions live in the fixer worker HOME.",
+		"oauth_hint":    "Log in with Claude, Codex, OpenCode, or Grok Build in the worker console, or add provider API keys under Account → Secrets. Sessions live in the fixer worker HOME.",
 		"prompts": map[string]any{
 			// Defaults come from the worker; empty until a worker has run.
 			"initial": map[string]string{
