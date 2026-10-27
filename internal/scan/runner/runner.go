@@ -419,6 +419,11 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 			result.ToolSkipReasons[p.Name()] = err.Error()
 			continue
 		}
+		if externalUnlicensed(p.Name()) {
+			result.ToolsSkipped = append(result.ToolsSkipped, p.Name())
+			result.ToolSkipReasons[p.Name()] = "requires an Enterprise license (enterprise.plugins)"
+			continue
+		}
 		if !p.CheckAvailable() {
 			log.Warn().Str("tool", p.Name()).Msg("tool not available, skipping")
 			result.ToolsSkipped = append(result.ToolsSkipped, p.Name())
