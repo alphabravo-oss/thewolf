@@ -113,8 +113,9 @@
   --muted-foreground: 211.6 12.1% 69.2%;  /* #a7b0ba */
   --accent: 210 15.6% 12.5%;
   --accent-foreground: 210 21.4% 94.5%;
-  --destructive: 4.2 64% 36%;
-  --destructive-foreground: 0 0% 98%;
+  /* Light red so it works as both a fill (dark label) and as text on near-black. */
+  --destructive: 0 90.6% 70.8%;           /* #f87171 */
+  --destructive-foreground: 210 17.6% 6.7%;
   --border: 212 12.4% 23.7%;              /* #353c44 line */
   --input: 212.5 11.8% 42.5%;             /* 3:1 control edge on panel */
   --ring: 210 20.3% 76.9%;
@@ -207,6 +208,11 @@
   --font-sans: var(--font-sans-stack);
   --font-narrow: var(--font-narrow-stack);
   --font-mono: var(--font-mono-stack);
+
+  /* Archivo's word space collapses at Tailwind's default negative tracking
+     ("Keep work" reads "Keepwork"), so keep headings only slightly tight. */
+  --tracking-tight: -0.01em;
+  --tracking-tighter: -0.02em;
 
   --color-sev-critical: var(--sev-critical);
   --color-sev-high: var(--sev-high);
@@ -312,7 +318,7 @@
   }
 
   h1, h2, h3, h4 {
-    letter-spacing: -0.02em;
+    letter-spacing: -0.01em;
   }
 
   /* Archivo Narrow carries the "label" voice: table headers, eyebrows, nav
@@ -430,7 +436,7 @@
     font-size: 1.5rem;
     line-height: 2rem;
     font-weight: 600;
-    letter-spacing: -0.025em;
+    letter-spacing: -0.01em;
     color: var(--color-foreground);
   }
   .page-subtitle {
@@ -500,7 +506,7 @@
     font-size: 1.5rem;
     line-height: 2rem;
     font-weight: 600;
-    letter-spacing: -0.025em;
+    letter-spacing: -0.01em;
     color: var(--color-foreground);
   }
   .stat-delta {

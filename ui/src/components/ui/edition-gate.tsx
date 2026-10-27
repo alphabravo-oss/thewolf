@@ -43,7 +43,7 @@ export function EditionGate({
           href={ENTERPRISE_INFO_URL}
           target="_blank"
           rel="noreferrer"
-          className="inline-block text-sm font-medium text-primary underline-offset-4 hover:underline"
+          className="inline-block text-sm font-medium text-primary underline underline-offset-4 hover:no-underline"
         >
           Contact us about Enterprise
         </a>
