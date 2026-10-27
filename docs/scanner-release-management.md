@@ -55,22 +55,22 @@ manifest digest. The manifest binds:
 - SBOM, provenance, test, vulnerability, license, and signature evidence;
 - the policy revision and decision digest.
 
-Every managed release contains eight Wolf-owned images: scanner `default`,
-`jvm`, `rust`, and `codeql`, plus fixer `base`, `api`, `claude`, and `codex`.
-The durable inventory records `image_kind` as `scanner` or `fixer`. Existing
-pre-field inventories normalize to `scanner`; new publication rejects an
-unknown kind, an incomplete owned-image set, a missing platform, or divergent
-digests for the same image across registry targets.
+Every managed release contains four Wolf-owned scanner images: `default`,
+`jvm`, `rust`, and `codeql`. The durable inventory records `image_kind`;
+existing pre-field inventories normalize to `scanner`. New publication rejects
+an unknown kind, an incomplete owned-image set, a missing platform, or
+divergent digests for the same image across registry targets.
 
-Fixer engines are first-class supply-chain artifacts but never scanner runtime
-assignments. The factory publishes and verifies `fixer-base` first. API,
-Claude, and Codex engine builds receive only its exact
-`repository@sha256:digest` reference, record that reference in their metadata,
-and fail aggregate-manifest creation if it differs. All eight images receive
-final-image vulnerability/secret/license scans, SPDX SBOMs, provenance,
-signatures, immutable tags, optional mirror parity, and offline-bundle
-coverage. Rollout, cache preparation, synthetic scanner health, and per-scan
-image selection filter the inventory to `image_kind=scanner`.
+Fixer images are not built, qualified, or published by Community. Releases
+published through `scanner-set-2026.44.2` and earlier also list four
+`image_kind=fixer` images (`fixer-base`, `fixer-api`, `fixer-claude`,
+`fixer-codex`). Those releases stay readable and verifiable (inventory
+validation, offline bundles, closure verification, and the runtime snapshot all
+tolerate the legacy entries), but rollout, cache preparation, synthetic
+scanner health, and per-scan image selection only use `image_kind=scanner`.
+All four scanner images receive final-image vulnerability/secret/license scans,
+SPDX SBOMs, provenance, signatures, immutable tags, optional mirror parity, and
+offline-bundle coverage.
 
 Wolf allocates the ISO-week sequence inside the same database transaction that
 publishes the immutable release inventory and advances the candidate. The
@@ -84,7 +84,7 @@ reconstructs the exact complete DAG from its immutable image/platform
 snapshot, requires every expected latest step and evidence digest to be
 successful, recomputes the canonical receipt
 digest, checks its candidate/build/commit/lock/policy bindings, and obtains the
-manifest, signer identity, 49-tool inventory, eight owned images, and artifacts
+manifest, signer identity, 49-tool inventory, four owned scanner images, and artifacts
 from that receipt. Approvals must bind the same receipt digest. Callers cannot
 submit or override authoritative release inventory or signature status.
 
@@ -188,7 +188,7 @@ timezone, jitter, catch-up, `maximum_stable_image_age`, and
 `force_weekly_rebuild`. The default seven-day maximum means a weekly candidate
 may record an audited no-op only when all discovered inputs are unchanged and
 the current stable release is still within that age. Otherwise the scheduler
-forces a complete rebuild of all four scanner and four fixer images. Operators
+forces a complete rebuild of all four scanner images. Operators
 can edit these fields through the same revisioned Policy API and UI used for
 maintenance windows; the next scheduler tick reloads the active revision.
 
@@ -205,14 +205,10 @@ socket or registry push/signing credentials.
   candidate build with caches disabled for security-sensitive rebuilds;
 - authorized dispatch supports validation, discovery, package refresh,
   candidate, security rebuild, protected release, and verification;
-- scanner quality covers seven supported scanner/platform tuples;
-- fixer quality covers all eight fixer/platform tuples, including non-root,
-  strict version, auth-boundary, vulnerability, secret, license, and SBOM
-  gates;
-- publication commits four scanner images and the fixer base, then builds the
-  three fixer engines from the verified exact base digest;
-- the aggregate commit accepts exactly four scanner and four fixer variants,
-  and channel aliases move only after that signed commit succeeds.
+- scanner quality covers the four scanner images' supported platform tuples;
+- publication commits the four scanner images;
+- the aggregate commit accepts exactly the four scanner variants, and channel
+  aliases move only after that signed commit succeeds.
 
 The factory uses GHCR as primary. Docker Hub mirroring can be disabled,
 best-effort, or required; required mode fails closed when credentials or digest
@@ -221,7 +217,7 @@ manifests, signatures, provenance, and SBOM attestations from the registry.
 
 The API/runtime, proposal-worker, and three managed release-lane adapter images
 use a separate immutable transaction and aggregate so they do not expand or
-change the canonical eight-image scanner/fixer release. See
+change the canonical four-image scanner release. See
 [deployment image releases](deployment-image-releases.md).
 
 ## Operation and trace correlation
