@@ -35,10 +35,11 @@ export const severityRowAccent: Record<Severity, string> = {
   info: "border-l-zinc-500",
 };
 
+// Chart fills reference the theme-aware `--sev-*` tokens in globals.css.
 export const severityChartColor: Record<Severity, string> = {
-  critical: "#dc2626",
-  high: "#ea580c",
-  medium: "#d97706",
-  low: "#0891b2",
-  info: "#6b7280",
+  critical: "var(--sev-critical)",
+  high: "var(--sev-high)",
+  medium: "var(--sev-medium)",
+  low: "var(--sev-low)",
+  info: "var(--sev-info)",
 };

@@ -4,6 +4,7 @@ import { EmptyState, ErrorState, PermissionState } from "@/components/ui/empty-s
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeftIcon } from "lucide-react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { api, ApiError, isNotFound } from "@/lib/api";
 import type { Finding, FindingStatus } from "@/lib/types";
@@ -13,6 +14,8 @@ import { Badge } from "@/components/ui/badge";
 import { findingTitle } from "@/lib/finding-title";
 import { useAutofixEnabled } from "@/lib/fixes";
 import { FixFindingButton } from "@/components/fixes/fix-finding-button";
+import { Section } from "@/components/ui/section";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 
 export const Route = createFileRoute("/_authed/findings/$findingId")({
   component: FindingDetailPage,
@@ -48,30 +51,31 @@ function FindingDetailPage() {
       toast.error(e instanceof Error ? e.message : "Update failed"),
   });
 
-  const suppress = useMutation({
+  // Suppress is two steps: preview how many findings it would hide, ask in a
+  // ConfirmDialog, then save.
+  const [suppressPreview, setSuppressPreview] = useState<{ finding: Finding; count: number; hidden: number } | null>(null);
+  const previewSuppress = useMutation({
     mutationFn: async (finding: Finding) => {
       const preview = await api.post<{ count?: number; hidden_count?: number }>(
         "/suppressions/preview",
         { finding_id: finding.id, reason: "user" },
       );
       const count = preview.data?.count ?? 0;
-      const hidden = preview.data?.hidden_count ?? count;
-      if (
-        !window.confirm(
-          `Save this suppression? It matches ${count} current finding${count === 1 ? "" : "s"}; ${hidden} will be hidden in the latest scan.`,
-        )
-      ) {
-        return false;
-      }
-      await api.post("/suppressions", {
+      return { finding, count, hidden: preview.data?.hidden_count ?? count };
+    },
+    onSuccess: setSuppressPreview,
+    onError: (e) =>
+      toast.error(e instanceof Error ? e.message : "Suppress failed"),
+  });
+  const suppress = useMutation({
+    mutationFn: (finding: Finding) =>
+      api.post("/suppressions", {
         finding_id: finding.id,
         repo_id: finding.repo_id,
         reason: "user",
-      });
-      return true;
-    },
-    onSuccess: (ok) => {
-      if (!ok) return;
+      }),
+    onSuccess: () => {
+      setSuppressPreview(null);
       qc.invalidateQueries({ queryKey: ["finding", findingId] });
       qc.invalidateQueries({ queryKey: ["findings"] });
       toast.success("Suppression saved");
@@ -163,11 +167,11 @@ function FindingDetailPage() {
         ) : (
           <button
             type="button"
-            disabled={suppress.isPending}
-            onClick={() => suppress.mutate(f)}
+            disabled={previewSuppress.isPending}
+            onClick={() => previewSuppress.mutate(f)}
             className="ml-auto h-8 px-3 rounded-md border border-border text-xs hover:bg-muted/40 disabled:opacity-50"
           >
-            {suppress.isPending ? "Suppressing…" : "Suppress"}
+            {previewSuppress.isPending ? "Suppressing…" : "Suppress"}
           </button>
         )}
       </section>
@@ -178,7 +182,7 @@ function FindingDetailPage() {
         <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-sm font-medium">Scanner evidence</h2><span className="text-xs text-muted-foreground">{tools.length} scanner{tools.length === 1 ? "" : "s"}</span></div>
         {severitiesDiffer && <p className="text-xs leading-relaxed text-muted-foreground">Scanners assigned different severities. Their original assessments are preserved below.</p>}
         <ul className="divide-y divide-border">{reports.map((row) => <li key={row.id} className="space-y-2 py-4 first:pt-0 last:pb-0"><div className="flex flex-wrap items-center gap-2"><span className="text-sm font-medium">{row.tool_name}</span><SeverityBadge severity={row.severity} size="sm" /></div>{(row.advisory_id || row.rule_id) && <p className="break-all font-mono text-xs text-muted-foreground">{[row.advisory_id, row.rule_id].filter((id, index, ids) => id && ids.indexOf(id) === index).join(" · ")}</p>}{(row.file_path !== f.file_path || row.line_start !== f.line_start) && <p className="break-all font-mono text-xs text-muted-foreground">{row.file_path}{row.line_start ? `:${row.line_start}` : ""}</p>}{row.description && <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">{row.description}</p>}</li>)}</ul>
-        {f.confidence && <details className="text-xs text-muted-foreground"><summary className="cursor-pointer">How confidence is determined</summary><p className="mt-2 leading-relaxed">Confidence reflects recorded cross-tool agreement: one scanner is low, two medium, and three or more high. Severity describes impact; confidence describes agreement.</p></details>}
+        {f.confidence && <Section variant="plain" className="text-xs text-muted-foreground" title="How confidence is determined"><p className="mt-2 leading-relaxed">Confidence reflects recorded cross-tool agreement: one scanner is low, two medium, and three or more high. Severity describes impact; confidence describes agreement.</p></Section>}
       </section>
 
       {f.file_path && <section id="source-code" className="glass-card scroll-mt-20 overflow-hidden" tabIndex={-1}>
@@ -198,6 +202,16 @@ function FindingDetailPage() {
         {f.scan_id && <Link to="/scans/$scanId" params={{ scanId: f.scan_id }} className="hover:underline">View scan</Link>}
         {f.repo_id && <Link to="/repos/$repoId" params={{ repoId: f.repo_id }} className="hover:underline">View repository</Link>}
       </footer>
+      <ConfirmDialog
+        open={!!suppressPreview}
+        onOpenChange={(open) => !open && setSuppressPreview(null)}
+        title="Save this suppression?"
+        description={suppressPreview && `It matches ${suppressPreview.count} current finding${suppressPreview.count === 1 ? "" : "s"}; ${suppressPreview.hidden} will be hidden in the latest scan.`}
+        confirmLabel="Save suppression"
+        variant="default"
+        pending={suppress.isPending}
+        onConfirm={() => suppressPreview && suppress.mutate(suppressPreview.finding)}
+      />
     </div>
   );
 }
