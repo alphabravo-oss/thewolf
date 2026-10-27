@@ -276,8 +276,7 @@
 
   /* Numbers read better aligned — tabular figures on data surfaces. */
   .tnum,
-  .data-table td,
-  .stat-value {
+  .data-table td {
     font-variant-numeric: tabular-nums;
   }
 
@@ -485,40 +484,6 @@
     padding: 0.875rem 1.25rem;
     border-bottom: 1px solid var(--color-border);
   }
-
-  .stat-card {
-    border-radius: var(--radius-lg);
-    border: 1px solid var(--color-border);
-    background: var(--color-card);
-    padding: 1rem 1.25rem;
-    transition: border-color 0.15s;
-  }
-  .stat-card:hover { border-color: var(--color-border-strong); }
-  .stat-label {
-    font-size: 0.75rem;
-    font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--color-muted-foreground);
-  }
-  .stat-value {
-    margin-top: 0.35rem;
-    font-size: 1.5rem;
-    line-height: 2rem;
-    font-weight: 600;
-    letter-spacing: -0.01em;
-    color: var(--color-foreground);
-  }
-  .stat-delta {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.25rem;
-    margin-top: 0.35rem;
-    font-size: 0.75rem;
-    color: var(--color-muted-foreground);
-  }
-  .stat-delta.up { color: var(--color-status-error); }
-  .stat-delta.down { color: var(--color-status-success); }
 
   /* --- Tables -------------------------------------------------------------- */
 

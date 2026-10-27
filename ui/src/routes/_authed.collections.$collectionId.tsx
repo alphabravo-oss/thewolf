@@ -1,6 +1,6 @@
 import { EmptyState, ErrorState, PermissionState } from "@/components/ui/empty-state";
 // Collection detail. Lets the user:
-//   - Rename or clear description (inline edit)
+//   - Rename or clear description (edit dialog)
 //   - Delete the collection (modal; optional purge of scan records)
 //   - Add a repo: pick an existing one or create a new one
 //       (local path or remote git URL)
@@ -8,14 +8,7 @@ import { EmptyState, ErrorState, PermissionState } from "@/components/ui/empty-s
 //   - Trigger a scan against any single repo in the collection
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  ArrowLeftIcon,
-  PencilIcon,
-  PlayIcon,
-  PlusIcon,
-  Trash2Icon,
-  XIcon,
-} from "lucide-react";
+import { PencilIcon, Trash2Icon } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { api, ApiError, isNotFound } from "@/lib/api";
@@ -25,7 +18,14 @@ import { DataTable, type Column } from "@/components/ui/data-table";
 import { ScanStatusPill } from "@/components/scan-status-pill";
 import { formatRelativeTime } from "@/lib/utils";
 import { CardSkeleton } from "@/components/skeleton";
-import { AddRepoForm } from "@/components/add-repo-form";
+import { AddRepoDialog } from "@/components/add-repo-form";
+import { CollectionFormDialog } from "@/components/collection-form-dialog";
+import { AddButton } from "@/components/ui/add-button";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { PageHeader, PageShell } from "@/components/ui/page";
+import { RowActions } from "@/components/ui/row-actions";
 import { PostureCards } from "@/components/fleet/posture-cards";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { DeleteWithRecordsDialog } from "@/components/delete-with-records-dialog";
@@ -115,9 +115,9 @@ function CollectionDetailPage() {
   if (q.isError) return <ErrorState title="Could not load collection" actionLabel="Retry collection" onRetry={() => void q.refetch()} />;
   if (q.isLoading) {
     return (
-      <div className="space-y-6">
+      <PageShell>
         <CardSkeleton />
-      </div>
+      </PageShell>
     );
   }
   if (!q.data) return <EmptyState title="Collection not found" />;
@@ -138,12 +138,16 @@ function CollectionDetailPage() {
     { key: "coverage", header: "Tools completed", sortable: false, accessor: (r) => r.latest ? <div className="text-xs tabular-nums">{parseToolList(r.latest.tools_completed).length} / {parseToolList(r.latest.tools_selected).length}{parseToolList(r.latest.tools_failed).length > 0 && <p className="text-status-error">{parseToolList(r.latest.tools_failed).length} failed</p>}</div> : <span className="text-muted-foreground">—</span> },
     { key: "findings", header: "Latest findings", align: "right", sortAccessor: (r) => r.latest?.finding_count ?? -1, accessor: (r) => r.latest ? <Link to="/scans/$scanId" params={{ scanId: r.latest.id }} className="tabular-nums hover:underline">{r.latest.finding_count.toLocaleString()}</Link> : <span className="text-muted-foreground">—</span> },
     { key: "scans", header: "Scan history", align: "right", sortAccessor: (r) => r.scanCount, accessor: (r) => <Link to="/scans" search={{ repo_id: r.id }} className="tabular-nums hover:underline" aria-label={`View ${r.scanCount} scans for ${r.name}`}>{r.scanCount} scans</Link> },
-    { key: "actions", header: "Actions", sortable: false, accessor: (r) => <div className="flex items-center gap-1"><Link to="/repos/$repoId" params={{ repoId: r.id }} search={{ collection_id: collectionId }} hash="findings" className="px-2 py-1 text-xs hover:underline">Findings</Link>{canModify(me.data, r.user_id) && <button type="button" aria-label={`Scan ${r.name}`} onClick={() => scan.launch({ repo_id: r.id, collection_id: collectionId, branch: r.default_branch || "main", profile: "standard" })} disabled={scan.busy} className="inline-flex h-8 items-center gap-1 rounded px-2 text-xs font-medium hover:bg-muted/50 disabled:opacity-50"><PlayIcon className="size-3.5" />Scan</button>}{canModify(me.data, c.user_id) && <button type="button" onClick={() => setRemoveTarget(r)} className="size-8 grid place-items-center rounded hover:bg-muted/50" aria-label={`Remove ${r.name} from collection`}><XIcon className="size-3.5" /></button>}</div> },
+    { key: "actions", header: "Actions", hideHeader: true, sortable: false, align: "right", width: "3rem", accessor: (r) => <RowActions label={`Actions for ${r.name}`}>
+      <DropdownMenuItem asChild><Link to="/repos/$repoId" params={{ repoId: r.id }} search={{ collection_id: collectionId }} hash="findings">Findings</Link></DropdownMenuItem>
+      {canModify(me.data, r.user_id) && <DropdownMenuItem disabled={scan.busy} onSelect={() => scan.launch({ repo_id: r.id, collection_id: collectionId, branch: r.default_branch || "main", profile: "standard" })}>Scan</DropdownMenuItem>}
+      {canModify(me.data, c.user_id) && <DropdownMenuItem onSelect={() => setRemoveTarget(r)}>Remove from collection</DropdownMenuItem>}
+    </RowActions> },
   ];
 
 
   return (
-    <div className="space-y-6">
+    <PageShell>
       <DeleteWithRecordsDialog
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
@@ -168,157 +172,44 @@ function CollectionDetailPage() {
           }
         }}
       />
-      <div className="flex items-start gap-3">
-        <Link
-          to="/collections"
-          className="size-9 grid place-items-center rounded-md hover:bg-muted/50"
-          aria-label="Back"
-        >
-          <ArrowLeftIcon className="size-4" />
-        </Link>
-        <div className="flex-1 min-w-0">
-          {editing ? (
-            <EditHeader
-              initialName={c.name}
-              initialDescription={c.description ?? ""}
-              onSave={(body) => update.mutate(body)}
-              onCancel={() => setEditing(false)}
-              pending={update.isPending}
-            />
-          ) : (
-            <>
-              <h1 className="text-xl font-semibold">{c.name}</h1>
-              {c.description ? (
-                <p className="text-sm text-muted-foreground">{c.description}</p>
-              ) : (
-                <p className="text-sm text-muted-foreground italic">No description</p>
-              )}
-            </>
-          )}
-        </div>
-        {!editing && canModify(me.data, c.user_id) && (
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => setEditing(true)}
-              className="size-9 grid place-items-center rounded-md hover:bg-muted/50"
-              aria-label="Edit"
-            >
-              <PencilIcon className="size-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setDeleteOpen(true)}
-              className="size-9 grid place-items-center rounded-md hover:bg-destructive/10 text-destructive"
-              aria-label="Delete"
-            >
-              <Trash2Icon className="size-4" />
-            </button>
-          </div>
-        )}
-      </div>
+      <CollectionFormDialog
+        open={editing}
+        onOpenChange={(open) => { setEditing(open); if (!open) update.reset(); }}
+        initial={{ name: c.name, description: c.description ?? "" }}
+        onSubmit={(body) => update.mutate({
+          name: body.name !== c.name ? body.name : undefined,
+          description: body.description !== (c.description ?? "") ? body.description : undefined,
+        })}
+        pending={update.isPending}
+      />
+      <AddRepoDialog open={adding} collectionId={collectionId} onDone={() => setAdding(false)} />
+      <PageHeader
+        breadcrumbs={[{ label: "Collections", to: "/collections" }, { label: c.name }]}
+        title={c.name}
+        description={c.description || <span className="italic">No description</span>}
+        actions={canModify(me.data, c.user_id) ? (
+          <>
+            <Button variant="outline" size="sm" onClick={() => setEditing(true)}><PencilIcon aria-hidden />Edit</Button>
+            <Button variant="outline" size="sm" className="text-destructive-text" onClick={() => setDeleteOpen(true)}><Trash2Icon aria-hidden />Delete</Button>
+          </>
+        ) : undefined}
+      />
 
       <p className="text-sm text-muted-foreground">Work within this collection: open a repository to review its findings, or inspect a scan for the evidence from that run. Scan history follows the repository when it moves between collections.</p>
       <PostureCards collectionId={collectionId} />
 
-      <section className="glass-card p-5">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-medium">Repositories ({repos?.length ?? 0})</h2>
-          {!adding && canModify(me.data, c.user_id) && (
-            <button
-              type="button"
-              onClick={() => setAdding(true)}
-              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90"
-            >
-              <PlusIcon className="size-4" />
-              Add repo
-            </button>
-          )}
-        </div>
-
-        {adding && (
-          <AddRepoForm
-            collectionId={collectionId}
-            onDone={() => {
-              setAdding(false);
-              // Toast already fired inside the component on success; nothing else needed.
-            }}
-          />
-        )}
-
-        <p className="mb-4 text-xs text-muted-foreground">Finding counts describe the latest scan, including partial results. Use Findings to review the repository’s current open issues.</p>
-        <DataTable data={rows} columns={columns} keyExtractor={(r) => r.id} searchPlaceholder="Search repositories in this collection..." pageSize={20} density="compact" persistKey={`collection-repos:${collectionId}`} emptyMessage="No repositories in this collection. Add a repository to get started." />
-      </section>
+      <Card>
+        <CardHeader>
+          <CardTitle>Repositories ({repos?.length ?? 0})</CardTitle>
+          {canModify(me.data, c.user_id) && <AddButton thing="repo" onClick={() => setAdding(true)} />}
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-xs text-muted-foreground">Finding counts describe the latest scan, including partial results. Use Findings to review the repository’s current open issues.</p>
+          <DataTable data={rows} columns={columns} keyExtractor={(r) => r.id} searchPlaceholder="Search repositories in this collection..." pageSize={20} density="compact" persistKey={`collection-repos:${collectionId}`} emptyMessage="No repositories in this collection. Add a repository to get started." />
+        </CardContent>
+      </Card>
 
       {scan.dialog}
-
-
-    </div>
+    </PageShell>
   );
 }
-
-// ── Edit header ───────────────────────────────────────────────
-
-function EditHeader({
-  initialName,
-  initialDescription,
-  onSave,
-  onCancel,
-  pending,
-}: {
-  initialName: string;
-  initialDescription: string;
-  onSave: (body: { name?: string; description?: string }) => void;
-  onCancel: () => void;
-  pending: boolean;
-}) {
-  const [name, setName] = useState(initialName);
-  const [description, setDescription] = useState(initialDescription);
-  return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (!name.trim()) return;
-        onSave({
-          name: name.trim() !== initialName ? name.trim() : undefined,
-          description: description !== initialDescription ? description : undefined,
-        });
-      }}
-      className="space-y-2"
-    >
-      <input
-        type="text"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        required
-        autoFocus
-        placeholder="Collection name"
-        className="w-full h-9 px-2 rounded-md bg-background border border-muted/40 text-sm font-semibold"
-      />
-      <textarea
-        value={description}
-        onChange={(e) => setDescription(e.target.value)}
-        rows={2}
-        placeholder="Description (optional)"
-        className="w-full px-2 py-1.5 rounded-md bg-background border border-muted/40 text-sm resize-none"
-      />
-      <div className="flex justify-end gap-2">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="h-8 px-3 rounded-md text-sm hover:bg-muted/40"
-        >
-          Cancel
-        </button>
-        <button
-          type="submit"
-          disabled={pending || !name.trim()}
-          className="h-8 px-3 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-50"
-        >
-          {pending ? "Saving…" : "Save"}
-        </button>
-      </div>
-    </form>
-  );
-}
-

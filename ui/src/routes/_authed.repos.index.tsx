@@ -4,13 +4,21 @@
 import { useMemo, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { GitBranchIcon, GitForkIcon, HardDriveIcon, PlusIcon, ServerIcon } from "lucide-react";
+import { GitBranchIcon, GitForkIcon, HardDriveIcon, ServerIcon } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import type { Collection, Repo, Scan } from "@/lib/types";
 import { ListSkeleton } from "@/components/skeleton";
 import { EmptyState, ErrorState, PermissionState } from "@/components/ui/empty-state";
 import { PageHeader, PageShell } from "@/components/ui/page";
-import { AddRepoForm } from "@/components/add-repo-form";
+import { AddRepoDialog } from "@/components/add-repo-form";
+import { useScanWithPreflight } from "@/components/scan-preflight";
+import { ScanStatusPill } from "@/components/scan-status-pill";
+import { AddButton } from "@/components/ui/add-button";
+import { Button } from "@/components/ui/button";
+import { DataTable, type Column } from "@/components/ui/data-table";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { MetricCard } from "@/components/ui/metric-card";
+import { RowActions } from "@/components/ui/row-actions";
 import { ImportGitHubModal } from "@/components/repos/import-github-modal";
 import { DiscoverSSHModal } from "@/components/repos/discover-ssh-modal";
 import {
@@ -22,7 +30,6 @@ import {
 import { GroupToggle, type RepoGroupBy } from "@/components/repos/group-toggle";
 import { BulkToolbar } from "@/components/repos/bulk-toolbar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
 
 type GroupBy = RepoGroupBy;
 
@@ -32,6 +39,14 @@ interface ReposSearch {
   status?: RepoStatusFilter[];
   group?: GroupBy;
 }
+
+const SOURCE_LABELS: Record<string, string> = {
+  local: "Local",
+  github: "GitHub",
+  gitlab: "GitLab",
+  git: "Git URL",
+  ssh: "SSH",
+};
 
 const VALID_SOURCES: RepoSourceFilter[] = ["local", "github", "ssh", "git"];
 const VALID_STATUSES: RepoStatusFilter[] = [
@@ -97,14 +112,6 @@ function ReposPage() {
   const search = Route.useSearch();
   const navigate = useNavigate();
 
-  const toggleSelected = (id: string) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
   const clearSelected = () => setSelected(new Set());
 
   const filters: ReposFilters = {
@@ -199,37 +206,104 @@ function ReposPage() {
     });
   }, [reposQ.data, filters, collectionMembership, latestScanByRepo]);
 
+  const statusCounts = useMemo(() => {
+    const c: Record<RepoStatusFilter, number> = { clean: 0, "open-high": 0, "open-critical": 0, none: 0, failed: 0 };
+    for (const r of reposQ.data ?? []) c[repoStatusFor(latestScanByRepo.get(r.id))]++;
+    return c;
+  }, [reposQ.data, latestScanByRepo]);
+
+  const scan = useScanWithPreflight();
+  const columns: Column<Repo>[] = [
+    {
+      key: "name",
+      header: "Repository",
+      sortAccessor: (r) => r.name,
+      accessor: (r) => (
+        <Link to="/repos/$repoId" params={{ repoId: r.id }} className="flex min-w-0 items-center gap-3" onClick={(e) => e.stopPropagation()}>
+          <div className="grid size-8 shrink-0 place-items-center rounded-md bg-muted">
+            {r.source_type === "local" ? <HardDriveIcon className="size-4 text-muted-foreground" aria-hidden /> : r.source_type === "ssh" ? <ServerIcon className="size-4 text-muted-foreground" aria-hidden /> : <GitBranchIcon className="size-4 text-muted-foreground" aria-hidden />}
+          </div>
+          <div className="min-w-0">
+            <div className="truncate text-sm font-medium hover:underline">{r.name}</div>
+            <div className="truncate font-mono text-xs text-muted-foreground">{r.source_path}</div>
+          </div>
+        </Link>
+      ),
+    },
+    { key: "source", header: "Source", sortAccessor: (r) => r.source_type, filter: { label: "Source" }, accessor: (r) => <span className="text-xs">{SOURCE_LABELS[r.source_type] ?? r.source_type}</span> },
+    { key: "branch", header: "Branch", sortAccessor: (r) => r.default_branch || "main", accessor: (r) => <span className="font-mono text-xs text-muted-foreground">{r.default_branch || "main"}</span> },
+    {
+      key: "last_scan",
+      header: "Latest scan",
+      sortAccessor: (r) => latestScanByRepo.get(r.id)?.created_at ?? "",
+      accessor: (r) => {
+        const last = latestScanByRepo.get(r.id);
+        return last ? <ScanStatusPill scan={last} status={last.status} size="sm" /> : <span className="text-xs text-muted-foreground">Not scanned</span>;
+      },
+    },
+    {
+      key: "findings",
+      header: "Findings",
+      align: "right",
+      sortAccessor: (r) => latestScanByRepo.get(r.id)?.finding_count ?? -1,
+      accessor: (r) => {
+        const last = latestScanByRepo.get(r.id);
+        return <span className="font-mono tabular-nums">{last ? last.finding_count.toLocaleString() : "—"}</span>;
+      },
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      hideHeader: true,
+      sortable: false,
+      align: "right",
+      width: "3rem",
+      accessor: (r) => (
+        <RowActions label={`Actions for ${r.name}`}>
+          <DropdownMenuItem onSelect={() => void navigate({ to: "/repos/$repoId", params: { repoId: r.id } })}>Open repository</DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => scan.configure({ repo_id: r.id, profile: "standard" })}>Scan repository</DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => void navigate({ to: "/scans", search: { repo_id: r.id } })}>View scans</DropdownMenuItem>
+        </RowActions>
+      ),
+    },
+  ];
+  // Per-table selection merges into the page-level set the BulkToolbar reads.
+  const table = (rows: Repo[]) => (
+    <DataTable
+      data={rows}
+      columns={columns}
+      keyExtractor={(r) => r.id}
+      density="compact"
+      selectable
+      selectedKeys={selected}
+      onSelectionChange={(picked) => {
+        const ids = new Set(rows.map((r) => r.id));
+        setSelected((prev) => new Set([...prev].filter((id) => !ids.has(id)).concat(picked.map((r) => r.id))));
+      }}
+      searchPlaceholder="Search repositories..."
+      columnVisibilityControl={false}
+      pageSize={25}
+      emptyMessage="No repositories match your search"
+    />
+  );
+
   return (
     <PageShell>
+      {scan.dialog}
       <PageHeader
         title="Repositories"
         description="Source-code targets — local paths, GitHub, remote git URLs, or SSH nodes."
         actions={
           <>
-            <button
-              type="button"
-              onClick={() => setShowImportGitHub(true)}
-              className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-background px-3 text-sm font-medium hover:bg-accent"
-            >
-              <GitForkIcon className="size-4" />
+            <Button variant="outline" size="sm" onClick={() => setShowImportGitHub(true)}>
+              <GitForkIcon aria-hidden />
               Import from GitHub
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowDiscoverSSH(true)}
-              className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-background px-3 text-sm font-medium hover:bg-accent"
-            >
-              <ServerIcon className="size-4" />
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setShowDiscoverSSH(true)}>
+              <ServerIcon aria-hidden />
               Discover SSH
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowAdd((v) => !v)}
-              className="inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:opacity-90"
-            >
-              <PlusIcon className="size-4" />
-              Add repo
-            </button>
+            </Button>
+            <AddButton thing="repo" onClick={() => setShowAdd(true)} />
           </>
         }
       />
@@ -242,17 +316,16 @@ function ReposPage() {
         <DiscoverSSHModal onClose={() => setShowDiscoverSSH(false)} />
       )}
 
-      {showAdd && (
-        <AddRepoForm
-          onDone={(repoId) => {
-            setShowAdd(false);
-            // The component already invalidates the repos query; the list refetches.
-            // If the parent wants to navigate to the new repo immediately, do it here.
-            if (repoId) {
-              // optional: navigate({ to: `/repos/${repoId}` })
-            }
-          }}
-        />
+      {/* The component already invalidates the repos query; the list refetches. */}
+      <AddRepoDialog open={showAdd} onDone={() => setShowAdd(false)} />
+
+      {reposQ.data && reposQ.data.length > 0 && (
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <MetricCard title="Repositories" value={reposQ.data.length} subtitle={`${filtered.length} shown`} />
+          <MetricCard title="With findings" value={statusCounts["open-high"]} subtitle="Latest scan found issues" />
+          <MetricCard title="Failed" value={statusCounts.failed} subtitle="Latest scan failed or stopped" />
+          <MetricCard title="Not scanned" value={statusCounts.none} subtitle="No finished scan yet" />
+        </div>
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -285,24 +358,15 @@ function ReposPage() {
           description="Try clearing one of the filter chips above."
         />
       ) : (search.group ?? "none") === "none" ? (
-        <ul className="space-y-2">
-          {filtered.map((r) => (
-            <li key={r.id}>
-              <RepoRow
-                repo={r}
-                selected={selected.has(r.id)}
-                onToggleSelect={() => toggleSelected(r.id)}
-              />
-            </li>
-          ))}
-        </ul>
+        <Card>
+          <CardContent className="p-4">{table(filtered)}</CardContent>
+        </Card>
       ) : (
         <GroupedRepos
           repos={filtered}
           groupBy={search.group ?? "none"}
           collections={collectionsQ.data ?? []}
-          selected={selected}
-          onToggleSelect={toggleSelected}
+          table={table}
         />
       )}
 
@@ -319,14 +383,12 @@ function GroupedRepos({
   repos,
   groupBy,
   collections,
-  selected,
-  onToggleSelect,
+  table,
 }: {
   repos: Repo[];
   groupBy: GroupBy;
   collections: Collection[];
-  selected: Set<string>;
-  onToggleSelect: (id: string) => void;
+  table: (rows: Repo[]) => React.ReactNode;
 }) {
   const groups = useMemo(() => groupRepos(repos, groupBy, collections), [
     repos,
@@ -343,19 +405,7 @@ function GroupedRepos({
               <span className="text-xs text-muted-foreground">{g.repos.length}</span>
             </CardTitle>
           </CardHeader>
-          <CardContent className="pt-0">
-            <ul className="space-y-2">
-              {g.repos.map((r) => (
-                <li key={r.id}>
-                  <RepoRow
-                    repo={r}
-                    selected={selected.has(r.id)}
-                    onToggleSelect={() => onToggleSelect(r.id)}
-                  />
-                </li>
-              ))}
-            </ul>
-          </CardContent>
+          <CardContent className="p-4">{table(g.repos)}</CardContent>
         </Card>
       ))}
     </div>
@@ -382,16 +432,9 @@ function groupRepos(repos: Repo[], by: GroupBy, collections: Collection[]): Repo
   };
 
   if (by === "source_type") {
-    const LABELS: Record<string, string> = {
-      local: "Local",
-      github: "GitHub",
-      gitlab: "GitLab",
-      git: "Git URL",
-      ssh: "SSH",
-    };
     for (const r of repos) {
       const key = r.source_type || "other";
-      ensure(key, LABELS[key] ?? key).repos.push(r);
+      ensure(key, SOURCE_LABELS[key] ?? key).repos.push(r);
     }
   } else if (by === "language") {
     for (const r of repos) {
@@ -433,61 +476,6 @@ function primaryLanguage(s: string | undefined): string {
 function capitalize(s: string): string {
   if (!s) return s;
   return s.charAt(0).toUpperCase() + s.slice(1);
-}
-
-function RepoRow({
-  repo: r,
-  selected,
-  onToggleSelect,
-}: {
-  repo: Repo;
-  selected: boolean;
-  onToggleSelect: () => void;
-}) {
-  return (
-    <div
-      className={
-        "glass-card flex items-center gap-3 pl-3 pr-4 py-3 transition " +
-        (selected ? "bg-accent/50" : "hover:bg-muted/30")
-      }
-    >
-      <div
-        // Stop link navigation when clicking the checkbox region.
-        onClick={(e) => e.stopPropagation()}
-        className="flex items-center"
-      >
-        <Checkbox
-          checked={selected}
-          onCheckedChange={onToggleSelect}
-          aria-label={`Select ${r.name}`}
-        />
-      </div>
-      <Link
-        to="/repos/$repoId"
-        params={{ repoId: r.id }}
-        className="flex flex-1 items-center gap-3 min-w-0"
-      >
-        <div className="size-8 rounded-md bg-muted/40 grid place-items-center">
-          {r.source_type === "local" ? (
-            <HardDriveIcon className="size-4 text-muted-foreground" />
-          ) : r.source_type === "ssh" ? (
-            <ServerIcon className="size-4 text-muted-foreground" />
-          ) : (
-            <GitBranchIcon className="size-4 text-muted-foreground" />
-          )}
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="text-sm font-medium truncate">{r.name}</div>
-          <div className="text-xs text-muted-foreground truncate font-mono">
-            {r.source_path}
-          </div>
-        </div>
-        <div className="text-xs text-muted-foreground">
-          {r.default_branch || "main"}
-        </div>
-      </Link>
-    </div>
-  );
 }
 
 // Classify the most-recent scan for a repo into one of the filter buckets.

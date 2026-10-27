@@ -15,10 +15,17 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { EmptyState, PermissionState } from "@/components/ui/empty-state";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { PageHeader, PageShell } from "@/components/ui/page";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { ConfirmDialog } from "@/components/confirm-dialog";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { MetricCard } from "@/components/ui/metric-card";
+import { RowActions } from "@/components/ui/row-actions";
 import { SeverityBadge } from "@/components/severity-badge";
 import { severityRank } from "@/lib/severity";
 import {
   useFindingsByRepo,
+  useFleetPosture,
   useTopVulnerableRules,
   type AggregateRow,
   type FindingsByRepoRow,
@@ -88,30 +95,46 @@ function FindingsPage() {
                 ["list", "List"],
               ] as const
             ).map(([id, label]) => (
-              <button
+              <Button
                 key={id}
                 type="button"
+                size="sm"
+                variant={view === id ? "default" : "outline"}
+                aria-pressed={view === id}
                 onClick={() =>
                   navigate({
                     search: id === "repo" ? { q } : { view: id, q },
                   })
                 }
-                className={
-                  "h-8 px-3 rounded-md text-xs border transition-colors " +
-                  (view === id
-                    ? "bg-accent border-border text-foreground"
-                    : "border-border text-muted-foreground hover:bg-accent hover:text-foreground")
-                }
               >
                 {label}
-              </button>
+              </Button>
             ))}
           </div>
         }
       />
 
+      <SeverityKpis />
+
       {view === "repo" ? <ByRepo /> : view === "rule" ? <ByRule /> : <FindingsList />}
     </PageShell>
+  );
+}
+
+// Fleet-wide open counts from the same posture the Home page reads; renders
+// nothing until it loads so a failure here never masks the table below.
+function SeverityKpis() {
+  const sev = useFleetPosture().data?.open_findings_by_severity;
+  if (!sev) return null;
+  const n = (k: string) => sev[k] ?? 0;
+  const total = Object.values(sev).reduce((a, b) => a + b, 0);
+  return (
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <MetricCard title="Open findings" value={total.toLocaleString()} subtitle="Deduplicated across repositories" />
+      <MetricCard title="Critical" value={n("critical")} subtitle="Fix first" />
+      <MetricCard title="High" value={n("high")} subtitle="Fix next" />
+      <MetricCard title="Medium / low / info" value={n("medium") + n("low") + n("info")} subtitle="Backlog" />
+    </div>
   );
 }
 
@@ -166,7 +189,7 @@ function ByRepo() {
   }
 
   return (
-    <DataTable
+    <Card><CardContent className="p-4"><DataTable
       data={rows}
       columns={columns}
       keyExtractor={(r) => r.repo_id}
@@ -177,7 +200,7 @@ function ByRepo() {
       onRetry={() => void q.refetch()}
       searchPlaceholder="Filter repos..."
       emptyMessage="No repos match"
-    />
+    /></CardContent></Card>
   );
 }
 
@@ -297,7 +320,7 @@ function ByRule() {
   }
 
   return (
-    <DataTable
+    <Card><CardContent className="p-4"><DataTable
       data={rows}
       columns={columns}
       keyExtractor={(r) => r.key}
@@ -309,7 +332,7 @@ function ByRule() {
       searchPlaceholder="Filter rules, CVEs, titles..."
       emptyMessage="No rules match"
       onRowClick={(r) => setOpen((cur) => (cur === r.key ? null : r.key))}
-    />
+    /></CardContent></Card>
   );
 }
 
@@ -341,6 +364,7 @@ function FindingsList() {
     },
   });
   const rows = q.data?.items ?? EMPTY_FINDINGS;
+  const [pendingTriage, setPendingTriage] = useState<{ ids: string[]; status: FindingStatus } | null>(null);
 
   // The bulk endpoint stops at the first error without a per-item receipt.
   // Individual requests let the operator see exactly which selections failed.
@@ -424,6 +448,20 @@ function FindingsList() {
         </span>
       ),
     },
+    {
+      key: "actions",
+      header: "Actions",
+      hideHeader: true,
+      sortable: false,
+      align: "right",
+      width: "3rem",
+      accessor: (f) => (
+        <RowActions label={`Actions for ${findingTitle(f)}`}>
+          <DropdownMenuItem onSelect={() => void navigate({ to: "/findings/$findingId", params: { findingId: f.id } })}>Open finding</DropdownMenuItem>
+          {f.repo_id && <DropdownMenuItem onSelect={() => void navigate({ to: "/repos/$repoId", params: { repoId: f.repo_id } })}>Open repository</DropdownMenuItem>}
+        </RowActions>
+      ),
+    },
   ];
 
   return (
@@ -435,26 +473,21 @@ function FindingsList() {
             ["all", "All open"],
           ] as const
         ).map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => {
-              setScope(id);
-            }}
-            aria-pressed={scope === id}
-            className={
-              "h-8 px-3 rounded-md text-xs border transition-colors " +
-              (scope === id
-                ? "bg-accent border-border text-foreground"
-                : "border-border text-muted-foreground hover:bg-accent hover:text-foreground")
-            }
-          >
+          <Button key={id} type="button" size="sm" variant={scope === id ? "default" : "outline"} aria-pressed={scope === id} onClick={() => setScope(id)}>
             {label}
-          </button>
+          </Button>
         ))}
+        <Select value={search.severity ?? "all"} onValueChange={(severity) => void navigate({ to: "/findings", search: { ...search, view: "list", severity: severity === "all" ? undefined : severity, page: 1 } })}><SelectTrigger className="h-9 w-44" aria-label="Filter by severity"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All severities</SelectItem>{["critical", "high", "medium", "low", "info"].map((severity) => <SelectItem key={severity} value={severity}>{severity}</SelectItem>)}</SelectContent></Select>
       </div>
-
-      <Select value={search.severity ?? "all"} onValueChange={(severity) => void navigate({ to: "/findings", search: { ...search, view: "list", severity: severity === "all" ? undefined : severity, page: 1 } })}><SelectTrigger className="h-8 w-44" aria-label="Filter by severity"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All severities</SelectItem>{["critical", "high", "medium", "low", "info"].map((severity) => <SelectItem key={severity} value={severity}>{severity}</SelectItem>)}</SelectContent></Select>
+      <ConfirmDialog
+        open={!!pendingTriage}
+        onOpenChange={(open) => { if (!open) setPendingTriage(null); }}
+        title={pendingTriage ? `Mark ${pendingTriage.ids.length} ${pendingTriage.ids.length === 1 ? "finding" : "findings"} as ${pendingTriage.status === "wont_fix" ? "won't fix" : "false positive"}?` : ""}
+        description="They leave the open list and stop counting toward risk. You can reopen each one from its detail page."
+        confirmLabel="Mark"
+        pending={bulk.isPending}
+        onConfirm={() => { if (pendingTriage) bulk.mutate(pendingTriage); setPendingTriage(null); }}
+      />
       {bulk.data && <div role={bulk.data.failed.length ? "alert" : "status"} className="rounded-md border border-border p-3 text-sm"><p>{bulk.data.updated} updated{bulk.data.failed.length ? ` · ${bulk.data.failed.length} failed` : ""}</p>{bulk.data.failed.length > 0 && <><ul className="mt-2 space-y-1">{bulk.data.failed.map(({ id, message }) => <li key={id}><Link to="/findings/$findingId" params={{ findingId: id }} className="underline">{findingTitle(rows.find((f) => f.id === id) ?? { title: "Open finding" })}</Link>: {message}</li>)}</ul><button type="button" disabled={bulk.isPending} className="mt-2 underline" onClick={() => bulk.mutate({ ids: bulk.data!.failed.map((f) => f.id), status: bulk.variables!.status })}>Retry failed updates</button></>}</div>}
       {q.error instanceof ApiError && q.error.status === 403 ? <PermissionState description="You do not have access to these findings." /> : !q.isLoading && !q.isError && !search.q && !search.severity && (q.data?.total ?? 0) === 0 ? (
         scope === "new" ? (
@@ -473,7 +506,7 @@ function FindingsList() {
           />
         )
       ) : (
-        <DataTable
+        <Card><CardContent className="p-4"><DataTable
           data={rows}
           columns={columns}
           keyExtractor={(f) => f.id}
@@ -503,42 +536,18 @@ function FindingsList() {
           }
           bulkActions={(selected) => (
             <>
-              <button
-                type="button"
-                disabled={bulk.isPending}
-                onClick={() =>
-                  bulk.mutate({
-                    ids: selected.map((f) => f.id),
-                    status: "wont_fix",
-                  })
-                }
-                className="h-7 px-2 rounded-md border border-border text-xs hover:bg-muted/40 disabled:opacity-50"
-              >
+              <Button type="button" size="sm" variant="outline" disabled={bulk.isPending} onClick={() => setPendingTriage({ ids: selected.map((f) => f.id), status: "wont_fix" })}>
                 Won't fix
-              </button>
-              <button
-                type="button"
-                disabled={bulk.isPending}
-                onClick={() =>
-                  bulk.mutate({
-                    ids: selected.map((f) => f.id),
-                    status: "false_positive",
-                  })
-                }
-                className="h-7 px-2 rounded-md border border-border text-xs hover:bg-muted/40 disabled:opacity-50"
-              >
+              </Button>
+              <Button type="button" size="sm" variant="outline" disabled={bulk.isPending} onClick={() => setPendingTriage({ ids: selected.map((f) => f.id), status: "false_positive" })}>
                 False positive
-              </button>
-              <button
-                type="button"
-                onClick={() => downloadFindingsJson(selected)}
-                className="h-7 px-2 rounded-md border border-border text-xs hover:bg-muted/40"
-              >
+              </Button>
+              <Button type="button" size="sm" variant="outline" onClick={() => downloadFindingsJson(selected)}>
                 Export JSON
-              </button>
+              </Button>
             </>
           )}
-        />
+        /></CardContent></Card>
       )}
     </div>
   );

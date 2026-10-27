@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowUpRightIcon, RefreshCwIcon } from "lucide-react";
-import type { Finding } from "@/lib/types";
+import { GaugeIcon, OctagonAlertIcon, RadarIcon, RefreshCwIcon, ShieldAlertIcon } from "lucide-react";
+import type { Finding, Scan } from "@/lib/types";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { api } from "@/lib/api";
 import { useFleetPosture, type FleetPosture, type FleetPriority, type FleetCoverageRow, type FleetChangeRow } from "@/lib/fleet";
@@ -12,10 +12,13 @@ import { useIsAdmin } from "@/lib/me";
 import { useRuntimeCapabilities } from "@/lib/runtime-capabilities";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { DataTable, type Column } from "@/components/ui/data-table";
+import { MetricCard } from "@/components/ui/metric-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { SeverityBadge } from "@/components/severity-badge";
 import { Section } from "@/components/ui/section";
+import { NeedsAttention } from "@/components/fleet/needs-attention";
+import { RecentActivity } from "@/components/fleet/recent-activity";
 
 const linkClass = "font-medium text-primary hover:underline underline-offset-4";
 const coverageLabels: Record<FleetCoverageRow["status"], string> = {
@@ -23,30 +26,54 @@ const coverageLabels: Record<FleetCoverageRow["status"], string> = {
   incomplete: "Incomplete", pending: "Queued", running: "Running",
 };
 
+const WEEK_MS = 7 * 24 * 3600 * 1000;
+
+// /scans has no date filter, so count the newest 100 root scans started in the
+// last 7 days; "100+" means the page was full and the real count is higher.
+function useScansThisWeek() {
+  return useQuery({
+    queryKey: ["scans", "this-week"],
+    queryFn: async () => {
+      const r = await api.get<Scan[]>("/scans?per_page=100&roots=1&sort=started&order=desc");
+      const n = (r.data ?? []).filter((s) => s.started_at && Date.now() - new Date(s.started_at).getTime() < WEEK_MS).length;
+      return n >= 100 ? "100+" : n;
+    },
+    staleTime: 30_000,
+  });
+}
+
 export function DashboardEvidence() {
   const q = useFleetPosture();
+  const scansWeek = useScansThisWeek();
+  const admin = useIsAdmin();
   const [priorityScope, setPriorityScope] = useState("all");
   const [coverageScope, setCoverageScope] = useState("all");
   if (q.isLoading) return <div role="status" aria-label="Loading dashboard" className="space-y-4"><Skeleton className="h-24" /><Skeleton className="h-80" /></div>;
   if (q.isError || !q.data) return <Card><CardContent><div role="alert" className="space-y-3"><p>Dashboard evidence could not be loaded. Coverage and risk are unknown.</p><button className={linkClass} onClick={() => void q.refetch()}>Retry dashboard</button></div></CardContent></Card>;
   const p = q.data;
   // /fleet/posture contains the complete authorized evidence set (no row cap).
+  const sev = p.open_findings_by_severity;
+  const critHigh = (sev.critical ?? 0) + (sev.high ?? 0);
+  const delta = (p.week_over_week_delta.critical ?? 0) + (p.week_over_week_delta.high ?? 0);
+  const wow = "critical" in p.week_over_week_delta || "high" in p.week_over_week_delta
+    ? { trend: delta > 0 ? "up" as const : delta < 0 ? "down" as const : "flat" as const, trendValue: `${delta > 0 ? "+" : ""}${delta} vs last week` } : {};
   const attention = new Set(p.coverage.rows.filter((r) => r.status === "failed" || r.status === "incomplete").map((r) => r.repo_id)).size;
   return <div className="space-y-6">
-    <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
       {[
-        { label: "Open high-risk findings", value: p.priorities.length, detail: "All current critical and high security issues", href: "#priority-findings", select: () => setPriorityScope("all") },
-        { label: "Fresh scan coverage", value: `${p.coverage.fresh_repos} / ${p.repo_count}`, detail: `Repositories with complete scans in the last ${p.coverage.fresh_days} days`, href: "#scan-coverage", select: () => setCoverageScope("all") },
-        { label: "Repositories needing attention", value: attention, detail: "Failed or incomplete latest scans", href: "#scan-coverage", select: () => setCoverageScope("attention") },
-        { label: "Scans in progress", value: p.work.length, detail: "Queued, running, or lease expired", href: "#work-in-progress" },
-      ].map((item) => <a key={item.label} href={item.href} onClick={item.select} className="stat-card group block hover:border-primary/50 focus-visible:outline-2 focus-visible:outline-primary">
-        <div className="flex justify-between gap-2"><span className="stat-label">{item.label}</span><ArrowUpRightIcon aria-hidden className="size-3.5 shrink-0 text-muted-foreground" /></div>
-        <div className="stat-value mt-2">{item.value}</div><p className="mt-2 text-xs text-muted-foreground">{item.detail}</p>
-      </a>)}
+        { title: "Open critical / high", value: critHigh, subtitle: `Critical ${sev.critical ?? 0} · High ${sev.high ?? 0}`, icon: <ShieldAlertIcon className="size-4" aria-hidden />, href: "#priority-findings", select: () => setPriorityScope("all"), ...wow },
+        { title: "Scans this week", value: scansWeek.isError ? "—" : scansWeek.data ?? "…", subtitle: "Root scans started in the last 7 days", icon: <GaugeIcon className="size-4" aria-hidden />, href: "#work-in-progress" },
+        { title: "Fresh scan coverage", value: `${p.coverage.fresh_repos} / ${p.repo_count}`, subtitle: `Complete scans in the last ${p.coverage.fresh_days} days`, icon: <RadarIcon className="size-4" aria-hidden />, href: "#scan-coverage", select: () => setCoverageScope("all") },
+        { title: "Gates failing", value: p.gates_failing, subtitle: `${attention} ${attention === 1 ? "repository needs" : "repositories need"} attention (failed or incomplete)`, icon: <OctagonAlertIcon className="size-4" aria-hidden />, href: "#scan-coverage", select: () => setCoverageScope("attention") },
+      ].map(({ href, select, ...metric }) => <a key={metric.title} href={href} onClick={select} className="block rounded-lg focus-visible:outline-2 focus-visible:outline-primary"><MetricCard {...metric} className="h-full" /></a>)}
     </div>
     <div className="grid grid-cols-1 xl:grid-cols-[1.15fr_1fr] gap-5 items-start">
       <PriorityFindings rows={p.priorities} scope={priorityScope} setScope={setPriorityScope} />
       <ScanCoverage posture={p} scope={coverageScope} setScope={setCoverageScope} />
+    </div>
+    <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-2">
+      <NeedsAttention />
+      {admin && <RecentActivity />}
     </div>
     <WorkInProgress posture={p} />
     <QualityVolume />

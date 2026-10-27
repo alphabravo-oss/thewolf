@@ -1,10 +1,15 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { BotIcon, BugIcon, GaugeIcon } from "lucide-react";
 import { useFlag } from "@/lib/flags";
-import { useFixJobs, type FixJob } from "@/lib/fixes";
+import { isFixPaused, useFixJobs, type FixJob } from "@/lib/fixes";
 import { EmptyState, ErrorState } from "@/components/ui/empty-state";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { PageHeader, PageShell } from "@/components/ui/page";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { MetricCard } from "@/components/ui/metric-card";
+import { RowActions } from "@/components/ui/row-actions";
 import { FixerSetupBanner } from "@/components/fixes/fixer-setup-banner";
 import { StatusBadge } from "@/components/fixes/status-badge";
 
@@ -84,7 +89,22 @@ function AgentsPage() {
         </span>
       ),
     },
+    {
+      key: "actions",
+      header: "Actions",
+      hideHeader: true,
+      sortable: false,
+      align: "right",
+      width: "3rem",
+      accessor: (job) => (
+        <RowActions label={`Actions for agent ${job.id.slice(0, 8)}`}>
+          <DropdownMenuItem onSelect={() => void navigate({ to: "/agents/$agentId", params: { agentId: job.id } })}>Open agent</DropdownMenuItem>
+          {job.scan_id && <DropdownMenuItem onSelect={() => void navigate({ to: "/scans/$scanId", params: { scanId: job.scan_id! } })}>Open scan</DropdownMenuItem>}
+        </RowActions>
+      ),
+    },
   ];
+  const running = jobs.filter((j) => j.status === "running" || j.status === "claimed").length;
 
   return (
     <PageShell>
@@ -94,12 +114,12 @@ function AgentsPage() {
         actions={
           enabled ? (
             <>
-              <Link to="/scans" className="btn btn-outline">
-                <GaugeIcon /> Open scans
-              </Link>
-              <Link to="/findings" className="btn btn-outline">
-                <BugIcon /> Open findings
-              </Link>
+              <Button asChild variant="outline" size="sm">
+                <Link to="/scans"><GaugeIcon aria-hidden /> Open scans</Link>
+              </Button>
+              <Button asChild variant="outline" size="sm">
+                <Link to="/findings"><BugIcon aria-hidden /> Open findings</Link>
+              </Button>
             </>
           ) : null
         }
@@ -112,15 +132,23 @@ function AgentsPage() {
       ) : (
         <>
           <FixerSetupBanner />
+          {jobs.length > 0 && (
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <MetricCard title="Agents" value={jobs.length} subtitle="All fixer jobs" />
+              <MetricCard title="Running" value={running} subtitle="Working on a branch now" />
+              <MetricCard title="Queued" value={jobs.filter((j) => j.status === "queued").length} subtitle="Waiting for a runner" />
+              <MetricCard title="Needs review" value={jobs.filter((j) => isFixPaused(j.status)).length} subtitle="Paused before push" />
+            </div>
+          )}
           {!q.isLoading && !q.isError && jobs.length === 0 ? (
-            <EmptyState
+            <Card><EmptyState
               icon={BotIcon}
               title="No agents yet"
               description="Open a scan or finding and click Fix. Wolf opens a branch, applies fixes, rescans, and can pause for review before push."
               cta={{ label: "Go to scans", to: "/scans" }}
-            />
+            /></Card>
           ) : (
-            <DataTable
+            <Card><CardContent className="p-4"><DataTable
               data={jobs}
               columns={columns}
               keyExtractor={(job) => job.id}
@@ -134,7 +162,7 @@ function AgentsPage() {
               onRowClick={(job) =>
                 navigate({ to: "/agents/$agentId", params: { agentId: job.id } })
               }
-            />
+            /></CardContent></Card>
           )}
         </>
       )}
