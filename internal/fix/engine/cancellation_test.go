@@ -14,7 +14,7 @@ import (
 // A CLI wrapper can exit while its child keeps the output pipe and checkout
 // open. Cancellation must stop the child before the worker acknowledges it.
 func TestEngineCancellationStopsChildren(t *testing.T) {
-	for _, name := range []string{"claude", "codex", "custom", "configured", "opencode"} {
+	for _, name := range []string{"claude", "codex", "custom", "configured", "opencode", "grok"} {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()
 			bin := filepath.Join(dir, name)
@@ -30,6 +30,8 @@ func TestEngineCancellationStopsChildren(t *testing.T) {
 				eng = &Codex{}
 			case "opencode":
 				eng = &OpenCode{}
+			case "grok":
+				eng = &GrokBuild{}
 			case "configured":
 				eng = NewConfigEngine(ToolDefinition{Name: name, Command: bin})
 			default:

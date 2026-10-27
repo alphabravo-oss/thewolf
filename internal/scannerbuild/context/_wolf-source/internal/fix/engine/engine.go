@@ -245,6 +245,62 @@ func (c *Codex) Fix(ctx context.Context, req FixRequest) (*FixResult, error) {
 	}, nil
 }
 
+// GrokBuild implements SubprocessEngine using xAI's Grok Build CLI (`grok`).
+// It authenticates with an OAuth session (`grok login --device-auth`) or
+// XAI_API_KEY, and edits the worktree in place like Codex.
+type GrokBuild struct{}
+
+func (g *GrokBuild) Name() string { return "grok-build" }
+
+func (g *GrokBuild) Available() bool {
+	_, err := exec.LookPath("grok")
+	return err == nil
+}
+
+// grokBuildArgs runs Grok Build headless: single prompt, edits auto-approved,
+// bounded turns, no web access.
+func grokBuildArgs(req FixRequest) []string {
+	args := []string{
+		"-p", RenderPrompt(req.Instructions, req),
+		"--always-approve",
+		"--output-format", "plain",
+		"--max-turns", "20",
+		"--disable-web-search",
+		"--cwd", req.RepoPath,
+	}
+	if model := strings.TrimSpace(req.Model); model != "" {
+		args = append(args, "-m", model)
+	}
+	if effort := strings.TrimSpace(req.Effort); effort != "" {
+		args = append(args, "--effort", effort)
+	}
+	return args
+}
+
+func (g *GrokBuild) Fix(ctx context.Context, req FixRequest) (*FixResult, error) {
+	timeout := req.Timeout
+	if timeout == 0 {
+		timeout = DefaultTimeout
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	cmd := plugin.CommandContext(ctx, "grok", grokBuildArgs(req)...) // #nosec G204 -- fixed binary; args built from internal request fields
+	cmd.Dir = req.RepoPath
+	applyEngineEnv(cmd, req.Env)
+	// Judge by the worktree, not the exit code: the verify gate rolls back an
+	// empty or broken run.
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		res := &FixResult{Success: false, Output: string(output), Error: err.Error()}
+		applySkipVerdict(res, requestIDs(req))
+		return res, nil
+	}
+	res := &FixResult{Success: true, FilesChanged: changedFiles(req.RepoPath), Output: string(output), EditsInPlace: true}
+	applySkipVerdict(res, requestIDs(req))
+	return res, nil
+}
+
 func applyEngineEnv(cmd *exec.Cmd, extra []string) {
 	if len(extra) == 0 {
 		return
