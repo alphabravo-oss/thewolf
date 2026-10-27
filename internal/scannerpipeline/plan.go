@@ -28,7 +28,6 @@ type ImageKind string
 
 const (
 	ImageKindScanner ImageKind = "scanner"
-	ImageKindFixer   ImageKind = "fixer"
 )
 
 type Image struct {
@@ -71,19 +70,6 @@ func ManagedReleaseImages() []Image {
 		{Key: "jvm", Kind: ImageKindScanner, Platforms: []string{"linux/amd64"}},
 		{Key: "rust", Kind: ImageKindScanner, Platforms: []string{"linux/amd64"}},
 		{Key: "codeql", Kind: ImageKindScanner, Platforms: []string{"linux/amd64"}},
-		{Key: "fixer-base", Kind: ImageKindFixer, Platforms: []string{"linux/amd64"}},
-		{
-			Key: "fixer-api", Kind: ImageKindFixer,
-			Platforms: []string{"linux/amd64"}, DependsOn: []string{"fixer-base"},
-		},
-		{
-			Key: "fixer-claude", Kind: ImageKindFixer,
-			Platforms: []string{"linux/amd64"}, DependsOn: []string{"fixer-base"},
-		},
-		{
-			Key: "fixer-codex", Kind: ImageKindFixer,
-			Platforms: []string{"linux/amd64"}, DependsOn: []string{"fixer-base"},
-		},
 	}
 	for index := range images {
 		images[index].Platforms = append([]string(nil), images[index].Platforms...)
@@ -114,7 +100,7 @@ func Default(inputs Inputs) (Plan, error) {
 		if image.Kind == "" {
 			image.Kind = ImageKindScanner
 		}
-		if image.Kind != ImageKindScanner && image.Kind != ImageKindFixer {
+		if image.Kind != ImageKindScanner {
 			return Plan{}, fmt.Errorf("scanner pipeline image %q has invalid kind %q", image.Key, image.Kind)
 		}
 		if _, duplicate := imagesByKey[image.Key]; duplicate {
@@ -143,8 +129,6 @@ func Default(inputs Inputs) (Plan, error) {
 	}
 
 	imageFinalSteps := make([]string, 0, len(inputs.Images))
-	scannerFinalSteps := make([]string, 0, len(inputs.Images))
-	fixerFinalSteps := make([]string, 0, len(inputs.Images))
 	for _, image := range inputs.Images {
 		if len(image.Platforms) == 0 {
 			return Plan{}, fmt.Errorf("scanner pipeline image %q has no platforms", image.Key)
@@ -176,22 +160,14 @@ func Default(inputs Inputs) (Plan, error) {
 		steps = append(steps, requiredAfter(versionKey, StepTest, 10*time.Minute, manifestKey))
 		invocationKey := "invocation-smoke/" + image.Key
 		steps = append(steps, requiredAfter(invocationKey, StepTest, 20*time.Minute, manifestKey))
-		var testGateKey string
-		if image.Kind == ImageKindScanner {
-			parserKey := "parser-fixtures/" + image.Key
-			steps = append(steps, requiredAfter(parserKey, StepTest, 20*time.Minute, invocationKey))
-			goldenKey := "normalized-golden/" + image.Key
-			steps = append(steps, requiredAfter(goldenKey, StepTest, 20*time.Minute, parserKey))
-			comparisonKey := "candidate-stable-comparison/" + image.Key
-			steps = append(steps, requiredAfter(comparisonKey, StepTest, 30*time.Minute, goldenKey))
-			resourceKey := "recorded-resource-gate/" + image.Key
-			steps = append(steps, requiredAfter(resourceKey, StepTest, 10*time.Minute, comparisonKey))
-			testGateKey = resourceKey
-		} else {
-			authKey := "fixer-auth-contract/" + image.Key
-			steps = append(steps, requiredAfter(authKey, StepTest, 10*time.Minute, invocationKey))
-			testGateKey = authKey
-		}
+		parserKey := "parser-fixtures/" + image.Key
+		steps = append(steps, requiredAfter(parserKey, StepTest, 20*time.Minute, invocationKey))
+		goldenKey := "normalized-golden/" + image.Key
+		steps = append(steps, requiredAfter(goldenKey, StepTest, 20*time.Minute, parserKey))
+		comparisonKey := "candidate-stable-comparison/" + image.Key
+		steps = append(steps, requiredAfter(comparisonKey, StepTest, 30*time.Minute, goldenKey))
+		testGateKey := "recorded-resource-gate/" + image.Key
+		steps = append(steps, requiredAfter(testGateKey, StepTest, 10*time.Minute, comparisonKey))
 		vulnerabilityKey := "vulnerability-scan/" + image.Key
 		steps = append(steps, requiredAfter(vulnerabilityKey, StepSecurity, 30*time.Minute, manifestKey))
 		databaseKey := "vulnerability-db-identity/" + image.Key
@@ -229,27 +205,13 @@ func Default(inputs Inputs) (Plan, error) {
 		verifyKey := "published-verify/" + image.Key
 		steps = append(steps, requiredAfter(verifyKey, StepEvidence, 10*time.Minute, signKey))
 		imageFinalSteps = append(imageFinalSteps, verifyKey)
-		if image.Kind == ImageKindScanner {
-			scannerFinalSteps = append(scannerFinalSteps, verifyKey)
-		} else {
-			fixerFinalSteps = append(fixerFinalSteps, verifyKey)
-		}
 	}
 
-	if len(scannerFinalSteps) == 0 {
-		return Plan{}, errors.New("scanner pipeline requires at least one scanner runtime image")
-	}
 	steps = append(steps,
-		requiredAfter("finding-regression", StepTest, 45*time.Minute, scannerFinalSteps...),
+		requiredAfter("finding-regression", StepTest, 45*time.Minute, imageFinalSteps...),
 		requiredAfter("aggregate-sbom", StepEvidence, 10*time.Minute, imageFinalSteps...),
 	)
-	if len(fixerFinalSteps) != 0 {
-		steps = append(steps, requiredAfter("fixer-integration", StepIntegration, 30*time.Minute, fixerFinalSteps...))
-	}
 	publicationDependencies := []string{"finding-regression", "aggregate-sbom"}
-	if len(fixerFinalSteps) != 0 {
-		publicationDependencies = append(publicationDependencies, "fixer-integration")
-	}
 	if inputs.RequireMirror {
 		mirror := requiredAfter("mirror-copy-verify", StepPublish, 45*time.Minute, imageFinalSteps...)
 		mirror.Retryable = true

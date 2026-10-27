@@ -13,26 +13,19 @@ import (
 )
 
 // Variant describes one wolf-built image: which Dockerfile builds it
-// (relative to its ContextSubdir inside the embedded build context), what
-// DockerHub repo base it uses, and what suffix that repo carries. The two
-// build tables — Variants (scanners) and FixerVariants (the autonomous-fix
-// engine containers) — share this shape and the same Build path.
+// (relative to the embedded build context root), what DockerHub repo base it
+// uses, and what suffix that repo carries.
 type Variant struct {
 	// Name is the variant selector used by callers and routes.
 	Name string
 	// Dockerfile is the Dockerfile filename relative to the build context
-	// root for this variant (see ContextSubdir).
+	// root for this variant.
 	Dockerfile string
-	// ImageBase is the DockerHub repo base (e.g. "wolf-scanners" or
-	// "wolf-fixer"). Bucket/engine suffixes are appended to it.
+	// ImageBase is the DockerHub repo base (e.g. "wolf-scanners").
 	ImageBase string
-	// ImageSuffix is appended to ImageBase to form the repo (e.g. "-jvm",
-	// "-claude"); empty for the primary image of a set.
+	// ImageSuffix is appended to ImageBase to form the repo (e.g. "-jvm");
+	// empty for the primary image of a set.
 	ImageSuffix string
-	// ContextSubdir is the subdirectory of the materialized build context
-	// the Dockerfile is resolved against. "" means the context root
-	// (scanners); "fixer" means the fixer/ subtree.
-	ContextSubdir string
 }
 
 // Variants is the scanner build table. "default" has no image suffix; the
@@ -42,17 +35,6 @@ var Variants = []Variant{
 	{Name: "jvm", Dockerfile: "Dockerfile.jvm", ImageBase: imageBase, ImageSuffix: "-jvm"},
 	{Name: "rust", Dockerfile: "Dockerfile.rust", ImageBase: imageBase, ImageSuffix: "-rust"},
 	{Name: "codeql", Dockerfile: "Dockerfile.codeql", ImageBase: imageBase, ImageSuffix: "-codeql"},
-}
-
-// FixerVariants is the parallel build table for the autonomous-fix engine
-// containers. They live under fixer/ and share the wolf-fixer repo base.
-// "base" is the shared image the engine variants FROM; "claude"/"codex"
-// add the respective agent CLI; "api" is CLI-free (the zero-auth fallback).
-var FixerVariants = []Variant{
-	{Name: "base", Dockerfile: "Dockerfile.base", ImageBase: fixerImageBase, ImageSuffix: "", ContextSubdir: fixerContextSubdir},
-	{Name: "claude", Dockerfile: "Dockerfile.claude", ImageBase: fixerImageBase, ImageSuffix: "-claude", ContextSubdir: fixerContextSubdir},
-	{Name: "codex", Dockerfile: "Dockerfile.codex", ImageBase: fixerImageBase, ImageSuffix: "-codex", ContextSubdir: fixerContextSubdir},
-	{Name: "api", Dockerfile: "Dockerfile.api", ImageBase: fixerImageBase, ImageSuffix: "-api", ContextSubdir: fixerContextSubdir},
 }
 
 // VariantByName returns the scanner Variant with the given name, or false.
@@ -65,28 +47,10 @@ func VariantByName(name string) (Variant, bool) {
 	return Variant{}, false
 }
 
-// FixerVariantByName returns the fixer Variant with the given name, or false.
-func FixerVariantByName(name string) (Variant, bool) {
-	for _, v := range FixerVariants {
-		if v.Name == name {
-			return v, true
-		}
-	}
-	return Variant{}, false
-}
-
 // imageBase is the DockerHub repo for the default scanner image; bucket
 // suffixes are appended to this. Kept here so the build path and the runtime
 // resolver agree.
 const imageBase = "wolf-scanners"
-
-// fixerImageBase is the DockerHub repo base for the autonomous-fix engine
-// containers; engine suffixes ("-claude"/"-codex"/"-api") are appended.
-const fixerImageBase = "wolf-fixer"
-
-// fixerContextSubdir is the materialized build-context subtree the fixer
-// Dockerfiles are resolved against (mirrors the repo's fixer/ directory).
-const fixerContextSubdir = "fixer"
 
 // defaultNamespace is the DockerHub namespace used when a build request
 // leaves Namespace empty.
@@ -145,8 +109,7 @@ func activeRuntimeTag() string {
 }
 
 // imageRepo returns "<namespace>/<base><suffix>" for a variant. The base is
-// carried on the variant (wolf-scanners for scanners, wolf-fixer for fixer
-// engine containers).
+// carried on the variant.
 func imageRepo(namespace string, v Variant) string {
 	return namespace + "/" + v.ImageBase + v.ImageSuffix
 }
@@ -199,14 +162,6 @@ func buildArgs(req BuildRequest, contextDir, dockerfile string, tags []string, r
 	return args
 }
 
-func buildContextPaths(contextRoot string, variant Variant) (string, string) {
-	dockerfile := filepath.Join(contextRoot, variant.Dockerfile)
-	if variant.ContextSubdir != "" {
-		dockerfile = filepath.Join(contextRoot, variant.ContextSubdir, variant.Dockerfile)
-	}
-	return contextRoot, dockerfile
-}
-
 // IsMultiPlatform reports whether a platforms spec names more than one platform
 // (so the build must be --push'ed, not --load'ed).
 func IsMultiPlatform(platforms string) bool {
@@ -256,9 +211,6 @@ func Build(ctx context.Context, req BuildRequest, onLine func(string)) (BuildRes
 	}
 	v, ok := VariantByName(req.Variant)
 	if !ok {
-		v, ok = FixerVariantByName(req.Variant)
-	}
-	if !ok {
 		return BuildResult{}, fmt.Errorf("unknown variant %q", req.Variant)
 	}
 	namespace := strings.TrimSpace(req.Namespace)
@@ -294,10 +246,8 @@ func Build(ctx context.Context, req BuildRequest, onLine func(string)) (BuildRes
 
 	repo := imageRepo(namespace, v)
 	tags := tagList(req.Version, activeRuntimeTagFn())
-	// Every variant uses the materialized repository-shaped root as its context.
-	// Fixer Dockerfiles live under fixer/, but COPY Wolf source and scanner lock
-	// inputs from the repository root.
-	contextDir, dockerfile := buildContextPaths(contextRoot, v)
+	// Every variant uses the materialized context root as its build context.
+	contextDir, dockerfile := contextRoot, filepath.Join(contextRoot, v.Dockerfile)
 	argv := append(
 		[]string{"--config", dockerConfigDir},
 		buildArgs(req, contextDir, dockerfile, tags, repo)...,

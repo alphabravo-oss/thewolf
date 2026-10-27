@@ -317,7 +317,7 @@ tags() {
 
     [[ "$primary" =~ ^[a-z0-9.-]+(/[a-z0-9._-]+)+$ ]] || die "invalid primary repository"
     [[ "$mirror" =~ ^[a-z0-9.-]+(/[a-z0-9._-]+)+$ ]] || die "invalid mirror repository"
-    [[ "$image_name" =~ ^wolf-(scanners|fixer)(-[a-z0-9]+)?$ ]] || die "invalid image name"
+    [[ "$image_name" =~ ^wolf-scanners(-[a-z0-9]+)?$ ]] || die "invalid image name"
     [[ "$immutable_id" =~ ^[a-z0-9][a-z0-9._-]{0,126}$ ]] || die "invalid immutable tag"
     [[ "$run_id" =~ ^[0-9]+$ ]] || die "RUN_ID must be numeric"
     [[ "$run_attempt" =~ ^[0-9]+$ ]] || die "RUN_ATTEMPT must be numeric"

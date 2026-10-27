@@ -752,7 +752,7 @@ func validatePublication(
 			return fmt.Errorf("release image %d identity is incomplete", index)
 		case scannerrelease.NormalizedImageKind(image) != scannerrelease.ReleaseImageScanner &&
 			scannerrelease.NormalizedImageKind(image) != scannerrelease.ReleaseImageFixer:
-			return fmt.Errorf("release image %q kind must be scanner or fixer", image.ImageKey)
+			return fmt.Errorf("release image %q kind must be scanner or legacy fixer", image.ImageKey)
 		case !digestPattern.MatchString(image.Digest):
 			return fmt.Errorf("release image %q digest is invalid", image.ImageKey)
 		case image.SignatureStatus != "verified":
@@ -886,19 +886,6 @@ func defaultImages() []scannerpipeline.Image {
 		{Key: "jvm", Kind: scannerpipeline.ImageKindScanner, Platforms: []string{"linux/amd64", "linux/arm64"}},
 		{Key: "rust", Kind: scannerpipeline.ImageKindScanner, Platforms: []string{"linux/amd64", "linux/arm64"}},
 		{Key: "codeql", Kind: scannerpipeline.ImageKindScanner, Platforms: []string{"linux/amd64"}},
-		{Key: "fixer-base", Kind: scannerpipeline.ImageKindFixer, Platforms: []string{"linux/amd64", "linux/arm64"}},
-		{
-			Key: "fixer-api", Kind: scannerpipeline.ImageKindFixer,
-			Platforms: []string{"linux/amd64", "linux/arm64"}, DependsOn: []string{"fixer-base"},
-		},
-		{
-			Key: "fixer-claude", Kind: scannerpipeline.ImageKindFixer,
-			Platforms: []string{"linux/amd64", "linux/arm64"}, DependsOn: []string{"fixer-base"},
-		},
-		{
-			Key: "fixer-codex", Kind: scannerpipeline.ImageKindFixer,
-			Platforms: []string{"linux/amd64", "linux/arm64"}, DependsOn: []string{"fixer-base"},
-		},
 	}
 }
 

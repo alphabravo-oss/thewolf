@@ -1,12 +1,10 @@
-# wolf-scanners — four runtime images in an eight-image release
+# wolf-scanners — four runtime images
 
 This directory builds the **four images** that together bundle every scanner that `thewolf` orchestrates. Wolf-slim spawns one short-lived container per tool invocation, picking the right image per tool.
 
-A complete managed release also carries the four signed fixer artifacts from
-`../fixer/` (`base`, `api`, `claude`, and `codex`). They share the same lock,
-platform, SBOM, provenance, signing, mirror, and offline-bundle contract but
-are classified as `image_kind=fixer`, so scan assignment and scanner rollout
-never treat them as scanner runtime images. See
+Fixer images are no longer part of Community releases. Releases published
+through `scanner-set-2026.44.2` still list them; they remain verifiable but are
+ignored by scanner assignment and rollout. See
 [`../docs/scanner-release-management.md`](../docs/scanner-release-management.md).
 
 See [`../docs/archive/2026-10-23/PLAN-containerized-scanner-execution.md`](../docs/archive/2026-10-23/PLAN-containerized-scanner-execution.md) §5.1

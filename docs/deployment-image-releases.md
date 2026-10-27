@@ -1,7 +1,7 @@
 # Deployment image release factory
 
 Wolf publishes its five deployment and scanner-release control-plane images
-through a transaction independent of the canonical scanner/fixer release:
+through a transaction independent of the canonical scanner release:
 
 | Variant | OCI repository | Docker target | Purpose |
 |---|---|---|---|
@@ -12,7 +12,7 @@ through a transaction independent of the canonical scanner/fixer release:
 | `release-integration` | `wolf-release-integration-adapter` | `scanner-release-integration-adapter` | Compose and Kubernetes qualification lane |
 
 These images are intentionally absent from `wolf-scanner-releases`. That
-artifact retains exactly the four scanner and four fixer variants consumed by
+artifact retains exactly the four scanner variants consumed by
 scan execution. Deployment image releases use the separate
 `wolf-deployment-image-releases` aggregate, allowing independent retention,
 rollout, and trust policy without changing a scanner-set digest.

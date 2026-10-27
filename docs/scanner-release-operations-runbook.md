@@ -105,7 +105,7 @@ schedules:
   resolves both Trivy database tags to exact digests and proposes eight-day
   lock replacements. It does not mutate Git, publish an image, or move a
   channel.
-- `03:43 UTC` Sunday: a no-cache, complete scanner/fixer candidate rebuild
+- `03:43 UTC` Sunday: a no-cache, complete scanner candidate rebuild
   from the last reviewed immutable scanner lock. New version or OS-package
   proposals remain separate review work and do not silently suppress the
   weekly freshness rebuild.

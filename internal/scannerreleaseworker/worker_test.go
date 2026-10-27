@@ -870,10 +870,6 @@ func testReleaseImages() []scannerrelease.ReleaseImage {
 		image("jvm", scannerrelease.ReleaseImageScanner, "linux/amd64", "linux/arm64"),
 		image("rust", scannerrelease.ReleaseImageScanner, "linux/amd64", "linux/arm64"),
 		image("codeql", scannerrelease.ReleaseImageScanner, "linux/amd64"),
-		image("fixer-base", scannerrelease.ReleaseImageFixer, "linux/amd64", "linux/arm64"),
-		image("fixer-api", scannerrelease.ReleaseImageFixer, "linux/amd64", "linux/arm64"),
-		image("fixer-claude", scannerrelease.ReleaseImageFixer, "linux/amd64", "linux/arm64"),
-		image("fixer-codex", scannerrelease.ReleaseImageFixer, "linux/amd64", "linux/arm64"),
 	}
 }
 

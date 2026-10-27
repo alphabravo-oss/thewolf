@@ -76,7 +76,7 @@ func DeriveLogicalOperationID(request StepRequest) string {
 
 // DependencyEvidence is the immutable output of a completed direct DAG
 // dependency. Executors receive only direct dependencies so they can bind
-// derivative work (for example fixer engines) to exact upstream digests.
+// derivative work to exact upstream digests.
 type DependencyEvidence struct {
 	OutputURI    string `json:"output_uri,omitempty"`
 	OutputDigest string `json:"output_digest,omitempty"`

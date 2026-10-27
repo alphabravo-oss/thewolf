@@ -139,8 +139,8 @@ func TestCompareNormalizesEvidenceOrdering(t *testing.T) {
 
 func TestValidateRequiresExactImageAndQualityCoverage(t *testing.T) {
 	evidence := testEvidence(t, "managed", "managed-factory", "a")
-	evidence.Release.Images = evidence.Release.Images[:7]
-	if err := Validate(evidence); err == nil || !strings.Contains(err.Error(), "eight-image") {
+	evidence.Release.Images = evidence.Release.Images[:3]
+	if err := Validate(evidence); err == nil || !strings.Contains(err.Error(), "four-image") {
 		t.Fatalf("missing image error = %v", err)
 	}
 
@@ -195,9 +195,8 @@ func testEvidence(t *testing.T, kind, id, nondeterministic string) Evidence {
 			Variant: variant, ImageKind: expected.Kind, Image: kind + "-wolf-" + variant,
 			ReleaseID: releaseID, LockDigest: lockDigest, DefinitionDigest: definitionDigest,
 			Digest: imageDigest, Platforms: append([]string(nil), expected.Platforms...),
-			BaseReference: "registry." + kind + "/base@" + imageDigest,
-			Primary:       RegistryRecord{Repository: "registry." + kind + "/" + variant, Verified: true},
-			SBOMSHA256:    testDigest(nondeterministic), SignatureVerified: true,
+			Primary:    RegistryRecord{Repository: "registry." + kind + "/" + variant, Verified: true},
+			SBOMSHA256: testDigest(nondeterministic), SignatureVerified: true,
 			ProvenanceVerified: true, SBOMVerified: true,
 			Evidence: ImageReceipt{
 				SignatureVerificationSHA256:  testDigest(nondeterministic),

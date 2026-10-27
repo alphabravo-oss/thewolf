@@ -42,28 +42,15 @@ func TestMaterialize(t *testing.T) {
 	if info.Mode().Perm()&0o111 == 0 {
 		t.Fatalf("install/go-tools.sh is not executable, mode=%v", info.Mode().Perm())
 	}
-	for _, relative := range []string{"go.mod", "go.sum", "cmd/wolf", "internal", "plugins"} {
-		if _, err := os.Stat(filepath.Join(dir, relative)); err != nil {
-			t.Fatalf("expected fixer build source %s materialized: %v", relative, err)
-		}
-	}
-	if _, err := os.Stat(filepath.Join(dir, "_wolf-source")); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("encoded source prefix leaked into Docker context: %v", err)
-	}
 }
 
-func TestEmbeddedFixerContextContainsEveryLocalCopySource(t *testing.T) {
+func TestEmbeddedContextContainsEveryLocalCopySource(t *testing.T) {
 	root := t.TempDir()
 	if err := Materialize(root); err != nil {
 		t.Fatalf("Materialize: %v", err)
 	}
-	for _, variant := range FixerVariants {
-		contextDir, dockerfile := buildContextPaths(root, variant)
-		if contextDir != root {
-			t.Errorf("%s context=%q, want repository root %q", variant.Name, contextDir, root)
-			continue
-		}
-		validateLocalCopySources(t, contextDir, dockerfile)
+	for _, variant := range Variants {
+		validateLocalCopySources(t, root, filepath.Join(root, variant.Dockerfile))
 	}
 }
 
@@ -449,92 +436,6 @@ func assertPrivateDirectory(t *testing.T, path string) {
 	}
 	if !info.IsDir() || info.Mode().Perm() != 0o700 {
 		t.Fatalf("ephemeral config mode = %v", info.Mode())
-	}
-}
-
-// TestFixerVariantsResolve verifies the parallel fixer build table: each
-// engine variant resolves, carries the wolf-fixer repo base, and points at a
-// Dockerfile in the fixer/ context subtree.
-func TestFixerVariantsResolve(t *testing.T) {
-	wantSuffix := map[string]string{
-		"base":   "",
-		"claude": "-claude",
-		"codex":  "-codex",
-		"api":    "-api",
-	}
-	for name, suffix := range wantSuffix {
-		v, ok := FixerVariantByName(name)
-		if !ok {
-			t.Fatalf("FixerVariantByName(%q) not found", name)
-		}
-		if v.ImageBase != "wolf-fixer" {
-			t.Fatalf("%s ImageBase = %q, want wolf-fixer", name, v.ImageBase)
-		}
-		if v.ImageSuffix != suffix {
-			t.Fatalf("%s ImageSuffix = %q, want %q", name, v.ImageSuffix, suffix)
-		}
-		if v.ContextSubdir != "fixer" {
-			t.Fatalf("%s ContextSubdir = %q, want fixer", name, v.ContextSubdir)
-		}
-		repo := imageRepo("acme", v)
-		if repo != "acme/wolf-fixer"+suffix {
-			t.Fatalf("%s imageRepo = %q, want acme/wolf-fixer%s", name, repo, suffix)
-		}
-	}
-	// Scanner variants are still resolvable and unchanged (wolf-scanners base).
-	if _, ok := FixerVariantByName("default"); ok {
-		t.Fatalf("scanner variant leaked into FixerVariantByName")
-	}
-	def, _ := VariantByName("default")
-	if imageRepo("acme", def) != "acme/wolf-scanners" {
-		t.Fatalf("scanner default repo regressed: %q", imageRepo("acme", def))
-	}
-}
-
-// TestFixerBuildUsesFixerContextAndDockerfile drives Build for a fixer variant
-// with a stubbed runner and asserts the argv targets the materialized
-// fixer/Dockerfile.api under the repository-shaped context, tagged wolf-fixer-api.
-func TestFixerBuildUsesFixerContextAndDockerfile(t *testing.T) {
-	t.Setenv("WOLF_SCANNERS_TAG", "dev")
-
-	var argvSeen []string
-	restore := stubRunStreaming(func(_ string, argv []string, onLine func(string)) error {
-		argvSeen = argv
-		return nil
-	})
-	defer restore()
-
-	res, err := Build(testCtx(), BuildRequest{
-		Variant:   "api",
-		Namespace: "acme",
-		Version:   "2.0.0",
-		Push:      false,
-	}, nil)
-	if err != nil {
-		t.Fatalf("Build(api): %v", err)
-	}
-	// --file must point at a fixer/Dockerfile.api path.
-	var dockerfileArg string
-	for i, a := range argvSeen {
-		if a == "--file" && i+1 < len(argvSeen) {
-			dockerfileArg = argvSeen[i+1]
-		}
-	}
-	if !strings.Contains(dockerfileArg, filepath.Join("fixer", "Dockerfile.api")) {
-		t.Fatalf("--file = %q, want a fixer/Dockerfile.api path", dockerfileArg)
-	}
-	// Context dir (last positional) must be the repository-shaped root so the
-	// fixer Dockerfile can COPY cmd/, internal/, plugins/, scanners/, and fixer/.
-	ctxDir := argvSeen[len(argvSeen)-1]
-	if filepath.Base(ctxDir) != "context" {
-		t.Fatalf("context dir = %q, want a .../context root", ctxDir)
-	}
-	if !equalStrings(res.Refs, []string{
-		"acme/wolf-fixer-api:2.0.0",
-		"acme/wolf-fixer-api:latest",
-		"acme/wolf-fixer-api:dev",
-	}) {
-		t.Fatalf("refs = %v", res.Refs)
 	}
 }
 

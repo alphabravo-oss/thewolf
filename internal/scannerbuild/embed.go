@@ -1,5 +1,3 @@
-//go:build !fixer_runtime
-
 package scannerbuild
 
 import (
@@ -11,13 +9,10 @@ import (
 	"strings"
 )
 
-// The build context contains the Dockerfiles, install inputs, and exact local
-// Go source closure needed by scanner and fixer builds. It is embedded so the
-// server can build without a checkout.
-//
-// The files under context/ provide the historical scanner context at the root
-// and a repository-shaped tree for fixer builds. To refresh them after editing
-// any build input, run `go generate ./internal/scannerbuild/...`.
+// The build context contains the Dockerfiles and install inputs needed by
+// scanner builds. It is embedded so the server can build without a checkout.
+// To refresh it after editing any build input, run
+// `go generate ./internal/scannerbuild/...`.
 //
 //go:generate go run ./cmd/synccontext
 //go:embed all:context
@@ -35,16 +30,6 @@ func Materialize(dir string) error {
 		// Strip the leading "context/" prefix so files land at the root of dir.
 		rel := strings.TrimPrefix(path, "context")
 		rel = strings.TrimPrefix(rel, "/")
-		if rel == "_wolf-source" {
-			return nil
-		}
-		rel = strings.TrimPrefix(rel, "_wolf-source/")
-		switch rel {
-		case "wolf-root.go.mod":
-			rel = "go.mod"
-		case "wolf-root.go.sum":
-			rel = "go.sum"
-		}
 		switch filepath.Base(rel) {
 		case "wolf-embedded.go.mod":
 			rel = filepath.Join(filepath.Dir(rel), "go.mod")

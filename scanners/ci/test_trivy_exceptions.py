@@ -60,7 +60,7 @@ class TrivyExceptionTests(unittest.TestCase):
                 "CVE-2026-12345 # owner=security; expires=2026-08-30; "
                 "reason=Runtime-only compensating control; images=runtime\n"
                 "CVE-2026-23456 # owner=security; expires=2026-08-30; "
-                "reason=Fixer-only compensating control; images=fixer-api\n"
+                "reason=JVM-only compensating control; images=jvm\n"
                 "GHSA-2345-6789-cfgh # owner=security; expires=2026-08-30; "
                 "reason=Global compensating control; images=all\n",
                 encoding="utf-8",

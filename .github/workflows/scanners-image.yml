@@ -1,4 +1,4 @@
-# Scanner release factory for every Wolf-owned scanner and fixer image.
+# Scanner release factory for every Wolf-owned scanner image.
 #
 # The factory has two schedules:
 #   * daily read-only update discovery (02:17 UTC);
@@ -23,7 +23,6 @@ on:
     branches: [main]
     paths:
       - "scanners/**"
-      - "fixer/**"
       - "cmd/**"
       - "internal/**"
       - "plugins/**"
@@ -39,7 +38,6 @@ on:
     branches: [main]
     paths:
       - "scanners/**"
-      - "fixer/**"
       - "cmd/**"
       - "internal/**"
       - "plugins/**"
@@ -411,10 +409,6 @@ jobs:
           cmp scanners/os-packages.yaml internal/scannerbuild/context/os-packages.yaml
           cmp scanners/os-packages.lock.yaml internal/scannerbuild/context/os-packages.lock.yaml
           diff -ru scanners/os-packages internal/scannerbuild/context/os-packages
-          cmp fixer/Dockerfile.base internal/scannerbuild/context/fixer/Dockerfile.base
-          cmp fixer/Dockerfile.api internal/scannerbuild/context/fixer/Dockerfile.api
-          cmp fixer/Dockerfile.claude internal/scannerbuild/context/fixer/Dockerfile.claude
-          cmp fixer/Dockerfile.codex internal/scannerbuild/context/fixer/Dockerfile.codex
 
       - name: Validate upstream image platforms
         run: make scanners-upstream-check
@@ -560,175 +554,6 @@ jobs:
         with:
           name: scanner-evidence-${{ matrix.variant }}-${{ matrix.arch }}
           path: build/scanner-evidence/
-          if-no-files-found: error
-          retention-days: 90
-
-  fixer-quality:
-    name: Fixer quality (${{ matrix.variant }}, ${{ matrix.platform }})
-    needs: [prepare, validate]
-    if: always() && needs.prepare.outputs.run_build == 'true' && needs.validate.result == 'success'
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 120
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - variant: base
-            dockerfile: fixer/Dockerfile.base
-            image: wolf-fixer
-            platform: linux/amd64
-            arch: amd64
-            runner: ubuntu-24.04
-            auth_mode: none
-          - variant: api
-            dockerfile: fixer/Dockerfile.api
-            image: wolf-fixer-api
-            platform: linux/amd64
-            arch: amd64
-            runner: ubuntu-24.04
-            auth_mode: api-key
-          - variant: claude
-            dockerfile: fixer/Dockerfile.claude
-            image: wolf-fixer-claude
-            platform: linux/amd64
-            arch: amd64
-            runner: ubuntu-24.04
-            auth_mode: interactive-session
-          - variant: codex
-            dockerfile: fixer/Dockerfile.codex
-            image: wolf-fixer-codex
-            platform: linux/amd64
-            arch: amd64
-            runner: ubuntu-24.04
-            auth_mode: interactive-session
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-
-      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
-
-      - name: Verify exact native runner architecture
-        env:
-          ARCH: ${{ matrix.arch }}
-        run: |
-          case "$ARCH:$RUNNER_ARCH" in
-            amd64:X64|arm64:ARM64) ;;
-            *) echo "matrix architecture $ARCH does not match native runner $RUNNER_ARCH" >&2; exit 1 ;;
-          esac
-
-      - name: Build exact-platform fixer artifact
-        env:
-          VARIANT: ${{ matrix.variant }}
-          DOCKERFILE: ${{ matrix.dockerfile }}
-          IMAGE: ${{ matrix.image }}:quality-${{ matrix.arch }}
-          PLATFORM: ${{ matrix.platform }}
-          ARCH: ${{ matrix.arch }}
-          WOLF_VERSION: ${{ needs.prepare.outputs.immutable_id }}
-        run: |
-          base="wolf-fixer:quality-${ARCH}"
-          if [[ "$VARIANT" == base ]]; then
-            docker buildx build \
-              --platform "$PLATFORM" \
-              --load \
-              --build-arg "WOLF_VERSION=$WOLF_VERSION" \
-              --tag "$base" \
-              --file fixer/Dockerfile.base \
-              .
-          else
-            base_oci="$RUNNER_TEMP/wolf-fixer-base-${ARCH}.oci.tar"
-            base_layout="$RUNNER_TEMP/wolf-fixer-base-${ARCH}.oci"
-            docker buildx build \
-              --platform "$PLATFORM" \
-              --output "type=oci,dest=$base_oci" \
-              --build-arg "WOLF_VERSION=$WOLF_VERSION" \
-              --file fixer/Dockerfile.base \
-              .
-            mkdir -p "$base_layout"
-            tar -xf "$base_oci" -C "$base_layout"
-            docker buildx build \
-              --platform "$PLATFORM" \
-              --load \
-              --build-context "wolf-fixer-base=oci-layout://$base_layout" \
-              --build-arg "WOLF_FIXER_BASE_REF=wolf-fixer-base" \
-              --tag "$IMAGE" \
-              --file "$DOCKERFILE" \
-              .
-          fi
-
-      - name: Strict fixer version and auth-boundary smoke
-        env:
-          VARIANT: ${{ matrix.variant }}
-          IMAGE: ${{ matrix.image }}:quality-${{ matrix.arch }}
-          PLATFORM: ${{ matrix.platform }}
-          AUTH_MODE: ${{ matrix.auth_mode }}
-        run: |
-          docker run --rm --platform "$PLATFORM" --network none \
-            --entrypoint /usr/local/bin/wolf "$IMAGE" version
-          case "$VARIANT" in
-            claude)
-              docker run --rm --platform "$PLATFORM" --network none \
-                --entrypoint claude "$IMAGE" --version
-              ;;
-            codex)
-              docker run --rm --platform "$PLATFORM" --network none \
-                --entrypoint codex "$IMAGE" --version
-              ;;
-          esac
-          test "$(docker image inspect "$IMAGE" --format '{{.Config.User}}')" = wolf
-          test "$(docker image inspect "$IMAGE" --format '{{index .Config.Labels "dev.wolf.fixer.auth-mode"}}')" = "$AUTH_MODE"
-
-      - name: Verify locked vulnerability database identity
-        env:
-          EVIDENCE: build/fixer-evidence/${{ matrix.variant }}-${{ matrix.arch }}.trivy-db.json
-          VARIANT: ${{ matrix.variant }}
-        run: |
-          scanners/ci/validate-trivy-exceptions.py .trivyignore \
-            --image "fixer-$VARIANT" \
-            --output "${EVIDENCE%.trivy-db.json}.trivyignore"
-          main_ref="$(scanners/ci/verify-trivy-db.sh scanners/quality/trivy-db.lock.json "$EVIDENCE")"
-          java_ref="$(scanners/ci/verify-trivy-db.sh scanners/quality/trivy-java-db.lock.json "${EVIDENCE%.json}.java.json")"
-          echo "TRIVY_DB_REPOSITORY=$main_ref" >>"$GITHUB_ENV"
-          echo "TRIVY_JAVA_DB_REPOSITORY=$java_ref" >>"$GITHUB_ENV"
-
-      - name: Final fixer vulnerability, secret, and license gate
-        uses: aquasecurity/trivy-action@dc5a429b52fcf669ce959baa2c2dd26090d2a6c4 # 0.32.0
-        with:
-          image-ref: ${{ matrix.image }}:quality-${{ matrix.arch }}
-          scanners: vuln,secret,license
-          severity: HIGH,CRITICAL
-          # Report-only: findings are surfaced in the job log and the SPDX
-          # evidence below, but do not withhold a release. The build,
-          # version, and auth-boundary smoke steps above remain blocking.
-          exit-code: "0"
-          ignore-unfixed: true
-          format: table
-          trivyignores: build/fixer-evidence/${{ matrix.variant }}-${{ matrix.arch }}.trivyignore
-          version: ${{ env.TRIVY_VERSION }}
-
-      - uses: aquasecurity/trivy-action@dc5a429b52fcf669ce959baa2c2dd26090d2a6c4 # 0.32.0
-        with:
-          image-ref: ${{ matrix.image }}:quality-${{ matrix.arch }}
-          scanners: vuln
-          exit-code: "0"
-          format: spdx-json
-          output: build/fixer-evidence/${{ matrix.variant }}-${{ matrix.arch }}.spdx.json
-          version: ${{ env.TRIVY_VERSION }}
-
-      - name: Validate fixer SPDX document
-        env:
-          SBOM: build/fixer-evidence/${{ matrix.variant }}-${{ matrix.arch }}.spdx.json
-        run: |
-          jq -e '
-            .spdxVersion == "SPDX-2.3"
-            and (.packages | type == "array" and length > 0)
-            and (.relationships | type == "array" and length > 0)
-          ' "$SBOM" >/dev/null
-          sha256sum "$SBOM" >"${SBOM}.sha256"
-
-      - name: Upload fixer platform evidence
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: fixer-evidence-${{ matrix.variant }}-${{ matrix.arch }}
-          path: build/fixer-evidence/
           if-no-files-found: error
           retention-days: 90
 
@@ -1090,13 +915,13 @@ jobs:
 
   publish:
     name: Publish immutable ${{ matrix.variant }}
-    # quality/fixer-quality/runtime-quality are listed so this job can *read*
+    # quality/runtime-quality are listed so this job can *read*
     # their results below. They are deliberately NOT in the `if` — 6f13b47
     # severed that dependency and re-instating it here would silently re-enable
     # the disabled supply-chain gates. They gate only the stable/latest channel
     # move, in "Resolve channel aliases" below.
     needs:
-      [prepare, validate, release-approval, quality, fixer-quality, runtime-quality]
+      [prepare, validate, release-approval, quality, runtime-quality]
     if: >-
       always() &&
       needs.validate.result == 'success' &&
@@ -1142,13 +967,6 @@ jobs:
             context: scanners
             dockerfile: scanners/Dockerfile.codeql
             image: wolf-scanners-codeql
-            platforms: linux/amd64
-            annotation_prefix: manifest
-          - variant: fixer-base
-            image_kind: fixer
-            context: .
-            dockerfile: fixer/Dockerfile.base
-            image: wolf-fixer
             platforms: linux/amd64
             annotation_prefix: manifest
     steps:
@@ -1304,13 +1122,11 @@ jobs:
         env:
           ALIASES: ${{ needs.prepare.outputs.aliases }}
           QUALITY: ${{ needs.quality.result }}
-          FIXER_QUALITY: ${{ needs['fixer-quality'].result }}
           RUNTIME_QUALITY: ${{ needs['runtime-quality'].result }}
         run: |
           effective="$ALIASES"
           if [[ ",$ALIASES," == *,stable,* || ",$ALIASES," == *,latest,* ]]; then
             if [[ "$QUALITY" == success &&
-                  "$FIXER_QUALITY" == success &&
                   "$RUNTIME_QUALITY" == success ]]; then
               echo "quality gates passed; stable/latest may move" >>"$GITHUB_STEP_SUMMARY"
             else
@@ -1321,7 +1137,7 @@ jobs:
               {
                 echo "> **Channel move withheld.** \`stable\`/\`latest\` were requested but the"
                 echo "> scanner quality gates did not run (quality=\`$QUALITY\`,"
-                echo "> fixer=\`$FIXER_QUALITY\`, runtime=\`$RUNTIME_QUALITY\`)."
+                echo "> runtime=\`$RUNTIME_QUALITY\`)."
                 echo "> Moved \`${effective:-none}\` instead. Re-enable the gates disabled in"
                 echo "> 6f13b47 to let the weekly release publish \`stable\`."
               } >>"$GITHUB_STEP_SUMMARY"
@@ -1460,368 +1276,12 @@ jobs:
           if-no-files-found: error
           retention-days: 365
 
-  publish-fixer-engines:
-    name: Publish immutable ${{ matrix.variant }}
-    needs: [prepare, publish, release-approval]
-    if: >-
-      always() &&
-      needs.publish.result == 'success' &&
-      (needs.prepare.outputs.operation != 'release' ||
-       (needs.release-approval.result == 'success' &&
-        needs.release-approval.outputs.receipt_digest != '')) &&
-      needs.prepare.outputs.run_build == 'true' &&
-      needs.prepare.outputs.publish == 'true' &&
-      github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
-    timeout-minutes: 150
-    permissions:
-      contents: read
-      packages: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - variant: fixer-api
-            dockerfile: fixer/Dockerfile.api
-            image: wolf-fixer-api
-            platforms: linux/amd64
-            annotation_prefix: manifest
-          - variant: fixer-claude
-            dockerfile: fixer/Dockerfile.claude
-            image: wolf-fixer-claude
-            platforms: linux/amd64
-            annotation_prefix: manifest
-          - variant: fixer-codex
-            dockerfile: fixer/Dockerfile.codex
-            image: wolf-fixer-codex
-            platforms: linux/amd64
-            annotation_prefix: manifest
-          # Combined Debian worker (Claude+Codex+OpenCode). Published to GHCR
-          # so Helm/compose can pull it independently of the locked 8-image
-          # scanner/fixer aggregate.
-          - variant: fixer-engines
-            dockerfile: fixer/Dockerfile.engines
-            image: wolf-fixer-engines
-            platforms: linux/amd64
-            annotation_prefix: manifest
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: scanner-publish-fixer-base
-          path: build/fixer-base-publication
-
-      - uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3
-        with:
-          platforms: all
-
-      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
-
-      - name: Log in to GHCR
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
-        with:
-          registry: ${{ env.PRIMARY_REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Resolve mirror availability
-        id: mirror-config
-        env:
-          MODE: ${{ needs.prepare.outputs.mirror_mode }}
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-        run: |
-          configured=false
-          if [[ -n "$DOCKERHUB_USERNAME" || -n "$DOCKERHUB_TOKEN" ]]; then
-            [[ -n "$DOCKERHUB_USERNAME" && -n "$DOCKERHUB_TOKEN" ]] || {
-              echo "Docker Hub credentials are only partially configured" >&2
-              exit 1
-            }
-            configured=true
-          fi
-          if [[ "$MODE" == required && "$configured" != true ]]; then
-            echo "Docker Hub mirror is required but credentials are unavailable" >&2
-            exit 1
-          fi
-          enabled=false
-          [[ "$MODE" == disabled || "$configured" != true ]] || enabled=true
-          echo "enabled=$enabled" >>"$GITHUB_OUTPUT"
-
-      - name: Log in to Docker Hub mirror
-        if: steps.mirror-config.outputs.enabled == 'true'
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
-        with:
-          registry: ${{ env.MIRROR_REGISTRY }}
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - uses: oras-project/setup-oras@22ce207df3b08e061f537244349aac6ae1d214f6 # v1.2.4
-
-      - name: Verify and bind exact published fixer base
-        id: base
-        env:
-          METADATA: build/fixer-base-publication/fixer-base.image.json
-          RELEASE_ID: ${{ needs.prepare.outputs.immutable_id }}
-          LOCK_DIGEST: ${{ needs.prepare.outputs.lock_digest }}
-          DEFINITION_DIGEST: ${{ needs.prepare.outputs.definition_digest }}
-          SOURCE_URL: ${{ github.server_url }}/${{ github.repository }}
-          REVISION: ${{ github.sha }}
-          VARIANT: ${{ matrix.variant }}
-          CERTIFICATE_IDENTITY: ${{ github.server_url }}/${{ github.repository }}/.github/workflows/scanners-image.yml@${{ github.ref }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          jq -e --arg release "$RELEASE_ID" --arg lock "$LOCK_DIGEST" --arg definition "$DEFINITION_DIGEST" '
-            .variant == "fixer-base"
-            and .imageKind == "fixer"
-            and .image == "wolf-fixer"
-            and (.digest | test("^sha256:[a-f0-9]{64}$"))
-            and (.platforms | sort) == (["linux/amd64"] | sort)
-            and .releaseId == $release
-            and .lockDigest == $lock
-            and .definitionDigest == $definition
-          ' "$METADATA" >/dev/null
-          repository="$(jq -r .primary.repository "$METADATA")"
-          digest="$(jq -r .digest "$METADATA")"
-          reference="${repository}@${digest}"
-          scanners/ci/verify-image.sh "$reference" "$digest" "linux/amd64" \
-            "$RELEASE_ID" "$LOCK_DIGEST" "$DEFINITION_DIGEST" \
-            "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" "$GITHUB_SHA" "$RELEASE_ID" "fixer-base" "fixer"
-          echo "reference=$reference" >>"$GITHUB_OUTPUT"
-
-      - name: Resolve safe image references
-        id: refs
-        env:
-          PRIMARY_REPOSITORY: ${{ env.PRIMARY_REGISTRY }}/${{ env.PRIMARY_NAMESPACE }}
-          MIRROR_REPOSITORY: ${{ env.MIRROR_REGISTRY }}/${{ env.MIRROR_NAMESPACE }}
-          IMAGE_NAME: ${{ matrix.image }}
-          IMMUTABLE_ID: ${{ needs.prepare.outputs.immutable_id }}
-          ALIASES: ${{ needs.prepare.outputs.aliases }}
-          RUN_ID: ${{ github.run_id }}
-          RUN_ATTEMPT: ${{ github.run_attempt }}
-        run: scanners/ci/release-meta.sh tags
-
-      - name: Build engine from exact base digest and push staging image
-        id: build
-        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5
-        with:
-          context: .
-          file: ${{ matrix.dockerfile }}
-          platforms: ${{ matrix.platforms }}
-          push: true
-          tags: ${{ steps.refs.outputs.staging_ref }}
-          build-args: |
-            WOLF_FIXER_BASE_REF=${{ steps.base.outputs.reference }}
-          labels: |
-            org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.version=${{ needs.prepare.outputs.immutable_id }}
-            dev.wolf.release.variant=${{ matrix.variant }}
-            dev.wolf.release.image-kind=fixer
-            dev.wolf.release.id=${{ needs.prepare.outputs.immutable_id }}
-            dev.wolf.release.lock-digest=${{ needs.prepare.outputs.lock_digest }}
-            dev.wolf.release.definition-digest=${{ needs.prepare.outputs.definition_digest }}
-            dev.wolf.fixer.base=${{ steps.base.outputs.reference }}
-          annotations: |
-            ${{ matrix.annotation_prefix }}:org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            ${{ matrix.annotation_prefix }}:org.opencontainers.image.revision=${{ github.sha }}
-            ${{ matrix.annotation_prefix }}:org.opencontainers.image.version=${{ needs.prepare.outputs.immutable_id }}
-            ${{ matrix.annotation_prefix }}:dev.wolf.release.variant=${{ matrix.variant }}
-            ${{ matrix.annotation_prefix }}:dev.wolf.release.image-kind=fixer
-            ${{ matrix.annotation_prefix }}:dev.wolf.release.platforms=${{ matrix.platforms }}
-            ${{ matrix.annotation_prefix }}:dev.wolf.release.id=${{ needs.prepare.outputs.immutable_id }}
-            ${{ matrix.annotation_prefix }}:dev.wolf.release.lock-digest=${{ needs.prepare.outputs.lock_digest }}
-            ${{ matrix.annotation_prefix }}:dev.wolf.release.definition-digest=${{ needs.prepare.outputs.definition_digest }}
-          provenance: false
-          sbom: false
-          no-cache: >-
-            ${{
-              needs.prepare.outputs.operation == 'security-rebuild'
-            }}
-          cache-from: type=gha,scope=scanner-${{ matrix.variant }}-publish
-          cache-to: type=gha,scope=scanner-${{ matrix.variant }}-publish,mode=max
-
-      - name: Verify staged engine digest and exact platform set
-        env:
-          REF: ${{ steps.refs.outputs.staging_ref }}
-          DIGEST: ${{ steps.build.outputs.digest }}
-          PLATFORMS: ${{ matrix.platforms }}
-          RELEASE_ID: ${{ needs.prepare.outputs.immutable_id }}
-          LOCK_DIGEST: ${{ needs.prepare.outputs.lock_digest }}
-          DEFINITION_DIGEST: ${{ needs.prepare.outputs.definition_digest }}
-          SOURCE_URL: ${{ github.server_url }}/${{ github.repository }}
-          REVISION: ${{ github.sha }}
-          VARIANT: ${{ matrix.variant }}
-        run: >-
-          scanners/ci/verify-image.sh "$REF" "$DIGEST" "$PLATFORMS"
-          "$RELEASE_ID" "$LOCK_DIGEST" "$DEFINITION_DIGEST"
-          "$SOURCE_URL" "$REVISION" "$RELEASE_ID" "$VARIANT" "fixer"
-
-      - name: Create engine publication evidence directory
-        run: mkdir -p build/scanner-publish
-
-      - name: Record unsigned primary engine evidence
-        id: primary-evidence
-        env:
-          DIGEST: ${{ steps.build.outputs.digest }}
-        run: |
-          mkdir -p build/scanner-publish
-          for evidence in signature-verification provenance-verification sbom-verification referrers; do
-            jq -nS --arg digest "$DIGEST" --arg evidence "$evidence" '{
-              subjectDigest: $digest,
-              evidence: $evidence,
-              disabled: true
-            }' >"build/scanner-publish/primary.${evidence}.json"
-          done
-          for evidence in signature-verification provenance-verification sbom-verification referrers; do
-            value="sha256:$(sha256sum "build/scanner-publish/primary.${evidence}.json" | awk '{print $1}')"
-            echo "${evidence//-/_}_digest=$value" >>"$GITHUB_OUTPUT"
-          done
-
-      - name: Create or verify immutable primary engine tag
-        env:
-          SOURCE: ${{ steps.refs.outputs.primary_repository }}@${{ steps.build.outputs.digest }}
-          TARGET: ${{ steps.refs.outputs.primary_repository }}
-          IMMUTABLE_ID: ${{ needs.prepare.outputs.immutable_id }}
-          DIGEST: ${{ steps.build.outputs.digest }}
-          PLATFORMS: ${{ matrix.platforms }}
-          RELEASE_ID: ${{ needs.prepare.outputs.immutable_id }}
-          LOCK_DIGEST: ${{ needs.prepare.outputs.lock_digest }}
-          DEFINITION_DIGEST: ${{ needs.prepare.outputs.definition_digest }}
-          SOURCE_URL: ${{ github.server_url }}/${{ github.repository }}
-          REVISION: ${{ github.sha }}
-          VARIANT: ${{ matrix.variant }}
-          ALIASES: ${{ needs.prepare.outputs.aliases }}
-        run: scanners/ci/promote-image.sh "$SOURCE" "$TARGET" "$IMMUTABLE_ID" "$DIGEST" "$PLATFORMS" "$ALIASES"
-
-      - name: Mirror immutable engine
-        id: mirror
-        if: steps.mirror-config.outputs.enabled == 'true'
-        continue-on-error: ${{ needs.prepare.outputs.mirror_mode == 'auto' }}
-        env:
-          SOURCE: ${{ steps.refs.outputs.primary_repository }}@${{ steps.build.outputs.digest }}
-          TARGET: ${{ steps.refs.outputs.mirror_repository }}
-          IMMUTABLE_ID: ${{ needs.prepare.outputs.immutable_id }}
-          DIGEST: ${{ steps.build.outputs.digest }}
-          PLATFORMS: ${{ matrix.platforms }}
-        run: scanners/ci/promote-image.sh "$SOURCE" "$TARGET" "$IMMUTABLE_ID" "$DIGEST" "$PLATFORMS" ""
-
-      - name: Verify mirrored engine
-        id: mirror-evidence
-        if: steps.mirror-config.outputs.enabled == 'true' && steps.mirror.outcome == 'success'
-        continue-on-error: ${{ needs.prepare.outputs.mirror_mode == 'auto' }}
-        env:
-          IMAGE: ${{ steps.refs.outputs.mirror_repository }}
-          DIGEST: ${{ steps.build.outputs.digest }}
-          PLATFORMS: ${{ matrix.platforms }}
-          RELEASE_ID: ${{ needs.prepare.outputs.immutable_id }}
-          LOCK_DIGEST: ${{ needs.prepare.outputs.lock_digest }}
-          DEFINITION_DIGEST: ${{ needs.prepare.outputs.definition_digest }}
-          SOURCE_URL: ${{ github.server_url }}/${{ github.repository }}
-          REVISION: ${{ github.sha }}
-          VARIANT: ${{ matrix.variant }}
-        run: |
-          scanners/ci/verify-image.sh "${IMAGE}@${DIGEST}" "$DIGEST" "$PLATFORMS" \
-            "$RELEASE_ID" "$LOCK_DIGEST" "$DEFINITION_DIGEST" \
-            "$SOURCE_URL" "$REVISION" "$RELEASE_ID" "$VARIANT" "fixer"
-          jq -nS --arg digest "$DIGEST" '{
-            subjectDigest: $digest,
-            evidence: "referrers",
-            disabled: true
-          }' >build/scanner-publish/mirror.referrers.json
-          echo "referrers_digest=sha256:$(sha256sum build/scanner-publish/mirror.referrers.json | awk '{print $1}')" >>"$GITHUB_OUTPUT"
-
-      - name: Write immutable engine metadata
-        env:
-          VARIANT: ${{ matrix.variant }}
-          IMAGE_NAME: ${{ matrix.image }}
-          PLATFORMS: ${{ matrix.platforms }}
-          DIGEST: ${{ steps.build.outputs.digest }}
-          BASE_REFERENCE: ${{ steps.base.outputs.reference }}
-          PRIMARY_REPOSITORY: ${{ steps.refs.outputs.primary_repository }}
-          MIRROR_REPOSITORY: ${{ steps.refs.outputs.mirror_repository }}
-          MIRROR_ENABLED: ${{ steps.mirror-config.outputs.enabled }}
-          MIRROR_EVIDENCE_OUTCOME: ${{ steps.mirror-evidence.outcome }}
-          RELEASE_ID: ${{ needs.prepare.outputs.immutable_id }}
-          LOCK_DIGEST: ${{ needs.prepare.outputs.lock_digest }}
-          DEFINITION_DIGEST: ${{ needs.prepare.outputs.definition_digest }}
-          APPROVAL_RECEIPT_DIGEST: ${{ needs.release-approval.outputs.receipt_digest }}
-          SIGNATURE_EVIDENCE_DIGEST: ${{ steps.primary-evidence.outputs.signature_verification_digest }}
-          PROVENANCE_EVIDENCE_DIGEST: ${{ steps.primary-evidence.outputs.provenance_verification_digest }}
-          SBOM_EVIDENCE_DIGEST: ${{ steps.primary-evidence.outputs.sbom_verification_digest }}
-          PRIMARY_REFERRERS_DIGEST: ${{ steps.primary-evidence.outputs.referrers_digest }}
-          MIRROR_REFERRERS_DIGEST: ${{ steps.mirror-evidence.outputs.referrers_digest }}
-        run: |
-          mirror=null
-          if [[ "$MIRROR_ENABLED" == true && "$MIRROR_EVIDENCE_OUTCOME" == success ]]; then
-            mirror="$(jq -n --arg repository "$MIRROR_REPOSITORY" --arg referrers "$MIRROR_REFERRERS_DIGEST" '{
-              repository: $repository,
-              verified: true,
-              referrersSha256: $referrers,
-              signatureVerified: false,
-              provenanceVerified: false,
-              sbomVerified: false
-            }')"
-          fi
-          sbom_sha="$SBOM_EVIDENCE_DIGEST"
-          jq -n \
-            --arg variant "$VARIANT" \
-            --arg image "$IMAGE_NAME" \
-            --arg digest "$DIGEST" \
-            --arg platforms "$PLATFORMS" \
-            --arg repository "$PRIMARY_REPOSITORY" \
-            --arg base_reference "$BASE_REFERENCE" \
-            --arg sbom "$sbom_sha" \
-            --arg release_id "$RELEASE_ID" \
-            --arg lock_digest "$LOCK_DIGEST" \
-            --arg definition_digest "$DEFINITION_DIGEST" \
-            --arg approval_receipt "$APPROVAL_RECEIPT_DIGEST" \
-            --arg signature_evidence "$SIGNATURE_EVIDENCE_DIGEST" \
-            --arg provenance_evidence "$PROVENANCE_EVIDENCE_DIGEST" \
-            --arg sbom_evidence "$SBOM_EVIDENCE_DIGEST" \
-            --arg primary_referrers "$PRIMARY_REFERRERS_DIGEST" \
-            --argjson mirror "$mirror" \
-            '{
-              variant: $variant,
-              imageKind: "fixer",
-              image: $image,
-              releaseId: $release_id,
-              lockDigest: $lock_digest,
-              definitionDigest: $definition_digest,
-              approvalReceiptDigest: (if $approval_receipt == "" then null else $approval_receipt end),
-              digest: $digest,
-              platforms: ($platforms | split(",")),
-              baseReference: $base_reference,
-              primary: {repository: $repository, verified: true},
-              mirror: $mirror,
-              sbom_sha256: $sbom,
-              evidence: {
-                signatureVerificationSha256: $signature_evidence,
-                provenanceVerificationSha256: $provenance_evidence,
-                sbomVerificationSha256: $sbom_evidence,
-                referrersSha256: $primary_referrers
-              },
-              signatureVerified: false,
-              provenanceVerified: false,
-              sbomVerified: false
-            }' >"build/scanner-publish/${VARIANT}.image.json"
-
-      - name: Upload immutable engine publication metadata
-        if: always() && hashFiles('build/scanner-publish/*.image.json') != ''
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: scanner-publish-${{ matrix.variant }}
-          path: build/scanner-publish/
-          if-no-files-found: error
-          retention-days: 365
-
   published-platform-quality:
     name: Published artifact quality (${{ matrix.variant }}, ${{ matrix.platform }})
-    needs: [prepare, publish, publish-fixer-engines]
+    needs: [prepare, publish]
     if: >-
       always() &&
       needs.publish.result == 'success' &&
-      needs.publish-fixer-engines.result == 'success' &&
       needs.prepare.outputs.operation != 'release' &&
       needs.prepare.outputs.publish == 'true' &&
       github.event_name != 'pull_request'
@@ -1834,14 +1294,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - {variant: default, image_kind: scanner, platform: linux/amd64, arch: amd64, auth_mode: none}
-          - {variant: jvm, image_kind: scanner, platform: linux/amd64, arch: amd64, auth_mode: none}
-          - {variant: rust, image_kind: scanner, platform: linux/amd64, arch: amd64, auth_mode: none}
-          - {variant: codeql, image_kind: scanner, platform: linux/amd64, arch: amd64, auth_mode: none}
-          - {variant: fixer-base, image_kind: fixer, platform: linux/amd64, arch: amd64, auth_mode: none}
-          - {variant: fixer-api, image_kind: fixer, platform: linux/amd64, arch: amd64, auth_mode: api-key}
-          - {variant: fixer-claude, image_kind: fixer, platform: linux/amd64, arch: amd64, auth_mode: interactive-session}
-          - {variant: fixer-codex, image_kind: fixer, platform: linux/amd64, arch: amd64, auth_mode: interactive-session}
+          - {variant: default, image_kind: scanner, platform: linux/amd64, arch: amd64}
+          - {variant: jvm, image_kind: scanner, platform: linux/amd64, arch: amd64}
+          - {variant: rust, image_kind: scanner, platform: linux/amd64, arch: amd64}
+          - {variant: codeql, image_kind: scanner, platform: linux/amd64, arch: amd64}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
@@ -1920,39 +1376,16 @@ jobs:
 
       - name: Strict smoke against exact published child
         env:
-          VARIANT: ${{ matrix.variant }}
-          IMAGE_KIND: ${{ matrix.image_kind }}
           PLATFORM: ${{ matrix.platform }}
-          AUTH_MODE: ${{ matrix.auth_mode }}
           CHILD_REF: ${{ steps.child.outputs.child_ref }}
         run: |
           mkdir -p build/published-quality
           docker pull --platform "$PLATFORM" "$CHILD_REF" >/dev/null
           test "$(docker image inspect "$CHILD_REF" --format '{{.Config.User}}')" = wolf
-          if [[ "$IMAGE_KIND" == scanner ]]; then
-            docker run --rm --platform "$PLATFORM" --network none \
-              -e WOLF_SMOKE_STRICT=1 "$CHILD_REF" \
-              /usr/local/bin/smoke-test.sh \
-              | tee build/published-quality/smoke.log
-          else
-            docker run --rm --platform "$PLATFORM" --network none \
-              --entrypoint /usr/local/bin/wolf "$CHILD_REF" version \
-              | tee build/published-quality/smoke.log
-            case "$VARIANT" in
-              fixer-claude)
-                docker run --rm --platform "$PLATFORM" --network none \
-                  --entrypoint claude "$CHILD_REF" --version \
-                  | tee -a build/published-quality/smoke.log
-                ;;
-              fixer-codex)
-                docker run --rm --platform "$PLATFORM" --network none \
-                  --entrypoint codex "$CHILD_REF" --version \
-                  | tee -a build/published-quality/smoke.log
-                ;;
-            esac
-            test "$(docker image inspect "$CHILD_REF" \
-              --format '{{index .Config.Labels "dev.wolf.fixer.auth-mode"}}')" = "$AUTH_MODE"
-          fi
+          docker run --rm --platform "$PLATFORM" --network none \
+            -e WOLF_SMOKE_STRICT=1 "$CHILD_REF" \
+            /usr/local/bin/smoke-test.sh \
+            | tee build/published-quality/smoke.log
 
       - name: Verify locked vulnerability database identity
         env:
@@ -2055,20 +1488,19 @@ jobs:
 
   integration-quality:
     name: Exact candidate Compose and Kind qualification
-    needs: [prepare, publish, publish-fixer-engines, published-platform-quality]
+    needs: [prepare, publish, published-platform-quality]
     # Runs for its evidence, but does not withhold a release. This is a
     # docker-in-docker Compose+Kind harness that has not executed since
     # 6f13b47 and has drifted from the runner environment it assumes — the
     # first `docker run` fails in ~200ms on the mounted docker config, before
     # any scanner image is exercised. What it would prove about the images
     # (they build, start, and run their tools) is already covered by quality,
-    # fixer-quality, runtime-quality, and published-platform-quality, all of
+    # runtime-quality, and published-platform-quality, all of
     # which block. Repairing the harness is tracked separately.
     continue-on-error: true
     if: >-
       always() &&
       needs.publish.result == 'success' &&
-      needs.publish-fixer-engines.result == 'success' &&
       needs.published-platform-quality.result == 'success' &&
       needs.prepare.outputs.operation != 'release' &&
       needs.prepare.outputs.publish == 'true' &&
@@ -2182,17 +1614,17 @@ jobs:
           DEFINITION_DIGEST: ${{ needs.prepare.outputs.definition_digest }}
         run: |
           mapfile -d '' receipts < <(find build/platform-quality -name receipt.json -print0 | sort -z)
-          [[ "${#receipts[@]}" -eq 8 ]]
+          [[ "${#receipts[@]}" -eq 4 ]]
           jq -sS 'sort_by(.variant, .platform)' "${receipts[@]}" \
             >build/integration-quality/platform-receipts.json
           jq -e \
             --arg release "$RELEASE_ID" \
             --arg lock "$LOCK_DIGEST" \
             --arg definition "$DEFINITION_DIGEST" '
-              length == 8 and
+              length == 4 and
               all(.[]; .releaseId == $release and .lockDigest == $lock and
                 .definitionDigest == $definition and .passed == true) and
-              ([.[] | (.variant + ":" + .platform)] | unique | length) == 8
+              ([.[] | (.variant + ":" + .platform)] | unique | length) == 4
             ' build/integration-quality/platform-receipts.json >/dev/null
           jq -nS \
             --arg releaseId "$RELEASE_ID" \
@@ -2210,7 +1642,7 @@ jobs:
               lockDigest: $lockDigest,
               definitionDigest: $definitionDigest,
               candidateImage: $candidateImage,
-              platformReceiptCount: 8,
+              platformReceiptCount: 4,
               evidence: {
                 platformReceiptsSha256: $platformReceiptsSha256,
                 composeScannerSha256: $composeScannerSha256,
@@ -2232,8 +1664,8 @@ jobs:
           retention-days: 365
 
   release-manifest:
-    name: Commit aggregate scanner and fixer release
-    needs: [prepare, publish, publish-fixer-engines, integration-quality, release-approval]
+    name: Commit aggregate scanner release
+    needs: [prepare, publish, integration-quality, release-approval]
     # `release` is excluded: that operation promotes an already-built candidate
     # through promote-release, which commits its own aggregate. This job is the
     # build-path committer, covering candidate, security-rebuild, and the
@@ -2241,7 +1673,6 @@ jobs:
     if: >-
       always() &&
       needs.publish.result == 'success' &&
-      needs.publish-fixer-engines.result == 'success' &&
       needs.prepare.outputs.operation != 'release' &&
       needs.prepare.outputs.publish == 'true' &&
       github.event_name != 'pull_request'
@@ -2332,7 +1763,7 @@ jobs:
               .schemaVersion == "wolf.scanners.candidate-qualification/v1" and
               .releaseId == $release and .lockDigest == $lock and
               .definitionDigest == $definition and
-              .platformReceiptCount == 8 and .passed == true
+              .platformReceiptCount == 4 and .passed == true
             ' build/candidate-qualification/candidate-qualification.json >/dev/null
           cp build/candidate-qualification/candidate-qualification.json \
             build/candidate-qualification.json
@@ -2357,18 +1788,13 @@ jobs:
             "${spdx_sources[@]}"
           export AGGREGATE_SBOM_SHA256
           AGGREGATE_SBOM_SHA256="sha256:$(sha256sum build/scanner-release.spdx.json | awk '{print $1}')"
-          # Pass the canonical eight images only. wolf-fixer-engines is an
-          # operational GHCR worker and must not enter wolf-scanner-releases.
+          # Pass the canonical four scanner images only.
           scanners/ci/build-release-manifest.sh \
             build/scanner-release.json \
             build/release-evidence/default.image.json \
             build/release-evidence/jvm.image.json \
             build/release-evidence/rust.image.json \
             build/release-evidence/codeql.image.json \
-            build/release-evidence/fixer-base.image.json \
-            build/release-evidence/fixer-api.image.json \
-            build/release-evidence/fixer-claude.image.json \
-            build/release-evidence/fixer-codex.image.json \
             >build/scanner-release.sha256
 
       - name: Push aggregate manifest staging artifact

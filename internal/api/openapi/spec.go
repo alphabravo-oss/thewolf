@@ -1257,26 +1257,19 @@ func buildComponents() map[string]any {
 			},
 			"ScannerPipelineImage": objSchema(map[string]any{
 				"key": map[string]any{
-					"type": "string", "enum": []string{
-						"default", "jvm", "rust", "codeql",
-						"fixer-base", "fixer-api", "fixer-claude", "fixer-codex",
-					},
+					"type": "string", "enum": []string{"default", "jvm", "rust", "codeql"},
 				},
-				"kind": map[string]any{"type": "string", "enum": []string{"scanner", "fixer"}},
+				"kind": map[string]any{"type": "string", "enum": []string{"scanner"}},
 				"platforms": map[string]any{
 					"type": "array", "minItems": 1, "maxItems": 2, "uniqueItems": true,
 					"items": map[string]any{"type": "string", "enum": []string{"linux/amd64", "linux/arm64"}},
-				},
-				"depends_on": map[string]any{
-					"type": "array", "maxItems": 1, "uniqueItems": true,
-					"items": map[string]any{"type": "string", "enum": []string{"fixer-base"}},
 				},
 			}, "key", "kind", "platforms"),
 			"ScannerReleaseImage": objSchema(map[string]any{
 				"id":                 str,
 				"release_id":         str,
 				"image_key":          str,
-				"image_kind":         map[string]any{"type": "string", "enum": []string{"scanner", "fixer"}, "default": "scanner"},
+				"image_kind":         map[string]any{"type": "string", "enum": []string{"scanner", "fixer"}, "default": "scanner", "description": "fixer appears only in releases published before fixer images moved out of Community."},
 				"registry_target_id": str,
 				"repository":         str,
 				"digest":             map[string]any{"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
@@ -1822,9 +1815,9 @@ func buildComponents() map[string]any {
 				"selected_items": strArr,
 				"reason":         map[string]any{"type": "string", "minLength": 1, "maxLength": 2048},
 				"images": map[string]any{
-					"type": "array", "minItems": 8, "maxItems": 8, "uniqueItems": true,
+					"type": "array", "minItems": 4, "maxItems": 4, "uniqueItems": true,
 					"items":       map[string]any{"$ref": "#/components/schemas/ScannerPipelineImage"},
-					"description": "Optional exact complete image set. When omitted, the server uses the canonical four scanner and four fixer artifacts.",
+					"description": "Optional exact complete image set. When omitted, the server uses the canonical four scanner artifacts.",
 				},
 			}, "reason"),
 			"ScannerApprovalRequest": objSchema(map[string]any{

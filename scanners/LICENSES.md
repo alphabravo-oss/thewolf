@@ -7,7 +7,7 @@ each tool's terms.
 The release gate contains an explicit allowlist for the GPL-1.0, GPL-2.0,
 GPL-3.0, LGPL-2.0, LGPL-2.1, LGPL-3.0 (including the specific autoconf and
 bison exception identifiers present in the Debian packages), and Sleepycat
-license families used by the scanner and fixer images. These unmodified,
+license families used by the scanner images. These unmodified,
 standalone programs and libraries are intentionally redistributed with this
 public build source and their notices. This is an affirmative open-source
 distribution policy, not a vulnerability exception. Operators remain

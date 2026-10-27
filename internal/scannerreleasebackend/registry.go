@@ -916,8 +916,6 @@ func imageRepository(prefix, image string) (string, error) {
 	name := map[string]string{
 		"default": "wolf-scanners", "jvm": "wolf-scanners-jvm",
 		"rust": "wolf-scanners-rust", "codeql": "wolf-scanners-codeql",
-		"fixer-base": "wolf-fixer", "fixer-api": "wolf-fixer-api",
-		"fixer-claude": "wolf-fixer-claude", "fixer-codex": "wolf-fixer-codex",
 	}[image]
 	if name == "" {
 		return "", fmt.Errorf("unsupported owned release image %q", image)

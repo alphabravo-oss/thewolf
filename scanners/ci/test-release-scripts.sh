@@ -172,20 +172,21 @@ if env "${common[@]}" EVENT_NAME=release RELEASE_TAG_NAME=v2.0.0-RC1 \
 fi
 
 for image_name in \
-    wolf-scanners wolf-scanners-jvm wolf-scanners-rust wolf-scanners-codeql \
-    wolf-fixer wolf-fixer-api wolf-fixer-claude wolf-fixer-codex wolf-fixer-engines; do
+    wolf-scanners wolf-scanners-jvm wolf-scanners-rust wolf-scanners-codeql; do
     output="$(env PRIMARY_REPOSITORY=ghcr.io/example MIRROR_REPOSITORY=docker.io/example \
         IMAGE_NAME="$image_name" IMMUTABLE_ID=scanner-set-2026.31.1 \
         ALIASES=stable RUN_ID=123 RUN_ATTEMPT=1 scanners/ci/release-meta.sh tags)"
     assert_output "$output" "primary_repository=ghcr.io/example/${image_name}"
     assert_output "$output" "staging_tag=build-scanner-set-2026.31.1-123-1"
 done
-if env PRIMARY_REPOSITORY=ghcr.io/example MIRROR_REPOSITORY=docker.io/example \
-    IMAGE_NAME=wolf-fixer-claude-extra IMMUTABLE_ID=scanner-set-2026.31.1 \
-    ALIASES=stable RUN_ID=123 RUN_ATTEMPT=1 \
-    scanners/ci/release-meta.sh tags >/dev/null 2>&1; then
-    fail "non-canonical image name was accepted"
-fi
+for image_name in wolf-scanners-extra-name wolf-fixer wolf-fixer-claude; do
+    if env PRIMARY_REPOSITORY=ghcr.io/example MIRROR_REPOSITORY=docker.io/example \
+        IMAGE_NAME="$image_name" IMMUTABLE_ID=scanner-set-2026.31.1 \
+        ALIASES=stable RUN_ID=123 RUN_ATTEMPT=1 \
+        scanners/ci/release-meta.sh tags >/dev/null 2>&1; then
+        fail "non-canonical or fixer image name $image_name was accepted"
+    fi
+done
 
 digest="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 sbom_digest="sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
@@ -204,7 +205,7 @@ jq -nS \
       lockDigest: $lock,
       definitionDigest: $definition,
       candidateImage: "ghcr.io/example/wolf-scanners@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      platformReceiptCount: 8,
+      platformReceiptCount: 4,
       evidence: {
         platformReceiptsSha256: $evidence,
         composeScannerSha256: $evidence,
@@ -270,20 +271,12 @@ if PATH="$tmp/bin:$PATH" DOCKER_DESCRIPTOR="$bad_descriptor" DOCKER_MANIFEST="$b
     fail "image index without the exact scanner lock annotation was accepted"
 fi
 
-for variant in default jvm rust codeql fixer-base fixer-api fixer-claude fixer-codex; do
+for variant in default jvm rust codeql; do
     platforms='["linux/amd64"]'
     image_kind=scanner
     case "$variant" in
         default) image=wolf-scanners ;;
         jvm|rust|codeql) image="wolf-scanners-${variant}" ;;
-        fixer-base) image=wolf-fixer; image_kind=fixer ;;
-        fixer-api|fixer-claude|fixer-codex) image="wolf-${variant}"; image_kind=fixer ;;
-    esac
-    base_reference=""
-    case "$variant" in
-        fixer-api|fixer-claude|fixer-codex)
-            base_reference="ghcr.io/example/wolf-fixer@${digest}"
-            ;;
     esac
     jq -n \
         --arg variant "$variant" \
@@ -291,7 +284,6 @@ for variant in default jvm rust codeql fixer-base fixer-api fixer-claude fixer-c
         --arg image "$image" \
         --arg digest "$digest" \
         --arg sbom "$sbom_digest" \
-        --arg base_reference "$base_reference" \
         --arg release_id scanner-set-2026.31.1 \
         --arg lock_digest "$lock_digest" \
         --arg definition_digest "$definition_digest" \
@@ -308,7 +300,6 @@ for variant in default jvm rust codeql fixer-base fixer-api fixer-claude fixer-c
           approvalReceiptDigest: $approval_digest,
           digest: $digest,
           platforms: $platforms,
-          baseReference: (if $base_reference == "" then null else $base_reference end),
           primary: {repository: ("ghcr.io/example/" + $image), verified: true},
           mirror: null,
           sbom_sha256: $sbom,
@@ -365,15 +356,17 @@ jq -e '
   and .lockDigest == "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
   and .definitionDigest == "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
   and .approvalReceiptDigest == "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
-  and (.images | length) == 8
-  and ([.images[].imageKind] | map(select(. == "scanner")) | length) == 4
-  and ([.images[].imageKind] | map(select(. == "fixer")) | length) == 4
+  and (.images | length) == 4
+  and ([.images[].imageKind] | all(. == "scanner"))
   and .images[0].variant == "codeql"
   and (.aggregateSbom.sha256 | startswith("sha256:"))
 ' "$tmp/release.json" >/dev/null || fail "canonical release manifest is invalid"
 
-jq '.baseReference = "ghcr.io/example/wolf-fixer@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"' \
-    "$tmp/fixer-codex.image.json" >"$tmp/fixer-codex-bad.image.json"
+# Fixer images are no longer part of a Community release: a fifth image, even a
+# fully valid-looking fixer entry, must be rejected by the aggregate builder.
+jq '.variant = "fixer-base" | .imageKind = "fixer" | .image = "wolf-fixer"
+    | .primary.repository = "ghcr.io/example/wolf-fixer"' \
+    "$tmp/default.image.json" >"$tmp/legacy-fixer-base.image.json"
 if SCANNER_RELEASE_ID=scanner-set-2026.31.1 \
     DEFINITION_COMMIT=0123456789abcdef0123456789abcdef01234567 \
     SOURCE_DATE=2026-07-30T12:00:00Z \
@@ -387,10 +380,9 @@ if SCANNER_RELEASE_ID=scanner-set-2026.31.1 \
         "$tmp/release-bad.json" \
         "$tmp/default.image.json" "$tmp/jvm.image.json" \
         "$tmp/rust.image.json" "$tmp/codeql.image.json" \
-        "$tmp/fixer-base.image.json" "$tmp/fixer-api.image.json" \
-        "$tmp/fixer-claude.image.json" "$tmp/fixer-codex-bad.image.json" \
+        "$tmp/legacy-fixer-base.image.json" \
         >/dev/null 2>&1; then
-    fail "fixer engine with a mismatched base digest was accepted"
+    fail "aggregate release with a fixer image was accepted"
 fi
 
 jq '.digest = "sha256:bad"' \
@@ -408,13 +400,11 @@ if SCANNER_RELEASE_ID=scanner-set-2026.31.1 \
         "$tmp/release-bad-digest.json" \
         "$tmp/default-bad-digest.image.json" "$tmp/jvm.image.json" \
         "$tmp/rust.image.json" "$tmp/codeql.image.json" \
-        "$tmp/fixer-base.image.json" "$tmp/fixer-api.image.json" \
-        "$tmp/fixer-claude.image.json" "$tmp/fixer-codex.image.json" \
         >/dev/null 2>&1; then
     fail "image with invalid digest was accepted"
 fi
 
-for variant in default jvm rust codeql fixer-base fixer-api fixer-claude fixer-codex; do
+for variant in default jvm rust codeql; do
     jq --arg candidate "$candidate_id" '
       .releaseId = $candidate
       | .approvalReceiptDigest = null
@@ -596,6 +586,7 @@ case "$ref" in
   *wolf-scanners-codeql*) variant=codeql ;;
   *wolf-scanners-jvm*) variant=jvm ;;
   *wolf-scanners-rust*) variant=rust ;;
+  # Legacy releases (through scanner-set-2026.44.2) also contain fixer images.
   *wolf-fixer-api*) variant=fixer-api; kind=fixer ;;
   *wolf-fixer-claude*) variant=fixer-claude; kind=fixer ;;
   *wolf-fixer-codex*) variant=fixer-codex; kind=fixer ;;
@@ -731,7 +722,7 @@ CLOSURE_DEFINITION_DIGEST="$definition_digest" \
 jq -e --arg candidate "$candidate_id" '
   .schemaVersion == "wolf.scanners.candidate-verification/v1"
   and .candidate.id == $candidate
-  and (.images | length) == 8
+  and (.images | length) == 4
   and .closureVerified == true
 ' "$tmp/verified-candidate/candidate-verification.json" >/dev/null || \
   fail "candidate closure verifier did not emit complete evidence"
@@ -758,9 +749,59 @@ jq -e '
   .schemaVersion == "wolf.scanners.release-verification/v1"
   and .release.id == "scanner-set-2026.31.2"
   and .release.promotedCandidateId == "scanner-candidate-2026-w31-0123456789ab"
-  and (.images | length) == 8
+  and (.images | length) == 4
   and .closureVerified == true
 ' "$tmp/verified-release/release-verification.json" >/dev/null || \
   fail "protected release closure verifier did not replay complete evidence"
+
+# Releases published through scanner-set-2026.44.2 carry four extra fixer images.
+# They must stay verifiable even though no new release may contain them.
+legacy_fixers='["fixer-base:wolf-fixer","fixer-api:wolf-fixer-api","fixer-claude:wolf-fixer-claude","fixer-codex:wolf-fixer-codex"]'
+mkdir -p "$tmp/legacy-payload"
+jq '.platformReceiptCount = 8' "$tmp/candidate-qualification.json" >"$tmp/legacy-payload/candidate-qualification.json"
+jq --argjson legacy "$legacy_fixers" '
+  (.images | map(select(.variant == "default" or .variant == "fixer-base")) | .[0]) as $template
+  | .images += [$legacy[] | split(":") as $p | {
+      variant: $p[0], imageKind: "fixer", digest: $template.digest,
+      primaryVerified: true, mirrorVerified: true}]
+' "$tmp/candidate-verification.json" >"$tmp/legacy-payload/candidate-verification.json"
+legacy_report_sha="sha256:$(sha256sum "$tmp/legacy-payload/candidate-verification.json" | awk '{print $1}')"
+jq --arg report "$legacy_report_sha" '.verificationEvidenceDigest = $report' \
+    "$tmp/approval.json" >"$tmp/legacy-payload/protected-approval.json"
+legacy_approval_sha="sha256:$(sha256sum "$tmp/legacy-payload/protected-approval.json" | awk '{print $1}')"
+legacy_qualification_sha="sha256:$(sha256sum "$tmp/legacy-payload/candidate-qualification.json" | awk '{print $1}')"
+jq --argjson legacy "$legacy_fixers" \
+    --arg report "$legacy_report_sha" --arg approval "$legacy_approval_sha" \
+    --arg qualification "$legacy_qualification_sha" '
+  (.images | map(select(.variant == "default"))[0]) as $template
+  | .images += [$legacy[] | split(":") as $p | $template
+      | .variant = $p[0] | .imageKind = "fixer" | .image = $p[1]
+      | .primary.repository = "ghcr.io/example/" + $p[1]
+      | (if .mirror != null then .mirror.repository = "docker.io/example/" + $p[1] else . end)]
+  | .images |= sort_by(.variant)
+  | .approvalReceiptDigest = $approval
+  | .promotedFrom.verificationEvidenceDigest = $report
+  | .qualificationReceipt.sha256 = $qualification
+' "$tmp/promoted-release.json" >"$tmp/legacy-payload/scanner-release.json"
+cp "$tmp/aggregate.spdx.json" "$tmp/legacy-payload/scanner-release.spdx.json"
+PATH="$tmp/bin:$PATH" \
+GITHUB_REPOSITORY=example/wolf GITHUB_SERVER_URL=https://github.com \
+ORAS_DESCRIPTOR_DIGEST="$release_oci_digest" \
+ORAS_SUBJECT_KIND=release ORAS_SUBJECT_ID=scanner-set-2026.31.2 \
+ORAS_PAYLOAD_DIR="$tmp/legacy-payload" \
+IMAGE_DIGEST="$digest" CLOSURE_CANDIDATE_ID="$candidate_id" \
+CLOSURE_LOCK_DIGEST="$lock_digest" \
+CLOSURE_DEFINITION_DIGEST="$definition_digest" \
+  scanners/ci/verify-release-closure.sh \
+    ghcr.io/example/wolf-scanner-releases \
+    docker.io/example/wolf-scanner-releases \
+    scanner-set-2026.31.2 "$tmp/verified-legacy-release" true >/dev/null
+jq -e '
+  .schemaVersion == "wolf.scanners.release-verification/v1"
+  and (.images | length) == 8
+  and ([.images[].imageKind] | map(select(. == "fixer")) | length) == 4
+  and .closureVerified == true
+' "$tmp/verified-legacy-release/release-verification.json" >/dev/null || \
+  fail "legacy release with fixer images was not verifiable"
 
 printf 'scanner release CI script tests: PASS\n'

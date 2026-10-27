@@ -262,7 +262,6 @@ func applyBaseImageUpdates(
 	if err != nil {
 		return err
 	}
-	paths = append(paths, filepath.Join(root, "fixer", "Dockerfile.base"))
 	seen := make(map[string]bool, len(replacements))
 	for _, dockerfile := range paths {
 		if err := rejectSymlink(dockerfile); err != nil {

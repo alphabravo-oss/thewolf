@@ -161,10 +161,6 @@ func TestServiceCreatesCompleteDurableBuildPlan(t *testing.T) {
 		"build/default/linux-amd64",
 		"build/default/linux-arm64",
 		"build/codeql/linux-amd64",
-		"build/fixer-base/linux-arm64",
-		"build/fixer-codex/linux-amd64",
-		"fixer-auth-contract/fixer-codex",
-		"fixer-integration",
 		"signature/default",
 		"compose-integration",
 		"kubernetes-integration",
@@ -178,11 +174,13 @@ func TestServiceCreatesCompleteDurableBuildPlan(t *testing.T) {
 	if stepKeys["build/codeql/linux-arm64"] {
 		t.Fatal("build plan contains undeclared CodeQL arm64 build")
 	}
-	if stepKeys["parser-fixtures/fixer-codex"] {
-		t.Fatal("build plan applies scanner parser fixtures to a fixer image")
+	for key := range stepKeys {
+		if strings.Contains(key, "fixer") {
+			t.Fatalf("build plan contains fixer step %q", key)
+		}
 	}
 
-	incomplete := defaultImages()[:4]
+	incomplete := defaultImages()[:3]
 	if err := EnqueueCandidateBuildPlan(context.Background(), store, candidate, incomplete); err == nil ||
 		!strings.Contains(err.Error(), "incomplete") {
 		t.Fatalf("incomplete candidate image set error = %v", err)
@@ -347,7 +345,7 @@ func TestServicePublishesOnlyExactApprovedCandidateInventory(t *testing.T) {
 	}
 	if len(store.releaseInventories) != 1 ||
 		len(store.releaseInventories[0].Tools) != len(requiredReleaseToolKeys) ||
-		len(store.releaseInventories[0].Images) != 8 {
+		len(store.releaseInventories[0].Images) != 4 {
 		t.Fatalf("inventories = %#v", store.releaseInventories)
 	}
 
@@ -385,13 +383,21 @@ func TestPublicationValidationRejectsMissingSupplyChainEvidence(t *testing.T) {
 	if err := validatePublication(candidate, "scanner-set-2026.31.1", receipt); err != nil {
 		t.Fatal(err)
 	}
-	if err := validatePublication(candidate, "scanner-set-2026.31.1", receipt); err != nil {
-		t.Fatalf("complete release with fixer image: %v", err)
+
+	// Inventories published through scanner-set-2026.44.2 also carry fixer
+	// images. They are tolerated, never required.
+	legacy := receipt
+	legacy.Images = append([]scannerrelease.ReleaseImage(nil), receipt.Images...)
+	fixer := receipt.Images[1]
+	fixer.ImageKey, fixer.ImageKind, fixer.Repository = "fixer-codex", scannerrelease.ReleaseImageFixer, "security/fixer-codex"
+	legacy.Images = append(legacy.Images, fixer)
+	if err := validatePublication(candidate, "scanner-set-2026.31.1", legacy); err != nil {
+		t.Fatalf("legacy release with fixer image: %v", err)
 	}
 
 	badKind := receipt
 	badKind.Images = append([]scannerrelease.ReleaseImage(nil), receipt.Images...)
-	badKind.Images[4].ImageKind = "worker"
+	badKind.Images[1].ImageKind = "worker"
 	if err := validatePublication(candidate, "scanner-set-2026.31.1", badKind); err == nil ||
 		!strings.Contains(err.Error(), "kind") {
 		t.Fatalf("invalid image kind validation error = %v", err)
@@ -414,13 +420,13 @@ func TestPublicationValidationRejectsMissingSupplyChainEvidence(t *testing.T) {
 	}
 
 	missingOwned := receipt
-	missingOwned.Images = append([]scannerrelease.ReleaseImage(nil), receipt.Images[:7]...)
+	missingOwned.Images = append([]scannerrelease.ReleaseImage(nil), receipt.Images[:3]...)
 	if err := validatePublication(candidate, "scanner-set-2026.31.1", missingOwned); err == nil ||
 		!strings.Contains(err.Error(), "missing required owned image") {
 		t.Fatalf("missing owned image validation error = %v", err)
 	}
 
-	toolOnFixer := receipt
+	toolOnFixer := legacy
 	toolOnFixer.Tools = append([]scannerrelease.ReleaseTool(nil), receipt.Tools...)
 	toolOnFixer.Tools[0].MetadataJSON = `{"image_key":"fixer-codex","kind":"wolf"}`
 	if err := validatePublication(candidate, "scanner-set-2026.31.1", toolOnFixer); err == nil ||
@@ -632,9 +638,6 @@ func requiredControlReleaseImages(defaultImage scannerrelease.ReleaseImage) []sc
 		images = append(images, image(key, scannerrelease.ReleaseImageScanner, []string{"linux/amd64", "linux/arm64"}))
 	}
 	images = append(images, image("codeql", scannerrelease.ReleaseImageScanner, []string{"linux/amd64"}))
-	for _, key := range []string{"fixer-base", "fixer-api", "fixer-claude", "fixer-codex"} {
-		images = append(images, image(key, scannerrelease.ReleaseImageFixer, []string{"linux/amd64", "linux/arm64"}))
-	}
 	return images
 }
 

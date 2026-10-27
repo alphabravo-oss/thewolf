@@ -10,7 +10,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/alphabravocompany/thewolf/internal/fix/qualification"
 	"github.com/alphabravocompany/thewolf/internal/scannerquality"
 	"github.com/alphabravocompany/thewolf/internal/scannerreleaseworkspace"
 	scannerlock "github.com/alphabravocompany/thewolf/internal/scannertools/lock"
@@ -224,63 +223,5 @@ func TestParseDockerMemoryUsesBinaryAndDecimalUnits(t *testing.T) {
 		if err != nil || actual != expected {
 			t.Fatalf("parseDockerMemory(%q)=%d error=%v, want %d", input, actual, err, expected)
 		}
-	}
-}
-
-func TestFixerQualificationArgumentsAreImmutableAndHardened(t *testing.T) {
-	reference := "registry.example/wolf/fixer@sha256:" + strings.Repeat("a", 64)
-	for _, platform := range []string{"linux/amd64", "linux/arm64"} {
-		args, err := fixerQualificationArgs(platform, reference, "claude", "interactive-session")
-		if err != nil {
-			t.Fatal(err)
-		}
-		joined := strings.Join(args, " ")
-		for _, required := range []string{
-			"--pull=always", "--platform " + platform, "--network none", "--read-only",
-			"--cap-drop ALL", "no-new-privileges=true", "--pids-limit 128",
-			"--memory 512m", "--cpus 1", "/home/wolf:rw,noexec,nosuid,nodev",
-			"/run/wolf-qualification:rw,nosuid,nodev,uid=1000,gid=1000,mode=0700",
-			reference, "qualification --expected-variant claude --expected-auth-mode interactive-session --scratch /run/wolf-qualification",
-		} {
-			if !strings.Contains(joined, required) {
-				t.Fatalf("qualification args missing %q: %s", required, joined)
-			}
-		}
-		for _, forbidden := range []string{"docker.sock", "DOCKER_HOST", "DOCKER_CONFIG", " -v ", " --env "} {
-			if strings.Contains(joined, forbidden) {
-				t.Fatalf("qualification args contain %q: %s", forbidden, joined)
-			}
-		}
-	}
-	if _, err := fixerQualificationArgs("linux/amd64", "registry.example/wolf/fixer:latest", "base", "none"); err == nil {
-		t.Fatal("mutable fixer reference was accepted")
-	}
-}
-
-func TestFixerQualificationReportDecoderRejectsUnknownAndTrailingJSON(t *testing.T) {
-	report := qualification.Report{
-		SchemaVersion: qualification.SchemaVersion, Variant: "base", AuthMode: "none",
-		InstalledCLIs: []string{}, SelectedTiers: []string{"api"},
-		CompletedChecks: []string{
-			"api-diff-contract", "api-malformed-response-rejected", "cli-boundary",
-			"cli-command-failure-rejected", "cli-malformed-output-rejected",
-			"cli-protocol-success", "cli-timeout-rejected", "missing-provider-rejected",
-			"unauthenticated-api-fallback",
-		},
-	}
-	value, err := json.Marshal(report)
-	if err != nil {
-		t.Fatal(err)
-	}
-	decoded, err := decodeFixerQualificationReport(value)
-	if err != nil || qualification.ValidateReport(decoded, "base", "none") != nil {
-		t.Fatalf("valid report rejected: %v", err)
-	}
-	if _, err := decodeFixerQualificationReport(append(value, []byte(` {}`)...)); err == nil {
-		t.Fatal("trailing JSON was accepted")
-	}
-	unknown := append(value[:len(value)-1], []byte(`,"unexpected":true}`)...)
-	if _, err := decodeFixerQualificationReport(unknown); err == nil {
-		t.Fatal("unknown report field was accepted")
 	}
 }
