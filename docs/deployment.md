@@ -1,7 +1,8 @@
 # Deploying The Wolf
 
-Wolf ships as a Docker Compose stack. This guide covers running it on a public
-server with TLS, and the hardened Docker-access path.
+Wolf Community ships as a Docker Compose stack. This guide covers running it on a
+public server with TLS, and the hardened Docker-access path. Kubernetes and Helm
+packaging is part of Wolf Enterprise (see [Kubernetes](#kubernetes)).
 
 ## TL;DR
 
@@ -26,7 +27,7 @@ Queue-mode API usage, one-shot Git/SSH sources, credentials, idempotency, SSE,
 and result retrieval are documented in
 [`remote-scanning-api.md`](remote-scanning-api.md).
 
-Exact-image API/worker qualification across native, Compose, and Kind
+Exact-image API/worker qualification across native and Compose
 topologies is documented in
 [`remote-scan-deployment-qualification.md`](remote-scan-deployment-qualification.md).
 
@@ -47,7 +48,7 @@ address, not loopback: use its assigned stable address, or a dedicated subnet
 containing only trusted proxy hops. Do not copy loopback values for a container
 proxy, trust all private networks, or use `0.0.0.0/0` / `::/0`. Compose passes the
 variable from `.env`; native deployments set it in the API service environment.
-Helm can supply it through `extraEnv`.
+The Wolf Enterprise Helm chart supplies it through `extraEnv`.
 
 The default is empty: no forwarded addresses or protocols are trusted. Invalid
 configuration disables all proxy trust and emits a startup warning. Restart the
@@ -172,80 +173,14 @@ key to bypass the error: a new encryption key cannot decrypt stored credentials,
 and a changed JWT key invalidates existing tokens. Planned key rotation and
 versioned encryption migration remain tracked in PLAN G04.
 
-## Kubernetes native scanner Jobs
+## Kubernetes
 
-The Helm chart in `deploy/helm/wolf` deploys the API, PostgreSQL, durable scan
-workers, RWX workspace/artifact claims, least-privilege service accounts/RBAC,
-probes, NetworkPolicies, and optional worker autoscaling. Scanner tools run as
-native per-tool Kubernetes Jobs; there is no Docker socket or DinD.
-
-Requirements:
-
-- A Kubernetes cluster with a default or explicitly selected RWX storage class.
-- PostgreSQL. SQLite is intentionally rejected for Kubernetes workers.
-- Scanner images reachable by cluster nodes.
-- Immutable SHA-256 digests for the Wolf control-plane and PostgreSQL images.
-- A 32-byte master key encoded as 64 hexadecimal characters.
-- Worker egress to the Kubernetes API, PostgreSQL, DNS, and approved Git/SSH
-  sources. Scanner Jobs are default-denied; only tools classified as
-  network-required receive the chart's limited egress policy.
-
-Install:
-
-```bash
-helm upgrade --install wolf deploy/helm/wolf \
-  --namespace wolf --create-namespace \
-  --set-string masterKey="$(openssl rand -hex 32)" \
-  --set-string postgres.password="REPLACE_WITH_A_SECRET" \
-  --set-string image.digest="sha256:REPLACE_WITH_64_HEX_CHARACTERS" \
-  --set-string postgres.digest="sha256:REPLACE_WITH_64_HEX_CHARACTERS" \
-  --set workspace.storageClassName="rwx-storage-class" \
-  --set artifacts.storageClassName="rwx-storage-class"
-```
-
-For a headless deployment, add `--set apiOnly=true`. Set
-`image.repository`/`image.digest` for Wolf and
-`scanner.defaultImage`/`scanner.jvmImage`/`scanner.rustImage`/
-`scanner.codeqlImage` for scanner images in your registry mirror.
-Set `scanner.dockerHubMirror=mirror.gcr.io` to route Docker Hub-hosted
-third-party scanner images through Google's public Docker Hub cache. That cache
-does not contain every image/tag, so authenticated Docker Hub pulls or a
-private pull-through cache are still the reliable options for strict
-production environments.
-The chart refuses a tag-only Wolf or PostgreSQL image by default.
-`image.allowMutableTag` and `postgres.allowMutableImage` are development-only
-escape hatches and should not be enabled in a qualified environment.
-
-Ingress is off by default. The API NetworkPolicy already allows TCP 8778, so
-enabling Ingress does not require a NetworkPolicy change:
-
-```bash
-helm upgrade --install wolf deploy/helm/wolf \
-  --namespace wolf --create-namespace \
-  --set-string masterKey="$(openssl rand -hex 32)" \
-  --set-string postgres.password="REPLACE_WITH_A_SECRET" \
-  --set-string image.digest="sha256:REPLACE_WITH_64_HEX_CHARACTERS" \
-  --set-string postgres.digest="sha256:REPLACE_WITH_64_HEX_CHARACTERS" \
-  --set ingress.enabled=true \
-  --set-string ingress.className=nginx \
-  --set-json 'ingress.hosts=[{"host":"wolf.example.com","paths":[{"path":"/","pathType":"Prefix"}]}]'
-```
-
-Network-required scanner Jobs also default to no egress. Populate
-`networkPolicy.scannerEgressCIDRs` with the smallest approved destination set,
-including the cluster DNS resolver CIDR where DNS is required. A port-only
-all-destination scanner egress rule is never generated.
-
-The API service account has token automount disabled and no scanner-Job RBAC.
-Only the worker service account may create, inspect, and delete Jobs and read
-pod status/logs. Scanner Jobs use a separate service account with token
-automount disabled, non-root execution, read-only roots, dropped capabilities,
-no privilege escalation, RuntimeDefault seccomp, read-only source mounts, and
-bounded resources/timeouts.
-
-The worker reconciles abandoned Jobs at startup using scan/tool/attempt/lease
-labels. Completed Jobs are foreground-deleted after result collection and also
-carry a TTL as a final cleanup backstop.
+Community deploys with Docker Compose (above). Kubernetes and Helm packaging is
+part of Wolf Enterprise: the Helm chart, its security render checks, and the
+kind-cluster remote-scan qualification live in the private
+`AlphaBravoCompany/wolf-enterprise` repository and are delivered with the
+Enterprise image under a commercial agreement. On Kubernetes, scanner tools run
+as native per-tool Jobs and the API never mounts a Docker socket.
 
 ## Scanner release factory
 
@@ -257,7 +192,7 @@ through the opt-in `scanner-release` profile. Proposal execution has a separate
 `scanner-release-proposal` profile because its repository write credentials
 are a privileged trust boundary. The profile uses the built-in
 `proposal-runtime` image and `/usr/local/bin/wolf scanner-proposal-executor`;
-it does not require an installation-specific host executable. The Helm chart exposes independent
+it does not require an installation-specific host executable. The Wolf Enterprise Helm chart exposes independent
 `scannerRelease.scheduler.enabled`, `scannerRelease.discovery.enabled`,
 `scannerRelease.proposal.enabled`, `scannerRelease.rollout.enabled`, and
 `scannerRelease.builder.enabled` deployments, all disabled by default.
@@ -265,7 +200,7 @@ it does not require an installation-specific host executable. The Helm chart exp
 The API and UI exposure is controlled independently from those worker
 deployments:
 
-| Compose environment | Helm value | Default | Effect |
+| Compose environment | Helm value (Enterprise chart) | Default | Effect |
 | --- | --- | --- | --- |
 | `WOLF_SCANNER_RELEASE_MODE` | `scannerRelease.mode` | `read_only` | Enables `disabled`, `read_only`, `candidate`, `canary`, or full `stable_control` capability levels. Each level includes the capabilities before it; stable control is never implicit. |
 | `WOLF_SCANNER_LEGACY_BUILD_ENDPOINTS` | `scannerRelease.legacyBuildEndpoints` | `true` | Keeps the deprecated scanner-image build compatibility streams available. `false` returns `410 Gone` with a successor link to durable Custom builds. |
@@ -278,7 +213,7 @@ while it migrates. For a new or deliberately staged deployment, begin with
 operations are qualified. `disabled` hides the entire scanner release API
 behind a deterministic `409 scanner_release_mode_restricted` response.
 
-Example staged Helm configuration:
+Example staged Helm configuration (Enterprise chart):
 
 ```yaml
 scannerRelease:
@@ -306,7 +241,7 @@ when image verification is enabled without its trust policy. See
 for the exact adapter protocol and Compose paths.
 
 The standard image ships the immutable discovery manifest and lock under
-`/usr/share/wolf/scanners`. Helm can instead mount an operator-managed ConfigMap.
+`/usr/share/wolf/scanners`. The Enterprise Helm chart can instead mount an operator-managed ConfigMap.
 Production replicas require PostgreSQL, an immutable definition commit, an
 enabled release policy, and dedicated proposal/builder images containing their
 configured shell-free executors. Child-process credentials must be passed only
@@ -350,7 +285,7 @@ for staged enablement, incident response, backup/restore, and disaster
 recovery.
 
 Operator-requested local/push image builds use the separate durable
-[Custom build workflow](scanner-custom-builds.md). Its Compose and Helm worker
+[Custom build workflow](scanner-custom-builds.md). Its Compose and (Enterprise) Helm worker
 are independently opt-in; only that worker receives the custom-build engine
 socket and registry-secret resolution capability.
 

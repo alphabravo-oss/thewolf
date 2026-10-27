@@ -1,8 +1,8 @@
 # Community laptop path: Docker-out-of-Docker (API/worker mount docker.sock).
 # Recommended on shared hosts:
 #   docker compose -f docker-compose.yml -f docker-compose.hardened.yml up -d
-# Kubernetes/Enterprise scans must not mount docker.sock on the API pod
-# (see deploy/helm and wolf-enterprise/deploy/helm-overlay).
+# Kubernetes packaging (Helm) is part of Wolf Enterprise; its scans must not
+# mount docker.sock on the API pod.
 services:
   wolf:
     build:
@@ -220,7 +220,7 @@ services:
           memory: 512M
 
   # Separate fixer Deployment/image so it can scale independently of the
-  # API and scan-workers (same shape as the Helm fixer Deployment).
+  # API and scan-workers (same shape as the Enterprise Helm fixer Deployment).
   # Debian userspace + Claude/Codex/OpenCode, published as
   # ghcr.io/alphabravo-oss/wolf-fixer-engines. Opt in with:
   #   docker compose --profile fixer up -d
@@ -239,7 +239,7 @@ services:
         WOLF_FIXER_BASE_REF: ${WOLF_FIXER_BASE_REF:-wolf-fixer:quality-amd64}
     command: ["fixer"]
     # Match the Alpine API volume owner on this host. The Debian image
-    # defaults to uid 1000; Helm uses that with a dedicated fixer-home PVC.
+    # defaults to uid 1000; the Enterprise Helm chart uses that with a dedicated fixer-home PVC.
     user: "${WOLF_FIXER_UID:-100}:${WOLF_FIXER_GID:-101}"
     group_add:
       - "${DOCKER_GID:-107}"

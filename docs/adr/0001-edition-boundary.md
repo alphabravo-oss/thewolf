@@ -16,7 +16,7 @@ relocated into the private overlay because they look enterprise-grade.
 - All current fix harnesses (Claude, Codex, OpenCode, API, ToolDefinition) plus verification
 - Findings, fingerprints, corroboration, baselines, suppressions, gates, SARIF
 - Local auth, TOTP, API tokens, admin/user roles
-- REST/OpenAPI, CLI, SSE, SQLite, PostgreSQL, Compose, baseline Helm
+- REST/OpenAPI, CLI, SSE, SQLite, PostgreSQL, Compose
 - MCP core, Fix Engine Protocol, and public evidence contracts as they are added
 
 ### Go to Enterprise (`AlphaBravoCompany/wolf-enterprise`)
@@ -25,6 +25,7 @@ relocated into the private overlay because they look enterprise-grade.
 - Attack paths, reachability, private catalogs (not the first-party factory)
 - Org-wide autofix policy, certified fixer images, SIEM/ticketing, extra SCMs
 - Enterprise UI routes composed at private build time
+- Kubernetes/Helm packaging (chart, render security checks, kind remote-scan qualification)
 
 Licensing is capability-based (`enterprise.identity`, …), never a single
 `isEnterprise` boolean. The Community binary never imports Enterprise packages.

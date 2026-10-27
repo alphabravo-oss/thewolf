@@ -1,5 +1,7 @@
 # Scanner release operations runbook
 
+> Kubernetes and Helm packaging is part of Wolf Enterprise. Helm values and chart behavior described in this guide refer to the Enterprise chart (`deploy/helm/wolf` in the private `wolf-enterprise` repository); Community deploys with Docker Compose.
+
 This runbook covers the durable scanner release factory after the database
 migrations are installed. It does not authorize moving a deployment into
 `canary` or `stable_control`; those changes require the qualification evidence

@@ -308,7 +308,7 @@ The worker runs inside one of three independently versioned **engine containers*
 | (in `wolf-fixer-engines`) | xAI **Grok Build** CLI (`grok` 1.0.70, digest-pinned) | `grok login --device-auth` **or** an `xai_key` / `XAI_API_KEY` |
 | `wolf-fixer-api`    | **API** engine via `internal/ai` — CLI-free | `anthropic_key` or `openai_key` |
 
-Compose and Helm default to `ghcr.io/alphabravo-oss/wolf-fixer-engines`, the combined Debian worker. The single-engine images stay independently versioned in the locked scanner/fixer release; `wolf-fixer-engines` is published alongside them so the worker can scale on its own.
+Compose defaults to `ghcr.io/alphabravo-oss/wolf-fixer-engines`, the combined Debian worker. The single-engine images stay independently versioned in the locked scanner/fixer release; `wolf-fixer-engines` is published alongside them so the worker can scale on its own.
 
 The engine chain prefers an available, **authenticated** CLI (OAuth session *or* API key) and falls back to the API engine. The API engine returns a unified diff that wolf applies with `git apply`. OpenCode is a first-class engine; the dedicated image is optional (build `fixer/Dockerfile.opencode` against the locked fixer base). A repo-shipped `opencode.json` is stripped from the worktree before the run.
 
@@ -349,7 +349,7 @@ The Wolf is designed to live inside your perimeter and your governance model.
 
 | | |
 |---|---|
-| **Deployment** | Single Go binary or Docker Compose. Runs on your servers, your cloud, or fully air-gapped. |
+| **Deployment** | Single Go binary or Docker Compose. Runs on your servers, your cloud, or fully air-gapped. Kubernetes/Helm packaging is part of Wolf Enterprise. |
 | **Data store** | SQLite for a team; **PostgreSQL** for scale and high availability. |
 | **Access control** | **Role-based** (admin / user) with per-user data isolation, **two-factor auth** (TOTP, optionally mandatory org-wide), console sessions, and scoped, revocable **API keys** (`verb:resource` + `admin`). See [`docs/authentication.md`](docs/authentication.md). |
 | **Audit** | A **classified, security-aware audit log** — semantic event type, category, severity, actor, source IP, and result — searchable and filterable. See [`docs/audit.md`](docs/audit.md). |
