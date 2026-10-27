@@ -1,6 +1,6 @@
 // Package auth resolves LLM credentials for the autonomous fixer: stored
 // API keys (Anthropic / OpenAI) and/or an OAuth session on the worker host.
-// Either is enough to run Claude, Codex, or OpenCode.
+// Either is enough to run Claude, Codex, OpenCode, or Grok Build.
 package auth
 
 import (
@@ -114,6 +114,7 @@ func ProbeAll(ctx context.Context, creds Credentials) []EngineStatus {
 		probeCLI(ctx, "claude-code", "claude", creds),
 		probeCLI(ctx, "codex", "codex", creds),
 		probeCLI(ctx, "opencode", "opencode", creds),
+		probeCLI(ctx, "grok-build", "grok", creds),
 		{
 			Name:      "grok",
 			Available: creds.XAIKey != "",
@@ -227,6 +228,9 @@ func loginSpec(command string) *loginCmd {
 		spec = loginCmd{Args: []string{"codex", "login"}, Paths: []string{"~/.codex"}}
 	case "opencode":
 		spec = loginCmd{Args: []string{"opencode", "auth", "login"}, Paths: []string{"~/.local/share/opencode/auth.json", "~/.config/opencode"}}
+	case "grok":
+		// Device-code login works on headless fixer workers.
+		spec = loginCmd{Args: []string{"grok", "login", "--device-auth"}, Paths: []string{"~/.grok/auth.json"}}
 	default:
 		return nil
 	}
@@ -276,6 +280,11 @@ func oauthAccount(ctx context.Context, command string) (string, bool) {
 			return "opencode session", true
 		}
 		return "", false
+	case "grok":
+		if spec := loginSpec("grok"); spec != nil && sessionFilesPresent(spec.Paths) {
+			return "grok session", true
+		}
+		return "", false
 	default:
 		return "", false
 	}
@@ -320,8 +329,10 @@ func Login(ctx context.Context, engine string) error {
 		command = "codex"
 	case "opencode":
 		command = "opencode"
+	case "grok-build", "grok":
+		command = "grok"
 	default:
-		return fmt.Errorf("unknown engine %q (use claude, codex, or opencode)", engine)
+		return fmt.Errorf("unknown engine %q (use claude, codex, opencode, or grok-build)", engine)
 	}
 	spec := loginSpec(command)
 	if spec == nil {

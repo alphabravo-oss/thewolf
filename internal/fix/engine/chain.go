@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"strings"
 	"sync"
 	"time"
 
@@ -46,6 +47,14 @@ func defaultAuthProbe(ctx context.Context, command string) error {
 		// #nosec G204 -- command is a fixed tool name
 		cmd = plugin.CommandContext(probeCtx, command, "auth", "list")
 		cmd.Stdin = nil
+	case "grok":
+		// `grok models` exits 0 even when signed out; read its answer.
+		// #nosec G204 -- command is a fixed tool name
+		out, err := plugin.CommandContext(probeCtx, command, "models").CombinedOutput()
+		if err != nil || strings.Contains(strings.ToLower(string(out)), "not authenticated") {
+			return fmt.Errorf("grok is not signed in (run: wolf fixer login grok-build)")
+		}
+		return nil
 	default:
 		// #nosec G204 -- command is a configured tool name
 		cmd = plugin.CommandContext(probeCtx, command, "--version")
@@ -124,6 +133,8 @@ func cliCommandFor(name string) string {
 		return "codex"
 	case "opencode":
 		return "opencode"
+	case "grok-build":
+		return "grok"
 	default:
 		return ""
 	}
@@ -176,7 +187,7 @@ func (c *Chain) Next() SubprocessEngine {
 
 // SelectEngine builds the engine chain for a job, ordered:
 //
-//	auto  → [claude-code] → [codex] → [opencode] → [API]
+//	auto  → [claude-code] → [codex] → [opencode] → [grok-build] → [API]
 //
 // An explicit cfg.Engine pins a single tier (no fallback chain): the named CLI,
 // or "api" for the diff-returning API engine. "auto"/"" yields the full
@@ -200,6 +211,7 @@ func SelectEngine(ctx context.Context, cfg ChainConfig) (*Chain, error) {
 			{"claude-code", &ClaudeCode{}},
 			{"codex", &Codex{}},
 			{"opencode", &OpenCode{}},
+			{"grok-build", &GrokBuild{}},
 		} {
 			if cmd := cliCommandFor(c.name); cmd != "" && cliAuthed(ctx, cmd, hasKey(cmd)) {
 				tiers = append(tiers, c.eng)
@@ -210,7 +222,7 @@ func SelectEngine(ctx context.Context, cfg ChainConfig) (*Chain, error) {
 			tiers = append(tiers, NewAPIEngine(cfg.Provider))
 		}
 		if len(tiers) == 0 {
-			return nil, fmt.Errorf("no fix engine available: no authed CLI (claude/codex/opencode) and no API provider configured")
+			return nil, fmt.Errorf("no fix engine available: no authed CLI (claude/codex/opencode/grok) and no API provider configured")
 		}
 		return &Chain{tiers: tiers}, nil
 
@@ -226,6 +238,8 @@ func SelectEngine(ctx context.Context, cfg ChainConfig) (*Chain, error) {
 		return &Chain{tiers: []SubprocessEngine{&Codex{}}}, nil
 	case "opencode":
 		return &Chain{tiers: []SubprocessEngine{&OpenCode{}}}, nil
+	case "grok-build":
+		return &Chain{tiers: []SubprocessEngine{&GrokBuild{}}}, nil
 	case "grok", "xai":
 		if !apiAvailable {
 			return nil, fmt.Errorf("engine %q requested but no xAI API key is configured", cfg.Engine)

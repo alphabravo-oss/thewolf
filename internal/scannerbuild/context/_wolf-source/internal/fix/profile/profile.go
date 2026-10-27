@@ -172,8 +172,23 @@ func Catalog() []Engine {
 			},
 		},
 		{
+			Name:    "grok-build",
+			Command: "grok",
+			Label:   "Grok Build",
+			Auth:    "oauth+api_key",
+			Login:   []string{"grok", "login", "--device-auth"},
+			SessionPaths: []string{
+				"~/.grok/auth.json",
+			},
+			Efforts: efforts,
+			Models: []Model{
+				{ID: "grok-4.6", Label: "Grok 4.6", ContextK: 256, Plan: "pro", Speed: "balanced", Default: true, Provider: "xai"},
+				{ID: "grok-4.5", Label: "Grok 4.5", ContextK: 256, Plan: "pro", Speed: "balanced", Provider: "xai"},
+			},
+		},
+		{
 			Name:  "grok",
-			Label: "Grok (xAI)",
+			Label: "Grok (xAI API)",
 			Auth:  "api_key",
 			Models: []Model{
 				{ID: "grok-4", Label: "Grok 4", ContextK: 256, Plan: "api", Speed: "balanced", Default: true, Provider: "xai"},

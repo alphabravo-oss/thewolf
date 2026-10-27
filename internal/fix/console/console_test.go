@@ -21,6 +21,8 @@ func TestLoginArgs(t *testing.T) {
 		{"claude-code", "claude"},
 		{"codex", "codex"},
 		{"opencode", "opencode"},
+		{"grok", "grok"},
+		{"grok-build", "grok"},
 	}
 	for _, tc := range cases {
 		got, err := LoginArgs(tc.engine)
