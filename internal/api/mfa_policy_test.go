@@ -5,13 +5,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/alphabravocompany/thewolf/internal/auth"
-	"github.com/pquerna/otp/totp"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/alphabravocompany/thewolf/internal/auth"
+	"github.com/pquerna/otp/totp"
 
 	"github.com/alphabravocompany/thewolf/internal/api/routes"
 	"github.com/alphabravocompany/thewolf/internal/auth/apikey"

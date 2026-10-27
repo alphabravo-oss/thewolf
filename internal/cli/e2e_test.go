@@ -16,7 +16,15 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/auth/apikey"
 	"github.com/alphabravocompany/thewolf/internal/db"
 	"github.com/alphabravocompany/thewolf/internal/models"
+	"github.com/alphabravocompany/thewolf/pkg/entitlement"
 )
+
+// remediationGrant is an Enterprise-licensed build for AI remediation.
+type remediationGrant struct{}
+
+func (remediationGrant) Allows(c string) bool {
+	return !strings.HasPrefix(c, "enterprise.") || c == entitlement.Remediation
+}
 
 // startServerFull brings up a real wolf API server backed by an in-memory
 // DB, exposed over httptest, and returns its URL, a JWT for a fresh user,
@@ -28,6 +36,9 @@ func startServerFull(t *testing.T) (url, jwt, userID string, store db.Store) {
 		t.Fatalf("NewSQLite: %v", err)
 	}
 	t.Cleanup(func() { _ = st.Close() })
+	// The CLI covers every endpoint, including Enterprise-only AI remediation.
+	entitlement.SetActive(remediationGrant{})
+	t.Cleanup(func() { entitlement.SetActive(nil) })
 	auth.SetJWTSecret([]byte("test-secret-key-for-jwt-signing"))
 	srv := api.NewServer(st, ":0")
 	ts := httptest.NewServer(srv.Router)

@@ -270,6 +270,8 @@ The Wolf also maps source to tests across **13 languages** for coverage-aware sc
 
 The Wolf can go past *finding* a problem to *proposing the fix* — autonomously, but on a short leash. The autonomous fix engine takes a single finding, has an AI coding agent write a patch, **proves the patch is good**, and hands you a review-ready branch and diff. It never trusts the agent's word for it. Architecture and rationale: [`docs/archive/2026-10-23/superpowers/specs/2026-06-15-autonomous-fix-engine-design.md`](docs/archive/2026-10-23/superpowers/specs/2026-06-15-autonomous-fix-engine-design.md).
 
+> **Wolf Enterprise.** Autonomous AI remediation is an Enterprise capability (`enterprise.remediation`). Community scans, triages, baselines and reports; the fixer worker, its engines (Claude Code, Codex, OpenCode, Grok Build) and the fix queue ship with Wolf Enterprise. In Community the fix and remediation endpoints answer `403 enterprise_required` and the UI shows the feature as Enterprise-only. The rest of this section describes the Enterprise behaviour.
+
 **Off by default.** The entire surface is gated behind one master setting, `autofix_enabled` (default **`false`**). With it off, the execute path returns `403 autofix_disabled`, the worker processes nothing, and the UI surface is dark. Flip it on in **Settings > General** or with `wolf settings set autofix_enabled true`.
 
 **Verified, branch-only, then optional push.** The worker operates in an isolated worktree/clone on a fresh fix branch, commits each kept fix, rescans the branch, can pause for a human between loops, and can push *that* branch for review. It never pushes `main`/`master` or the repo default branch.

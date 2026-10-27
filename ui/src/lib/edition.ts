@@ -50,6 +50,14 @@ export function useEdition() {
   });
 }
 
+/** Capability for autonomous AI fixing; Community scans and reports, Enterprise fixes. */
+export const REMEDIATION = "enterprise.remediation";
+
+/** Whether the running edition grants a capability (false until loaded). */
+export function entitled(ed: EditionInfo | undefined, capability: string) {
+  return ed?.entitlements?.[capability] === true;
+}
+
 export function isEnterprise(ed?: { edition?: string; overlay?: Rev }) {
   return ed?.edition === "enterprise" || !!ed?.overlay;
 }
