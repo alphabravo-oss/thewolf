@@ -18,7 +18,7 @@ import (
 	"time"
 
 	"github.com/alphabravocompany/thewolf/internal/db"
-	gitpkg "github.com/alphabravocompany/thewolf/internal/fix/git"
+	gitpkg "github.com/alphabravocompany/thewolf/internal/gitops"
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/remote"
 	"github.com/alphabravocompany/thewolf/internal/sshclient"

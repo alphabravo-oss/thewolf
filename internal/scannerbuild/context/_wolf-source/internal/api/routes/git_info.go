@@ -6,7 +6,7 @@ import (
 	"os"
 
 	"github.com/alphabravocompany/thewolf/internal/api/response"
-	gitpkg "github.com/alphabravocompany/thewolf/internal/fix/git"
+	gitpkg "github.com/alphabravocompany/thewolf/internal/gitops"
 )
 
 // GitInfo handles GET /api/git-info?path=... — given an arbitrary directory,
