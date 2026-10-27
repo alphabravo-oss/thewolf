@@ -31,7 +31,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	gitpkg "github.com/alphabravocompany/thewolf/internal/fix/git"
+	gitpkg "github.com/alphabravocompany/thewolf/internal/gitops"
 	"github.com/alphabravocompany/thewolf/internal/models"
 	repocache "github.com/alphabravocompany/thewolf/internal/repo"
 	"github.com/alphabravocompany/thewolf/internal/scantarget"

@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	gitpkg "github.com/alphabravocompany/thewolf/internal/fix/git"
+	gitpkg "github.com/alphabravocompany/thewolf/internal/gitops"
 )
 
 // LocalInfo contains git information about a local repository.
