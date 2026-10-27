@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { describeScannerChannel } from "./_authed.settings";
+import { describeScannerChannel } from "./scanner-utils";
 
 describe("describeScannerChannel", () => {
   it("labels the moving release channels", () => {
