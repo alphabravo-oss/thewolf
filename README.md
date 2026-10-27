@@ -309,7 +309,7 @@ The Wolf is designed to live inside your perimeter and your governance model.
 
 | | |
 |---|---|
-| **Deployment** | Single Go binary or Docker Compose. Runs on your servers, your cloud, or fully air-gapped. |
+| **Deployment** | Single Go binary or Docker Compose. Runs on your servers, your cloud, or fully air-gapped. Kubernetes/Helm packaging is part of Wolf Enterprise. |
 | **Data store** | SQLite for a team; **PostgreSQL** for scale and high availability. |
 | **Access control** | **Role-based** (admin / user) with per-user data isolation, **two-factor auth** (TOTP, optionally mandatory org-wide), console sessions, and scoped, revocable **API keys** (`verb:resource` + `admin`). See [`docs/authentication.md`](docs/authentication.md). |
 | **Audit** | A **classified, security-aware audit log** — semantic event type, category, severity, actor, source IP, and result — searchable and filterable. See [`docs/audit.md`](docs/audit.md). |

@@ -1,5 +1,7 @@
 # Scanner release offline export and import
 
+> Kubernetes and Helm packaging is part of Wolf Enterprise. Helm values and chart behavior described in this guide refer to the Enterprise chart (`deploy/helm/wolf` in the private `wolf-enterprise` repository); Community deploys with Docker Compose.
+
 Wolf can move an immutable scanner release between connected and air-gapped
 installations without loading the bundle into API or CLI memory.
 

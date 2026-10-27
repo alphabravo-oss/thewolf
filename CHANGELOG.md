@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Move Kubernetes Helm packaging, its security render checks and the kind remote-scan
+  qualification to Wolf Enterprise. Community deploys with Docker Compose; the
+  native and Compose remote-scan qualification lanes remain.
+
 - Keep scan totals, quality gates and finding detail on one suppression projection
   per operation. Refresh live manifest counts after rule/default edits while retaining
   recorded producer metadata and immutable historical downloads.

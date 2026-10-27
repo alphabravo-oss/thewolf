@@ -12,7 +12,7 @@ and `no-new-privileges`. Tools that set `network_required: true` in
 | `WOLF_SCAN_ISOLATION` | `standard` | `standard`/`strict` = deny-by-default; `relaxed` = legacy all-bridge |
 
 Kubernetes scan Jobs already run without docker.sock on the API pod
-(`WOLF_SCAN_RUNTIME=kubernetes` on workers). Helm NetworkPolicy
+(`WOLF_SCAN_RUNTIME=kubernetes` on workers). The Wolf Enterprise Helm NetworkPolicy
 `*-scanner-network-required` is egress-empty unless you set
 `networkPolicy.scannerEgressCIDRs`.
 

@@ -1,8 +1,8 @@
 # Community laptop path: Docker-out-of-Docker (API/worker mount docker.sock).
 # Recommended on shared hosts:
 #   docker compose -f docker-compose.yml -f docker-compose.hardened.yml up -d
-# Kubernetes/Enterprise scans must not mount docker.sock on the API pod
-# (see deploy/helm and wolf-enterprise/deploy/helm-overlay).
+# Kubernetes packaging (Helm) is part of Wolf Enterprise; its scans must not
+# mount docker.sock on the API pod.
 services:
   wolf:
     build:

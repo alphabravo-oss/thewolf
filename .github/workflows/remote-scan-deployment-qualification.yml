@@ -9,7 +9,6 @@ on:
     paths:
       - ".github/workflows/remote-scan-deployment-qualification.yml"
       - "scripts/e2e/remote-scan-*.sh"
-      - "deploy/helm/wolf/**"
       - "docker-compose.yml"
       - "scanners/ci/test-remote-scan-deployment-workflow.py"
   workflow_dispatch:
@@ -47,9 +46,7 @@ jobs:
           python3 scanners/ci/test-remote-scan-deployment-workflow.py
           shellcheck scripts/e2e/remote-scan-api-smoke.sh \
             scripts/e2e/remote-scan-native.sh \
-            scripts/e2e/remote-scan-compose.sh \
-            scripts/e2e/remote-scan-kind.sh
-          bash deploy/helm/wolf/tests/render-security.sh
+            scripts/e2e/remote-scan-compose.sh
 
   prepare:
     name: Bind protected exact-image qualification
@@ -180,53 +177,9 @@ jobs:
           if-no-files-found: error
           retention-days: 365
 
-  kind:
-    name: Kind PostgreSQL API, worker, and scanner Jobs
-    needs: prepare
-    runs-on: ubuntu-24.04
-    timeout-minutes: 45
-    environment: scanner-release-qualification
-    permissions:
-      contents: read
-      packages: read
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
-        with:
-          go-version-file: go.mod
-          cache: false
-      - name: Install pinned Kind and verify deployment tools
-        run: |
-          go install sigs.k8s.io/kind@v0.30.0
-          kind version
-          helm version
-          kubectl version --client=true
-      - name: Run Kind exact-image qualification and rollout recovery
-        env:
-          WOLF_RUN_REMOTE_SCAN_KIND_E2E: "1"
-          WOLF_E2E_RUNTIME_IMAGE: ${{ needs.prepare.outputs.runtime_image }}
-          WOLF_E2E_SCANNER_IMAGE: ${{ needs.prepare.outputs.scanner_image }}
-          WOLF_E2E_POSTGRES_IMAGE: ${{ needs.prepare.outputs.postgres_image }}
-          WOLF_E2E_KIND_MEMORY_PVS: "0"
-        run: |
-          mkdir -p build/remote-scan-qualification
-          scripts/e2e/remote-scan-kind.sh |
-            tee build/remote-scan-qualification/kind-postgres.json
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: remote-scan-${{ needs.prepare.outputs.qualification_id }}-kind-postgres
-          path: build/remote-scan-qualification/kind-postgres.json
-          if-no-files-found: error
-          retention-days: 365
-
   closure:
     name: Require complete deployment matrix
-    needs: [prepare, native, compose, kind]
+    needs: [prepare, native, compose]
     if: always() && needs.prepare.result == 'success'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -236,16 +189,15 @@ jobs:
           pattern: remote-scan-${{ needs.prepare.outputs.qualification_id }}-*
           path: build/remote-scan-qualification
           merge-multiple: true
-      - name: Verify the exact five-receipt closure
+      - name: Verify the exact four-receipt closure
         env:
           NATIVE_RESULT: ${{ needs.native.result }}
           COMPOSE_RESULT: ${{ needs.compose.result }}
-          KIND_RESULT: ${{ needs.kind.result }}
         run: |
-          [[ "$NATIVE_RESULT" == success && "$COMPOSE_RESULT" == success && "$KIND_RESULT" == success ]]
+          [[ "$NATIVE_RESULT" == success && "$COMPOSE_RESULT" == success ]]
           mapfile -t receipts < <(find build/remote-scan-qualification -type f -name '*.json' | sort)
-          [[ "${#receipts[@]}" -eq 5 ]]
-          jq -s -e 'length == 5 and all(.[]; .result == "passed" and .restartRecoveryVerified == true)' \
+          [[ "${#receipts[@]}" -eq 4 ]]
+          jq -s -e 'length == 4 and all(.[]; .result == "passed" and .restartRecoveryVerified == true)' \
             "${receipts[@]}" >/dev/null
           sha256sum "${receipts[@]}" >build/remote-scan-qualification/closure.sha256
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

@@ -32,7 +32,7 @@ SCANNERS_REF   := $(SCANNERS_IMAGE):$(SCANNERS_TAG)
 GOLANGCI_LINT := $(shell command -v golangci-lint 2>/dev/null)
 AIR           := $(shell command -v air 2>/dev/null || echo $(shell go env GOPATH)/bin/air)
 
-.PHONY: all build test lint vet fmt ui-build dev dev-api dev-ui docker docker-buildx docker-up docker-down clean help helm-validate \
+.PHONY: all build test lint vet fmt ui-build dev dev-api dev-ui docker docker-buildx docker-up docker-down clean help \
         scanners-build scanners-buildx scanners-buildx-all scanners-buildx-setup scanners-smoke scanners-push scanners-validate scanners-quality scanners-docs scanners-docs-check scanners-upstream-check scanners-bump scanners-os-packages-check scanners-os-packages-refresh scanners-vulnerability-dbs-check scanners-vulnerability-dbs-refresh scanners-sync scanners-context-check dev-scanners test-integration
 
 ## all: Build everything (Go binary + UI)
@@ -93,10 +93,6 @@ ui-build:
 	else \
 		echo "==> No UI package.json found at $(UI_DIR), skipping"; \
 	fi
-
-## helm-validate: Lint and verify immutable-image and network-policy chart invariants
-helm-validate:
-	bash deploy/helm/wolf/tests/render-security.sh
 
 ## ui-dev-install: One-time install for local dev (after a fresh clone)
 ui-dev-install:
