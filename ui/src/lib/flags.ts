@@ -3,6 +3,7 @@
 // live in one place and share the ["settings"] query cache.
 import { useQuery } from "@tanstack/react-query";
 import { api } from "./api";
+import { entitled, REMEDIATION, useEdition } from "./edition";
 
 type SettingRow = { key: string; value: string };
 
@@ -24,10 +25,22 @@ export function useSettingsMap() {
   });
 }
 
-// useFlag returns whether a boolean setting is "true". It defaults to false
-// while loading and on error, so a gated surface stays hidden until the flag is
-// confirmed on (no flash of an off-by-default feature).
+// Flags that also need an edition capability. Autonomous fixing is Enterprise.
+const FLAG_CAPABILITY: Record<string, string> = { autofix_enabled: REMEDIATION };
+
+// useFlag returns whether a boolean setting is "true" (and, for Enterprise
+// features, that the edition grants it). It defaults to false while loading and
+// on error, so a gated surface stays hidden until the flag is confirmed on (no
+// flash of an off-by-default feature).
 export function useFlag(key: string) {
   const q = useSettingsMap();
-  return { enabled: !q.isError && q.data?.[key] === "true", isLoading: q.isLoading, isError: q.isError, refetch: q.refetch };
+  const edition = useEdition();
+  const capability = FLAG_CAPABILITY[key];
+  const gated = capability !== undefined;
+  return {
+    enabled: !q.isError && q.data?.[key] === "true" && (!gated || entitled(edition.data, capability)),
+    isLoading: q.isLoading || (gated && edition.isLoading),
+    isError: q.isError || (gated && edition.isError),
+    refetch: () => { void q.refetch(); if (gated) void edition.refetch(); },
+  };
 }

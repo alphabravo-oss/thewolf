@@ -29,6 +29,7 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/scannerobservability"
 	"github.com/alphabravocompany/thewolf/internal/wolflog"
 	"github.com/alphabravocompany/thewolf/pkg/edition"
+	"github.com/alphabravocompany/thewolf/pkg/entitlement"
 )
 
 // Re-export response types for backward compatibility.
@@ -469,10 +470,12 @@ func NewServer(store db.Store, addr string) *Server {
 			})
 
 			r.Route("/remediations", func(r chi.Router) {
+				r.Use(requireEntitlement(entitlement.Remediation, "AI remediation"))
 				r.With(wFixes).Post("/{id}/accept", routes.AcceptRemediation)
 			})
 
 			r.Route("/fixes", func(r chi.Router) {
+				r.Use(requireEntitlement(entitlement.Remediation, "AI remediation"))
 				r.With(rFixes).Get("/", routes.ListFixes)
 				r.With(wFixes).Post("/", routes.CreateFix)
 				r.With(rFixes).Get("/engines", routes.ListFixEngines)

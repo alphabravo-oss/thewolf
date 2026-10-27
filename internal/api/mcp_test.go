@@ -24,6 +24,7 @@ func (token bearerTransport) RoundTrip(r *http.Request) (*http.Response, error) 
 }
 
 func TestMCPClientAuthorizationAndExecution(t *testing.T) {
+	grantRemediation(t)
 	t.Setenv("WOLF_MCP_ENABLED", "1")
 	t.Setenv("WOLF_SCAN_EXECUTION_MODE", "queued")
 	srv, store, jwt := newTestServer(t)
