@@ -213,6 +213,45 @@ func TestCreateGitHubRepoStoresSelectedCredential(t *testing.T) {
 	}
 }
 
+func TestCreateGitRepoRequiresHostBoundCredential(t *testing.T) {
+	r, store, token := setupRepoRouter(t)
+	defer store.Close()
+
+	secrets.SetMasterKey([]byte("0123456789abcdef0123456789abcdef"))
+	user, err := store.GetUserByEmail(context.Background(), "repouser@test.com")
+	if err != nil {
+		t.Fatalf("GetUserByEmail: %v", err)
+	}
+	encrypted, _ := secrets.Encrypt("glpat-selected")
+	for id, hosts := range map[string]string{"bound": `["gitlab.example.com"]`, "other-host": `["gitlab.com"]`, "unbound": ""} {
+		if err := store.CreateSecret(context.Background(), &models.Secret{
+			ID: id, UserID: user.ID, KeyType: models.KeyTypeGitLabToken, KeyName: id,
+			EncryptedValue: encrypted, AllowedHosts: hosts,
+		}); err != nil {
+			t.Fatalf("CreateSecret: %v", err)
+		}
+	}
+	create := func(secretID string) int {
+		body, _ := json.Marshal(map[string]string{
+			"name": "app-" + secretID, "source_type": "git",
+			"source_path": "https://gitlab.example.com/team/" + secretID + ".git", "credential_secret_id": secretID,
+		})
+		req := httptest.NewRequest(http.MethodPost, "/api/repos", bytes.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		return w.Code
+	}
+	if code := create("bound"); code != http.StatusCreated {
+		t.Fatalf("host-bound gitlab credential: got %d, want 201", code)
+	}
+	for _, id := range []string{"other-host", "unbound", "missing"} {
+		if code := create(id); code != http.StatusBadRequest {
+			t.Errorf("credential %q: got %d, want 400", id, code)
+		}
+	}
+}
+
 // TestRepoDedup verifies that adding a repo whose path already exists
 // returns the existing repo (with deduplicated=true) instead of creating
 // a second row — including trailing-slash-insensitive matching.

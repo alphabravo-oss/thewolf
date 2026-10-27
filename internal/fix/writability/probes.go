@@ -12,6 +12,7 @@ import (
 
 	"github.com/alphabravocompany/thewolf/internal/db"
 	"github.com/alphabravocompany/thewolf/internal/github"
+	"github.com/alphabravocompany/thewolf/internal/gitlab"
 	gitpkg "github.com/alphabravocompany/thewolf/internal/gitops"
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/internal/remote"
@@ -24,6 +25,7 @@ func DefaultProbes(_ db.Store) Probes {
 	return Probes{
 		Local:  localFSProbe{},
 		GitHub: githubAPIProbe{},
+		GitLab: gitlabAPIProbe{},
 		// Enable the SSH probe only when remote workspace preparation exists.
 		ParseGitHubSource: scantarget.ParseGitHubSource,
 	}
@@ -74,6 +76,21 @@ func (githubAPIProbe) PushInfo(ctx context.Context, token, owner, repo string) (
 		return GitHubPushInfo{}, err
 	}
 	return GitHubPushInfo{CanPush: info.CanPush, Archived: info.Archived}, nil
+}
+
+// gitlabAPIProbe asks the project's GitLab instance what the token can do.
+type gitlabAPIProbe struct{}
+
+func (gitlabAPIProbe) ProjectInfo(ctx context.Context, host, token, project string) (GitLabProjectInfo, error) {
+	client, err := gitlab.New(host, token)
+	if err != nil {
+		return GitLabProjectInfo{}, err
+	}
+	info, err := client.Project(ctx, project)
+	if err != nil {
+		return GitLabProjectInfo{}, err
+	}
+	return GitLabProjectInfo{CanPush: info.CanPush, Archived: info.Archived, MergeRequests: info.MergeRequestsEnabled}, nil
 }
 
 // sshRunnerProbe runs `git push --dry-run` against the remote work tree over

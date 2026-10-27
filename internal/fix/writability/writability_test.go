@@ -358,3 +358,82 @@ func TestGitHubProbeErrorDoesNotExposeCredential(t *testing.T) {
 		t.Fatalf("unsafe permission response: %+v", result)
 	}
 }
+
+// --- gitlab ----------------------------------------------------------------
+
+type stubGitLab struct {
+	info                          GitLabProjectInfo
+	err                           error
+	gotHost, gotToken, gotProject string
+}
+
+func (s *stubGitLab) ProjectInfo(_ context.Context, host, token, project string) (GitLabProjectInfo, error) {
+	s.gotHost, s.gotToken, s.gotProject = host, token, project
+	return s.info, s.err
+}
+
+func glSecret(t *testing.T, value, hosts string) models.Secret {
+	t.Helper()
+	sec := ghSecret(t, value)
+	sec.KeyType = models.KeyTypeGitLabToken
+	sec.AllowedHosts = hosts
+	return sec
+}
+
+func TestCheck_GitLab(t *testing.T) {
+	repoFor := func(url string) *models.Repo {
+		return &models.Repo{UserID: "u1", SourceType: models.SourceTypeGit, SourcePath: url, CredentialSecretID: "cred"}
+	}
+	good := credStore{byID: map[string]models.Secret{"cred": glSecret(t, "glpat-secret", `["gitlab.example.com"]`)}}
+	url := "https://gitlab.example.com:8443/team/sub/app.git"
+	tests := []struct {
+		name         string
+		repo         *models.Repo
+		store        credStore
+		info         GitLabProjectInfo
+		probeErr     error
+		wantWritable bool
+		wantCanPush  bool
+		wantReason   string
+	}{
+		{"can push", repoFor(url), good, GitLabProjectInfo{CanPush: true, MergeRequests: true}, nil, true, true, "can push"},
+		{"reporter role", repoFor(url), good, GitLabProjectInfo{MergeRequests: true}, nil, true, false, "Developer"},
+		{"mrs disabled", repoFor(url), good, GitLabProjectInfo{CanPush: true}, nil, true, false, "merge requests are disabled"},
+		{"archived", repoFor(url), good, GitLabProjectInfo{CanPush: true, Archived: true, MergeRequests: true}, nil, false, false, "archived"},
+		{"no credential", &models.Repo{UserID: "u1", SourceType: models.SourceTypeGit, SourcePath: url}, good, GitLabProjectInfo{}, nil, false, false, "select a gitlab_token"},
+		{"ssh url", repoFor("ssh://git@gitlab.example.com/team/app.git"), good, GitLabProjectInfo{}, nil, false, false, "https"},
+		{"wrong host binding", repoFor("https://other.example.com/team/app.git"), good, GitLabProjectInfo{}, nil, false, false, "not allowed for host other.example.com"},
+		{"probe error hides token", repoFor(url), good, GitLabProjectInfo{}, errors.New("401 glpat-secret rejected"), false, false, "[REDACTED]"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			probe := &stubGitLab{info: tt.info, err: tt.probeErr}
+			res := Check(t.Context(), tt.repo, tt.store, Probes{GitLab: probe})
+			if res.Writable != tt.wantWritable || res.CanPush != tt.wantCanPush || !strings.Contains(res.Reason, tt.wantReason) {
+				t.Fatalf("got %+v; want writable=%v canPush=%v reason~%q", res, tt.wantWritable, tt.wantCanPush, tt.wantReason)
+			}
+			if strings.Contains(res.Reason, "glpat-secret") {
+				t.Fatal("token leaked into reason")
+			}
+		})
+	}
+	probe := &stubGitLab{info: GitLabProjectInfo{CanPush: true, MergeRequests: true}}
+	Check(t.Context(), repoFor(url), good, Probes{GitLab: probe})
+	if probe.gotHost != "gitlab.example.com:8443" || probe.gotProject != "team/sub/app" || probe.gotToken != "glpat-secret" {
+		t.Fatalf("probe args = %q %q %q", probe.gotHost, probe.gotProject, probe.gotToken)
+	}
+}
+
+func TestGitLabTokenRejectsOtherOwnerAndType(t *testing.T) {
+	foreign := glSecret(t, "tok", `["gitlab.com"]`)
+	foreign.UserID = "someone-else"
+	wrongType := ghSecret(t, "tok")
+	wrongType.AllowedHosts = `["gitlab.com"]`
+	store := credStore{byID: map[string]models.Secret{"foreign": foreign, "wrong": wrongType}}
+	for _, id := range []string{"foreign", "wrong", "missing"} {
+		repo := &models.Repo{UserID: "u1", SourceType: models.SourceTypeGitLab, SourcePath: "https://gitlab.com/g/p.git", CredentialSecretID: id}
+		if token, reason := GitLabToken(t.Context(), store, repo); token != "" || reason == "" {
+			t.Fatalf("%s accepted: %q", id, reason)
+		}
+	}
+}
