@@ -325,7 +325,7 @@ func TestGitHubCloneURL(t *testing.T) {
 }
 
 func TestGitHubAuthEnv_StoresTokenOutsideCloneArgs(t *testing.T) {
-	env, cleanup, err := githubAuthEnv(t.TempDir(), "tok'quoted")
+	env, cleanup, err := tokenAuthEnv(t.TempDir(), "oauth2", "tok'quoted")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -336,6 +336,34 @@ func TestGitHubAuthEnv_StoresTokenOutsideCloneArgs(t *testing.T) {
 	}
 	if !strings.Contains(joined, "GIT_ASKPASS=") || !strings.Contains(joined, "GIT_TERMINAL_PROMPT=0") {
 		t.Fatalf("missing git askpass env: %s", joined)
+	}
+	var askpass string
+	for _, entry := range env {
+		if v, ok := strings.CutPrefix(entry, "GIT_ASKPASS="); ok {
+			askpass = v
+		}
+	}
+	out, err := exec.Command(askpass, "Username for 'https://gitlab.example.com': ").Output()
+	if err != nil || strings.TrimSpace(string(out)) != "oauth2" {
+		t.Fatalf("askpass username = %q, %v; want oauth2", out, err)
+	}
+}
+
+func TestTokenUsernameAndCloneURLForGitLab(t *testing.T) {
+	gl := &models.Repo{SourceType: models.SourceTypeGitLab, SourcePath: "https://gitlab.example.com:8443/team/sub/app.git"}
+	if tokenUsername(gl) != "oauth2" || tokenUsername(&models.Repo{SourceType: models.SourceTypeGit}) != "oauth2" {
+		t.Fatal("git/gitlab sources must use the oauth2 username")
+	}
+	if tokenUsername(&models.Repo{SourceType: models.SourceTypeGitHub}) != "x-access-token" {
+		t.Fatal("github keeps x-access-token")
+	}
+	for _, bad := range []string{"ssh://git@gitlab.example.com/team/app.git", "http://gitlab.example.com/team/app.git", "https://user:pw@gitlab.example.com/team/app.git"} {
+		if _, err := cloneURLFor(t.Context(), &models.Repo{SourceType: models.SourceTypeGit, SourcePath: bad}); err == nil {
+			t.Errorf("accepted %q", bad)
+		}
+	}
+	if _, err := cloneURLFor(t.Context(), &models.Repo{SourceType: models.SourceTypeGit, SourcePath: "https://localhost/team/app.git"}); err == nil {
+		t.Error("loopback host must be refused by the Git network boundary")
 	}
 }
 

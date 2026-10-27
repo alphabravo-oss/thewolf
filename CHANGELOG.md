@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- Let AI remediation (Enterprise) fix GitLab projects on gitlab.com or a self-hosted
+  instance: Git/GitLab repos accept a host-bound `gitlab_token` credential, the
+  writability preflight checks the token's role through the GitLab API, and fix
+  branches clone and push with it. `WOLF_GIT_CA_BUNDLE` adds a private CA for
+  self-hosted servers. Repo creation now validates the selected Git credential and
+  its host binding.
+
 - Move Kubernetes Helm packaging, its security render checks and the kind remote-scan
   qualification to Wolf Enterprise. Community deploys with Docker Compose; the
   native and Compose remote-scan qualification lanes remain.

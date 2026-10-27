@@ -48,19 +48,21 @@ func materializeScanSource(ctx context.Context, h *Handler, userID string, sourc
 	}
 }
 
+// gitCredentialTypes lists the credential types usable for a Git URL.
+func gitCredentialTypes(canonical string) []models.KeyType {
+	if strings.HasPrefix(canonical, "ssh://") {
+		return []models.KeyType{models.KeyTypeSSHPrivate}
+	}
+	return []models.KeyType{models.KeyTypeGitHTTPS, models.KeyTypeGitHubToken, models.KeyTypeGitLabToken}
+}
+
 func materializeGitSource(ctx context.Context, h *Handler, userID string, source *scanSourceRequest) (*models.Repo, error) {
 	canonical, host, err := scantarget.CanonicalGitURL(source.URL)
 	if err != nil {
 		return nil, err
 	}
 	if source.CredentialID != "" {
-		allowedTypes := []models.KeyType{
-			models.KeyTypeGitHTTPS, models.KeyTypeGitHubToken, models.KeyTypeGitLabToken,
-		}
-		if strings.HasPrefix(canonical, "ssh://") {
-			allowedTypes = []models.KeyType{models.KeyTypeSSHPrivate}
-		}
-		if err := validateSourceCredential(ctx, h, userID, source.CredentialID, host, allowedTypes...); err != nil {
+		if err := validateSourceCredential(ctx, h, userID, source.CredentialID, host, gitCredentialTypes(canonical)...); err != nil {
 			return nil, err
 		}
 	}
