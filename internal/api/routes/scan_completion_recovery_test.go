@@ -124,7 +124,7 @@ func TestScanCompletionSurvivesProcessKill(t *testing.T) {
 				if err := store.CreateRepo(ctx, &models.Repo{ID: repo, UserID: user, Name: "recovery", SourceType: models.SourceTypeLocal, SourcePath: repoPath, DefaultBranch: "main"}); err != nil {
 					t.Fatal(err)
 				}
-				queued := &models.Scan{ID: uuid.NewString(), UserID: user, RepoID: repo, Branch: "main", Status: models.ScanStatusPending, SourceType: models.SourceTypeLocal, SourcePath: repoPath, PreparedWorkspace: repoPath, ExecutionBackend: "docker", RequestJSON: `{"tools":["cluster-a","cluster-b"]}`}
+				queued := &models.Scan{ID: uuid.NewString(), UserID: user, RepoID: repo, Branch: "main", Status: models.ScanStatusPending, SourceType: models.SourceTypeLocal, SourcePath: repoPath, PreparedWorkspace: repoPath, ExecutionBackend: "docker", RequestJSON: `{}`}
 				if err := store.CreateScan(ctx, queued); err != nil {
 					t.Fatal(err)
 				}
