@@ -1,6 +1,6 @@
 # UI design-system and admin-console plan
 
-Status: executing. Owner decision 2026-10-27. This elaborates workstream **U** in
+Status: executing (Phase 1 done on branch `ui/design-foundation`). Owner decision 2026-10-27. This elaborates workstream **U** in
 [`PLAN.md`](PLAN.md); it is not a second execution plan. Check tasks off here and
 reference the evidence in `PLAN.md` §U when they land.
 
@@ -67,35 +67,44 @@ then the list pages. Phases 1–3 are separate PRs (see `PLAN.md` fast path and
 
 ### Phase 1 — Foundation (theme + primitives)
 
-- [ ] **T1.1 Tokens.** Replace the zinc/Inter token values in `globals.css` with
+- [x] **T1.1 Tokens.** Replace the zinc/Inter token values in `globals.css` with
   the site palette. Light: bg `#eef0f3`, panel `#f7f8fa`, line `#cdd3da`, ink
   `#111418`, muted `#525b66`, accent fill `#3c4855` on `#f3f5f7`. Dark: bg
   `#0e1114`, panel `#15191d`, line `#353c44`, ink `#eef1f4`, muted `#a7b0ba`,
   accent `#b8c4d0` on `#0e1114`. Express as the existing HSL triples so
   `@theme inline` and every shadcn component follow. Keep the status scale
   (success/warning/error/info) but retune to the cool base; re-verify AA.
-- [ ] **T1.2 Type.** Self-host Archivo, Archivo Narrow (nav, eyebrows, table
+  Evidence: site palette as HSL triples in `globals.css`; status/severity scales retuned, every tone >= 4.5:1 on bg/panel/muted with a 12% wash; axe clean on 18 routes x 2 themes (`e2e/visual-baseline.spec.ts`).
+- [x] **T1.2 Type.** Self-host Archivo, Archivo Narrow (nav, eyebrows, table
   headers), Geist Mono (ids, digests, code) via `@fontsource`. Replace Inter /
   Hanken / JetBrains imports; remove unused font packages.
-- [ ] **T1.3 Shape.** Site language: 1px `--border` lines, small radius (`0.25rem`),
+  Evidence: Archivo, Archivo Narrow, Geist Mono via `@fontsource`; Inter, Hanken, JetBrains packages removed from `package.json` and lockfile.
+- [x] **T1.3 Shape.** Site language: 1px `--border` lines, small radius (`0.25rem`),
   restrained shadow, 2px ink rule under the page header. Update `.page`,
   `.panel`, `.glass-card`, `.data-table`, `.nav-item`, `.badge-*`, buttons,
   inputs, focus ring in the shared layer only.
-- [ ] **T1.4 `Section`** (`components/ui/section.tsx`): titled, collapsible,
+  Evidence: 0.25rem radius, 1px lines, `--shadow-card`, 2px ink rule via `.page-header`, narrow-font table headers/eyebrows/nav sections, all in `globals.css` and `PageHeader`/`StatusBadge` class swaps.
+- [x] **T1.4 `Section`** (`components/ui/section.tsx`): titled, collapsible,
   `defaultOpen`, optional summary line, `aria-expanded`, keyboard accessible.
   Replace every raw `<details>` in `routes/` and `components/`.
-- [ ] **T1.5 `FormDialog`** (`components/ui/form-dialog.tsx`): `Dialog` or `Sheet`
+  Evidence: `components/ui/section.tsx` (+ `section.test.tsx`); `grep -rn "<details" ui/src` is empty.
+- [x] **T1.5 `FormDialog`** (`components/ui/form-dialog.tsx`): `Dialog` or `Sheet`
   wrapper with title, description, body, footer (Cancel / primary), pending state,
   inline field errors, focus management, Esc/overlay close with dirty-guard.
-- [ ] **T1.6 `AddButton`**: the standard `+ Add <thing>` trigger (icon + label,
+  Evidence: `components/ui/form-dialog.tsx` (+ `form-dialog.test.tsx`: field error, pending lock, dirty-guard on Esc/Cancel); `FieldError` helper exported; Dialog or Sheet via `presentation`.
+- [x] **T1.6 `AddButton`**: the standard `+ Add <thing>` trigger (icon + label,
   primary variant) used in `PageHeader` actions and `CardHeader`.
-- [ ] **T1.7 `EditionGate`** (consolidate the existing Enterprise-only treatment).
-- [ ] **T1.8 Lint guard.** ESLint `no-restricted-globals` for `confirm`/`alert`
+  Evidence: `components/ui/add-button.tsx` (ref-forwarding, works as a `DialogTrigger asChild`).
+- [x] **T1.7 `EditionGate`** (consolidate the existing Enterprise-only treatment).
+  Evidence: `components/ui/edition-gate.tsx` replaces the ad-hoc text in `EnterpriseChrome` and `FixerSetupBanner`; link target from `ENTERPRISE_INFO_URL` (`VITE_ENTERPRISE_INFO_URL`, placeholder default).
+- [x] **T1.8 Lint guard.** ESLint `no-restricted-globals` for `confirm`/`alert`
   and `no-restricted-syntax` for hex colour literals in `src/` outside
   `globals.css`. Migrate the one `window.confirm` to `ConfirmDialog`.
-- [ ] **T1.9 Visual baseline.** Playwright screenshot sweep of every route in
+  Evidence: ESLint bans `confirm`/`alert` (+ `window.*`) and hex literals in `src/` (tests exempt); suppression confirm is now `ConfirmDialog`; chart, terminal and severity colours read tokens; one documented disable in `theme-color-sync.tsx`.
+- [x] **T1.9 Visual baseline.** Playwright screenshot sweep of every route in
   light and dark (reuse `e2e/scanner-api-mock.ts` fixtures) saved as the
   before/after reference; update `e2e/__screenshots__` deliberately.
+  Evidence: `e2e/visual-baseline.spec.ts` (18 routes x light/dark, axe per shot); `pnpm test:e2e:baseline` refreshes `e2e/__screenshots__/baseline/`; linux product snapshots updated.
 
 Acceptance: `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:e2e` pass; axe
 clean in both themes; no raw hex outside `globals.css`; no `window.confirm`.
