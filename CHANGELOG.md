@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- Remove the Community evaluation caps (5 repositories, 3 users, 1 concurrent scan
+  worker). Community is uncapped; Enterprise is differentiated by capabilities, not
+  limits. `WOLF_COMMUNITY_LIMITS`, the `community_limit` error and the `limits` field
+  of `GET /api/edition` are gone.
+
 - Let AI remediation (Enterprise) fix GitLab projects on gitlab.com or a self-hosted
   instance: Git/GitLab repos accept a host-bound `gitlab_token` credential, the
   writability preflight checks the token's role through the GitLab API, and fix

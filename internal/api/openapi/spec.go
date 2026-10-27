@@ -36,7 +36,7 @@ func Endpoints() []Endpoint {
 		{"GET", "/ready", "system", "Readiness probe", "", "", false},
 		{"GET", "/metrics", "system", "Prometheus metrics", "", "", false},
 		{"GET", "/version", "system", "Build version info", "", "", false},
-		{"GET", "/edition", "system", "Edition, modules, entitlements, and Community limits", "", "", false},
+		{"GET", "/edition", "system", "Edition, modules, and entitlements", "", "", false},
 		{"GET", "/license", "system", "Commercial license status (Community has none)", "", "", false},
 		{"GET", "/coverage", "system", "Honest scanner coverage matrix from tools.yaml", "", "", false},
 		{"GET", "/scan-profiles", "scans", "Named scan profiles (fast/standard/release)", "", "", true},

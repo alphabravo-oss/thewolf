@@ -1,12 +1,5 @@
 import { ApiError } from "./api";
 
-export const COMMUNITY_LIMIT_COPY =
-  "Community evaluation limit reached (5 repos, 3 users, or 1 concurrent scan). See Settings → License.";
-
-export function isCommunityLimit(error: unknown): boolean {
-  return error instanceof ApiError && error.code === "community_limit";
-}
-
 const ASSIGNMENT_SECRET =
   /(\b(?:authorization|credential|password|passwd|private[_-]?key|access[_-]?key|token|secret|api[_-]?key)\b["']?\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^\s,;}]+)/gi;
 const BEARER_SECRET = /\bBearer\s+[A-Za-z0-9._~+/=-]{6,}/gi;
@@ -70,9 +63,6 @@ export function safeErrorMessage(
   };
   if (candidate.name !== "ApiError") {
     return safeDisplayText(candidate.message, 320) || fallback;
-  }
-  if (candidate.code === "community_limit") {
-    return COMMUNITY_LIMIT_COPY;
   }
   const registryCopy: Record<string, string> = {
     registry_rate_limited:
