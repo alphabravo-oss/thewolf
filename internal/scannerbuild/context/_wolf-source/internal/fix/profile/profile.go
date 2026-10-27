@@ -6,6 +6,24 @@ package profile
 import "strings"
 
 // Engine is one agent harness the worker can drive.
+// Operator-editable prompt settings. The fixer worker publishes the shipped
+// defaults (see workerstatus); the API stores overrides under these keys.
+const (
+	SettingPromptInitial  = "fixer_prompt_initial"
+	SettingPromptFollowup = "fixer_prompt_followup"
+)
+
+// CLIEngine reports whether name (engine or command) is a CLI harness that
+// the worker console can log in to or install.
+func CLIEngine(name string) bool {
+	for _, e := range Catalog() {
+		if len(e.Login) > 0 && (e.Name == name || e.Command == name) {
+			return true
+		}
+	}
+	return false
+}
+
 type Engine struct {
 	Name         string   `json:"name"`
 	Command      string   `json:"command,omitempty"`

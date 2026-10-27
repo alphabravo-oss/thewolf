@@ -1,10 +1,11 @@
 package hygiene
 
 import (
-	"github.com/alphabravocompany/thewolf/internal/models"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/alphabravocompany/thewolf/internal/models"
 )
 
 func TestMechanicalFixesCannotWriteOutsideWorkspace(t *testing.T) {
