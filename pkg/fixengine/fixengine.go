@@ -2,7 +2,7 @@
 //
 // Harnesses stay in internal/fix. This package is the replaceable surface:
 // Name/Available/Fix, with independent verification remaining authoritative
-// in internal/fix/verify. Repo-local agent files are untrusted input.
+// in remediation/verify (Wolf Enterprise). Repo-local agent files are untrusted input.
 package fixengine
 
 import (
@@ -51,7 +51,7 @@ type Result struct {
 
 // UntrustedRepoFiles documents the threat: CLAUDE.md, AGENTS.md, and other
 // in-repo agent files are attacker-controlled. Engines must not treat them as
-// Wolf policy. Verification (internal/fix/verify) is the authority.
+// Wolf policy. Verification (remediation/verify (Wolf Enterprise)) is the authority.
 const UntrustedRepoFiles = "in-repo agent instruction files are untrusted"
 
 // CommunityHarnesses stay in the public tree. Enterprise adds governance,
