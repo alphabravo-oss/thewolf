@@ -116,6 +116,13 @@ type createScanRequest struct {
 	AIModel         string             `json:"ai_model,omitempty"`
 }
 
+// narrowedScan reports a scan limited to hand-picked tools, categories or
+// paths. Its coverage is complete only for that slice, so it must never become
+// the repository's automatic baseline.
+func narrowedScan(req createScanRequest) bool {
+	return len(req.Tools) > 0 || len(req.Categories) > 0 || len(req.IncludePaths) > 0
+}
+
 func normalizedScanRequest(req createScanRequest, repoID, branch string) ([]byte, string, error) {
 	req.RepoID = repoID
 	req.Branch = branch
@@ -1305,7 +1312,7 @@ func executeScan(parent context.Context, h *Handler, scanID, userID, repoID, bra
 			}(),
 		}
 		var completionErr error
-		gateStatus, result.Findings, completionErr = publishScanResults(context.Background(), h, scan, logDir, rcfg, mfst, db.ScanCompletion{AutoBaseline: true})
+		gateStatus, result.Findings, completionErr = publishScanResults(context.Background(), h, scan, logDir, rcfg, mfst, db.ScanCompletion{AutoBaseline: !narrowedScan(req)})
 		if errors.Is(completionErr, db.ErrStaleScanLease) {
 			return
 		}
