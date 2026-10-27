@@ -255,7 +255,7 @@ test.describe("application shell accessibility", () => {
     // the topbar menu offers light, dark and system preferences.
     expect(initialTheme).toMatchObject({
       colorScheme: "dark",
-      metaColor: "#09090b",
+      metaColor: "#0e1114",
     });
     expect(initialTheme.animationMs).toBeLessThanOrEqual(0.01);
     expect(initialTheme.transitionMs).toBeLessThanOrEqual(0.01);
@@ -273,7 +273,7 @@ test.describe("application shell accessibility", () => {
       .poll(() =>
         page.locator('meta[name="theme-color"]').getAttribute("content"),
       )
-      .toBe("#ffffff");
+      .toBe("#eef0f3");
     expect(
       await page.evaluate(
         () => getComputedStyle(document.documentElement).colorScheme,
@@ -294,7 +294,7 @@ test.describe("application shell accessibility", () => {
       .poll(() =>
         page.locator('meta[name="theme-color"]').getAttribute("content"),
       )
-      .toBe("#09090b");
+      .toBe("#0e1114");
   });
 });
 

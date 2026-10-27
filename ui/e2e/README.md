@@ -24,4 +24,5 @@ pnpm exec playwright install chromium firefox
 pnpm test:e2e:typecheck
 pnpm test:e2e
 pnpm test:e2e:headed
+pnpm test:e2e:baseline   # refresh the committed light/dark route screenshots
 ```

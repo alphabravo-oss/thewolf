@@ -75,6 +75,8 @@ interface ScannerMockOptions {
   delayGetMsByPath?: Record<string, number>;
   currentUser?: Partial<UserFixture>;
   users?: UserFixture[];
+  /** Let requests the fixture does not know fall through to routes registered earlier (visual sweep). */
+  fallthroughUnmocked?: boolean;
 }
 
 interface UserFixture {
@@ -142,6 +144,7 @@ export async function installScannerApiMock(
     delayGetMsByPath = {},
     currentUser = {},
     users = userFixtures,
+    fallthroughUnmocked = false,
   }: ScannerMockOptions = {},
 ): Promise<ScannerApiState> {
   const remainingGetFailures = new Map(Object.entries(failGetCountByPath));
@@ -1234,6 +1237,7 @@ export async function installScannerApiMock(
       );
     }
 
+    if (fallthroughUnmocked) return route.fallback();
     await jsonError(
       route,
       404,
@@ -2096,7 +2100,7 @@ const apiCreatedScan = {
   repo: apiCreatedRepository,
 };
 
-const apiCreatedFinding = {
+export const apiCreatedFinding = {
   id: "finding-api-created",
   scan_id: apiCreatedScan.id,
   repo_id: apiCreatedRepository.id,

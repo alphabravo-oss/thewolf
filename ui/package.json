@@ -15,6 +15,7 @@
     "test:e2e": "playwright test",
     "test:e2e:live": "bash ../scripts/e2e-live.sh",
     "test:e2e:headed": "playwright test --headed",
+    "test:e2e:baseline": "UPDATE_VISUAL_BASELINE=1 playwright test e2e/visual-baseline.spec.ts --project=desktop-chromium-linux",
     "test:e2e:update": "playwright test --update-snapshots",
     "test:e2e:typecheck": "tsc --noEmit -p tsconfig.playwright.json"
   },
