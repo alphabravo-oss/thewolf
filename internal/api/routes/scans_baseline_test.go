@@ -29,6 +29,21 @@ func TestIsZeroToolResult(t *testing.T) {
 	}
 }
 
+// A scan narrowed to hand-picked tools, categories or paths is complete only
+// for that slice and must not become the automatic baseline.
+func TestNarrowedScansNeverBecomeAutoBaseline(t *testing.T) {
+	for _, req := range []createScanRequest{{Tools: []string{"zap"}}, {Categories: []string{"sast"}}, {IncludePaths: []string{"svc/"}}} {
+		if !narrowedScan(req) {
+			t.Fatalf("%+v should be narrowed", req)
+		}
+	}
+	for _, req := range []createScanRequest{{}, {Profile: "full"}, {DisabledTools: []string{"codeql"}}, {ExcludePaths: []string{"vendor/"}}} {
+		if narrowedScan(req) {
+			t.Fatalf("%+v is a full scan", req)
+		}
+	}
+}
+
 func TestRedactToolLogLine(t *testing.T) {
 	in := "key=AKIATESTKEYTESTKEY12 Bearer abc.def api_key=secret-value password:hunter2"
 	out := redactToolLogLine(in)
