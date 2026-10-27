@@ -9,6 +9,7 @@ import { api } from "@/lib/api";
 import { useFixEngines, type FixerPromptTemplate } from "@/lib/fixes";
 import { FixerConsolePanel } from "@/components/fixes/fixer-console";
 import { FixerEngines } from "@/components/fixes/fixer-engines";
+import { GitAccessCard } from "@/components/fixes/git-access";
 
 export function FixerSettings() {
   const qc = useQueryClient();
@@ -48,6 +49,8 @@ export function FixerSettings() {
           document.getElementById("fixer-sign-in")?.scrollIntoView({ behavior: "smooth", block: "start" });
         }}
       />
+
+      <GitAccessCard />
 
       <div id="fixer-sign-in" className="glass-card p-5 space-y-3 text-sm scroll-mt-20">
         <h2 className="text-sm font-medium">Sign in to an engine</h2>

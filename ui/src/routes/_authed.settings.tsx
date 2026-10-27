@@ -28,6 +28,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { toast } from "sonner";
 import { api, isNotFound } from "@/lib/api";
 import { GitHubTokenHelp } from "@/components/github-token-help";
+import { GitLabTokenHelp } from "@/components/gitlab-token-help";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { ErrorState } from "@/components/ui/empty-state";
 import { useIsAdmin, useMe } from "@/lib/me";
@@ -1673,11 +1674,16 @@ export function SecretsTab() {
       toast.error(e instanceof Error ? e.message : "Delete failed"),
   });
   const create = useMutation({
-    mutationFn: (body: { key_type: string; key_name: string; value: string }) =>
-      api.post("/config/secrets", body),
+    mutationFn: ({ host, ...body }: NewSecret) =>
+      // A GitLab token is only usable for a git repo when bound to its host, which
+      // only the source-credentials API can record.
+      host
+        ? api.post("/credentials", { type: body.key_type, name: body.key_name, secret: body.value, allowed_hosts: [host] })
+        : api.post("/config/secrets", body),
     onSuccess: () => {
       toast.success("Secret added");
       qc.invalidateQueries({ queryKey: ["secrets"] });
+      qc.invalidateQueries({ queryKey: ["credentials"] });
     },
     onError: (e) =>
       toast.error(e instanceof Error ? e.message : "Create failed"),
@@ -1757,23 +1763,31 @@ export function SecretsTab() {
   );
 }
 
+type NewSecret = { key_type: string; key_name: string; value: string; host?: string };
+
+// "https://GitLab.example.com/group" -> "gitlab.example.com"
+const bareHost = (v: string) => v.trim().replace(/^[a-z]+:\/\//i, "").replace(/[/?#].*$/, "").toLowerCase();
+
 function NewSecretForm({
   onSubmit,
   disabled,
 }: {
-  onSubmit: (b: { key_type: string; key_name: string; value: string }) => void;
+  onSubmit: (b: NewSecret) => void;
   disabled?: boolean;
 }) {
   const [keyType, setKeyType] = useState("github_token");
   const [keyName, setKeyName] = useState("");
   const [value, setValue] = useState("");
+  const [gitlabHost, setGitlabHost] = useState("gitlab.com");
+  const host = keyType === "gitlab_token" ? bareHost(gitlabHost) : "";
+  const missingHost = keyType === "gitlab_token" && !host;
   return (
     <form
       className="glass-card p-4 grid md:grid-cols-[200px_1fr_1fr_auto] gap-2 items-end"
       onSubmit={(e) => {
         e.preventDefault();
-        if (!keyName.trim() || !value) return;
-        onSubmit({ key_type: keyType, key_name: keyName.trim(), value });
+        if (!keyName.trim() || !value || missingHost) return;
+        onSubmit({ key_type: keyType, key_name: keyName.trim(), value, ...(host && { host }) });
         setKeyName("");
         setValue("");
       }}
@@ -1812,9 +1826,26 @@ function NewSecretForm({
           className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border text-sm font-mono"
         />
       </Field>
+      {keyType === "gitlab_token" && (
+        <div className="md:col-span-3">
+          <Field label="GitLab host">
+            <input
+              required
+              value={gitlabHost}
+              onChange={(e) => setGitlabHost(e.target.value)}
+              placeholder="gitlab.com"
+              className="w-full h-9 px-2 rounded-md bg-muted/40 border border-border text-sm font-mono"
+            />
+          </Field>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Hostname only (e.g. <code className="font-mono">gitlab.example.com</code>). The token is bound to this host
+            and sent nowhere else.
+          </p>
+        </div>
+      )}
       <button
         type="submit"
-        disabled={disabled || !keyName.trim() || !value}
+        disabled={disabled || !keyName.trim() || !value || missingHost}
         className="inline-flex items-center gap-1 h-9 px-3 rounded-md bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
       >
         <PlusIcon className="size-4" /> Add
@@ -1822,6 +1853,11 @@ function NewSecretForm({
       {keyType === "github_token" && (
         <div className="md:col-span-4 mt-1">
           <GitHubTokenHelp />
+        </div>
+      )}
+      {keyType === "gitlab_token" && (
+        <div className="md:col-span-4 mt-1">
+          <GitLabTokenHelp />
         </div>
       )}
     </form>

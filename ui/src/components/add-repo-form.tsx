@@ -33,6 +33,25 @@ interface GitHubRepoOption {
   archived?: boolean;
 }
 
+interface SourceCredential {
+  id: string;
+  type: string;
+  name: string;
+  allowed_hosts: string[];
+}
+
+// Hostname of a remote git URL, or "" while the user is still typing one.
+function gitUrlHost(s: string): string {
+  try {
+    return new URL(s.trim()).hostname.toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+const hostAllowed = (allowed: string[], host: string) =>
+  allowed.some((h) => h === host || (h.startsWith("*.") && host.endsWith(h.slice(1))));
+
 export type AddRepoFormProps = {
   /** When set, the form attaches the new repo to this collection on success. */
   collectionId?: string;
@@ -61,6 +80,7 @@ export function AddRepoForm({ collectionId, onDone }: AddRepoFormProps) {
   const [branch, setBranch] = useState("main");
   const [remoteNodeId, setRemoteNodeId] = useState("");
   const [githubSecretId, setGithubSecretId] = useState("");
+  const [gitCredentialId, setGitCredentialId] = useState("");
   const [scanNow, setScanNow] = useState(true);
   const [browse, setBrowse] = useState(false);
   const [createdRepoId, setCreatedRepoId] = useState<string | null>(null);
@@ -81,6 +101,18 @@ export function AddRepoForm({ collectionId, onDone }: AddRepoFormProps) {
       setGithubSecretId(githubTokens[0].id);
     }
   }, [mode, githubSecretId, githubTokens]);
+
+  const credentialsQ = useQuery({
+    queryKey: ["credentials"],
+    queryFn: async () => (await api.get<SourceCredential[]>("/credentials")).data ?? [],
+    enabled: mode === "git",
+  });
+  const gitHost = gitUrlHost(sourcePath);
+  const gitCredentials = gitHost
+    ? (credentialsQ.data ?? []).filter((c) => (c.type === "gitlab_token" || c.type === "git_https") && hostAllowed(c.allowed_hosts ?? [], gitHost))
+    : [];
+  // Only send a credential that still matches the URL's host.
+  const gitCredentialValid = gitCredentials.some((c) => c.id === gitCredentialId) ? gitCredentialId : "";
 
   const githubReposQ = useQuery({
     queryKey: ["github-repos", githubSecretId],
@@ -106,6 +138,7 @@ export function AddRepoForm({ collectionId, onDone }: AddRepoFormProps) {
       if (mode === "github" && githubSecretId) {
         body.credential_secret_id = githubSecretId;
       }
+      if (mode === "git" && gitCredentialValid) body.credential_secret_id = gitCredentialValid;
       const { data } = await api.post<Repo>("/repos", body);
       const repoId = data.id;
       if (collectionId) {
@@ -278,15 +311,34 @@ export function AddRepoForm({ collectionId, onDone }: AddRepoFormProps) {
         )}
 
         {mode === "git" && (
-          <Field label="Git URL">
-            <input
-              value={sourcePath}
-              onChange={(e) => setSourcePath(e.target.value)}
-              required
-              placeholder="https://gitlab.example.com/team/repo.git"
-              className="w-full h-9 px-2 rounded-md bg-background border border-muted/40 text-sm font-mono"
-            />
-          </Field>
+          <>
+            <Field label="Git URL">
+              <input
+                value={sourcePath}
+                onChange={(e) => setSourcePath(e.target.value)}
+                required
+                placeholder="https://gitlab.example.com/team/repo.git"
+                className="w-full h-9 px-2 rounded-md bg-background border border-muted/40 text-sm font-mono"
+              />
+            </Field>
+            {gitCredentials.length > 0 ? (
+              <Field label="Use credential" hint="Needed to scan private repos and for the AI fixer to push a fix branch.">
+                <Select value={gitCredentialValid || "__none__"} onValueChange={(value) => setGitCredentialId(value === "__none__" ? "" : value)}>
+                  <SelectTrigger aria-label="Use credential"><SelectValue placeholder="Choose credential" /></SelectTrigger>
+                  <SelectContent><SelectItem value="__none__">No credential</SelectItem>{gitCredentials.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
+                </Select>
+              </Field>
+            ) : gitHost && !credentialsQ.isLoading ? (
+              <div className="text-xs text-muted-foreground">
+                No credential is bound to <span className="font-mono">{gitHost}</span>. For private repos or AI fixes,{" "}
+                <Link to="/account" search={{ section: "secrets" }} className="underline underline-offset-2">
+                  add a GitLab token
+                </Link>{" "}
+                with that host.
+              </div>
+            ) : null}
+            {credentialsQ.isError && <p role="alert" className="text-xs text-destructive">Credentials could not be loaded. <button type="button" className="underline" onClick={() => void credentialsQ.refetch()}>Retry credentials</button></p>}
+          </>
         )}
 
         {mode === "ssh" && (
