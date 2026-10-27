@@ -184,7 +184,7 @@ function CollectionDetailPage() {
       />
       <AddRepoDialog open={adding} collectionId={collectionId} onDone={() => setAdding(false)} />
       <PageHeader
-        breadcrumbs={[{ label: "Collections", to: "/collections" }, { label: c.name }]}
+        breadcrumbs={[{ label: "Collections", link: { to: "/collections" } }, { label: c.name }]}
         title={c.name}
         description={c.description || <span className="italic">No description</span>}
         actions={canModify(me.data, c.user_id) ? (

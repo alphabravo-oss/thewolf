@@ -49,7 +49,7 @@ export function AppShell() {
         {!online && (
           <div
             role="status"
-            className="flex items-center gap-2 bg-amber-500/15 text-amber-900 dark:text-amber-100 border-b border-amber-500/30 px-4 py-2 text-sm"
+            className="flex items-center gap-2 border-b border-status-warning/30 bg-status-warning/15 px-4 py-2 text-sm text-foreground"
           >
             <WifiOff className="h-4 w-4 shrink-0" />
             You are offline. Live updates and mutations will fail until connectivity returns.

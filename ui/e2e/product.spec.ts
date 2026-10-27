@@ -154,8 +154,8 @@ test.describe("ordinary remote scan workflow", () => {
     await expectNoPageOverflow(page);
 
     await page.getByRole("button", { name: "Cancel scan" }).click();
-    const confirmCancel = page.getByRole("button", { name: "Confirm cancel" });
-    await expect(confirmCancel).toBeFocused();
+    const confirmCancel = page.getByRole("dialog").getByRole("button", { name: "Confirm cancel" });
+    await expect(confirmCancel).toBeVisible();
     await confirmCancel.click();
     await expect(
       page.getByRole("status").filter({ hasText: "Scan cancelled." }),

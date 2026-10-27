@@ -3,19 +3,22 @@ import { EmptyState, ErrorState, PermissionState } from "@/components/ui/empty-s
 // AI fix suggestion, status controls (open / wont_fix / false_positive).
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeftIcon } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { api, ApiError, isNotFound } from "@/lib/api";
 import type { Finding, FindingStatus } from "@/lib/types";
 import { CardSkeleton } from "@/components/skeleton";
 import { SeverityBadge } from "@/components/severity-badge";
-import { Badge } from "@/components/ui/badge";
 import { findingTitle } from "@/lib/finding-title";
 import { useAutofixEnabled } from "@/lib/fixes";
 import { FixFindingButton } from "@/components/fixes/fix-finding-button";
 import { Section } from "@/components/ui/section";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { MetricCard } from "@/components/ui/metric-card";
+import { PageHeader, PageShell } from "@/components/ui/page";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export const Route = createFileRoute("/_authed/findings/$findingId")({
   component: FindingDetailPage,
@@ -86,10 +89,10 @@ function FindingDetailPage() {
 
   if (q.isLoading) {
     return (
-      <div className="page stack page--mid">
+      <PageShell>
         <CardSkeleton />
         <CardSkeleton />
-      </div>
+      </PageShell>
     );
   }
   if (q.error instanceof ApiError && q.error.status === 403) return <PermissionState description="You do not have access to this finding." />;
@@ -112,76 +115,78 @@ function FindingDetailPage() {
   const language = fileLanguage(f.file_path);
   const guidance = f.fix_strategy?.body.replace(/(?:\*\*(?:Before|After):\*\*\s*)?```([^\n]*)\n[\s\S]*?```/g, (block, tag: string) => language && fileLanguage(`example.${tag.trim().toLowerCase()}`) === language ? block : "").trim();
 
+  const hasGuidance = !!(f.fix_strategy && guidance) || !!f.ai_fix_suggestion;
+
   return (
-    <div className="page stack page--mid">
-      <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-3">
-        <Link
-          to="/findings"
-          className="size-9 grid place-items-center rounded-md hover:bg-muted/50"
-          aria-label="Back"
-        >
-          <ArrowLeftIcon className="size-4" />
-        </Link>
-        <div className="flex-1 min-w-0">
-          <h1 className="text-xl font-semibold leading-snug text-balance sm:text-2xl">{findingTitle(f)}</h1>
-          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
-            {f.file_path && <a href="#source-code" className="break-all font-mono underline-offset-4 hover:underline focus-visible:underline">{f.file_path}{f.line_start ? `:${f.line_start}` : ""}</a>}
-            <span>{tools.join(" + ")}</span>
-            {f.introduced_in_scan_id ? <Link to="/scans/$scanId" params={{ scanId: f.introduced_in_scan_id }} className="hover:underline" title={f.introduced_in_scan_id === f.scan_id ? fmtTime(f.created_at) : "Open the first observed scan"}>First seen {f.introduced_in_scan_id === f.scan_id ? fmtDate(f.created_at) : "in scan"}</Link> : <span title={fmtTime(f.created_at)}>Recorded {fmtDate(f.created_at)}</span>}
-            {f.baseline_state && f.baseline_state !== "new" && <span className="capitalize">{f.baseline_state.replaceAll("_", " ")} baseline</span>}
-            {!f.baseline_state && <span>Not compared to baseline</span>}
-          </div>
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            <SeverityBadge severity={f.severity} />
-            {f.confidence && <Badge variant="outline" className="font-normal capitalize">{f.confidence} confidence</Badge>}
-            {f.baseline_state === "new" && <Badge variant="secondary">New</Badge>}
-            {Number.isFinite(f.composite_score) && f.composite_score > 0 && <span className="ml-1 text-xs text-muted-foreground" title="Composite risk score">Score {Math.round(f.composite_score)}</span>}
-          </div>
-        </div>
+    <PageShell>
+      <PageHeader
+        breadcrumbs={[{ label: "Findings", link: { to: "/findings" } }, ...(f.repo_id ? [{ label: f.repo?.name || "Repository", link: { to: "/repos/$repoId", params: { repoId: f.repo_id } } } as const] : []), { label: "Finding" }]}
+        title={<span className="whitespace-normal text-balance">{findingTitle(f)}</span>}
+        status={<SeverityBadge severity={f.severity} />}
+        description={<span className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
+          {f.file_path && <a href="#source-code" className="break-all font-mono underline-offset-4 hover:underline focus-visible:underline">{f.file_path}{f.line_start ? `:${f.line_start}` : ""}</a>}
+          <span>{tools.join(" + ")}</span>
+          {f.introduced_in_scan_id ? <Link to="/scans/$scanId" params={{ scanId: f.introduced_in_scan_id }} className="hover:underline" title={f.introduced_in_scan_id === f.scan_id ? fmtTime(f.created_at) : "Open the first observed scan"}>First seen {f.introduced_in_scan_id === f.scan_id ? fmtDate(f.created_at) : "in scan"}</Link> : <span title={fmtTime(f.created_at)}>Recorded {fmtDate(f.created_at)}</span>}
+          {f.baseline_state && f.baseline_state !== "new" && <span className="capitalize">{f.baseline_state.replaceAll("_", " ")} baseline</span>}
+          {!f.baseline_state && <span>Not compared to baseline</span>}
+        </span>}
+      />
+
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <MetricCard title="Status" value={STATUSES.find((st) => st.value === f.status)?.label ?? f.status} subtitle={f.suppressed ? "Suppressed" : f.baseline_state === "new" ? "New since baseline" : "Triage state"} />
+        <MetricCard title="Confidence" value={f.confidence ? f.confidence.charAt(0).toUpperCase() + f.confidence.slice(1) : "—"} subtitle="Cross-tool agreement" />
+        <MetricCard title="Scanners" value={tools.length} subtitle={tools.join(", ") || "None recorded"} />
+        <MetricCard title="Risk score" value={Number.isFinite(f.composite_score) && f.composite_score > 0 ? Math.round(f.composite_score) : "—"} subtitle="Composite" />
       </div>
 
-      <section className="glass-card p-5 flex flex-wrap items-center gap-2">
-        <span className="text-xs text-muted-foreground mr-1">Status</span>
+      <Card><CardContent className="flex flex-wrap items-center gap-2 p-4">
+        <span className="mr-1 text-xs text-muted-foreground">Status</span>
         {STATUSES.map((s) => (
-          <button
+          <Button
             key={s.value}
             type="button"
+            size="sm"
+            variant={f.status === s.value ? "default" : "outline"}
+            aria-pressed={f.status === s.value}
             disabled={setStatus.isPending}
             onClick={() => setStatus.mutate(s.value)}
-            className={
-              "px-2.5 h-8 rounded-md text-xs font-medium ring-1 transition disabled:opacity-50 " +
-              (f.status === s.value
-                ? "bg-status-info/15 text-status-info ring-status-info/30"
-                : "bg-transparent text-muted-foreground ring-border hover:bg-muted/40")
-            }
           >
             {s.label}
-          </button>
+          </Button>
         ))}
         {autofixEnabled && <div className="ml-auto"><FixFindingButton findingId={f.id} repoId={f.repo_id} scanId={f.scan_id} /></div>}
         {f.suppressed ? (
-          <span className="text-xs text-muted-foreground ml-auto">
+          <span className="ml-auto text-xs text-muted-foreground">
             Suppressed
             {f.suppressed_reason ? `: ${f.suppressed_reason}` : ""}
           </span>
         ) : (
-          <button
+          <Button
             type="button"
+            size="sm"
+            variant="outline"
+            className="ml-auto"
             disabled={previewSuppress.isPending}
             onClick={() => previewSuppress.mutate(f)}
-            className="ml-auto h-8 px-3 rounded-md border border-border text-xs hover:bg-muted/40 disabled:opacity-50"
           >
             {previewSuppress.isPending ? "Suppressing…" : "Suppress"}
-          </button>
+          </Button>
         )}
-      </section>
+      </CardContent></Card>
 
+      <Tabs defaultValue="details">
+        <TabsList aria-label="Finding views">
+          <TabsTrigger value="details">Details</TabsTrigger>
+          {hasGuidance && <TabsTrigger value="remediation">Remediation</TabsTrigger>}
+        </TabsList>
+        <TabsContent value="details" className="mt-4 space-y-5">
       {f.description?.trim() && !descriptions.has(f.description.trim()) && <section className="glass-card p-5"><h2 className="mb-2 text-sm font-medium">Description</h2><p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">{f.description}</p></section>}
 
       <section className="glass-card space-y-4 p-5" aria-label="Scanner evidence">
         <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-sm font-medium">Scanner evidence</h2><span className="text-xs text-muted-foreground">{tools.length} scanner{tools.length === 1 ? "" : "s"}</span></div>
         {severitiesDiffer && <p className="text-xs leading-relaxed text-muted-foreground">Scanners assigned different severities. Their original assessments are preserved below.</p>}
         <ul className="divide-y divide-border">{reports.map((row) => <li key={row.id} className="space-y-2 py-4 first:pt-0 last:pb-0"><div className="flex flex-wrap items-center gap-2"><span className="text-sm font-medium">{row.tool_name}</span><SeverityBadge severity={row.severity} size="sm" /></div>{(row.advisory_id || row.rule_id) && <p className="break-all font-mono text-xs text-muted-foreground">{[row.advisory_id, row.rule_id].filter((id, index, ids) => id && ids.indexOf(id) === index).join(" · ")}</p>}{(row.file_path !== f.file_path || row.line_start !== f.line_start) && <p className="break-all font-mono text-xs text-muted-foreground">{row.file_path}{row.line_start ? `:${row.line_start}` : ""}</p>}{row.description && <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">{row.description}</p>}</li>)}</ul>
+        <Section variant="plain" className="text-xs text-muted-foreground" title="Raw finding record"><pre className="mt-2 max-h-80 overflow-auto whitespace-pre-wrap break-all font-mono text-xs">{JSON.stringify(f, null, 2)}</pre></Section>
         {f.confidence && <Section variant="plain" className="text-xs text-muted-foreground" title="How confidence is determined"><p className="mt-2 leading-relaxed">Confidence reflects recorded cross-tool agreement: one scanner is low, two medium, and three or more high. Severity describes impact; confidence describes agreement.</p></Section>}
       </section>
 
@@ -190,12 +195,18 @@ function FindingDetailPage() {
         {code ? <><pre className="overflow-x-auto bg-muted/30 p-5 font-mono text-xs leading-6">{code.code_snippet}</pre><p className="px-5 py-2 text-xs text-muted-foreground">Recorded by {code.tool_name}</p></> : <p className="p-5 text-sm text-muted-foreground">{f.code_snippet ? "Source preview unavailable. The scanner did not return source code for this location." : "No source snippet was recorded for this finding."}</p>}
       </section>}
 
-      {f.fix_strategy && guidance && <section className="glass-card p-5">
-        <h2 className="mb-2 text-sm font-medium">{f.fix_strategy.title}</h2>
-        <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-muted-foreground">{guidance}</pre>
-      </section>}
-
-      {f.ai_fix_suggestion && <section className="glass-card p-5"><h2 className="mb-2 text-sm font-medium">AI fix suggestion</h2><pre className="log-viewer whitespace-pre-wrap text-xs">{f.ai_fix_suggestion}</pre></section>}
+        </TabsContent>
+        {hasGuidance && <TabsContent value="remediation" className="mt-4 space-y-5">
+          {f.fix_strategy && guidance && <Card>
+            <CardHeader><CardTitle>{f.fix_strategy.title}</CardTitle></CardHeader>
+            <CardContent><pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-muted-foreground">{guidance}</pre></CardContent>
+          </Card>}
+          {f.ai_fix_suggestion && <Card>
+            <CardHeader><CardTitle>AI fix suggestion</CardTitle></CardHeader>
+            <CardContent><pre className="log-viewer whitespace-pre-wrap text-xs">{f.ai_fix_suggestion}</pre></CardContent>
+          </Card>}
+        </TabsContent>}
+      </Tabs>
 
       <footer className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
         {f.cwe_id && <span className="font-mono">{f.cwe_id}</span>}
@@ -212,7 +223,7 @@ function FindingDetailPage() {
         pending={suppress.isPending}
         onConfirm={() => suppressPreview && suppress.mutate(suppressPreview.finding)}
       />
-    </div>
+    </PageShell>
   );
 }
 

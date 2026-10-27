@@ -9,8 +9,8 @@ import { Link, type LinkProps } from "@tanstack/react-router";
 import { ChevronRightIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-/** Detail pages pass the trail back to their list: [{ label: "Repositories", to: "/repos" }, { label: name }]. */
-export type Breadcrumb = { label: string; to?: LinkProps["to"] };
+/** Detail pages pass the trail back to their list: [{ label: "Repositories", link: { to: "/repos" } }, { label: name }]. */
+export type Breadcrumb = { label: string; link?: LinkProps };
 
 function Breadcrumbs({ items }: { items: Breadcrumb[] }) {
   return (
@@ -19,8 +19,8 @@ function Breadcrumbs({ items }: { items: Breadcrumb[] }) {
         {items.map((item, i) => (
           <li key={`${i}-${item.label}`} className="flex min-w-0 items-center gap-1">
             {i > 0 ? <ChevronRightIcon className="size-3 shrink-0" aria-hidden /> : null}
-            {item.to ? (
-              <Link to={item.to} className="hover:text-foreground hover:underline">{item.label}</Link>
+            {item.link ? (
+              <Link {...item.link} className="hover:text-foreground hover:underline">{item.label}</Link>
             ) : (
               <span aria-current="page" className="truncate text-foreground">{item.label}</span>
             )}

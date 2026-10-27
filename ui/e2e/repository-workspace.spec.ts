@@ -55,7 +55,7 @@ test("repository findings page, filter and sort on the server @browser-matrix", 
   await page.reload();
   await expect(findings.getByRole("textbox")).toHaveValue("payment");
   await expect(findings.getByRole("combobox", { name: "Filter by severity" })).toHaveText("Critical");
-  await expect(page.getByRole("link", { name: "Back to collection" })).toHaveAttribute("href", "/collections/services");
+  await expect(page.getByRole("navigation", { name: "Breadcrumb" }).getByRole("link", { name: "Collection", exact: true })).toHaveAttribute("href", "/collections/services");
   await findings.getByRole("textbox").fill("");
   await findings.getByRole("combobox", { name: "Findings per page" }).click();
   await page.getByRole("option", { name: "25 per page", exact: true }).click();

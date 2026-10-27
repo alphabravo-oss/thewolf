@@ -12,7 +12,7 @@ import {
   Sun,
 } from "lucide-react";
 import { api, isNotFound } from "@/lib/api";
-import type { Collection, InboxNotification, Repo, Scan } from "@/lib/types";
+import type { InboxNotification, Scan } from "@/lib/types";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuLabel } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { useTheme } from "@/lib/theme";
@@ -58,7 +58,11 @@ const routeLabels: Record<string, string> = {
   "customer-keys": "Customer keys",
 };
 
-function generateBreadcrumbs(pathname: string, resourceName?: string): { label: string; href: string }[] {
+// Detail pages of these resources render their own PageHeader breadcrumbs
+// (with the resource name), so the topbar trail stays out of their way.
+const pageOwnedBreadcrumbs = new Set(["repos", "collections", "scans", "findings", "vulnerabilities"]);
+
+function generateBreadcrumbs(pathname: string): { label: string; href: string }[] {
   const segments = pathname.split("/").filter(Boolean);
   if (segments.length === 0) return [{ label: "Home", href: "/" }];
 
@@ -66,11 +70,8 @@ function generateBreadcrumbs(pathname: string, resourceName?: string): { label: 
   let path = "";
   for (const segment of segments) {
     path += `/${segment}`;
-    // Reuse the resource name; never expose an opaque identifier as a label.
-    const resource = segment === segments[1] && (segments[0] === "repos" || segments[0] === "collections");
-    const label = resource
-      ? (resourceName || (segments[0] === "repos" ? "Repository" : "Collection"))
-      : /^[0-9a-f-]{20,}$/i.test(segment) ? "Details"
+    // Never expose an opaque identifier as a label.
+    const label = /^[0-9a-f-]{20,}$/i.test(segment) ? "Details"
       : (routeLabels[segment] ??
         decodeURIComponent(segment).charAt(0).toUpperCase() + decodeURIComponent(segment).slice(1));
     crumbs.push({ label, href: path });
@@ -105,12 +106,7 @@ export function Topbar() {
   const openPalette = useUIStore((s) => s.openPalette);
   const [notificationOpen, setNotificationOpen] = useState(false);
   const segments = pathname.split("/").filter(Boolean);
-  const repoId = segments[0] === "repos" ? segments[1] : undefined;
-  const collectionId = segments[0] === "collections" ? segments[1] : undefined;
-  const repo = useQuery({ queryKey: ["repo", repoId], enabled: !!repoId,
-    queryFn: async () => (await api.get<Repo>(`/repos/${encodeURIComponent(repoId!)}`)).data });
-  const collection = useQuery({ queryKey: ["collection", collectionId], enabled: !!collectionId,
-    queryFn: async () => (await api.get<Collection>(`/collections/${encodeURIComponent(collectionId!)}`)).data });
+  const pageOwnsBreadcrumbs = segments.length >= 2 && pageOwnedBreadcrumbs.has(segments[0]);
 
   // Running scans drive both the live activity pill and the bell. Polls every
   // 5s; cheap, and clearly signals when Wolf is busy.
@@ -153,8 +149,7 @@ export function Topbar() {
   });
 
   const { theme, setTheme } = useTheme();
-  const resourceName = repo.data?.name || collection.data?.name;
-  const breadcrumbs = useMemo(() => generateBreadcrumbs(pathname, resourceName), [pathname, resourceName]);
+  const breadcrumbs = useMemo(() => (pageOwnsBreadcrumbs ? [] : generateBreadcrumbs(pathname)), [pathname, pageOwnsBreadcrumbs]);
 
   const runningScans = running ?? [];
   const failedScans = failed ?? [];
@@ -171,9 +166,9 @@ export function Topbar() {
   const ThemeIcon = theme === "dark" ? Moon : theme === "light" ? Sun : Monitor;
 
   return (
-    <header className="sticky top-0 z-30 flex items-center justify-between h-14 shrink-0 gap-2 px-3 sm:px-6 border-b border-border bg-background/80 backdrop-blur-lg">
+    <header className="sticky top-0 z-30 flex items-center justify-between h-14 shrink-0 gap-2 px-3 sm:px-6 border-b border-border bg-background">
       {/* Left: breadcrumbs. Padded on mobile to clear the hamburger. */}
-      <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-sm min-w-0 pl-10 md:pl-0">
+      <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 font-narrow text-sm min-w-0 pl-10 md:pl-0">
         {breadcrumbs.map((crumb, i) => (
           <div key={crumb.href} className={i === breadcrumbs.length - 1 ? "flex items-center gap-1.5 min-w-0" : "hidden sm:flex items-center gap-1.5 min-w-0"}>
             {i > 0 && <ChevronRight className="hidden sm:block h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />}
@@ -254,7 +249,7 @@ export function Topbar() {
           >
             <Bell className="h-4 w-4" />
             {notificationCount > 0 && (
-              <span className="absolute top-0.5 right-0.5 flex items-center justify-center h-4 min-w-[16px] px-1 rounded-full bg-status-error text-[10px] font-bold text-white">
+              <span className="absolute top-0.5 right-0.5 flex items-center justify-center h-4 min-w-[16px] px-1 rounded-full bg-status-error text-[10px] font-bold text-destructive-foreground">
                 {notificationCount > 99 ? "99+" : notificationCount}
               </span>
             )}

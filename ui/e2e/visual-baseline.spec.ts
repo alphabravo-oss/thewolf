@@ -10,6 +10,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 import path from "node:path";
 import { apiCreatedFinding, installScannerApiMock } from "./scanner-api-mock";
+import { installRichFixtures } from "./visual-fixtures";
 
 type Fixture = { edition?: "community" | "enterprise" };
 const ROUTES: { name: string; url: string; edition?: Fixture["edition"] }[] = [
@@ -25,6 +26,9 @@ const ROUTES: { name: string; url: string; edition?: Fixture["edition"] }[] = [
   { name: "coverage", url: "/coverage" },
   { name: "audit", url: "/audit" },
   { name: "agents", url: "/agents" },
+  { name: "findings-by-repo", url: "/findings" },
+  { name: "vulnerability-detail", url: "/vulnerabilities/vuln-sqli" },
+  { name: "collection-detail", url: "/collections/backend" },
   { name: "fixes", url: "/fixes" },
   { name: "settings-general", url: "/settings?tab=general" },
   { name: "settings-scanners", url: "/settings?tab=scanners" },
@@ -63,6 +67,8 @@ for (const theme of ["light", "dark"] as const) {
       test.skip(!testInfo.project.name.startsWith("desktop-chromium"), "one reference viewport");
       await page.addInitScript((t) => localStorage.setItem("wolf-theme", t), theme);
       await installSweepMock(page, route.edition ?? "enterprise");
+      // Settings, account and Enterprise pages keep the plain mock; the rest get real data.
+      if (!/^(settings|account|enterprise)/.test(route.name)) await installRichFixtures(page);
       await page.goto(route.url);
       await expect(page.locator("#main-content")).toBeVisible();
       await expect(page.locator("html")).toHaveClass(theme === "dark" ? /dark/ : /^(?!.*dark)/);

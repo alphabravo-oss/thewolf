@@ -3,7 +3,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { keepPreviousData, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  ArrowLeftIcon,
   AlertTriangleIcon,
   BugIcon,
   CheckCircle2Icon,
@@ -36,6 +35,10 @@ import { useIsAdmin, useMe, displayLabel } from "@/lib/me";
 import { useAutofixEnabled } from "@/lib/fixes";
 import { useRuntimeCapabilities } from "@/lib/runtime-capabilities";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/confirm-dialog";
+import { MetricCard } from "@/components/ui/metric-card";
+import { PageHeader, PageShell } from "@/components/ui/page";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScanAgentsPanel } from "@/components/fixes/scan-agents-panel";
 import { Section } from "@/components/ui/section";
@@ -444,12 +447,12 @@ function ScanDetailPage() {
     });
   };
 
-  if (scanQ.isError) return <div className="page stack"><p role="alert">Could not load this scan. <button className="underline" onClick={() => void scanQ.refetch()}>Retry</button></p></div>;
+  if (scanQ.isError) return <PageShell><p role="alert">Could not load this scan. <button className="underline" onClick={() => void scanQ.refetch()}>Retry</button></p></PageShell>;
   if (scanQ.isLoading || !scanQ.data) {
     return (
-      <div className="page stack">
+      <PageShell>
         <CardSkeleton />
-      </div>
+      </PageShell>
     );
   }
   const scan = scanQ.data;
@@ -477,34 +480,33 @@ function ScanDetailPage() {
     : gateVerdict(gateQ.data, gateQ.isError);
 
   return (
-    <div className="page stack">
+    <PageShell>
       {retryTools.dialog}
-      <header className="space-y-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <Link to="/scans" className="size-9 grid place-items-center rounded-md hover:bg-muted/50" aria-label="Back to scans"><ArrowLeftIcon className="size-4" /></Link>
-          <h1 className="min-w-0 flex-1 text-xl font-semibold break-words">
-            <Link to="/repos/$repoId" params={{ repoId: scan.repo_id }} className="hover:underline">{scan.repo?.name ?? "Repository"}</Link>
-            <span className="font-normal text-muted-foreground"> · {scan.branch || "Default branch"} · <span className="capitalize">{scan.profile || "Custom"}</span></span>
-          </h1>
-          <ScanStatusPill scan={scan} status={scan.status} incomplete={incomplete || toolsQ.isError} gateStatus={gateQ.data?.evaluation?.status ?? gateQ.data?.result?.status ?? (gateQ.isError ? "unavailable" : "pending")} />
-        </div>
-        <p role="status" aria-live="polite" className="min-h-6 text-base font-medium break-words">{verdict}</p>
-        <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-          <span><ScanTimestamps scan={scan} /></span>
-          <span>{completed.length}/{selected.length} tools completed · Attempt {scan.attempt || 1}</span>
-          {scan.failure_code && <span className="font-mono">{scan.failure_code}</span>}
-          {scan.commit_sha && <span title={scan.commit_sha}>Commit <span className="font-mono">{scan.commit_sha.slice(0, 7)}</span></span>}
-          {me.data?.id === scan.user_id && <span>Requested by {displayLabel(me.data)}</span>}
-          {scan.origin_scan_id && <Link to="/scans/$scanId" params={{ scanId: scan.origin_scan_id }} className="underline">Original scan</Link>}
-          <Link to="/repos/$repoId" params={{ repoId: scan.repo_id }} search={{ tab: "tests", test_scan: scanId, collection_id: scan.collection_id }} className="hover:underline">Test coverage</Link>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {!scanLive && retryable.length > 0 && <Button onClick={() => void launchRetryTools()} disabled={retryTools.busy} aria-describedby="retry-tools-scope"><RefreshCwIcon className="size-4" />{retryTools.busy ? "Checking scanners…" : `Retry ${retryable.length} ${retryable.length === 1 ? "tool" : "tools"}`}</Button>}
-          {(scan.status === "failed" || scan.status === "cancelled") && <Button variant="outline" onClick={() => retry.mutate()} disabled={retry.isPending || retryTools.busy}><RefreshCwIcon className="size-4" />{retry.isPending ? "Retrying…" : "Retry whole scan"}</Button>}
+      <PageHeader
+        breadcrumbs={[{ label: "Scans", link: { to: "/scans" } }, { label: scan.repo?.name ?? "Repository", link: { to: "/repos/$repoId", params: { repoId: scan.repo_id } } }, { label: scanId.slice(0, 8) }]}
+        title={<>{scan.repo?.name ?? "Repository"}<span className="font-normal text-muted-foreground"> · {scan.branch || "Default branch"} · <span className="capitalize">{scan.profile || "Custom"}</span></span></>}
+        status={<ScanStatusPill scan={scan} status={scan.status} incomplete={incomplete || toolsQ.isError} gateStatus={gateQ.data?.evaluation?.status ?? gateQ.data?.result?.status ?? (gateQ.isError ? "unavailable" : "pending")} />}
+        description={<span role="status" aria-live="polite" className="block min-h-5 break-words text-foreground">{verdict}</span>}
+        actions={<>
+          {!scanLive && retryable.length > 0 && <Button size="sm" onClick={() => void launchRetryTools()} disabled={retryTools.busy} aria-describedby="retry-tools-scope"><RefreshCwIcon aria-hidden />{retryTools.busy ? "Checking scanners…" : `Retry ${retryable.length} ${retryable.length === 1 ? "tool" : "tools"}`}</Button>}
+          {(scan.status === "failed" || scan.status === "cancelled") && <Button size="sm" variant="outline" onClick={() => retry.mutate()} disabled={retry.isPending || retryTools.busy}><RefreshCwIcon aria-hidden />{retry.isPending ? "Retrying…" : "Retry whole scan"}</Button>}
           {scanLive && <CancelScanButton scanId={scanId} />}
-        </div>
-        {!scanLive && retryable.length > 0 && <Section variant="plain" className="text-xs text-muted-foreground" id="retry-tools-scope" title={<>Retry scope: {retryable.length} failed, partial or stopped {retryable.length === 1 ? "tool" : "tools"} · new scan on {scan.branch || "the default branch"}</>}><p className="mt-1 break-words">{retryable.map((tool) => tool.name).join(", ")}. Completed tools are not rerun. Original results remain in this scan.</p></Section>}
-      </header>
+        </>}
+      />
+      <div className="-mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+        <span><ScanTimestamps scan={scan} /></span>
+        {scan.failure_code && <span className="font-mono">{scan.failure_code}</span>}
+        {me.data?.id === scan.user_id && <span>Requested by {displayLabel(me.data)}</span>}
+        {scan.origin_scan_id && <Link to="/scans/$scanId" params={{ scanId: scan.origin_scan_id }} className="underline">Original scan</Link>}
+        <Link to="/repos/$repoId" params={{ repoId: scan.repo_id }} search={{ tab: "tests", test_scan: scanId, collection_id: scan.collection_id }} className="hover:underline">Test coverage</Link>
+      </div>
+      {!scanLive && retryable.length > 0 && <Section variant="plain" className="text-xs text-muted-foreground" id="retry-tools-scope" title={<>Retry scope: {retryable.length} failed, partial or stopped {retryable.length === 1 ? "tool" : "tools"} · new scan on {scan.branch || "the default branch"}</>}><p className="mt-1 break-words">{retryable.map((tool) => tool.name).join(", ")}. Completed tools are not rerun. Original results remain in this scan.</p></Section>}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <MetricCard title="Tools completed" value={`${completed.length} / ${selected.length}`} subtitle={parseToolList(scan.tools_failed).length > 0 ? `${parseToolList(scan.tools_failed).length} failed` : "No tool failures"} />
+        <MetricCard title="Attempt" value={scan.attempt || 1} subtitle={scan.origin_scan_id ? "Retry of an earlier scan" : "Original scan"} />
+        <MetricCard title="Commit" value={scan.commit_sha ? scan.commit_sha.slice(0, 7) : "—"} subtitle={scan.commit_sha ? "Scanned revision" : "No commit recorded"} className="[&_span.tabular-nums]:font-mono" />
+        <MetricCard title="Profile" value={(scan.profile || "Custom").replace(/^./, (c) => c.toUpperCase())} subtitle={scan.branch || "Default branch"} />
+      </div>
 
       <section aria-label="Scanner coverage" className="rounded-lg border border-border px-4 py-3 space-y-2">
         <ToolsPanel tools={toolsQ.data} loading={toolsQ.isPending} error={toolsQ.isError} onRefresh={() => void toolsQ.refetch()} scanId={scanId} scanStatus={scan.status} />
@@ -527,6 +529,13 @@ function ScanDetailPage() {
         {statsQ.isError && <p role="alert" className="text-xs text-status-warning">Severity totals could not refresh. <button type="button" onClick={() => void statsQ.refetch()} className="underline">Retry totals</button></p>}
       </section>
 
+      <Tabs defaultValue="findings">
+        <TabsList aria-label="Scan views">
+          <TabsTrigger value="findings">Findings</TabsTrigger>
+          {!!scan.scanner_scopes?.length && <TabsTrigger value="scope">Scope</TabsTrigger>}
+          {autofixEnabled && !scanLive && <TabsTrigger value="agents">Agents</TabsTrigger>}
+        </TabsList>
+        <TabsContent value="findings" className="mt-4">
       <section aria-label="Scan findings">
         <div className="flex items-end justify-between gap-3 mb-3">
           <h2 className="text-base font-semibold">Findings</h2>
@@ -669,26 +678,34 @@ function ScanDetailPage() {
           </>
         )}
       </section>
+        </TabsContent>
+        {!!scan.scanner_scopes?.length && <TabsContent value="scope" className="mt-4">
+          <ScopeList scopes={scan.scanner_scopes} />
+        </TabsContent>}
+        {autofixEnabled && !scanLive && <TabsContent value="agents" className="mt-4">
+          <ScanAgentsPanel scanId={scan.origin_scan_id || scanId} repoId={scan.repo_id} originFindings={scan.origin_scan_id ? undefined : scan.finding_count} github={scan.source_type === "github" || scan.repo?.source_type === "github"} sourcePath={scan.source_path || scan.repo?.source_path} />
+        </TabsContent>}
+      </Tabs>
       {(scan.failure_message || scan.failure_code) && <Section className="text-sm" title="Failure details"><p className="mt-2 whitespace-pre-wrap break-words text-muted-foreground">{scan.failure_message || scan.failure_code}</p></Section>}
       {output.scanId === scanId && output.lines.length > 0 && (
         <Section title="Tool output · latest 200 lines"><pre aria-label="Live tool output" tabIndex={0} className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap break-all text-xs">{output.lines.join("\n")}</pre></Section>
       )}
-      {!!scan.scanner_scopes?.length && (
-        <Section className="text-sm" title="Requested and effective scan scope">
-          <ul className="mt-2 space-y-3">
-            {scan.scanner_scopes.map((scope) => <li key={scope.tool_name} className="break-words">
-              <strong>{scope.tool_name}</strong>
-              <p>Requested: {scopeLabel(scope.requested_scope)}</p>
-              <p>Effective: {scopeLabel(scope.effective_scope)}</p>
-              {scope.scope_message && <p className="text-status-warning">{scope.scope_message}</p>}
-            </li>)}
-          </ul>
-        </Section>
-      )}
+    </PageShell>
+  );
+}
 
-      {autofixEnabled && !scanLive && <ScanAgentsPanel scanId={scan.origin_scan_id || scanId} repoId={scan.repo_id} originFindings={scan.origin_scan_id ? undefined : scan.finding_count} github={scan.source_type === "github" || scan.repo?.source_type === "github"} sourcePath={scan.source_path || scan.repo?.source_path} />}
-
-    </div>
+function ScopeList({ scopes }: { scopes: NonNullable<Scan["scanner_scopes"]> }) {
+  return (
+    <Section defaultOpen className="text-sm" title="Requested and effective scan scope">
+      <ul className="mt-2 space-y-3">
+        {scopes.map((scope) => <li key={scope.tool_name} className="break-words">
+          <strong>{scope.tool_name}</strong>
+          <p>Requested: {scopeLabel(scope.requested_scope)}</p>
+          <p>Effective: {scopeLabel(scope.effective_scope)}</p>
+          {scope.scope_message && <p className="text-status-warning">{scope.scope_message}</p>}
+        </li>)}
+      </ul>
+    </Section>
   );
 }
 
@@ -752,49 +769,30 @@ function downloadBlob(content: string, filename: string, mime: string) {
 function CancelScanButton({ scanId }: { scanId: string }) {
   const qc = useQueryClient();
   const [confirming, setConfirming] = useState(false);
-  const confirmRef = useRef<HTMLButtonElement>(null);
   const m = useMutation({
     mutationFn: () => api.delete(`/scans/${scanId}`),
     onSuccess: () => {
+      setConfirming(false);
       qc.invalidateQueries({ queryKey: ["scan", scanId] });
       qc.invalidateQueries({ queryKey: ["scan", scanId, "tools"] });
     },
   });
-  useEffect(() => {
-    if (confirming) confirmRef.current?.focus();
-  }, [confirming]);
-  if (confirming) {
-    return (
-      <div className="flex items-center gap-2">
-        <button
-          ref={confirmRef}
-          type="button"
-          onClick={() => m.mutate()}
-          disabled={m.isPending}
-          className="inline-flex items-center gap-1 px-3 h-9 rounded-md bg-status-error/20 ring-1 ring-status-error/40 text-status-error text-sm hover:bg-status-error/30 disabled:opacity-50"
-        >
-          <StopCircleIcon className="size-4" />
-          {m.isPending ? "Cancelling…" : "Confirm cancel"}
-        </button>
-        <button
-          type="button"
-          onClick={() => setConfirming(false)}
-          className="text-xs text-muted-foreground hover:text-foreground"
-        >
-          back
-        </button>
-      </div>
-    );
-  }
   return (
-    <button
-      type="button"
-      onClick={() => setConfirming(true)}
-      className="inline-flex items-center gap-1 px-3 h-9 rounded-md bg-status-error/10 ring-1 ring-status-error/30 text-status-error text-sm hover:bg-status-error/20"
-      title="Cancel the entire scan. Findings from tools that already completed are preserved."
-    >
-      <StopCircleIcon className="size-4" /> Cancel scan
-    </button>
+    <>
+      <Button type="button" size="sm" variant="outline" className="text-destructive-text" onClick={() => setConfirming(true)} title="Cancel the entire scan. Findings from tools that already completed are preserved.">
+        <StopCircleIcon aria-hidden /> Cancel scan
+      </Button>
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title="Cancel this scan?"
+        description="The whole scan stops. Findings from tools that already completed are preserved."
+        confirmLabel="Confirm cancel"
+        cancelLabel="Keep running"
+        pending={m.isPending}
+        onConfirm={() => m.mutate()}
+      />
+    </>
   );
 }
 
