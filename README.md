@@ -290,7 +290,7 @@ Anything that fails is rolled back and the orchestrator escalates (more context,
 
 ### The worker
 
-The server **runs no agents**. It enqueues durable jobs onto a `fix_jobs` queue; a separable **`wolf fixer`** worker atomically claims them, runs the orchestration inside an engine container, streams logs + status back over SSE, and updates the job. Run one or many — the atomic claim guarantees two workers never double-claim a job, and a heartbeat + stale-reclaim recovers jobs from a crashed worker.
+The server **runs no agents**. It enqueues durable jobs onto a `fix_jobs` queue; a separable **`wolf fixer`** worker (shipped in the Wolf Enterprise binary) atomically claims them, runs the orchestration inside an engine container, streams logs + status back over SSE, and updates the job. Run one or many — the atomic claim guarantees two workers never double-claim a job, and a heartbeat + stale-reclaim recovers jobs from a crashed worker.
 
 ```bash
 wolf fixer            # long-running worker: claim, fix, repeat

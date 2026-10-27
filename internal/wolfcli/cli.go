@@ -130,7 +130,6 @@ func NewRootCommand(opts Options) *cobra.Command {
 		scanCmd,
 		newEnrichCmd(),
 		agentCmd,
-		newFixerCmd(),
 		newScanWorkerCmd(),
 		newScannerReleaseWorkerCmd(),
 		newScannerProposalExecutorCmd(),

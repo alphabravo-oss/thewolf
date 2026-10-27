@@ -33,7 +33,7 @@ func TestWorkersRejectInvalidMasterKeyBeforeInitialization(t *testing.T) {
 	t.Setenv("WOLF_MASTER_KEY", "invalid")
 	t.Setenv("WOLF_DB_DRIVER", "unsupported")
 	t.Setenv("PATH", t.TempDir())
-	for _, cmd := range []*cobra.Command{newScanWorkerCmd(), newFixerCmd()} {
+	for _, cmd := range []*cobra.Command{newScanWorkerCmd()} {
 		cmd.SetArgs([]string{"--once"})
 		if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "load secrets master key") {
 			t.Fatalf("%s must reject the key before backend/database initialization: %v", cmd.Name(), err)
