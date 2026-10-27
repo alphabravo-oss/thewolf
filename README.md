@@ -370,7 +370,8 @@ For the full operations reference — air-gapped installs, network allowlists, r
 ## Architecture
 
 ```text
-cmd/wolf/        CLI + server entrypoint
+cmd/wolf/        CLI + server entrypoint (thin main)
+internal/wolfcli/ the wolf command tree (embedded by the Enterprise overlay via pkg/host)
 internal/
   api/           HTTP API, OpenAPI docs, SSE streaming, auth & audit middleware
   ai/            Pluggable AI providers (Anthropic, OpenAI)
