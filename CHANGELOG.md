@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- Performance: the Home and Reports aggregates (`/fleet/posture`, `/findings/trends`,
+  `/findings/by-repo`, `/fleet/report`, needs-attention, top rules, the findings
+  list) no longer load every historical finding per request. Current state reads
+  only the latest complete scan of each branch plus later attempts; first-seen and
+  new-vs-resurfaced are answered with a query for just the issues involved; trends
+  load each distinct scan once. On a 250k-finding database `/fleet/posture` went
+  from 3.2 s to 0.11 s, `/findings/trends` from 4.6 s to 0.45 s and `/fleet/report`
+  from 10.8 s to 0.48 s, with identical results.
 - PostgreSQL is now the Compose default (`postgres` service always on, services
   wait for it healthy, `WOLF_DB_DRIVER=postgres`, DSN built from
   `POSTGRES_PASSWORD`). SQLite support ends after this release. New

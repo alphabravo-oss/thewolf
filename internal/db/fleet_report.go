@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
+	"golang.org/x/sync/errgroup"
 )
 
 // SecurityReport is the "Security posture" report (GET /fleet/report). The live
@@ -53,25 +54,27 @@ func BuildSecurityReport(ctx context.Context, s Store, userID string, fleet bool
 		}
 		out.Collection = &ReportCollection{ID: col.ID, Name: col.Name}
 	}
-	p, err := s.FleetPosture(ctx, userID, fleet, collectionID)
-	if err != nil {
-		return nil, err
-	}
-	trend, err := s.FleetFindingTrends(ctx, userID, fleet, collectionID)
-	if err != nil {
-		return nil, err
-	}
-	byRepo, err := s.FindingsByRepo(ctx, userID, fleet, collectionID)
-	if err != nil {
-		return nil, err
-	}
-	var jobs []models.FixJob
-	if fleet {
-		jobs, err = s.ListFixJobs(ctx, "")
-	} else {
-		jobs, err = s.ListFixJobsByUser(ctx, userID, "")
-	}
-	if err != nil {
+	// The reads are independent and each is one scoped evidence load: run them
+	// together so the report costs its slowest part, not their sum.
+	var (
+		p      *FleetPostureResult
+		trend  []FleetTrendEntry
+		byRepo []FindingsByRepoRow
+		jobs   []models.FixJob
+		group  errgroup.Group
+	)
+	group.Go(func() (err error) { p, err = s.FleetPosture(ctx, userID, fleet, collectionID); return })
+	group.Go(func() (err error) { trend, err = s.FleetFindingTrends(ctx, userID, fleet, collectionID); return })
+	group.Go(func() (err error) { byRepo, err = s.FindingsByRepo(ctx, userID, fleet, collectionID); return })
+	group.Go(func() (err error) {
+		if fleet {
+			jobs, err = s.ListFixJobs(ctx, "")
+		} else {
+			jobs, err = s.ListFixJobsByUser(ctx, userID, "")
+		}
+		return
+	})
+	if err := group.Wait(); err != nil {
 		return nil, err
 	}
 
