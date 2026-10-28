@@ -58,3 +58,8 @@ export function entitled(ed: EditionInfo | undefined, capability: string) {
 export function isEnterprise(ed?: { edition?: string; overlay?: Rev }) {
   return ed?.edition === "enterprise" || !!ed?.overlay;
 }
+
+/** Human edition name. The API sends `product`; without it, derive it from the edition rather than defaulting to Community. */
+export function editionProduct(ed?: { product?: string; edition?: string; overlay?: Rev }) {
+  return ed?.product || (isEnterprise(ed) ? "Wolf Enterprise" : "Wolf Community");
+}

@@ -1,4 +1,4 @@
-import { REMEDIATION, useEdition } from "@/lib/edition";
+import { editionProduct, REMEDIATION, useEdition } from "@/lib/edition";
 import { KnobsCard, type Knob } from "./knobs";
 import { SettingsCard } from "./shared";
 
@@ -32,7 +32,7 @@ const SCANNING: Knob[] = [
 
 export function GeneralSection() {
   const edition = useEdition();
-  const product = edition.data?.product ?? "Wolf Community";
+  const product = editionProduct(edition.data);
   return (
     <div className="space-y-4">
       <SettingsCard title="Edition" description={`${product} — ${edition.data?.edition ?? "community"}.`}>

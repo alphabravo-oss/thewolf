@@ -420,6 +420,9 @@
   .page { width: 100%; }
   .page--narrow { max-width: 66rem; margin-inline: auto; }
   .page--mid { max-width: 84rem; margin-inline: auto; }
+  /* Body of a section page (Settings sections, Account): readable measure that
+     still uses wide screens, left-aligned beside its sub-nav. */
+  .section-page { min-width: 0; max-width: 72rem; }
 
   /* PageShell is `space-y-6`. */
   .stack > * + * { margin-top: 1.5rem; }

@@ -70,7 +70,7 @@ function AccountPage() {
         })}
       </nav>
 
-      <div className="min-w-0 max-w-4xl">
+      <div className="section-page">
       {section === "profile" && <AccountTab />}
       {section === "security" && <SecurityTab />}
       {section === "apikeys" && <ApiKeysTab />}

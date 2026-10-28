@@ -25,4 +25,16 @@ describe("Section", () => {
     fireEvent.click(trigger);
     expect(screen.getByLabelText("kept", { selector: "input" })).toHaveValue("typed");
   });
+
+  it("can be controlled and exposes a named heading region", () => {
+    const seen: boolean[] = [];
+    const { rerender } = render(<Section title="Work" headingLevel={2} open={false} onOpenChange={(o) => seen.push(o)}><p>body</p></Section>);
+    expect(screen.getByRole("heading", { name: "Work", level: 2 })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Work" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Work" }));
+    expect(seen).toEqual([true]);
+    expect(screen.getByText("body")).not.toBeVisible();
+    rerender(<Section title="Work" headingLevel={2} open onOpenChange={() => {}}><p>body</p></Section>);
+    expect(screen.getByText("body")).toBeVisible();
+  });
 });

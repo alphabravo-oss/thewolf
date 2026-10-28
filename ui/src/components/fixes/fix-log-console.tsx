@@ -1,6 +1,5 @@
 // FixLogConsole — a live, monospace, auto-scrolling log panel for a running
-// fix job. It uses the Nocturne .glass-card / .mono frame (running/done/error
-// header and black/40 log box) and consumes the
+// fix job (status line plus a .log-viewer box). It consumes the
 // GET SSE relay at /fixes/{id}/stream via the shared useSSE hook (the worker
 // runs out-of-process and the server tails its durable log artifact).
 //
@@ -97,7 +96,7 @@ export function FixLogConsole({
     : "";
 
   return (
-    <div className="glass-card p-5 space-y-3">
+    <div className="space-y-3">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-sm font-medium">
           <TerminalIcon className="size-4 text-muted-foreground" />
@@ -139,7 +138,7 @@ export function FixLogConsole({
       {/* The streamed log. Monospace, fixed height, auto-scrolling. */}
       <div
         ref={scrollRef}
-        className="mono text-[11px] leading-relaxed max-h-[28rem] overflow-auto rounded-md border border-border bg-black/40 p-3 whitespace-pre-wrap break-words"
+        className="leading-relaxed max-h-[28rem] overflow-auto rounded-md border border-border log-viewer p-3 text-[11px] whitespace-pre-wrap break-words"
       >
         {lines.length === 0 ? (
           <span className="text-muted-foreground">
@@ -153,7 +152,7 @@ export function FixLogConsole({
           </span>
         ) : (
           lines.map((line, i) => (
-            <div key={i} className="path text-foreground/80">
+            <div key={i}>
               {display(line)}
             </div>
           ))

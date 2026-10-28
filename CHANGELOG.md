@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- UI polish pass: Home recent activity reads in plain language (`lib/audit.ts`), the
+  dashboard uses equal-height cards with collapsible "Keep work moving" and "Are we
+  improving?" sections, agent/fix detail uses the page template (header with
+  breadcrumbs and status, KPI strip, Overview/Decisions tabs, log in a `Section`),
+  Vulnerabilities gains a KPI strip, the Enterprise hub edition tile no longer labels
+  Enterprise as Community, the sidebar Enterprise group links to the hub, and
+  Settings/Account section pages use a wider shared measure (`.section-page`).
+
 - Remove the Community evaluation caps (5 repositories, 3 users, 1 concurrent scan
   worker). Community is uncapped; Enterprise is differentiated by capabilities, not
   limits. `WOLF_COMMUNITY_LIMITS`, the `community_limit` error and the `limits` field
