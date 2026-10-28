@@ -95,7 +95,8 @@ async function installSettingsFixtures(page: Page, edition: "community" | "enter
       { id: "c-1", type: "github_token", name: "github-fixer", allowed_hosts: ["github.com"] },
       { id: "c-2", type: "gitlab_token", name: "corp-gitlab", allowed_hosts: ["gitlab.corp.example"] },
     ],
-    "/license": { edition, product: edition === "enterprise" ? "Wolf Enterprise" : "Wolf Community", commercial_license: edition === "enterprise", data_intact: true },
+    "/license": { edition, product: edition === "enterprise" ? "Wolf Enterprise" : "Wolf Community", commercial_license: false, data_intact: true },
+    "/version": { version: "2.0.0-e2e", commit: "e2e0001", edition, product: edition === "enterprise" ? "Wolf Enterprise" : "Wolf Community", license: edition === "enterprise" ? "commercial" : "apache-2.0", community: { version: "2.0.0-e2e", commit: "e2e0001" } },
     "/auth/providers": { providers: [{ name: "okta", kind: "redirect" }, { name: "ldap", kind: "directory" }], local_break_glass: true },
     "/fixes/engines": {
       worker: [{ name: "claude-code", available: true, installed: true, auth: "oauth", account: "dev@example.com" }, { name: "codex", available: false, installed: true, auth: "none", detail: "not logged in — run: wolf fixer login codex" }],

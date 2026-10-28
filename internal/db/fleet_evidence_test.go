@@ -243,11 +243,16 @@ func testFleetEvidenceQueries(t *testing.T, store Store, database *sqlx.DB) {
 	}
 	// Remediation child scans cannot clear the source branch or count as coverage.
 	makeScan("child", "main", "one", models.ScanStatusCompleted, now)
+	// Legacy root scans of a wolf-fix/* branch are remediation evidence too.
+	makeScan("fixroot", "wolf-fix/one", "", models.ScanStatusCompleted, now)
+	if err := store.CreateFinding(ctx, &models.Finding{ID: uuid.NewString(), RepoID: repo.ID, ScanID: "fixroot", ToolName: "semgrep", Category: models.CategorySAST, FilePath: "fix.go", RuleID: "fix", Status: models.StatusOpen, Severity: models.SeverityHigh, Title: "Fix branch only"}); err != nil {
+		t.Fatal(err)
+	}
 	p, err := store.FleetPosture(ctx, "owner", false, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p.OpenFindingsBySeverity["high"] != 1 || p.Coverage.Rows[0].ScanID == "child" {
+	if p.OpenFindingsBySeverity["high"] != 1 || len(p.Coverage.Rows) != 1 || p.Coverage.Rows[0].Branch != "main" {
 		t.Fatalf("posture: %+v", p)
 	}
 	full, err := store.ListCurrentOpenFindings(ctx, "owner", false, "")
@@ -291,7 +296,7 @@ func testFleetEvidenceQueries(t *testing.T, store Store, database *sqlx.DB) {
 		t.Fatal(err)
 	}
 	collectionScans, err := store.ListScansByCollection(ctx, col.ID)
-	if err != nil || len(collectionScans) != 4 {
+	if err != nil || len(collectionScans) != 5 {
 		t.Fatalf("collection lost repository history: %d %v", len(collectionScans), err)
 	}
 	// Repository filtering must scope the history queries as well as the page,

@@ -80,9 +80,12 @@ test("Integrations: + Add destination validates, posts, sends a test and deletes
 
 test("License & support lists what is included and downloads diagnostics @browser-matrix", async ({ page }) => {
   await setup(page, { "enterprise.identity": true, "enterprise.support": true, "enterprise.integrations": false });
-  await page.route(apiPath("/license"), (route) => route.fulfill({ json: { data: { edition: "enterprise", product: "Wolf Enterprise", commercial_license: true, data_intact: true } } }));
+  await page.route(apiPath("/license"), (route) => route.fulfill({ json: { data: { edition: "enterprise", product: "Wolf Enterprise", commercial_license: false, reason: "license blob is empty", data_intact: true } } }));
   await page.route(apiPath("/enterprise/diagnostics"), (route) => route.fulfill({ json: { data: { edition: "enterprise", go: "go1.25" } } }));
   await page.goto("/settings?tab=license");
+  // The Enterprise binary is the entitlement; no license file is installed (as live).
+  await expect(page.getByText(/^Licensed\. This Enterprise build/)).toBeVisible();
+  await expect(page.getByText(/No commercial license/)).toHaveCount(0);
 
   const included = page.getByRole("region", { name: "What's included" });
   await expect(included.getByText("Single sign-on (OIDC, SAML, LDAP) and SCIM directory sync (included)")).toBeVisible();

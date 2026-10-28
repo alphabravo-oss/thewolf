@@ -91,6 +91,8 @@ const TRENDS = Array.from({ length: 90 }, (_, i) => {
   const date = new Date(FIXED_NOW.getTime() - (89 - i) * 86_400_000).toISOString().slice(0, 10);
   const wave = Math.round(4 * Math.sin(i / 6));
   const counts = { critical: Math.max(1, 6 - Math.floor(i / 25)), high: 18 - Math.floor(i / 12) + (i > 55 && i < 65 ? 6 : 0), medium: 34 + wave, low: 16 + (i % 5), info: 5 };
+  // x100 so count axes reach thousands (compact ticks) with the same proportions.
+  for (const k of Object.keys(counts) as (keyof typeof counts)[]) counts[k] *= 100;
   return { date, counts: { ...counts, total: Object.values(counts).reduce((a, b) => a + b, 0) }, repos: 5, incomplete_scans: i % 17 === 0 ? 1 : 0 };
 });
 
