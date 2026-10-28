@@ -17,7 +17,7 @@ var startTime = time.Now()
 
 // Version info set via ldflags
 var (
-	AppVersion     = "0.2.0"
+	AppVersion     = "0.2.2" // must match ui/package.json; TestAppVersionMatchesUIPackage enforces it
 	BuildCommit    = "dev"
 	BuildDate      = "unknown"
 	CoreCommit     = ""

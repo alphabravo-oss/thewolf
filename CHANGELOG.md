@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- Fix: "Scan coverage" on Home and Reports no longer shows full coverage in red;
+  the shared KPI gauge now treats higher as better (red below 50%, amber below
+  90%). Fix: `/api/v1/version`, the sidebar footer and `wolf version` report
+  0.2.2 instead of 0.2.0 when the build sets no ldflags version; a Go test keeps
+  `routes.AppVersion` equal to `ui/package.json`.
 - detect-secrets: entropy-only hits (`Hex High Entropy String`,
   `Base64 High Entropy String`) are reported as low instead of high. They mostly
   match SHA-256 digests in generated JSON; one astronomer scan raised 33.7k high

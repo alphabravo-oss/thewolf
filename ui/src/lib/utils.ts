@@ -135,19 +135,19 @@ export function statusDotColor(status: string): string {
 }
 
 /**
- * Threshold colouring for a 0–100 gauge: green under 70, amber to 90, red
- * above. Matches Astronomer's utilisation bars.
+ * Threshold colouring for a 0–100 gauge where higher is better (scan
+ * coverage): green from 90, amber from 50, red below.
  */
 export function gaugeColor(percentage: number): string {
-  if (percentage >= 90) return "bg-status-error";
-  if (percentage >= 70) return "bg-status-warning";
-  return "bg-status-success";
+  if (percentage >= 90) return "bg-status-success";
+  if (percentage >= 50) return "bg-status-warning";
+  return "bg-status-error";
 }
 
 export function gaugeTextColor(percentage: number): string {
-  if (percentage >= 90) return "text-status-error";
-  if (percentage >= 70) return "text-status-warning";
-  return "text-foreground";
+  if (percentage >= 90) return "text-foreground";
+  if (percentage >= 50) return "text-status-warning";
+  return "text-status-error";
 }
 
 /* ---------------------------------------------------------------------------
