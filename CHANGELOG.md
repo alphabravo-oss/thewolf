@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Security: Enterprise integration `authorization` headers (SIEM, ticketing,
+  integrations) are now encrypted at rest with the Community master key
+  (AES-256-GCM, same as stored credentials). Community gains `pkg/control.Sealer`
+  (`BindSealer`/`SealerAPI`, values prefixed `wolf-sealed:v1:`) for overlays.
+  Existing plaintext values keep delivering and are sealed on the next edit.
+
 - Reports (Enterprise, `enterprise.compliance`): a **Reports** sidebar item with a
   print-ready "Security posture" report for every repository or one collection
   (open critical/high with a 30-day trend, new vs resolved this week, coverage,

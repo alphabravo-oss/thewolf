@@ -56,8 +56,19 @@ type Fleet interface {
 	IsAdmin(ctx context.Context) bool
 }
 
+// SealedPrefix marks a value produced by Sealer.Seal. Values without it are
+// legacy plaintext.
+const SealedPrefix = "wolf-sealed:v1:"
+
+// Sealer encrypts overlay secrets at rest with the Community master key.
+type Sealer interface {
+	Seal(plaintext string) (string, error)
+	Open(sealed string) (string, error)
+}
+
 var (
 	mu       sync.RWMutex
+	sealer   Sealer
 	fleet    Fleet
 	users    Users
 	records  Records
@@ -98,4 +109,16 @@ func FleetAPI() Fleet {
 	mu.RLock()
 	defer mu.RUnlock()
 	return fleet
+}
+
+func BindSealer(s Sealer) {
+	mu.Lock()
+	sealer = s
+	mu.Unlock()
+}
+
+func SealerAPI() Sealer {
+	mu.RLock()
+	defer mu.RUnlock()
+	return sealer
 }

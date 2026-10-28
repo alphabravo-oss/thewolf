@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/alphabravocompany/thewolf/internal/db"
+	"github.com/alphabravocompany/thewolf/internal/secrets"
 	"github.com/alphabravocompany/thewolf/pkg/control"
 )
 
@@ -47,5 +48,33 @@ func TestRecordsAndUsersRoundTrip(t *testing.T) {
 	}
 	if control.FleetAPI().IsAdmin(t.Context()) {
 		t.Fatal("no caller must not be admin")
+	}
+}
+
+func TestSealerRoundTrip(t *testing.T) {
+	secrets.SetMasterKey(make([]byte, 32))
+	store, err := db.NewSQLite(t.TempDir() + "/wolf.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	Bind(store)
+	s := control.SealerAPI()
+	sealed, err := s.Seal("Bearer example")
+	if err != nil || !strings.HasPrefix(sealed, control.SealedPrefix) || strings.Contains(sealed, "example") {
+		t.Fatalf("seal: %q %v", sealed, err)
+	}
+	if got, err := s.Open(sealed); err != nil || got != "Bearer example" {
+		t.Fatalf("open: %q %v", got, err)
+	}
+	if _, err := s.Open("Bearer example"); err == nil {
+		t.Fatal("unsealed value must not open")
+	}
+	flip := map[byte]string{'0': "1"}[sealed[len(sealed)-1]]
+	if flip == "" {
+		flip = "0"
+	}
+	if _, err := s.Open(sealed[:len(sealed)-1] + flip); err == nil {
+		t.Fatal("tampered value must not open")
 	}
 }
