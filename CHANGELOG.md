@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- Home is a dashboard: KPI row with a 30-day sparkline, seven drill-down charts
+  (observed open findings daily, new vs resolved, riskiest repositories, top rules,
+  age of open critical/high, scanner health, fix pipeline), "Act on now" and recent
+  activity; each card loads, fails and retries on its own. `/fleet/posture`
+  priorities gain `first_seen_at`; `/findings` accepts `sort=first_seen`; the
+  findings list accepts `severity=critical,high`, By rule filters on `q`, and
+  `/agents` accepts `?stage=`. See `docs/dashboard.md`.
+
 - UI polish pass: Home recent activity reads in plain language (`lib/audit.ts`), the
   dashboard uses equal-height cards with collapsible "Keep work moving" and "Are we
   improving?" sections, agent/fix detail uses the page template (header with

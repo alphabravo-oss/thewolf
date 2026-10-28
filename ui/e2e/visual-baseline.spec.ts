@@ -13,8 +13,9 @@ import { apiCreatedFinding, installScannerApiMock } from "./scanner-api-mock";
 import { installRichFixtures } from "./visual-fixtures";
 
 type Fixture = { edition?: "community" | "enterprise" };
-const ROUTES: { name: string; url: string; edition?: Fixture["edition"] }[] = [
+const ROUTES: { name: string; url: string; edition?: Fixture["edition"]; width?: number }[] = [
   { name: "dashboard", url: "/" },
+  { name: "dashboard-mobile", url: "/", width: 390 },
   { name: "repositories", url: "/repos" },
   { name: "repository-detail", url: "/repos/payments-api" },
   { name: "scans", url: "/scans" },
@@ -126,6 +127,7 @@ for (const theme of ["light", "dark"] as const) {
     test(`baseline ${route.name} ${theme}`, async ({ page }, testInfo) => {
       test.skip(!testInfo.project.name.startsWith("desktop-chromium"), "one reference viewport");
       await page.addInitScript((t) => localStorage.setItem("wolf-theme", t), theme);
+      if (route.width) await page.setViewportSize({ width: route.width, height: 844 });
       await installSweepMock(page, route.edition ?? "enterprise");
       // Settings, account and Enterprise pages get the settings fixtures; the rest get rich data.
       if (/^(settings|account|enterprise)/.test(route.name)) await installSettingsFixtures(page, route.edition ?? "enterprise");
@@ -139,7 +141,7 @@ for (const theme of ["light", "dark"] as const) {
       // The app scrolls inside <main>, so grow the viewport to the content
       // (capped) or fullPage would only capture the first screen.
       const contentHeight = await page.locator("#main-content").evaluate((el) => Math.ceil(el.scrollHeight + el.getBoundingClientRect().top));
-      await page.setViewportSize({ width: 1440, height: Math.min(Math.max(contentHeight, 1000), 3600) });
+      await page.setViewportSize({ width: route.width ?? 1440, height: Math.min(Math.max(contentHeight, 1000), 3600) });
       const out = process.env.UPDATE_VISUAL_BASELINE
         ? path.join(testInfo.config.rootDir, "__screenshots__", "baseline", theme, `${route.name}.png`)
         : testInfo.outputPath(`${route.name}-${theme}.png`);

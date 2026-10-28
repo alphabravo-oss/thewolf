@@ -110,6 +110,7 @@ func queryFindingPage(ctx context.Context, tx *sqlx.Tx, where string, args []any
 	column := map[string]string{
 		"severity":   "CASE severity WHEN 'critical' THEN 5 WHEN 'high' THEN 4 WHEN 'medium' THEN 3 WHEN 'low' THEN 2 WHEN 'info' THEN 1 ELSE 0 END",
 		"created_at": "created_at", "tool_name": "tool_name", "title": "title", "file_path": "file_path", "line_start": "line_start",
+		"first_seen": "COALESCE(first_seen_at, created_at)",
 	}[q.SortBy]
 	if column == "" {
 		column = "composite_score"

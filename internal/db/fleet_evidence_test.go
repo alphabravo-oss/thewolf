@@ -42,6 +42,13 @@ func TestFleetEvidenceProgressAndCoverage(t *testing.T) {
 		if p.Coverage.FreshRepos != 1 || p.OpenFindingsBySeverity["high"] != 3 {
 			t.Fatalf("posture: %+v", p)
 		}
+		seen := map[string]time.Time{}
+		for _, f := range p.Priorities {
+			seen[f.Title] = f.FirstSeenAt
+		}
+		if !seen["returned"].Equal(now.AddDate(0, 0, -15)) || !seen["new"].Equal(now.AddDate(0, 0, -1)) {
+			t.Fatalf("priority first seen: %v", seen)
+		}
 	})
 	t.Run("legacy identity fallback and shared evidence stay unchanged", func(t *testing.T) {
 		e := fixture()

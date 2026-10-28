@@ -1,5 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { BotIcon, BugIcon, GaugeIcon } from "lucide-react";
+import { useMemo } from "react";
+import { FIX_STAGES, fixStage, type FixStage } from "@/components/fleet/dashboard-data";
 import { useFlag } from "@/lib/flags";
 import { isFixPaused, useFixJobs, type FixJob } from "@/lib/fixes";
 import { EmptyState, ErrorState } from "@/components/ui/empty-state";
@@ -14,6 +16,10 @@ import { FixerSetupBanner } from "@/components/fixes/fixer-setup-banner";
 import { StatusBadge } from "@/components/fixes/status-badge";
 
 export const Route = createFileRoute("/_authed/agents/")({
+  // ?stage= narrows to jobs at one fix-pipeline stage (Home funnel drill-down).
+  validateSearch: (s: Record<string, unknown>): { stage?: FixStage } => ({
+    stage: FIX_STAGES.some((f) => f.key === s.stage) ? (s.stage as FixStage) : undefined,
+  }),
   component: AgentsPage,
 });
 
@@ -26,6 +32,8 @@ function AgentsPage() {
   const { enabled, isLoading: flagLoading, isError: flagError, refetch: retryFlag } = useFlag("autofix_enabled");
   const q = useFixJobs(enabled);
   const jobs = q.data ?? EMPTY_JOBS;
+  const { stage } = Route.useSearch();
+  const shown = useMemo(() => (stage ? jobs.filter((j) => fixStage(j) === stage) : jobs), [jobs, stage]);
 
   const columns: Column<FixJob>[] = [
     {
@@ -148,8 +156,8 @@ function AgentsPage() {
               cta={{ label: "Go to scans", to: "/scans" }}
             /></Card>
           ) : (
-            <Card><CardContent className="p-4"><DataTable
-              data={jobs}
+            <Card><CardContent className="space-y-3 p-4">{stage && <p className="text-sm">Showing jobs at stage <strong>{FIX_STAGES.find((f) => f.key === stage)?.label}</strong>. <Link to="/agents" className="font-medium text-primary underline-offset-4 hover:underline">Show all</Link></p>}<DataTable
+              data={shown}
               columns={columns}
               keyExtractor={(job) => job.id}
               persistKey="agents"

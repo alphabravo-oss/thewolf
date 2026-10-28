@@ -5,7 +5,7 @@ import { findingRuleHint, findingTitle } from "@/lib/finding-title";
 //   - List: individual findings with bulk triage (defaults to new-since-baseline)
 // Deep work stays on the scan page / repo current-findings list.
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { PaginationState } from "@tanstack/react-table";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BugIcon, ChevronDownIcon } from "lucide-react";
@@ -65,9 +65,10 @@ export const Route = createFileRoute("/_authed/findings/")({
       ...(view !== "repo" ? { view } : {}),
       ...(q ? { q } : {}),
       scope: s.scope === "all" || s.scope === "new" ? s.scope : undefined,
-      severity: typeof s.severity === "string" && ["critical", "high", "medium", "low", "info"].includes(s.severity) ? s.severity : undefined,
+      // One severity, or a comma list from Home drill-downs (e.g. "critical,high").
+      severity: typeof s.severity === "string" && s.severity.split(",").every((v) => ["critical", "high", "medium", "low", "info"].includes(v)) ? s.severity : undefined,
       page: Number.isSafeInteger(Number(s.page)) && Number(s.page) > 0 ? Number(s.page) : undefined,
-      sort: typeof s.sort === "string" && ["severity", "title", "file"].includes(s.sort) ? s.sort : undefined,
+      sort: typeof s.sort === "string" && ["severity", "title", "file", "first_seen"].includes(s.sort) ? s.sort : undefined,
       order: s.order === "asc" ? "asc" : "desc",
     };
   },
@@ -237,7 +238,12 @@ function sevColumn(key: SeverityKey, header: string): Column<RepoRow> {
 // list expands inline rather than opening a detail page.
 function ByRule() {
   const q = useTopVulnerableRules(100);
-  const rows = q.data ?? EMPTY_RULE_ROWS;
+  // ?q= (or ?rule_id=) narrows to matching rules, e.g. a Home chart drill-down.
+  const term = Route.useSearch().q?.toLowerCase();
+  const rows = useMemo(() => {
+    const all = q.data ?? EMPTY_RULE_ROWS;
+    return term ? all.filter((r) => `${r.key} ${r.title ?? ""}`.toLowerCase().includes(term)) : all;
+  }, [q.data, term]);
   const [open, setOpen] = useState<string | null>(null);
 
   const columns: Column<AggregateRow>[] = [
@@ -477,7 +483,7 @@ function FindingsList() {
             {label}
           </Button>
         ))}
-        <Select value={search.severity ?? "all"} onValueChange={(severity) => void navigate({ to: "/findings", search: { ...search, view: "list", severity: severity === "all" ? undefined : severity, page: 1 } })}><SelectTrigger className="h-9 w-44" aria-label="Filter by severity"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All severities</SelectItem>{["critical", "high", "medium", "low", "info"].map((severity) => <SelectItem key={severity} value={severity}>{severity}</SelectItem>)}</SelectContent></Select>
+        <Select value={search.severity ?? "all"} onValueChange={(severity) => void navigate({ to: "/findings", search: { ...search, view: "list", severity: severity === "all" ? undefined : severity, page: 1 } })}><SelectTrigger className="h-9 w-44" aria-label="Filter by severity"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All severities</SelectItem><SelectItem value="critical,high">critical + high</SelectItem>{["critical", "high", "medium", "low", "info"].map((severity) => <SelectItem key={severity} value={severity}>{severity}</SelectItem>)}</SelectContent></Select>
       </div>
       <ConfirmDialog
         open={!!pendingTriage}
