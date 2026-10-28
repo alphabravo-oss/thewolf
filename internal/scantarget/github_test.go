@@ -59,11 +59,7 @@ func TestParseGitHubSource(t *testing.T) {
 // TestPrepareGitHubPublic — a repo with no github_token secret falls through
 // to an unauthenticated clone (the public-repo path).
 func TestPrepareGitHubPublic(t *testing.T) {
-	store, err := db.NewSQLite(":memory:")
-	if err != nil {
-		t.Fatalf("NewSQLite: %v", err)
-	}
-	t.Cleanup(func() { _ = store.Close() })
+	store := db.NewTestPostgres(t)
 
 	user := &models.User{ID: "u1", Email: "u@e.test", PasswordHash: "x"}
 	if err := store.CreateUser(context.Background(), user); err != nil {
@@ -123,11 +119,7 @@ func TestPrepareGitHubPublic(t *testing.T) {
 // TestPrepareGitHubPrivate — a github_token secret for the repo's user is
 // decrypted and passed to the cloner.
 func TestPrepareGitHubPrivate(t *testing.T) {
-	store, err := db.NewSQLite(":memory:")
-	if err != nil {
-		t.Fatalf("NewSQLite: %v", err)
-	}
-	t.Cleanup(func() { _ = store.Close() })
+	store := db.NewTestPostgres(t)
 
 	t.Setenv("WOLF_MASTER_KEY", strings.Repeat("ab", 32))
 	if err := secrets.LoadMasterKey(); err != nil {
@@ -175,11 +167,7 @@ func TestPrepareGitHubPrivate(t *testing.T) {
 }
 
 func TestPrepareGitHubUsesSelectedCredential(t *testing.T) {
-	store, err := db.NewSQLite(":memory:")
-	if err != nil {
-		t.Fatalf("NewSQLite: %v", err)
-	}
-	t.Cleanup(func() { _ = store.Close() })
+	store := db.NewTestPostgres(t)
 
 	t.Setenv("WOLF_MASTER_KEY", strings.Repeat("cd", 32))
 	if err := secrets.LoadMasterKey(); err != nil {

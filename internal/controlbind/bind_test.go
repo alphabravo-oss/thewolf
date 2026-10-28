@@ -10,11 +10,7 @@ import (
 )
 
 func TestRecordsAndUsersRoundTrip(t *testing.T) {
-	store, err := db.NewSQLite(t.TempDir() + "/wolf.db")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = store.Close() })
+	store := db.NewTestPostgres(t)
 	Bind(store)
 
 	u, err := control.UsersAPI().Create(t.Context(), "a@b.co", "Ann", "user")
@@ -53,11 +49,7 @@ func TestRecordsAndUsersRoundTrip(t *testing.T) {
 
 func TestSealerRoundTrip(t *testing.T) {
 	secrets.SetMasterKey(make([]byte, 32))
-	store, err := db.NewSQLite(t.TempDir() + "/wolf.db")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = store.Close() })
+	store := db.NewTestPostgres(t)
 	Bind(store)
 	s := control.SealerAPI()
 	sealed, err := s.Seal("Bearer example")

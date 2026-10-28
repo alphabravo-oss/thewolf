@@ -20,12 +20,6 @@ type ScanCompletion struct {
 	SARIFImport  *models.SARIFImport
 }
 
-// CompleteScan publishes the terminal status, gate and its immutable artifact,
-// and optional first-success baseline together. Findings and other artifacts
-// remain visible as provisional evidence while the scan is running.
-func (s *SQLiteStore) CompleteScan(ctx context.Context, scan *models.Scan, completion ScanCompletion) (bool, error) {
-	return completeScan(ctx, s.db, scan, completion)
-}
 func (s *PostgresStore) CompleteScan(ctx context.Context, scan *models.Scan, completion ScanCompletion) (bool, error) {
 	return completeScan(ctx, s.db, scan, completion)
 }

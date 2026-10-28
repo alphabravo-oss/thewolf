@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -14,24 +13,6 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-func TestSuppressionLifecycleSQLite(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "suppressions.db")
-	s, err := NewSQLite(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = s.Close() })
-	testSuppressionLifecycle(t, s, s.db, func() {
-		if err := s.Close(); err != nil {
-			t.Fatal(err)
-		}
-		reopened, err := NewSQLite(path)
-		if err != nil {
-			t.Fatal(err)
-		}
-		*s = *reopened
-	})
-}
 func TestSuppressionLifecyclePostgres(t *testing.T) {
 	s := newClusterPostgresStore(t)
 	testSuppressionLifecycle(t, s, s.db, func() { reconnectPostgresTestStore(s) })
@@ -243,10 +224,7 @@ func testSuppressionLifecycle(t *testing.T, s Store, database *sqlx.DB, restart 
 	}
 	restart()
 	// The store was reopened; use its current connection for remaining inspections.
-	switch store := s.(type) {
-	case *SQLiteStore:
-		database = store.db
-	case *PostgresStore:
+	if store, ok := s.(*PostgresStore); ok {
 		database = store.db
 	}
 	if n, err := s.ExpireFindingSuppressions(ctx, expiry); err != nil || n != 1 {

@@ -203,14 +203,10 @@ func TestResolverPrepareSSHAllowsDirtyWhenConfigured(t *testing.T) {
 	}
 }
 
-func setupSSHRepo(t *testing.T) (*db.SQLiteStore, *models.Repo) {
+func setupSSHRepo(t *testing.T) (*db.PostgresStore, *models.Repo) {
 	t.Helper()
 	secrets.SetMasterKey(bytes.Repeat([]byte{1}, 32))
-	store, err := db.NewSQLite(":memory:")
-	if err != nil {
-		t.Fatalf("NewSQLite: %v", err)
-	}
-	t.Cleanup(func() { _ = store.Close() })
+	store := db.NewTestPostgres(t)
 	user := &models.User{ID: "user-1", Email: "user@example.com", PasswordHash: "hash"}
 	if err := store.CreateUser(context.Background(), user); err != nil {
 		t.Fatalf("CreateUser: %v", err)

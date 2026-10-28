@@ -50,11 +50,7 @@ function DatabaseCard() {
   return (
     <SettingsCard
       title="Database"
-      description={
-        info?.driver === "postgres"
-          ? `Postgres ${info.user ? `${info.user}@` : ""}${info.host || "—"}/${info.database || "—"}${info.sslmode ? ` · sslmode=${info.sslmode}` : ""}`
-          : `SQLite${info?.database ? ` (${info.database})` : ""}`
-      }
+      description={`Postgres ${info?.user ? `${info.user}@` : ""}${info?.host || "—"}/${info?.database || "—"}${info?.sslmode ? ` · sslmode=${info.sslmode}` : ""}`}
       actions={!helmLocked && <Button size="sm" variant="outline" onClick={() => setOpen(true)}>Change connection</Button>}
     >
       <p className="text-xs text-muted-foreground">

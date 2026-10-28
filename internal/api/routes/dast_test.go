@@ -15,11 +15,7 @@ import (
 )
 
 func TestDASTApprovalAPI(t *testing.T) {
-	store, err := db.NewSQLite(":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer store.Close()
+	store := db.NewTestPostgres(t)
 	old := DefaultHandler
 	t.Cleanup(func() { DefaultHandler = old })
 	SetHandler(store, plugin.NewRegistry())

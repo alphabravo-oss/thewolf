@@ -34,9 +34,6 @@ func auditLimit(q AuditQuery) int {
 	return q.Limit
 }
 
-func (s *SQLiteStore) QueryAuditLog(ctx context.Context, q AuditQuery) ([]models.AuditLogEntry, int, error) {
-	return queryAuditLog(ctx, s.db, q)
-}
 func (s *PostgresStore) QueryAuditLog(ctx context.Context, q AuditQuery) ([]models.AuditLogEntry, int, error) {
 	return queryAuditLog(ctx, s.db, q)
 }

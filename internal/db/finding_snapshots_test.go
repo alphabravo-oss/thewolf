@@ -11,7 +11,6 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-func TestFindingSnapshotsSQLite(t *testing.T) { s := newTestStore(t); testFindingSnapshots(t, s, s.db) }
 func TestFindingSnapshotsPostgres(t *testing.T) {
 	s := newClusterPostgresStore(t)
 	testFindingSnapshots(t, s, s.db)

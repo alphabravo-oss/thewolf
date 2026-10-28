@@ -15,7 +15,7 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/models"
 )
 
-func seedQueuedScan(t *testing.T, store *SQLiteStore, userID, repoID string) *models.Scan {
+func seedQueuedScan(t *testing.T, store *PostgresStore, userID, repoID string) *models.Scan {
 	t.Helper()
 	scan := &models.Scan{
 		ID:        uuid.NewString(),
@@ -31,7 +31,7 @@ func seedQueuedScan(t *testing.T, store *SQLiteStore, userID, repoID string) *mo
 	return scan
 }
 
-func seedQueueOwner(t *testing.T, store *SQLiteStore) (string, string) {
+func seedQueueOwner(t *testing.T, store *PostgresStore) (string, string) {
 	t.Helper()
 	ctx := context.Background()
 	userID := uuid.NewString()
@@ -420,7 +420,7 @@ func TestDurableToolOutputIsBoundedAndEmitsDropMarker(t *testing.T) {
 
 	var count int
 	if err := store.db.GetContext(ctx, &count,
-		`SELECT COUNT(*) FROM scan_events WHERE scan_id = ?`, scan.ID); err != nil {
+		store.db.Rebind(`SELECT COUNT(*) FROM scan_events WHERE scan_id = ?`), scan.ID); err != nil {
 		t.Fatal(err)
 	}
 	if count != models.MaxDurableToolOutputEventsPerScan+1 {

@@ -139,7 +139,7 @@ func TestReclaimStaleJobs(t *testing.T) {
 	}
 	// Backdate the heartbeat so it looks stale.
 	old := time.Now().UTC().Add(-10 * time.Minute)
-	if _, err := store.db.ExecContext(ctx, "UPDATE fix_jobs SET heartbeat_at=? WHERE id=?", old, claimed.ID); err != nil {
+	if _, err := store.db.ExecContext(ctx, store.db.Rebind("UPDATE fix_jobs SET heartbeat_at=? WHERE id=?"), old, claimed.ID); err != nil {
 		t.Fatalf("update: %v", err)
 	}
 

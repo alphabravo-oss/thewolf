@@ -15,13 +15,9 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/scantarget"
 )
 
-func queuedTestScan(t *testing.T) (*db.SQLiteStore, *models.Scan) {
+func queuedTestScan(t *testing.T) (*db.PostgresStore, *models.Scan) {
 	t.Helper()
-	store, err := db.NewSQLite(":memory:")
-	if err != nil {
-		t.Fatalf("NewSQLite: %v", err)
-	}
-	t.Cleanup(func() { _ = store.Close() })
+	store := db.NewTestPostgres(t)
 	ctx := context.Background()
 	userID := uuid.NewString()
 	repoID := uuid.NewString()

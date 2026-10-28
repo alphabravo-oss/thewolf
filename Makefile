@@ -45,7 +45,7 @@ build:
 	CGO_ENABLED=1 go build -trimpath -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY) $(CMD)
 	@echo "==> Built: $(BUILD_DIR)/$(BINARY)"
 
-## test: Run all Go tests
+## test: Run all Go tests (set WOLF_TEST_POSTGRES_DSN, see CONTRIBUTING.md; database tests skip without it)
 test:
 	@echo "==> Running tests..."
 	go test -race -count=1 -timeout 600s ./...

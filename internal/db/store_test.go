@@ -2,24 +2,51 @@ package db
 
 import (
 	"context"
-	"database/sql"
-	"path/filepath"
+	"net/url"
+	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/google/uuid"
+	"github.com/jmoiron/sqlx"
 )
 
-func newTestStore(t *testing.T) *SQLiteStore {
+func newTestStore(t *testing.T) *PostgresStore {
 	t.Helper()
-	store, err := NewSQLite(":memory:")
+	return NewTestPostgres(t)
+}
+
+// connWithoutForeignKeys returns a connection whose session skips foreign-key
+// triggers, to seed corruption the application would refuse to write. It needs
+// a superuser, like the CI service's postgres role.
+func connWithoutForeignKeys(t *testing.T, s *PostgresStore) *sqlx.Conn {
+	t.Helper()
+	conn, err := s.db.Connx(t.Context())
 	if err != nil {
-		t.Fatalf("NewSQLite failed: %v", err)
+		t.Fatal(err)
 	}
-	t.Cleanup(func() { store.Close() })
-	return store
+	t.Cleanup(func() { _ = conn.Close() })
+	if _, err := conn.ExecContext(t.Context(), "SET session_replication_role = replica"); err != nil {
+		t.Fatal(err)
+	}
+	return conn
+}
+
+// testDSNFor returns a DSN for the test database s is connected to, so a test
+// can open a second store on it or reopen it after closing s.
+func testDSNFor(t *testing.T, s *PostgresStore) string {
+	t.Helper()
+	var name string
+	if err := s.db.Get(&name, "SELECT current_database()"); err != nil {
+		t.Fatal(err)
+	}
+	base, err := url.Parse(os.Getenv("WOLF_TEST_POSTGRES_DSN"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return testDatabaseDSN(base, name)
 }
 
 func TestCreateAndGetUser(t *testing.T) {
@@ -973,13 +1000,8 @@ func TestPurgeOrphanedRecordsRemovesLeftoverScans(t *testing.T) {
 		t.Fatalf("create scan: %v", err)
 	}
 	// Simulate a leftover scan after the repo row disappeared.
-	if _, err := store.db.ExecContext(ctx, "PRAGMA foreign_keys = OFF"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := store.db.ExecContext(ctx, "DELETE FROM repos WHERE id = ?", repoID); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := store.db.ExecContext(ctx, "PRAGMA foreign_keys = ON"); err != nil {
+	conn := connWithoutForeignKeys(t, store)
+	if _, err := conn.ExecContext(ctx, "DELETE FROM repos WHERE id = $1", repoID); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1007,9 +1029,6 @@ func TestOrphanSummaryCountsFindingsWithoutRepo(t *testing.T) {
 	ctx := context.Background()
 	userID := uuid.New().String()
 	store.CreateUser(ctx, &models.User{ID: userID, Email: "orphan-f@test.com", PasswordHash: "hash"})
-	if _, err := store.db.ExecContext(ctx, "PRAGMA foreign_keys = OFF"); err != nil {
-		t.Fatal(err)
-	}
 	finding := models.Finding{
 		ID: uuid.New().String(), ScanID: "missing-scan", RepoID: "missing-repo",
 		ToolName: "semgrep", RuleID: "x", Severity: models.SeverityHigh,
@@ -1020,13 +1039,15 @@ func TestOrphanSummaryCountsFindingsWithoutRepo(t *testing.T) {
 		t.Fatal("application persistence accepted a missing scan")
 	}
 	// Seed historical corruption directly; normal persistence requires a scan
-	// whose finding revision it can advance, even with SQLite FK checks disabled.
+	// whose finding revision it can advance, even with foreign keys disabled.
 	finding.CreatedAt, finding.UpdatedAt = time.Now().UTC(), time.Now().UTC()
 	prepareFindingForWrite(&finding)
-	if _, err := store.db.NamedExecContext(ctx, insertFindingQuery, &finding); err != nil {
+	query, args, err := sqlx.Named(insertFindingQuery, &finding)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.db.ExecContext(ctx, "PRAGMA foreign_keys = ON"); err != nil {
+	conn := connWithoutForeignKeys(t, store)
+	if _, err := conn.ExecContext(ctx, conn.Rebind(query), args...); err != nil {
 		t.Fatal(err)
 	}
 	sum, err := store.OrphanSummary(ctx)
@@ -1045,65 +1066,5 @@ func TestOrphanSummaryCountsFindingsWithoutRepo(t *testing.T) {
 	}
 	if sum.FindingCount != 0 {
 		t.Fatalf("expected leftovers gone, finding_count = %d", sum.FindingCount)
-	}
-}
-
-func TestSQLiteReadSnapshotsDoNotReserveWriter(t *testing.T) {
-	store, err := NewSQLite(filepath.Join(t.TempDir(), "snapshot.db") + "?_foreign_keys=off&_journal_mode=DELETE&_txlock=deferred")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = store.Close() })
-	if store.reader == nil {
-		t.Fatal("disk database has no reader pool")
-	}
-	var foreignKeys int
-	var journal string
-	if err := store.db.Get(&foreignKeys, "PRAGMA foreign_keys"); err != nil || foreignKeys != 1 {
-		t.Fatalf("foreign keys: %d %v", foreignKeys, err)
-	}
-	if err := store.db.Get(&journal, "PRAGMA journal_mode"); err != nil || journal != "wal" {
-		t.Fatalf("journal: %s %v", journal, err)
-	}
-	if _, err := store.db.Exec("CREATE TABLE read_snapshot_check (id INTEGER PRIMARY KEY)"); err != nil {
-		t.Fatal(err)
-	}
-	read, err := store.reader.BeginTxx(t.Context(), &sql.TxOptions{ReadOnly: true})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = read.Rollback() }()
-	var count int
-	if err := read.Get(&count, "SELECT COUNT(*) FROM read_snapshot_check"); err != nil {
-		t.Fatal(err)
-	}
-	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
-	defer cancel()
-	if _, err := store.db.ExecContext(ctx, "INSERT INTO read_snapshot_check VALUES (1)"); err != nil {
-		t.Fatalf("reader blocked writer: %v", err)
-	}
-	if err := read.Get(&count, "SELECT COUNT(*) FROM read_snapshot_check"); err != nil || count != 0 {
-		t.Fatalf("snapshot changed: %d %v", count, err)
-	}
-	if _, err := read.Exec("INSERT INTO read_snapshot_check VALUES (2)"); err == nil {
-		t.Fatal("reader accepted a write")
-	}
-	if err := read.Commit(); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.reader.Get(&count, "SELECT COUNT(*) FROM read_snapshot_check"); err != nil || count != 1 {
-		t.Fatalf("fresh snapshot: %d %v", count, err)
-	}
-	// Cancellation must return the reserved reader connection to the pool.
-	store.reader.SetMaxOpenConns(1)
-	cancelled, stop := context.WithCancel(t.Context())
-	tx, err := store.reader.BeginTxx(cancelled, &sql.TxOptions{ReadOnly: true})
-	if err != nil {
-		t.Fatal(err)
-	}
-	stop()
-	_ = tx.Rollback()
-	if err := store.reader.GetContext(ctx, &count, "SELECT COUNT(*) FROM read_snapshot_check"); err != nil || count != 1 {
-		t.Fatalf("cancelled reader leaked: %d %v", count, err)
 	}
 }

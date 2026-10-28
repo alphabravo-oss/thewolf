@@ -13,6 +13,10 @@ stop_server() {
 trap stop_server EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
+# SQLite is gone: each journey gets its own database on a throwaway PostgreSQL
+# (e.g. docker run -d --rm -p 55440:5432 -e POSTGRES_PASSWORD=test postgres:18-alpine).
+admin_dsn="${WOLF_E2E_POSTGRES_DSN:?set WOLF_E2E_POSTGRES_DSN to a throwaway PostgreSQL URL (a database is created and dropped per journey)}"
+command -v psql >/dev/null || { echo "psql is required" >&2; exit 2; }
 echo "Live e2e artifacts: $run"
 cd "$root"
 export GOCACHE="${GOCACHE:-${TMPDIR:-/tmp}/wolf-e2e-go-cache}"
@@ -33,11 +37,14 @@ for project in desktop mobile; do
   for spec in ease daily; do
     home="$run/$project-$spec"
     mkdir -p "$home"
+    database="wolf_e2e_$(openssl rand -hex 6)"
+    psql "$admin_dsn" --quiet --command "CREATE DATABASE $database"
+    database_dsn=$(python3 -c 'import sys,urllib.parse as u; p=u.urlparse(sys.argv[1]); print(p._replace(path="/"+sys.argv[2]).geturl())' "$admin_dsn" "$database")
     export WOLF_LIVE_RESULTS_DIR="$home/results"
     export WOLF_LIVE_SAMPLE_DIR="$home/.wolf/sample-repo"
     (
       cd "$home"
-      HOME="$home" WOLF_DB_DRIVER=sqlite WOLF_DB_DSN="$home/wolf.db" WOLF_UI_DIR="$run/dist" \
+      HOME="$home" WOLF_DB_DRIVER=postgres WOLF_DB_DSN="$database_dsn" WOLF_UI_DIR="$run/dist" \
         WOLF_MASTER_KEY="$(openssl rand -hex 32)" \
         WOLF_SCANNERS_PULL_POLICY="${WOLF_SCANNERS_PULL_POLICY:-IfNotPresent}" \
         WOLF_SCANNERS_DB_VOLUME="$scanner_cache" \
@@ -57,7 +64,8 @@ for project in desktop mobile; do
     npx --no-install playwright test -c playwright.live.config.ts "$spec.spec.ts" --project "$project" "$@" || result=$?
     stop_server
     # Keep results and logs; drop the server's data (workspaces, artifacts) so runs fit a tmpfs.
-    rm -rf "$home/.wolf" "$home/wolf.db"
+    rm -rf "$home/.wolf"
+    psql "$admin_dsn" --quiet --command "DROP DATABASE $database WITH (FORCE)"
   done
 done
 echo "Live e2e artifacts: $run"

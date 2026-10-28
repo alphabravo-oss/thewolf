@@ -11,10 +11,6 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/scannerrelease"
 )
 
-func TestScannerRegistryJobRepositoryContractSQLite(t *testing.T) {
-	runScannerRegistryJobRepositoryContract(t, newSQLiteReleaseContractBackend)
-}
-
 func TestScannerRegistryJobRepositoryContractPostgres(t *testing.T) {
 	runScannerRegistryJobRepositoryContract(t, newPostgresReleaseContractBackend)
 }

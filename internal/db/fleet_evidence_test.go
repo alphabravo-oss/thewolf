@@ -2,7 +2,6 @@ package db
 
 import (
 	"context"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -197,25 +196,7 @@ func TestFleetEvidenceHistoryQueries(t *testing.T) {
 }
 
 func TestFleetEvidenceHistoryPostgres(t *testing.T) {
-	dsn := os.Getenv("WOLF_TEST_POSTGRES_DSN")
-	if dsn == "" {
-		t.Skip("WOLF_TEST_POSTGRES_DSN is not configured")
-	}
-	admin, err := NewPostgres(dsn)
-	if err != nil {
-		t.Fatal(err)
-	}
-	schema := "fleet_history_" + uuid.NewString()
-	if _, err := admin.db.Exec(`CREATE SCHEMA "` + schema + `"`); err != nil {
-		_ = admin.Close()
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _, _ = admin.db.Exec(`DROP SCHEMA IF EXISTS "` + schema + `" CASCADE`); _ = admin.Close() })
-	store, err := NewPostgres(postgresDSNWithSearchPath(t, dsn, schema))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer store.Close()
+	store := NewTestPostgres(t)
 	testFleetEvidenceHistory(t, store, store.db)
 }
 
@@ -327,25 +308,7 @@ func testFleetEvidenceHistory(t *testing.T, store Store, database *sqlx.DB) {
 }
 
 func TestFleetEvidencePostgres(t *testing.T) {
-	dsn := os.Getenv("WOLF_TEST_POSTGRES_DSN")
-	if dsn == "" {
-		t.Skip("WOLF_TEST_POSTGRES_DSN is not configured")
-	}
-	admin, err := NewPostgres(dsn)
-	if err != nil {
-		t.Fatal(err)
-	}
-	schema := "fleet_evidence_" + uuid.NewString()
-	if _, err := admin.db.Exec(`CREATE SCHEMA "` + schema + `"`); err != nil {
-		_ = admin.Close()
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _, _ = admin.db.Exec(`DROP SCHEMA IF EXISTS "` + schema + `" CASCADE`); _ = admin.Close() })
-	store, err := NewPostgres(postgresDSNWithSearchPath(t, dsn, schema))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer store.Close()
+	store := NewTestPostgres(t)
 	testFleetEvidenceQueries(t, store, store.db)
 }
 

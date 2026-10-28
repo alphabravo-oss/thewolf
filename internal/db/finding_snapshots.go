@@ -55,15 +55,11 @@ func updateFindingWithRevision(ctx context.Context, database *sqlx.DB, f *models
 	return tx.Commit()
 }
 
-func (s *SQLiteStore) GetScanFindingSnapshot(ctx context.Context, scanID string) (*models.Scan, []models.Finding, error) {
-	return getScanFindingSnapshot(ctx, s.readDatabase(), scanID)
-}
 func (s *PostgresStore) GetScanFindingSnapshot(ctx context.Context, scanID string) (*models.Scan, []models.Finding, error) {
 	return getScanFindingSnapshot(ctx, s.db, scanID)
 }
 func getScanFindingSnapshot(ctx context.Context, database *sqlx.DB, scanID string) (*models.Scan, []models.Finding, error) {
-	// PostgreSQL requires repeatable read for the two SELECTs. SQLite holds its
-	// existing transaction snapshot; no application mutation occurs here.
+	// Repeatable read gives the two SELECTs one snapshot; nothing is mutated here.
 	tx, err := database.BeginTxx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
 	if err != nil {
 		return nil, nil, err
@@ -154,11 +150,6 @@ func upsertQualityGateResultTx(ctx context.Context, tx *sqlx.Tx, result *models.
 	return nil
 }
 
-// A late publication failure must not rewrite a stale scan struct over manual
-// counts or a concurrent cancellation. Preserve every unrelated scan field.
-func (s *SQLiteStore) FailCompletedScan(ctx context.Context, scanID, code, message string) error {
-	return failCompletedScan(ctx, s.db, scanID, code, message)
-}
 func (s *PostgresStore) FailCompletedScan(ctx context.Context, scanID, code, message string) error {
 	return failCompletedScan(ctx, s.db, scanID, code, message)
 }

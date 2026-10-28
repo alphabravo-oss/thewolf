@@ -63,12 +63,6 @@ func updateUserMFA(ctx context.Context, database sqlx.ExtContext, user, previous
 // ErrMFAChallenge means the challenge is absent, expired, revoked or already used.
 var ErrMFAChallenge = errors.New("invalid MFA challenge")
 
-// CompleteMFALogin commits the verified factor, consumes the challenge and saves
-// both credentials together. A failed transaction consumes neither factor nor
-// challenge, so an otherwise valid exchange can be retried.
-func (s *SQLiteStore) CompleteMFALogin(ctx context.Context, hash string, user, previous *models.User, refresh, browser *models.AuthSession) error {
-	return completeMFALogin(ctx, s.db, hash, user, previous, refresh, browser)
-}
 func (s *PostgresStore) CompleteMFALogin(ctx context.Context, hash string, user, previous *models.User, refresh, browser *models.AuthSession) error {
 	return completeMFALogin(ctx, s.db, hash, user, previous, refresh, browser)
 }

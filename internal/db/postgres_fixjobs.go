@@ -8,7 +8,7 @@ import (
 )
 
 // --- Fix jobs (autonomous fix engine) ---
-// encodeStrings/decodeStrings live in sqlite_fixjobs.go (same package).
+// encodeStrings/decodeStrings live in fixjobs.go (same package).
 
 func (s *PostgresStore) EnqueueFixJob(ctx context.Context, j *models.FixJob) error {
 	return enqueueFixJob(ctx, s.db, j)

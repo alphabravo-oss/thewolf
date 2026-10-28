@@ -10,11 +10,7 @@ import (
 )
 
 func TestUpsertVulnerabilityMergesOnCanonicalKey(t *testing.T) {
-	store, err := NewSQLite(":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = store.Close() })
+	store := NewTestPostgres(t)
 	ctx := context.Background()
 	repoID := uuid.NewString()
 	first := &models.Vulnerability{

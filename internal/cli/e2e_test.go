@@ -31,11 +31,7 @@ func (remediationGrant) Allows(c string) bool {
 // that user's ID, and the store (so tests can seed records directly).
 func startServerFull(t *testing.T) (url, jwt, userID string, store db.Store) {
 	t.Helper()
-	st, err := db.NewSQLite(":memory:")
-	if err != nil {
-		t.Fatalf("NewSQLite: %v", err)
-	}
-	t.Cleanup(func() { _ = st.Close() })
+	st := db.NewTestPostgres(t)
 	// The CLI covers every endpoint, including Enterprise-only AI remediation.
 	entitlement.SetActive(remediationGrant{})
 	t.Cleanup(func() { entitlement.SetActive(nil) })

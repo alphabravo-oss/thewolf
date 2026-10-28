@@ -47,9 +47,6 @@ func checkFixWorkspaceScans(ctx context.Context, tx *sqlx.Tx, repoID, remediatio
 	return nil
 }
 
-func (s *SQLiteStore) AcceptFixRemediation(ctx context.Context, rem *models.Remediation, cleanup func(context.Context, *models.Remediation, *models.Repo) (string, error)) error {
-	return acceptFixRemediation(ctx, s.db, rem, cleanup)
-}
 func (s *PostgresStore) AcceptFixRemediation(ctx context.Context, rem *models.Remediation, cleanup func(context.Context, *models.Remediation, *models.Repo) (string, error)) error {
 	return acceptFixRemediation(ctx, s.db, rem, cleanup)
 }

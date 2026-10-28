@@ -2,8 +2,6 @@ package db
 
 import (
 	"errors"
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -12,35 +10,9 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-func TestMFAReplaySQLite(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "replay.db")
-	first, err := NewSQLite(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = first.Close() })
-	second, err := NewSQLite(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = second.Close() })
-	id := testMFAReplay(t, []Store{first, second})
-	_ = first.Close()
-	_ = second.Close()
-	reopened, err := NewSQLite(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer reopened.Close()
-	verifyMFAReplayRestart(t, reopened, id)
-}
 func TestMFAReplayPostgres(t *testing.T) {
 	first := newClusterPostgresStore(t)
-	var schema string
-	if err := first.db.Get(&schema, "SELECT current_schema()"); err != nil {
-		t.Fatal(err)
-	}
-	dsn := postgresDSNWithSearchPath(t, os.Getenv("WOLF_TEST_POSTGRES_DSN"), schema)
+	dsn := testDSNFor(t, first)
 	second, err := NewPostgres(dsn)
 	if err != nil {
 		t.Fatal(err)
@@ -191,14 +163,6 @@ func testMFAReplay(t *testing.T, stores []Store) string {
 	return user.ID
 }
 
-func TestMFAReplayMigrationSQLite(t *testing.T) {
-	s, err := NewSQLite(":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer s.Close()
-	testMFAReplayMigration(t, s, s.db)
-}
 func TestMFAReplayMigrationPostgres(t *testing.T) {
 	s := newClusterPostgresStore(t)
 	testMFAReplayMigration(t, s, s.db)

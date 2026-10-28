@@ -18,11 +18,7 @@ func (s bootstrapReadFailure) GetUserByEmail(context.Context, string) (*models.U
 }
 
 func TestBootstrapAdminValidationAndNoRepromotion(t *testing.T) {
-	store, err := db.NewSQLite(":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer store.Close()
+	store := db.NewTestPostgres(t)
 	t.Setenv("WOLF_ADMIN_EMAIL", "")
 	t.Setenv("WOLF_ADMIN_PASSWORD", "")
 	if err := bootstrapAdmin(t.Context(), store); err != nil {

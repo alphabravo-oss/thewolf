@@ -20,16 +20,14 @@ three `repository@sha256:<64 hex>` inputs from `main`:
 - a qualified PostgreSQL image.
 
 Configure the `scanner-release-qualification` GitHub environment with required
-reviewers. A single authorized dispatch runs all four receipts:
+reviewers. A single authorized dispatch runs both receipts (SQLite is no longer supported, so only PostgreSQL is qualified):
 
 | Receipt | Database | Execution path | Restart proof |
 |---|---|---|---|
-| Native | SQLite | exact runtime binary + Docker scanner | API and worker processes |
 | Native | PostgreSQL | exact runtime binary + Docker scanner | API and worker processes |
-| Compose | SQLite | published runtime containers + Docker scanner | API and worker services |
 | Compose | PostgreSQL | published runtime/PostgreSQL containers + Docker scanner | API and worker services |
 
-Every job retains its JSON receipt for 365 days. The closure job requires four
+Every job retains its JSON receipt for 365 days. The closure job requires two
 passing receipts, restart recovery in each, and writes SHA-256 checksums for
 the change record. A failed or skipped lane prevents closure.
 
@@ -64,17 +62,16 @@ export WOLF_E2E_SCANNER_IMAGE='registry.example/wolf-scanners@sha256:<digest>'
 export WOLF_E2E_POSTGRES_IMAGE='registry.example/postgres@sha256:<digest>'
 ```
 
-Native SQLite:
+Native PostgreSQL launches `WOLF_E2E_POSTGRES_IMAGE` on an isolated tmpfs by
+default. Set `WOLF_E2E_POSTGRES_DSN` to qualify an already-running customer
+database instead:
 
 ```sh
 WOLF_RUN_REMOTE_SCAN_NATIVE_E2E=1 \
-WOLF_E2E_DATABASE=sqlite \
 scripts/e2e/remote-scan-native.sh
 ```
 
-Native PostgreSQL launches `WOLF_E2E_POSTGRES_IMAGE` on an isolated tmpfs by
-default. Set `WOLF_E2E_POSTGRES_DSN` to qualify an already-running customer
-database instead. Compose owns its database lifecycle:
+Compose owns its database lifecycle:
 
 ```sh
 WOLF_RUN_REMOTE_SCAN_COMPOSE_E2E=1 \

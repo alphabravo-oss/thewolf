@@ -161,7 +161,7 @@ For retained SSH archives, the durable remote path/node/commit/dirty state remai
 the source provenance even though the archive contains no `.git`. Stale-worker
 cleanup keeps a workspace queued for another attempt; exhausted failed jobs remain
 eligible for the existing confined, lease-aware cleanup. Recovery finding deletion
-locks/checks the scan lease in the same transaction on SQLite and PostgreSQL,
+locks/checks the scan lease in the same transaction,
 rejecting replaced or cancelled owners before deleting the requested tool's rows.
 
 This is a recovery-time comparison, not a frozen filesystem snapshot. Concurrent

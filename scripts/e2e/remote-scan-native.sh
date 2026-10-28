@@ -6,13 +6,13 @@ set -euo pipefail
   exit 0
 }
 
-database="${WOLF_E2E_DATABASE:-sqlite}"
+database="${WOLF_E2E_DATABASE:-postgres}"
 scanner_image="${WOLF_E2E_SCANNER_IMAGE:-}"
 postgres_image="${WOLF_E2E_POSTGRES_IMAGE:-}"
 binary="${WOLF_E2E_WOLF_BINARY:-}"
 postgres_dsn="${WOLF_E2E_POSTGRES_DSN:-}"
-[[ "$database" == sqlite || "$database" == postgres ]] || {
-  echo "WOLF_E2E_DATABASE must be sqlite or postgres" >&2
+[[ "$database" == postgres ]] || {
+  echo "WOLF_E2E_DATABASE must be postgres (SQLite is no longer supported)" >&2
   exit 2
 }
 [[ "$scanner_image" =~ ^[^[:space:]@]+@sha256:[a-f0-9]{64}$ ]] || {
@@ -135,8 +135,7 @@ fi
 docker_host="${DOCKER_HOST:-$(docker context inspect --format '{{.Endpoints.docker.Host}}' 2>/dev/null || true)}"
 [[ -n "$docker_host" ]] || docker_host=unix:///var/run/docker.sock
 scanner_digest="${scanner_image##*@}"
-database_dsn="$work/wolf.db"
-[[ "$database" == sqlite ]] || database_dsn="$postgres_dsn"
+database_dsn="$postgres_dsn"
 
 common_environment=(
   "HOME=$work/home"

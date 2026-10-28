@@ -282,8 +282,7 @@ Kubernetes deployment while preserving those actions in Docker Compose.
 ## Operations
 
 Docker Compose enables queue mode by default and starts one Docker-backed
-worker. SQLite is supported with one effective worker. For multiple workers,
-enable PostgreSQL and set `WOLF_SCAN_WORKERS`:
+worker. For multiple workers, set `WOLF_SCAN_WORKERS`:
 
 ```bash
 WOLF_DB_DRIVER=postgres \

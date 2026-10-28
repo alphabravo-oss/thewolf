@@ -69,10 +69,7 @@ func TestRegistrationRequiresExplicitPolicy(t *testing.T) {
 func setupTestRouter(t *testing.T) (*chi.Mux, db.Store) {
 	t.Helper()
 
-	store, err := db.NewSQLite(":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
+	store := db.NewTestPostgres(t)
 	if err := store.Migrate(); err != nil {
 		t.Fatal(err)
 	}

@@ -543,11 +543,7 @@ func newFixtureWithPolicyAndSchedule(
 	if err := plan.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	store, err := db.NewSQLite(t.TempDir() + "/worker.db")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = store.Close() })
+	store := db.NewTestPostgres(t)
 	persistence := store.ScannerReleases()
 	rules.Revision = 1
 	rulesJSON, err := json.Marshal(rules)
@@ -922,7 +918,8 @@ func passingPolicyInput() *scannerreleaseworker.PolicyInput {
 func TestWorkerPolicyInputUsesOnlyDurableCandidateExceptions(t *testing.T) {
 	t.Parallel()
 	fixture := newFixtureWithPolicy(t, successPlan(), scannerpolicy.Default())
-	expires := time.Now().UTC().Add(24 * time.Hour)
+	// PostgreSQL timestamps keep microseconds; the digest must see what is stored.
+	expires := time.Now().UTC().Add(24 * time.Hour).Truncate(time.Microsecond)
 	approval := &scannerrelease.Approval{
 		ID: "exception-durable", CandidateID: fixture.candidate.ID,
 		Actor: "release-approver", Action: "exception",

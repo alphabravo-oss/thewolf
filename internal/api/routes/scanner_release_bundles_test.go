@@ -314,17 +314,13 @@ func importScannerBundleRequest(
 	return response
 }
 
-func newScannerBundleTestStore(t *testing.T) *db.SQLiteStore {
+func newScannerBundleTestStore(t *testing.T) *db.PostgresStore {
 	t.Helper()
-	store, err := db.NewSQLite(":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = store.Close() })
+	store := db.NewTestPostgres(t)
 	return store
 }
 
-func seedScannerBundleRelease(t *testing.T, store *db.SQLiteStore) {
+func seedScannerBundleRelease(t *testing.T, store *db.PostgresStore) {
 	t.Helper()
 	ctx := context.Background()
 	persistence := store.ScannerReleases()

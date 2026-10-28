@@ -13,17 +13,9 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-func TestIgnoreErrorsRollbackSQLite(t *testing.T) {
-	s := newTestStore(t)
-	testIgnoreErrorsRollback(t, s, s.db, false)
-}
 func TestIgnoreErrorsRollbackPostgres(t *testing.T) {
 	s := newClusterPostgresStore(t)
 	testIgnoreErrorsRollback(t, s, s.db, false)
-}
-func TestGitignoreRollbackSQLite(t *testing.T) {
-	s := newTestStore(t)
-	testIgnoreErrorsRollback(t, s, s.db, true)
 }
 func TestGitignoreRollbackPostgres(t *testing.T) {
 	s := newClusterPostgresStore(t)

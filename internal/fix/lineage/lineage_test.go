@@ -24,7 +24,7 @@ func TestBranchAndOrigin(t *testing.T) {
 	}
 }
 
-func seedRepo(t *testing.T, store *db.SQLiteStore, userID, repoID string) {
+func seedRepo(t *testing.T, store *db.PostgresStore, userID, repoID string) {
 	t.Helper()
 	ctx := context.Background()
 	_ = store.CreateUser(ctx, &models.User{ID: userID, Email: userID + "@t", PasswordHash: "h"})
@@ -301,13 +301,9 @@ func TestMaybeEnqueueNextRun(t *testing.T) {
 	}
 }
 
-func newLineageStore(t *testing.T) *db.SQLiteStore {
+func newLineageStore(t *testing.T) *db.PostgresStore {
 	t.Helper()
-	store, err := db.NewSQLite(":memory:")
-	if err != nil {
-		t.Fatalf("NewSQLite: %v", err)
-	}
-	t.Cleanup(func() { _ = store.Close() })
+	store := db.NewTestPostgres(t)
 	return store
 }
 

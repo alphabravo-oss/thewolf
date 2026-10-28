@@ -21,9 +21,6 @@ var (
 	ErrFixSourceBranchConflict = errors.New("findings span different source branches; submit a separate fix for each branch")
 )
 
-func (s *SQLiteStore) FindFixJobByIdempotencyKey(ctx context.Context, user, key string) (*models.FixJob, error) {
-	return findFixJobKey(ctx, s.db, user, key)
-}
 func (s *PostgresStore) FindFixJobByIdempotencyKey(ctx context.Context, user, key string) (*models.FixJob, error) {
 	return findFixJobKey(ctx, s.db, user, key)
 }
@@ -36,9 +33,7 @@ func findFixJobKey(ctx context.Context, q sqlx.ExtContext, user, key string) (*m
 	job.FindingIDList = decodeStrings(job.FindingIDs)
 	return &job, nil
 }
-func (s *SQLiteStore) CreateFixJob(ctx context.Context, job *models.FixJob, allFindings bool) (*models.FixJob, bool, error) {
-	return createFixJob(ctx, s.db, job, allFindings)
-}
+
 func (s *PostgresStore) CreateFixJob(ctx context.Context, job *models.FixJob, allFindings bool) (*models.FixJob, bool, error) {
 	return createFixJob(ctx, s.db, job, allFindings)
 }

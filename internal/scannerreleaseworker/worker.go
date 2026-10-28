@@ -37,8 +37,7 @@ var digestPattern = regexp.MustCompile(`^sha256:[a-f0-9]{64}$`)
 type Worker struct {
 	config Config
 	// Executor work may run concurrently, but persistence mutations are kept
-	// short and serialized per worker. This preserves SQLite single-writer
-	// compatibility without reducing parallel build/test execution.
+	// short and serialized per worker without reducing parallel build/test execution.
 	writeMu sync.Mutex
 }
 

@@ -1,8 +1,9 @@
 package routes
 
 import (
-	"github.com/alphabravocompany/thewolf/internal/models"
 	"testing"
+
+	"github.com/alphabravocompany/thewolf/internal/models"
 )
 
 func TestSortFindingsTiesRemainDeterministic(t *testing.T) {

@@ -332,20 +332,16 @@ func TestWorkerRecoversStaleClaimAfterRestart(t *testing.T) {
 
 func proposalFixture(
 	t *testing.T,
-) (*db.SQLiteStore, scannerrelease.Persistence, *scannerrelease.Candidate) {
+) (*db.PostgresStore, scannerrelease.Persistence, *scannerrelease.Candidate) {
 	return proposalFixtureWithUpdates(t, true)
 }
 
 func proposalFixtureWithUpdates(
 	t *testing.T,
 	withUpdates bool,
-) (*db.SQLiteStore, scannerrelease.Persistence, *scannerrelease.Candidate) {
+) (*db.PostgresStore, scannerrelease.Persistence, *scannerrelease.Candidate) {
 	t.Helper()
-	store, err := db.NewSQLite(t.TempDir() + "/proposal.db")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = store.Close() })
+	store := db.NewTestPostgres(t)
 	persistence := store.ScannerReleases()
 	rules := scannerpolicy.Default()
 	rulesJSON, _ := json.Marshal(rules)

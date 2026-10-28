@@ -10,34 +10,6 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/models"
 )
 
-func (s *SQLiteStore) UpsertVulnerability(ctx context.Context, v *models.Vulnerability) error {
-	return upsertVulnerability(ctx, s.db, v)
-}
-func (s *SQLiteStore) GetVulnerabilityByID(ctx context.Context, id string) (*models.Vulnerability, error) {
-	return getVulnerabilityByID(ctx, s.db, id)
-}
-func (s *SQLiteStore) GetVulnerabilityByRepoKey(ctx context.Context, repoID, canonicalKey string) (*models.Vulnerability, error) {
-	return getVulnerabilityByRepoKey(ctx, s.db, repoID, canonicalKey)
-}
-func (s *SQLiteStore) ListVulnerabilitiesByRepo(ctx context.Context, repoID string) ([]models.Vulnerability, error) {
-	return listVulnerabilities(ctx, s.db, "SELECT * FROM vulnerabilities WHERE repo_id = ? ORDER BY composite_score DESC", repoID)
-}
-func (s *SQLiteStore) ListVulnerabilitiesByScan(ctx context.Context, scanID string) ([]models.Vulnerability, error) {
-	return listVulnerabilities(ctx, s.db, "SELECT * FROM vulnerabilities WHERE scan_id = ? ORDER BY composite_score DESC", scanID)
-}
-func (s *SQLiteStore) ListVulnerabilitiesForUser(ctx context.Context, userID string, fleetMode bool) ([]models.Vulnerability, error) {
-	return listVulnerabilitiesForUser(ctx, s.db, userID, fleetMode)
-}
-func (s *SQLiteStore) InsertVulnerabilityEvidence(ctx context.Context, e *models.VulnerabilityEvidence) error {
-	return insertVulnerabilityEvidence(ctx, s.db, e)
-}
-func (s *SQLiteStore) ListEvidenceByVulnerability(ctx context.Context, vulnerabilityID string) ([]models.VulnerabilityEvidence, error) {
-	return listEvidenceByVulnerability(ctx, s.db, vulnerabilityID)
-}
-func (s *SQLiteStore) RefreshVulnerabilityEvidence(ctx context.Context, vulnerabilityID string) error {
-	return refreshVulnerabilityEvidence(ctx, s.db, vulnerabilityID)
-}
-
 func (s *PostgresStore) UpsertVulnerability(ctx context.Context, v *models.Vulnerability) error {
 	return upsertVulnerability(ctx, s.db, v)
 }

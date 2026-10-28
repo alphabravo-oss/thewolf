@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+- **Breaking: SQLite is no longer supported.** PostgreSQL is the only runtime
+  database. Migrate existing installs **before** upgrading with
+  `wolf db migrate-from-sqlite` (docs/deployment.md, "Move from SQLite to
+  PostgreSQL"; the command is kept for one more release). `WOLF_DB_DRIVER=sqlite`
+  now fails with that pointer, `WOLF_DB_DRIVER` defaults to `postgres`, and Wolf
+  still refuses to start on an empty PostgreSQL while an unmigrated
+  `~/.wolf/wolf.db` exists. `wolf backup` / `wolf restore` only handled SQLite and
+  now print the replacement (`pg_dump`/`pg_restore` or CNPG Barman); the one-worker
+  SQLite limit on `scan-worker` is gone. Tests run against PostgreSQL:
+  set `WOLF_TEST_POSTGRES_DSN` (see `db.NewTestPostgres`); CI sets it.
 - Perf: the bundled PostgreSQL service now starts with `shared_buffers=512MB`, `effective_cache_size=1536MB`, `work_mem=16MB` and a 2 CPU / 2 GB limit (was 1 CPU / 512 MB, which re-read the findings table on every dashboard load). Override with `POSTGRES_SHARED_BUFFERS`, `POSTGRES_EFFECTIVE_CACHE_SIZE`, `POSTGRES_WORK_MEM`, `POSTGRES_CPUS`, `POSTGRES_MEMORY`.
 - Performance: the Home and Reports aggregates (`/fleet/posture`, `/findings/trends`,
   `/findings/by-repo`, `/fleet/report`, needs-attention, top rules, the findings

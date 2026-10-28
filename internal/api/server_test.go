@@ -25,11 +25,7 @@ import (
 // and returns it along with a JWT for a freshly registered user.
 func newTestServer(t *testing.T) (*api.Server, db.Store, string) {
 	t.Helper()
-	store, err := db.NewSQLite(":memory:")
-	if err != nil {
-		t.Fatalf("NewSQLite: %v", err)
-	}
-	t.Cleanup(func() { _ = store.Close() })
+	store := db.NewTestPostgres(t)
 	auth.SetJWTSecret([]byte("test-secret-key-for-jwt-signing"))
 	// Production always has a master key (LoadMasterKey auto-generates one);
 	// mirror that so encryption-backed endpoints (secrets, MFA) work in tests.

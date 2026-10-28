@@ -69,7 +69,7 @@ jobs:
       - name: scanner metadata validation
         run: make scanners-validate
 
-      - name: go test (race, SQLite and PostgreSQL)
+      - name: go test (race, against PostgreSQL)
         run: go test -race -count=1 -timeout 600s ./...
 
   lint:

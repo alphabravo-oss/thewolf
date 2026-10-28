@@ -1,7 +1,6 @@
 package db
 
 import (
-	"os"
 	"testing"
 
 	"github.com/google/uuid"
@@ -9,33 +8,8 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/models"
 )
 
-func TestScanScheduleEnablementSQLite(t *testing.T) {
-	testScanScheduleEnablement(t, newTestStore(t))
-}
-
 func TestScanScheduleEnablementPostgres(t *testing.T) {
-	dsn := os.Getenv("WOLF_TEST_POSTGRES_DSN")
-	if dsn == "" {
-		t.Skip("WOLF_TEST_POSTGRES_DSN is not configured")
-	}
-	admin, err := NewPostgres(dsn)
-	if err != nil {
-		t.Fatal(err)
-	}
-	schema := "schedule_contract_" + uuid.NewString()
-	if _, err := admin.db.Exec(`CREATE SCHEMA "` + schema + `"`); err != nil {
-		_ = admin.Close()
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		_, _ = admin.db.Exec(`DROP SCHEMA "` + schema + `" CASCADE`)
-		_ = admin.Close()
-	})
-	store, err := NewPostgres(postgresDSNWithSearchPath(t, dsn, schema))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer store.Close()
+	store := NewTestPostgres(t)
 	testScanScheduleEnablement(t, store)
 }
 

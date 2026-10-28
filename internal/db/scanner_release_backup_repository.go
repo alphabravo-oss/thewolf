@@ -945,16 +945,6 @@ func (r *scannerReleaseRepository) verifyRestoreIntegrity(
 	if inconsistent != 0 {
 		return errors.New("restored event and operation correlation identities disagree")
 	}
-	if strings.Contains(strings.ToLower(r.db.DriverName()), "sqlite") {
-		rows, err := tx.QueryxContext(ctx, `PRAGMA foreign_key_check`)
-		if err != nil {
-			return err
-		}
-		defer func() { _ = rows.Close() }()
-		if rows.Next() {
-			return errors.New("restored scanner release backup violates foreign-key integrity")
-		}
-	}
 	return nil
 }
 
@@ -1121,6 +1111,6 @@ func (r *scannerReleaseRepository) recordBackupFailure(
 func quoteBackupIdentifier(value string) string {
 	// Every caller supplies a name from the compiled allowlist or from columns
 	// read directly from that allowlisted table. Double-quoting preserves names
-	// across SQLite and PostgreSQL.
+	// (and in backups written by older SQLite releases).
 	return `"` + strings.ReplaceAll(value, `"`, `""`) + `"`
 }

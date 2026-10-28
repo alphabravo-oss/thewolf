@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"strings"
 	"syscall"
 	"time"
 
@@ -54,9 +53,6 @@ func newScanWorkerCmd() *cobra.Command {
 				return fmt.Errorf("open store: %w", err)
 			}
 			defer func() { _ = store.Close() }()
-			if strings.EqualFold(envOr("WOLF_DB_DRIVER", "sqlite"), "sqlite") && capacity > 1 {
-				return fmt.Errorf("SQLite supports one effective scan-worker slot; use PostgreSQL for capacity > 1")
-			}
 			var kubernetesConfig *kubernetesruntime.Config
 			switch backend {
 			case "docker":
@@ -64,9 +60,6 @@ func newScanWorkerCmd() *cobra.Command {
 					wolflog.Warn().Err(err).Msg("scanner backend unavailable; scans may fail until images/runtime are ready")
 				}
 			case "kubernetes":
-				if !strings.EqualFold(envOr("WOLF_DB_DRIVER", "sqlite"), "postgres") {
-					return fmt.Errorf("Kubernetes scan workers require PostgreSQL")
-				}
 				runtimeConfig, err := kubernetesruntime.ConfigFromEnv()
 				if err != nil {
 					return fmt.Errorf("configure Kubernetes scanner runtime: %w", err)

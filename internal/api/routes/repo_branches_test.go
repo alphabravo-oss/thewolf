@@ -149,11 +149,7 @@ func gitRunTest(t *testing.T, dir string, args ...string) {
 }
 
 func TestRepoBranchesOnlySelectGitHubCredentialsForTrustedHTTPSOrigin(t *testing.T) {
-	store, err := db.NewSQLite(":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer store.Close()
+	store := db.NewTestPostgres(t)
 	if err := store.CreateUser(t.Context(), &models.User{ID: "owner", Email: "branch-owner@example.test", PasswordHash: "test-only"}); err != nil {
 		t.Fatal(err)
 	}

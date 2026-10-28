@@ -2,7 +2,6 @@ package db
 
 import (
 	"context"
-	"os"
 	"testing"
 	"time"
 
@@ -11,30 +10,8 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/models"
 )
 
-func TestSQLiteRestartPreservesQueuedAndActiveReleaseAssignments(t *testing.T) {
-	path := t.TempDir() + "/scan-recovery.db"
-	runScanReleaseRestartContract(t, func() (Store, error) { return NewSQLite(path) })
-}
-
 func TestPostgresRestartPreservesQueuedAndActiveReleaseAssignments(t *testing.T) {
-	dsn := os.Getenv("WOLF_TEST_POSTGRES_DSN")
-	if dsn == "" {
-		t.Skip("WOLF_TEST_POSTGRES_DSN is not configured")
-	}
-	admin, err := NewPostgres(dsn)
-	if err != nil {
-		t.Fatal(err)
-	}
-	schema := "scan_recovery_" + uuid.NewString()
-	if _, err := admin.db.Exec(`CREATE SCHEMA "` + schema + `"`); err != nil {
-		_ = admin.Close()
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		_, _ = admin.db.Exec(`DROP SCHEMA IF EXISTS "` + schema + `" CASCADE`)
-		_ = admin.Close()
-	})
-	isolatedDSN := postgresDSNWithSearchPath(t, dsn, schema)
+	isolatedDSN := TestPostgresDSN(t)
 	runScanReleaseRestartContract(t, func() (Store, error) { return NewPostgres(isolatedDSN) })
 }
 

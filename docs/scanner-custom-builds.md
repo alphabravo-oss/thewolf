@@ -197,8 +197,7 @@ home-directory config is mutated.
 ## Persistence, recovery, and backup
 
 Migration 046 creates `scanner_custom_builds`,
-`scanner_custom_build_variants`, and `scanner_custom_build_logs` on SQLite and
-PostgreSQL. Aggregate transitions and correlation events commit atomically.
+`scanner_custom_build_variants`, and `scanner_custom_build_logs`. Aggregate transitions and correlation events commit atomically.
 Claims use opaque exact-match tokens, heartbeat/expiry, attempt budgets, and
 optimistic resource versions. On startup/poll, workers reclaim expired
 operations: within budget, running variants return to queued; after exhaustion
