@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Perf: the bundled PostgreSQL service now starts with `shared_buffers=512MB`, `effective_cache_size=1536MB`, `work_mem=16MB` and a 2 CPU / 2 GB limit (was 1 CPU / 512 MB, which re-read the findings table on every dashboard load). Override with `POSTGRES_SHARED_BUFFERS`, `POSTGRES_EFFECTIVE_CACHE_SIZE`, `POSTGRES_WORK_MEM`, `POSTGRES_CPUS`, `POSTGRES_MEMORY`.
 - Performance: the Home and Reports aggregates (`/fleet/posture`, `/findings/trends`,
   `/findings/by-repo`, `/fleet/report`, needs-attention, top rules, the findings
   list) no longer load every historical finding per request. Current state reads
