@@ -2,7 +2,6 @@ package db
 
 import (
 	"encoding/json"
-	"github.com/jmoiron/sqlx"
 	"math"
 	"sync"
 	"testing"
@@ -14,9 +13,6 @@ import (
 	"github.com/google/uuid"
 )
 
-func TestPartialClusterSuppressionSQLite(t *testing.T) {
-	testPartialClusterSuppression(t, newTestStore(t))
-}
 func TestPartialClusterSuppressionPostgres(t *testing.T) {
 	testPartialClusterSuppression(t, newClusterPostgresStore(t))
 }
@@ -180,13 +176,7 @@ func testPartialClusterSuppression(t *testing.T, s Store) {
 		t.Fatal(err)
 	}
 	// Force a late failure after links, history and scores have changed.
-	var database *sqlx.DB
-	switch store := s.(type) {
-	case *SQLiteStore:
-		database = store.db
-	case *PostgresStore:
-		database = store.db
-	}
+	database := s.(*PostgresStore).db
 	snapshot := func() string {
 		t.Helper()
 		var f []models.Finding

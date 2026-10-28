@@ -20,7 +20,7 @@ services:
     ports:
       - "${WOLF_BIND:-127.0.0.1}:${WOLF_PORT:-8778}:8778"
     # Drop all Linux capabilities (KICS 451d79dc), keep only what
-    # wolf needs to write its sqlite db and spawn child scanners
+    # wolf needs to spawn child scanners
     # via the mounted docker socket (no extra caps required).
     cap_drop:
       - ALL
@@ -830,8 +830,8 @@ services:
           cpus: "0.5"
           memory: 512M
 
-  # Default database. SQLite support ends after this release; existing
-  # installs migrate with `wolf db migrate-from-sqlite` (docs/deployment.md).
+  # The only supported database. Old SQLite installs migrate with
+  # `wolf db migrate-from-sqlite` (docs/deployment.md).
   postgres:
     image: postgres:18.6-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
     # Pull the password from a docker secret rather than baking the

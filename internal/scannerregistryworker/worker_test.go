@@ -55,11 +55,7 @@ func TestWorkerDeletesOnlyRepositoryAuthorizedOrphan(t *testing.T) {
 	}))
 	defer server.Close()
 	host := strings.TrimPrefix(server.URL, "http://")
-	store, err := db.NewSQLite(":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer store.Close()
+	store := db.NewTestPostgres(t)
 	repository := store.ScannerReleases()
 	target := &scannerrelease.RegistryTarget{
 		ID: uuid.NewString(), Name: "mirror", Type: scannerrelease.RegistryMirror,

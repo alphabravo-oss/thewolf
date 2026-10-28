@@ -24,12 +24,9 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/scannerrelease"
 )
 
-func withScannerSupplyChainStore(t *testing.T) *db.SQLiteStore {
+func withScannerSupplyChainStore(t *testing.T) *db.PostgresStore {
 	t.Helper()
-	store, err := db.NewSQLite(":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
+	store := db.NewTestPostgres(t)
 	previous := DefaultHandler
 	SetHandler(store, nil)
 	t.Cleanup(func() {

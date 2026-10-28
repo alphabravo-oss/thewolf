@@ -8,10 +8,6 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-func (s *SQLiteStore) UpdateFixAttempt(ctx context.Context, attempt *models.FixAttempt) error {
-	return finishFixAttempt(ctx, s.db, attempt)
-}
-
 func (s *PostgresStore) UpdateFixAttempt(ctx context.Context, attempt *models.FixAttempt) error {
 	return finishFixAttempt(ctx, s.db, attempt)
 }

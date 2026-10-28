@@ -3,7 +3,6 @@ package db
 import (
 	"encoding/json"
 	"errors"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -12,25 +11,6 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-func TestScanCompletionSQLite(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "completion.db")
-	s, err := NewSQLite(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = s.Close() })
-	testScanCompletion(t, s, s.db, func() *sqlx.DB {
-		if err := s.Close(); err != nil {
-			t.Fatal(err)
-		}
-		reopened, err := NewSQLite(path)
-		if err != nil {
-			t.Fatal(err)
-		}
-		*s = *reopened
-		return s.db
-	})
-}
 func TestScanCompletionPostgres(t *testing.T) {
 	s := newClusterPostgresStore(t)
 	testScanCompletion(t, s, s.db, func() *sqlx.DB { reconnectPostgresTestStore(s); return s.db })

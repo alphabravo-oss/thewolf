@@ -8,8 +8,6 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -25,25 +23,6 @@ import (
 type backupStorePair struct {
 	source Store
 	target Store
-}
-
-func TestScannerReleaseBackupRestoreContractSQLite(t *testing.T) {
-	runScannerReleaseBackupRestoreContract(t, func(t *testing.T) backupStorePair {
-		source, err := NewSQLite(t.TempDir() + "/source.db")
-		if err != nil {
-			t.Fatal(err)
-		}
-		target, err := NewSQLite(t.TempDir() + "/target.db")
-		if err != nil {
-			_ = source.Close()
-			t.Fatal(err)
-		}
-		t.Cleanup(func() {
-			_ = source.Close()
-			_ = target.Close()
-		})
-		return backupStorePair{source: source, target: target}
-	})
 }
 
 func TestScannerReleaseBackupRestoreContractPostgres(t *testing.T) {
@@ -548,55 +527,5 @@ func cloneReleaseBackup(
 
 func newPostgresBackupStorePair(t *testing.T) backupStorePair {
 	t.Helper()
-	dsn := os.Getenv("WOLF_TEST_POSTGRES_DSN")
-	if dsn == "" {
-		t.Skip("WOLF_TEST_POSTGRES_DSN is not configured")
-	}
-	admin, err := NewPostgres(dsn)
-	if err != nil {
-		t.Fatal(err)
-	}
-	sourceSchema := "backup_source_" + strings.ReplaceAll(uuid.NewString(), "-", "")
-	targetSchema := "backup_target_" + strings.ReplaceAll(uuid.NewString(), "-", "")
-	var source, target *PostgresStore
-	t.Cleanup(func() {
-		if source != nil {
-			_ = source.Close()
-		}
-		if target != nil {
-			_ = target.Close()
-		}
-		_, _ = admin.db.Exec(`DROP SCHEMA IF EXISTS "` + sourceSchema + `" CASCADE`)
-		_, _ = admin.db.Exec(`DROP SCHEMA IF EXISTS "` + targetSchema + `" CASCADE`)
-		_ = admin.Close()
-	})
-	for _, schema := range []string{sourceSchema, targetSchema} {
-		if _, err := admin.db.Exec(`CREATE SCHEMA "` + schema + `"`); err != nil {
-			t.Fatal(err)
-		}
-	}
-	source, err = NewPostgres(postgresDSNWithSearchPath(t, dsn, sourceSchema))
-	if err != nil {
-		t.Fatal(err)
-	}
-	target, err = NewPostgres(postgresDSNWithSearchPath(t, dsn, targetSchema))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return backupStorePair{source: source, target: target}
-}
-
-func postgresDSNWithSearchPath(t *testing.T, dsn, schema string) string {
-	t.Helper()
-	if strings.Contains(dsn, "://") {
-		parsed, err := url.Parse(dsn)
-		if err != nil {
-			t.Fatal(err)
-		}
-		query := parsed.Query()
-		query.Set("search_path", schema)
-		parsed.RawQuery = query.Encode()
-		return parsed.String()
-	}
-	return strings.TrimSpace(dsn) + " search_path=" + schema
+	return backupStorePair{source: NewTestPostgres(t), target: NewTestPostgres(t)}
 }

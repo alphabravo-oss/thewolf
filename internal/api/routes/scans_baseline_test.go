@@ -69,11 +69,7 @@ func TestParsePaginationCapsAt200(t *testing.T) {
 }
 
 func TestPersistBaselineState(t *testing.T) {
-	store, err := db.NewSQLite(":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = store.Close() })
+	store := db.NewTestPostgres(t)
 	if err := store.Migrate(); err != nil {
 		t.Fatal(err)
 	}
@@ -161,11 +157,7 @@ func TestPersistBaselineState(t *testing.T) {
 }
 
 func TestCompleteScanCreatesFirstBaseline(t *testing.T) {
-	store, err := db.NewSQLite(":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = store.Close() })
+	store := db.NewTestPostgres(t)
 	if err := store.Migrate(); err != nil {
 		t.Fatal(err)
 	}

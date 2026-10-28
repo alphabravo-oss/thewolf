@@ -168,8 +168,7 @@ func initLogger() {
 	wolflog.Init(os.Stderr, level, json)
 }
 
-// openStore opens the configured database backend. Defaults to SQLite at
-// ~/.wolf/wolf.db.
+// openStore opens the configured PostgreSQL database (WOLF_DB_DSN).
 func openStore() (db.Store, error) { return serve.OpenStore() }
 
 // installScannerBackend wires the container backend into the process. Failures

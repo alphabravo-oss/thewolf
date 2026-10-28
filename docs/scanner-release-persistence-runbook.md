@@ -10,8 +10,6 @@ not replace scanner definitions, release locks, or existing scan records.
 - Migration 030 creates scanner release operational tables, indexes, database
   constraints, immutable-evidence triggers, event streams, and scheduler
   leases.
-- SQLite and PostgreSQL use separate migration 030 files because their trigger,
-  boolean, and timestamp syntax differ.
 - Migration 031 adds `scanner_release_id` and
   `release_manifest_digest` to `scanner_run_records`.
 - Migration 031 deliberately does not add a foreign key. Empty release
@@ -54,9 +52,7 @@ not replace scanner definitions, release locks, or existing scan records.
 2. Confirm the application database is healthy and has sufficient free space
    for indexes.
 3. Take and verify a database backup:
-   - SQLite: use the SQLite online backup API or `.backup`; do not copy a live
-     WAL database as independent files.
-   - PostgreSQL: use the organization's normal consistent backup or
+   - Use the organization's normal consistent PostgreSQL backup or
      `pg_dump --format=custom`.
 4. Record the running Wolf version and the checksum or image digest of the
    binary performing the migration.

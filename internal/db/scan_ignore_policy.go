@@ -9,9 +9,6 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-func (s *SQLiteStore) CaptureScanIgnorePolicy(ctx context.Context, scanID, leaseToken, repoPath string) error {
-	return captureScanIgnorePolicy(ctx, s.db, scanID, leaseToken, repoPath)
-}
 func (s *PostgresStore) CaptureScanIgnorePolicy(ctx context.Context, scanID, leaseToken, repoPath string) error {
 	return captureScanIgnorePolicy(ctx, s.db, scanID, leaseToken, repoPath)
 }

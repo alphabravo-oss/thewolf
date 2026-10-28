@@ -2,7 +2,6 @@ package db
 
 import (
 	"errors"
-	"os"
 	"testing"
 	"time"
 
@@ -10,30 +9,8 @@ import (
 	"github.com/google/uuid"
 )
 
-func TestRecoveryEvidenceDeletionSQLite(t *testing.T) {
-	testRecoveryEvidenceDeletion(t, newTestStore(t))
-}
-
 func TestRecoveryEvidenceDeletionPostgres(t *testing.T) {
-	dsn := os.Getenv("WOLF_TEST_POSTGRES_DSN")
-	if dsn == "" {
-		t.Skip("WOLF_TEST_POSTGRES_DSN is not configured")
-	}
-	admin, err := NewPostgres(dsn)
-	if err != nil {
-		t.Fatal(err)
-	}
-	schema := "recovery_evidence_" + uuid.NewString()
-	if _, err := admin.db.Exec(`CREATE SCHEMA "` + schema + `"`); err != nil {
-		_ = admin.Close()
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _, _ = admin.db.Exec(`DROP SCHEMA "` + schema + `" CASCADE`); _ = admin.Close() })
-	store, err := NewPostgres(postgresDSNWithSearchPath(t, dsn, schema))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer store.Close()
+	store := NewTestPostgres(t)
 	testRecoveryEvidenceDeletion(t, store)
 }
 

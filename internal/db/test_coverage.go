@@ -31,15 +31,10 @@ func getTestCoverage(ctx context.Context, db *sqlx.DB, id string) (*models.TestC
 	return &report, err
 }
 
-func (s *SQLiteStore) SaveTestCoverage(ctx context.Context, r *models.TestCoverage) error {
-	return saveTestCoverage(ctx, s.db, r)
-}
 func (s *PostgresStore) SaveTestCoverage(ctx context.Context, r *models.TestCoverage) error {
 	return saveTestCoverage(ctx, s.db, r)
 }
-func (s *SQLiteStore) GetTestCoverage(ctx context.Context, id string) (*models.TestCoverage, error) {
-	return getTestCoverage(ctx, s.db, id)
-}
+
 func (s *PostgresStore) GetTestCoverage(ctx context.Context, id string) (*models.TestCoverage, error) {
 	return getTestCoverage(ctx, s.db, id)
 }

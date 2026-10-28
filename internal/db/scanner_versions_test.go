@@ -8,7 +8,7 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/models"
 )
 
-func TestScannerVersionChecksSQLite(t *testing.T) {
+func TestScannerVersionChecks(t *testing.T) {
 	store := newTestStore(t)
 	ctx := context.Background()
 	now := time.Date(2026, 6, 12, 12, 0, 0, 0, time.UTC)

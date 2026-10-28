@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"os"
 	"sync"
 	"testing"
 	"time"
@@ -31,45 +30,9 @@ func sameOptionalCounter(before int, beforeErr error, after int, afterErr error)
 	return beforeErr == nil && afterErr == nil && before == after
 }
 
-func newSQLiteReleaseContractBackend(t *testing.T) releaseContractBackend {
-	t.Helper()
-	store, err := NewSQLite(":memory:")
-	if err != nil {
-		t.Fatalf("NewSQLite: %v", err)
-	}
-	return releaseContractBackend{
-		persistence: store.ScannerReleases(),
-		exec: func(ctx context.Context, query string, args ...any) (sql.Result, error) {
-			return store.db.ExecContext(ctx, query, args...)
-		},
-		get: func(ctx context.Context, destination any, query string, args ...any) error {
-			return store.db.GetContext(ctx, destination, query, args...)
-		},
-		close: store.Close,
-	}
-}
-
 func newPostgresReleaseContractBackend(t *testing.T) releaseContractBackend {
 	t.Helper()
-	dsn := os.Getenv("WOLF_TEST_POSTGRES_DSN")
-	if dsn == "" {
-		t.Skip("WOLF_TEST_POSTGRES_DSN is not configured")
-	}
-	admin, err := NewPostgres(dsn)
-	if err != nil {
-		t.Fatalf("NewPostgres admin: %v", err)
-	}
-	schema := "release_contract_" + uuid.NewString()
-	if _, err := admin.db.Exec(`CREATE SCHEMA "` + schema + `"`); err != nil {
-		_ = admin.Close()
-		t.Fatalf("create isolated PostgreSQL schema: %v", err)
-	}
-	store, err := NewPostgres(postgresDSNWithSearchPath(t, dsn, schema))
-	if err != nil {
-		_, _ = admin.db.Exec(`DROP SCHEMA "` + schema + `" CASCADE`)
-		_ = admin.Close()
-		t.Fatalf("NewPostgres isolated schema: %v", err)
-	}
+	store := NewTestPostgres(t)
 	return releaseContractBackend{
 		persistence: store.ScannerReleases(),
 		exec: func(ctx context.Context, query string, args ...any) (sql.Result, error) {
@@ -78,17 +41,8 @@ func newPostgresReleaseContractBackend(t *testing.T) releaseContractBackend {
 		get: func(ctx context.Context, destination any, query string, args ...any) error {
 			return store.db.GetContext(ctx, destination, store.db.Rebind(query), args...)
 		},
-		close: func() error {
-			storeErr := store.Close()
-			_, dropErr := admin.db.Exec(`DROP SCHEMA "` + schema + `" CASCADE`)
-			adminErr := admin.Close()
-			return errors.Join(storeErr, dropErr, adminErr)
-		},
+		close: store.Close,
 	}
-}
-
-func TestScannerReleaseRepositoryContractSQLite(t *testing.T) {
-	runScannerReleaseRepositoryContract(t, newSQLiteReleaseContractBackend)
 }
 
 func TestScannerReleaseRepositoryContractPostgres(t *testing.T) {
@@ -1536,100 +1490,5 @@ func TestScannerRunReleaseProvenanceRoundTrip(t *testing.T) {
 	if len(records) != 1 || records[0].ScannerReleaseID != record.ScannerReleaseID ||
 		records[0].ReleaseManifestDigest != record.ReleaseManifestDigest {
 		t.Fatalf("release provenance did not round-trip: %#v", records)
-	}
-}
-
-func TestScannerReleaseMigrationsAreIdempotentAndPreserveExistingRows(t *testing.T) {
-	path := t.TempDir() + "/migration.db"
-	store, err := NewSQLite(path)
-	if err != nil {
-		t.Fatalf("NewSQLite: %v", err)
-	}
-	ctx := context.Background()
-	user := &models.User{
-		ID:           uuid.NewString(),
-		Email:        uuid.NewString() + "@example.test",
-		PasswordHash: "hash",
-	}
-	if err := store.CreateUser(ctx, user); err != nil {
-		t.Fatalf("CreateUser: %v", err)
-	}
-	repo := &models.Repo{
-		ID:            uuid.NewString(),
-		UserID:        user.ID,
-		Name:          "pre-feature-repo",
-		SourceType:    models.SourceTypeLocal,
-		SourcePath:    t.TempDir(),
-		DefaultBranch: "main",
-	}
-	if err := store.CreateRepo(ctx, repo); err != nil {
-		t.Fatalf("CreateRepo: %v", err)
-	}
-	scan := &models.Scan{
-		ID:     uuid.NewString(),
-		UserID: user.ID,
-		RepoID: repo.ID,
-		Branch: "main",
-		Status: models.ScanStatusCompleted,
-	}
-	if err := store.CreateScan(ctx, scan); err != nil {
-		t.Fatalf("CreateScan: %v", err)
-	}
-	if err := store.UpsertScannerRunRecord(ctx, &models.ScannerRunRecord{
-		ID:       uuid.NewString(),
-		ScanID:   scan.ID,
-		ToolName: "semgrep",
-		Status:   "completed",
-	}); err != nil {
-		t.Fatalf("UpsertScannerRunRecord: %v", err)
-	}
-	// Strip only migrations 030/031 to reproduce a populated database at the
-	// 029 boundary. Existing application rows remain in place.
-	if _, err := store.db.Exec(`
-		PRAGMA foreign_keys = OFF;
-		DROP TABLE scanner_release_events;
-		DROP TABLE scanner_schedule_leases;
-		DROP TABLE scanner_worker_release_status;
-		DROP TABLE scanner_rollout_cohorts;
-		DROP TABLE scanner_rollouts;
-		DROP TABLE scanner_release_approvals;
-		DROP TABLE scanner_release_artifacts;
-		DROP TABLE scanner_release_images;
-		DROP TABLE scanner_release_tools;
-		DROP TABLE scanner_releases;
-		DROP TABLE scanner_build_steps;
-		DROP TABLE scanner_build_runs;
-		DROP TABLE scanner_release_candidates;
-		DROP TABLE scanner_update_items;
-		DROP TABLE scanner_discovery_runs;
-		DROP TABLE scanner_registry_targets;
-		DROP TABLE scanner_update_policies;
-		DROP INDEX idx_scanner_run_records_release;
-		DROP INDEX idx_scanner_run_records_manifest_digest;
-		ALTER TABLE scanner_run_records DROP COLUMN scanner_release_id;
-		ALTER TABLE scanner_run_records DROP COLUMN release_manifest_digest;
-		PRAGMA foreign_keys = ON;
-	`); err != nil {
-		t.Fatalf("prepare populated 029 database: %v", err)
-	}
-	if err := store.Close(); err != nil {
-		t.Fatal(err)
-	}
-	reopened, err := NewSQLite(path)
-	if err != nil {
-		t.Fatalf("reopen migrated store: %v", err)
-	}
-	defer reopened.Close()
-	got, err := reopened.GetUserByID(ctx, user.ID)
-	if err != nil || got.Email != user.Email {
-		t.Fatalf("pre-feature row was not preserved: user=%#v err=%v", got, err)
-	}
-	records, err := reopened.ListScannerRunRecords(ctx, scan.ID)
-	if err != nil || len(records) != 1 || records[0].ToolName != "semgrep" ||
-		records[0].ScannerReleaseID != "" || records[0].ReleaseManifestDigest != "" {
-		t.Fatalf("pre-feature scanner run was not preserved: records=%#v err=%v", records, err)
-	}
-	if err := reopened.Migrate(); err != nil {
-		t.Fatalf("idempotent re-run after upgrade: %v", err)
 	}
 }

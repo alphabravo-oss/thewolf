@@ -4,27 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"testing"
 
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/google/uuid"
 )
 
-func TestMFAStateSQLite(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "mfa.db")
-	first, err := NewSQLite(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = first.Close() })
-	second, err := NewSQLite(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = second.Close() })
-	testMFAState(t, []Store{first, second})
-}
 func TestMFAStatePostgres(t *testing.T) {
 	s := newClusterPostgresStore(t)
 	testMFAState(t, []Store{s})

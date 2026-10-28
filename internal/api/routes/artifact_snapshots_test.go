@@ -7,14 +7,15 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"github.com/alphabravocompany/thewolf/internal/api/routes"
-	"github.com/alphabravocompany/thewolf/internal/db"
-	"github.com/alphabravocompany/thewolf/internal/scan/report"
 	"net/http"
 	"os"
 	"strconv"
 	"sync"
 	"testing"
+
+	"github.com/alphabravocompany/thewolf/internal/api/routes"
+	"github.com/alphabravocompany/thewolf/internal/db"
+	"github.com/alphabravocompany/thewolf/internal/scan/report"
 
 	"github.com/alphabravocompany/thewolf/internal/artifacts"
 	"github.com/alphabravocompany/thewolf/internal/models"

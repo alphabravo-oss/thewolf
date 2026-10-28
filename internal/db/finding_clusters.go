@@ -11,15 +11,10 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-func (s *SQLiteStore) FinalizeFindingClusters(ctx context.Context, scanID, leaseToken string, clusters []models.Finding) error {
-	return finalizeFindingClusters(ctx, s.db, scanID, leaseToken, clusters)
-}
 func (s *PostgresStore) FinalizeFindingClusters(ctx context.Context, scanID, leaseToken string, clusters []models.Finding) error {
 	return finalizeFindingClusters(ctx, s.db, scanID, leaseToken, clusters)
 }
-func (s *SQLiteStore) ListFindingEvidenceByScan(ctx context.Context, scanID string) ([]models.Finding, error) {
-	return listFindingEvidenceByScan(ctx, s.db, scanID)
-}
+
 func (s *PostgresStore) ListFindingEvidenceByScan(ctx context.Context, scanID string) ([]models.Finding, error) {
 	return listFindingEvidenceByScan(ctx, s.db, scanID)
 }
@@ -29,9 +24,7 @@ func listFindingEvidenceByScan(ctx context.Context, database *sqlx.DB, scanID st
 	hydrateFindingsAfterRead(findings)
 	return findings, err
 }
-func (s *SQLiteStore) ListFindingClusterEvidence(ctx context.Context, findingID string) ([]models.Finding, error) {
-	return listFindingClusterEvidence(ctx, s.db, findingID)
-}
+
 func (s *PostgresStore) ListFindingClusterEvidence(ctx context.Context, findingID string) ([]models.Finding, error) {
 	return listFindingClusterEvidence(ctx, s.db, findingID)
 }

@@ -3,7 +3,6 @@ package db
 import (
 	"errors"
 	"fmt"
-	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -13,24 +12,6 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-func TestFindingBaselineSQLite(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "history.db")
-	s, err := NewSQLite(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = s.Close() })
-	testFindingBaseline(t, s, s.db, func() {
-		if err := s.Close(); err != nil {
-			t.Fatal(err)
-		}
-		reopened, err := NewSQLite(path)
-		if err != nil {
-			t.Fatal(err)
-		}
-		*s = *reopened
-	})
-}
 func TestFindingBaselinePostgres(t *testing.T) {
 	s := newClusterPostgresStore(t)
 	testFindingBaseline(t, s, s.db, func() { reconnectPostgresTestStore(s) })

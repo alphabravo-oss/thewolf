@@ -30,10 +30,6 @@ func decodeStrings(s string) []string {
 	return out
 }
 
-func (s *SQLiteStore) EnqueueFixJob(ctx context.Context, j *models.FixJob) error {
-	return enqueueFixJob(ctx, s.db, j)
-}
-
 func enqueueFixJob(ctx context.Context, executor sqlx.ExtContext, j *models.FixJob) error {
 	now := time.Now().UTC()
 	if j.CreatedAt.IsZero() {
@@ -69,54 +65,6 @@ func enqueueFixJob(ctx context.Context, executor sqlx.ExtContext, j *models.FixJ
 	return err
 }
 
-func (s *SQLiteStore) GetFixJobByID(ctx context.Context, id string) (*models.FixJob, error) {
-	var j models.FixJob
-	if err := s.db.GetContext(ctx, &j, "SELECT * FROM fix_jobs WHERE id = ?", id); err != nil {
-		return nil, err
-	}
-	j.FindingIDList = decodeStrings(j.FindingIDs)
-	return &j, nil
-}
-
-func (s *SQLiteStore) ListFixJobs(ctx context.Context, repoID string) ([]models.FixJob, error) {
-	var jobs []models.FixJob
-	var err error
-	if repoID == "" {
-		err = s.db.SelectContext(ctx, &jobs, "SELECT * FROM fix_jobs ORDER BY created_at DESC")
-	} else {
-		err = s.db.SelectContext(ctx, &jobs, "SELECT * FROM fix_jobs WHERE repo_id = ? ORDER BY created_at DESC", repoID)
-	}
-	for i := range jobs {
-		jobs[i].FindingIDList = decodeStrings(jobs[i].FindingIDs)
-	}
-	return jobs, err
-}
-
-// ListFixJobsByUser returns only jobs owned by userID, optionally narrowed to
-// one repo. The tenant-scoped counterpart to ListFixJobs — the API uses this so
-// one user can never enumerate another's fix jobs (and their diffs/logs).
-func (s *SQLiteStore) ListFixJobsByUser(ctx context.Context, userID, repoID string) ([]models.FixJob, error) {
-	var jobs []models.FixJob
-	var err error
-	if repoID == "" {
-		err = s.db.SelectContext(ctx, &jobs,
-			"SELECT * FROM fix_jobs WHERE user_id = ? ORDER BY created_at DESC", userID)
-	} else {
-		err = s.db.SelectContext(ctx, &jobs,
-			"SELECT * FROM fix_jobs WHERE user_id = ? AND repo_id = ? ORDER BY created_at DESC", userID, repoID)
-	}
-	for i := range jobs {
-		jobs[i].FindingIDList = decodeStrings(jobs[i].FindingIDs)
-	}
-	return jobs, err
-}
-
-// ClaimNextFixJob atomically claims the oldest runnable job, excluding another
-// active job on the same repository branch, remediation, or checkout.
-func (s *SQLiteStore) ClaimNextFixJob(ctx context.Context, workerID string) (*models.FixJob, error) {
-	return claimNextFixJob(ctx, s.db, workerID)
-}
-
 func claimNextFixJob(ctx context.Context, database *sqlx.DB, workerID string) (*models.FixJob, error) {
 	tx, err := database.BeginTxx(ctx, nil)
 	if err != nil {
@@ -125,7 +73,6 @@ func claimNextFixJob(ctx context.Context, database *sqlx.DB, workerID string) (*
 	defer func() { _ = tx.Rollback() }()
 	// ponytail: serialize only the short claim transaction, never engine work.
 	// Per-resource locks can replace this if claim throughput becomes material.
-	// SQLite already serializes its immediate write transactions.
 	if database.DriverName() == "postgres" {
 		if _, err := tx.ExecContext(ctx, "SELECT pg_advisory_xact_lock(hashtextextended('wolf.fix-job-claim', 0))"); err != nil {
 			return nil, err
@@ -177,10 +124,6 @@ func claimNextFixJob(ctx context.Context, database *sqlx.DB, workerID string) (*
 // ErrFixJobConflict means a newer transition or claim owns this job. Callers must
 // not reload and retry a stale worker's result against the newer revision.
 var ErrFixJobConflict = errors.New("fix job changed; reload its current state")
-
-func (s *SQLiteStore) UpdateFixJob(ctx context.Context, j *models.FixJob) error {
-	return updateFixJob(ctx, s.db, j)
-}
 
 func updateFixJob(ctx context.Context, database *sqlx.DB, j *models.FixJob) error {
 	var executor sqlx.ExtContext = database
@@ -269,10 +212,6 @@ func updateFixJob(ctx context.Context, database *sqlx.DB, j *models.FixJob) erro
 	return nil
 }
 
-func (s *SQLiteStore) HeartbeatFixJob(ctx context.Context, id, worker string, claimedAt time.Time) error {
-	return heartbeatFixJob(ctx, s.db, id, worker, claimedAt)
-}
-
 func heartbeatFixJob(ctx context.Context, database *sqlx.DB, id, worker string, claimedAt time.Time) error {
 	result, err := database.ExecContext(ctx, database.Rebind(`UPDATE fix_jobs SET heartbeat_at=?
 		WHERE id=? AND claimed_by=? AND claimed_at=? AND status IN ('claimed','running')`),
@@ -288,39 +227,4 @@ func heartbeatFixJob(ctx context.Context, database *sqlx.DB, id, worker string, 
 		return ErrFixJobConflict
 	}
 	return nil
-}
-
-func (s *SQLiteStore) ReclaimStaleJobs(ctx context.Context, cutoff time.Time) (int, error) {
-	res, err := s.db.ExecContext(ctx,
-		`UPDATE fix_jobs SET revision = revision + 1, status = ?, claimed_by = '', updated_at = ?
-		 WHERE status IN (?, ?) AND (heartbeat_at IS NULL OR heartbeat_at < ?)`,
-		models.FixJobQueued, time.Now().UTC(), models.FixJobClaimed, models.FixJobRunning, cutoff)
-	if err != nil {
-		return 0, err
-	}
-	n, _ := res.RowsAffected()
-	return int(n), nil
-}
-
-func (s *SQLiteStore) CreateFixAttempt(ctx context.Context, a *models.FixAttempt) error {
-	if a.CreatedAt.IsZero() {
-		a.CreatedAt = time.Now().UTC()
-	}
-	_, err := s.db.NamedExecContext(ctx,
-		`INSERT INTO fix_attempts
-		 (id, job_id, finding_id, attempt_no, engine_used, model, built, finding_cleared,
-		  new_findings, outcome, files_changed, diff_excerpt, duration_ms, cost_usd,
-		  input_tokens, output_tokens, created_at)
-		 VALUES
-		 (:id, :job_id, :finding_id, :attempt_no, :engine_used, :model, :built, :finding_cleared,
-		  :new_findings, :outcome, :files_changed, :diff_excerpt, :duration_ms, :cost_usd,
-		  :input_tokens, :output_tokens, :created_at)`, a)
-	return err
-}
-
-func (s *SQLiteStore) ListFixAttempts(ctx context.Context, jobID string) ([]models.FixAttempt, error) {
-	var attempts []models.FixAttempt
-	err := s.db.SelectContext(ctx, &attempts,
-		"SELECT * FROM fix_attempts WHERE job_id = ? ORDER BY created_at ASC", jobID)
-	return attempts, err
 }

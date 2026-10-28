@@ -6,13 +6,13 @@ set -euo pipefail
   exit 0
 }
 
-database="${WOLF_E2E_DATABASE:-sqlite}"
+database="${WOLF_E2E_DATABASE:-postgres}"
 runtime_image="${WOLF_E2E_RUNTIME_IMAGE:-}"
 scanner_image="${WOLF_E2E_SCANNER_IMAGE:-}"
 postgres_image="${WOLF_E2E_POSTGRES_IMAGE:-}"
 timeout_seconds="${WOLF_E2E_TIMEOUT_SECONDS:-900}"
-[[ "$database" == sqlite || "$database" == postgres ]] || {
-  echo "WOLF_E2E_DATABASE must be sqlite or postgres" >&2
+[[ "$database" == postgres ]] || {
+  echo "WOLF_E2E_DATABASE must be postgres (SQLite is no longer supported)" >&2
   exit 2
 }
 for value_name in runtime_image scanner_image; do
@@ -135,36 +135,14 @@ environment=(
   "POSTGRES_PASSWORD=$postgres_password"
   "POSTGRES_PORT=0"
 )
-if [[ "$database" == postgres ]]; then
-  environment+=("WOLF_DB_DSN=postgres://wolf:$postgres_password@postgres:5432/wolf?sslmode=disable")
-else
-  environment+=("WOLF_DB_DSN=")
-fi
+environment+=("WOLF_DB_DSN=postgres://wolf:$postgres_password@postgres:5432/wolf?sslmode=disable")
 
 compose_env() {
   env "${environment[@]}" "${compose[@]}" "$@"
 }
 
-if [[ "$database" == postgres ]]; then
-  compose_env up --detach --no-build postgres
-  compose_env up --detach --no-build wolf scan-worker
-else
-  # SQLite migrations are intentionally initialized by the API before the
-  # second process opens the shared database, avoiding an artificial startup
-  # lock race while still testing two independent roles.
-  compose_env up --detach --no-build wolf
-  deadline="$(( $(date +%s) + 120 ))"
-  until curl --silent --fail --max-time 3 \
-    "http://127.0.0.1:$port/api/v1/ready" >/dev/null 2>&1; do
-    (( $(date +%s) < deadline )) || {
-      compose_env logs --no-color wolf >&2
-      echo "Compose API did not become ready" >&2
-      exit 1
-    }
-    sleep 2
-  done
-  compose_env up --detach --no-build scan-worker
-fi
+compose_env up --detach --no-build postgres
+compose_env up --detach --no-build wolf scan-worker
 
 run_probe() {
   sequence="$1"

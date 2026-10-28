@@ -1,6 +1,7 @@
 [sqlfluff]
-# Internal DB is SQLite (mattn/go-sqlite3) — using ansi or postgres
-# raised PRS parse errors and dozens of false LT01s on migration DDL.
+# The migrations are a portable DDL subset written when Wolf also ran on SQLite.
+# The sqlite dialect parses them; ansi or postgres raised PRS parse errors and
+# dozens of false LT01s. PostgreSQL is the only runtime database now.
 dialect = sqlite
 
 # LT01 (whitespace) is auto-fixed by a one-time `sqlfluff fix` run on

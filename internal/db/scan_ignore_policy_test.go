@@ -13,35 +13,14 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-func TestScanIgnorePolicySQLite(t *testing.T) {
-	name := filepath.Join(t.TempDir(), "policy.db")
-	s, err := NewSQLite(name)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = s.Close() })
-	want := testScanIgnorePolicy(t, s, s.db)
-	if err := s.Close(); err != nil {
-		t.Fatal(err)
-	}
-	reopened, err := NewSQLite(name)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer reopened.Close()
-	checkReopenedScanPolicy(t, reopened, want)
-}
 func TestScanIgnorePolicyPostgres(t *testing.T) {
 	s := newClusterPostgresStore(t)
 	want := testScanIgnorePolicy(t, s, s.db)
-	var schema string
-	if err := s.db.Get(&schema, "SELECT current_schema()"); err != nil {
-		t.Fatal(err)
-	}
+	dsn := testDSNFor(t, s)
 	if err := s.Close(); err != nil {
 		t.Fatal(err)
 	}
-	reopened, err := NewPostgres(postgresDSNWithSearchPath(t, os.Getenv("WOLF_TEST_POSTGRES_DSN"), schema))
+	reopened, err := NewPostgres(dsn)
 	if err != nil {
 		t.Fatal(err)
 	}

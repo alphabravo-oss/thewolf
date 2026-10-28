@@ -10,9 +10,6 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/models"
 )
 
-func (s *SQLiteStore) ListScansPage(ctx context.Context, q ScanListQuery) ([]models.Scan, int, error) {
-	return listScansPage(ctx, s.readDatabase(), q)
-}
 func (s *PostgresStore) ListScansPage(ctx context.Context, q ScanListQuery) ([]models.Scan, int, error) {
 	return listScansPage(ctx, s.db, q)
 }
@@ -117,9 +114,6 @@ func attachScanRepos(ctx context.Context, database sqlx.ExtContext, scans []mode
 	return nil
 }
 
-func (s *SQLiteStore) ListVulnerabilitiesPage(ctx context.Context, q VulnListQuery) ([]models.Vulnerability, int, error) {
-	return listVulnerabilitiesPage(ctx, s.readDatabase(), q)
-}
 func (s *PostgresStore) ListVulnerabilitiesPage(ctx context.Context, q VulnListQuery) ([]models.Vulnerability, int, error) {
 	return listVulnerabilitiesPage(ctx, s.db, q)
 }
@@ -181,9 +175,6 @@ func listVulnerabilitiesPage(ctx context.Context, database *sqlx.DB, q VulnListQ
 	return vulns, total, tx.Commit()
 }
 
-func (s *SQLiteStore) ScanFindingStats(ctx context.Context, scanID string) (ScanFindingStats, error) {
-	return scanFindingStats(ctx, s.db, scanID)
-}
 func (s *PostgresStore) ScanFindingStats(ctx context.Context, scanID string) (ScanFindingStats, error) {
 	return scanFindingStats(ctx, s.db, scanID)
 }

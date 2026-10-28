@@ -104,7 +104,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        database: [sqlite, postgres]
+        database: [postgres]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
@@ -151,7 +151,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        database: [sqlite, postgres]
+        database: [postgres]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
@@ -189,15 +189,15 @@ jobs:
           pattern: remote-scan-${{ needs.prepare.outputs.qualification_id }}-*
           path: build/remote-scan-qualification
           merge-multiple: true
-      - name: Verify the exact four-receipt closure
+      - name: Verify the exact two-receipt closure
         env:
           NATIVE_RESULT: ${{ needs.native.result }}
           COMPOSE_RESULT: ${{ needs.compose.result }}
         run: |
           [[ "$NATIVE_RESULT" == success && "$COMPOSE_RESULT" == success ]]
           mapfile -t receipts < <(find build/remote-scan-qualification -type f -name '*.json' | sort)
-          [[ "${#receipts[@]}" -eq 4 ]]
-          jq -s -e 'length == 4 and all(.[]; .result == "passed" and .restartRecoveryVerified == true)' \
+          [[ "${#receipts[@]}" -eq 2 ]]
+          jq -s -e 'length == 2 and all(.[]; .result == "passed" and .restartRecoveryVerified == true)' \
             "${receipts[@]}" >/dev/null
           sha256sum "${receipts[@]}" >build/remote-scan-qualification/closure.sha256
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

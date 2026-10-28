@@ -16,7 +16,7 @@ relocated into the private overlay because they look enterprise-grade.
 - All current fix harnesses (Claude, Codex, OpenCode, API, ToolDefinition) plus verification
 - Findings, fingerprints, corroboration, baselines, suppressions, gates, SARIF
 - Local auth, TOTP, API tokens, admin/user roles
-- REST/OpenAPI, CLI, SSE, SQLite, PostgreSQL, Compose
+- REST/OpenAPI, CLI, SSE, PostgreSQL, Compose
 - MCP core, Fix Engine Protocol, and public evidence contracts as they are added
 
 ### Go to Enterprise (`AlphaBravoCompany/wolf-enterprise`)

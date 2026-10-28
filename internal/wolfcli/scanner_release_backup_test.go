@@ -8,12 +8,13 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+
+	"github.com/alphabravocompany/thewolf/internal/db"
 )
 
 func TestScannerReleaseBackupCLIExportPreflightRestore(t *testing.T) {
-	databasePath := filepath.Join(t.TempDir(), "wolf.db")
-	t.Setenv("WOLF_DB_DRIVER", "sqlite")
-	t.Setenv("WOLF_DB_DSN", databasePath)
+	t.Setenv("WOLF_DB_DRIVER", "postgres")
+	t.Setenv("WOLF_DB_DSN", db.TestPostgresDSN(t))
 	backupPath := filepath.Join(t.TempDir(), "release-backup.json")
 
 	export := newScannerReleaseBackupExportCmd()

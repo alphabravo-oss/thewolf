@@ -45,7 +45,7 @@ func ResolveDatabase() DatabaseConfig {
 		cfg.Driver = fd
 	}
 	if cfg.Driver == "" {
-		cfg.Driver = "sqlite"
+		cfg.Driver = "postgres"
 	}
 	if cfg.DSN == "" {
 		cfg.DSN = fdsn
@@ -154,8 +154,6 @@ func (c DatabaseConfig) View() DatabaseView {
 				v.User = u.User.Username()
 			}
 		}
-		return v
 	}
-	v.Database = filepath.Base(c.DSN)
 	return v
 }

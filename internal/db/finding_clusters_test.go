@@ -2,7 +2,6 @@ package db
 
 import (
 	"errors"
-	"os"
 	"sync"
 	"testing"
 	"time"
@@ -12,38 +11,11 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-func TestFindingClustersSQLite(t *testing.T) { s := newTestStore(t); testFindingClusters(t, s, s.db) }
 func TestFindingClustersPostgres(t *testing.T) {
 	s := newClusterPostgresStore(t)
 	testFindingClusters(t, s, s.db)
 }
-func newClusterPostgresStore(t *testing.T) *PostgresStore {
-	t.Helper()
-	dsn := os.Getenv("WOLF_TEST_POSTGRES_DSN")
-	if dsn == "" {
-		t.Skip("WOLF_TEST_POSTGRES_DSN is not configured")
-	}
-	admin, err := NewPostgres(dsn)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = admin.Close() })
-	schema := "clusters_" + uuid.NewString()
-	if _, err := admin.db.Exec(`CREATE SCHEMA "` + schema + `"`); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if _, err := admin.db.Exec(`DROP SCHEMA "` + schema + `" CASCADE`); err != nil {
-			t.Error(err)
-		}
-	})
-	s, err := NewPostgres(postgresDSNWithSearchPath(t, dsn, schema))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = s.Close() })
-	return s
-}
+func newClusterPostgresStore(t *testing.T) *PostgresStore { return NewTestPostgres(t) }
 func testFindingClusters(t *testing.T, s Store, database *sqlx.DB) {
 	t.Helper()
 	ctx := t.Context()

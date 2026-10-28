@@ -283,12 +283,9 @@ func TestDecodeScopeCompatibility(t *testing.T) {
 
 func newDiscoveryStore(
 	t *testing.T,
-) (*db.SQLiteStore, scannerrelease.Persistence, *scannerrelease.DiscoveryRun) {
+) (*db.PostgresStore, scannerrelease.Persistence, *scannerrelease.DiscoveryRun) {
 	t.Helper()
-	store, err := db.NewSQLite(":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
+	store := db.NewTestPostgres(t)
 	repository := store.ScannerReleases()
 	policy := &scannerrelease.Policy{
 		ID: uuid.NewString(), Scope: "test:" + uuid.NewString(), Revision: 1,

@@ -2,77 +2,47 @@ package db
 
 import (
 	"bytes"
+	"database/sql"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
-
-	"github.com/alphabravocompany/thewolf/internal/models"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 func TestMigrateSQLiteToPostgres(t *testing.T) {
-	dsn := os.Getenv("WOLF_TEST_POSTGRES_DSN")
-	if dsn == "" {
-		t.Skip("WOLF_TEST_POSTGRES_DSN is not configured")
-	}
+	target := TestPostgresDSN(t)
 	ctx := t.Context()
 	path := filepath.Join(t.TempDir(), "wolf.db")
-	lite, err := NewSQLite(path)
+	source, err := sql.Open("sqlite3", path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	user, repo := uuid.NewString(), uuid.NewString()
-	if err := lite.CreateUser(ctx, &models.User{ID: user, Email: user + "@example.test", PasswordHash: "hash"}); err != nil {
-		t.Fatal(err)
-	}
-	if err := lite.CreateRepo(ctx, &models.Repo{ID: repo, UserID: user, Name: "migrated", SourceType: models.SourceTypeLocal, SourcePath: "/src"}); err != nil {
-		t.Fatal(err)
-	}
-	scan := &models.Scan{ID: uuid.NewString(), UserID: user, RepoID: repo, Status: models.ScanStatusRunning, ToolsSelected: `["semgrep","trivy"]`}
-	if err := lite.CreateScan(ctx, scan); err != nil {
-		t.Fatal(err)
-	}
-	finding := models.Finding{ID: uuid.NewString(), ScanID: scan.ID, RepoID: repo, ToolName: "semgrep", Category: models.CategorySAST,
-		RuleID: "rule", FilePath: "a.go", Title: "truncated \xe2", Severity: models.SeverityHigh, Status: models.StatusOpen,
-		Suppressed: true, CorroboratedBy: []string{"trivy"}}
-	if err := lite.CreateFinding(ctx, &finding); err != nil {
-		t.Fatal(err)
-	}
-	if err := lite.PutEnterpriseRecord(ctx, &models.EnterpriseRecord{Kind: "policy", ID: "p1", Name: "Policy", Body: `{"a":1}`}); err != nil {
-		t.Fatal(err)
-	}
-	if err := lite.CreateSecret(ctx, &models.Secret{ID: uuid.NewString(), UserID: user, KeyType: models.KeyType("github"), KeyName: "token", EncryptedValue: "ciphertext-not-for-logs"}); err != nil {
-		t.Fatal(err)
-	}
-	if err := lite.SetSetting(ctx, "fleet_mode", "true"); err != nil {
-		t.Fatal(err)
-	}
-	var created time.Time
-	if err := lite.db.Get(&created, `SELECT created_at FROM scans WHERE id = ?`, scan.ID); err != nil {
-		t.Fatal(err)
-	}
-	_ = lite.Close()
-
-	admin, err := NewPostgres(dsn)
+	fixture, err := os.ReadFile("testdata/sqlite_fixture.sql")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer admin.Close()
-	schema := "sqlite_migrate_" + strings.ReplaceAll(uuid.NewString(), "-", "")
-	if _, err := admin.db.Exec(`CREATE SCHEMA "` + schema + `"`); err != nil {
+	if _, err := source.Exec(string(fixture)); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _, _ = admin.db.Exec(`DROP SCHEMA "` + schema + `" CASCADE`) })
-	target := postgresDSNWithSearchPath(t, dsn, schema)
+	// Invalid UTF-8 cannot live in the .sql file.
+	if _, err := source.Exec(`UPDATE findings SET title = ? WHERE id = 'f1'`, "truncated \xe2"); err != nil {
+		t.Fatal(err)
+	}
+	if err := source.Close(); err != nil {
+		t.Fatal(err)
+	}
+	const user, scanID = "u1", "s1"
+	created := time.Date(2026, 10, 1, 12, 34, 56, 123456789, time.UTC)
 
 	var out bytes.Buffer
 	if err := MigrateSQLiteToPostgres(ctx, path, target, &out); err != nil {
 		t.Fatalf("%v\n%s", err, out.String())
 	}
-	if strings.Contains(out.String(), "ciphertext-not-for-logs") || !strings.Contains(out.String(), "findings.title: replaced invalid UTF-8") {
+	if strings.Contains(out.String(), "ciphertext-not-for-logs") || !strings.Contains(out.String(), "findings.title: replaced invalid UTF-8") ||
+		!strings.Contains(out.String(), "skip removed_feature: not in the postgres schema") {
 		t.Fatalf("unexpected output:\n%s", out.String())
 	}
 	if err := MigrateSQLiteToPostgres(ctx, path, target, &bytes.Buffer{}); err == nil || !strings.Contains(err.Error(), "already has rows") {
@@ -87,11 +57,11 @@ func TestMigrateSQLiteToPostgres(t *testing.T) {
 	if u, err := pg.GetUserByID(ctx, user); err != nil || u.Email != user+"@example.test" {
 		t.Fatalf("user: %+v %v", u, err)
 	}
-	got, err := pg.GetScanByID(ctx, scan.ID)
-	if err != nil || got.ToolsSelected != scan.ToolsSelected || !got.CreatedAt.Equal(created.Truncate(time.Microsecond)) {
+	got, err := pg.GetScanByID(ctx, scanID)
+	if err != nil || got.ToolsSelected != `["semgrep","trivy"]` || !got.CreatedAt.Equal(created.Truncate(time.Microsecond)) {
 		t.Fatalf("scan: %+v %v (want created %s)", got, err, created)
 	}
-	findings, err := pg.ListFindingsByScan(ctx, scan.ID)
+	findings, err := pg.ListFindingsByScan(ctx, scanID)
 	if err != nil || len(findings) != 1 || !findings[0].Suppressed || findings[0].Title != "truncated �" ||
 		len(findings[0].CorroboratedBy) != 1 || findings[0].CorroboratedBy[0] != "trivy" {
 		t.Fatalf("findings: %+v %v", findings, err)

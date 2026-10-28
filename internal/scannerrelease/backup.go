@@ -9,7 +9,7 @@ const (
 	RestoreConfirmation = "RESTORE_SCANNER_RELEASE_STATE"
 )
 
-// BackupCell keeps database values portable between SQLite and PostgreSQL
+// BackupCell keeps database values portable between database engines
 // without allowing JSON number coercion to change immutable identities.
 type BackupCell struct {
 	Kind  string `json:"kind"`

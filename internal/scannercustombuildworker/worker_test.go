@@ -388,13 +388,9 @@ func TestWorkerTimeoutAndCooperativeCancellationBecomeTerminal(t *testing.T) {
 
 func newWorkerStore(
 	t *testing.T,
-) (*db.SQLiteStore, scannerrelease.Persistence) {
+) (*db.PostgresStore, scannerrelease.Persistence) {
 	t.Helper()
-	store, err := db.NewSQLite(t.TempDir() + "/worker.db")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = store.Close() })
+	store := db.NewTestPostgres(t)
 	return store, store.ScannerReleases()
 }
 

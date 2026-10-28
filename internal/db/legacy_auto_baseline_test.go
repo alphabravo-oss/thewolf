@@ -9,11 +9,6 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-func TestLegacyAutoBaselineSQLite(t *testing.T) {
-	s := newTestStore(t)
-	testLegacyAutoBaseline(t, s, s.db)
-}
-
 func TestLegacyAutoBaselinePostgres(t *testing.T) {
 	s := newClusterPostgresStore(t)
 	testLegacyAutoBaseline(t, s, s.db)

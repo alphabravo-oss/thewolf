@@ -4,8 +4,8 @@ server:
   log_level: "info"
 
 database:
-  driver: "sqlite"
-  dsn: "~/.wolf/wolf.db"
+  driver: "postgres"
+  dsn: "postgres://wolf:CHANGEME@localhost:5432/wolf?sslmode=disable"
 
 scan:
   concurrency: 8

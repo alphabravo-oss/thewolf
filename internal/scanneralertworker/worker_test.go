@@ -18,11 +18,7 @@ import (
 )
 
 func TestAcceleratedClockLifecycleAndReplicaLease(t *testing.T) {
-	store, err := db.NewSQLite(":memory:")
-	if err != nil {
-		t.Fatalf("NewSQLite: %v", err)
-	}
-	t.Cleanup(func() { _ = store.Close() })
+	store := db.NewTestPostgres(t)
 	persistence := store.ScannerReleases()
 	ctx := context.Background()
 	now := time.Date(2026, 7, 30, 12, 0, 0, 0, time.UTC)

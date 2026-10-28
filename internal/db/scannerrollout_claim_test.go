@@ -12,11 +12,7 @@ import (
 
 func TestRolloutClaimLeaseTakeoverCooldownAndCohortTimestamps(t *testing.T) {
 	t.Parallel()
-	store, err := NewSQLite(":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer store.Close()
+	store := NewTestPostgres(t)
 	repository := store.ScannerReleases()
 	ctx := context.Background()
 

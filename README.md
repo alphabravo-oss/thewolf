@@ -82,7 +82,7 @@ The Wolf collapses that sprawl into one platform:
 
 ### Built for Platforms
 
-**Automate all of it.** A complete REST API with live OpenAPI docs, a CLI that mirrors it 1:1, scoped tokens, SSE streaming, SQLite or PostgreSQL — self-hosted and air-gap friendly.
+**Automate all of it.** A complete REST API with live OpenAPI docs, a CLI that mirrors it 1:1, scoped tokens, SSE streaming, PostgreSQL — self-hosted and air-gap friendly.
 
 </td>
 <td width="33%" valign="top">
@@ -144,7 +144,7 @@ The controls that turn scanning into a program.
 - **A complete REST API** — every capability is an endpoint, documented with live, interactive OpenAPI/Swagger docs served right from the product (fully offline). If a human can do it in the UI, a pipeline can do it through the API.
 - **A CLI that mirrors the API 1:1** — `wolf <resource> <verb>` for everything, with table output for humans and JSON for machines, kubeconfig-style contexts for multiple environments, and CI-friendly exit codes.
 - **Scoped, revocable credentials** — least-privilege API tokens with `verb:resource` scopes and configurable expiry, alongside session-based UI auth — role-appropriate access for every actor.
-- **Run it your way** — single-binary or Docker, SQLite for a team or **PostgreSQL** for the enterprise, on your servers, in your cloud, or fully **air-gapped**.
+- **Run it your way** — single-binary or Docker on **PostgreSQL**, on your servers, in your cloud, or fully **air-gapped**.
 - **Live everything** — real-time scan, fix, and loop progress streamed over SSE to the console and the CLI.
 - **Managed scanner images** — consume tested scanner images from GHCR by default, detect available updates in the console, and pre-pull the full configured set before scans run.
 
@@ -310,7 +310,7 @@ The Wolf is designed to live inside your perimeter and your governance model.
 | | |
 |---|---|
 | **Deployment** | Single Go binary or Docker Compose. Runs on your servers, your cloud, or fully air-gapped. Kubernetes/Helm packaging is part of Wolf Enterprise. |
-| **Data store** | SQLite for a team; **PostgreSQL** for scale and high availability. |
+| **Data store** | **PostgreSQL** (the only supported database; scale and high availability). |
 | **Access control** | **Role-based** (admin / user) with per-user data isolation, **two-factor auth** (TOTP, optionally mandatory org-wide), console sessions, and scoped, revocable **API keys** (`verb:resource` + `admin`). See [`docs/authentication.md`](docs/authentication.md). |
 | **Audit** | A **classified, security-aware audit log** — semantic event type, category, severity, actor, source IP, and result — searchable and filterable. See [`docs/audit.md`](docs/audit.md). |
 | **HTTPS** | Run behind the bundled **Caddy** reverse proxy — automatic Let's Encrypt *or* bring-your-own cert — with an optional hardened Docker-socket proxy. See [`docs/deployment.md`](docs/deployment.md). |
@@ -334,7 +334,7 @@ internal/
   api/           HTTP API, OpenAPI docs, SSE streaming, auth & audit middleware
   ai/            Pluggable AI providers (Anthropic, OpenAI)
   auth/          Sessions, scoped API tokens, RBAC
-  db/            SQLite + PostgreSQL persistence
+  db/            PostgreSQL persistence
   fix/  loop/    AI fix engine, autonomous remediation loops + fix worker/orchestrator
   finding/       Identity, diff, baselines, quality gates, suppressions, SARIF
   scan/          Detection, orchestration, scoring, reporting

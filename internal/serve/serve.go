@@ -42,13 +42,7 @@ func OpenStore() (db.Store, error) {
 	cfg := db.ResolveDatabase()
 	switch strings.ToLower(cfg.Driver) {
 	case "sqlite":
-		dsn := cfg.DSN
-		if dsn == "" {
-			home, _ := os.UserHomeDir()
-			_ = os.MkdirAll(home+"/.wolf", 0o750)
-			dsn = home + "/.wolf/wolf.db"
-		}
-		return db.NewSQLite(dsn)
+		return nil, errors.New("SQLite is no longer supported; run `wolf db migrate-from-sqlite` and set WOLF_DB_DRIVER=postgres (docs/deployment.md)")
 	case "postgres":
 		if cfg.DSN == "" {
 			return nil, fmt.Errorf("WOLF_DB_DSN required for postgres driver")
@@ -58,7 +52,8 @@ func OpenStore() (db.Store, error) {
 			return nil, err
 		}
 		// An upgraded install pointed at an empty Postgres would look wiped and
-		// bootstrap a fresh admin. Refuse until its SQLite data is migrated.
+		// bootstrap a fresh admin. Refuse until its SQLite data is migrated (SQLite
+		// is no longer a runtime database).
 		home, _ := os.UserHomeDir()
 		legacy := filepath.Join(home, ".wolf", "wolf.db")
 		if _, statErr := os.Stat(legacy); statErr == nil {

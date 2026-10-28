@@ -254,26 +254,6 @@ func computeAggregateByRule(ctx context.Context, database *sqlx.DB, userID strin
 	return out, nil
 }
 
-func (s *SQLiteStore) ListCurrentOpenFindings(ctx context.Context, userID string, fleetMode bool, collectionID string) ([]models.Finding, error) {
-	return listCurrentOpenFindings(ctx, s.db, userID, fleetMode, collectionID)
-}
-
-func (s *SQLiteStore) FleetPosture(ctx context.Context, userID string, fleetMode bool, collectionID string) (*FleetPostureResult, error) {
-	return computeFleetPosture(ctx, s.db, userID, fleetMode, collectionID)
-}
-
-func (s *SQLiteStore) FleetNeedsAttention(ctx context.Context, userID string, fleetMode bool, limit int) ([]NeedsAttentionRow, error) {
-	return computeNeedsAttention(ctx, s.db, userID, fleetMode, limit)
-}
-
-func (s *SQLiteStore) FindingsAggregateByRule(ctx context.Context, userID string, fleetMode bool, limit int, securityOnly bool) ([]FindingsAggregateRow, error) {
-	return computeAggregateByRule(ctx, s.db, userID, fleetMode, limit, securityOnly)
-}
-
-func (s *SQLiteStore) FindingsByRepo(ctx context.Context, userID string, fleetMode bool, collectionID string) ([]FindingsByRepoRow, error) {
-	return computeFindingsByRepo(ctx, s.db, userID, fleetMode, collectionID)
-}
-
 func (s *PostgresStore) ListCurrentOpenFindings(ctx context.Context, userID string, fleetMode bool, collectionID string) ([]models.Finding, error) {
 	return listCurrentOpenFindings(ctx, s.db, userID, fleetMode, collectionID)
 }

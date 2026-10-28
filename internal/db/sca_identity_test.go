@@ -1,7 +1,6 @@
 package db
 
 import (
-	"os"
 	"testing"
 	"time"
 
@@ -9,27 +8,8 @@ import (
 	"github.com/google/uuid"
 )
 
-func TestDependencyIdentitySQLite(t *testing.T) { testDependencyIdentity(t, newTestStore(t)) }
 func TestDependencyIdentityPostgres(t *testing.T) {
-	dsn := os.Getenv("WOLF_TEST_POSTGRES_DSN")
-	if dsn == "" {
-		t.Skip("WOLF_TEST_POSTGRES_DSN is not configured")
-	}
-	admin, err := NewPostgres(dsn)
-	if err != nil {
-		t.Fatal(err)
-	}
-	schema := "sca_identity_" + uuid.NewString()
-	if _, err := admin.db.Exec(`CREATE SCHEMA "` + schema + `"`); err != nil {
-		_ = admin.Close()
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _, _ = admin.db.Exec(`DROP SCHEMA "` + schema + `" CASCADE`); _ = admin.Close() })
-	store, err := NewPostgres(postgresDSNWithSearchPath(t, dsn, schema))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer store.Close()
+	store := NewTestPostgres(t)
 	testDependencyIdentity(t, store)
 }
 func testDependencyIdentity(t *testing.T, store Store) {
@@ -54,14 +34,7 @@ func testDependencyIdentity(t *testing.T, store Store) {
 		t.Fatal(err)
 	}
 	for _, column := range []string{"package_name", "package_version", "package_ecosystem", "package_url", "advisory_id"} {
-		var err error
-		switch s := store.(type) {
-		case *SQLiteStore:
-			_, err = s.db.Exec("ALTER TABLE findings DROP COLUMN " + column)
-		case *PostgresStore:
-			_, err = s.db.Exec("ALTER TABLE findings DROP COLUMN " + column)
-		}
-		if err != nil {
+		if _, err := store.(*PostgresStore).db.Exec("ALTER TABLE findings DROP COLUMN " + column); err != nil {
 			t.Fatal(err)
 		}
 	}

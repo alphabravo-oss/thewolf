@@ -2,7 +2,6 @@ package db
 
 import (
 	"errors"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -10,20 +9,6 @@ import (
 	"github.com/google/uuid"
 )
 
-func TestMFAExchangeSQLite(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "mfa-exchange.db")
-	first, err := NewSQLite(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = first.Close() })
-	second, err := NewSQLite(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = second.Close() })
-	testMFAExchange(t, []Store{first, second})
-}
 func TestMFAExchangePostgres(t *testing.T) { testMFAExchange(t, []Store{newClusterPostgresStore(t)}) }
 
 func testMFAExchange(t *testing.T, stores []Store) {

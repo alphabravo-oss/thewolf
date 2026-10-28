@@ -11,7 +11,6 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-func TestManualBaselineSQLite(t *testing.T) { s := newTestStore(t); testManualBaseline(t, s, s.db) }
 func TestManualBaselinePostgres(t *testing.T) {
 	s := newClusterPostgresStore(t)
 	testManualBaseline(t, s, s.db)

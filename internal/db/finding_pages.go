@@ -19,9 +19,6 @@ import (
 // first and hide suppressed rows afterward: that would corrupt page boundaries.
 var ErrLiveFindingPolicy = errors.New("scan has not captured its ignore policy")
 
-func (s *SQLiteStore) QueryScanFindings(ctx context.Context, scanID string, q FindingListQuery) (FindingPage, error) {
-	return queryScanFindings(ctx, s.readDatabase(), scanID, q)
-}
 func (s *PostgresStore) QueryScanFindings(ctx context.Context, scanID string, q FindingListQuery) (FindingPage, error) {
 	return queryScanFindings(ctx, s.db, scanID, q)
 }
@@ -140,9 +137,6 @@ const findingPageColumns = `cluster_id, id, scan_id, repo_id, fingerprint, stabl
  fix_strategy_id, confidence, corroborated_by_json, suppressed, suppression_id, suppressed_reason, baseline_identity_key, baseline_state,
  first_seen_at, last_seen_at, introduced_in_scan_id, resolved_in_scan_id, source_kind, source_ref`
 
-func (s *SQLiteStore) QueryCurrentFindings(ctx context.Context, userID string, fleet bool, collectionID, repoID string, q FindingListQuery) (FindingPage, error) {
-	return queryCurrentFindings(ctx, s.readDatabase(), userID, fleet, collectionID, repoID, q)
-}
 func (s *PostgresStore) QueryCurrentFindings(ctx context.Context, userID string, fleet bool, collectionID, repoID string, q FindingListQuery) (FindingPage, error) {
 	return queryCurrentFindings(ctx, s.db, userID, fleet, collectionID, repoID, q)
 }

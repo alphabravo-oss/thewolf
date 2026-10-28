@@ -18,11 +18,7 @@ import (
 )
 
 func TestUpdateUserScannerSupplyChainAccessValidatesPresets(t *testing.T) {
-	store, err := db.NewSQLite(":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = store.Close() })
+	store := db.NewTestPostgres(t)
 	SetHandler(store, nil)
 
 	admin := &models.User{ID: uuid.NewString(), Email: "admin@example.test", PasswordHash: "hash", Role: models.RoleAdmin}
@@ -87,11 +83,7 @@ func TestUpdateUserScannerSupplyChainAccessValidatesPresets(t *testing.T) {
 }
 
 func TestUpdateUserRolePreservesAssignmentExceptAdminDemotion(t *testing.T) {
-	store, err := db.NewSQLite(":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = store.Close() })
+	store := db.NewTestPostgres(t)
 	SetHandler(store, nil)
 	actor := &models.User{ID: uuid.NewString(), Email: "actor@example.test", PasswordHash: "hash", Role: models.RoleAdmin}
 	encoded, _, _ := apikey.EncodeScannerPersonas([]string{apikey.ScannerPersonaOperator, apikey.ScannerPersonaApprover})

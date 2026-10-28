@@ -8,10 +8,6 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-func TestUserRoleMigrationSQLite(t *testing.T) {
-	s := newTestStore(t)
-	testUserRoleMigration(t, s, s.db)
-}
 func TestUserRoleMigrationPostgres(t *testing.T) {
 	s := newClusterPostgresStore(t)
 	testUserRoleMigration(t, s, s.db)

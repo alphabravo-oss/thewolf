@@ -897,9 +897,6 @@ func fleetFindingTrends(ctx context.Context, database *sqlx.DB, userID string, f
 	return out, nil
 }
 
-func (s *SQLiteStore) FleetFindingTrends(ctx context.Context, userID string, fleetMode bool, collectionID string) ([]FleetTrendEntry, error) {
-	return fleetFindingTrends(ctx, s.db, userID, fleetMode, collectionID)
-}
 func (s *PostgresStore) FleetFindingTrends(ctx context.Context, userID string, fleetMode bool, collectionID string) ([]FleetTrendEntry, error) {
 	return fleetFindingTrends(ctx, s.db, userID, fleetMode, collectionID)
 }

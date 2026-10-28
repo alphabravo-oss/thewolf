@@ -11,9 +11,6 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-func (s *SQLiteStore) PersistFindingBaseline(ctx context.Context, scanID, leaseToken string, at time.Time) error {
-	return persistFindingBaseline(ctx, s.db, scanID, leaseToken, at)
-}
 func (s *PostgresStore) PersistFindingBaseline(ctx context.Context, scanID, leaseToken string, at time.Time) error {
 	return persistFindingBaseline(ctx, s.db, scanID, leaseToken, at)
 }

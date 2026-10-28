@@ -687,11 +687,7 @@ func newSchedulerFixtureWithSchedule(
 	schedule scannerpolicy.SchedulePolicy,
 ) schedulerFixture {
 	t.Helper()
-	store, err := db.NewSQLite(t.TempDir() + "/scheduler.db")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = store.Close() })
+	store := db.NewTestPostgres(t)
 	persistence := store.ScannerReleases()
 	rules := scannerpolicy.Default()
 	rulesJSON, err := json.Marshal(rules)

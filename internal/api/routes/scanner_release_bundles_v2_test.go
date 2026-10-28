@@ -411,7 +411,7 @@ func (r *bundleV2Registry) ServeHTTP(w http.ResponseWriter, request *http.Reques
 
 func seedScannerBundleV2Release(
 	t *testing.T,
-	store *db.SQLiteStore,
+	store *db.PostgresStore,
 	primaryURL, mirrorURL string,
 	primary, mirror bundleV2RegistryIdentity,
 ) {

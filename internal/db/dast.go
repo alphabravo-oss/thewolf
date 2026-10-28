@@ -11,9 +11,6 @@ import (
 
 var ErrDASTRevision = errors.New("DAST settings changed; reload before saving or approving")
 
-func (s *SQLiteStore) GetDASTTarget(ctx context.Context, repoID string) (*models.DASTTarget, error) {
-	return getDASTTarget(ctx, s.db, repoID)
-}
 func (s *PostgresStore) GetDASTTarget(ctx context.Context, repoID string) (*models.DASTTarget, error) {
 	return getDASTTarget(ctx, s.db, repoID)
 }
@@ -26,9 +23,6 @@ func getDASTTarget(ctx context.Context, database *sqlx.DB, repoID string) (*mode
 	return t, err
 }
 
-func (s *SQLiteStore) SaveDASTTarget(ctx context.Context, t *models.DASTTarget, approve bool) error {
-	return saveDASTTarget(ctx, s.db, t, approve)
-}
 func (s *PostgresStore) SaveDASTTarget(ctx context.Context, t *models.DASTTarget, approve bool) error {
 	return saveDASTTarget(ctx, s.db, t, approve)
 }

@@ -9,9 +9,6 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-func (s *SQLiteStore) CompleteFixCancellation(ctx context.Context, job *models.FixJob, cleanup func(context.Context, *models.FixJob, *models.Repo) error) error {
-	return completeFixCancellation(ctx, s.db, job, cleanup)
-}
 func (s *PostgresStore) CompleteFixCancellation(ctx context.Context, job *models.FixJob, cleanup func(context.Context, *models.FixJob, *models.Repo) error) error {
 	return completeFixCancellation(ctx, s.db, job, cleanup)
 }

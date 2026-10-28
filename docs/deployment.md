@@ -22,8 +22,9 @@ docker compose -f docker-compose.yml -f docker-compose.hardened.yml \
 ```
 
 PostgreSQL (the `postgres` service) starts with every command above and is the
-default database. Set a URL-safe `POSTGRES_PASSWORD` in `.env`. **Existing
-SQLite installs must migrate before upgrading past this release**; see
+only supported database. Set a URL-safe `POSTGRES_PASSWORD` in `.env`.
+**SQLite is no longer supported: existing installs must migrate to PostgreSQL
+before running this release**; see
 [Move from SQLite to PostgreSQL](#move-from-sqlite-to-postgresql).
 
 Queue-mode API usage, one-shot Git/SSH sources, credentials, idempotency, SSE,
@@ -311,12 +312,11 @@ has not migrated any existing deployment or deleted any volume.
 
 ## Move from SQLite to PostgreSQL
 
-SQLite support ends after this release: the next release removes the SQLite
-store and runs only on PostgreSQL. Migration is a **required step** for every
-existing install that still has `wolf.db`. Compose now defaults to
-`WOLF_DB_DRIVER=postgres`; an upgraded install whose `.env` does not pin
-`WOLF_DB_DRIVER=sqlite` refuses to start while `~/.wolf/wolf.db` exists and
-PostgreSQL has no users, instead of coming up looking empty.
+SQLite runtime support was removed in this release: Wolf only runs on
+PostgreSQL. `wolf db migrate-from-sqlite` is kept for one more release for
+installs that still have a `wolf.db`. `WOLF_DB_DRIVER=sqlite` is rejected, and
+Wolf refuses to start while `~/.wolf/wolf.db` exists and PostgreSQL has no
+users, instead of coming up looking empty.
 
 `wolf db migrate-from-sqlite` opens `wolf.db` read-only, runs the normal
 PostgreSQL migrations, copies every table in one transaction (foreign keys stay
@@ -327,12 +327,14 @@ bytes, invalid UTF-8 such as output truncated mid-character) is replaced with
 U+FFFD and reported per column. Values are never printed. A 635 MB database
 with 250k findings migrated in about 18 seconds.
 
-1. Run the same Wolf version the SQLite install last ran (schemas must match).
+1. Use this release's image for the migration; its PostgreSQL schema is created
+   by the command itself.
 2. Stop writers: `docker compose stop wolf scan-worker` (plus the fixer and any
    `scanner-*` services you run).
 3. Back up `wolf.db`: `docker compose run --rm --no-deps --entrypoint cp wolf
-   /home/wolf/.wolf/wolf.db /home/wolf/.wolf/wolf.db.pre-postgres`, and
-   `wolf backup` or a copy of the `wolf-data` volume off the host.
+   /home/wolf/.wolf/wolf.db /home/wolf/.wolf/wolf.db.pre-postgres`, and a copy
+   of the `wolf-data` volume off the host. (`wolf backup`/`wolf restore` no
+   longer exist; back PostgreSQL up with `pg_dump` or CNPG Barman afterwards.)
 4. In `.env` set `WOLF_DB_DRIVER=postgres` and a URL-safe `POSTGRES_PASSWORD`
    (leave `WOLF_DB_DSN` unset to use the bundled service), then
    `docker compose up -d postgres`.
@@ -347,10 +349,11 @@ with 250k findings migrated in about 18 seconds.
    `GET /api/v1/fleet/posture`) and the repository and scan counts with the
    values noted before step 2, and run one scan.
 
-Rollback: stop the services, set `WOLF_DB_DRIVER=sqlite` and `WOLF_DB_DSN=` in
-`.env`, and start again. The migration never writes `wolf.db`, but anything
-written to PostgreSQL after cutover is not copied back. Keep `wolf.db` and the
-backup until the next release.
+Rollback: this release cannot run on SQLite. To go back, stop the services,
+run the previous release's image with `WOLF_DB_DRIVER=sqlite` and `WOLF_DB_DSN=`
+pointing at the untouched `wolf.db`; anything written to PostgreSQL after cutover
+is not copied back. The migration never writes `wolf.db`; keep it and the backup
+until you have accepted the PostgreSQL install.
 
 ### Automatic scanner scheduling
 

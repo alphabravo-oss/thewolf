@@ -9,11 +9,7 @@ import (
 )
 
 func TestFixerConsoleQueueClaimStdinAndReclaim(t *testing.T) {
-	store, err := NewSQLite(":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = store.Close() })
+	store := NewTestPostgres(t)
 	ctx := context.Background()
 
 	c := &models.FixerConsole{

@@ -451,7 +451,7 @@ where malicious replacement is in scope.
 Create the database snapshot, Git mirror, and immutable artifact-storage
 snapshot in the same recovery window. The recovery set is:
 
-- the operational SQLite/PostgreSQL backup for non-release application data;
+- the operational PostgreSQL backup for non-release application data;
 - this versioned release-domain export;
 - scanner definition Git history;
 - immutable OCI images and release manifests;
@@ -503,9 +503,9 @@ wolf scanner-release-backup restore \
 Restore obtains a 30-minute database-backed maintenance lease, rechecks the
 empty target and schema inside a serializable transaction, and excludes
 concurrent release writes. PostgreSQL takes exclusive locks on the exact
-release tables; SQLite obtains its database write lock. Rows are inserted in
+release tables. Rows are inserted in
 referential order, reread, and compared against every table digest before
-commit. SQLite additionally runs `foreign_key_check`. Any error rolls back the
+commit. Any error rolls back the
 transaction and records bounded failure evidence outside it.
 
 During the current maintenance lease:
@@ -551,17 +551,13 @@ The repository contains a deterministic, non-production DR contract using
 separate source/target databases and a fake immutable OCI registry:
 
 ```bash
-go test ./internal/db \
-  -run TestScannerReleaseBackupRestoreContractSQLite \
-  -count=1
-
 WOLF_TEST_POSTGRES_DSN='<disposable postgres DSN>' \
   go test ./internal/db \
   -run TestScannerReleaseBackupRestoreContractPostgres \
   -count=1
 ```
 
-The PostgreSQL test creates and drops two unique schemas and must run only
+The PostgreSQL test creates and drops two unique databases and must run only
 against a disposable qualification database. Passing the deterministic test
 does not constitute a production disaster-recovery drill.
 
@@ -596,8 +592,7 @@ format, schema, registry, signer, or secret-manager recovery changes. Record:
 - Build concurrency is constrained by the largest platform image, QEMU cost,
   registry push bandwidth, and evidence storage. Start with two dependency-ready
   steps per worker and scale replicas by platform.
-- PostgreSQL is recommended for multiple scheduler/worker replicas. SQLite is
-  appropriate for one-node operation with serialized short writes.
+- PostgreSQL supports multiple scheduler/worker replicas.
 - Keep stable and at least one prior verified release protected for the full
   rollback window. Keep revoked artifacts for forensics.
 - Store bounded summaries in the database and large logs/reports in
