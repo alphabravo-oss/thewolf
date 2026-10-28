@@ -19,13 +19,6 @@ export type EditionInfo = VersionInfo & {
   entitlements?: Record<string, boolean>;
   modules?: string[];
   mcp?: { enabled?: boolean };
-  limits?: {
-    repos?: number;
-    users?: number;
-    workers?: number;
-    source?: string;
-    enforced?: boolean;
-  };
 };
 
 /** Where the locked-feature card sends people; override per deployment. */

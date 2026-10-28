@@ -1224,9 +1224,6 @@ func TestCreateScanMissingRepoID(t *testing.T) {
 
 func TestCreateScanIdempotencyReturnsOriginalAndRejectsConflict(t *testing.T) {
 	t.Setenv("WOLF_SCAN_EXECUTION_MODE", "queue")
-	t.Setenv(entitlement.LimitsEnv, "1")
-	entitlement.SetActive(entitlement.Community{})
-	t.Cleanup(func() { entitlement.SetActive(nil) })
 	env := setupTestEnv(t)
 	defer env.Store.Close()
 	repoID := env.createRepo(t)
@@ -1256,12 +1253,6 @@ func TestCreateScanIdempotencyReturnsOriginalAndRejectsConflict(t *testing.T) {
 	conflict := request("develop", "build-42")
 	if conflict.Code != http.StatusConflict || !strings.Contains(conflict.Body.String(), "idempotency_conflict") {
 		t.Fatalf("expected idempotency conflict, got %d: %s", conflict.Code, conflict.Body.String())
-	}
-	for _, key := range []string{"build-43", ""} {
-		blocked := request("main", key)
-		if blocked.Code != http.StatusConflict || !strings.Contains(blocked.Body.String(), "community_limit") {
-			t.Fatalf("new scan must respect capacity: %d %s", blocked.Code, blocked.Body.String())
-		}
 	}
 }
 

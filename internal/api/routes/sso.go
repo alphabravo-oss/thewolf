@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"strings"
 	"sync"
@@ -123,11 +122,6 @@ func ssoCallback(w http.ResponseWriter, r *http.Request, reg *authprovider.Regis
 	email = strings.ToLower(strings.TrimSpace(email))
 	user, err := ensureSSOUser(r, email)
 	if err != nil {
-		var le *communityLimitError
-		if errors.As(err, &le) {
-			response.WriteError(w, http.StatusConflict, le.code, le.msg)
-			return
-		}
 		response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to provision user")
 		return
 	}
@@ -179,9 +173,6 @@ func ensureSSOUser(r *http.Request, email string) (*models.User, error) {
 	}
 	if u, err := h.Store.GetUserByEmail(r.Context(), email); err == nil && u != nil {
 		return u, nil
-	}
-	if err := checkCommunityLimit(r.Context(), h.Store, limitUsers); err != nil {
-		return nil, err
 	}
 	secret := make([]byte, 32)
 	_, _ = rand.Read(secret)

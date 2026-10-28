@@ -8,7 +8,7 @@ import { FormDialog } from "@/components/ui/form-dialog";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { COMMUNITY_LIMIT_COPY, isCommunityLimit, safeErrorMessage } from "@/lib/safe-display";
+import { safeErrorMessage } from "@/lib/safe-display";
 import { Field, RowActions, SettingsCard, SettingsTable, shortDate, TypedConfirmDialog } from "./shared";
 
 interface UserSummary {
@@ -139,7 +139,7 @@ export function UsersSection() {
         submitLabel="Create user"
         pending={create.isPending}
         dirty={!!form.email || !!form.password}
-        error={create.isError ? (isCommunityLimit(create.error) ? COMMUNITY_LIMIT_COPY : safeErrorMessage(create.error, "Create failed")) : undefined}
+        error={create.isError ? safeErrorMessage(create.error, "Create failed") : undefined}
         onSubmit={() => {
           setTouched(true);
           if (/^\S+@\S+$/.test(form.email.trim()) && form.password.length >= 12) create.mutate(form);

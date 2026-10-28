@@ -38,13 +38,6 @@ func TestGetEditionIsPublicCommunity(t *testing.T) {
 			Edition string          `json:"edition"`
 			MCP     map[string]any  `json:"mcp"`
 			Ent     map[string]bool `json:"entitlements"`
-			Limits  struct {
-				Repos    int    `json:"repos"`
-				Users    int    `json:"users"`
-				Workers  int    `json:"workers"`
-				Source   string `json:"source"`
-				Enforced bool   `json:"enforced"`
-			} `json:"limits"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &env); err != nil {
@@ -58,12 +51,6 @@ func TestGetEditionIsPublicCommunity(t *testing.T) {
 	}
 	if enabled, _ := env.Data.MCP["enabled"].(bool); enabled {
 		t.Fatal("MCP must default off")
-	}
-	if env.Data.Limits.Repos != 5 || env.Data.Limits.Users != 3 || env.Data.Limits.Workers != 1 {
-		t.Fatalf("limits = %+v", env.Data.Limits)
-	}
-	if env.Data.Limits.Enforced || env.Data.Limits.Source != "synthetic" {
-		t.Fatalf("limits should be synthetic and off by default: %+v", env.Data.Limits)
 	}
 	if env.Data.Ent["enterprise.plugins"] || env.Data.Ent["enterprise.compliance"] {
 		t.Fatal("community must not grant remaining enterprise caps")

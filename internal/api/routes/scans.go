@@ -187,11 +187,6 @@ func CreateScan(w http.ResponseWriter, r *http.Request) {
 		}
 		sourceRepo, err := materializeScanSource(r.Context(), h, claims.UserID, req.Source)
 		if err != nil {
-			var le *communityLimitError
-			if errors.As(err, &le) {
-				response.WriteError(w, http.StatusConflict, le.code, le.msg)
-				return
-			}
 			response.WriteError(w, http.StatusBadRequest, "source_invalid", err.Error())
 			return
 		}
@@ -305,11 +300,6 @@ func persistScan(ctx context.Context, h *Handler, userID string, repo *models.Re
 		} else if !errors.Is(findErr, sql.ErrNoRows) {
 			return nil, persistErr(http.StatusInternalServerError, "server_error", "failed to check idempotency key")
 		}
-	}
-
-	// Replaying an existing operation does not consume additional capacity.
-	if err := persistCommunityLimit(ctx, h.Store, limitWorkers); err != nil {
-		return nil, err
 	}
 
 	now := time.Now()

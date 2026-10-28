@@ -17,13 +17,6 @@ type EditionInfo = {
   modules?: string[];
   entitlements?: Record<string, boolean>;
   mcp?: { enabled?: boolean };
-  limits?: {
-    repos?: number;
-    users?: number;
-    workers?: number;
-    source?: string;
-    enforced?: boolean;
-  };
 };
 
 type LicenseInfo = {
@@ -120,13 +113,6 @@ export function LicenseTab() {
           <p className="font-mono text-xs text-muted-foreground">modules: {edition.modules.join(", ")}</p>
         ) : null}
         {edition?.mcp ? <p className="text-xs text-muted-foreground">MCP {edition.mcp.enabled ? "enabled" : "off"}</p> : null}
-        {edition?.limits ? (
-          <p className="text-xs text-muted-foreground">
-            Evaluation ceiling: {edition.limits.repos} repos, {edition.limits.users} users, {edition.limits.workers} scan worker
-            {edition.limits.enforced ? " (enforced)" : " (not enforced)"}
-            {edition.limits.source ? ` · ${edition.limits.source}` : ""}
-          </p>
-        ) : null}
       </SettingsCard>
 
       <SettingsCard title="Entitlements" description="What this binary and license grant." flush>

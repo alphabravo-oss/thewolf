@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ApiError } from "./api";
 import {
-  COMMUNITY_LIMIT_COPY,
-  isCommunityLimit,
   safeBackendFailureMessage,
   safeDisplayText,
   safeErrorMessage,
@@ -37,16 +35,6 @@ describe("safeDisplayText", () => {
     expect(rendered).not.toContain("unstructured-value");
     expect(rendered).not.toContain("BEGIN KEY");
     expect(rendered).toContain("[REDACTED]");
-  });
-
-  it("points Community evaluation limits at Settings → License", () => {
-    const error = new ApiError(
-      409,
-      "community_limit",
-      "Community evaluation limit: at most 5 repositories",
-    );
-    expect(safeErrorMessage(error)).toBe(COMMUNITY_LIMIT_COPY);
-    expect(isCommunityLimit(error)).toBe(true);
   });
 
   it("never presents raw API error messages", () => {

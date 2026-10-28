@@ -13,7 +13,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
-import { isCommunityLimit, COMMUNITY_LIMIT_COPY } from "@/lib/safe-display";
 import type { Repo } from "@/lib/types";
 
 type Mode = "local" | "github" | "git" | "ssh";
@@ -158,7 +157,7 @@ export function AddRepoForm({ collectionId, onDone }: AddRepoFormProps) {
       else onDone(repoId);
     },
     onError: (e) => {
-      toast.error(isCommunityLimit(e) ? COMMUNITY_LIMIT_COPY : e instanceof Error ? e.message : "Create failed");
+      toast.error(e instanceof Error ? e.message : "Create failed");
     },
   });
 

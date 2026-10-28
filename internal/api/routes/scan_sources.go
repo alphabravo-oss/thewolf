@@ -212,9 +212,6 @@ func materializeSSHSource(ctx context.Context, h *Handler, userID string, source
 }
 
 func createVisibleSourceRepo(ctx context.Context, h *Handler, repo *models.Repo) (*models.Repo, error) {
-	if err := checkCommunityLimit(ctx, h.Store, limitRepos); err != nil {
-		return nil, err
-	}
 	if err := h.Store.CreateRepo(ctx, repo); err != nil {
 		if existing := findSourceRepo(ctx, h, repo.UserID, repo.SourceFingerprint); existing != nil {
 			return existing, nil

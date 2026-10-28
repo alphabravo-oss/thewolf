@@ -105,10 +105,6 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		role = models.RoleAdmin
 	}
 
-	if rejectCommunityLimit(w, r.Context(), h.Store, limitUsers) {
-		return
-	}
-
 	now := time.Now()
 	user := &models.User{
 		ID:           uuid.New().String(),
@@ -236,11 +232,6 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		}
 		user, err = ensureSSOUser(r, email)
 		if err != nil {
-			var le *communityLimitError
-			if errors.As(err, &le) {
-				response.WriteError(w, http.StatusConflict, le.code, le.msg)
-				return
-			}
 			response.WriteError(w, http.StatusInternalServerError, "server_error", "failed to provision user")
 			return
 		}
