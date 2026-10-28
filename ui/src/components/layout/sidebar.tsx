@@ -4,6 +4,7 @@ import {
   BookOpen,
   Bot,
   Bug,
+  FileText,
   ChevronLeft,
   ChevronRight,
   Gauge,
@@ -52,6 +53,7 @@ function useNavGroups(): NavGroup[] {
     const secondary: NavItem[] = [
       { label: "Collections", to: "/collections", icon: Package },
       { label: "Scanner coverage", to: "/coverage", icon: Layers },
+      { label: "Reports", to: "/reports", icon: FileText },
     ];
 
     const admin: NavItem[] = isAdmin ? [

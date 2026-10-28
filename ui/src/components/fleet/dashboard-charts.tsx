@@ -23,17 +23,17 @@ import {
 } from "./dashboard-data";
 
 const linkClass = "font-medium text-primary hover:underline underline-offset-4";
-const label = (s: string) => s[0].toUpperCase() + s.slice(1);
+export const label = (s: string) => s[0].toUpperCase() + s.slice(1);
 const short = (s: string, n = 22) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
-const axis = { stroke: "var(--color-muted-foreground)", fontSize: 11, tickLine: false } as const;
+export const axis = { stroke: "var(--color-muted-foreground)", fontSize: 11, tickLine: false } as const;
 // Count axes: whole numbers, compact ticks (60K) so labels fit the axis.
-const count = { allowDecimals: false, tickFormatter: new Intl.NumberFormat("en", { notation: "compact" }).format } as const;
-const grid = <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />;
+export const count = { allowDecimals: false, tickFormatter: new Intl.NumberFormat("en", { notation: "compact" }).format } as const;
+export const grid = <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />;
 // Keep series in severity order (Recharts sorts tooltip and legend by name).
-const tip = <Tooltip itemSorter={(i) => SEVERITIES.indexOf(String(i.dataKey) as SeverityKey)} cursor={{ fill: "var(--color-muted)" }} contentStyle={{ background: "var(--color-popover)", border: "1px solid var(--color-border)", borderRadius: 4, fontSize: 12, color: "var(--color-popover-foreground)" }} />;
-const legend = <Legend itemSorter={null} wrapperStyle={{ fontSize: 12 }} iconType="square" formatter={(v: string) => <span className="text-foreground">{v}</span>} />;
+export const tip = <Tooltip itemSorter={(i) => SEVERITIES.indexOf(String(i.dataKey) as SeverityKey)} cursor={{ fill: "var(--color-muted)" }} contentStyle={{ background: "var(--color-popover)", border: "1px solid var(--color-border)", borderRadius: 4, fontSize: 12, color: "var(--color-popover-foreground)" }} />;
+export const legend = <Legend itemSorter={null} wrapperStyle={{ fontSize: 12 }} iconType="square" formatter={(v: string) => <span className="text-foreground">{v}</span>} />;
 // 2px card-coloured gap between adjacent fills.
-const gap = { stroke: "var(--color-card)", strokeWidth: 1 } as const;
+export const gap = { stroke: "var(--color-card)", strokeWidth: 1 } as const;
 
 // Category-axis width and label length for horizontal bars; phones get a narrower axis.
 const narrowQuery = "(max-width: 640px)";
@@ -105,7 +105,7 @@ export function ChartCard({ id, title, info, description, q, empty, table, actio
   </Card></section>;
 }
 
-function DataTableText({ caption, head, rows }: { caption: string; head: string[]; rows: ReactNode[][] }) {
+export function DataTableText({ caption, head, rows }: { caption: string; head: string[]; rows: ReactNode[][] }) {
   return <div className="mt-2 overflow-x-auto"><table className="data-table w-full text-left text-xs">
     <caption className="sr-only">{caption}</caption>
     <thead><tr>{head.map((h, i) => <th key={h} scope="col" className={cn("border-b border-border py-1.5 pr-3 font-medium text-muted-foreground", i > 0 && "text-right")}>{h}</th>)}</tr></thead>

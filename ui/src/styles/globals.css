@@ -111,6 +111,8 @@
   --terminal-select: #b8c4d044;
 }
 
+/* Screen only: print (Reports → Download PDF) always uses the light tokens. */
+@media screen {
 .dark {
   --background: 210 17.6% 6.7%;           /* #0e1114 */
   --foreground: 210 21.4% 94.5%;          /* #eef1f4 ink */
@@ -169,6 +171,7 @@
 
   --rule: hsl(var(--foreground));
   --shadow-card: none;
+}
 }
 
 /* ----------------------------------------------------------------------------
@@ -722,4 +725,28 @@
 /* Code must show exactly what was written: no "!=" → "≠" ligatures in security evidence. */
 code, pre, kbd, samp, .font-mono {
   font-variant-ligatures: none;
+}
+
+/* ----------------------------------------------------------------------------
+   Print: Reports → "Download PDF" is the browser print dialog. Only the page
+   content prints, on white, with app chrome and buttons hidden and each report
+   section starting a page.
+   ---------------------------------------------------------------------------- */
+@media print {
+  @page { margin: 12mm; }
+  :root {
+    --background: 0 0% 100%;
+    --card: 0 0% 100%;
+    --shadow-card: none;
+  }
+  [data-testid="app-shell"] > :not(div),
+  [data-testid="app-shell"] > div > :not(main),
+  [data-sonner-toaster],
+  .print-hidden { display: none !important; }
+  [data-testid="app-shell"],
+  [data-testid="app-shell"] > div,
+  #main-content { display: block; height: auto; overflow: visible; }
+  #main-content > div { max-width: none; padding: 0; animation: none; }
+  .report > * + * + * { break-before: page; }
+  .report-section, .report-section > * { break-inside: avoid; }
 }

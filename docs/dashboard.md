@@ -49,6 +49,8 @@ Remediation scans are not backlog evidence: child scans (`origin_scan_id`) and r
 
 The aggregates use scoped SQL queries shared by SQLite and PostgreSQL. Read failures propagate as errors instead of empty results. The current implementation loads compact scan/finding history rather than issuing a query for every scan; its cost is linear in retained history (the compatibility daily series replays that history). At larger retention volumes, materialize snapshots before adding more historical widgets. No history is silently truncated to manufacture a complete result.
 
+`GET /fleet/report?collection_id=` is the Enterprise "Security posture" report in one JSON document: open counts by severity, the last 30 daily trend snapshots, the seven-day comparison and coverage summaries (without per-branch rows), gates failing, pushed fix branches for repositories in scope, open critical/high older than 30/60/90 days, and the 10 riskiest repositories. It uses the same scoped store aggregates as Home. Enterprise saved snapshots store this document unchanged, and the overlay reads it through `pkg/control.FleetAPI()`.
+
 ## Collections and repository work
 
 Collections organize repositories. Open a repository for its current findings, or open a scan for the tools, status and evidence from that individual run. The sidebar's **Across collections** section exposes **All scans** and **All findings** for cross-repository triage; these are aggregate views of the same work.

@@ -25,6 +25,8 @@ const ROUTES: { name: string; url: string; edition?: Fixture["edition"]; width?:
   { name: "vulnerabilities", url: "/vulnerabilities" },
   { name: "collections", url: "/collections" },
   { name: "coverage", url: "/coverage" },
+  { name: "reports", url: "/reports" },
+  { name: "reports-community", url: "/reports", edition: "community" },
   { name: "audit", url: "/audit" },
   { name: "agents", url: "/agents" },
   { name: "findings-by-repo", url: "/findings" },

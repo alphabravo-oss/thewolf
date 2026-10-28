@@ -34,6 +34,7 @@ const routeLabels: Record<string, string> = {
   fixes: "Fixes",
   agents: "Fix agents",
   coverage: "Scanner coverage",
+  reports: "Reports",
   audit: "Audit Log",
   settings: "Settings",
   account: "Account",
