@@ -31,11 +31,11 @@ test.describe("scanner settings and image inventory", () => {
       name: "Administration settings",
     });
     if (page.viewportSize()!.width < 1024) {
-      await expect(page.getByRole("combobox", { name: "Administration section" })).toHaveText("Scanners");
+      await expect(page.getByRole("combobox", { name: "Administration section" })).toHaveText("Scanners & updates");
     } else {
       await expect(
         settingsNavigation.getByRole("button", {
-          name: "Scanners",
+          name: "Scanners & updates",
           exact: true,
         }),
       ).toHaveAttribute("aria-current", "page");
@@ -51,9 +51,14 @@ test.describe("scanner settings and image inventory", () => {
     await expect(
       page.getByRole("button", { name: "Rebuild (local)" }),
     ).toHaveCount(0);
-    // The inventory is split by origin: images the Wolf release factory
-    // builds, and third-party tools pinned in scanner-lock.yaml. They are
-    // separate supply chains and each card carries its own outdated count.
+    await page.getByRole("button", { name: "Run Doctor" }).click();
+    await expect(page.getByText("All checks passed")).toBeVisible();
+
+    // Image inventory has its own section. It is split by origin: images the
+    // Wolf release factory builds, and third-party tools pinned in
+    // scanner-lock.yaml. They are separate supply chains and each card carries
+    // its own outdated count.
+    await page.goto("/settings?tab=images");
     await expect(
       page.getByRole("heading", { name: "Wolf scanner images" }),
     ).toBeVisible();
@@ -61,15 +66,9 @@ test.describe("scanner settings and image inventory", () => {
       page.getByRole("heading", { name: "Upstream tool images" }),
     ).toBeVisible();
 
-    await page.getByRole("button", { name: "Run Doctor" }).click();
-    await expect(page.getByText("All checks passed")).toBeVisible();
-
-    const updateImage = page.getByRole("button", {
-      name: "Update",
-      exact: true,
-    });
-    await expect(updateImage).toHaveCount(1);
-    await updateImage.click();
+    // Per-image update lives in the row's action menu.
+    await page.getByRole("button", { name: /^Actions for docker\.io\/alphabravodevops\/wolf-scanners:2\.0\.0/ }).first().click();
+    await page.getByRole("menuitem", { name: "Update image" }).click();
     await expect
       .poll(() => recorded(state, "POST", "/scanners/images/pull").length, {
         message: "the existing per-image update control should call its API",
@@ -79,6 +78,7 @@ test.describe("scanner settings and image inventory", () => {
       image: "docker.io/alphabravodevops/wolf-scanners:2.0.0",
     });
     await page.getByRole("button", { name: "Update Wolf images" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Update images" }).click();
     await expect.poll(() => recorded(state, "POST", "/scanners/images/pull").length).toBe(2);
     expect(recorded(state, "POST", "/scanners/pull")).toHaveLength(0);
     expect(recorded(state, "POST", "/scanners/images/pull")[1].body).toEqual({

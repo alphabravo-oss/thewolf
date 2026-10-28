@@ -13,7 +13,7 @@ test("automatic scanner capacity is visible and manual limits can return to auto
     host_cpus: 16, host_memory_bytes: 30 * 2 ** 30, cpu_budget: 12,
     memory_budget_bytes: 22.5 * 2 ** 30, workers: 1, source: "Docker host",
   } } }));
-  await page.goto("/settings?tab=general");
+  await page.goto("/settings?tab=scheduling");
   const scheduling = page.getByRole("region", { name: "Scanner scheduling" });
   await expect(scheduling).toContainText("16 CPUs");
   await expect(scheduling).toContainText("Up to 2 tools per scan");

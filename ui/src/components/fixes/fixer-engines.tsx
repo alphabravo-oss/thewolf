@@ -3,9 +3,11 @@
 // a single shared harness/model form that blurred which engine a model
 // belonged to.
 import { useState } from "react";
-import { CheckCircle2Icon, CircleDashedIcon, LogInIcon } from "lucide-react";
+import { LogInIcon } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { FixCatalogEngine, FixCatalogModel, FixEngineStatus } from "@/lib/fixes";
 
@@ -40,14 +42,11 @@ export function FixerEngines({ catalog, worker, settings, saving, onSave, onSign
     return rank(a) - rank(b);
   });
   return (
-    <div className="glass-card p-5 space-y-4 text-sm">
-      <div>
-        <h2 className="text-sm font-medium">Fixer engines</h2>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Each engine signs in on its own. Pick one as the default for new fixes and choose its model
-          and effort. A single fix can still override them.
-        </p>
-      </div>
+    <section aria-label="Fixer engines" className="space-y-4 text-sm">
+      <p className="text-sm text-muted-foreground">
+        Each engine signs in on its own. Pick one as the default for new fixes and choose its model
+        and effort. A single fix can still override them.
+      </p>
       <AutoCard active={defaultEngine === "auto"} saving={saving} onUse={() => onSave({ fixer_engine: "auto", fixer_model: "", fixer_effort: "" })} />
       <div className="grid gap-3 lg:grid-cols-2">
         {ordered.map((engine) => (
@@ -63,24 +62,24 @@ export function FixerEngines({ catalog, worker, settings, saving, onSave, onSign
           />
         ))}
       </div>
-    </div>
+    </section>
   );
 }
 
 function AutoCard({ active, saving, onUse }: { active: boolean; saving: boolean; onUse: () => void }) {
   return (
-    <div className={`rounded-lg border p-3 flex items-center justify-between gap-3 ${active ? "border-primary/50 bg-primary/5" : "border-border"}`}>
+    <Card className={`flex items-center justify-between gap-3 p-4 ${active ? "border-primary/50 bg-primary/5" : ""}`}>
       <div>
         <div className="font-medium">Auto</div>
         <div className="text-xs text-muted-foreground">Use the first signed-in engine; fall back to the API.</div>
       </div>
       {active ? <DefaultChip /> : <Button size="sm" variant="outline" disabled={saving} onClick={onUse}>Use Auto</Button>}
-    </div>
+    </Card>
   );
 }
 
 function DefaultChip() {
-  return <span className="text-[10px] uppercase tracking-wide border rounded px-1.5 py-0.5 text-primary bg-primary/10 border-primary/30">Default</span>;
+  return <StatusBadge status="info" label="Default" size="sm" showDot={false} />;
 }
 
 function EngineCard({ engine, row, isDefault, settings, saving, onSave, onSignIn }: {
@@ -108,7 +107,7 @@ function EngineCard({ engine, row, isDefault, settings, saving, onSave, onSignIn
   const dirty = isDefault && (model !== initialModel || effortValid !== initialEffort);
 
   return (
-    <article aria-label={engine.label} className={`rounded-lg border p-4 space-y-3 ${isDefault ? "border-primary/50 bg-primary/5" : "border-border"}`}>
+    <Card role="article" aria-label={engine.label} className={`space-y-3 p-4 ${isDefault ? "border-primary/50 bg-primary/5" : ""}`}>
       <header className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -117,10 +116,7 @@ function EngineCard({ engine, row, isDefault, settings, saving, onSave, onSignIn
           </div>
           <p className="text-xs text-muted-foreground">{info.about}</p>
         </div>
-        <span className={`shrink-0 inline-flex items-center gap-1 text-[11px] ${connected ? "text-status-success" : "text-muted-foreground"}`}>
-          {connected ? <CheckCircle2Icon className="size-3.5" /> : <CircleDashedIcon className="size-3.5" />}
-          {connected ? "Signed in" : "Not connected"}
-        </span>
+        <StatusBadge status={connected ? "connected" : "neutral"} label={connected ? "Signed in" : "Not connected"} size="sm" className="shrink-0" />
       </header>
 
       {connected ? (
@@ -165,12 +161,12 @@ function EngineCard({ engine, row, isDefault, settings, saving, onSave, onSignIn
             </Button>
           ) : (
             <p className="text-xs text-muted-foreground">
-              Add an API key under <Link to="/account" search={{ section: "secrets" }} className="underline">Account → Secrets</Link>.
+              Add an API key under <Link to="/settings" search={{ tab: "secrets" }} className="underline">Secrets &amp; credentials</Link>.
             </p>
           )}
         </div>
       )}
-    </article>
+    </Card>
   );
 }
 

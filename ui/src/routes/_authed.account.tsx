@@ -5,13 +5,11 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PageHeader } from "@/components/ui/page";
 import { KeyIcon, KeyRoundIcon, LockIcon, ServerIcon, UserIcon } from "lucide-react";
-import {
-  AccountTab,
-  SecurityTab,
-  ApiKeysTab,
-  SecretsTab,
-  NodesTab,
-} from "./_authed.settings";
+import { AccountTab } from "@/components/settings/account";
+import { SecurityTab } from "@/components/settings/mfa";
+import { ApiKeysTab } from "@/components/settings/api-keys";
+import { SecretsTab } from "@/components/settings/secrets";
+import { NodesTab } from "@/components/settings/nodes";
 
 type SectionKey = "profile" | "security" | "apikeys" | "secrets" | "nodes";
 

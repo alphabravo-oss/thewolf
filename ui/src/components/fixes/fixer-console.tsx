@@ -226,7 +226,7 @@ export function FixerConsolePanel({
         )}
       </div>
 
-      <div className="glass-card p-4 space-y-2">
+      <div className="space-y-2">
         <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
           <span className="inline-flex items-center gap-1.5">
             <TerminalIcon className="size-3.5" />

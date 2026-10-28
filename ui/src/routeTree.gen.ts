@@ -29,6 +29,7 @@ import { Route as AuthedAgentsAgentIdRouteImport } from './routes/_authed.agents
 import { Route as AuthedAuditIndexRouteImport } from './routes/_authed.audit.index'
 import { Route as AuthedCollectionsIndexRouteImport } from './routes/_authed.collections.index'
 import { Route as AuthedCollectionsCollectionIdRouteImport } from './routes/_authed.collections.$collectionId'
+import { Route as AuthedEnterpriseIndexRouteImport } from './routes/_authed.enterprise.index'
 import { Route as AuthedEnterpriseSplatRouteImport } from './routes/_authed.enterprise.$'
 import { Route as AuthedEnterpriseIdentityRouteImport } from './routes/_authed.enterprise.identity'
 import { Route as AuthedEnterpriseTenancyRouteImport } from './routes/_authed.enterprise.tenancy'
@@ -145,6 +146,11 @@ const AuthedCollectionsCollectionIdRoute =
     path: '/$collectionId',
     getParentRoute: () => AuthedCollectionsRoute,
   } as any)
+const AuthedEnterpriseIndexRoute = AuthedEnterpriseIndexRouteImport.update({
+  id: '/enterprise/',
+  path: '/enterprise/',
+  getParentRoute: () => AuthedRoute,
+} as any)
 const AuthedEnterpriseSplatRoute = AuthedEnterpriseSplatRouteImport.update({
   id: '/enterprise/$',
   path: '/enterprise/$',
@@ -252,6 +258,7 @@ export interface FileRoutesByFullPath {
   '/agents/': typeof AuthedAgentsIndexRoute
   '/audit/': typeof AuthedAuditIndexRoute
   '/collections/': typeof AuthedCollectionsIndexRoute
+  '/enterprise/': typeof AuthedEnterpriseIndexRoute
   '/findings/': typeof AuthedFindingsIndexRoute
   '/fixes/': typeof AuthedFixesIndexRoute
   '/repos/': typeof AuthedReposIndexRoute
@@ -279,6 +286,7 @@ export interface FileRoutesByTo {
   '/agents': typeof AuthedAgentsIndexRoute
   '/audit': typeof AuthedAuditIndexRoute
   '/collections': typeof AuthedCollectionsIndexRoute
+  '/enterprise': typeof AuthedEnterpriseIndexRoute
   '/findings': typeof AuthedFindingsIndexRoute
   '/fixes': typeof AuthedFixesIndexRoute
   '/repos': typeof AuthedReposIndexRoute
@@ -317,6 +325,7 @@ export interface FileRoutesById {
   '/_authed/agents/': typeof AuthedAgentsIndexRoute
   '/_authed/audit/': typeof AuthedAuditIndexRoute
   '/_authed/collections/': typeof AuthedCollectionsIndexRoute
+  '/_authed/enterprise/': typeof AuthedEnterpriseIndexRoute
   '/_authed/findings/': typeof AuthedFindingsIndexRoute
   '/_authed/fixes/': typeof AuthedFixesIndexRoute
   '/_authed/repos/': typeof AuthedReposIndexRoute
@@ -355,6 +364,7 @@ export interface FileRouteTypes {
     | '/agents/'
     | '/audit/'
     | '/collections/'
+    | '/enterprise/'
     | '/findings/'
     | '/fixes/'
     | '/repos/'
@@ -382,6 +392,7 @@ export interface FileRouteTypes {
     | '/agents'
     | '/audit'
     | '/collections'
+    | '/enterprise'
     | '/findings'
     | '/fixes'
     | '/repos'
@@ -419,6 +430,7 @@ export interface FileRouteTypes {
     | '/_authed/agents/'
     | '/_authed/audit/'
     | '/_authed/collections/'
+    | '/_authed/enterprise/'
     | '/_authed/findings/'
     | '/_authed/fixes/'
     | '/_authed/repos/'
@@ -575,6 +587,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/collections/$collectionId'
       preLoaderRoute: typeof AuthedCollectionsCollectionIdRouteImport
       parentRoute: typeof AuthedCollectionsRoute
+    }
+    '/_authed/enterprise/': {
+      id: '/_authed/enterprise/'
+      path: '/enterprise'
+      fullPath: '/enterprise/'
+      preLoaderRoute: typeof AuthedEnterpriseIndexRouteImport
+      parentRoute: typeof AuthedRoute
     }
     '/_authed/enterprise/$': {
       id: '/_authed/enterprise/$'
@@ -824,6 +843,7 @@ interface AuthedRouteChildren {
   AuthedEnterpriseSplatRoute: typeof AuthedEnterpriseSplatRoute
   AuthedEnterpriseIdentityRoute: typeof AuthedEnterpriseIdentityRoute
   AuthedEnterpriseTenancyRoute: typeof AuthedEnterpriseTenancyRoute
+  AuthedEnterpriseIndexRoute: typeof AuthedEnterpriseIndexRoute
 }
 
 const AuthedRouteChildren: AuthedRouteChildren = {
@@ -842,6 +862,7 @@ const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedEnterpriseSplatRoute: AuthedEnterpriseSplatRoute,
   AuthedEnterpriseIdentityRoute: AuthedEnterpriseIdentityRoute,
   AuthedEnterpriseTenancyRoute: AuthedEnterpriseTenancyRoute,
+  AuthedEnterpriseIndexRoute: AuthedEnterpriseIndexRoute,
 }
 
 const AuthedRouteWithChildren =

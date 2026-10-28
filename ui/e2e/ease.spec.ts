@@ -19,20 +19,22 @@ test("ease path: home, findings, scanners, scanner updates", async ({
     page.getByRole("heading", { level: 1, name: "Settings" }),
   ).toBeVisible();
   if (page.viewportSize()!.width < 1024) {
-    await expect(page.getByRole("combobox", { name: "Administration section" })).toHaveText("Scanners");
+    await expect(page.getByRole("combobox", { name: "Administration section" })).toHaveText("Scanners & updates");
   } else {
-    await expect(page.getByRole("button", { name: "Scanners", exact: true })).toHaveAttribute("aria-current", "page");
+    await expect(page.getByRole("button", { name: "Scanners & updates", exact: true })).toHaveAttribute("aria-current", "page");
   }
+  await expect(
+    page.getByRole("button", { name: "Run Doctor" }),
+  ).toBeVisible();
+
+  await page.goto("/settings?tab=images");
   await expect(
     page.getByRole("button", { name: "Update Wolf images" }),
   ).toBeVisible();
 
+  // The old "Advanced" tab now redirects into Scanners & updates → Advanced.
   await page.goto("/settings?tab=scanner-updates");
-  if (page.viewportSize()!.width < 1024) {
-    await expect(page.getByRole("combobox", { name: "Administration section" })).toHaveText("Advanced");
-  } else {
-    await expect(page.getByRole("button", { name: "Advanced", exact: true })).toHaveAttribute("aria-current", "page");
-  }
+  await expect(page).toHaveURL(/tab=scanners.*advanced=true|advanced=true.*tab=scanners/);
   await expect(
     page.getByText("Notify only (do not auto-promote scanner releases)"),
   ).toBeVisible();

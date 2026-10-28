@@ -49,9 +49,9 @@ test("locally built scanner images support private registry ports without a regi
   await page.route(/\/api(?:\/v1)?\/scanners\/images$/, (route) => route.fulfill({ json: { data: [{
     image: "registry.example:5000/wolf-scanners:local", local_present: true, updates_available: false,
   }] } }));
-  await page.goto("/settings?tab=scanners");
+  await page.goto("/settings?tab=images");
   await expect(page.getByText("Present (local build)", { exact: true })).toBeVisible();
-  const wolfCard = page.locator(".glass-card").filter({ has: page.getByRole("heading", { name: "Wolf scanner images", exact: true }) });
+  const wolfCard = page.getByRole("region", { name: "Wolf scanner images" });
   await expect(wolfCard.getByText("registry.example:5000/wolf-scanners:local", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Pull", exact: true })).toHaveCount(0);
 });
