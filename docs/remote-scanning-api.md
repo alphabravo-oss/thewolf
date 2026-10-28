@@ -289,7 +289,7 @@ enable PostgreSQL and set `WOLF_SCAN_WORKERS`:
 WOLF_DB_DRIVER=postgres \
 WOLF_DB_DSN='postgres://wolf:REDACTED@postgres:5432/wolf?sslmode=disable' \
 WOLF_SCAN_WORKERS=3 \
-docker compose --profile postgres up -d --build
+docker compose up -d --build
 ```
 
 `WOLF_SCAN_EXECUTION_MODE=inline` is the one-release rollback mode. It keeps

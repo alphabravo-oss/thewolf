@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- PostgreSQL is now the Compose default (`postgres` service always on, services
+  wait for it healthy, `WOLF_DB_DRIVER=postgres`, DSN built from
+  `POSTGRES_PASSWORD`). SQLite support ends after this release. New
+  `wolf db migrate-from-sqlite --sqlite <wolf.db> [--postgres <dsn>]` copies an
+  existing install in one verified transaction (read-only source, row counts
+  checked, rollback on mismatch); a 635 MB install moved in ~18 s. Wolf refuses
+  to start on an empty PostgreSQL while an unmigrated `~/.wolf/wolf.db` exists.
+  See docs/deployment.md "Move from SQLite to PostgreSQL".
 - Security: Enterprise integration `authorization` headers (SIEM, ticketing,
   integrations) are now encrypted at rest with the Community master key
   (AES-256-GCM, same as stored credentials). Community gains `pkg/control.Sealer`

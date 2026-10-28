@@ -352,7 +352,7 @@ docker-up:
 docker-up-pg:
 	@echo "==> Starting docker-compose services with PostgreSQL..."
 	WOLF_VERSION=$(VERSION) WOLF_COMMIT=$(COMMIT) WOLF_BUILD_DATE=$(BUILD_DATE) \
-		docker compose --profile postgres up -d --build
+		docker compose up -d --build
 
 ## docker-down: Stop docker-compose services
 docker-down:

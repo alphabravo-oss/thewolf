@@ -14,7 +14,8 @@
 #   docker compose -f docker-compose.yml -f docker-compose.hardened.yml \
 #     --profile proxy up -d --build
 #
-# Combine with --profile postgres as needed.
+# PostgreSQL is part of the base stack; depends_on maps merge, so these
+# services still wait for a healthy postgres.
 
 services:
   docker-socket-proxy:
