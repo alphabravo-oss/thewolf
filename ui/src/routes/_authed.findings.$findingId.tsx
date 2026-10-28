@@ -175,10 +175,10 @@ function FindingDetailPage() {
       </CardContent></Card>
 
       <Tabs defaultValue="details">
-        <TabsList aria-label="Finding views">
+        {hasGuidance && <TabsList aria-label="Finding views">
           <TabsTrigger value="details">Details</TabsTrigger>
-          {hasGuidance && <TabsTrigger value="remediation">Remediation</TabsTrigger>}
-        </TabsList>
+          <TabsTrigger value="remediation">Remediation</TabsTrigger>
+        </TabsList>}
         <TabsContent value="details" className="mt-4 space-y-5">
       {f.description?.trim() && !descriptions.has(f.description.trim()) && <section className="glass-card p-5"><h2 className="mb-2 text-sm font-medium">Description</h2><p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">{f.description}</p></section>}
 

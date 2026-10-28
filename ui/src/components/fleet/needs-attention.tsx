@@ -87,6 +87,7 @@ export function NeedsAttention() {
             keyExtractor={(row) => row.repo_id}
             density="compact"
             searchable={false}
+            columnVisibilityControl={false}
             pageSize={8}
             loading={q.isLoading}
             isError={q.isError}

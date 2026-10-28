@@ -530,11 +530,11 @@ function ScanDetailPage() {
       </section>
 
       <Tabs defaultValue="findings">
-        <TabsList aria-label="Scan views">
+        {(!!scan.scanner_scopes?.length || (autofixEnabled && !scanLive)) && <TabsList aria-label="Scan views">
           <TabsTrigger value="findings">Findings</TabsTrigger>
           {!!scan.scanner_scopes?.length && <TabsTrigger value="scope">Scope</TabsTrigger>}
           {autofixEnabled && !scanLive && <TabsTrigger value="agents">Agents</TabsTrigger>}
-        </TabsList>
+        </TabsList>}
         <TabsContent value="findings" className="mt-4">
       <section aria-label="Scan findings">
         <div className="flex items-end justify-between gap-3 mb-3">

@@ -230,7 +230,7 @@ function ReposPage() {
         </Link>
       ),
     },
-    { key: "source", header: "Source", sortAccessor: (r) => r.source_type, filter: { label: "Source" }, accessor: (r) => <span className="text-xs">{SOURCE_LABELS[r.source_type] ?? r.source_type}</span> },
+    { key: "source", header: "Source", sortAccessor: (r) => r.source_type, accessor: (r) => <span className="text-xs">{SOURCE_LABELS[r.source_type] ?? r.source_type}</span> },
     { key: "branch", header: "Branch", sortAccessor: (r) => r.default_branch || "main", accessor: (r) => <span className="font-mono text-xs text-muted-foreground">{r.default_branch || "main"}</span> },
     {
       key: "last_scan",

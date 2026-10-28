@@ -1,6 +1,6 @@
 # UI design-system and admin-console plan
 
-Status: executing (Phase 1 done on branch `ui/design-foundation`). Owner decision 2026-10-27. This elaborates workstream **U** in
+Status: executing (Phase 1 done on branch `ui/design-foundation`; Phase 3 on `ui/list-pages`). Owner decision 2026-10-27. This elaborates workstream **U** in
 [`PLAN.md`](PLAN.md); it is not a second execution plan. Check tasks off here and
 reference the evidence in `PLAN.md` §U when they land.
 
@@ -143,20 +143,25 @@ modal; screenshots in both themes.
 
 ### Phase 3 — List and detail pages
 
-- [ ] **T3.1 Dashboard** (`/`): `MetricCard` strip (open critical/high, scans
+- [x] **T3.1 Dashboard** (`/`): `MetricCard` strip (open critical/high, scans
   this week, coverage, MTTR), trend card, needs-attention table card,
   recent-activity card. Reconcile or delete the dead `.stat-card` path.
-- [ ] **T3.2 Repositories, Findings, Vulnerabilities, Scans, Collections,
+  Evidence: Home leads with a `MetricCard` strip (open critical/high with week-over-week trend, scans this week from `/scans`, fresh coverage, gates failing), then priorities and coverage cards, the needs-attention table card and an admin-only recent-activity card, then the existing work/progress cards. The trend card is the existing comparison card ("Are we improving?"): `docs/dashboard.md` keeps `/findings/trends` off Home on purpose, so it is not called. MTTR is not exposed by any endpoint and is not shown. `.stat-card`, `.stat-label`, `.stat-value`, `.stat-delta` are deleted; `PostureCards` (collection detail) uses `MetricCard`.
+- [x] **T3.2 Repositories, Findings, Vulnerabilities, Scans, Collections,
   Coverage, Audit, Agents, Fixes** lists: page template (header → KPI strip →
   filter bar → `DataTable` card), `+ Add` where the entity is user-created
   (repository, collection), row detail in `Sheet` where it avoids a navigation.
-- [ ] **T3.3 Detail pages** (repo, scan, finding, vulnerability, collection,
+  Evidence: scans, repos, findings (by repo / rule / list), vulnerabilities, collections, coverage, audit and agents use `PageShell` > `PageHeader` > KPI strip (where existing counts exist) > filter bar > `Card`-wrapped `DataTable` with a trailing `RowActions` menu. Add repo, collection create/edit and New scan are `FormDialog`s (`add-repo-form.tsx` -> `AddRepoDialog`, `collection-form-dialog.tsx`, `new-scan-dialog.tsx`); bulk triage and scan cancel use `ConfirmDialog`; audit row detail is a `Sheet`. `DataTable` gained `selectedKeys` (controlled selection) and `hideHeader`. Vulnerabilities has no KPI strip (the API returns only a total). Fixes list is owned by the Phase 2 branch.
+- [x] **T3.3 Detail pages** (repo, scan, finding, vulnerability, collection,
   fix, agent): `PageHeader` with breadcrumbs and status, summary cards on top,
   `Tabs` for the body, evidence/raw data in `Section`.
-- [ ] **T3.4 Sidebar and topbar** pick up the new tokens/type; Enterprise group
+  Evidence: repo, scan, finding, vulnerability and collection detail use `PageShell` + `PageHeader` (new `breadcrumbs` and `status` props), a `MetricCard` summary strip, `Tabs` for the body (tab list hidden when there is one view) and raw data in `Section`. Merge (was `window.prompt`), verify and cancel go through `FormDialog`/`ConfirmDialog`. `/scans/:id/live` is a redirect with no markup. Agent and fix detail render `FixJobView` in `components/fixes/*` (Phase 2 owns it), so their page-template conversion lands with T2.6.
+- [x] **T3.4 Sidebar and topbar** pick up the new tokens/type; Enterprise group
   links to the hub.
-- [ ] **T3.5 Final sweep.** Re-run the T1.9 screenshot sweep, compare to
+  Evidence: sidebar mark/edition chip/group labels and the offline banner use theme tokens (no gradient or raw palette colours); topbar is solid, uses the narrow face, and leaves breadcrumbs to the page header on detail routes (two fewer requests). Enterprise group links unchanged.
+- [x] **T3.5 Final sweep.** Re-run the T1.9 screenshot sweep, compare to
   baseline, fix regressions; confirm the lint guard finds no violations.
+  Evidence: `e2e/visual-fixtures.ts` (pinned clock) gives the sweep real rows for repos, scans, findings, vulnerabilities, collections, audit, agents and coverage; sweep adds findings-by-repo, vulnerability-detail and collection-detail; screenshots grow the viewport to the content. `pnpm test:e2e:baseline` refreshed both themes (axe clean, 21 routes x 2). `pnpm lint && typecheck && test && build && test:e2e` green (190 passed, 44 skipped).
 
 Acceptance: every route uses `PageShell`/`PageHeader`; `MetricCard` is used by
 the dashboard and at least the list pages that have a summary; screenshots

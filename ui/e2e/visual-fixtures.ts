@@ -28,14 +28,14 @@ const scan = (id: string, repoId: string, status: string, extra: Record<string, 
   repo: REPOS.find((r) => r.id === repoId), ...extra,
 });
 const SCANS = [
-  scan("scan-0001aaaa", "payments-api", "completed", { finding_count: 14, commit_sha: "9f2c1d7a3b" }),
-  scan("scan-0002bbbb", "identity-service", "running", { started_at: ago(0.2), completed_at: undefined, tools_completed: '["semgrep"]', tools_running: '["trivy"]', finding_count: 3, created_at: ago(0.2) }),
-  scan("scan-0003cccc", "web-frontend", "completed", { finding_count: 31, tools_completed: '["semgrep","trivy"]', tools_failed: '["gitleaks"]', completeness: "incomplete", created_at: ago(9) }),
-  scan("scan-0004dddd", "infra-terraform", "failed", { finding_count: 0, tools_completed: "[]", tools_failed: '["trivy"]', failure_message: "repository source is unavailable", created_at: ago(26) }),
-  scan("scan-0005eeee", "ledger-worker", "completed", { finding_count: 6, created_at: ago(30) }),
-  scan("scan-0006ffff", "docs-site", "cancelled", { finding_count: 1, created_at: ago(52) }),
-  scan("scan-0007gggg", "payments-api", "completed", { finding_count: 17, created_at: ago(76) }),
-  scan("scan-0008hhhh", "identity-service", "pending", { started_at: undefined, completed_at: undefined, tools_completed: "[]", created_at: ago(0.05) }),
+  scan("7c1e4a90-aaaa", "payments-api", "completed", { finding_count: 14, commit_sha: "9f2c1d7a3b" }),
+  scan("b3d5f812-bbbb", "identity-service", "running", { started_at: ago(0.2), completed_at: undefined, tools_completed: '["semgrep"]', tools_running: '["trivy"]', finding_count: 3, created_at: ago(0.2) }),
+  scan("e90a27c4-cccc", "web-frontend", "completed", { finding_count: 31, tools_completed: '["semgrep","trivy"]', tools_failed: '["gitleaks"]', completeness: "incomplete", created_at: ago(9) }),
+  scan("15f8d6b3-dddd", "infra-terraform", "failed", { finding_count: 0, tools_completed: "[]", tools_failed: '["trivy"]', failure_message: "repository source is unavailable", created_at: ago(26) }),
+  scan("4a7be1c9-eeee", "ledger-worker", "completed", { finding_count: 6, created_at: ago(30) }),
+  scan("d2c60f58-ffff", "docs-site", "cancelled", { finding_count: 1, created_at: ago(52) }),
+  scan("8e3b9a17-gggg", "payments-api", "completed", { finding_count: 17, created_at: ago(76) }),
+  scan("f46c0d2b-hhhh", "identity-service", "pending", { started_at: undefined, completed_at: undefined, tools_completed: "[]", created_at: ago(0.05) }),
 ];
 
 const posture = () => ({
@@ -49,18 +49,18 @@ const posture = () => ({
     { finding_id: "finding-3", repo_id: "payments-api", name: "payments-api", title: "Weak TLS cipher suite enabled", severity: "high", tool: "semgrep", file_path: "internal/tls/config.go", line: 31, state: "existing", confidence: "medium" },
   ],
   coverage: { fresh_days: 7, fresh_repos: 3, rows: [
-    { repo_id: "web-frontend", name: "web-frontend", branch: "main", scan_id: "scan-0003cccc", status: "incomplete", detail: "gitleaks did not complete.", last_complete_at: ago(24 * 9), gate_failing: false },
-    { repo_id: "infra-terraform", name: "infra-terraform", branch: "main", scan_id: "scan-0004dddd", status: "failed", detail: "The repository source is unavailable.", last_complete_at: ago(24 * 12), gate_failing: true },
+    { repo_id: "web-frontend", name: "web-frontend", branch: "main", scan_id: "e90a27c4-cccc", status: "incomplete", detail: "gitleaks did not complete.", last_complete_at: ago(24 * 9), gate_failing: false },
+    { repo_id: "infra-terraform", name: "infra-terraform", branch: "main", scan_id: "15f8d6b3-dddd", status: "failed", detail: "The repository source is unavailable.", last_complete_at: ago(24 * 12), gate_failing: true },
     { repo_id: "docs-site", name: "docs-site", branch: "", status: "never_scanned", detail: "Run the first scan to establish coverage.", gate_failing: false },
-    { repo_id: "payments-api", name: "payments-api", branch: "main", scan_id: "scan-0001aaaa", status: "fresh", detail: "All selected tools completed within 7 days.", last_complete_at: ago(5), gate_failing: true },
+    { repo_id: "payments-api", name: "payments-api", branch: "main", scan_id: "7c1e4a90-aaaa", status: "fresh", detail: "All selected tools completed within 7 days.", last_complete_at: ago(5), gate_failing: true },
   ] },
   work: [
-    { scan_id: "scan-0002bbbb", repo_id: "identity-service", name: "identity-service", branch: "main", status: "running", phase: "scanning", stalled: false },
-    { scan_id: "scan-0008hhhh", repo_id: "identity-service", name: "identity-service", branch: "main", status: "pending", phase: "", stalled: false },
+    { scan_id: "b3d5f812-bbbb", repo_id: "identity-service", name: "identity-service", branch: "main", status: "running", phase: "scanning", stalled: false },
+    { scan_id: "f46c0d2b-hhhh", repo_id: "identity-service", name: "identity-service", branch: "main", status: "pending", phase: "", stalled: false },
   ],
   changes: { window_days: 7, compared_branches: 3, excluded_branches: 1, new: 6, resurfaced: 1, resolved: 9, suppressed: 2, rows: [
-    { repo_id: "payments-api", name: "payments-api", branch: "main", scan_id: "scan-0001aaaa", baseline_scan_id: "scan-0007gggg", new: 2, resurfaced: 0, resolved: 5, suppressed: 1 },
-    { repo_id: "identity-service", name: "identity-service", branch: "main", scan_id: "scan-0002bbbb", baseline_scan_id: "scan-0005eeee", new: 4, resurfaced: 1, resolved: 4, suppressed: 1 },
+    { repo_id: "payments-api", name: "payments-api", branch: "main", scan_id: "7c1e4a90-aaaa", baseline_scan_id: "8e3b9a17-gggg", new: 2, resurfaced: 0, resolved: 5, suppressed: 1 },
+    { repo_id: "identity-service", name: "identity-service", branch: "main", scan_id: "b3d5f812-bbbb", baseline_scan_id: "4a7be1c9-eeee", new: 4, resurfaced: 1, resolved: 4, suppressed: 1 },
   ] },
 });
 
@@ -85,7 +85,7 @@ const rules = [
 ];
 
 const vuln = (id: string, title: string, severity: string, category: string, evidence: number, tools: string[], baseline = "new") => ({
-  id, repo_id: "payments-api", scan_id: "scan-0001aaaa", canonical_key: id, title, severity, category, confidence: evidence > 2 ? "high" : evidence > 1 ? "medium" : "low",
+  id, repo_id: "payments-api", scan_id: "7c1e4a90-aaaa", canonical_key: id, title, severity, category, confidence: evidence > 2 ? "high" : evidence > 1 ? "medium" : "low",
   baseline_state: baseline, composite_score: 6, evidence_count: evidence, finding_ids: [`finding-${id}`], corroborated_by: tools, created_at: ago(30), updated_at: ago(5),
 });
 const VULNS = [
@@ -140,7 +140,7 @@ const COVERAGE_TOOLS = [
 ].map(([name, display_name, category, integration_tier, pinned_version, network_required]) => ({ name, display_name, category, integration_tier, pinned_version, network_required, parser_contract: true, depth: "federated-scanner" }));
 
 const fixJob = (id: string, status: string, repoId: string, extra: Record<string, unknown> = {}) => ({
-  id, user_id: "user-admin", type: "scan", repo_id: repoId, scan_id: "scan-0001aaaa", finding_ids: ["finding-0"], target_branch: "main", engine: "claude", mode: "fix",
+  id, user_id: "user-admin", type: "scan", repo_id: repoId, scan_id: "7c1e4a90-aaaa", finding_ids: ["finding-0"], target_branch: "main", engine: "claude", mode: "fix",
   severity_floor: "high", max_attempts: 3, max_loops: 3, current_loop: 1, human_in_the_loop: true, model: "sonnet", pushed: false, status, summary: "",
   result_branch: `wolf-fix/${id}`, created_at: ago(3), updated_at: ago(1), ...extra,
 });
@@ -162,6 +162,9 @@ export async function installRichFixtures(page: Page) {
     const ok = (data: unknown, meta?: unknown) => route.fulfill({ json: { data, ...(meta ? { meta } : {}) } });
     if (route.request().method() !== "GET") return route.fallback();
     if (p === "/repos") return ok(REPOS);
+    const repoMatch = /^\/repos\/([^/]+)$/.exec(p);
+    if (repoMatch && REPOS.some((r) => r.id === repoMatch[1])) return ok(REPOS.find((r) => r.id === repoMatch[1]));
+    if (/^\/scans\/[^/]+\/gate$/.test(p)) return ok({ evaluation: { status: "pass" }, result: { status: "pass" } });
     if (p === "/collections") return ok(COLLECTIONS);
     if (p === "/collections/backend") return ok(collectionDetail);
     if (p === "/scans") {

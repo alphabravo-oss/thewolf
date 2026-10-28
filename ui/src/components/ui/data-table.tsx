@@ -687,7 +687,7 @@ export function DataTable<T>({
                             col.align === "right" && "justify-end",
                           )}
                         >
-                          {col.hideHeader ? <span className="sr-only">{col.header}</span> : col.header}
+                          {col.hideHeader ? <span className="relative"><span className="sr-only">{col.header}</span></span> : col.header}
                           {col.sortable !== false && (
                             <span className="text-muted-foreground/50">
                               {sorted === "asc" ? (
@@ -1029,7 +1029,7 @@ function VirtualizedGrid<T>({
                   }
                 }}
               >
-                {col.hideHeader ? <span className="sr-only">{col.header}</span> : col.header}
+                {col.hideHeader ? <span className="relative"><span className="sr-only">{col.header}</span></span> : col.header}
                 {col.sortable !== false && (
                   <span className="text-muted-foreground/50">
                     {sorted === "asc" ? (

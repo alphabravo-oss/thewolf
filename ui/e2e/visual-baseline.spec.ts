@@ -16,7 +16,7 @@ type Fixture = { edition?: "community" | "enterprise" };
 const ROUTES: { name: string; url: string; edition?: Fixture["edition"] }[] = [
   { name: "dashboard", url: "/" },
   { name: "repositories", url: "/repos" },
-  { name: "repository-detail", url: "/repos/repo-api-created" },
+  { name: "repository-detail", url: "/repos/payments-api" },
   { name: "scans", url: "/scans" },
   { name: "scan-detail", url: "/scans/scan-source" },
   { name: "findings", url: "/findings?view=list&scope=all" },
@@ -75,6 +75,10 @@ for (const theme of ["light", "dark"] as const) {
       await page.waitForLoadState("networkidle");
       const a11y = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
       expect(a11y.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`)).toEqual([]);
+      // The app scrolls inside <main>, so grow the viewport to the content
+      // (capped) or fullPage would only capture the first screen.
+      const contentHeight = await page.locator("#main-content").evaluate((el) => Math.ceil(el.scrollHeight + el.getBoundingClientRect().top));
+      await page.setViewportSize({ width: 1440, height: Math.min(Math.max(contentHeight, 1000), 3600) });
       const out = process.env.UPDATE_VISUAL_BASELINE
         ? path.join(testInfo.config.rootDir, "__screenshots__", "baseline", theme, `${route.name}.png`)
         : testInfo.outputPath(`${route.name}-${theme}.png`);

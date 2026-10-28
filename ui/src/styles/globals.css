@@ -253,6 +253,11 @@
    Base layer.
    ---------------------------------------------------------------------------- */
 @layer base {
+  /* Native <progress>, checkboxes and radios follow the accent token. */
+  progress,
+  input[type="checkbox"],
+  input[type="radio"] { accent-color: var(--color-primary); }
+
   /* Tailwind v4 defaults `border-*` to currentColor; make every border the
      1px `--border` line unless a utility overrides it. */
   *,
