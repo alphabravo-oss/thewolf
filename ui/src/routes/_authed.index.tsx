@@ -4,11 +4,12 @@ import { Loader2Icon, PlayIcon, ShieldCheckIcon } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { DashboardEvidence } from "@/components/fleet/dashboard-evidence";
-import { AddRepoForm } from "@/components/add-repo-form";
+import { AddRepoDialog } from "@/components/add-repo-form";
 import { useScanWithPreflight } from "@/components/scan-preflight";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { AddButton } from "@/components/ui/add-button";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { PermissionState } from "@/components/ui/empty-state";
+import { ErrorState, PermissionState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader, PageShell } from "@/components/ui/page";
 import { ApiError, api } from "@/lib/api";
@@ -44,11 +45,15 @@ function FleetDashboard() {
 
   return <PageShell>
     {scan.dialog}
-    <PageHeader title="Home" description="Security risk, scan coverage, and what needs your attention." />
-    {fleet.isLoading ? <div role="status" aria-label="Loading Home"><Skeleton className="h-64" /></div>
+    <PageHeader
+      title="Home"
+      description="Security risk, scan coverage, and what needs your attention."
+      actions={fleet.data && fleet.data.repo_count > 0 ? <AddButton thing="repo" onClick={() => setAdding(true)} /> : undefined}
+    />
+    {fleet.isLoading ? <div role="status" aria-label="Loading Home" className="space-y-4"><div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-28" />)}</div><Skeleton className="h-64" /></div>
       : fleet.error instanceof ApiError && fleet.error.status === 403 ? <PermissionState description="You do not have access to fleet evidence." />
-      : fleet.isError || !fleet.data ? <div role="alert" className="rounded-lg border border-border p-6 space-y-3"><p>Dashboard evidence could not be loaded. Coverage and risk are unknown.</p><Button variant="outline" onClick={() => void fleet.refetch()}>Retry dashboard</Button></div>
-      : fleet.data.repo_count === 0 ? <section className="rounded-xl border border-border bg-card px-6 py-8 sm:p-10 space-y-6">
+      : fleet.isError || !fleet.data ? <Card><ErrorState title="Dashboard evidence could not be loaded. Coverage and risk are unknown." actionLabel="Retry dashboard" onRetry={() => void fleet.refetch()} /></Card>
+      : fleet.data.repo_count === 0 ? <Card><CardContent className="space-y-6 px-6 py-8 sm:p-10">
         <div className="max-w-xl space-y-3">
           <ShieldCheckIcon className="size-8 text-primary" aria-hidden />
           <h2 className="text-2xl font-semibold tracking-tight">Your first security scan starts here</h2>
@@ -60,15 +65,15 @@ function FleetDashboard() {
         </div>
         <p className="text-xs text-muted-foreground">No source credentials needed for the sample. Bring your own local path, GitHub repository, Git URL, or SSH source.</p>
         <ScannerReadiness />
-      </section> : <>
-        <div className="flex flex-wrap items-center justify-between gap-3"><ScannerReadiness /><Button variant="outline" onClick={() => setAdding(true)}>Add your repository</Button></div>
+      </CardContent></Card> : <>
+        <ScannerReadiness />
         <DashboardEvidence />
       </>}
-    <Dialog open={adding} onOpenChange={setAdding}><DialogContent className="max-h-[90dvh] overflow-y-auto [&>button]:hidden"><DialogHeader className="sr-only"><DialogTitle>Add your repository</DialogTitle><DialogDescription>Choose a local path, GitHub repository, remote Git URL, or SSH node.</DialogDescription></DialogHeader>{adding && <AddRepoForm onDone={(repoId) => {
+    <AddRepoDialog open={adding} onDone={(repoId) => {
       setAdding(false);
       void qc.invalidateQueries({ queryKey: ["fleet"] });
       if (repoId) void navigate({ to: "/repos/$repoId", params: { repoId } });
-    }} />}</DialogContent></Dialog>
+    }} />
   </PageShell>;
 }
 

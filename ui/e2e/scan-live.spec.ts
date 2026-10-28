@@ -57,10 +57,11 @@ test("scan header exposes attempts, incomplete execution and changed scope @brow
     scanner_scopes: [{ tool_name: "trivy", status: "failed", requested_scope: { include_paths: ["src/**"] }, effective_scope: { profile: "standard" }, scope_message: "Repository-scoped scanner: path selectors could not be enforced." }],
   });
   await page.goto("/scans/scan-api-created");
-  await expect(page.getByText(/0\/2 tools completed.*Attempt 2/)).toBeVisible();
+  await expect(page.getByText("Tools completed", { exact: true }).locator("xpath=../..")).toContainText("0 / 2");
+  await expect(page.getByText("Attempt", { exact: true }).locator("xpath=../..")).toContainText("2");
   await expect(page.getByText("worker_lost", { exact: true })).toBeVisible();
   await expect(page.getByRole("status").filter({ hasText: "Worker stopped before completion." })).toBeVisible();
-  await page.getByText("Requested and effective scan scope", { exact: true }).click();
+  await page.getByRole("tab", { name: "Scope" }).click();
   await expect(page.getByText("Requested: Include: src/**", { exact: true })).toBeVisible();
   await expect(page.getByText("Effective: Profile standard", { exact: true })).toBeVisible();
   await expect(page.getByText(/path selectors could not be enforced/)).toBeVisible();

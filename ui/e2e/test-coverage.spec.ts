@@ -46,7 +46,7 @@ test("measured coverage is scoped, paginated and accessible @browser-matrix", as
   await files.getByRole("textbox", { name: "Search source files" }).fill("payment");
   await expect.poll(() => queries.at(-1)?.get("q")).toBe("payment");
   await expect(files.getByRole("row")).toHaveCount(2);
-  await expect(page.getByRole("link", { name: "Back to collection" })).toHaveAttribute("href", "/collections/services");
+  await expect(page.getByRole("navigation", { name: "Breadcrumb" }).getByRole("link", { name: "Collection", exact: true })).toHaveAttribute("href", "/collections/services");
   const result = await new AxeBuilder({ page }).include("#main-content").withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
   expect(result.violations).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);

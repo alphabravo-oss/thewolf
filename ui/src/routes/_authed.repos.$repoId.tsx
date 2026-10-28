@@ -31,7 +31,9 @@ import { SeverityBadge } from "@/components/severity-badge";
 import { CardSkeleton } from "@/components/skeleton";
 import { FrameworksChips } from "@/components/frameworks-chips";
 import { DataTable, type Column } from "@/components/ui/data-table";
-import { PageHeader } from "@/components/ui/page";
+import { PageHeader, PageShell } from "@/components/ui/page";
+import { MetricCard } from "@/components/ui/metric-card";
+import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScanStatusPill } from "@/components/scan-status-pill";
 import { formatRelativeTime } from "@/lib/utils";
@@ -197,28 +199,43 @@ function RepoDetailPage() {
   if (repoQ.isError) return <ErrorState title="Could not load repository" onRetry={() => void repoQ.refetch()} />;
   if (repoQ.isLoading) {
     return (
-      <div className="page stack page--mid">
+      <PageShell>
         <CardSkeleton />
-      </div>
+      </PageShell>
     );
   }
   if (!repoQ.data) return <EmptyState title="Repository not found" />;
   const r = repoQ.data;
   const langs = parseLanguages(r.detected_languages);
 
+  const toolsDone = latest ? parseToolList(latest.tools_completed).length : 0;
+  const toolsSelected = latest ? parseToolList(latest.tools_selected).length : 0;
+
   return (
-    <div className="page stack page--mid">
+    <PageShell>
       {scan.dialog}
       <DeleteWithRecordsDialog open={deleteOpen} onOpenChange={setDeleteOpen} kind="repo" name={r.name}
         recordCount={scansQ.data?.total} pending={del.isPending} onConfirm={(purge) => del.mutate(purge)} />
-      {collectionId && <Link to="/collections/$collectionId" params={{ collectionId }} className="text-sm text-muted-foreground hover:underline">Back to collection</Link>}
       <PageHeader
+        breadcrumbs={[
+          { label: "Repositories", link: { to: "/repos" } },
+          ...(collectionId ? [{ label: "Collection", link: { to: "/collections/$collectionId", params: { collectionId } } } as const] : []),
+          { label: r.name },
+        ]}
         title={r.name}
-        description={<span className="flex flex-wrap items-center gap-x-4 gap-y-1"><span className="break-all">{r.source_path}</span><span className="inline-flex items-center gap-1 text-xs"><GitBranchIcon className="size-3.5" />{r.default_branch || "main"}</span></span>}
-        actions={latest && canModify(me.data, r.user_id) && <button type="button" onClick={() => scan.configure({ repo_id: repoId, collection_id: collectionId, profile: "standard" })} disabled={scan.busy}
-          className="inline-flex h-9 items-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"><PlayIcon className="size-4" />Scan repository</button>}
+        status={latest ? <ScanStatusPill status={latest.status} scan={latest} gateStatus={latest.status === "completed" ? gateQ.isError ? "unavailable" : gateQ.data?.evaluation.status ?? "pending" : undefined} size="sm" /> : undefined}
+        description={<span className="flex flex-wrap items-center gap-x-4 gap-y-1"><span className="break-all font-mono text-xs">{r.source_path}</span><span className="inline-flex items-center gap-1 text-xs"><GitBranchIcon className="size-3.5" aria-hidden /><span className="font-mono">{r.default_branch || "main"}</span></span></span>}
+        actions={latest && canModify(me.data, r.user_id) && <Button size="sm" onClick={() => scan.configure({ repo_id: repoId, collection_id: collectionId, profile: "standard" })} disabled={scan.busy}><PlayIcon aria-hidden />Scan repository</Button>}
       />
 
+      {latest && (
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <MetricCard title="Findings" value={(latest.finding_count ?? 0).toLocaleString()} subtitle="In the latest scan, including partial results" />
+          <MetricCard title="New since baseline" value={newQ.data ?? "—"} subtitle={baselineQ.data?.length ? "New or resurfaced issues" : "No baseline yet"} />
+          <MetricCard title="Tools completed" value={`${toolsDone} / ${toolsSelected}`} subtitle={parseToolList(latest.tools_failed).length > 0 ? `${parseToolList(latest.tools_failed).length} failed` : "No tool failures"} />
+          <MetricCard title="Scans" value={(scansQ.data?.total ?? 0).toLocaleString()} subtitle={`Last ${formatRelativeTime(latest.created_at)}`} />
+        </div>
+      )}
 
       <Tabs value={search.tab ?? "findings"} onValueChange={(tab) => void navigate({ to: "/repos/$repoId", params: { repoId }, search: { ...search, tab: tab === "findings" ? undefined : tab as "scans" | "tests" | "settings" }, hash: "" })}>
         <TabsList aria-label="Repository views" className="flex h-auto flex-wrap justify-start"><TabsTrigger value="findings">Findings</TabsTrigger><TabsTrigger value="tests">Tests</TabsTrigger><TabsTrigger value="scans">Scan history</TabsTrigger><TabsTrigger value="settings">Settings</TabsTrigger></TabsList>
@@ -226,7 +243,7 @@ function RepoDetailPage() {
           {scansQ.isError ? <p role="alert" className="text-sm text-status-error">Could not load scan coverage. <button type="button" onClick={() => void scansQ.refetch()} className="underline">Retry coverage</button></p> : latest ? (
             <section aria-label="Latest scan" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-muted/20 px-4 py-3">
               <div className="space-y-1.5">
-                <div className="flex flex-wrap items-center gap-2 text-sm"><span className="font-medium">Latest scan</span><ScanStatusPill status={latest.status} scan={latest} gateStatus={latest.status === "completed" ? gateQ.isError ? "unavailable" : gateQ.data?.evaluation.status ?? "pending" : undefined} size="sm" />{gateQ.isError && <button type="button" className="text-xs underline" onClick={() => void gateQ.refetch()}>Retry verdict</button>}</div>
+                <div className="flex flex-wrap items-center gap-2 text-sm"><span className="font-medium">Latest scan</span>{gateQ.isError && <button type="button" className="text-xs underline" onClick={() => void gateQ.refetch()}>Retry verdict</button>}</div>
                 <p className="text-xs text-muted-foreground">{latest.branch || r.default_branch} · {formatRelativeTime(latest.created_at)} · {parseToolList(latest.tools_completed).length} of {parseToolList(latest.tools_selected).length} tools completed{parseToolList(latest.tools_failed).length > 0 ? ` · ${parseToolList(latest.tools_failed).length} failed` : ""}</p>
               </div>
               <div className="flex flex-wrap items-center gap-4 text-sm">
@@ -302,7 +319,7 @@ function RepoDetailPage() {
           {canModify(me.data, r.user_id) && <section className="rounded-lg border border-destructive/30 p-5 space-y-3"><h2 className="text-sm font-medium">Delete repository</h2><p className="text-sm text-muted-foreground">Remove this repository from Wolf. You can choose whether to keep its scan records.</p><button type="button" onClick={() => setDeleteOpen(true)} className="inline-flex h-9 items-center gap-2 rounded-md border border-destructive/40 px-3 text-sm text-destructive hover:bg-destructive/10"><Trash2Icon className="size-4" />Delete repository</button></section>}
         </TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }
 

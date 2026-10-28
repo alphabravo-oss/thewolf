@@ -105,6 +105,8 @@ export interface Column<T> {
   sortable?: boolean;
   filterable?: boolean;
   hidden?: boolean;
+  /** Keep the header for screen readers only (icon-only columns such as row actions). */
+  hideHeader?: boolean;
   width?: string;
   align?: "left" | "center" | "right";
   /**
@@ -127,6 +129,8 @@ interface DataTableProps<T> {
   selectable?: boolean;
   onRowClick?: (row: T) => void;
   onSelectionChange?: (selected: T[]) => void;
+  /** Controls the selection from outside (for example a page-level bulk toolbar). */
+  selectedKeys?: ReadonlySet<string>;
   bulkActions?: (selected: T[]) => ReactNode;
   pageSize?: number;
   loadingRows?: number;
@@ -263,6 +267,7 @@ export function DataTable<T>({
   selectable = false,
   onRowClick,
   onSelectionChange,
+  selectedKeys,
   bulkActions,
   pageSize = 20,
   loadingRows,
@@ -290,7 +295,8 @@ export function DataTable<T>({
   const [globalFilter] = useDebouncedValue(searchInput, { wait: 200 });
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+  const [ownSelection, setRowSelection] = useState<RowSelectionState>({});
+  const rowSelection = selectedKeys ? Object.fromEntries([...selectedKeys].map((k) => [k, true as const])) : ownSelection;
   const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize });
   const [columnVisibility, setColumnVisibility] = useState<ColumnVisibilityState>(() =>
     Object.fromEntries(columns.filter((c) => c.hidden).map((c) => [c.key, false])),
@@ -432,12 +438,11 @@ export function DataTable<T>({
         }
         return next;
       }),
-    onRowSelectionChange: (updater: Updater<RowSelectionState>) =>
-      setRowSelection((prev) => {
-        const next = typeof updater === "function" ? updater(prev) : updater;
-        onSelectionChange?.(data.filter((row) => next[keyExtractor(row)]));
-        return next;
-      }),
+    onRowSelectionChange: (updater: Updater<RowSelectionState>) => {
+      const next = typeof updater === "function" ? updater(rowSelection) : updater;
+      setRowSelection(next);
+      onSelectionChange?.(data.filter((row) => next[keyExtractor(row)]));
+    },
   });
 
   const serverSearch = effectiveServerSide?.search;
@@ -682,7 +687,7 @@ export function DataTable<T>({
                             col.align === "right" && "justify-end",
                           )}
                         >
-                          {col.header}
+                          {col.hideHeader ? <span className="relative"><span className="sr-only">{col.header}</span></span> : col.header}
                           {col.sortable !== false && (
                             <span className="text-muted-foreground/50">
                               {sorted === "asc" ? (
@@ -1024,7 +1029,7 @@ function VirtualizedGrid<T>({
                   }
                 }}
               >
-                {col.header}
+                {col.hideHeader ? <span className="relative"><span className="sr-only">{col.header}</span></span> : col.header}
                 {col.sortable !== false && (
                   <span className="text-muted-foreground/50">
                     {sorted === "asc" ? (

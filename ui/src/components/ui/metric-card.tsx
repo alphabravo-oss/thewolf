@@ -1,7 +1,6 @@
 // Metric tile — ported from astronomer/frontend/src/components/ui/metric-card.tsx.
-// Wolf's dashboard stat tiles render through this instead of the old
-// `.stat-card` markup, so the two consoles share gauge thresholds and trend
-// colouring.
+// Every KPI strip (Home, collection posture, list pages) renders through this
+// so the two consoles share gauge thresholds and trend colouring.
 import { cn, gaugeColor, gaugeTextColor } from "@/lib/utils";
 import { ArrowUpRight, ArrowDownRight, Minus } from "lucide-react";
 

@@ -244,14 +244,13 @@ export function Sidebar({ onMobileOpenChange }: { onMobileOpenChange: (open: boo
         <div className="flex items-center h-14 px-4 border-b border-sidebar-border">
           {!railCollapsed && (
             <Link to="/" className="flex items-center gap-2.5 min-w-0">
-              {/* The mark sits in a rounded gradient tile, matching the brand
-                  lockup in the Astronomer console. Wolf keeps its own mark;
-                  only the container treatment is shared. */}
-              <div className="flex-shrink-0 w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center">
-                <WolfLogo bare className="h-4 w-4 text-white" />
+              {/* The mark sits in a solid accent tile (the steel accent from the
+                  site palette), so the lockup reads in both themes. */}
+              <div className="flex size-7 flex-shrink-0 items-center justify-center rounded-md bg-primary">
+                <WolfLogo bare className="h-4 w-4 text-primary-foreground" />
               </div>
               <span className="text-sm font-semibold tracking-tight">Wolf</span>
-              <span className="rounded border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground">
+              <span className="rounded-sm border border-sidebar-border px-1.5 py-0.5 font-narrow text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                 {versionQ.data?.edition === "enterprise" ? "Enterprise" : "Community"}
               </span>
             </Link>
@@ -318,7 +317,7 @@ function SidebarGroup({ group, pathname, collapsed }: {
   return (
     <div className={cn("space-y-1", group.label !== "Daily work" && "mt-4 border-t border-sidebar-border pt-3")}>
       {!collapsed && ["Administration", "Enterprise"].includes(group.label) && (
-        <p className="px-3 pb-1 text-xs font-medium text-muted-foreground">{group.label}</p>
+        <p className="eyebrow px-3 pt-1">{group.label}</p>
       )}
       {group.items.map((item) => {
         const Icon = item.icon;
