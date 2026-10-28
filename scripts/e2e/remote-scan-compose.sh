@@ -45,7 +45,7 @@ project="wolf-remote-scan-$database-${RANDOM}-$$"
 cleanup() {
   docker compose --project-directory "$project_root" --project-name "$project" \
     --file "$project_root/docker-compose.yml" --file "$work/override.yml" \
-    --profile postgres down --volumes --remove-orphans >/dev/null 2>&1 || true
+    down --volumes --remove-orphans >/dev/null 2>&1 || true
   find "$work" -mindepth 1 -delete >/dev/null 2>&1 || true
   rmdir "$work" >/dev/null 2>&1 || true
 }
@@ -146,8 +146,8 @@ compose_env() {
 }
 
 if [[ "$database" == postgres ]]; then
-  compose_env --profile postgres up --detach --no-build postgres
-  compose_env --profile postgres up --detach --no-build wolf scan-worker
+  compose_env up --detach --no-build postgres
+  compose_env up --detach --no-build wolf scan-worker
 else
   # SQLite migrations are intentionally initialized by the API before the
   # second process opens the shared database, avoiding an artificial startup

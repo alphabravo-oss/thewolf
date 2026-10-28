@@ -21,7 +21,10 @@ docker compose -f docker-compose.yml -f docker-compose.hardened.yml \
 # Scanner containers default to --network none; see docs/scan-isolation.md.
 ```
 
-Add `--profile postgres` to any of the above to use Postgres instead of SQLite.
+PostgreSQL (the `postgres` service) starts with every command above and is the
+default database. Set a URL-safe `POSTGRES_PASSWORD` in `.env`. **Existing
+SQLite installs must migrate before upgrading past this release**; see
+[Move from SQLite to PostgreSQL](#move-from-sqlite-to-postgresql).
 
 Queue-mode API usage, one-shot Git/SSH sources, credentials, idempotency, SSE,
 and result retrieval are documented in
@@ -147,8 +150,8 @@ in `docker-compose.hardened.yml`.
    `WOLF_BIND=127.0.0.1` (or remove the port mapping); only Caddy faces 80/443.
 4. **`WOLF_CORS_ORIGINS=https://your-domain`** so the browser origin matches.
 5. **Use the hardened socket-proxy override** on shared/multi-tenant hosts.
-6. **Use Postgres** (`--profile postgres`) for durability and concurrency; set a
-   real `POSTGRES_PASSWORD` (or a Docker secret).
+6. **Postgres is the default**; set a real URL-safe `POSTGRES_PASSWORD` (or a
+   Docker secret plus an explicit `WOLF_DB_DSN`).
 7. **Firewall:** open only 80 + 443. Postgres binds to localhost by default.
 8. **Scanner images:** make sure `WOLF_SCANNERS_TAG` resolves for your host's
    architecture (publish multi-arch images via `make scanners-buildx-all` or
@@ -292,8 +295,7 @@ socket and registry-secret resolution capability.
 ## PostgreSQL 18 upgrade
 
 Compose now pins PostgreSQL 18.6; Go database connections use pgx v5 through the
-existing store interface. SQLite remains available for the Community laptop
-path. PostgreSQL migrations acquire a database advisory lock so concurrent
+existing store interface. PostgreSQL migrations acquire a database advisory lock so concurrent
 control-plane starts cannot race schema changes.
 
 Do not start PostgreSQL 18 against a PostgreSQL 16 data directory. The Compose
@@ -306,6 +308,49 @@ repositories, findings, queued jobs and a scan/gate cycle; then switch the
 service. Keep the old database and backups until acceptance. An in-place major
 upgrade needs a separately tested pg_upgrade procedure. This source change
 has not migrated any existing deployment or deleted any volume.
+
+## Move from SQLite to PostgreSQL
+
+SQLite support ends after this release: the next release removes the SQLite
+store and runs only on PostgreSQL. Migration is a **required step** for every
+existing install that still has `wolf.db`. Compose now defaults to
+`WOLF_DB_DRIVER=postgres`; an upgraded install whose `.env` does not pin
+`WOLF_DB_DRIVER=sqlite` refuses to start while `~/.wolf/wolf.db` exists and
+PostgreSQL has no users, instead of coming up looking empty.
+
+`wolf db migrate-from-sqlite` opens `wolf.db` read-only, runs the normal
+PostgreSQL migrations, copies every table in one transaction (foreign keys stay
+enforced; tables load in dependency order), verifies per-table row counts,
+prints a summary and commits only if every count matches. It refuses a target
+that already holds application data. Text that PostgreSQL cannot store (NUL
+bytes, invalid UTF-8 such as output truncated mid-character) is replaced with
+U+FFFD and reported per column. Values are never printed. A 635 MB database
+with 250k findings migrated in about 18 seconds.
+
+1. Run the same Wolf version the SQLite install last ran (schemas must match).
+2. Stop writers: `docker compose stop wolf scan-worker` (plus the fixer and any
+   `scanner-*` services you run).
+3. Back up `wolf.db`: `docker compose run --rm --no-deps --entrypoint cp wolf
+   /home/wolf/.wolf/wolf.db /home/wolf/.wolf/wolf.db.pre-postgres`, and
+   `wolf backup` or a copy of the `wolf-data` volume off the host.
+4. In `.env` set `WOLF_DB_DRIVER=postgres` and a URL-safe `POSTGRES_PASSWORD`
+   (leave `WOLF_DB_DSN` unset to use the bundled service), then
+   `docker compose up -d postgres`.
+5. Migrate: `docker compose run --rm --no-deps wolf db migrate-from-sqlite
+   --sqlite /home/wolf/.wolf/wolf.db`. `--postgres` defaults to `WOLF_DB_DSN`
+   when `WOLF_DB_DRIVER=postgres`, which keeps the password out of `ps`.
+   Any non-zero exit leaves PostgreSQL without application data; fix the cause
+   and rerun.
+6. Start: `docker compose up -d`. On PostgreSQL, `WOLF_SCAN_WORKERS` and
+   `WOLF_SCAN_WORKER_CAPACITY` may exceed 1.
+7. Verify: log in, compare open findings by severity on Home (or
+   `GET /api/v1/fleet/posture`) and the repository and scan counts with the
+   values noted before step 2, and run one scan.
+
+Rollback: stop the services, set `WOLF_DB_DRIVER=sqlite` and `WOLF_DB_DSN=` in
+`.env`, and start again. The migration never writes `wolf.db`, but anything
+written to PostgreSQL after cutover is not copied back. Keep `wolf.db` and the
+backup until the next release.
 
 ### Automatic scanner scheduling
 

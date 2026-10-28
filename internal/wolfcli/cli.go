@@ -126,6 +126,7 @@ func NewRootCommand(opts Options) *cobra.Command {
 		newInitCmd(),
 		newBackupCmd(),
 		newRestoreCmd(),
+		newDBCmd(),
 		newPullCmd(),
 		newVersionCmd(),
 		scanCmd,

@@ -53,7 +53,22 @@ func OpenStore() (db.Store, error) {
 		if cfg.DSN == "" {
 			return nil, fmt.Errorf("WOLF_DB_DSN required for postgres driver")
 		}
-		return db.NewPostgres(cfg.DSN)
+		store, err := db.NewPostgres(cfg.DSN)
+		if err != nil {
+			return nil, err
+		}
+		// An upgraded install pointed at an empty Postgres would look wiped and
+		// bootstrap a fresh admin. Refuse until its SQLite data is migrated.
+		home, _ := os.UserHomeDir()
+		legacy := filepath.Join(home, ".wolf", "wolf.db")
+		if _, statErr := os.Stat(legacy); statErr == nil {
+			users, err := store.ListUsers(context.Background())
+			if err != nil || len(users) == 0 {
+				_ = store.Close()
+				return nil, errors.Join(fmt.Errorf("found SQLite data at %s but PostgreSQL has no users; run `wolf db migrate-from-sqlite --sqlite %s` first (docs/deployment.md)", legacy, legacy), err)
+			}
+		}
+		return store, nil
 	default:
 		return nil, fmt.Errorf("unknown db driver %q", cfg.Driver)
 	}

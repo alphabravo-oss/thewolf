@@ -6,7 +6,8 @@ The `wolf` binary is the same product as the API. Exit codes: `0` ok, `1` runtim
 |---|---|
 | `wolf serve` | API + UI |
 | `wolf init` | First-run local layout |
-| `wolf backup -o file.tar` / `wolf restore` | Control-plane backup |
+| `wolf backup -o file.tar` / `wolf restore` | Control-plane backup (SQLite) |
+| `wolf db migrate-from-sqlite --sqlite wolf.db --postgres DSN` | One-time copy of a SQLite install into PostgreSQL ([deployment](deployment.md#move-from-sqlite-to-postgresql)) |
 | `wolf scan create --profile fast` | Start a scan |
 | `wolf scan gate <scan-id> --fail-exit-code` | CI gate (exit 5) |
 | `wolf system edition` / `coverage` / `license` | Commercial and scanner matrix |
