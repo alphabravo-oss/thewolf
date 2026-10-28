@@ -42,11 +42,11 @@ const ROUTES: { name: string; url: string; edition?: Fixture["edition"] }[] = [
   { name: "settings-images", url: "/settings?tab=images" },
   { name: "settings-license", url: "/settings?tab=license" },
   { name: "account", url: "/account" },
-  { name: "enterprise-hub", url: "/enterprise", edition: "enterprise" },
-  { name: "enterprise-hub-community", url: "/enterprise", edition: "community" },
-  { name: "enterprise-siem", url: "/enterprise/siem", edition: "enterprise" },
-  { name: "enterprise-locked", url: "/enterprise/identity", edition: "community" },
-  { name: "enterprise-tenancy", url: "/enterprise/tenancy", edition: "enterprise" },
+  { name: "settings-sso", url: "/settings?tab=sso", edition: "enterprise" },
+  { name: "settings-sso-community", url: "/settings?tab=sso", edition: "community" },
+  { name: "settings-scim", url: "/settings?tab=scim", edition: "enterprise" },
+  { name: "settings-integrations", url: "/settings?tab=integrations", edition: "enterprise" },
+  { name: "settings-license-community", url: "/settings?tab=license", edition: "community" },
 ];
 
 const findings = ["critical", "high", "medium", "low", "info"].map((severity, i) => ({
@@ -62,7 +62,7 @@ async function installSweepMock(page: Page, edition: "community" | "enterprise")
     const p = new URL(route.request().url()).pathname.replace(/^\/api(?:\/v1)?/, "");
     const json = (data: unknown, meta?: unknown) => route.fulfill({ json: { data, ...(meta ? { meta } : {}) } });
     if (route.request().method() !== "GET") return json({});
-    if (p === "/edition") return json({ edition, product: edition === "enterprise" ? "Wolf Enterprise" : "Wolf Community", licensed: edition === "enterprise", ui_routes: edition === "enterprise" ? [{ path: "/enterprise/identity", title: "Identity" }, { path: "/enterprise/siem", title: "SIEM" }] : [], entitlements: Object.fromEntries(CAPABILITIES.map((c) => [`enterprise.${c}`, edition === "enterprise" && c !== "residency"])) });
+    if (p === "/edition") return json({ edition, product: edition === "enterprise" ? "Wolf Enterprise" : "Wolf Community", licensed: edition === "enterprise", entitlements: Object.fromEntries(CAPABILITIES.map((c) => [`enterprise.${c}`, edition === "enterprise" && c !== "residency"])) });
     if (p === `/findings/${apiCreatedFinding.id}`) return json(apiCreatedFinding);
     if (/^\/scans\/[^/]+\/findings\/stats$/.test(p)) {
       return json({ total: 5, by_severity: { critical: 1, high: 1, medium: 1, low: 1, info: 1 }, by_tool: { semgrep: 5 }, by_category: { sast: 5 } });
@@ -77,7 +77,7 @@ const iso = "2026-10-01T12:00:00Z";
 const CAPABILITIES = ["identity", "tenancy", "compliance", "integrations", "plugins", "residency", "remediation", "support", "packaging", "intelligence", "verification"];
 const efforts = ["low", "medium", "high"].map((id) => ({ id, label: id }));
 
-/** Rows for settings and enterprise pages, so the baseline shows tables rather than empty states. Registered last so it wins over the generic fallback. */
+/** Rows for settings pages, so the baseline shows tables rather than empty states. Registered last so it wins over the generic fallback. */
 async function installSettingsFixtures(page: Page, edition: "community" | "enterprise") {
   const data: Record<string, unknown> = {
     "/config/secrets": [
@@ -104,13 +104,8 @@ async function installSettingsFixtures(page: Page, edition: "community" | "enter
       ],
       defaults: {}, api_keys: {}, console_shell: false,
     },
-    "/enterprise/siem": [{ id: "d-1", name: "splunk-prod", kind: "webhook", created_at: iso }, { id: "d-2", name: "elastic-eu", kind: "webhook", created_at: iso }],
-    "/enterprise/ticketing": [{ id: "t-1", name: "jira-security", created_at: iso }],
-    "/enterprise/group-mappings": [{ id: "g-1", name: "sec-admins", created_at: iso }],
-    "/enterprise/workspaces": [{ id: "w-1", name: "platform", created_at: iso }, { id: "w-2", name: "payments", created_at: iso }],
-    "/enterprise/applications": [{ id: "a-1", name: "checkout", created_at: iso }],
-    "/enterprise/projects": [],
-    "/enterprise/custom-roles": [{ id: "r-1", name: "auditor", created_at: iso }],
+    "/enterprise/siem": [{ id: "d-1", name: "splunk-prod", url: "https://splunk.example.com/services/collector", created_at: iso }, { id: "d-2", name: "elastic-eu", url: "https://elastic.example.eu/in", created_at: iso }],
+    "/enterprise/ticketing": [{ id: "t-1", name: "jira-security", url: "https://jira.example.com/rest/webhooks", created_at: iso }],
   };
   await page.route("**/api/**", (route) => {
     const p = new URL(route.request().url()).pathname.replace(/^\/api(?:\/v1)?/, "");
@@ -127,8 +122,8 @@ for (const theme of ["light", "dark"] as const) {
       test.skip(!testInfo.project.name.startsWith("desktop-chromium"), "one reference viewport");
       await page.addInitScript((t) => localStorage.setItem("wolf-theme", t), theme);
       await installSweepMock(page, route.edition ?? "enterprise");
-      // Settings, account and Enterprise pages get the settings fixtures; the rest get rich data.
-      if (/^(settings|account|enterprise)/.test(route.name)) await installSettingsFixtures(page, route.edition ?? "enterprise");
+      // Settings and account pages get the settings fixtures; the rest get rich data.
+      if (/^(settings|account)/.test(route.name)) await installSettingsFixtures(page, route.edition ?? "enterprise");
       else await installRichFixtures(page);
       await page.goto(route.url);
       await expect(page.locator("#main-content")).toBeVisible();

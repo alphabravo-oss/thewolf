@@ -38,24 +38,6 @@ const routeLabels: Record<string, string> = {
   settings: "Settings",
   account: "Account",
   live: "Live",
-  enterprise: "Enterprise",
-  identity: "Identity",
-  tenancy: "Tenancy",
-  catalogs: "Plugin catalogs",
-  compliance: "Compliance",
-  reports: "Reports",
-  support: "Support",
-  diagnostics: "Diagnostics",
-  integrations: "Integrations",
-  siem: "SIEM",
-  ticketing: "Ticketing",
-  residency: "Residency",
-  packaging: "Packaging",
-  verifications: "Verification",
-  "attack-paths": "Attack paths",
-  "custom-roles": "Custom roles",
-  "group-mappings": "Group mappings",
-  "customer-keys": "Customer keys",
 };
 
 // Detail pages of these resources render their own PageHeader breadcrumbs
@@ -172,7 +154,7 @@ export function Topbar() {
         {breadcrumbs.map((crumb, i) => (
           <div key={crumb.href} className={i === breadcrumbs.length - 1 ? "flex items-center gap-1.5 min-w-0" : "hidden sm:flex items-center gap-1.5 min-w-0"}>
             {i > 0 && <ChevronRight className="hidden sm:block h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />}
-            {i === breadcrumbs.length - 1 || crumb.href === "/enterprise" ? (
+            {i === breadcrumbs.length - 1 ? (
               <span aria-current={i === breadcrumbs.length - 1 ? "page" : undefined} className="text-foreground font-medium truncate">
                 {crumb.label}
               </span>
