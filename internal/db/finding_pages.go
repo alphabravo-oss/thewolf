@@ -163,6 +163,9 @@ func queryCurrentFindings(ctx context.Context, database *sqlx.DB, userID string,
 	}
 	normalization := trace.StartRegion(ctx, "finding.normalization")
 	current := e.currentEvidence(time.Now().UTC())
+	if e.err != nil {
+		return result, e.err
+	}
 	current = slices.DeleteFunc(current, func(f *fleetFinding) bool {
 		return f.Status != models.StatusOpen || (repoID != "" && f.RepoID != repoID)
 	})

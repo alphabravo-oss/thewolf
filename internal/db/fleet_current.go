@@ -91,6 +91,9 @@ func listCurrentOpenFindings(ctx context.Context, database *sqlx.DB, userID stri
 		return nil, err
 	}
 	current := e.currentEvidence(time.Now().UTC())
+	if e.err != nil {
+		return nil, e.err
+	}
 	// Keep suppressed open records for the include_suppressed API option.
 	current = slices.DeleteFunc(current, func(f *fleetFinding) bool { return f.Status != models.StatusOpen })
 	current = dedupCurrentFindings(current)
@@ -132,7 +135,8 @@ func computeFleetPosture(ctx context.Context, database *sqlx.DB, userID string, 
 	if err != nil {
 		return nil, err
 	}
-	return e.posture(time.Now().UTC()), nil
+	p := e.posture(time.Now().UTC())
+	return p, e.err
 }
 
 func computeNeedsAttention(ctx context.Context, database *sqlx.DB, userID string, fleetMode bool, limit int) ([]NeedsAttentionRow, error) {
@@ -141,6 +145,9 @@ func computeNeedsAttention(ctx context.Context, database *sqlx.DB, userID string
 		return nil, err
 	}
 	rows := e.attention(time.Now().UTC())
+	if e.err != nil {
+		return nil, e.err
+	}
 	if limit <= 0 {
 		limit = 10
 	}
@@ -159,6 +166,9 @@ func computeAggregateByRule(ctx context.Context, database *sqlx.DB, userID strin
 		return nil, err
 	}
 	findings := e.currentEvidence(time.Now().UTC())
+	if e.err != nil {
+		return nil, e.err
+	}
 	findings = slices.DeleteFunc(findings, func(f *fleetFinding) bool { return f.Status != models.StatusOpen })
 	findings = dedupCurrentFindings(findings)
 	findings = slices.DeleteFunc(findings, func(f *fleetFinding) bool { return f.Suppressed })
@@ -313,6 +323,9 @@ func computeFindingsByRepo(ctx context.Context, database *sqlx.DB, userID string
 		return nil, err
 	}
 	findings := e.currentEvidence(time.Now().UTC())
+	if e.err != nil {
+		return nil, e.err
+	}
 	findings = slices.DeleteFunc(findings, func(f *fleetFinding) bool { return f.Status != models.StatusOpen })
 	findings = dedupCurrentFindings(findings)
 	findings = slices.DeleteFunc(findings, func(f *fleetFinding) bool { return f.Suppressed })

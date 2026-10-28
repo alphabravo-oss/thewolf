@@ -191,6 +191,141 @@ func TestFleetEvidenceQueriesAndTrends(t *testing.T) {
 	testFleetEvidenceQueries(t, store, store.db)
 }
 
+func TestFleetEvidenceHistoryQueries(t *testing.T) {
+	store := newTestStore(t)
+	testFleetEvidenceHistory(t, store, store.db)
+}
+
+func TestFleetEvidenceHistoryPostgres(t *testing.T) {
+	dsn := os.Getenv("WOLF_TEST_POSTGRES_DSN")
+	if dsn == "" {
+		t.Skip("WOLF_TEST_POSTGRES_DSN is not configured")
+	}
+	admin, err := NewPostgres(dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	schema := "fleet_history_" + uuid.NewString()
+	if _, err := admin.db.Exec(`CREATE SCHEMA "` + schema + `"`); err != nil {
+		_ = admin.Close()
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _, _ = admin.db.Exec(`DROP SCHEMA IF EXISTS "` + schema + `" CASCADE`); _ = admin.Close() })
+	store, err := NewPostgres(postgresDSNWithSearchPath(t, dsn, schema))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	testFleetEvidenceHistory(t, store, store.db)
+}
+
+// testFleetEvidenceHistory locks the dashboard semantics against the stores:
+// only the latest complete scan and later attempts supply current evidence,
+// yet first-seen, new-vs-resurfaced and the daily trend still account for the
+// scans that were superseded and never loaded.
+func testFleetEvidenceHistory(t *testing.T, store Store, database *sqlx.DB) {
+	t.Helper()
+	ctx := context.Background()
+	now := time.Now().UTC()
+	if err := store.CreateUser(ctx, &models.User{ID: "owner", Email: "history@example.test", PasswordHash: "test-only"}); err != nil {
+		t.Fatal(err)
+	}
+	repo := &models.Repo{ID: uuid.NewString(), UserID: "owner", Name: "Payments", SourceType: models.SourceTypeLocal, SourcePath: "/repo"}
+	if err := store.CreateRepo(ctx, repo); err != nil {
+		t.Fatal(err)
+	}
+	day := func(days int) time.Time { return now.AddDate(0, 0, -days) }
+	scan := func(id, branch string, status models.ScanStatus, at time.Time, findings map[string]models.Severity) {
+		s := &models.Scan{ID: id, UserID: "owner", RepoID: repo.ID, Branch: branch, Status: status, ToolsSelected: `["semgrep"]`, ToolsCompleted: `["semgrep"]`, ToolsFailed: `[]`, CompletedAt: &at, ReleaseManifestDigest: "sha256:release"}
+		if status != models.ScanStatusCompleted {
+			s.ToolsCompleted, s.ToolsFailed = `[]`, `["semgrep"]`
+		}
+		if err := store.CreateScan(ctx, s); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := database.Exec(database.Rebind(`UPDATE scans SET created_at = ? WHERE id = ?`), at, id); err != nil {
+			t.Fatal(err)
+		}
+		for key, severity := range findings {
+			err := store.CreateFinding(ctx, &models.Finding{ID: id + "-" + key, RepoID: repo.ID, ScanID: id, ToolName: "semgrep", Category: models.CategorySAST, FilePath: key + ".go", RuleID: key, Fingerprint: key, StableFingerprint: key, LocationFingerprint: key, Status: models.StatusOpen, Severity: severity, Title: key})
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	high, crit := models.SeverityHigh, models.SeverityCritical
+	medium := models.SeverityMedium
+	scan("old", "main", models.ScanStatusCompleted, day(30), map[string]models.Severity{"X": high, "Y": high})
+	scan("baseline", "main", models.ScanStatusCompleted, day(10), map[string]models.Severity{"Y": high, "Z": crit})
+	scan("latest", "main", models.ScanStatusCompleted, day(1), map[string]models.Severity{"Z": crit, "X": high, "W": high})
+	scan("release", "release", models.ScanStatusCompleted, day(2), map[string]models.Severity{"R": medium})
+	scan("attempt", "release", models.ScanStatusFailed, now.Add(-time.Hour), map[string]models.Severity{"V": medium})
+	if _, err := database.Exec(database.Rebind(`UPDATE findings SET baseline_state = 'resurfaced' WHERE id = ?`), "latest-X"); err != nil {
+		t.Fatal(err)
+	}
+
+	p, err := store.FleetPosture(ctx, "owner", false, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A failed attempt adds V without erasing the release branch's last
+	// complete scan (R), and leaves that branch out of the comparison.
+	if got := p.OpenFindingsBySeverity; got["critical"] != 1 || got["high"] != 2 || got["medium"] != 2 {
+		t.Fatalf("open findings: %v", got)
+	}
+	// Y was fixed, W is new, X was seen before the window but not in the baseline.
+	if c := p.Changes; c.ComparedBranches != 1 || c.ExcludedBranches != 1 || c.New != 1 || c.Resurfaced != 1 || c.Resolved != 1 || c.Suppressed != 0 {
+		t.Fatalf("changes: %+v", c)
+	}
+	type priority struct {
+		state string
+		seen  time.Time
+	}
+	got := map[string]priority{}
+	for _, f := range p.Priorities {
+		got[f.Title] = priority{f.State, f.FirstSeenAt}
+	}
+	want := map[string]priority{"Z": {"existing", day(10)}, "X": {"resurfaced", day(30)}, "W": {"new", day(1)}}
+	if len(got) != len(want) {
+		t.Fatalf("priorities: %+v", got)
+	}
+	for title, w := range want {
+		if g := got[title]; g.state != w.state || g.seen.Sub(w.seen).Abs() > time.Second {
+			t.Fatalf("priority %s: got %+v want %+v", title, g, w)
+		}
+	}
+
+	// Superseded scans stay on disk and out of memory.
+	e, err := loadFleetEvidence(ctx, database, "owner", false, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := len(e.currentEvidence(now)); n != 5 || len(e.findings) != 3 || e.findings["latest"] == nil || e.findings["release"] == nil || e.findings["attempt"] == nil {
+		t.Fatalf("current evidence %d from %d loaded scans", n, len(e.findings))
+	}
+
+	trends, err := store.FleetFindingTrends(ctx, "owner", false, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	totals := map[string]int{}
+	for _, entry := range trends {
+		totals[entry.Date] = entry.Counts["total"]
+	}
+	for _, c := range []struct{ ago, total int }{{20, 2}, {10, 2}, {5, 2}} {
+		if date := day(c.ago).Format("2006-01-02"); totals[date] != c.total {
+			t.Fatalf("trend on %s: %d, want %d (%v)", date, totals[date], c.total, totals)
+		}
+	}
+	if last := trends[len(trends)-1]; last.Counts["total"] != 5 || last.Counts["critical"] != 1 || last.IncompleteScans != 1 {
+		t.Fatalf("trend today: %+v", last)
+	}
+	byRepo, err := store.FindingsByRepo(ctx, "owner", false, "")
+	if err != nil || len(byRepo) != 1 || byRepo[0].Total != 5 || byRepo[0].Critical != 1 || byRepo[0].High != 2 || byRepo[0].Medium != 2 {
+		t.Fatalf("by repo: %+v %v", byRepo, err)
+	}
+}
+
 func TestFleetEvidencePostgres(t *testing.T) {
 	dsn := os.Getenv("WOLF_TEST_POSTGRES_DSN")
 	if dsn == "" {
@@ -325,6 +460,9 @@ func testFleetEvidenceQueries(t *testing.T, store Store, database *sqlx.DB) {
 		e, err := loadFleetEvidence(ctx, database, tc.user, false, tc.collection, tc.repo)
 		if err != nil {
 			t.Fatal(err)
+		}
+		for _, scan := range e.scans {
+			e.of(scan.ID)
 		}
 		if len(e.repos) != tc.wantRepos || len(e.scans) != tc.wantScans || len(e.findings) != tc.wantScans {
 			t.Fatalf("history scope %+v: repos=%d scans=%d finding scans=%d", tc, len(e.repos), len(e.scans), len(e.findings))
