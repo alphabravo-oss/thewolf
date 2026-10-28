@@ -35,6 +35,7 @@ import { PageHeader } from "@/components/ui/page";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScanStatusPill } from "@/components/scan-status-pill";
 import { formatRelativeTime } from "@/lib/utils";
+import { severityChartColor } from "@/lib/severity";
 import { findingRuleHint, findingTitle } from "@/lib/finding-title";
 import { useScanWithPreflight } from "@/components/scan-preflight";
 import { DeleteWithRecordsDialog } from "@/components/delete-with-records-dialog";
@@ -714,19 +715,20 @@ function TrendsSection({
             <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
             <Tooltip
               contentStyle={{
-                background: "rgba(20,20,20,0.95)",
-                border: "1px solid rgba(255,255,255,0.1)",
+                background: "hsl(var(--popover))",
+                color: "hsl(var(--popover-foreground))",
+                border: "1px solid hsl(var(--border))",
                 fontSize: 12,
               }}
             />
             <Legend wrapperStyle={{ fontSize: 11 }} iconType="square" />
             {/* Stack severities so the bar height = total. Colors match
                 the rest of the UI's severity palette. */}
-            <Bar dataKey="critical" stackId="s" fill="#dc2626" name="Critical" />
-            <Bar dataKey="high" stackId="s" fill="#f97316" name="High" />
-            <Bar dataKey="medium" stackId="s" fill="#eab308" name="Medium" />
-            <Bar dataKey="low" stackId="s" fill="#3b82f6" name="Low" />
-            <Bar dataKey="info" stackId="s" fill="#71717a" name="Info" />
+            <Bar dataKey="critical" stackId="s" fill={severityChartColor.critical} name="Critical" />
+            <Bar dataKey="high" stackId="s" fill={severityChartColor.high} name="High" />
+            <Bar dataKey="medium" stackId="s" fill={severityChartColor.medium} name="Medium" />
+            <Bar dataKey="low" stackId="s" fill={severityChartColor.low} name="Low" />
+            <Bar dataKey="info" stackId="s" fill={severityChartColor.info} name="Info" />
           </BarChart>
         </ResponsiveContainer>
       </div>

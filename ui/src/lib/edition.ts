@@ -21,6 +21,10 @@ export type EditionInfo = VersionInfo & {
   mcp?: { enabled?: boolean };
 };
 
+/** Where the locked-feature card sends people; override per deployment. */
+export const ENTERPRISE_INFO_URL: string =
+  import.meta.env.VITE_ENTERPRISE_INFO_URL ?? "https://alphabravo.io/how-to-buy/#contact";
+
 export function shortRev(s?: string) {
   if (!s) return "";
   if (s === "dev" || s === "unknown") return s;

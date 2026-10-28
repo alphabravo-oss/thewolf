@@ -9,7 +9,7 @@ import { cn, statusBgColor, statusDotColor } from "@/lib/utils";
 import { cva, type VariantProps } from "class-variance-authority";
 
 const statusBadgeVariants = cva(
-  "inline-flex items-center gap-1.5 rounded-full font-medium transition-colors",
+  "inline-flex items-center gap-1.5 rounded-lg font-medium transition-colors",
   {
     variants: {
       size: {

@@ -13,7 +13,7 @@ vi.mock("@/lib/theme", () => ({
 describe("ThemeColorSync", () => {
   beforeEach(() => {
     document.head.innerHTML =
-      '<meta name="theme-color" content="#09090b" data-theme-color-sync="true">';
+      '<meta name="theme-color" content="#0e1114" data-theme-color-sync="true">';
   });
 
   afterEach(() => {
@@ -26,11 +26,11 @@ describe("ThemeColorSync", () => {
     mockUseTheme.mockReturnValue({ resolvedTheme: "light" });
     const view = render(<ThemeColorSync />);
     const themeColor = document.querySelector('meta[name="theme-color"]');
-    expect(themeColor).toHaveAttribute("content", "#ffffff");
+    expect(themeColor).toHaveAttribute("content", "#eef0f3");
 
     mockUseTheme.mockReturnValue({ resolvedTheme: "dark" });
     view.rerender(<ThemeColorSync />);
-    expect(themeColor).toHaveAttribute("content", "#09090b");
+    expect(themeColor).toHaveAttribute("content", "#0e1114");
   });
 
   it("preserves the safe document default while the theme is unresolved", () => {
@@ -38,7 +38,7 @@ describe("ThemeColorSync", () => {
     render(<ThemeColorSync />);
     expect(document.querySelector('meta[name="theme-color"]')).toHaveAttribute(
       "content",
-      "#09090b",
+      "#0e1114",
     );
   });
 });

@@ -59,14 +59,14 @@ export function FixerConsolePanel({
     const term = new Terminal({
       convertEol: false,
       cursorBlink: true,
-      fontFamily: '"JetBrains Mono Variable", ui-monospace, monospace',
+      fontFamily: '"Geist Mono", ui-monospace, monospace',
       fontSize: 13,
       lineHeight: 1.25,
       theme: {
-        background: "#0b0e14",
-        foreground: "#e6edf3",
-        cursor: "#7dd3fc",
-        selectionBackground: "#1d4ed855",
+        background: tokenColor(host, "--terminal-bg"),
+        foreground: tokenColor(host, "--terminal-fg"),
+        cursor: tokenColor(host, "--terminal-fg"),
+        selectionBackground: tokenColor(host, "--terminal-select"),
       },
     });
     const fit = new FitAddon();
@@ -241,9 +241,7 @@ export function FixerConsolePanel({
           )}
         </div>
         <div
-          // `log-viewer` is the shared terminal surface from globals.css; the
-          // previous hardcoded #0b0e14 was a Nocturne-era one-off that no
-          // longer tracks the palette.
+          // `log-viewer` is the shared terminal surface from globals.css.
           className="log-viewer relative min-w-0 overflow-hidden rounded-md border border-border"
           onClick={() => termRef.current?.focus()}
         >
@@ -261,6 +259,11 @@ export function FixerConsolePanel({
       </div>
     </div>
   );
+}
+
+/** xterm cannot read CSS vars, so resolve a globals.css token to its value. */
+function tokenColor(el: Element, name: string) {
+  return getComputedStyle(el).getPropertyValue(name).trim();
 }
 
 function statusFor(id: string, worker: FixEngineStatus[]) {

@@ -31,13 +31,9 @@ export function PageHeader({
   className?: string;
 }) {
   return (
-    <div className={cn("flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between", className)}>
+    <div className={cn("page-header", className)}>
       <div className="min-w-0">
-        {eyebrow ? (
-          <div className="mb-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            {eyebrow}
-          </div>
-        ) : null}
+        {eyebrow ? <div className="eyebrow">{eyebrow}</div> : null}
         <h1 className="truncate text-2xl font-semibold tracking-tight text-foreground">{title}</h1>
         {description ? (
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{description}</p>

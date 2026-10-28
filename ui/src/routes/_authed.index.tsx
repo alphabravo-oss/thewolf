@@ -17,6 +17,7 @@ import { useIsAdmin } from "@/lib/me";
 import { useRuntimeCapabilities } from "@/lib/runtime-capabilities";
 import { safeErrorMessage } from "@/lib/safe-display";
 import type { Repo } from "@/lib/types";
+import { Section } from "@/components/ui/section";
 
 export const Route = createFileRoute("/_authed/")({ component: FleetDashboard });
 
@@ -102,6 +103,6 @@ function ScannerReadiness() {
       <Link to="/account" search={{ section: "secrets" }} className="underline underline-offset-4">GitHub credentials</Link>
       {runtime.data?.docker_image_management && <button type="button" disabled={doctor.isFetching} onClick={() => void doctor.refetch()} className="underline underline-offset-4 disabled:opacity-50">{doctor.isFetching ? "Running doctor…" : "Run doctor"}</button>}
     </div>
-    {failed.length > 0 && <details><summary className="cursor-pointer">Diagnostic details</summary><ul className="mt-2 space-y-1">{failed.map((c) => <li key={c.label}>{c.label} {c.detail}</li>)}</ul></details>}
+    {failed.length > 0 && <Section variant="plain" triggerClassName="text-foreground" title="Diagnostic details"><ul className="mt-2 space-y-1">{failed.map((c) => <li key={c.label}>{c.label} {c.detail}</li>)}</ul></Section>}
   </div>;
 }
