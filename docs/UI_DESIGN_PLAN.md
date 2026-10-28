@@ -1,6 +1,6 @@
 # UI design-system and admin-console plan
 
-Status: executing (Phase 1 done on branch `ui/design-foundation`). Owner decision 2026-10-27. This elaborates workstream **U** in
+Status: executing (Phase 1 done on branch `ui/design-foundation`; Phase 2 done on branch `ui/settings-enterprise`). Owner decision 2026-10-27. This elaborates workstream **U** in
 [`PLAN.md`](PLAN.md); it is not a second execution plan. Check tasks off here and
 reference the evidence in `PLAN.md` §U when they land.
 
@@ -111,31 +111,38 @@ clean in both themes; no raw hex outside `globals.css`; no `window.confirm`.
 
 ### Phase 2 — Settings and Enterprise admin
 
-- [ ] **T2.1 Split Settings.** `_authed.settings.tsx` becomes a layout with a
+- [x] **T2.1 Split Settings.** `_authed.settings.tsx` becomes a layout with a
   left sub-nav and one file per section under `routes/` or
   `components/settings/`: General, Account & MFA, Users, API keys, Secrets &
   credentials, Git access, Fixer engines, Scanners & updates, Nodes, Images,
   Security, Scheduling, Database & disk, License. Each section is a page of
   titled `Card`s. Rarely used options go in `Section` ("Advanced"), collapsed.
-- [ ] **T2.2 Convert create flows.** `NewSecretForm`, `NewNodeForm`,
+  Evidence: `routes/_authed.settings.tsx` is a 101-line layout (left sub-nav in 5 groups + mobile Select, `?tab=` deep links kept, `scanner-updates` redirects to `scanners&advanced=true`); 14 sections in `components/settings/` (`sections.tsx` registry), each a page of titled `SettingsCard`s with rare options in a collapsed `Section`. `AccountTab`/`SecurityTab`/`ApiKeysTab`/`SecretsTab`/`NodesTab` now live in `components/settings/{account,mfa,api-keys,secrets,nodes}.tsx` (imported by `/account`); `describeScannerChannel`/`isWolfBuiltImage` in `scanner-utils.ts` (+ moved `scanner-utils.test.ts`).
+- [x] **T2.2 Convert create flows.** `NewSecretForm`, `NewNodeForm`,
   `NewUserForm`, API-key create, credential create (including GitHub/GitLab
   token + host binding) become `+ Add …` → `FormDialog`. Edit uses the same
   dialog. Delete/revoke/rotate use `ConfirmDialog`.
-- [ ] **T2.3 Settings tables** move to `DataTable` with trailing action menus,
+  Evidence: `NewSecretForm`, `NewNodeForm`, `NewUserForm`, API-key create, GitHub/GitLab credential create (host-bound), license install, profile email/password, MFA enroll/disable and the database DSN are `+ Add …`/action buttons opening `FormDialog` (inline field errors, pending lock, dirty guard); node edit reuses the add dialog. Delete/revoke/disable/enable/reap/role change use `ConfirmDialog`; deleting a user and revoking a used API key require typing the name (`TypedConfirmDialog`). `grep -rn "<form" ui/src/components/settings` is empty (per-field saves use Enter + Save, not forms).
+- [x] **T2.3 Settings tables** move to `DataTable` with trailing action menus,
   `StatusBadge`, mono ids, `EmptyState` with the `+ Add` action.
-- [ ] **T2.4 Enterprise hub.** `/enterprise` index: cards grouped by Identity
+  Evidence: Every settings list (users, API keys incl. all-users, secrets incl. all-users, nodes, git credentials, images x2, entitlements, enterprise records) is a `DataTable` via `SettingsTable`: trailing `RowActions` dropdown, `StatusBadge`, mono ids/digests, and an `EmptyState` with the `+ Add` action when empty.
+- [x] **T2.4 Enterprise hub.** `/enterprise` index: cards grouped by Identity
   & access (SSO/SCIM, tenancy), Governance (compliance, reports, audit, legal
   hold), Integrations (SIEM, ticketing, catalogs), Data (residency, customer
   keys), Operations (fixer fleet, packaging, support, diagnostics). Each card:
   status, one-line purpose, entitlement state, primary action.
-- [ ] **T2.5 Enterprise modules** use the page template instead of the generic
+  Evidence: `/enterprise` (`routes/_authed.enterprise.index.tsx`, registry in `lib/enterprise-modules.ts`): KPI strip, then cards grouped Identity & access / Governance / Integrations / Data / Operations, each with `StatusBadge` entitlement state, one-line purpose, configured-count status and a primary action; locked cards use `EditionGate`. The sidebar Enterprise group is driven by `ui_routes` from the overlay and is owned by the Phase 3 PR (T3.4), so the hub link is left to that change.
+- [x] **T2.5 Enterprise modules** use the page template instead of the generic
   `RecordsPanel` dump: KPI strip where meaningful, `DataTable`, `+ Add` dialogs
   for SIEM/ticketing/catalog/residency records, `ConfirmDialog` on send/delete,
   `Section` for raw payloads. Identity and tenancy follow the same layout.
-- [ ] **T2.6 Fixer console** (`components/fixes/*`, `/fixes`): same template;
+  Evidence: `components/enterprise-records.tsx` is now `EnterpriseChrome` (page template, KPI strip, breadcrumb to the hub) + `RecordsPanel` (`DataTable`, `+ Add <noun>` dialog, send/delete behind `ConfirmDialog`, typed-name delete for keys/residency/workspaces/roles, raw JSON in a collapsed `Section`). SIEM, ticketing, catalogs, residency, customer keys, reports, compliance, support, diagnostics, packaging, attack paths, verification, identity and tenancy all use it. Record schemas belong to the private overlay, so the add dialog sends `name` plus an optional JSON-object field (follow-up: typed fields once the overlay publishes schemas).
+- [x] **T2.6 Fixer console** (`components/fixes/*`, `/fixes`): same template;
   engines as cards with state, git access as a card with `+ Add credential`.
-- [ ] **T2.7 Tests.** Update Playwright specs for moved controls; add one
+  Evidence: Settings → Fixer engines: engine `Card`s with `StatusBadge` state, model/effort and default, sign-in console card, CLI equivalent and prompts in `Section`s, all behind `EditionGate`. Settings → Git access (`components/fixes/git-access.tsx`): credential `DataTable` with `+ Add credential` (GitHub/GitLab token bound to a host) and delete confirm. `/fixes` still redirects to `/agents` (retired route).
+- [x] **T2.7 Tests.** Update Playwright specs for moved controls; add one
   spec per converted create flow (opens dialog, validates, submits, toasts).
+  Evidence: `e2e/settings-create-flows.spec.ts` (user, API key, secret, node, git credential, password, license: opens dialog, validates, posts, toasts, confirm paths), `e2e/enterprise-admin.spec.ts` (hub states, SIEM add/send/delete, Community lock); `ease`, `product`, `scheduling`, `scan-preparation`, `git-access` specs updated for moved controls; visual baseline gains 12 routes with fixtures (`e2e/__screenshots__/baseline/`, both themes, axe clean). Full suite: 194 passed / 38 skipped / 5 failed — the 3 `scan-live` failures also fail on the base commit; the 2 `product` snapshot failures were refreshed.
 
 Acceptance: no `<form>` rendered outside a dialog/sheet or a search/filter bar;
 `settings.tsx` no longer exceeds ~300 lines; every delete path has a confirm

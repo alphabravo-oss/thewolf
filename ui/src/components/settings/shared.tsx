@@ -39,8 +39,8 @@ export function SettingsCard({
 }) {
   return (
     <Card role={label ? "region" : undefined} aria-label={label} className={cn("min-w-0 overflow-hidden", className)}>
-      <CardHeader className="items-start">
-        <div className="min-w-0 space-y-1">
+      <CardHeader className="flex-wrap items-start">
+        <div className="min-w-0 flex-1 basis-60 space-y-1">
           <h3 className="text-[0.95rem] font-semibold leading-none tracking-tight">{title}</h3>
           {description ? <CardDescription>{description}</CardDescription> : null}
         </div>
