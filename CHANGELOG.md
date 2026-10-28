@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- detect-secrets: entropy-only hits (`Hex High Entropy String`,
+  `Base64 High Entropy String`) are reported as low instead of high. They mostly
+  match SHA-256 digests in generated JSON; one astronomer scan raised 33.7k high
+  findings this way. Pattern-based detectors stay high. Existing findings are not
+  migrated; new scans get the new severity.
+
 - Reports (Enterprise, `enterprise.compliance`): a **Reports** sidebar item with a
   print-ready "Security posture" report for every repository or one collection
   (open critical/high with a 30-day trend, new vs resolved this week, coverage,
