@@ -841,6 +841,16 @@ services:
     # Operators in real environments set the secret via docker
     # secret create or compose secrets: { external: true } — never
     # commit the value (KICS 487f4be7).
+    # Sized for the findings working set: a 512 MB / 128 MB shared_buffers default
+    # re-reads the table on every dashboard load. Raise with the host.
+    command:
+      - postgres
+      - -c
+      - shared_buffers=${POSTGRES_SHARED_BUFFERS:-512MB}
+      - -c
+      - effective_cache_size=${POSTGRES_EFFECTIVE_CACHE_SIZE:-1536MB}
+      - -c
+      - work_mem=${POSTGRES_WORK_MEM:-16MB}
     environment:
       # Keep the existing location: older volumes fail visibly until migrated.
       PGDATA: /var/lib/postgresql/data
@@ -876,11 +886,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "1.0"
-          memory: 512M
+          cpus: "${POSTGRES_CPUS:-2.0}"
+          memory: ${POSTGRES_MEMORY:-2G}
         reservations:
           cpus: "0.25"
-          memory: 128M
+          memory: 512M
 
   # Reverse proxy + TLS termination. Opt-in: `docker compose --profile proxy up`.
   # Two TLS modes, both driven by .env:
