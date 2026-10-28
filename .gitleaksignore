@@ -55,3 +55,8 @@
 8c461e532e3c5228c5bcacaed0a5a3c75c78ca9f:docs/validation/2026-10-23/sca-identity/sha256.json:generic-api-key:3
 8c461e532e3c5228c5bcacaed0a5a3c75c78ca9f:docs/validation/2026-10-23/security-followup/sha256.json:generic-api-key:3
 8c461e532e3c5228c5bcacaed0a5a3c75c78ca9f:docs/validation/2026-10-23/workspace-cleanup/source.json:generic-api-key:19
+# Reviewed 2026-10-28: prose false positives in CHANGELOG, a spec comment and
+# an earlier revision of this file. No credential.
+f3eeeae165e5bbad913b0da8c6e636f4bd850f5f:.gitleaksignore:generic-api-key:58
+9d8f1866ac538cfb00a273aa9d15aff770f033e8:CHANGELOG.md:generic-api-key:6
+9d8f1866ac538cfb00a273aa9d15aff770f033e8:ui/e2e/settings-enterprise.spec.ts:generic-api-key:2

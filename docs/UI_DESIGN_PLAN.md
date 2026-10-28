@@ -177,6 +177,46 @@ Acceptance: every route uses `PageShell`/`PageHeader`; `MetricCard` is used by
 the dashboard and at least the list pages that have a summary; screenshots
 consistent; full UI check suite green.
 
+### Phase 4 — Information architecture and dashboard
+
+Decision (owner, 2026-10-28): remove the sidebar "Enterprise" section. Most
+overlay modules are stubs (generic JSON record stores for compliance, reports,
+catalogs, residency, customer keys and tenancy; attack paths and verification are
+a "type a vulnerability id" form; packaging is a static catalog; support,
+diagnostics and proof are a dump and a probe). The real ones (identity, the AI
+fixer, SIEM/ticketing) move to where users look for them in Settings, gated with
+`EditionGate` at the point of use. Stubs are hidden, with no locked-feature
+catalog. Home becomes a dashboard with 7 drill-down charts (separate parallel
+PR). Reports is the next Enterprise feature to make real.
+
+- [x] **T4.1 Sidebar.** Home, Repositories, Findings, Vulnerabilities, Scans,
+  Fixes (autofix on), Collections, Scanner coverage; Administration: Settings, Audit.
+  Evidence: `components/layout/sidebar.tsx` drops the overlay-driven Enterprise
+  group; `ui_routes` is removed from the UI `EditionInfo` type (no other reader).
+- [x] **T4.2 Settings regroup.** Users & access (Users, Security, Single sign-on,
+  Directory sync), Credentials, Integrations, AI fixing (Fixer engines, Git
+  access), Scanning, System (Database & disk, License & support).
+  Evidence: `components/settings/sections.tsx`; `identity.tsx` (provider table with
+  Test sign-in, OIDC/SAML/LDAP configuration help, SCIM base URL), `integrations.tsx`
+  (SIEM and ticketing tables, `+ Add destination` `FormDialog` with name/URL/optional
+  Authorization, `ConfirmDialog` for Send test and delete), `license-settings.tsx`
+  (What's included in plain words, install, Download diagnostics bundle, contact
+  link). Old `?tab=identity|siem|ticketing|support|diagnostics` alias to the new keys.
+  Roles have no UI beyond the user role selector, so there is no Roles tab.
+- [x] **T4.3 Routes.** `/enterprise` and `/enterprise/*` redirect
+  (`routes/_authed.enterprise.$.tsx`): identity/group-mappings → `sso`;
+  siem/ticketing/integrations → `integrations`; everything else → `license`. Hub,
+  identity, tenancy and splat pages, `components/enterprise-records.tsx` and
+  `lib/enterprise-modules.ts` are deleted; the vulnerability attack-path and
+  verification tabs are removed until they are real.
+- [x] **T4.4 Tests.** `e2e/settings-enterprise.spec.ts` (SSO gated in Community and
+  usable in Enterprise, SIEM add/validate/send test/delete, License & support
+  entitlements and diagnostics download, `/enterprise/*` redirects);
+  `enterprise-admin.spec.ts` and the `enterprise-*` baselines are deleted; the sweep
+  adds `settings-sso`, `settings-sso-community`, `settings-scim`,
+  `settings-integrations`, `settings-license-community`.
+  Evidence: `pnpm lint && typecheck && test (67) && build && test:e2e` green (246 passed, 68 skipped viewport-gated); `pnpm test:e2e:baseline` refreshed both themes (66 shots, axe clean); `product` scanner-inventory snapshot refreshed for the regrouped sub-nav.
+
 ## Out of scope
 
 Backend/API changes, new product features, scanner changes, and the marketing
