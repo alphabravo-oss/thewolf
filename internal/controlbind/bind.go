@@ -13,6 +13,7 @@ import (
 	"github.com/alphabravocompany/thewolf/internal/auth"
 	"github.com/alphabravocompany/thewolf/internal/db"
 	"github.com/alphabravocompany/thewolf/internal/models"
+	"github.com/alphabravocompany/thewolf/internal/secrets"
 	"github.com/alphabravocompany/thewolf/pkg/control"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -21,10 +22,29 @@ type users struct{ store db.Store }
 type records struct{ store db.Store }
 type settings struct{ store db.Store }
 type fleet struct{ store db.Store }
+type sealer struct{}
 
 func Bind(store db.Store) {
 	control.Bind(users{store}, records{store}, settings{store})
 	control.BindFleet(fleet{store})
+	control.BindSealer(sealer{})
+}
+
+// Seal uses the same AES-256-GCM master key as Community stored secrets.
+func (sealer) Seal(plaintext string) (string, error) {
+	enc, err := secrets.Encrypt(plaintext)
+	if err != nil {
+		return "", err
+	}
+	return control.SealedPrefix + enc, nil
+}
+
+func (sealer) Open(sealed string) (string, error) {
+	enc, ok := strings.CutPrefix(sealed, control.SealedPrefix)
+	if !ok {
+		return "", errors.New("value is not sealed")
+	}
+	return secrets.Decrypt(enc)
 }
 
 func (f fleet) Report(ctx context.Context, collectionID string) (json.RawMessage, error) {

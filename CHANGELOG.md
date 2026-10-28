@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- Security: Enterprise integration `authorization` headers (SIEM, ticketing,
+  integrations) are now encrypted at rest with the Community master key
+  (AES-256-GCM, same as stored credentials). Community gains `pkg/control.Sealer`
+  (`BindSealer`/`SealerAPI`, values prefixed `wolf-sealed:v1:`) for overlays.
+  Existing plaintext values keep delivering and are sealed on the next edit.
 - Fix: "Scan coverage" on Home and Reports no longer shows full coverage in red;
   the shared KPI gauge now treats higher as better (red below 50%, amber below
   90%). Fix: `/api/v1/version`, the sidebar footer and `wolf version` report
