@@ -1,6 +1,33 @@
 # Dashboard evidence
 
-Home prioritizes work: high-risk security findings, scan coverage gaps, active scans and fix jobs, then seven-day progress. TanStack Query shares the posture response and refreshes it every 30 seconds. Every issue, coverage exception, job and comparison has a link to its evidence or next action. New or resurfaced findings are the default; all open critical/high findings remain available.
+Home is a dashboard: a KPI row, seven charts, the top five high-risk findings ("Act on now"), recent activity (admins) and the collapsed "Are we improving?" comparison. Long lists live on their own pages (Findings, Repositories, Scans, Fixes). Every KPI and chart mark links to a filtered list. Each card loads on its own query, shows a Skeleton while loading and its own error with Retry (it also retries itself every 10 seconds, up to 5 times, for the brief 500s seen after a restart), so one slow endpoint never blanks the page. TanStack Query keys are shared with the list pages (`["fleet","posture",null]`, `["findings","by-repo"]`, `["fix-jobs"]`), and posture refreshes every 30 seconds.
+
+## KPIs and charts
+
+| Card | Data source | Drill-down |
+| --- | --- | --- |
+| Open critical / high (30-day sparkline, change vs 7 days ago) | `/fleet/posture` counts; sparkline from `/findings/trends` | `/findings?view=list&scope=all&severity=critical,high` |
+| New vs resolved this week | `/fleet/posture` `changes` | opens "Are we improving?" |
+| Scan coverage % | `/fleet/posture` `coverage` | `/repos` |
+| Gates failing | `/fleet/posture` `gates_failing` | `/repos` |
+| Fix branches pushed / verified (Enterprise, autofix on) | `/fixes?limit=200` | `/agents?stage=pushed` |
+| 1. Observed open findings (daily), 30/90 days | `/findings/trends` | severity → `/findings?view=list&scope=all&severity=…` (the list has no date filter) |
+| 2. New vs resolved this week, per comparable branch | `/fleet/posture` `changes.rows` | latest scan `/scans/:id` (table also links the baseline scan) |
+| 3. Riskiest repositories (top 10, stacked by severity) | `/findings/by-repo` | `/repos/:id?scope=all&severity=…` |
+| 4. Top rules (top 10 security rules/CVEs) | `/findings/aggregate?group_by=rule_id&security_only=1&limit=10` | `/findings?view=rule&q=<rule>` (the By rule view filters on `q`) |
+| 5. Age of open critical / high (0–7, 8–30, 31–90, >90 days) | `/fleet/posture` `priorities[].first_seen_at` | `/findings?view=list&scope=all&severity=…&sort=first_seen&order=asc` |
+| 6. Scanner health (per-tool success rate) | newest 100 root scans, `/scans?per_page=100&roots=1` | `/coverage` |
+| 7. Fix pipeline funnel (Enterprise, autofix on) | `/fixes?limit=200` | `/agents?stage=queued\|started\|verified\|pushed` |
+
+Aggregation is client-side over bounded responses (`components/fleet/dashboard-data.ts`, tested in `dashboard-data.test.ts`). Limits, stated in each card's description:
+
+- Chart 1 is labelled "Observed open findings (daily)": snapshots use each finding's current triage state, so it is not an audit-grade history (owner-accepted label, info tooltip on the card).
+- Chart 2 shows the single seven-day comparison window the API computes, per branch. A week-by-week history would need the comparison replayed per window; that is not built.
+- Chart 5 uses the posture priorities (all open, unsuppressed critical/high **security** findings) and the earliest scan observing each issue. A missing timestamp counts as oldest.
+- Chart 6 counts completed and failed root scans only; success = tool in `tools_completed` and not in `tools_failed`.
+- Chart 7 maps fix-job status to the furthest stage reached: queued/claimed → Queued; running (or failed/cancelled after starting) → Started; awaiting review/push, push failed or succeeded → Changes verified; `pushed` → Branch pushed. Pull-request and merge state is not recorded on fix jobs, so the funnel stops at Branch pushed.
+
+Accessibility: every chart has a heading, a one-line meaning, a legend for multi-series charts, and a "Data table" `Section` whose rows carry the drill-down links (the SVG is `aria-hidden`; Recharts' keyboard layer is off so the table is the keyboard path). Fills use `--chart-*` tokens in `globals.css`: severity is a one-hue ordinal ramp (validated for colour-vision deficiency in both themes), new/resolved are an orange/blue pair.
 
 ## Metric definitions
 
@@ -16,9 +43,9 @@ Remediation child scans (`origin_scan_id`) do not replace source-branch evidence
 
 ## API compatibility
 
-`GET /fleet/posture` retains the existing summary fields and adds `coverage`, `changes`, `priorities`, `work` and `generated_at`. `week_over_week_delta` is deprecated; it now represents the deduplicated open-location count change within the comparable cohort. Clients should use `changes` and inspect its comparison coverage instead of rendering a green/red fleet-wide delta.
+`GET /fleet/posture` retains the existing summary fields and adds `coverage`, `changes`, `priorities`, `work` and `generated_at`. Each priority carries `first_seen_at` (earliest scan observing the issue). `GET /findings` accepts `sort=first_seen` (first observation, falling back to the record's creation time). `week_over_week_delta` is deprecated; it now represents the deduplicated open-location count change within the comparable cohort. Clients should use `changes` and inspect its comparison coverage instead of rendering a green/red fleet-wide delta.
 
-`GET /findings/trends` and its export now return up to 90 daily UTC snapshots of distinct observed open locations instead of summing repeated scan output. Days without scans carry forward observations; clean complete scans can produce an explicit zero. JSON includes repository counts and incomplete-scan counts. Historical triage is not immutable: snapshots use the records' stored current triage state, so this compatibility series is not an audit-quality historical risk ledger or proof of fixes. Home uses the explicit comparisons instead.
+`GET /findings/trends` and its export now return up to 90 daily UTC snapshots of distinct observed open locations instead of summing repeated scan output. Days without scans carry forward observations; clean complete scans can produce an explicit zero. JSON includes repository counts and incomplete-scan counts. Historical triage is not immutable: snapshots use the records' stored current triage state, so this compatibility series is not an audit-quality historical risk ledger or proof of fixes. Home charts it only under the "Observed open findings (daily)" label; progress claims use the explicit comparisons.
 
 The aggregates use scoped SQL queries shared by SQLite and PostgreSQL. Read failures propagate as errors instead of empty results. The current implementation loads compact scan/finding history rather than issuing a query for every scan; its cost is linear in retained history (the compatibility daily series replays that history). At larger retention volumes, materialize snapshots before adding more historical widgets. No history is silently truncated to manufacture a complete result.
 
@@ -32,5 +59,7 @@ A collection's repository table includes source, default branch, latest root sca
 
 - `go test -race ./internal/db ./internal/api/routes -run 'TestFleet|TestFindingTrends|TestCollection'`
 - Set `WOLF_TEST_POSTGRES_DSN` to include the PostgreSQL contract test; it creates an isolated schema.
-- `pnpm --dir ui test:e2e dashboard-evidence.spec.ts` covers desktop/mobile, Firefox, accessibility, drill-down targets, unknown evidence, retry and admin worker visibility.
+- `pnpm --dir ui test:e2e dashboard-evidence.spec.ts` covers desktop/mobile, Firefox, accessibility, every chart rendering from `e2e/visual-fixtures.ts`, chart-click and keyboard drill-down URLs, unknown comparisons, Community hiding the funnel, per-card error and retry, and non-admin audit visibility.
+- `pnpm --dir ui test src/components/fleet` covers age buckets, the fix funnel, weekly new/resolved, scanner health, top repositories and trend windows.
+- `go test ./internal/db -run 'TestFleetEvidenceProgressAndCoverage|TestScanFindingPages'` covers `first_seen_at` and `sort=first_seen`.
 - `pnpm --dir ui test:e2e collection-repositories.spec.ts` checks repository/scan context, partial and missing evidence, keyboard sorting, search, scan submission, accessibility and retry.

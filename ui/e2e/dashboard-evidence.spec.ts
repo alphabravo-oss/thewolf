@@ -1,72 +1,110 @@
 import { expect, test, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { installScannerApiMock } from "./scanner-api-mock";
+import { installRichFixtures, richPosture } from "./visual-fixtures";
 
-function posture() {
-  return {
-    generated_at: "2026-10-13T12:00:00Z", repo_count: 3, gates_failing: 1,
-    open_findings_by_severity: { critical: 1, high: 1 }, week_over_week_delta: {},
-    priorities: [
-      { finding_id: "issue-new", repo_id: "payments", name: "Payments", title: "SQL query accepts untrusted input", severity: "critical", tool: "semgrep", file_path: "src/checkout.ts", line: 42, state: "new", confidence: "high" },
-      { finding_id: "issue-old", repo_id: "api", name: "API", title: "Existing vulnerable dependency", severity: "high", tool: "trivy", file_path: "go.mod", line: 9, state: "existing", confidence: "" },
-    ],
-    coverage: { fresh_days: 7, fresh_repos: 1, rows: [
-      { repo_id: "api", name: "API", branch: "main", scan_id: "scan-partial", status: "incomplete", detail: "Trivy did not complete.", last_complete_at: "2026-10-01T12:00:00Z", gate_failing: false },
-      { repo_id: "new-repo", name: "New service", branch: "", status: "never_scanned", detail: "Run the first scan to establish coverage.", gate_failing: false },
-      { repo_id: "payments", name: "Payments", branch: "main", scan_id: "scan-payments", status: "fresh", detail: "All selected tools completed within 7 days.", last_complete_at: "2026-10-13T11:00:00Z", gate_failing: true },
-    ] },
-    work: [{ scan_id: "scan-stuck", repo_id: "api", name: "API", branch: "release", status: "running", phase: "scanning", stalled: true }],
-    changes: { window_days: 7, compared_branches: 1, excluded_branches: 2, new: 1, resurfaced: 0, resolved: 2, suppressed: 1, rows: [
-      { repo_id: "payments", name: "Payments", branch: "main", scan_id: "scan-payments", baseline_scan_id: "scan-before", new: 1, resurfaced: 0, resolved: 2, suppressed: 1 },
-      { repo_id: "api", name: "API", branch: "main", scan_id: "scan-partial", reason: "Needs a recent, complete scan.", new: 0, resurfaced: 0, resolved: 0, suppressed: 0 },
-    ] },
-  };
-}
+const CHARTS = [
+  ["chart-trend", "Observed open findings (daily)"],
+  ["chart-changes", "New vs resolved this week"],
+  ["chart-age", "Age of open critical / high"],
+  ["chart-repos", "Riskiest repositories"],
+  ["chart-rules", "Top rules"],
+  ["chart-scanners", "Scanner health"],
+  ["chart-fixes", "Fix pipeline"],
+] as const;
 
-async function dashboard(page: Page, data = posture()) {
+/** Shared mock + rich fixtures (posture, trends, by-repo, rules, scans, fixes); Enterprise turns the fix funnel on. */
+async function dashboard(page: Page, edition: "enterprise" | "community" = "enterprise") {
   const state = await installScannerApiMock(page);
-  await page.route(/\/api(?:\/v1)?\/fleet\/posture(?:\?|$)/, (route) => route.fulfill({ json: { data } }));
-  await page.route(/\/api(?:\/v1)?\/scanners\/workers$/, (route) => route.fulfill({ json: { data: [] } }));
+  await installRichFixtures(page);
+  await page.route(/\/api(?:\/v1)?\/edition$/, (route) => route.fulfill({ json: { data: { edition, product: edition === "enterprise" ? "Wolf Enterprise" : "Wolf Community", licensed: edition === "enterprise", ui_routes: [], entitlements: { "enterprise.remediation": edition === "enterprise" } } } }));
   return state;
 }
 
-test("dashboard leads with actionable evidence and exposes gaps @browser-matrix", async ({ page }, testInfo) => {
-  const state = await dashboard(page);
+const bars = (page: Page, chart: string) => page.locator(`#${chart} .recharts-bar-rectangle`);
+const allParams = (path: string, params: Record<string, string>) => new RegExp(`${path}\\?${Object.entries(params).map(([k, v]) => `(?=.*${k}=${v})`).join("")}`);
+
+test("home renders every chart from fixtures with text alternatives @browser-matrix", async ({ page }, testInfo) => {
+  await dashboard(page);
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Act on high-risk findings" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "SQL query accepts untrusted input" })).toHaveAttribute("href", /\/findings\/issue-new$/);
-  await expect(page.getByRole("link", { name: "Existing vulnerable dependency" })).toBeVisible();
-  await page.getByRole("combobox", { name: "Finding priority scope" }).click();
-  await page.getByRole("option", { name: "New / resurfaced · 7 days" }).click();
-  await expect(page.getByText("Existing vulnerable dependency", { exact: true })).toHaveCount(0);
-  await expect(page.getByRole("link", { name: "SQL query accepts untrusted input" })).toBeVisible();
-  await page.getByRole("combobox", { name: "Finding priority scope" }).click();
-  await page.getByRole("option", { name: "All open critical / high" }).click();
-  await expect(page.getByRole("link", { name: "Existing vulnerable dependency" })).toBeVisible();
-  await expect(page.getByText("Trivy did not complete.", { exact: true })).toBeVisible();
-  await expect(page.getByRole("progressbar", { name: "Repositories with fresh, complete coverage" })).toHaveAttribute("value", "1");
-  await expect(page.getByText("Lease expired", { exact: true })).toBeVisible();
-  await expect(page.getByText(/No workers reported in the last minute/)).toBeVisible();
-  await expect(page.getByRole("link", { name: "Baseline scan", exact: true })).toHaveAttribute("href", /\/scans\/scan-before$/);
-  await expect(page.getByRole("link", { name: "Run first scan →", exact: true })).toHaveAttribute("href", /repo_id=new-repo/);
-  expect(state.getRequests.some((path) => path.startsWith("/findings/trends"))).toBe(false);
-  await expect(page.getByText("Findings over time", { exact: true })).toHaveCount(0);
+  for (const [id, title] of CHARTS) {
+    const card = page.locator(`#${id}`);
+    await expect(card.getByRole("heading", { name: title, exact: true })).toBeVisible();
+    await expect(bars(page, id).first()).toBeVisible();
+    await expect(card.getByRole("button", { name: "Data table" })).toBeVisible();
+  }
+  for (const title of ["Open critical / high", "New vs resolved this week", "Scan coverage", "Gates failing", "Fix branches pushed"]) {
+    await expect(page.getByRole("link", { name: new RegExp(`^${title}`) })).toBeVisible();
+  }
+  await expect(page.getByRole("heading", { name: "Act on now" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Hard-coded credential in config" })).toHaveAttribute("href", /\/findings\/finding-0$/);
+  await expect(page.getByRole("button", { name: "Are we improving?" })).toHaveAttribute("aria-expanded", "false");
+  // The 30/90-day toggle widens the plotted window.
+  const thirty = await bars(page, "chart-trend").count();
+  await page.getByRole("button", { name: "90 days" }).click();
+  await expect.poll(() => bars(page, "chart-trend").count()).toBeGreaterThan(thirty);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   const a11y = await new AxeBuilder({ page }).include("#main-content").withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
   expect(a11y.violations).toEqual([]);
-  await page.screenshot({ path: testInfo.outputPath("dashboard-evidence.png"), fullPage: true });
+  await page.screenshot({ path: testInfo.outputPath("dashboard.png"), fullPage: true });
 });
 
-test("dashboard does not call missing comparison evidence improvement @browser-matrix", async ({ page }) => {
-  const data = posture();
-  data.changes = { window_days: 7, compared_branches: 0, excluded_branches: 3, new: 0, resurfaced: 0, resolved: 0, suppressed: 0, rows: [] };
-  data.priorities = [];
-  await dashboard(page, data);
+test("chart marks drill down to filtered lists @browser-matrix", async ({ page }) => {
+  await dashboard(page);
+  const drill = async (chart: string, url: RegExp) => {
+    await page.goto("/");
+    await bars(page, chart).first().click();
+    await expect(page).toHaveURL(url);
+  };
+  // First segment of each stacked chart is its critical series.
+  await drill("chart-repos", allParams("/repos/payments-api", { scope: "all", severity: "critical" }));
+  await drill("chart-trend", allParams("/findings", { view: "list", scope: "all", severity: "critical" }));
+  await drill("chart-age", allParams("/findings", { view: "list", scope: "all", severity: "critical", sort: "first_seen", order: "asc" }));
+  await drill("chart-rules", allParams("/findings", { view: "rule", q: "CVE-2024-4067" }));
+  await expect(page.getByText("Regular expression denial of service in micromatch")).toBeVisible();
+  await expect(page.getByText("AWS access key committed")).toHaveCount(0);
+  await drill("chart-changes", /\/scans\/[0-9a-f]{8}-[a-z]{4}$/);
+  await drill("chart-scanners", /\/coverage$/);
+  await drill("chart-fixes", /\/agents\?stage=queued$/);
+  await expect(page.getByText(/Showing jobs at stage/)).toBeVisible();
+});
+
+test("chart data tables expose keyboard drill-down links", async ({ page }) => {
+  await dashboard(page);
   await page.goto("/");
-  await expect(page.getByText(/Progress is unknown/)).toBeVisible();
+  const age = page.locator("#chart-age");
+  await age.getByRole("button", { name: "Data table" }).focus();
+  await page.keyboard.press("Enter");
+  await age.getByRole("table").getByRole("link").first().focus();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(allParams("/findings", { scope: "all", severity: "critical", sort: "first_seen", order: "asc" }));
+  await expect(page.getByRole("combobox", { name: "Filter by severity" })).toHaveText("critical");
+});
+
+test("community hides the fix funnel; missing comparisons stay unknown @browser-matrix", async ({ page }) => {
+  await dashboard(page, "community");
+  const data = { ...richPosture(), changes: { window_days: 7, compared_branches: 0, excluded_branches: 3, new: 0, resurfaced: 0, resolved: 0, suppressed: 0, rows: [] } };
+  await page.route(/\/api(?:\/v1)?\/fleet\/posture(?:\?|$)/, (route) => route.fulfill({ json: { data } }));
+  await page.goto("/");
+  await expect(page.locator("#chart-changes").getByText(/Progress is unknown/)).toBeVisible();
+  await expect(page.locator("#chart-fixes")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /^Fix branches pushed/ })).toHaveCount(0);
+  await page.getByRole("link", { name: /^New vs resolved this week/ }).click();
   const progress = page.getByRole("region", { name: "Are we improving?" });
   await expect(progress.getByRole("link", { name: "Verified resolved —", exact: true })).toBeVisible();
-  await expect(page.getByText(/Check scan coverage before drawing conclusions|check coverage before drawing conclusions/)).toBeVisible();
+});
+
+test("a failing card shows its own error and recovers on retry @browser-matrix", async ({ page }) => {
+  await dashboard(page);
+  let broken = true;
+  await page.route(/\/api(?:\/v1)?\/findings\/by-repo$/, (route) => broken ? route.fulfill({ status: 500, json: { error: { code: "server_error", message: "failed" } } }) : route.fallback());
+  await page.goto("/");
+  const repos = page.locator("#chart-repos");
+  await expect(repos.getByText("Riskiest repositories could not be loaded.")).toBeVisible({ timeout: 20_000 });
+  await expect(bars(page, "chart-rules").first()).toBeVisible();
+  broken = false;
+  await repos.getByRole("button", { name: "Retry" }).click();
+  await expect(bars(page, "chart-repos").first()).toBeVisible();
 });
 
 test("dashboard read errors remain unknown and can be retried @browser-matrix", async ({ page }) => {
@@ -74,23 +112,24 @@ test("dashboard read errors remain unknown and can be retried @browser-matrix", 
   let broken = true;
   await page.route(/\/api(?:\/v1)?\/fleet\/posture(?:\?|$)/, (route) => broken
     ? route.fulfill({ status: 503, json: { error: { code: "unavailable", message: "Unavailable" } } })
-    : route.fulfill({ json: { data: posture() } }));
+    : route.fallback());
   await page.goto("/");
   await expect(page.getByText("Dashboard evidence could not be loaded. Coverage and risk are unknown.")).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByText("All clear.", { exact: true })).toHaveCount(0);
+  // Charts that do not depend on posture still render.
+  await expect(bars(page, "chart-repos").first()).toBeVisible();
   broken = false;
   await page.getByRole("button", { name: "Retry dashboard", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Act on high-risk findings" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Hard-coded credential in config" })).toBeVisible();
 });
 
-test("non-admin dashboard never requests worker health @browser-matrix", async ({ page }) => {
+test("non-admin dashboard never requests the audit log @browser-matrix", async ({ page }) => {
   const state = await dashboard(page);
   state.currentUser.role = "user";
   state.currentUser.scopes = [];
-  let workerRequests = 0;
-  await page.route(/\/api(?:\/v1)?\/scanners\/workers$/, (route) => { workerRequests++; return route.fulfill({ json: { data: [] } }); });
+  let auditRequests = 0;
+  await page.route(/\/api(?:\/v1)?\/audit-log/, (route) => { auditRequests++; return route.fulfill({ json: { data: [] } }); });
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Keep work moving" })).toBeVisible();
-  expect(workerRequests).toBe(0);
-  await expect(page.getByRole("link", { name: "Inspect scanner settings →" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Act on now" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Recent activity" })).toHaveCount(0);
+  expect(auditRequests).toBe(0);
 });

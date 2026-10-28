@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- Home is a dashboard: KPI row with a 30-day sparkline, seven drill-down charts
+  (observed open findings daily, new vs resolved, riskiest repositories, top rules,
+  age of open critical/high, scanner health, fix pipeline), "Act on now" and recent
+  activity; each card loads, fails and retries on its own. `/fleet/posture`
+  priorities gain `first_seen_at`; `/findings` accepts `sort=first_seen`; the
+  findings list accepts `severity=critical,high`, By rule filters on `q`, and
+  `/agents` accepts `?stage=`. See `docs/dashboard.md`.
 - Fold Enterprise into Settings and remove the sidebar Enterprise section: Single
   sign-on and Directory sync under Users & access, SIEM/ticketing destinations
   (typed name/URL/authorization, send test, delete) under Integrations, Fixer engines

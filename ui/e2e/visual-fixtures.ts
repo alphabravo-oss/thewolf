@@ -38,15 +38,19 @@ const SCANS = [
   scan("f46c0d2b-hhhh", "identity-service", "pending", { started_at: undefined, completed_at: undefined, tools_completed: "[]", created_at: ago(0.05) }),
 ];
 
-const posture = () => ({
+export const richPosture = () => ({
   generated_at: ago(0.01), repo_count: REPOS.length, gates_failing: 2,
-  open_findings_by_severity: { critical: 3, high: 11, medium: 27, low: 16, info: 5 },
+  open_findings_by_severity: { critical: 4, high: 8, medium: 27, low: 16, info: 5 },
   week_over_week_delta: { critical: -1, high: 2 },
   priorities: [
-    { finding_id: "finding-0", repo_id: "payments-api", name: "payments-api", title: "Hard-coded credential in config", severity: "critical", tool: "gitleaks", file_path: "config/prod.yaml", line: 12, state: "new", confidence: "high" },
-    { finding_id: "finding-1", repo_id: "identity-service", name: "identity-service", title: "SQL query built from request input", severity: "critical", tool: "semgrep", file_path: "internal/users/query.go", line: 88, state: "resurfaced", confidence: "high" },
-    { finding_id: "finding-2", repo_id: "web-frontend", name: "web-frontend", title: "Prototype pollution in lodash", severity: "high", tool: "trivy", file_path: "package-lock.json", line: 0, state: "existing", confidence: "medium" },
-    { finding_id: "finding-3", repo_id: "payments-api", name: "payments-api", title: "Weak TLS cipher suite enabled", severity: "high", tool: "semgrep", file_path: "internal/tls/config.go", line: 31, state: "existing", confidence: "medium" },
+    { finding_id: "finding-0", repo_id: "payments-api", name: "payments-api", title: "Hard-coded credential in config", severity: "critical", tool: "gitleaks", file_path: "config/prod.yaml", line: 12, state: "new", confidence: "high", first_seen_at: ago(24 * 2) },
+    { finding_id: "finding-1", repo_id: "identity-service", name: "identity-service", title: "SQL query built from request input", severity: "critical", tool: "semgrep", file_path: "internal/users/query.go", line: 88, state: "resurfaced", confidence: "high", first_seen_at: ago(24 * 40) },
+    { finding_id: "finding-2", repo_id: "web-frontend", name: "web-frontend", title: "Prototype pollution in lodash", severity: "high", tool: "trivy", file_path: "package-lock.json", line: 0, state: "existing", confidence: "medium", first_seen_at: ago(24 * 120) },
+    { finding_id: "finding-3", repo_id: "payments-api", name: "payments-api", title: "Weak TLS cipher suite enabled", severity: "high", tool: "semgrep", file_path: "internal/tls/config.go", line: 31, state: "existing", confidence: "medium", first_seen_at: ago(24 * 15) },
+    // The rest fill out the age chart (Home shows the top five).
+    ...([[3, "critical", 1], [4, "high", 5], [5, "high", 12], [6, "high", 22], [7, "high", 45], [8, "high", 70], [9, "critical", 100], [10, "high", 200]] as const).map(([i, severity, days]) => ({
+      finding_id: `finding-age-${i}`, repo_id: "ledger-worker", name: "ledger-worker", title: `Outdated dependency with known CVE (${i})`, severity, tool: "trivy", file_path: "go.sum", line: 0, state: "existing", confidence: "medium", first_seen_at: ago(24 * days),
+    })),
   ],
   coverage: { fresh_days: 7, fresh_repos: 3, rows: [
     { repo_id: "web-frontend", name: "web-frontend", branch: "main", scan_id: "e90a27c4-cccc", status: "incomplete", detail: "gitleaks did not complete.", last_complete_at: ago(24 * 9), gate_failing: false },
@@ -61,6 +65,8 @@ const posture = () => ({
   changes: { window_days: 7, compared_branches: 3, excluded_branches: 1, new: 6, resurfaced: 1, resolved: 9, suppressed: 2, rows: [
     { repo_id: "payments-api", name: "payments-api", branch: "main", scan_id: "7c1e4a90-aaaa", baseline_scan_id: "8e3b9a17-gggg", new: 2, resurfaced: 0, resolved: 5, suppressed: 1 },
     { repo_id: "identity-service", name: "identity-service", branch: "main", scan_id: "b3d5f812-bbbb", baseline_scan_id: "4a7be1c9-eeee", new: 4, resurfaced: 1, resolved: 4, suppressed: 1 },
+    { repo_id: "ledger-worker", name: "ledger-worker", branch: "release/2026.10", scan_id: "4a7be1c9-eeee", baseline_scan_id: "8e3b9a17-gggg", new: 0, resurfaced: 0, resolved: 0, suppressed: 0 },
+    { repo_id: "web-frontend", name: "web-frontend", branch: "main", scan_id: "e90a27c4-cccc", reason: "Needs a recent, complete scan.", new: 0, resurfaced: 0, resolved: 0, suppressed: 0 },
   ] },
 });
 
@@ -76,13 +82,27 @@ const byRepo = [
   { repo_id: "payments-api", name: "payments-api", total: 14, critical: 2, high: 4, medium: 5, low: 2, info: 1 },
   { repo_id: "ledger-worker", name: "ledger-worker", total: 6, critical: 0, high: 1, medium: 3, low: 2, info: 0 },
   { repo_id: "identity-service", name: "identity-service", total: 3, critical: 1, high: 2, medium: 0, low: 0, info: 0 },
+  { repo_id: "infra-terraform", name: "infra-terraform", total: 12, critical: 0, high: 2, medium: 6, low: 3, info: 1 },
+  { repo_id: "docs-site", name: "docs-site", total: 2, critical: 0, high: 0, medium: 1, low: 1, info: 0 },
 ];
+
+// 90 daily snapshots (oldest first), a slow decline with a mid-window spike.
+const TRENDS = Array.from({ length: 90 }, (_, i) => {
+  const date = new Date(FIXED_NOW.getTime() - (89 - i) * 86_400_000).toISOString().slice(0, 10);
+  const wave = Math.round(4 * Math.sin(i / 6));
+  const counts = { critical: Math.max(1, 6 - Math.floor(i / 25)), high: 18 - Math.floor(i / 12) + (i > 55 && i < 65 ? 6 : 0), medium: 34 + wave, low: 16 + (i % 5), info: 5 };
+  return { date, counts: { ...counts, total: Object.values(counts).reduce((a, b) => a + b, 0) }, repos: 5, incomplete_scans: i % 17 === 0 ? 1 : 0 };
+});
 
 const rules = [
   { key: "CVE-2024-4067", repos: 3, findings: 9, tool: "trivy", title: "Regular expression denial of service in micromatch", severity: "high", repo_ids: ["web-frontend", "docs-site"], repo_names: ["web-frontend", "docs-site"] },
   { key: "go.lang.security.audit.sqli", repos: 2, findings: 5, tool: "semgrep", title: "SQL query built from request input", severity: "critical", repo_ids: ["identity-service"], repo_names: ["identity-service"] },
   { key: "generic.secrets.security.detected-aws-key", repos: 1, findings: 2, tool: "gitleaks", title: "AWS access key committed", severity: "critical", repo_ids: ["payments-api"], repo_names: ["payments-api"] },
-];
+  { key: "CWE-79", repos: 2, findings: 7, tool: "semgrep", title: "Cross-site scripting via unescaped template output", severity: "high", repo_ids: ["web-frontend", "docs-site"], repo_names: ["web-frontend", "docs-site"] },
+  { key: "CVE-2023-45288", repos: 3, findings: 6, tool: "trivy", title: "golang.org/x/net HTTP/2 CONTINUATION flood", severity: "high", repo_ids: ["payments-api", "identity-service", "ledger-worker"], repo_names: ["payments-api", "identity-service", "ledger-worker"] },
+  { key: "CKV_AWS_20", repos: 1, findings: 4, tool: "checkov", title: "S3 bucket allows public read", severity: "high", repo_ids: ["infra-terraform"], repo_names: ["infra-terraform"] },
+  { key: "CWE-327", repos: 2, findings: 3, tool: "semgrep", title: "Weak TLS cipher suite enabled", severity: "high", repo_ids: ["payments-api", "identity-service"], repo_names: ["payments-api", "identity-service"] },
+].sort((a, b) => b.findings - a.findings);
 
 const vuln = (id: string, title: string, severity: string, category: string, evidence: number, tools: string[], baseline = "new") => ({
   id, repo_id: "payments-api", scan_id: "7c1e4a90-aaaa", canonical_key: id, title, severity, category, confidence: evidence > 2 ? "high" : evidence > 1 ? "medium" : "low",
@@ -190,10 +210,11 @@ export async function installRichFixtures(page: Page) {
       const per = Number(q.get("per_page") || q.get("limit") || 50);
       return ok(rows.slice(0, per), { total: rows.length, page: 1, per_page: per });
     }
-    if (p === "/fleet/posture") return ok(posture());
+    if (p === "/fleet/posture") return ok(richPosture());
     if (p === "/fleet/needs-attention") return ok(needsAttention);
     if (p === "/findings/by-repo") return ok(byRepo);
-    if (p === "/findings/aggregate") return ok(rules);
+    if (p === "/findings/aggregate") return ok(rules.slice(0, Number(q.get("limit") || 100)));
+    if (p === "/findings/trends") return ok(TRENDS);
     if (p === "/vulnerabilities") return ok(VULNS, { total: VULNS.length, page: 1, per_page: 50 });
     if (p === "/vulnerabilities/vuln-sqli") return ok(vulnDetail);
     if (p === "/audit-log") return ok(AUDIT.slice(0, Number(q.get("limit") || q.get("per_page") || 50)), { total: 240, page: 1, per_page: 50 });

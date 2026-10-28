@@ -9,8 +9,7 @@ import { useScanWithPreflight } from "@/components/scan-preflight";
 import { AddButton } from "@/components/ui/add-button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ErrorState, PermissionState } from "@/components/ui/empty-state";
-import { Skeleton } from "@/components/ui/skeleton";
+import { PermissionState } from "@/components/ui/empty-state";
 import { PageHeader, PageShell } from "@/components/ui/page";
 import { ApiError, api } from "@/lib/api";
 import { useFleetPosture } from "@/lib/fleet";
@@ -50,10 +49,9 @@ function FleetDashboard() {
       description="Security risk, scan coverage, and what needs your attention."
       actions={fleet.data && fleet.data.repo_count > 0 ? <AddButton thing="repo" onClick={() => setAdding(true)} /> : undefined}
     />
-    {fleet.isLoading ? <div role="status" aria-label="Loading Home" className="space-y-4"><div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-28" />)}</div><Skeleton className="h-64" /></div>
-      : fleet.error instanceof ApiError && fleet.error.status === 403 ? <PermissionState description="You do not have access to fleet evidence." />
-      : fleet.isError || !fleet.data ? <Card><ErrorState title="Dashboard evidence could not be loaded. Coverage and risk are unknown." actionLabel="Retry dashboard" onRetry={() => void fleet.refetch()} /></Card>
-      : fleet.data.repo_count === 0 ? <Card><CardContent className="space-y-6 px-6 py-8 sm:p-10">
+    {/* Charts load per card, so only the first-run check waits on posture. */}
+    {fleet.error instanceof ApiError && fleet.error.status === 403 ? <PermissionState description="You do not have access to fleet evidence." />
+      : fleet.data?.repo_count === 0 ? <Card><CardContent className="space-y-6 px-6 py-8 sm:p-10">
         <div className="max-w-xl space-y-3">
           <ShieldCheckIcon className="size-8 text-primary" aria-hidden />
           <h2 className="text-2xl font-semibold tracking-tight">Your first security scan starts here</h2>

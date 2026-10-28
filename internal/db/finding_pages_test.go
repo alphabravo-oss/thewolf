@@ -72,6 +72,9 @@ func TestScanFindingPagesPreserveVisibilityAndOrdering(t *testing.T) {
 			if _, err := database.Exec(database.Rebind("UPDATE findings SET cluster_id='a' WHERE id IN ('a','g')")); err != nil {
 				t.Fatal(err)
 			}
+			if _, err := database.Exec(database.Rebind("UPDATE findings SET first_seen_at=? WHERE id='h'"), time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)); err != nil {
+				t.Fatal(err)
+			}
 			if _, err := store.QueryScanFindings(ctx, id, FindingListQuery{}); !errors.Is(err, ErrLiveFindingPolicy) {
 				t.Fatalf("live policy bypassed: %v", err)
 			}
@@ -85,6 +88,7 @@ func TestScanFindingPagesPreserveVisibilityAndOrdering(t *testing.T) {
 				total, suppressed int
 			}{
 				{"stable page", FindingListQuery{SortBy: "severity", Desc: true, Limit: 2, Offset: 1}, "dh", 5, 2},
+				{"oldest first", FindingListQuery{SortBy: "first_seen", Limit: 1}, "h", 5, 2},
 				{"contributor", FindingListQuery{Tools: []string{"semgrep"}}, "c", 1, 2},
 				{"exact tool", FindingListQuery{Tools: []string{"a"}}, "", 0, 2},
 				{"literal search", FindingListQuery{Search: "%_"}, "a", 1, 2},

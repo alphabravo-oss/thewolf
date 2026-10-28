@@ -70,6 +70,8 @@ type FleetPriority struct {
 	Line       int             `json:"line"`
 	State      string          `json:"state"`
 	Confidence string          `json:"confidence"`
+	// FirstSeenAt is the earliest scan observing this issue (Home age buckets).
+	FirstSeenAt time.Time `json:"first_seen_at"`
 }
 
 type FleetScanWork struct {
@@ -563,7 +565,7 @@ func (e *fleetEvidence) posture(now time.Time) *FleetPostureResult {
 		} else if !resurfacedAt[progressKey(f)].Before(now.AddDate(0, 0, -7)) {
 			state = "resurfaced"
 		}
-		out.Priorities = append(out.Priorities, FleetPriority{FindingID: f.ID, RepoID: f.RepoID, Name: names[f.RepoID], Title: f.Title, Severity: f.Severity, Tool: f.ToolName, FilePath: f.FilePath, Line: f.LineStart, State: state, Confidence: f.Confidence})
+		out.Priorities = append(out.Priorities, FleetPriority{FindingID: f.ID, RepoID: f.RepoID, Name: names[f.RepoID], Title: f.Title, Severity: f.Severity, Tool: f.ToolName, FilePath: f.FilePath, Line: f.LineStart, State: state, Confidence: f.Confidence, FirstSeenAt: firstSeen[progressKey(f)]})
 	}
 	sort.Slice(out.Priorities, func(i, j int) bool {
 		a, b := out.Priorities[i], out.Priorities[j]

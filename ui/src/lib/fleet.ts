@@ -20,6 +20,8 @@ export type FleetPriority = {
   finding_id: string; repo_id: string; name: string; title: string;
   severity: Severity; tool: string; file_path: string; line: number;
   state: "new" | "resurfaced" | "existing"; confidence: string;
+  /** Earliest scan observing the issue (older servers omit it). */
+  first_seen_at?: string;
 };
 
 export type FleetChangeRow = {

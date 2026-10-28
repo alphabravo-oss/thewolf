@@ -84,6 +84,17 @@
   --sev-medium: #7a4d08;
   --sev-low: #1e4a9e;
   --sev-info: #47515c;
+  /* Chart fills (validated: dataviz validate_palette.js against --card).
+     Severity is an ordinal one-hue ramp so stacked segments stay distinct
+     under colour-vision deficiency; series pair is new (orange) vs resolved
+     (blue). Every chart also has a legend and a data table. */
+  --chart-sev-critical: #6e1414;
+  --chart-sev-high: #a31f1f;
+  --chart-sev-medium: #d4452f;
+  --chart-sev-low: #ea7a5c;
+  --chart-sev-info: #f09c80;
+  --chart-1: #3c4855;
+  --chart-2: #eb6834;
 
   /* Page-header rule and card shadow of the shared shape layer. */
   --rule: hsl(var(--foreground));
@@ -146,6 +157,13 @@
   --sev-medium: #fcd34d;
   --sev-low: #93c5fd;
   --sev-info: #a7b0ba;
+  --chart-sev-critical: #fbd0c3;
+  --chart-sev-high: #f6a38a;
+  --chart-sev-medium: #ee7458;
+  --chart-sev-low: #d9473a;
+  --chart-sev-info: #b32a2a;
+  --chart-1: #b8c4d0;
+  --chart-2: #d95926;
 
   --rule: hsl(var(--foreground));
   --shadow-card: none;
