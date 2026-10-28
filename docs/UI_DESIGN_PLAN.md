@@ -216,6 +216,18 @@ PR). Reports is the next Enterprise feature to make real.
   adds `settings-sso`, `settings-sso-community`, `settings-scim`,
   `settings-integrations`, `settings-license-community`.
   Evidence: `pnpm lint && typecheck && test (67) && build && test:e2e` green (246 passed, 68 skipped viewport-gated); `pnpm test:e2e:baseline` refreshed both themes (66 shots, axe clean); `product` scanner-inventory snapshot refreshed for the regrouped sub-nav.
+- [x] **T4.5 Reports (Enterprise `enterprise.compliance`).** Sidebar **Reports**
+  under Scanner coverage; `/reports` tabs Current report, Saved reports, Schedules
+  (the last two admin-only). One "Security posture" report component
+  (`components/reports/security-report.tsx`) renders live `GET /fleet/report` and
+  saved snapshots from the same JSON, labelled "Observed, not audit-grade".
+  "Download PDF" is `window.print()` with the `@media print` rules in
+  `styles/globals.css` (chrome and buttons hidden, light tokens, page breaks).
+  Schedules use `+ Add schedule` → `FormDialog`; deletes use `ConfirmDialog`;
+  Community shows the `EditionGate` card.
+  Evidence: `pnpm lint && typecheck && test (78)` green; `pnpm test:e2e:baseline`
+  refreshed both themes (72 shots, axe clean, new `reports`/`reports-community`);
+  print preview checked in Chromium with the dark theme selected.
 
 ## Out of scope
 

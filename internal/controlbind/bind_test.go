@@ -1,6 +1,7 @@
 package controlbind
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/alphabravocompany/thewolf/internal/db"
@@ -39,5 +40,12 @@ func TestRecordsAndUsersRoundTrip(t *testing.T) {
 	missing, err := control.RecordsAPI().Get(t.Context(), "workspaces", "nope")
 	if err != nil || missing != nil {
 		t.Fatalf("missing: %#v %v", missing, err)
+	}
+	raw, err := control.FleetAPI().Report(t.Context(), "")
+	if err != nil || !strings.Contains(string(raw), `"repo_count":0`) || !strings.Contains(string(raw), `"aging":[`) {
+		t.Fatalf("fleet report: %s %v", raw, err)
+	}
+	if control.FleetAPI().IsAdmin(t.Context()) {
+		t.Fatal("no caller must not be admin")
 	}
 }

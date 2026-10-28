@@ -36,7 +36,7 @@ func TestFleetAuthorizationDoesNotElevateAPITokens(t *testing.T) {
 	adminWrite := createToken(t, srv, adminJWT, []string{apikey.ScopeWriteFindings})
 	adminSuper := createToken(t, srv, adminJWT, []string{apikey.ScopeAdmin})
 	otherRead := createToken(t, srv, otherPair.AccessToken, readScopes)
-	var findings, vulns []string
+	var findings, vulns, collections []string
 	for _, userID := range []string{admin.UserID, other.ID} {
 		repo := &models.Repo{ID: uuid.NewString(), UserID: userID, Name: userID, SourceType: models.SourceTypeLocal, SourcePath: t.TempDir(), DefaultBranch: "main"}
 		if err := store.CreateRepo(ctx, repo); err != nil {
@@ -49,6 +49,7 @@ func TestFleetAuthorizationDoesNotElevateAPITokens(t *testing.T) {
 		if err := store.AddRepoToCollection(ctx, col.ID, repo.ID); err != nil {
 			t.Fatal(err)
 		}
+		collections = append(collections, col.ID)
 		now := time.Now().UTC()
 		scan := &models.Scan{ID: uuid.NewString(), UserID: userID, RepoID: repo.ID, Branch: "main", Status: models.ScanStatusCompleted, CreatedAt: now, UpdatedAt: now, CompletedAt: &now, ToolsCompleted: `["test"]`}
 		if err := store.CreateScan(ctx, scan); err != nil {
@@ -85,7 +86,7 @@ func TestFleetAuthorizationDoesNotElevateAPITokens(t *testing.T) {
 			if principal.owner == 1 {
 				mine, foreign = foreign, mine
 			}
-			for _, path := range []string{"/repos", "/collections", "/scans", "/findings", "/findings/export?format=json", "/findings/aggregate", "/findings/by-repo", "/vulnerabilities", "/fleet/inventory", "/fleet/needs-attention"} {
+			for _, path := range []string{"/repos", "/collections", "/scans", "/findings", "/findings/export?format=json", "/findings/aggregate", "/findings/by-repo", "/vulnerabilities", "/fleet/inventory", "/fleet/needs-attention", "/fleet/report"} {
 				t.Run(path, func(t *testing.T) {
 					w := request(srv, http.MethodGet, "/api/v1"+path, principal.bearer, nil)
 					if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), mine) || strings.Contains(w.Body.String(), foreign) != principal.fleet {
@@ -97,6 +98,9 @@ func TestFleetAuthorizationDoesNotElevateAPITokens(t *testing.T) {
 				status := http.StatusNotFound
 				if principal.fleet || i == principal.owner {
 					status = http.StatusOK
+				}
+				if w := request(srv, http.MethodGet, "/api/v1/fleet/report?collection_id="+collections[i], principal.bearer, nil); w.Code != status {
+					t.Errorf("collection report: want %d: %d %s", status, w.Code, w.Body.String())
 				}
 				for _, path := range []string{"/findings/" + findings[i], "/vulnerabilities/" + vulns[i], "/vulnerabilities/" + vulns[i] + "/evidence", "/evidence?vulnerability_id=" + vulns[i]} {
 					t.Run(path, func(t *testing.T) {

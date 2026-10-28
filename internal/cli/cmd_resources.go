@@ -1600,6 +1600,7 @@ func newFleetCmd() *cobra.Command {
 		get("inventory", "Repository inventory across the fleet", "/fleet/inventory"),
 		get("needs-attention", "Repositories needing attention", "/fleet/needs-attention"),
 		get("posture", "Fleet-wide security posture", "/fleet/posture"),
+		get("report", "Security posture report (whole fleet; use the API for collection_id)", "/fleet/report"),
 	)
 	return cmd
 }

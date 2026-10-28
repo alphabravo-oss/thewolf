@@ -214,6 +214,15 @@ export async function installRichFixtures(page: Page) {
     }
     if (p === "/fleet/posture") return ok(richPosture());
     if (p === "/fleet/needs-attention") return ok(needsAttention);
+    if (p === "/fleet/report") {
+      const posture = richPosture();
+      return ok({
+        generated_at: posture.generated_at, open_by_severity: posture.open_findings_by_severity, trend: TRENDS.slice(-30),
+        changes: { ...posture.changes, rows: undefined }, repo_count: posture.repo_count, coverage: { ...posture.coverage, rows: undefined },
+        gates_failing: posture.gates_failing, fixes_pushed: 1, aging: [{ days: 30, critical: 2, high: 5 }, { days: 60, critical: 1, high: 3 }, { days: 90, critical: 0, high: 1 }],
+        top_repos: [...byRepo].sort((a, b) => b.critical - a.critical || b.high - a.high),
+      });
+    }
     if (p === "/findings/by-repo") return ok(byRepo);
     if (p === "/findings/aggregate") return ok(rules.slice(0, Number(q.get("limit") || 100)));
     if (p === "/findings/trends") return ok(TRENDS);

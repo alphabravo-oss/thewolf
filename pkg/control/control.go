@@ -4,6 +4,7 @@ package control
 
 import (
 	"context"
+	"encoding/json"
 	"sync"
 	"time"
 )
@@ -46,8 +47,18 @@ type Settings interface {
 	List(ctx context.Context) (map[string]string, error)
 }
 
+// Fleet is read-only fleet evidence for overlay reports. Report covers every
+// repository (admin scope), so overlays serve it only when IsAdmin holds.
+type Fleet interface {
+	// Report is the GET /fleet/report JSON for all repositories, or one collection.
+	Report(ctx context.Context, collectionID string) (json.RawMessage, error)
+	// IsAdmin reports whether the request's caller holds the administrator role.
+	IsAdmin(ctx context.Context) bool
+}
+
 var (
 	mu       sync.RWMutex
+	fleet    Fleet
 	users    Users
 	records  Records
 	settings Settings
@@ -75,4 +86,16 @@ func SettingsAPI() Settings {
 	mu.RLock()
 	defer mu.RUnlock()
 	return settings
+}
+
+func BindFleet(f Fleet) {
+	mu.Lock()
+	fleet = f
+	mu.Unlock()
+}
+
+func FleetAPI() Fleet {
+	mu.RLock()
+	defer mu.RUnlock()
+	return fleet
 }

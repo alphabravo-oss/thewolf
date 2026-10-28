@@ -2,8 +2,11 @@ package routes
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/alphabravocompany/thewolf/internal/api/response"
 	"github.com/alphabravocompany/thewolf/internal/auth"
@@ -168,4 +171,30 @@ func FindingsByRepo(w http.ResponseWriter, r *http.Request) {
 		rows = []db.FindingsByRepoRow{}
 	}
 	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: rows})
+}
+
+// FleetReport handles GET /fleet/report — the "Security posture" report over
+// the caller's visible repositories, or one collection. Enterprise saved
+// snapshots store this same JSON.
+func FleetReport(w http.ResponseWriter, r *http.Request) {
+	h := DefaultHandler
+	if h == nil {
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "handler not initialized")
+		return
+	}
+	claims := auth.GetUserFromContext(r.Context())
+	if claims == nil {
+		response.WriteError(w, http.StatusUnauthorized, "unauthorized", "not authenticated")
+		return
+	}
+	report, err := db.BuildSecurityReport(r.Context(), h.Store, claims.UserID, fleetVisible(r.Context(), h.Store, claims.UserID), r.URL.Query().Get("collection_id"), time.Now())
+	if errors.Is(err, sql.ErrNoRows) {
+		response.WriteError(w, http.StatusNotFound, "not_found", "collection not found")
+		return
+	}
+	if err != nil {
+		response.WriteError(w, http.StatusInternalServerError, "server_error", "compute report: "+err.Error())
+		return
+	}
+	response.WriteJSON(w, http.StatusOK, response.SuccessResponse{Data: report})
 }

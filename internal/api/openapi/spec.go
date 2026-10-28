@@ -193,6 +193,7 @@ func Endpoints() []Endpoint {
 
 		// Fleet aggregates.
 		{"GET", "/fleet/posture", "fleet", "Fleet-wide posture summary", "read:scans", "", false},
+		{"GET", "/fleet/report", "fleet", "Security posture report (query collection_id); Enterprise snapshots store this shape", "read:scans", "", false},
 		{"GET", "/fleet/inventory", "fleet", "Fleet inventory grouped by source / collection / language", "read:repos", "", false},
 		{"GET", "/fleet/needs-attention", "fleet", "Top repos that need attention, scored", "read:scans", "", true},
 

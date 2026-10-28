@@ -20,6 +20,7 @@ import { Route as AuthedCollectionsRouteImport } from './routes/_authed.collecti
 import { Route as AuthedCoverageRouteImport } from './routes/_authed.coverage'
 import { Route as AuthedFindingsRouteImport } from './routes/_authed.findings'
 import { Route as AuthedFixesRouteImport } from './routes/_authed.fixes'
+import { Route as AuthedReportsRouteImport } from './routes/_authed.reports'
 import { Route as AuthedReposRouteImport } from './routes/_authed.repos'
 import { Route as AuthedScansRouteImport } from './routes/_authed.scans'
 import { Route as AuthedSettingsRouteImport } from './routes/_authed.settings'
@@ -95,6 +96,11 @@ const AuthedFindingsRoute = AuthedFindingsRouteImport.update({
 const AuthedFixesRoute = AuthedFixesRouteImport.update({
   id: '/fixes',
   path: '/fixes',
+  getParentRoute: () => AuthedRoute,
+} as any)
+const AuthedReportsRoute = AuthedReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
   getParentRoute: () => AuthedRoute,
 } as any)
 const AuthedReposRoute = AuthedReposRouteImport.update({
@@ -222,6 +228,7 @@ export interface FileRoutesByFullPath {
   '/coverage': typeof AuthedCoverageRoute
   '/findings': typeof AuthedFindingsRouteWithChildren
   '/fixes': typeof AuthedFixesRouteWithChildren
+  '/reports': typeof AuthedReportsRoute
   '/repos': typeof AuthedReposRouteWithChildren
   '/scans': typeof AuthedScansRouteWithChildren
   '/settings': typeof AuthedSettingsRoute
@@ -250,6 +257,7 @@ export interface FileRoutesByTo {
   '/register': typeof RegisterRoute
   '/account': typeof AuthedAccountRoute
   '/coverage': typeof AuthedCoverageRoute
+  '/reports': typeof AuthedReportsRoute
   '/settings': typeof AuthedSettingsRoute
   '/': typeof AuthedIndexRoute
   '/agents/$agentId': typeof AuthedAgentsAgentIdRoute
@@ -282,6 +290,7 @@ export interface FileRoutesById {
   '/_authed/coverage': typeof AuthedCoverageRoute
   '/_authed/findings': typeof AuthedFindingsRouteWithChildren
   '/_authed/fixes': typeof AuthedFixesRouteWithChildren
+  '/_authed/reports': typeof AuthedReportsRoute
   '/_authed/repos': typeof AuthedReposRouteWithChildren
   '/_authed/scans': typeof AuthedScansRouteWithChildren
   '/_authed/settings': typeof AuthedSettingsRoute
@@ -319,6 +328,7 @@ export interface FileRouteTypes {
     | '/coverage'
     | '/findings'
     | '/fixes'
+    | '/reports'
     | '/repos'
     | '/scans'
     | '/settings'
@@ -347,6 +357,7 @@ export interface FileRouteTypes {
     | '/register'
     | '/account'
     | '/coverage'
+    | '/reports'
     | '/settings'
     | '/'
     | '/agents/$agentId'
@@ -378,6 +389,7 @@ export interface FileRouteTypes {
     | '/_authed/coverage'
     | '/_authed/findings'
     | '/_authed/fixes'
+    | '/_authed/reports'
     | '/_authed/repos'
     | '/_authed/scans'
     | '/_authed/settings'
@@ -486,6 +498,13 @@ declare module '@tanstack/react-router' {
       path: '/fixes'
       fullPath: '/fixes'
       preLoaderRoute: typeof AuthedFixesRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/reports': {
+      id: '/_authed/reports'
+      path: '/reports'
+      fullPath: '/reports'
+      preLoaderRoute: typeof AuthedReportsRouteImport
       parentRoute: typeof AuthedRoute
     }
     '/_authed/repos': {
@@ -777,6 +796,7 @@ interface AuthedRouteChildren {
   AuthedCoverageRoute: typeof AuthedCoverageRoute
   AuthedFindingsRoute: typeof AuthedFindingsRouteWithChildren
   AuthedFixesRoute: typeof AuthedFixesRouteWithChildren
+  AuthedReportsRoute: typeof AuthedReportsRoute
   AuthedReposRoute: typeof AuthedReposRouteWithChildren
   AuthedScansRoute: typeof AuthedScansRouteWithChildren
   AuthedSettingsRoute: typeof AuthedSettingsRoute
@@ -793,6 +813,7 @@ const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedCoverageRoute: AuthedCoverageRoute,
   AuthedFindingsRoute: AuthedFindingsRouteWithChildren,
   AuthedFixesRoute: AuthedFixesRouteWithChildren,
+  AuthedReportsRoute: AuthedReportsRoute,
   AuthedReposRoute: AuthedReposRouteWithChildren,
   AuthedScansRoute: AuthedScansRouteWithChildren,
   AuthedSettingsRoute: AuthedSettingsRoute,

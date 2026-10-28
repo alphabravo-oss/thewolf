@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+- Reports (Enterprise, `enterprise.compliance`): a **Reports** sidebar item with a
+  print-ready "Security posture" report for every repository or one collection
+  (open critical/high with a 30-day trend, new vs resolved this week, coverage,
+  gates failing, fix branches pushed, age over 30/60/90 days, top 10 riskiest
+  repositories, all labelled observed, not audit-grade). "Download PDF" uses the
+  browser print dialog with a print stylesheet. Saved reports and weekly/monthly
+  schedules are Enterprise. Community gains `GET /fleet/report` and
+  `pkg/control.Fleet` (`BindFleet`/`FleetAPI`) for overlays; Community shows the
+  upgrade card.
+
 - Home is a dashboard: KPI row with a 30-day sparkline, seven drill-down charts
   (observed open findings daily, new vs resolved, riskiest repositories, top rules,
   age of open critical/high, scanner health, fix pipeline), "Act on now" and recent

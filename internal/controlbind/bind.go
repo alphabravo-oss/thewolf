@@ -5,9 +5,12 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"strings"
+	"time"
 
+	"github.com/alphabravocompany/thewolf/internal/auth"
 	"github.com/alphabravocompany/thewolf/internal/db"
 	"github.com/alphabravocompany/thewolf/internal/models"
 	"github.com/alphabravocompany/thewolf/pkg/control"
@@ -17,9 +20,25 @@ import (
 type users struct{ store db.Store }
 type records struct{ store db.Store }
 type settings struct{ store db.Store }
+type fleet struct{ store db.Store }
 
 func Bind(store db.Store) {
 	control.Bind(users{store}, records{store}, settings{store})
+	control.BindFleet(fleet{store})
+}
+
+func (f fleet) Report(ctx context.Context, collectionID string) (json.RawMessage, error) {
+	rep, err := db.BuildSecurityReport(ctx, f.store, "", true, collectionID, time.Now())
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(rep)
+}
+
+// IsAdmin matches auth.RequireAdmin.
+func (fleet) IsAdmin(ctx context.Context) bool {
+	c := auth.GetUserFromContext(ctx)
+	return c != nil && c.IsAdmin()
 }
 
 func (u users) List(ctx context.Context) ([]control.User, error) {
