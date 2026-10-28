@@ -1,23 +1,31 @@
-// Settings → License: edition and evaluation ceiling, entitlements, and the
-// install flow (a dialog; validate before install).
+// Settings → License & support: edition, what it includes in plain words, the
+// license install flow (a dialog; validate before install), the diagnostics
+// bundle for support cases, and how to reach us.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
-import { SettingsCard, SettingsTable } from "@/components/settings/shared";
+import { SettingsCard } from "@/components/settings/shared";
 import { Button } from "@/components/ui/button";
 import { ErrorState } from "@/components/ui/empty-state";
 import { FormDialog } from "@/components/ui/form-dialog";
-import { StatusBadge } from "@/components/ui/status-badge";
-import { shortRev, useVersion } from "@/lib/edition";
+import { CheckIcon, MinusIcon } from "lucide-react";
+import { ENTERPRISE_INFO_URL, entitled, shortRev, useVersion } from "@/lib/edition";
 import { safeErrorMessage } from "@/lib/safe-display";
 
 type EditionInfo = {
   edition?: string;
-  modules?: string[];
   entitlements?: Record<string, boolean>;
   mcp?: { enabled?: boolean };
 };
+
+/** Real Enterprise capabilities, in the words users look for. Stub modules are not listed. */
+const INCLUDED: { capability: string; label: string }[] = [
+  { capability: "enterprise.identity", label: "Single sign-on (OIDC, SAML, LDAP) and SCIM directory sync" },
+  { capability: "enterprise.remediation", label: "Autonomous AI fixing with pull requests" },
+  { capability: "enterprise.integrations", label: "SIEM and ticketing destinations" },
+  { capability: "enterprise.support", label: "Support with a diagnostics bundle" },
+];
 
 type LicenseInfo = {
   edition?: string;
@@ -68,9 +76,16 @@ export function LicenseTab() {
   const version = versionQ.data?.community?.version || versionQ.data?.version;
   const commit = versionQ.data?.community?.commit || versionQ.data?.commit;
   const license = licenseQ.data;
-  const entitlements = Object.entries(edition?.entitlements ?? {})
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([name, granted]) => ({ name, granted }));
+  const diagnostics = useMutation({
+    mutationFn: async () => (await api.get<unknown>("/enterprise/diagnostics")).data,
+    onSuccess: (data) => {
+      const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
+      const a = Object.assign(document.createElement("a"), { href: url, download: `wolf-diagnostics-${new Date().toISOString().slice(0, 10)}.json` });
+      a.click();
+      URL.revokeObjectURL(url);
+    },
+    onError: (e) => toast.error(safeErrorMessage(e, "Could not collect diagnostics")),
+  });
 
   if (editionQ.isPending || licenseQ.isPending) return <p role="status" className="text-sm text-muted-foreground">Loading license…</p>;
   if (editionQ.isError || licenseQ.isError) return <ErrorState title="Could not load license" onRetry={() => { void editionQ.refetch(); void licenseQ.refetch(); }} />;
@@ -109,27 +124,38 @@ export function LicenseTab() {
             {license?.community_fallback ? " · Community operations remain available" : ""}.
           </p>
         )}
-        {edition?.modules && edition.modules.length > 0 ? (
-          <p className="font-mono text-xs text-muted-foreground">modules: {edition.modules.join(", ")}</p>
-        ) : null}
         {edition?.mcp ? <p className="text-xs text-muted-foreground">MCP {edition.mcp.enabled ? "enabled" : "off"}</p> : null}
       </SettingsCard>
 
-      <SettingsCard title="Entitlements" description="What this binary and license grant." flush>
-        <SettingsTable
-          query={{ data: entitlements, isLoading: false, isError: false, refetch: () => undefined }}
-          keyExtractor={(e) => e.name}
-          persistKey="wolf-license-entitlements"
-          searchPlaceholder="Search entitlements..."
-          empty={{ title: "None reported" }}
-          columns={[
-            { key: "name", header: "Capability", sortAccessor: (e) => e.name, accessor: (e) => <span className="font-mono text-xs">{e.name}</span> },
-            {
-              key: "state", header: "State", sortAccessor: (e) => (e.granted ? "granted" : "denied"),
-              accessor: (e) => <StatusBadge status={e.granted ? "active" : "neutral"} label={e.granted ? "Granted" : "Denied"} size="sm" />,
-            },
-          ]}
-        />
+      <SettingsCard title="What's included" label="What's included" description="Scanning, findings, reports, users and the API are included in every edition.">
+        <ul className="space-y-2 text-sm">
+          {INCLUDED.map(({ capability, label }) => {
+            const on = entitled(edition, capability);
+            return (
+              <li key={capability} className="flex items-start gap-2">
+                {on ? <CheckIcon aria-hidden className="mt-0.5 size-4 shrink-0 text-status-success" /> : <MinusIcon aria-hidden className="mt-0.5 size-4 shrink-0 text-muted-foreground" />}
+                <span className={on ? "" : "text-muted-foreground"}>{label}<span className="sr-only">{on ? " (included)" : " (not included)"}</span></span>
+              </li>
+            );
+          })}
+        </ul>
+      </SettingsCard>
+
+      <SettingsCard
+        title="Support"
+        label="Support"
+        description="Attach a diagnostics bundle to a support case. It holds the edition, runtime and settings, with secrets masked; no findings or source code."
+        actions={
+          entitled(edition, "enterprise.support") ? (
+            <Button size="sm" variant="outline" disabled={diagnostics.isPending} onClick={() => diagnostics.mutate()}>
+              {diagnostics.isPending ? "Collecting…" : "Download diagnostics bundle"}
+            </Button>
+          ) : null
+        }
+      >
+        <a href={ENTERPRISE_INFO_URL} target="_blank" rel="noreferrer" className="text-sm font-medium text-primary underline underline-offset-4 hover:no-underline">
+          Contact AlphaBravo
+        </a>
       </SettingsCard>
 
       <FormDialog

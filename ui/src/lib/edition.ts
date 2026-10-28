@@ -15,7 +15,6 @@ export type VersionInfo = {
 
 export type EditionInfo = VersionInfo & {
   licensed?: boolean;
-  ui_routes?: { path: string; title: string }[];
   entitlements?: Record<string, boolean>;
   modules?: string[];
   mcp?: { enabled?: boolean };

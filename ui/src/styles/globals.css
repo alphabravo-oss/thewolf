@@ -93,7 +93,7 @@
   --chart-sev-medium: #d4452f;
   --chart-sev-low: #ea7a5c;
   --chart-sev-info: #f09c80;
-  --chart-1: #2a78d6;
+  --chart-1: #3c4855;
   --chart-2: #eb6834;
 
   /* Page-header rule and card shadow of the shared shape layer. */
@@ -162,7 +162,7 @@
   --chart-sev-medium: #ee7458;
   --chart-sev-low: #d9473a;
   --chart-sev-info: #b32a2a;
-  --chart-1: #3987e5;
+  --chart-1: #b8c4d0;
   --chart-2: #d95926;
 
   --rule: hsl(var(--foreground));

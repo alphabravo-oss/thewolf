@@ -9,6 +9,13 @@
   priorities gain `first_seen_at`; `/findings` accepts `sort=first_seen`; the
   findings list accepts `severity=critical,high`, By rule filters on `q`, and
   `/agents` accepts `?stage=`. See `docs/dashboard.md`.
+- Fold Enterprise into Settings and remove the sidebar Enterprise section: Single
+  sign-on and Directory sync under Users & access, SIEM/ticketing destinations
+  (typed name/URL/authorization, send test, delete) under Integrations, Fixer engines
+  and Git access under AI fixing, and License & support (what the edition includes in
+  plain words, license install, diagnostics bundle download, contact link). Old
+  `/enterprise/*` links redirect to the matching section; the stub module pages, the
+  hub and the vulnerability attack-path/verification tabs are gone for now.
 
 - UI polish pass: Home recent activity reads in plain language (`lib/audit.ts`), the
   dashboard uses equal-height cards with collapsible "Keep work moving" and "Are we

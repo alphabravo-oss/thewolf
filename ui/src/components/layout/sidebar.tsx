@@ -4,26 +4,21 @@ import {
   BookOpen,
   Bot,
   Bug,
-  Building2,
   ChevronLeft,
   ChevronRight,
   Gauge,
   FolderGit2,
-  KeyRound,
   Layers,
   LayoutDashboard,
-  LayoutGrid,
   Menu,
   Package,
-  Plug,
   ScrollText,
   Settings,
   ShieldAlert,
-  ShieldCheck,
   X,
 } from "lucide-react";
 import { WolfLogo } from "@/components/wolf-logo";
-import { useEdition, useVersion } from "@/lib/edition";
+import { useVersion } from "@/lib/edition";
 import { useFlag } from "@/lib/flags";
 import { useIsAdmin } from "@/lib/me";
 import { useUIStore } from "@/lib/store-ui";
@@ -41,18 +36,9 @@ type NavGroup = {
   items: NavItem[];
 };
 
-const enterpriseIcons: Record<string, typeof Package> = {
-  "/enterprise/identity": KeyRound,
-  "/enterprise/tenancy": Building2,
-  "/enterprise/integrations": Plug,
-  "/enterprise/attack-paths": ShieldAlert,
-  "/enterprise/verifications": ShieldCheck,
-};
-
 function useNavGroups(): NavGroup[] {
   const autofix = useFlag("autofix_enabled");
   const isAdmin = useIsAdmin();
-  const editionQ = useEdition();
 
   return useMemo(() => {
     const primary: NavItem[] = [
@@ -68,16 +54,6 @@ function useNavGroups(): NavGroup[] {
       { label: "Scanner coverage", to: "/coverage", icon: Layers },
     ];
 
-    const enterprise: NavItem[] = (editionQ.data?.edition === "enterprise" ? editionQ.data.ui_routes ?? [] : [])
-      .filter((rt) => rt.path?.startsWith("/enterprise/") && rt.title)
-      .map((rt) => ({
-        label: rt.title,
-        to: rt.path,
-        icon: enterpriseIcons[rt.path] ?? Building2,
-      }));
-    // The hub ships with the Community UI, so the overlay's routes only need a link to it.
-    if (enterprise.length > 0) enterprise.unshift({ label: "Overview", to: "/enterprise", icon: LayoutGrid, exact: true });
-
     const admin: NavItem[] = isAdmin ? [
       { label: "Settings", to: "/settings", icon: Settings },
       { label: "Audit", to: "/audit", icon: ScrollText },
@@ -86,10 +62,9 @@ function useNavGroups(): NavGroup[] {
     return [
       { label: "Daily work", items: primary },
       { label: "Explore", items: secondary },
-      { label: "Enterprise", items: enterprise },
       { label: "Administration", items: admin },
     ].filter((g) => g.items.length > 0);
-  }, [autofix.enabled, isAdmin, editionQ.data]);
+  }, [autofix.enabled, isAdmin]);
 }
 
 function isActive(pathname: string, item: NavItem) {
@@ -319,7 +294,7 @@ function SidebarGroup({ group, pathname, collapsed }: {
 }) {
   return (
     <div className={cn("space-y-1", group.label !== "Daily work" && "mt-4 border-t border-sidebar-border pt-3")}>
-      {!collapsed && ["Administration", "Enterprise"].includes(group.label) && (
+      {!collapsed && group.label === "Administration" && (
         <p className="eyebrow px-3 pt-1">{group.label}</p>
       )}
       {group.items.map((item) => {
