@@ -1,9 +1,8 @@
-// One source-type-tabbed form for creating repositories. Used standalone
-// from the Repos page, and threaded through a collection when called from
-// the collection detail page (sets collectionId so the new repo is
-// auto-linked).
+// Source-type-tabbed dialog for creating repositories, opened from an
+// `Add repo` button on Home, Repositories and collection detail pages (the
+// latter sets collectionId so the new repo is auto-linked).
 import { useEffect, useState } from "react";
-import { Loader2Icon, XIcon } from "lucide-react";
+import { Loader2Icon } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Link } from "@tanstack/react-router";
@@ -12,6 +11,8 @@ import { BrowsePathModal } from "@/components/browse-path-modal";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
+import { FormDialog } from "@/components/ui/form-dialog";
+import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
 import type { Repo } from "@/lib/types";
 
@@ -51,10 +52,11 @@ function gitUrlHost(s: string): string {
 const hostAllowed = (allowed: string[], host: string) =>
   allowed.some((h) => h === host || (h.startsWith("*.") && host.endsWith(h.slice(1))));
 
-export type AddRepoFormProps = {
-  /** When set, the form attaches the new repo to this collection on success. */
+export type AddRepoDialogProps = {
+  open: boolean;
+  /** When set, the dialog attaches the new repo to this collection on success. */
   collectionId?: string;
-  /** Called after a successful create (or on Close). Parents typically navigate or refetch. */
+  /** Called after a successful create (repo id) or on Close (null). Parents close the dialog and navigate or refetch. */
   onDone: (repoId: string | null) => void;
 };
 
@@ -72,7 +74,12 @@ function isLikelyGitHubSource(s: string): boolean {
   return parts.length === 2 && parts.every((p) => p.length > 0 && !/[\s@:]/.test(p));
 }
 
-export function AddRepoForm({ collectionId, onDone }: AddRepoFormProps) {
+// Mounted only while open so every opening starts from a blank form.
+export function AddRepoDialog({ open, ...props }: AddRepoDialogProps) {
+  return open ? <AddRepoDialogBody {...props} /> : null;
+}
+
+function AddRepoDialogBody({ collectionId, onDone }: Omit<AddRepoDialogProps, "open">) {
   const [mode, setMode] = useState<Mode>("local");
   const [name, setName] = useState("");
   const [sourcePath, setSourcePath] = useState("");
@@ -168,25 +175,26 @@ export function AddRepoForm({ collectionId, onDone }: AddRepoFormProps) {
     (mode === "ssh" && !remoteNodeId) ||
     create.isPending || scan.busy;
 
+  const dirty = !createdRepoId && !!(name.trim() || sourcePath.trim());
+
   return (
-    <div className="border border-border rounded-lg p-3 mb-4 space-y-3 bg-muted/10">
+    <FormDialog
+      open
+      onOpenChange={(next) => { if (!next) onDone(null); }}
+      title={collectionId ? "Add a repo to this collection" : "Add a repository"}
+      description="Choose a local path, GitHub repository, remote Git URL, or SSH node."
+      onSubmit={() => (createdRepoId ? onDone(createdRepoId) : create.mutate())}
+      submitLabel={createdRepoId ? "View repository" : collectionId ? "Create + add" : "Create"}
+      cancelLabel={createdRepoId ? "Close" : "Cancel"}
+      submitDisabled={!createdRepoId && submitDisabled}
+      pending={create.isPending}
+      dirty={dirty}
+      presentation="sheet"
+    >
       {scan.dialog}
       {browse && <BrowsePathModal initialPath={sourcePath} onClose={() => setBrowse(false)} onSelect={(path) => { setSourcePath(path); if (!name.trim()) setName(path.split("/").filter(Boolean).at(-1) || "repository"); setBrowse(false); }} />}
-      <div className="flex items-center justify-between">
-        <div className="text-xs text-muted-foreground">
-          {collectionId ? "Add a repo to this collection" : "Add a repository"}
-        </div>
-        <button
-          type="button"
-          onClick={() => onDone(null)}
-          className="size-7 grid place-items-center rounded hover:bg-muted/40"
-          aria-label="Close"
-        >
-          <XIcon className="size-4" />
-        </button>
-      </div>
 
-      <div className="flex flex-wrap gap-1 text-xs">
+      <div className="flex flex-wrap gap-1.5">
         {(
           [
             ["local", "Local path"],
@@ -195,36 +203,27 @@ export function AddRepoForm({ collectionId, onDone }: AddRepoFormProps) {
             ["ssh", "SSH node"],
           ] as const
         ).map(([m, label]) => (
-          <button
+          <Button
             key={m}
             type="button"
+            size="sm"
+            variant={mode === m ? "default" : "outline"}
             onClick={() => setMode(m)}
-            className={`h-7 px-2.5 rounded-md transition ${
-              mode === m
-                ? "bg-primary text-primary-foreground"
-                : "hover:bg-muted/40 text-muted-foreground"
-            }`}
             aria-pressed={mode === m}
+            disabled={!!createdRepoId}
           >
             {label}
-          </button>
+          </Button>
         ))}
       </div>
 
-      {createdRepoId ? <div className="space-y-3 text-sm"><p>Repository added. Start its first scan when you are ready.</p><div className="flex flex-wrap gap-2"><Button disabled={scan.busy} onClick={() => scan.configure({ repo_id: createdRepoId, profile: "standard" })}>Scan repository</Button><Button variant="outline" onClick={() => onDone(createdRepoId)}>View repository</Button></div></div> : <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (!submitDisabled) create.mutate();
-        }}
-        className="space-y-3"
-      >
+      {createdRepoId ? <div className="space-y-3 text-sm"><p>Repository added. Start its first scan when you are ready.</p><Button disabled={scan.busy} onClick={() => scan.configure({ repo_id: createdRepoId, profile: "standard" })}>Scan repository</Button></div> : <div className="space-y-4">
         <Field label="Name">
-          <input
+          <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
             placeholder={mode === "github" ? "owner/repo" : "my-project"}
-            className="w-full h-9 px-2 rounded-md bg-background border border-muted/40 text-sm"
           />
         </Field>
 
@@ -233,12 +232,12 @@ export function AddRepoForm({ collectionId, onDone }: AddRepoFormProps) {
             label="Absolute path on host"
             hint="A folder on the Wolf server, under an allowed repository root. Docker must be able to read it."
           >
-            <div className="flex gap-2"><input
+            <div className="flex gap-2"><Input
               value={sourcePath}
               onChange={(e) => setSourcePath(e.target.value)}
               required
               placeholder="/srv/repos/my-project"
-              className="min-w-0 w-full h-9 px-2 rounded-md bg-background border border-muted/40 text-sm font-mono"
+              className="font-mono"
             /><Button variant="outline" type="button" size="sm" onClick={() => setBrowse(true)}>Browse</Button></div>
           </Field>
         )}
@@ -297,12 +296,12 @@ export function AddRepoForm({ collectionId, onDone }: AddRepoFormProps) {
                 label="GitHub repo"
                 hint="Accepts owner/repo, github.com/owner/repo, or a full https://github.com/... URL."
               >
-                <input
+                <Input
                   value={sourcePath}
                   onChange={(e) => setSourcePath(e.target.value)}
                   required
                   placeholder="alphabravo-oss/thewolf"
-                  className="w-full h-9 px-2 rounded-md bg-background border border-muted/40 text-sm font-mono"
+              className="font-mono"
                 />
               </Field>
             )}
@@ -312,12 +311,12 @@ export function AddRepoForm({ collectionId, onDone }: AddRepoFormProps) {
         {mode === "git" && (
           <>
             <Field label="Git URL">
-              <input
+              <Input
                 value={sourcePath}
                 onChange={(e) => setSourcePath(e.target.value)}
                 required
                 placeholder="https://gitlab.example.com/team/repo.git"
-                className="w-full h-9 px-2 rounded-md bg-background border border-muted/40 text-sm font-mono"
+              className="font-mono"
               />
             </Field>
             {gitCredentials.length > 0 ? (
@@ -346,41 +345,31 @@ export function AddRepoForm({ collectionId, onDone }: AddRepoFormProps) {
               <NodePicker value={remoteNodeId} onChange={setRemoteNodeId} />
             </Field>
             <Field label="Absolute remote path">
-              <input
+              <Input
                 value={sourcePath}
                 onChange={(e) => setSourcePath(e.target.value)}
                 required
                 placeholder="/srv/code/my-project"
-                className="w-full h-9 px-2 rounded-md bg-background border border-muted/40 text-sm font-mono"
+              className="font-mono"
               />
             </Field>
           </>
         )}
 
         <Field label="Default branch">
-          <input
+          <Input
             value={branch}
             onChange={(e) => setBranch(e.target.value)}
             placeholder="main"
-            className="w-full h-9 px-2 rounded-md bg-background border border-muted/40 text-sm"
           />
         </Field>
 
-        <div className="flex items-center justify-between gap-3">
-          <label className="flex items-center gap-2 text-sm">
-            <Checkbox checked={scanNow} onCheckedChange={(checked) => setScanNow(checked === true)} />
-            Scan now
-          </label>
-          <button
-            type="submit"
-            disabled={submitDisabled}
-            className="h-8 px-3 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-50"
-          >
-            {create.isPending ? "Creating…" : collectionId ? "Create + add" : "Create"}
-          </button>
-        </div>
-      </form>}
-    </div>
+        <label className="flex items-center gap-2 text-sm">
+          <Checkbox checked={scanNow} onCheckedChange={(checked) => setScanNow(checked === true)} />
+          Scan now
+        </label>
+      </div>}
+    </FormDialog>
   );
 }
 

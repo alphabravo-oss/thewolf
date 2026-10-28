@@ -10,12 +10,13 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 import path from "node:path";
 import { apiCreatedFinding, installScannerApiMock } from "./scanner-api-mock";
+import { installRichFixtures } from "./visual-fixtures";
 
 type Fixture = { edition?: "community" | "enterprise" };
 const ROUTES: { name: string; url: string; edition?: Fixture["edition"] }[] = [
   { name: "dashboard", url: "/" },
   { name: "repositories", url: "/repos" },
-  { name: "repository-detail", url: "/repos/repo-api-created" },
+  { name: "repository-detail", url: "/repos/payments-api" },
   { name: "scans", url: "/scans" },
   { name: "scan-detail", url: "/scans/scan-source" },
   { name: "findings", url: "/findings?view=list&scope=all" },
@@ -25,6 +26,9 @@ const ROUTES: { name: string; url: string; edition?: Fixture["edition"] }[] = [
   { name: "coverage", url: "/coverage" },
   { name: "audit", url: "/audit" },
   { name: "agents", url: "/agents" },
+  { name: "findings-by-repo", url: "/findings" },
+  { name: "vulnerability-detail", url: "/vulnerabilities/vuln-sqli" },
+  { name: "collection-detail", url: "/collections/backend" },
   { name: "fixes", url: "/fixes" },
   { name: "settings-general", url: "/settings?tab=general" },
   { name: "settings-users", url: "/settings?tab=users" },
@@ -121,13 +125,19 @@ for (const theme of ["light", "dark"] as const) {
       test.skip(!testInfo.project.name.startsWith("desktop-chromium"), "one reference viewport");
       await page.addInitScript((t) => localStorage.setItem("wolf-theme", t), theme);
       await installSweepMock(page, route.edition ?? "enterprise");
-      await installSettingsFixtures(page, route.edition ?? "enterprise");
+      // Settings, account and Enterprise pages get the settings fixtures; the rest get rich data.
+      if (/^(settings|account|enterprise)/.test(route.name)) await installSettingsFixtures(page, route.edition ?? "enterprise");
+      else await installRichFixtures(page);
       await page.goto(route.url);
       await expect(page.locator("#main-content")).toBeVisible();
       await expect(page.locator("html")).toHaveClass(theme === "dark" ? /dark/ : /^(?!.*dark)/);
       await page.waitForLoadState("networkidle");
       const a11y = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
       expect(a11y.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`)).toEqual([]);
+      // The app scrolls inside <main>, so grow the viewport to the content
+      // (capped) or fullPage would only capture the first screen.
+      const contentHeight = await page.locator("#main-content").evaluate((el) => Math.ceil(el.scrollHeight + el.getBoundingClientRect().top));
+      await page.setViewportSize({ width: 1440, height: Math.min(Math.max(contentHeight, 1000), 3600) });
       const out = process.env.UPDATE_VISUAL_BASELINE
         ? path.join(testInfo.config.rootDir, "__screenshots__", "baseline", theme, `${route.name}.png`)
         : testInfo.outputPath(`${route.name}-${theme}.png`);

@@ -29,7 +29,9 @@ test("collection repository table shows scan evidence and preserves context @bro
   await expect(payments.getByRole("cell", { name: "1 / 2 1 failed", exact: true })).toBeVisible();
   await expect(payments.getByRole("link", { name: "7", exact: true })).toHaveAttribute("href", "/scans/latest-partial");
   await expect(payments.getByRole("link", { name: "View 2 scans for Payments" })).toHaveAttribute("href", /repo_id=payments/);
-  await expect(payments.getByRole("link", { name: "Findings", exact: true })).toHaveAttribute("href", /\/repos\/payments\?collection_id=services#findings$/);
+  await payments.getByRole("button", { name: "Actions for Payments" }).click();
+  await expect(page.getByRole("menuitem", { name: "Findings", exact: true })).toHaveAttribute("href", /\/repos\/payments\?collection_id=services#findings$/);
+  await page.keyboard.press("Escape");
   await expect(table.getByText("Never scanned", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: /Recent scans/ })).toHaveCount(0);
   const a11y = await new AxeBuilder({ page }).include("#main-content").withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
@@ -51,7 +53,8 @@ test("collection repository table shows scan evidence and preserves context @bro
 test("scan from collection sends the repository and collection @browser-matrix", async ({ page }) => {
   const state = await collection(page);
   await page.goto("/collections/services");
-  await page.getByRole("button", { name: "Scan Payments", exact: true }).click();
+  await page.getByRole("button", { name: "Actions for Payments" }).click();
+  await page.getByRole("menuitem", { name: "Scan", exact: true }).click();
   await expect.poll(() => state.requests.find((r) => r.method === "POST" && r.pathname === "/scans")?.body).toMatchObject({ repo_id: "payments", collection_id: "services", branch: "main" });
 });
 

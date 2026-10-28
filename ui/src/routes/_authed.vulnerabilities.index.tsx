@@ -6,6 +6,9 @@ import { api, ApiError } from "@/lib/api";
 import { EmptyState, PermissionState } from "@/components/ui/empty-state";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { PageHeader, PageShell } from "@/components/ui/page";
+import { Card, CardContent } from "@/components/ui/card";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { RowActions } from "@/components/ui/row-actions";
 import { SeverityBadge } from "@/components/severity-badge";
 import { severityRank } from "@/lib/severity";
 import type { Vulnerability } from "@/lib/types";
@@ -96,6 +99,20 @@ function VulnerabilitiesPage() {
         </span>
       ),
     },
+    {
+      key: "actions",
+      header: "Actions",
+      hideHeader: true,
+      sortable: false,
+      align: "right",
+      width: "3rem",
+      accessor: (v) => (
+        <RowActions label={`Actions for ${findingTitle(v)}`}>
+          <DropdownMenuItem onSelect={() => void navigate({ to: "/vulnerabilities/$vulnerabilityId", params: { vulnerabilityId: v.id } })}>Open vulnerability</DropdownMenuItem>
+          {v.finding_ids?.[0] && <DropdownMenuItem onSelect={() => void navigate({ to: "/findings/$findingId", params: { findingId: v.finding_ids![0] } })}>Open first finding</DropdownMenuItem>}
+        </RowActions>
+      ),
+    },
   ];
 
   return (
@@ -111,7 +128,7 @@ function VulnerabilitiesPage() {
           description="Complete a scan to see vulnerabilities and their supporting evidence."
         />
       ) : (
-        <DataTable
+        <Card><CardContent className="p-4"><DataTable
           data={rows}
           columns={columns}
           keyExtractor={(v) => v.id}
@@ -138,7 +155,7 @@ function VulnerabilitiesPage() {
               params: { vulnerabilityId: v.id },
             })
           }
-        />
+        /></CardContent></Card>
       )}
     </PageShell>
   );
