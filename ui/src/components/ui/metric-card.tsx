@@ -1,6 +1,6 @@
 // Metric tile — ported from astronomer/frontend/src/components/ui/metric-card.tsx.
 // Every KPI strip (Home, collection posture, list pages) renders through this
-// so the two consoles share gauge thresholds and trend colouring.
+// so the two consoles share gauge thresholds (higher is better) and trend colouring.
 import { cn, gaugeColor, gaugeTextColor } from "@/lib/utils";
 import { ArrowUpRight, ArrowDownRight, Minus } from "lucide-react";
 
