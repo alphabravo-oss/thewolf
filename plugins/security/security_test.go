@@ -51,6 +51,10 @@ func TestParseDetectSecretsOutput(t *testing.T) {
 					"line_number": 20,
 					"hashed_secret": "def456"
 				}
+			],
+			"docs/evidence.json": [
+				{"type": "Hex High Entropy String", "line_number": 3, "hashed_secret": "fake01"},
+				{"type": "Base64 High Entropy String", "line_number": 4, "hashed_secret": "fake02"}
 			]
 		}
 	}`)
@@ -59,9 +63,21 @@ func TestParseDetectSecretsOutput(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parseDetectSecretsOutput returned error: %v", err)
 	}
-	if len(findings) != 1 {
-		t.Fatalf("expected 1 finding (Secret Keyword filtered, AWS Access Key kept), got %d", len(findings))
+	// Entropy-only hits (digests in generated JSON) are kept at low severity.
+	var kept []models.Finding
+	for _, f := range findings {
+		if f.FilePath == "docs/evidence.json" {
+			if f.Severity != models.SeverityLow {
+				t.Errorf("%s severity = %s, want low", f.RuleID, f.Severity)
+			}
+			continue
+		}
+		kept = append(kept, f)
 	}
+	if len(findings) != 3 || len(kept) != 1 {
+		t.Fatalf("expected 3 findings (Secret Keyword filtered, AWS key and 2 entropy kept), got %d", len(findings))
+	}
+	findings = kept
 	if findings[0].Title != `Potential AWS Access Key detected` {
 		t.Errorf("kept finding should be AWS Access Key, got title=%q", findings[0].Title)
 	}

@@ -90,6 +90,14 @@ var detectSecretsNoiseTypes = map[string]bool{
 	"Secret Keyword": true,
 }
 
+// detectSecretsEntropyTypes match any long random-looking string, including
+// SHA-256 digests in lockfiles, manifests and evidence JSON. They stay visible
+// at low severity; pattern-based detectors (AWS, Private Key, ...) stay high.
+var detectSecretsEntropyTypes = map[string]bool{
+	"Hex High Entropy String":    true,
+	"Base64 High Entropy String": true,
+}
+
 func parseDetectSecretsOutput(data []byte) ([]models.Finding, error) {
 	var output detectSecretsOutput
 	if err := json.Unmarshal(plugin.ExtractJSON(data), &output); err != nil {
@@ -106,10 +114,14 @@ func parseDetectSecretsOutput(data []byte) ([]models.Finding, error) {
 			if id == "" {
 				id = strconv.Itoa(s.LineNumber)
 			}
+			severity := models.SeverityHigh
+			if detectSecretsEntropyTypes[s.Type] {
+				severity = models.SeverityLow
+			}
 			findings = append(findings, models.Finding{
 				ToolName:    "detect-secrets",
 				Category:    models.CategorySecrets,
-				Severity:    models.SeverityHigh,
+				Severity:    severity,
 				Title:       fmt.Sprintf("Potential %s detected", s.Type),
 				Description: fmt.Sprintf("Possible secret of type %q found at line %d", s.Type, s.LineNumber),
 				FilePath:    file,
