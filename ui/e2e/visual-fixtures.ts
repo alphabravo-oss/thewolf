@@ -152,6 +152,22 @@ const FIX_JOBS = [
   fixJob("fix-eeee5555", "failed", "infra-terraform", { error: "tests failed after patch", finished_at: ago(40) }),
 ];
 
+const attempt = (n: number, outcome: string, tool: string, title: string, file: string, severity: string, excerpt: string) => ({
+  id: `att-${n}`, job_id: "fix-bbbb2222", finding_id: `finding-${n}`, attempt_no: 1, engine_used: "claude", model: "sonnet", built: true, finding_cleared: outcome === "kept", new_findings: 0,
+  outcome, files_changed: JSON.stringify([file]), diff_excerpt: excerpt, duration_ms: 42000, cost_usd: 0.18, input_tokens: 18000, output_tokens: 2400, created_at: ago(2),
+  tool_name: tool, title, file_path: file, line_start: 10 + n, severity, rule_id: `${tool}.rule-${n}`,
+});
+const fixDetail = (id: string) => ({
+  ...FIX_JOBS.find((j) => j.id === id)!, remediation_id: "rem-1", finding_ids: ["finding-0", "finding-1", "finding-2"],
+  summary: JSON.stringify({ rounds: [{ round: 1, kept: 2, remaining: 1 }], open: [{ id: "finding-2", tool: "semgrep", severity: "medium", file: "src/tls.ts", title: "Weak TLS cipher suite", reason: "Needs a dependency upgrade outside the repository." }] }),
+  attempts: [
+    attempt(0, "kept", "gitleaks", "Hard-coded credential in config", "config/app.yaml", "critical", "moved the credential to an environment variable"),
+    attempt(1, "kept", "semgrep", "SQL query accepts untrusted input", "src/checkout.ts", "high", "parameterised the query"),
+    attempt(2, "unfixable", "semgrep", "Weak TLS cipher suite", "src/tls.ts", "medium", "SKIP: needs a dependency upgrade"),
+  ],
+  tool_stats: [{ tool: "gitleaks", total: 1, kept: 1, open: 0, unfixable: 0, muted: 0, rolled: 0 }, { tool: "semgrep", total: 2, kept: 1, open: 1, unfixable: 1, muted: 0, rolled: 0 }],
+});
+
 /** Route handler over the richer data. Anything it does not recognise falls back. */
 export async function installRichFixtures(page: Page) {
   await page.clock.setFixedTime(FIXED_NOW);
@@ -184,6 +200,10 @@ export async function installRichFixtures(page: Page) {
     if (p === "/coverage") return ok({ source: "tools.yaml", tool_count: COVERAGE_TOOLS.length, honesty: "Honest scanner matrix from tools.yaml. Wolf does not claim CPG depth from federated tools.", tools: COVERAGE_TOOLS });
     if (p === "/settings") return ok({ scan_api_enabled: true, scanner_release_management_enabled: true, scanner_notify_only: "true", autofix_enabled: "true" });
     if (p === "/fixes") return ok(FIX_JOBS);
+    const fixMatch = /^\/fixes\/(fix-[a-z0-9]+)$/.exec(p);
+    if (fixMatch && FIX_JOBS.some((j) => j.id === fixMatch[1])) return ok(fixDetail(fixMatch[1]));
+    if (/^\/fixes\/fix-[a-z0-9]+\/stream$/.test(p)) return route.fulfill({ contentType: "text/event-stream", body: 'data: {"type":"fix_log","line":"engine claude: planning changes for 3 findings"}\n\ndata: {"type":"fix_log","line":"patched src/checkout.ts (parameterised query)"}\n\ndata: {"type":"fix_completed"}\n\n' });
+    if (/^\/repos\/[^/]+\/fixable$/.test(p)) return ok({ writable: true, can_push: true });
     return route.fallback();
   });
 }

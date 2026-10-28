@@ -88,7 +88,7 @@ function SettingsPage() {
           ))}
         </nav>
 
-        <div className="min-w-0 max-w-4xl space-y-4">
+        <div className="section-page space-y-4">
           <div>
             <h2 className="text-lg font-semibold tracking-tight">{active.label}</h2>
             <p className="mt-0.5 text-sm text-muted-foreground">{active.description}</p>

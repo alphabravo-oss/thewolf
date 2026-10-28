@@ -7,6 +7,7 @@ import { EmptyState, PermissionState } from "@/components/ui/empty-state";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { PageHeader, PageShell } from "@/components/ui/page";
 import { Card, CardContent } from "@/components/ui/card";
+import { MetricCard } from "@/components/ui/metric-card";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { RowActions } from "@/components/ui/row-actions";
 import { SeverityBadge } from "@/components/severity-badge";
@@ -45,6 +46,12 @@ function VulnerabilitiesPage() {
     },
   });
   const rows = q.data?.items ?? EMPTY;
+  // The API returns a total and one page of rows, not severity counts, so the
+  // split is computed from the loaded page and labelled as such.
+  const onPage = `Of ${rows.length} on this page`;
+  const critHigh = rows.filter((v) => v.severity === "critical" || v.severity === "high").length;
+  const multiTool = rows.filter((v) => (v.corroborated_by?.length ?? 0) > 1).length;
+  const isNew = rows.filter((v) => v.baseline_state === "new").length;
 
   const columns: Column<Vulnerability>[] = [
     {
@@ -127,7 +134,15 @@ function VulnerabilitiesPage() {
           title="No vulnerabilities yet"
           description="Complete a scan to see vulnerabilities and their supporting evidence."
         />
-      ) : (
+      ) : (<>
+        {q.data && (
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <MetricCard title="Vulnerabilities" value={q.data.total.toLocaleString()} subtitle={search.q ? "Matching your search" : "Across repositories you can access"} />
+            <MetricCard title="Critical / high" value={critHigh} subtitle={onPage} />
+            <MetricCard title="Flagged by 2+ tools" value={multiTool} subtitle={onPage} />
+            <MetricCard title="New since baseline" value={isNew} subtitle={onPage} />
+          </div>
+        )}
         <Card><CardContent className="p-4"><DataTable
           data={rows}
           columns={columns}
@@ -156,7 +171,7 @@ function VulnerabilitiesPage() {
             })
           }
         /></CardContent></Card>
-      )}
+      </>)}
     </PageShell>
   );
 }

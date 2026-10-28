@@ -12,6 +12,7 @@ import {
   KeyRound,
   Layers,
   LayoutDashboard,
+  LayoutGrid,
   Menu,
   Package,
   Plug,
@@ -74,6 +75,8 @@ function useNavGroups(): NavGroup[] {
         to: rt.path,
         icon: enterpriseIcons[rt.path] ?? Building2,
       }));
+    // The hub ships with the Community UI, so the overlay's routes only need a link to it.
+    if (enterprise.length > 0) enterprise.unshift({ label: "Overview", to: "/enterprise", icon: LayoutGrid, exact: true });
 
     const admin: NavItem[] = isAdmin ? [
       { label: "Settings", to: "/settings", icon: Settings },

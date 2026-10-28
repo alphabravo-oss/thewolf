@@ -11,7 +11,7 @@ import { PageHeader, PageSection, PageShell } from "@/components/ui/page";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useEnterpriseRecords } from "@/components/enterprise-records";
 import { ENTERPRISE_GROUPS, ENTERPRISE_MODULES, type EnterpriseModule } from "@/lib/enterprise-modules";
-import { entitled, useEdition, type EditionInfo } from "@/lib/edition";
+import { editionProduct, entitled, useEdition, type EditionInfo } from "@/lib/edition";
 
 export const Route = createFileRoute("/_authed/enterprise/")({
   component: EnterpriseHub,
@@ -72,7 +72,7 @@ function EnterpriseHub() {
         actions={<Button asChild variant="outline" size="sm"><Link to="/settings" search={{ tab: "license" }}>Manage license</Link></Button>}
       />
       <div className="grid gap-3 sm:grid-cols-3">
-        <MetricCard title="Edition" value={edition.data?.product ?? "Wolf Community"} subtitle={edition.data?.licensed ? "Commercial license active" : "No commercial license installed"} />
+        <MetricCard title="Edition" value={editionProduct(edition.data)} subtitle={edition.data?.licensed ? "Commercial license active" : "No commercial license"} />
         <MetricCard title="Modules available" value={`${available} of ${gated.length}`} subtitle="Granted by this binary and license" />
         <MetricCard title="Locked" value={gated.length - available} subtitle={gated.length - available ? "Contact us to enable" : "Everything is unlocked"} />
       </div>

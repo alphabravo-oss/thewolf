@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isEnterprise, shortRev } from "./edition";
+import { editionProduct, isEnterprise, shortRev } from "./edition";
 
 describe("shortRev", () => {
   it("keeps short tokens", () => {
@@ -16,5 +16,14 @@ describe("isEnterprise", () => {
     expect(isEnterprise({ edition: "community" })).toBe(false);
     expect(isEnterprise({ edition: "enterprise" })).toBe(true);
     expect(isEnterprise({ overlay: { commit: "abc" } })).toBe(true);
+  });
+});
+
+describe("editionProduct", () => {
+  it("prefers the API product and never labels Enterprise as Community", () => {
+    expect(editionProduct({ product: "Wolf Enterprise", edition: "enterprise" })).toBe("Wolf Enterprise");
+    expect(editionProduct({ edition: "enterprise" })).toBe("Wolf Enterprise");
+    expect(editionProduct({ edition: "community" })).toBe("Wolf Community");
+    expect(editionProduct(undefined)).toBe("Wolf Community");
   });
 });

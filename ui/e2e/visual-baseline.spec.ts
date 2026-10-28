@@ -30,6 +30,8 @@ const ROUTES: { name: string; url: string; edition?: Fixture["edition"] }[] = [
   { name: "vulnerability-detail", url: "/vulnerabilities/vuln-sqli" },
   { name: "collection-detail", url: "/collections/backend" },
   { name: "fixes", url: "/fixes" },
+  { name: "agent-detail", url: "/agents/fix-bbbb2222" },
+  { name: "fix-detail", url: "/fixes/fix-dddd4444" },
   { name: "settings-general", url: "/settings?tab=general" },
   { name: "settings-users", url: "/settings?tab=users" },
   { name: "settings-api-keys", url: "/settings?tab=apikeys" },
@@ -60,7 +62,7 @@ async function installSweepMock(page: Page, edition: "community" | "enterprise")
     const p = new URL(route.request().url()).pathname.replace(/^\/api(?:\/v1)?/, "");
     const json = (data: unknown, meta?: unknown) => route.fulfill({ json: { data, ...(meta ? { meta } : {}) } });
     if (route.request().method() !== "GET") return json({});
-    if (p === "/edition") return json({ edition, licensed: edition === "enterprise", entitlements: Object.fromEntries(CAPABILITIES.map((c) => [`enterprise.${c}`, edition === "enterprise" && c !== "residency"])) });
+    if (p === "/edition") return json({ edition, product: edition === "enterprise" ? "Wolf Enterprise" : "Wolf Community", licensed: edition === "enterprise", entitlements: Object.fromEntries(CAPABILITIES.map((c) => [`enterprise.${c}`, edition === "enterprise" && c !== "residency"])) });
     if (p === `/findings/${apiCreatedFinding.id}`) return json(apiCreatedFinding);
     if (/^\/scans\/[^/]+\/findings\/stats$/.test(p)) {
       return json({ total: 5, by_severity: { critical: 1, high: 1, medium: 1, low: 1, info: 1 }, by_tool: { semgrep: 5 }, by_category: { sast: 5 } });

@@ -1,10 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeftIcon, ChevronDownIcon, Loader2Icon, XIcon } from "lucide-react";
+import { Loader2Icon, XIcon } from "lucide-react";
 import { toast } from "sonner";
-import { CardSkeleton } from "@/components/skeleton";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ErrorState } from "@/components/ui/empty-state";
+import { MetricCard } from "@/components/ui/metric-card";
+import { PageHeader, PageShell } from "@/components/ui/page";
+import { Section } from "@/components/ui/section";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FixerSetupBanner } from "@/components/fixes/fixer-setup-banner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { AttemptsTable } from "@/components/fixes/attempts-table";
@@ -99,10 +105,11 @@ export function FixJobView({
 
   if (flagLoading || q.isLoading) {
     return (
-      <div className="page stack page--mid">
-        <CardSkeleton />
-        <CardSkeleton />
-      </div>
+      <PageShell>
+        <Skeleton className="h-16" />
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-24" />)}</div>
+        <Skeleton className="h-64" />
+      </PageShell>
     );
   }
 
@@ -120,6 +127,7 @@ export function FixJobView({
   const terminal = isFixTerminal(f.status);
   const cleanupPending = isFixCleanupPending(f);
   const paused = isFixPaused(f.status);
+  const active = f.status === "queued" || f.status === "claimed" || f.status === "running";
   const summary: {
     rounds?: { round: number; kept: number; remaining: number }[];
     tools?: ToolRow[];
@@ -134,149 +142,69 @@ export function FixJobView({
       return {};
     }
   })();
+  const attempts = f.attempts ?? [];
+  const fixed = attempts.filter((a) => a.outcome === "kept").length;
+  const title = repoName || f.result_branch || `Agent ${f.id.slice(0, 8)}`;
+  const lastChild = lineageQ.data?.children?.[lineageQ.data.children.length - 1];
 
   return (
-    <div className="page stack page--mid">
+    <PageShell>
       {!enabled && <FixerSetupBanner />}
-      <div className="flex items-center gap-3">
-        <BackLink to={backTo} />
-        <div className="flex items-center gap-2 flex-1 min-w-0">
-          <StatusBadge status={f.status} />
-          <div className="min-w-0">
-            <h1 className="text-xl font-semibold truncate">
-              {repoName || f.result_branch || `Agent ${f.id.slice(0, 8)}`}
-            </h1>
-            <p className="text-xs text-muted-foreground truncate">
-              {f.repo_id ? (
-                <Link
-                  to="/repos/$repoId"
-                  params={{ repoId: f.repo_id }}
-                  className="hover:underline"
-                >
-                  {repoName || "Repo"}
+      <PageHeader
+        breadcrumbs={[{ label: backTo === "/fixes" ? "Fixes" : "Agents", link: { to: backTo } }, { label: title }]}
+        title={title}
+        status={<StatusBadge status={f.status} />}
+        description={
+          <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+            {f.repo_id ? <Link to="/repos/$repoId" params={{ repoId: f.repo_id }} className="hover:underline">{repoName || "Repo"}</Link> : "Repo"}
+            {f.scan_id ? (
+              <>
+                <span aria-hidden>·</span>
+                <Link to="/scans/$scanId" params={{ scanId: f.scan_id }} className="hover:underline">
+                  Scan {f.scan_id.slice(0, 8)}{scanBranch ? ` (${scanBranch})` : ""}{typeof scanFindings === "number" ? ` · ${scanFindings} findings` : ""}
                 </Link>
-              ) : (
-                "Repo"
-              )}
-              {f.scan_id ? (
-                <>
-                  {" · "}
-                  <Link
-                    to="/scans/$scanId"
-                    params={{ scanId: f.scan_id }}
-                    className="hover:underline"
-                  >
-                    Scan {f.scan_id.slice(0, 8)}
-                    {scanBranch ? ` (${scanBranch})` : ""}
-                    {typeof scanFindings === "number"
-                      ? ` · ${scanFindings} findings`
-                      : ""}
-                  </Link>
-                </>
-              ) : null}
-              {f.result_branch ? (
-                <span className="font-mono"> · {f.result_branch}</span>
-              ) : null}
-              {lineageQ.data?.children?.length ? (
-                <>
-                  {" · "}
-                  <Link
-                    to="/scans/$scanId"
-                    params={{
-                      scanId:
-                        lineageQ.data.children[lineageQ.data.children.length - 1]
-                          .id,
-                    }}
-                    className="hover:underline"
-                  >
-                    Child scan{" "}
-                    {lineageQ.data.children[
-                      lineageQ.data.children.length - 1
-                    ].id.slice(0, 8)}
-                  </Link>
-                </>
-              ) : null}
-            </p>
-          </div>
-        </div>
-        {paused && (
-          <div className="flex items-center gap-2">
-            {f.status === "awaiting_review" && (
-              <button
-                type="button"
-                onClick={() => resume.mutate("continue")}
-                disabled={!enabled || resume.isPending}
-                className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border text-sm hover:bg-muted/40 disabled:opacity-50"
-              >
+              </>
+            ) : null}
+            {f.result_branch ? <><span aria-hidden>·</span><span className="font-mono">{f.result_branch}</span></> : null}
+            {lastChild ? <><span aria-hidden>·</span><Link to="/scans/$scanId" params={{ scanId: lastChild.id }} className="hover:underline">Child scan {lastChild.id.slice(0, 8)}</Link></> : null}
+          </span>
+        }
+        actions={
+          <>
+            {paused && f.status === "awaiting_review" && (
+              <Button size="sm" variant="outline" onClick={() => resume.mutate("continue")} disabled={!enabled || resume.isPending}>
                 Continue
-              </button>
+              </Button>
             )}
-            {fixableQ.data?.can_push ? (
-              <button
-                type="button"
-                onClick={() => resume.mutate("push")}
-                disabled={!enabled || resume.isPending}
-                className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-50"
-              >
-                {resume.isPending ? (
-                  <Loader2Icon className="size-4 animate-spin" />
-                ) : null}
-                {f.status === "push_failed"
-                  ? (f.pushed ? "Retry PR creation" : "Retry push")
-                  : "Push branch and open PR"}
-              </button>
+            {paused && (fixableQ.data?.can_push ? (
+              <Button size="sm" onClick={() => resume.mutate("push")} disabled={!enabled || resume.isPending}>
+                {resume.isPending ? <Loader2Icon className="animate-spin" /> : null}
+                {f.status === "push_failed" ? (f.pushed ? "Retry PR creation" : "Retry push") : "Push branch and open PR"}
+              </Button>
             ) : (
-              <button
-                type="button"
-                onClick={() => accept.mutate()}
-                disabled={accept.isPending || !f.remediation_id}
-                className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-50"
-              >
+              <Button size="sm" onClick={() => accept.mutate()} disabled={accept.isPending || !f.remediation_id}>
                 Accept branch
-              </button>
+              </Button>
+            ))}
+            {terminal && lineageQ.data?.remediation?.state === "open" && !fixableQ.data?.can_push && f.remediation_id && (
+              <Button size="sm" variant="outline" onClick={() => accept.mutate()} disabled={accept.isPending}>
+                Accept branch
+              </Button>
             )}
-          </div>
-        )}
-        {terminal &&
-          lineageQ.data?.remediation?.state === "open" &&
-          !fixableQ.data?.can_push &&
-          f.remediation_id && (
-            <button
-              type="button"
-              onClick={() => accept.mutate()}
-              disabled={accept.isPending}
-              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border text-sm hover:bg-muted/40 disabled:opacity-50"
-            >
-              Accept branch
-            </button>
-          )}
-        {f.status === "succeeded" && f.pushed && f.workspace_path && f.remediation_id &&
-          lineageQ.data?.remediation?.state === "frozen" && (
-            <button
-              type="button"
-              onClick={() => accept.mutate()}
-              disabled={accept.isPending}
-              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border text-sm hover:bg-muted/40 disabled:opacity-50"
-            >
-              Retry cleanup
-            </button>
-          )}
-        {(!terminal || (cleanupPending && !f.claimed_by)) && (
-          <button
-            type="button"
-            onClick={() => cleanupPending ? cancel.mutate() : setConfirmCancel(true)}
-            disabled={cancel.isPending}
-            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border text-sm hover:bg-destructive/10 text-destructive disabled:opacity-50"
-          >
-            {cancel.isPending ? (
-              <Loader2Icon className="size-4 animate-spin" />
-            ) : (
-              <XIcon className="size-4" />
+            {f.status === "succeeded" && f.pushed && f.workspace_path && f.remediation_id && lineageQ.data?.remediation?.state === "frozen" && (
+              <Button size="sm" variant="outline" onClick={() => accept.mutate()} disabled={accept.isPending}>
+                Retry cleanup
+              </Button>
             )}
-            {cleanupPending ? "Retry cleanup" : "Cancel"}
-          </button>
-        )}
-      </div>
+            {(!terminal || (cleanupPending && !f.claimed_by)) && (
+              <Button size="sm" variant="outline" className="text-destructive hover:text-destructive" onClick={() => cleanupPending ? cancel.mutate() : setConfirmCancel(true)} disabled={cancel.isPending}>
+                {cancel.isPending ? <Loader2Icon className="animate-spin" /> : <XIcon aria-hidden />}
+                {cleanupPending ? "Retry cleanup" : "Cancel"}
+              </Button>
+            )}
+          </>
+        }
+      />
 
       <ConfirmDialog
         open={confirmCancel}
@@ -333,64 +261,59 @@ export function FixJobView({
         }
       />
 
-      <section className="glass-card p-5 grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
-        <Meta label="Repo" value={repoName || f.repo_id.slice(0, 8)} />
-        <Meta
-          label="Scan"
-          value={
-            f.scan_id
-              ? `${f.scan_id.slice(0, 8)}${scanBranch ? ` · ${scanBranch}` : ""}`
-              : "—"
-          }
-          mono
-        />
-        <Meta label="Engine" value={f.engine} mono />
-        <Meta label="Model" value={f.model || "default"} mono />
-        <Meta label="Effort" value={f.effort || "default"} mono />
-        <Meta label="Mode" value={f.mode} mono />
-        <Meta label="Severity floor" value={f.severity_floor || "—"} />
-        <Meta
-          label="Round"
-          value={`${f.current_loop || 0}/${f.max_loops || 1}`}
-        />
-        <Meta label="Findings" value={String(f.finding_ids?.length ?? 0)} />
-        <Meta
-          label="Branch"
-          value={f.result_branch || f.target_branch || "—"}
-          mono
-        />
-        {f.pushed && <Meta label="Pushed" value={f.push_sha || "yes"} mono />}
-      </section>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <MetricCard title="Findings" value={f.finding_ids?.length ?? 0} subtitle={f.severity_floor ? `Severity floor: ${f.severity_floor}` : "No severity floor"} />
+        <MetricCard title="Fixed" value={attempts.length ? `${fixed} / ${attempts.length}` : "—"} subtitle={attempts.length ? "Decisions kept by this agent" : "No decisions recorded yet"} />
+        <MetricCard title="Round" value={`${f.current_loop || 0} / ${f.max_loops || 1}`} subtitle={f.mode ? `Mode: ${f.mode}` : "Rescan rounds"} />
+        <MetricCard title="Engine" value={f.engine} subtitle={`${f.model || "default model"}${f.effort ? ` · ${f.effort}` : ""}`} />
+      </div>
 
-      {summary.rounds && summary.rounds.length > 0 && (
-        <section className="glass-card p-5 text-sm space-y-2">
-          <h2 className="text-sm font-medium">Rescan rounds</h2>
-          <ul className="space-y-1 text-muted-foreground">
-            {summary.rounds.map((round) => (
-              <li key={round.round}>
-                Round {round.round}: kept {round.kept}, {round.remaining} still
-                open
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      <FixLogConsole
-        fixId={f.id}
-        status={f.status}
-        queuedBehind={f.queued_behind}
-      />
-      <AttemptsTable
-        attempts={f.attempts ?? []}
-        tools={f.tool_stats ?? summary.tools}
-        fixId={f.id}
-      />
-      <MutedList attempts={f.attempts ?? []} />
-      {summary.open && summary.open.length > 0 && (
-        <WhyNotFixed notes={summary.open} />
-      )}
-    </div>
+      <Tabs defaultValue="overview">
+        <TabsList aria-label="Agent views" className="flex h-auto flex-wrap justify-start">
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="decisions">Decisions{attempts.length ? ` (${attempts.length})` : ""}</TabsTrigger>
+        </TabsList>
+        {/* The log stays mounted across tab switches so the SSE stream is not replayed. */}
+        <TabsContent value="overview" forceMount className="mt-5 space-y-5 data-[state=inactive]:hidden">
+          <Card>
+            <CardHeader><CardTitle className="text-base">Run details</CardTitle></CardHeader>
+            <CardContent className="grid grid-cols-1 gap-x-8 gap-y-2 pt-4 text-sm md:grid-cols-2">
+              <Meta label="Repo" value={repoName || f.repo_id.slice(0, 8)} />
+              <Meta label="Scan" value={f.scan_id ? `${f.scan_id.slice(0, 8)}${scanBranch ? ` · ${scanBranch}` : ""}` : "—"} mono />
+              <Meta label="Engine" value={f.engine} mono />
+              <Meta label="Model" value={f.model || "default"} mono />
+              <Meta label="Effort" value={f.effort || "default"} mono />
+              <Meta label="Mode" value={f.mode} mono />
+              <Meta label="Severity floor" value={f.severity_floor || "—"} />
+              <Meta label="Round" value={`${f.current_loop || 0}/${f.max_loops || 1}`} />
+              <Meta label="Findings" value={String(f.finding_ids?.length ?? 0)} />
+              <Meta label="Branch" value={f.result_branch || f.target_branch || "—"} mono />
+              {f.pushed && <Meta label="Pushed" value={f.push_sha || "yes"} mono />}
+            </CardContent>
+          </Card>
+          {summary.rounds && summary.rounds.length > 0 && (
+            <Card>
+              <CardHeader><CardTitle className="text-base">Rescan rounds</CardTitle></CardHeader>
+              <CardContent className="pt-4">
+                <ul className="space-y-1 text-sm text-muted-foreground">
+                  {summary.rounds.map((round) => (
+                    <li key={round.round}>Round {round.round}: kept {round.kept}, {round.remaining} still open</li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          )}
+          {summary.open && summary.open.length > 0 && <WhyNotFixed notes={summary.open} />}
+          <Section title="Agent log" summary={active ? "Live" : "Finished"} defaultOpen={active} className="bg-card">
+            <FixLogConsole fixId={f.id} status={f.status} queuedBehind={f.queued_behind} />
+          </Section>
+        </TabsContent>
+        <TabsContent value="decisions" className="mt-5 space-y-5">
+          <AttemptsTable attempts={attempts} tools={f.tool_stats ?? summary.tools} fixId={f.id} />
+          <MutedList attempts={attempts} />
+        </TabsContent>
+      </Tabs>
+    </PageShell>
   );
 }
 
@@ -482,21 +405,8 @@ function PushResult({
   return null;
 }
 
-function BackLink({ to }: { to: "/agents" | "/fixes" }) {
-  return (
-    <Link
-      to={to}
-      className="size-9 grid place-items-center rounded-md hover:bg-muted/50"
-      aria-label="Back"
-    >
-      <ArrowLeftIcon className="size-4" />
-    </Link>
-  );
-}
-
 function MutedList({ attempts }: { attempts: { outcome: string; tool_name?: string; rule_id?: string; title?: string; file_path?: string; diff_excerpt?: string }[] }) {
   const muted = attempts.filter((a) => a.outcome === "muted");
-  const [open, setOpen] = useState(false);
   if (muted.length === 0) return null;
   const groups = new Map<string, typeof muted>();
   for (const a of muted) {
@@ -506,84 +416,47 @@ function MutedList({ attempts }: { attempts: { outcome: string; tool_name?: stri
     groups.set(key, list);
   }
   return (
-    <section className="glass-card overflow-hidden">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center gap-2 px-5 py-3 text-left text-sm font-medium hover:bg-muted/20"
-      >
-        <ChevronDownIcon
-          className={`size-3.5 text-muted-foreground transition-transform ${
-            open ? "" : "-rotate-90"
-          }`}
-        />
-        Muted this run
-        <span className="text-xs font-normal text-muted-foreground">
-          {muted.length} finding{muted.length === 1 ? "" : "s"} · {groups.size}{" "}
-          rule{groups.size === 1 ? "" : "s"} — this job only, unless a repo
-          suppression exists
-        </span>
-      </button>
-      {open && (
-        <ul className="divide-y divide-border/20 text-sm border-t border-border">
-          {[...groups.entries()].map(([key, items]) => (
-            <li key={key} className="px-5 py-2">
-              <div className="flex items-baseline gap-2 min-w-0">
-                <span className="font-mono text-xs truncate">{key}</span>
-                <span className="text-xs text-muted-foreground shrink-0">
-                  ×{items.length}
-                </span>
-              </div>
-              <p className="mt-0.5 text-[11px] text-muted-foreground truncate">
-                {(items[0].diff_excerpt || "").replace(/^MUTE:\s*/, "")}
-              </p>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
+    <Section
+      title="Muted this run"
+      className="bg-card"
+      summary={<>{muted.length} finding{muted.length === 1 ? "" : "s"} · {groups.size} rule{groups.size === 1 ? "" : "s"} — this job only, unless a repo suppression exists</>}
+    >
+      <ul className="divide-y divide-border text-sm">
+        {[...groups.entries()].map(([key, items]) => (
+          <li key={key} className="py-2">
+            <div className="flex items-baseline gap-2 min-w-0">
+              <span className="font-mono text-xs truncate">{key}</span>
+              <span className="text-xs text-muted-foreground shrink-0">×{items.length}</span>
+            </div>
+            <p className="mt-0.5 text-[11px] text-muted-foreground truncate">
+              {(items[0].diff_excerpt || "").replace(/^MUTE:\s*/, "")}
+            </p>
+          </li>
+        ))}
+      </ul>
+    </Section>
   );
 }
 
 function WhyNotFixed({ notes }: { notes: OpenNote[] }) {
-  const [open, setOpen] = useState(false);
   return (
-    <section className="glass-card overflow-hidden">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center gap-2 px-5 py-3 text-left text-sm font-medium hover:bg-muted/20"
-      >
-        <ChevronDownIcon
-          className={`size-3.5 text-muted-foreground transition-transform ${
-            open ? "" : "-rotate-90"
-          }`}
-        />
-        Why not fixed
-        <span className="text-xs font-normal text-muted-foreground">
-          {notes.length} leftover{notes.length === 1 ? "" : "s"}
-        </span>
-      </button>
-      {open && (
-        <ul className="divide-y divide-border/20 text-sm border-t border-border">
-          {notes.map((n) => (
-            <li key={n.id} className="px-5 py-2">
-              <div className="flex items-baseline gap-2 min-w-0">
-                <span className="text-[10px] uppercase tracking-wide text-muted-foreground shrink-0">
-                  {n.severity || "—"}
-                </span>
-                <span className="font-mono text-xs shrink-0">{n.tool}</span>
-                <span className="truncate text-foreground/80">
-                  {n.file || "(no file)"}
-                  {n.title ? ` — ${n.title}` : ""}
-                </span>
-              </div>
-              <p className="mt-0.5 text-[11px] text-muted-foreground">{n.reason}</p>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
+    <Section title="Why not fixed" className="bg-card" summary={`${notes.length} leftover${notes.length === 1 ? "" : "s"}`}>
+      <ul className="divide-y divide-border text-sm">
+        {notes.map((n) => (
+          <li key={n.id} className="py-2">
+            <div className="flex items-baseline gap-2 min-w-0">
+              <span className="text-[10px] uppercase tracking-wide text-muted-foreground shrink-0">{n.severity || "—"}</span>
+              <span className="font-mono text-xs shrink-0">{n.tool}</span>
+              <span className="truncate text-foreground/80">
+                {n.file || "(no file)"}
+                {n.title ? ` — ${n.title}` : ""}
+              </span>
+            </div>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">{n.reason}</p>
+          </li>
+        ))}
+      </ul>
+    </Section>
   );
 }
 
