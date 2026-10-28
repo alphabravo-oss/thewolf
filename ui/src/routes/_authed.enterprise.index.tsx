@@ -21,7 +21,7 @@ const isOpen = (m: EnterpriseModule, edition?: EditionInfo) => m.capability === 
 
 function ModuleStatus({ module, open }: { module: EnterpriseModule; open: boolean }) {
   const q = useEnterpriseRecords(module.countPath ?? "", open && !!module.countPath);
-  if (!open) return <p className="text-xs text-muted-foreground">Not entitled</p>;
+  if (!open) return null;
   if (!module.countPath) return <p className="text-xs text-muted-foreground">Available</p>;
   if (q.isLoading) return <p className="text-xs text-muted-foreground">Checking…</p>;
   if (q.isError) return <p className="text-xs text-muted-foreground">Not reporting</p>;
@@ -50,7 +50,7 @@ function ModuleCard({ module: m, edition }: { module: EnterpriseModule; edition?
         <ModuleStatus module={m} open={open} />
         <div className="mt-auto pt-1">
           {m.capability === null ? action : (
-            <EditionGate feature={m.title} capability={m.capability}>{action}</EditionGate>
+            <EditionGate feature={m.title} capability={m.capability} className="border-0 bg-transparent p-0">{action}</EditionGate>
           )}
         </div>
       </CardContent>
@@ -67,7 +67,6 @@ function EnterpriseHub() {
   return (
     <PageShell>
       <PageHeader
-        eyebrow="Enterprise"
         title="Enterprise"
         description="Identity, governance, integrations, data controls and operations for this installation."
         actions={<Button asChild variant="outline" size="sm"><Link to="/settings" search={{ tab: "license" }}>Manage license</Link></Button>}

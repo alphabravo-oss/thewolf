@@ -59,7 +59,7 @@ export function AccountTab() {
     <SettingsCard title="Profile" description="How you appear in Wolf and how you sign in.">
       <div className="space-y-5">
         <SettingRow label="Display name">
-          <TextSetting label="Display name" value={me.data?.display_name ?? ""} disabled={profile.isPending}
+          <TextSetting hideLabel label="Display name" value={me.data?.display_name ?? ""} disabled={profile.isPending}
             onCommit={(display_name) => profile.mutate({ display_name })} />
         </SettingRow>
         <SettingRow label="Email" help={me.data?.email}>

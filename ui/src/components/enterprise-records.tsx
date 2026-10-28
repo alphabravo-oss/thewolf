@@ -217,7 +217,7 @@ export function RecordsPanel({
         ]}
       />
       {rows.length > 0 && (
-        <div className="border-t border-border p-4">
+        <div>
           <Section title="Raw records" summary="JSON as returned by the API" variant="plain">
             <pre className="max-h-96 overflow-auto rounded-md bg-muted/30 p-3 font-mono text-xs">
               {safeDisplayText(JSON.stringify(rows, null, 2), 50_000)}

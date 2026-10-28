@@ -102,7 +102,7 @@ export function GitAccessCard() {
           { key: "actions", header: "", sortable: false, accessor: (c) => <RowActions label={c.name} actions={[{ label: "Delete credential", destructive: true, onSelect: () => setDeleting(c) }]} /> },
         ]}
       />
-      <div className="space-y-3 border-t border-border p-5">
+      <div>
         <Section title="Token scopes and private hosts" summary="What each host needs" variant="plain">
           <div className="grid gap-3 text-xs text-muted-foreground lg:grid-cols-2">
             <div className="space-y-1.5 rounded-lg border border-border p-3">

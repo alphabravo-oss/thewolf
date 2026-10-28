@@ -32,6 +32,7 @@ export function SettingsCard({
   actions?: ReactNode;
   /** Makes the card a named landmark (also what tests/AT find it by). */
   label?: string;
+  /** The body is a DataTable: tighter padding so the table gets the width. */
   flush?: boolean;
   className?: string;
   children?: ReactNode;
@@ -45,7 +46,7 @@ export function SettingsCard({
         </div>
         {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
       </CardHeader>
-      {children ? <CardContent className={cn(flush ? "p-0" : "space-y-4")}>{children}</CardContent> : null}
+      {children ? <CardContent className={cn("space-y-4", flush && "p-4")}>{children}</CardContent> : null}
     </Card>
   );
 }
@@ -84,8 +85,10 @@ const onEnter = (fn: () => void) => (e: KeyboardEvent) => {
   }
 };
 
-export function TextSetting({ label, value, type = "text", onCommit, disabled }: {
+export function TextSetting({ label, value, type = "text", onCommit, disabled, hideLabel }: {
   label: string; value: string; type?: string; onCommit: (value: string) => void; disabled?: boolean;
+  /** The surrounding SettingRow already shows the label; keep it for assistive tech only. */
+  hideLabel?: boolean;
 }) {
   const id = useId();
   const [draft, setDraft] = useState(value);
@@ -94,7 +97,7 @@ export function TextSetting({ label, value, type = "text", onCommit, disabled }:
   const commit = () => dirty && !disabled && onCommit(draft);
   return (
     <div className="space-y-1">
-      <label htmlFor={id} className="block text-xs text-muted-foreground">{label}</label>
+      <label htmlFor={id} className={hideLabel ? "sr-only" : "block text-xs text-muted-foreground"}>{label}</label>
       <div className="flex items-center gap-2">
         <Input id={id} type={type} autoComplete={type === "password" ? "off" : undefined}
           value={draft} disabled={disabled} onChange={(e) => setDraft(e.target.value)} onKeyDown={onEnter(commit)}
