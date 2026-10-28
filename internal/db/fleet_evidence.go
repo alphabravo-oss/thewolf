@@ -157,7 +157,9 @@ func loadFleetEvidence(ctx context.Context, database sqlx.ExtContext, userID str
 		scope += " AND s.repo_id = ?"
 		args = append(args, repoID)
 	}
-	root := ` FROM scans s JOIN repos r ON r.id = s.repo_id WHERE TRIM(COALESCE(s.origin_scan_id, '')) = ''` + scope
+	// Remediation scans are not backlog evidence: child scans carry
+	// origin_scan_id, and older root scans of Wolf's own fix branches do not.
+	root := ` FROM scans s JOIN repos r ON r.id = s.repo_id WHERE TRIM(COALESCE(s.origin_scan_id, '')) = '' AND COALESCE(s.branch, '') NOT LIKE 'wolf-fix/%'` + scope
 	if err := sqlx.SelectContext(ctx, database, &e.scans, database.Rebind(`SELECT s.id, s.repo_id, s.branch, s.source_type, s.source_path, s.remote_node_id, s.profile, s.categories, s.include_paths, s.exclude_paths, s.status, s.tools_selected, s.tools_completed, s.tools_failed, s.scanner_release_id, s.release_manifest_digest, s.created_at, s.completed_at, s.phase, s.lease_expires_at, s.heartbeat_at`+root+` ORDER BY s.created_at, s.id`), args...); err != nil {
 		return nil, err
 	}

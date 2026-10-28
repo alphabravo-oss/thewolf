@@ -6,7 +6,7 @@ Home is a dashboard: a KPI row, seven charts, the top five high-risk findings ("
 
 | Card | Data source | Drill-down |
 | --- | --- | --- |
-| Open critical / high (30-day sparkline, change vs 7 days ago) | `/fleet/posture` counts; sparkline from `/findings/trends` | `/findings?view=list&scope=all&severity=critical,high` |
+| Open critical / high (30-day sparkline, change vs 7 days ago) | `/fleet/posture` counts; sparkline and change are critical + high from `/findings/trends` (same scope as posture) | `/findings?view=list&scope=all&severity=critical,high` |
 | New vs resolved this week | `/fleet/posture` `changes` | opens "Are we improving?" |
 | Scan coverage % | `/fleet/posture` `coverage` | `/repos` |
 | Gates failing | `/fleet/posture` `gates_failing` | `/repos` |
@@ -27,7 +27,7 @@ Aggregation is client-side over bounded responses (`components/fleet/dashboard-d
 - Chart 6 counts completed and failed root scans only; success = tool in `tools_completed` and not in `tools_failed`.
 - Chart 7 maps fix-job status to the furthest stage reached: queued/claimed → Queued; running (or failed/cancelled after starting) → Started; awaiting review/push, push failed or succeeded → Changes verified; `pushed` → Branch pushed. Pull-request and merge state is not recorded on fix jobs, so the funnel stops at Branch pushed.
 
-Accessibility: every chart has a heading, a one-line meaning, a legend for multi-series charts, and a "Data table" `Section` whose rows carry the drill-down links (the SVG is `aria-hidden`; Recharts' keyboard layer is off so the table is the keyboard path). Fills use `--chart-*` tokens in `globals.css`: severity is a one-hue ordinal ramp (validated for colour-vision deficiency in both themes), new/resolved are an orange/blue pair.
+Accessibility: every chart has a heading, a one-line meaning, a legend for multi-series charts, and a "Data table" `Section` whose rows carry the drill-down links (the SVG is `aria-hidden`; Recharts' keyboard layer is off so the table is the keyboard path). Fills use `--chart-*` tokens in `globals.css`: severity steps from dark crimson (critical, the most prominent) through red, orange and amber to a neutral slate for info, changing both lightness and hue so critical and high stay distinct (validated for colour-vision deficiency in both themes; every fill is at least 3:1 against the panel, checked in `dashboard-data.test.ts`); new/resolved are an orange/blue pair. Count axes use compact ticks (3K, 60K) so labels fit.
 
 ## Metric definitions
 
@@ -39,7 +39,7 @@ Accessibility: every chart has a heading, a one-line meaning, a legend for multi
 - **New / resurfaced / verified resolved:** distinct security issue signatures using the existing scan-comparison identity. Line movement alone cannot earn resolution credit. A resolved signature must disappear from a complete comparable rescan, have no current observations on another branch, and have no affected branch whose comparison was excluded. An issue still open elsewhere is not new or resurfaced merely because another branch reports it.
 - **Suppressed / set aside:** baseline-open signatures still detected but now suppressed or closed by triage. These are separate from verified resolution. A status edit alone never earns resolution credit.
 
-Remediation child scans (`origin_scan_id`) do not replace source-branch evidence. Partial scans preserve previous complete observations and can add findings; they cannot erase a known backlog. The same selection applies to current finding APIs, preserving full finding fields and the `include_suppressed` option.
+Remediation scans are not backlog evidence: child scans (`origin_scan_id`) and root scans of Wolf's own `wolf-fix/*` branches are left out of current findings, posture, coverage, comparisons and trends, so they never replace or inflate source-branch evidence. Partial scans preserve previous complete observations and can add findings; they cannot erase a known backlog. The same selection applies to current finding APIs, preserving full finding fields and the `include_suppressed` option.
 
 ## API compatibility
 

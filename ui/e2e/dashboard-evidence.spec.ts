@@ -36,6 +36,13 @@ test("home renders every chart from fixtures with text alternatives @browser-mat
   for (const title of ["Open critical / high", "New vs resolved this week", "Scan coverage", "Gates failing", "Fix branches pushed"]) {
     await expect(page.getByRole("link", { name: new RegExp(`^${title}`) })).toBeVisible();
   }
+  // KPI change is critical + high vs seven days earlier (1400 vs 1500 in TRENDS), not the medium-heavy total.
+  await expect(page.getByRole("link", { name: /^Open critical \/ high/ })).toContainText("-100 vs 7 days ago");
+  // Thousands render as compact ticks (8K), so labels fit the axis.
+  // (Recharts may portal axis layers, so read every tick: dates are MM-DD, counts compact.)
+  const ticks = page.locator("#chart-trend .recharts-cartesian-axis-tick-value");
+  await expect(ticks.filter({ hasText: /^\d+(\.\d)?K$/ }).first()).toBeVisible();
+  expect((await ticks.allTextContents()).every((t) => t.length <= 5)).toBe(true);
   await expect(page.getByRole("heading", { name: "Act on now" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Hard-coded credential in config" })).toHaveAttribute("href", /\/findings\/finding-0$/);
   await expect(page.getByRole("button", { name: "Are we improving?" })).toHaveAttribute("aria-expanded", "false");

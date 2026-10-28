@@ -15,6 +15,7 @@ import { safeErrorMessage } from "@/lib/safe-display";
 
 type EditionInfo = {
   edition?: string;
+  licensed?: boolean;
   entitlements?: Record<string, boolean>;
   mcp?: { enabled?: boolean };
 };
@@ -112,9 +113,10 @@ export function LicenseTab() {
           </p>
         ) : null}
         <p className="text-sm text-muted-foreground">
-          {license?.commercial_license
-            ? "A commercial license is active."
-            : "No commercial license is installed in this binary. Community scanning, findings, and local auth stay available."}
+          {/* The Enterprise binary is the entitlement (/edition licensed); /license only reports an installed license file. */}
+          {edition?.licensed || license?.commercial_license
+            ? "Licensed. This Enterprise build includes its commercial entitlements; no license file is needed."
+            : "No commercial license. Community scanning, findings, and local auth stay available."}
         </p>
         {license?.data_intact === false ? (
           <p className="text-xs text-status-error">License state must not conceal customer data.</p>

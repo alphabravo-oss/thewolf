@@ -22,6 +22,12 @@ export function trendRows(entries: TrendEntry[], days: number): TrendRow[] {
   return entries.slice(-days).map((e) => ({ date: e.date, ...Object.fromEntries(SEVERITIES.map((s) => [s, e.counts?.[s] ?? 0])) }) as TrendRow);
 }
 
+/** Critical + high per day for the KPI: 30-day sparkline and change vs the snapshot seven days earlier. */
+export function critHighTrend(entries: TrendEntry[]): { days: number[]; delta?: number } {
+  const days = entries.slice(-30).map((e) => (e.counts?.critical ?? 0) + (e.counts?.high ?? 0));
+  return { days, delta: days.length > 7 ? days[days.length - 1] - days[days.length - 8] : undefined };
+}
+
 export const AGE_BUCKETS = [
   { key: "0-7", label: "0–7 days", max: 7 },
   { key: "8-30", label: "8–30 days", max: 30 },

@@ -26,6 +26,8 @@ const linkClass = "font-medium text-primary hover:underline underline-offset-4";
 const label = (s: string) => s[0].toUpperCase() + s.slice(1);
 const short = (s: string, n = 22) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 const axis = { stroke: "var(--color-muted-foreground)", fontSize: 11, tickLine: false } as const;
+// Count axes: whole numbers, compact ticks (60K) so labels fit the axis.
+const count = { allowDecimals: false, tickFormatter: new Intl.NumberFormat("en", { notation: "compact" }).format } as const;
 const grid = <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />;
 // Keep series in severity order (Recharts sorts tooltip and legend by name).
 const tip = <Tooltip itemSorter={(i) => SEVERITIES.indexOf(String(i.dataKey) as SeverityKey)} cursor={{ fill: "var(--color-muted)" }} contentStyle={{ background: "var(--color-popover)", border: "1px solid var(--color-border)", borderRadius: 4, fontSize: 12, color: "var(--color-popover-foreground)" }} />;
@@ -133,7 +135,7 @@ export function FindingsOverTime() {
       <BarChart accessibilityLayer={false} maxBarSize={28} data={rows} margin={{ top: 4, right: 8, bottom: 0, left: 0 }} barCategoryGap={1}>
         {grid}
         <XAxis dataKey="date" {...axis} minTickGap={24} tickFormatter={(d: string) => d.slice(5)} />
-        <YAxis {...axis} allowDecimals={false} axisLine={false} width={36} />
+        <YAxis {...axis} {...count} axisLine={false} width={36} />
         {tip}{legend}
         {SEVERITIES.map((s) => <Bar key={s} dataKey={s} name={label(s)} stackId="sev" fill={severityFill[s]} {...gap} className="cursor-pointer" onClick={() => open(s)} />)}
       </BarChart>
@@ -162,7 +164,7 @@ export function NewVsResolved({ q }: { q: Loadable & { data?: FleetPosture } }) 
     <ResponsiveContainer width="100%" height="100%">
       <BarChart accessibilityLayer={false} maxBarSize={28} data={rows} layout="vertical" margin={{ top: 4, right: 12, bottom: 0, left: 0 }} barGap={2}>
         {grid}
-        <XAxis type="number" {...axis} allowDecimals={false} />
+        <XAxis type="number" {...axis} {...count} />
         <YAxis type="category" dataKey="label" {...axis} {...cat} />
         {tip}{legend}
         <Bar dataKey="new" name="New" fill="var(--chart-2)" radius={[0, 4, 4, 0]} className="cursor-pointer" onClick={(d: Clicked<(typeof rows)[number]>) => open(d.payload)} />
@@ -185,7 +187,7 @@ export function RiskiestRepos() {
     <ResponsiveContainer width="100%" height="100%">
       <BarChart accessibilityLayer={false} maxBarSize={28} data={rows} layout="vertical" margin={{ top: 4, right: 12, bottom: 0, left: 0 }}>
         {grid}
-        <XAxis type="number" {...axis} allowDecimals={false} />
+        <XAxis type="number" {...axis} {...count} />
         <YAxis type="category" dataKey="name" {...axis} {...cat} />
         {tip}{legend}
         {SEVERITIES.map((s) => <Bar key={s} dataKey={s} name={label(s)} stackId="sev" fill={severityFill[s]} {...gap} className="cursor-pointer"
@@ -208,7 +210,7 @@ export function TopRules() {
     <ResponsiveContainer width="100%" height="100%">
       <BarChart accessibilityLayer={false} maxBarSize={28} data={rows} layout="vertical" margin={{ top: 4, right: 12, bottom: 0, left: 0 }}>
         {grid}
-        <XAxis type="number" {...axis} allowDecimals={false} />
+        <XAxis type="number" {...axis} {...count} />
         <YAxis type="category" dataKey="name" {...axis} {...cat} />
         {tip}
         <Bar dataKey="findings" name="Open findings" fill="var(--chart-1)" radius={[0, 4, 4, 0]} className="cursor-pointer"
@@ -236,7 +238,7 @@ export function FindingAge({ q }: { q: Loadable & { data?: FleetPosture } }) {
       <BarChart accessibilityLayer={false} maxBarSize={28} data={rows} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
         {grid}
         <XAxis dataKey="label" {...axis} />
-        <YAxis {...axis} allowDecimals={false} axisLine={false} width={36} />
+        <YAxis {...axis} {...count} axisLine={false} width={36} />
         {tip}{legend}
         {(["critical", "high"] as const).map((s) => <Bar key={s} dataKey={s} name={label(s)} stackId="sev" fill={severityFill[s]} {...gap} className="cursor-pointer"
           onClick={() => void navigate({ to: "/findings", search: oldestFirst(s) })} />)}
@@ -280,7 +282,7 @@ export function FixFunnel() {
     <ResponsiveContainer width="100%" height="100%">
       <BarChart accessibilityLayer={false} maxBarSize={28} data={rows} layout="vertical" margin={{ top: 4, right: 12, bottom: 0, left: 0 }}>
         {grid}
-        <XAxis type="number" {...axis} allowDecimals={false} />
+        <XAxis type="number" {...axis} {...count} />
         <YAxis type="category" dataKey="label" {...axis} {...cat} />
         {tip}
         <Bar dataKey="reached" name="Jobs reaching stage" fill="var(--chart-1)" radius={[0, 4, 4, 0]} className="cursor-pointer"

@@ -38,8 +38,8 @@ export function GeneralSection() {
       <SettingsCard title="Edition" description={`${product} — ${edition.data?.edition ?? "community"}.`}>
         <p className="text-sm text-muted-foreground">
           {edition.data?.licensed
-            ? "A commercial license is active."
-            : "No commercial license is installed in this binary."}{" "}
+            ? "Licensed. This Enterprise build includes its commercial entitlements."
+            : "No commercial license."}{" "}
           See the License section for entitlements and install.
         </p>
       </SettingsCard>

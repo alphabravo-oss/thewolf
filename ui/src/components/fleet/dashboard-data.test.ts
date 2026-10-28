@@ -1,8 +1,9 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { FixJob } from "@/lib/fixes";
 import type { FleetChangeRow, FleetPriority } from "@/lib/fleet";
 import type { Scan } from "@/lib/types";
-import { ageBuckets, fixFunnel, fixStage, toolHealth, topRepos, trendRows, weeklyChanges } from "./dashboard-data";
+import { ageBuckets, critHighTrend, fixFunnel, fixStage, toolHealth, topRepos, trendRows, weeklyChanges } from "./dashboard-data";
 
 const NOW = Date.parse("2026-10-28T12:00:00Z");
 const daysAgo = (d: number) => new Date(NOW - d * 86_400_000).toISOString();
@@ -63,5 +64,33 @@ describe("chart helpers", () => {
       { date: "2026-10-02", critical: 2, high: 0, medium: 0, low: 0, info: 0 },
       { date: "2026-10-03", critical: 3, high: 0, medium: 0, low: 0, info: 0 },
     ]);
+  });
+  it("KPI trend compares critical + high only, against seven days earlier", () => {
+    // Live shape: medium dominates the totals; the delta must ignore it.
+    const e = (i: number, critical: number, high: number) => ({ date: `2026-10-${String(i).padStart(2, "0")}`, counts: { critical, high, medium: 9000, low: 800, info: 100, total: critical + high + 9900 } });
+    const entries = Array.from({ length: 10 }, (_, i) => e(i + 1, i < 3 ? 69 : 12, i < 3 ? 400 : 212));
+    expect(critHighTrend(entries)).toEqual({ days: [469, 469, 469, 224, 224, 224, 224, 224, 224, 224], delta: -245 });
+    expect(critHighTrend(entries.slice(0, 7)).delta).toBeUndefined();
+  });
+});
+
+// WCAG relative luminance contrast for #rrggbb.
+const lum = (hex: string) => {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
+const contrast = (a: string, b: string) => { const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x); return (hi + 0.05) / (lo + 0.05); };
+
+describe("severity chart fills", () => {
+  const css = readFileSync("src/styles/globals.css", "utf8"); // vitest runs from ui/
+  const [light, dark] = css.split(/^\.dark \{/m);
+  const fills = (block: string) => [...block.matchAll(/--chart-sev-(\w+): (#[0-9a-f]{6});/g)].map((m) => [m[1], m[2]] as const);
+  it.each([["light", light, "#f7f8fa"], ["dark", dark, "#15191d"]])("%s fills are >= 3:1 on the panel and critical stands apart from high", (_, block, panel) => {
+    const f = fills(block);
+    expect(f.map(([k]) => k)).toEqual(["critical", "high", "medium", "low", "info"]);
+    for (const [, hex] of f) expect(contrast(hex, panel)).toBeGreaterThanOrEqual(3);
+    // Critical is the most prominent step: highest contrast against the panel.
+    expect(Math.max(...f.map(([, hex]) => contrast(hex, panel)))).toBe(contrast(f[0][1], panel));
+    expect(contrast(f[0][1], f[1][1])).toBeGreaterThanOrEqual(1.5);
   });
 });

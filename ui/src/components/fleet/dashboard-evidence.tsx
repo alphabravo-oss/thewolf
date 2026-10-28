@@ -14,7 +14,7 @@ import { SeverityBadge } from "@/components/severity-badge";
 import { Section } from "@/components/ui/section";
 import { RecentActivity } from "@/components/fleet/recent-activity";
 import { FindingAge, FindingsOverTime, FixFunnel, NewVsResolved, RiskiestRepos, ScannerHealth, TopRules, useFindingTrends } from "@/components/fleet/dashboard-charts";
-import { fixStage } from "@/components/fleet/dashboard-data";
+import { critHighTrend, fixStage } from "@/components/fleet/dashboard-data";
 
 const linkClass = "font-medium text-primary hover:underline underline-offset-4";
 const critHighList = { view: "list", scope: "all", severity: "critical,high" } as const;
@@ -59,9 +59,7 @@ function Kpis({ posture: p, loading, autofix, openProgress }: { posture?: FleetP
   if (!p) return loading ? <div role="status" aria-label="Loading dashboard" className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-28" />)}</div> : null;
   const sev = p.open_findings_by_severity;
   const critHigh = (sev.critical ?? 0) + (sev.high ?? 0);
-  // 30-day sparkline and week-over-week change from the observed daily series.
-  const days = (trends.data ?? []).slice(-30).map((d) => (d.counts.critical ?? 0) + (d.counts.high ?? 0));
-  const delta = days.length > 7 ? days[days.length - 1] - days[days.length - 8] : undefined;
+  const { days, delta } = critHighTrend(trends.data ?? []);
   const c = p.changes;
   const comparable = c.compared_branches > 0;
   const coverage = p.repo_count ? Math.round((p.coverage.fresh_repos / p.repo_count) * 100) : 0;

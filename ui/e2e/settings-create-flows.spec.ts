@@ -233,6 +233,7 @@ test("Install license: validate, then install from a dialog @browser-matrix", as
   await page.route(apiPath("/license/validate"), (route) => route.fulfill({ json: { data: { valid: true, reason: "Valid until 2027-01-01" } } }));
   await page.route(apiPath("/license/install"), (route) => { installs.push(route.request().postDataJSON()); return route.fulfill({ json: { data: { valid: true } } }); });
   await page.goto("/settings?tab=license");
+  await expect(page.getByText(/^No commercial license\. Community scanning/)).toBeVisible();
 
   await page.getByRole("button", { name: "Install license" }).click();
   const dialog = page.getByRole("dialog", { name: "Install license" });
