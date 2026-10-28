@@ -61,6 +61,7 @@ func TestPostgresDSN(t TestingT) string {
 		t.Fatalf("prepare test template: %v", err)
 	}
 	name := "wolf_t_" + strings.ReplaceAll(uuid.NewString(), "-", "")
+	// #nosec G701 -- name is "wolf_t_"+hex and template is "wolf_tpl_"+hex; neither is caller-controlled.
 	if _, err := admin.Exec(`CREATE DATABASE "` + name + `" TEMPLATE "` + template + `"`); err != nil {
 		t.Fatalf("create test database: %v", err)
 	}
