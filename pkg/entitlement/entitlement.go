@@ -3,10 +3,8 @@
 package entitlement
 
 import (
-	"os"
 	"strings"
 	"sync"
-	"testing"
 )
 
 const (
@@ -27,14 +25,6 @@ const (
 	Integrations = "enterprise.integrations"
 	Residency    = "enterprise.residency"
 	CloudTenancy = "cloud.tenancy"
-
-	// Synthetic BSL evaluation ceilings. Counsel/business owns production
-	// numbers; these exist so the registry and tests have one source.
-	SyntheticRepos   = 5
-	SyntheticUsers   = 3
-	SyntheticWorkers = 1
-	SourceSynthetic  = "synthetic"
-	LimitsEnv        = "WOLF_COMMUNITY_LIMITS"
 )
 
 // Catalog is every capability the edition API reports.
@@ -45,50 +35,6 @@ func Catalog() []string {
 		Plugins, Remediation, Compliance, Support, Packaging, Integrations, Residency,
 		CloudTenancy,
 	}
-}
-
-// Limits is the Community evaluation ceiling. Production values are
-// configuration, not scattered literals.
-type Limits struct {
-	Repos    int    `json:"repos"`
-	Users    int    `json:"users"`
-	Workers  int    `json:"workers"`
-	Source   string `json:"source"`
-	Enforced bool   `json:"enforced"`
-}
-
-func CommunityLimits() Limits {
-	return Limits{
-		Repos:    SyntheticRepos,
-		Users:    SyntheticUsers,
-		Workers:  SyntheticWorkers,
-		Source:   SourceSynthetic,
-		Enforced: EnforceCommunityLimits(),
-	}
-}
-
-func LimitsEnabled() bool {
-	v := strings.ToLower(strings.TrimSpace(os.Getenv(LimitsEnv)))
-	if v == "0" || v == "false" || v == "no" || v == "off" {
-		return false
-	}
-	if v == "1" || v == "true" || v == "yes" {
-		return true
-	}
-	// Default on in production. go test stays unlimited unless a test opts in.
-	return !testing.Testing()
-}
-
-// EnforceCommunityLimits applies the 5/3/1 evaluation ceiling to Community
-// and to an unlicensed overlay. A signed commercial license lifts it.
-func EnforceCommunityLimits() bool {
-	if !LimitsEnabled() {
-		return false
-	}
-	if l, ok := Active().(interface{ Licensed() bool }); ok && l.Licensed() {
-		return false
-	}
-	return true
 }
 
 // Checker answers whether a capability is granted.

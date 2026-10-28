@@ -177,9 +177,6 @@ func bootstrapAdmin(ctx context.Context, store db.Store) error {
 	if err == nil && existing != nil {
 		return nil
 	}
-	if err := routes.CheckCommunityLimit(ctx, store, "users"); err != nil {
-		return err
-	}
 	hash, err := auth.HashPassword(password)
 	if err != nil {
 		return fmt.Errorf("hash admin password: %w", err)

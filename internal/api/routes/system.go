@@ -121,7 +121,7 @@ func Version(w http.ResponseWriter, r *http.Request) {
 
 func versionInfo() map[string]any {
 	ed := edition.Default.Name()
-	kind := "source-available"
+	kind := "apache-2.0"
 	if entitlement.Licensed() {
 		kind = "commercial"
 	} else if ed != edition.Community {

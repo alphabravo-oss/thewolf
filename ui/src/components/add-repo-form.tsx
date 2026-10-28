@@ -14,7 +14,6 @@ import { Button } from "@/components/ui/button";
 import { FormDialog } from "@/components/ui/form-dialog";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
-import { isCommunityLimit, COMMUNITY_LIMIT_COPY } from "@/lib/safe-display";
 import type { Repo } from "@/lib/types";
 
 type Mode = "local" | "github" | "git" | "ssh";
@@ -165,7 +164,7 @@ function AddRepoDialogBody({ collectionId, onDone }: Omit<AddRepoDialogProps, "o
       else onDone(repoId);
     },
     onError: (e) => {
-      toast.error(isCommunityLimit(e) ? COMMUNITY_LIMIT_COPY : e instanceof Error ? e.message : "Create failed");
+      toast.error(e instanceof Error ? e.message : "Create failed");
     },
   });
 
