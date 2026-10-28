@@ -33,6 +33,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 
+	"github.com/alphabravocompany/thewolf/internal/api/routes"
 	"github.com/alphabravocompany/thewolf/internal/artifacts"
 	"github.com/alphabravocompany/thewolf/internal/cli"
 	"github.com/alphabravocompany/thewolf/internal/db"
@@ -69,7 +70,7 @@ type Options struct {
 
 // Build metadata and overlay identity, set once by Execute.
 var (
-	version   = "dev"
+	version   = routes.AppVersion
 	commit    = "unknown"
 	buildDate = "unknown"
 	overlay   Options
@@ -85,7 +86,7 @@ func Execute(opts Options) {
 
 // NewRootCommand builds the wolf command tree with opts applied.
 func NewRootCommand(opts Options) *cobra.Command {
-	if opts.Version != "" {
+	if opts.Version != "" && opts.Version != "dev" {
 		version = opts.Version
 	}
 	if opts.Commit != "" {

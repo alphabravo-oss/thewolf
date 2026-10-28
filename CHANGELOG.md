@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Fix: "Scan coverage" on Home and Reports no longer shows full coverage in red;
+  the shared KPI gauge now treats higher as better (red below 50%, amber below
+  90%). Fix: `/api/v1/version`, the sidebar footer and `wolf version` report
+  0.2.2 instead of 0.2.0 when the build sets no ldflags version; a Go test keeps
+  `routes.AppVersion` equal to `ui/package.json`.
+
 - Reports (Enterprise, `enterprise.compliance`): a **Reports** sidebar item with a
   print-ready "Security posture" report for every repository or one collection
   (open critical/high with a 30-day trend, new vs resolved this week, coverage,
