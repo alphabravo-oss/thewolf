@@ -21,6 +21,11 @@ describe("describeAudit", () => {
     expect(describeAudit(row("POST", "/api/v1/widgets")).text).toBe("Created a widget");
   });
 
+  it("reads sign-in from the path when the event type is unfamiliar", () => {
+    expect(describeAudit(row("POST", "/api/v1/auth/login", 200, "auth.login_ok")).text).toBe("Signed in");
+    expect(describeAudit(row("POST", "/api/v1/auth/login", 401, "auth.login_failed")).text).toBe("Failed sign-in attempt");
+  });
+
   it("flags failed requests without changing the label", () => {
     expect(describeAudit(row("POST", "/api/v1/auth/login", 401, "auth.login.failed"))).toEqual({ text: "Failed sign-in attempt", failed: true });
     expect(describeAudit(row("POST", "/api/v1/scans", 201)).failed).toBe(false);

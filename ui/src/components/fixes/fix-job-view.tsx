@@ -344,7 +344,7 @@ function PushResult({
         <div className="font-medium text-status-warning">
           {errorCode === "publication_not_ready" ? "Publication not ready; branch retained" : pushed ? "Branch pushed; pull request creation failed" : "GitHub push failed; branch retained"}
         </div>
-        <p className="mt-1 text-status-warning/90">{pushFailureHint(error)}</p>
+        <p className="mt-1 text-status-warning">{pushFailureHint(error)}</p>
       </div>
     );
   }
@@ -352,7 +352,7 @@ function PushResult({
     return (
       <div className="rounded-md border border-status-success/40 bg-status-success/10 px-4 py-3 text-sm">
         <div className="font-medium text-status-success">Pushed to GitHub</div>
-        <p className="mt-1 text-status-success/80">
+        <p className="mt-1 text-status-success">
           {branch ? (
             <>
               Branch{" "}

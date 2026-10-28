@@ -326,7 +326,7 @@ function SidebarGroup({ group, pathname, collapsed }: {
         const Icon = item.icon;
         const active = isActive(pathname, item) || (item.to === "/fixes" && pathname.startsWith("/agents"));
         return (
-          <Link key={item.to} to={item.to} title={collapsed ? item.label : undefined}
+          <Link key={item.to} to={item.to} activeOptions={{ exact: item.exact === true }} title={collapsed ? item.label : undefined}
             aria-label={collapsed ? item.label : undefined} aria-current={active ? "page" : undefined}
             className={cn("nav-item min-h-10", collapsed && "justify-center px-0", active && "active")}>
             <Icon aria-hidden="true" />

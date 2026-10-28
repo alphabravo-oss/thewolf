@@ -62,7 +62,7 @@ async function installSweepMock(page: Page, edition: "community" | "enterprise")
     const p = new URL(route.request().url()).pathname.replace(/^\/api(?:\/v1)?/, "");
     const json = (data: unknown, meta?: unknown) => route.fulfill({ json: { data, ...(meta ? { meta } : {}) } });
     if (route.request().method() !== "GET") return json({});
-    if (p === "/edition") return json({ edition, product: edition === "enterprise" ? "Wolf Enterprise" : "Wolf Community", licensed: edition === "enterprise", entitlements: Object.fromEntries(CAPABILITIES.map((c) => [`enterprise.${c}`, edition === "enterprise" && c !== "residency"])) });
+    if (p === "/edition") return json({ edition, product: edition === "enterprise" ? "Wolf Enterprise" : "Wolf Community", licensed: edition === "enterprise", ui_routes: edition === "enterprise" ? [{ path: "/enterprise/identity", title: "Identity" }, { path: "/enterprise/siem", title: "SIEM" }] : [], entitlements: Object.fromEntries(CAPABILITIES.map((c) => [`enterprise.${c}`, edition === "enterprise" && c !== "residency"])) });
     if (p === `/findings/${apiCreatedFinding.id}`) return json(apiCreatedFinding);
     if (/^\/scans\/[^/]+\/findings\/stats$/.test(p)) {
       return json({ total: 5, by_severity: { critical: 1, high: 1, medium: 1, low: 1, info: 1 }, by_tool: { semgrep: 5 }, by_category: { sast: 5 } });

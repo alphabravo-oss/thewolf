@@ -60,7 +60,7 @@ const routeLabels: Record<string, string> = {
 
 // Detail pages of these resources render their own PageHeader breadcrumbs
 // (with the resource name), so the topbar trail stays out of their way.
-const pageOwnedBreadcrumbs = new Set(["repos", "collections", "scans", "findings", "vulnerabilities"]);
+const pageOwnedBreadcrumbs = new Set(["repos", "collections", "scans", "findings", "vulnerabilities", "agents"]);
 
 function generateBreadcrumbs(pathname: string): { label: string; href: string }[] {
   const segments = pathname.split("/").filter(Boolean);

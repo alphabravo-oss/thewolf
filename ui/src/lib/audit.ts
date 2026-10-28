@@ -69,6 +69,8 @@ export function auditPath(path: string): string {
 export function describeAudit(e: AuditLike): { text: string; failed: boolean } {
   const failed = e.status_code >= 400;
   const path = auditPath(e.path);
+  // Sign-in is recorded as one POST whose status says whether it worked.
+  if (e.method === "POST" && /^\/auth\/(mfa\/)?login$/.test(path)) return { text: failed ? "Failed sign-in attempt" : "Signed in", failed };
   const known = EVENTS[e.event_type ?? ""] ?? PATHS.find(([m, re]) => m === e.method && re.test(path))?.[2];
   if (known) return { text: known, failed };
   const resource = path.split("/")[1] ?? "";
