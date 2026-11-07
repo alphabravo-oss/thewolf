@@ -2,7 +2,7 @@
   "schemaVersion": "wolf.scanners/vulnerability-db-lock/v1",
   "provider": "trivy",
   "repository": "ghcr.io/aquasecurity/trivy-java-db",
-  "digest": "sha256:d491eedaab0eb05ffd4eb1a0d90c97112d0f92836ffa9903be15a5f3543c6cfc",
-  "recordedAt": "2026-10-23T07:50:12Z",
-  "expiresAt": "2026-10-31T07:50:12Z"
+  "digest": "sha256:2326597d5d720a0da4a3198381f50ffdc1916e8a132e67f6463e0d5c1423ee9f",
+  "recordedAt": "2026-11-07T11:14:16Z",
+  "expiresAt": "2026-11-15T11:14:16Z"
 }
