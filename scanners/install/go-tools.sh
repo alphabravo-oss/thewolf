@@ -10,9 +10,9 @@ source /etc/wolf-scanners/versions.env
 
 # Debian 12 ships an older golang-go; modern gosec/staticcheck/govulncheck
 # need Go 1.22+. Install a current Go toolchain from go.dev.
-GOTC_VERSION=1.27.3
-GOTC_LINUX_AMD64_SHA256=65efbc80fdc1fa2cd2631cad5b481777a68e8725f34e89f50fc6ac714e379b40
-GOTC_LINUX_ARM64_SHA256=a06e99309dbcbdca1a8ccd2282c3ee146e55930886e26b4f1193269587165f49
+GOTC_VERSION=1.27.4
+GOTC_LINUX_AMD64_SHA256=7226736c2339719cda28fbf3a54d71aa63bcefe376e98cef00034268dab24840
+GOTC_LINUX_ARM64_SHA256=3392582988a273a87ab5043ee1b2c9c17a2c3c00580bf9326c47a2e0aaaeac92
 ARCH="$(uname -m)"
 case "$ARCH" in
     x86_64)
