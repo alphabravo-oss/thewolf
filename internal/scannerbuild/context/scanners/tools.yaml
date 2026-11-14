@@ -949,7 +949,7 @@ tools:
     pinned_version: "2.17.0"
     version_variable: ZAP_VERSION
     image:
-      pinned_reference: ghcr.io/zaproxy/zaproxy:2.17.0@sha256:030d3df57735dacbb83464854758e674dd9ad01d79d12a129a8e58b1fd384238
+      pinned_reference: ghcr.io/zaproxy/zaproxy:2.17.0@sha256:9624669db72f54d86c4b46a7064518bd9bf79d8c61a4c31befa9923489f328af
       entrypoint: python3
     update_source:
       type: docker_registry
