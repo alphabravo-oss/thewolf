@@ -148,6 +148,18 @@ func (worker *Worker) execute(
 		_ = stopHeartbeat()
 		return err
 	}
+	// fail ends the run on err. A deadline or cancellation that lands in the
+	// middle of a store call is the build timing out, not a persistence failure,
+	// so it finishes as an interruption like the Done check below.
+	fail := func(err error) error {
+		interrupted := executionContext.Err() != nil && parent.Err() == nil
+		cancel()
+		<-heartbeatDone
+		if interrupted {
+			return worker.finishInterrupted(parent, current)
+		}
+		return err
+	}
 
 	var requestedVariants []string
 	var platforms []string
@@ -204,9 +216,7 @@ func (worker *Worker) execute(
 			executionContext, current.ID, variant, current.LeaseToken,
 			worker.now(),
 		); err != nil {
-			cancel()
-			<-heartbeatDone
-			return err
+			return fail(err)
 		}
 		var logMutex sync.Mutex
 		logExhausted := false
@@ -260,9 +270,7 @@ func (worker *Worker) execute(
 		persistenceErr := logPersistenceError
 		logMutex.Unlock()
 		if persistenceErr != nil {
-			cancel()
-			<-heartbeatDone
-			return persistenceErr
+			return fail(persistenceErr)
 		}
 		variantResult := scannerrelease.CustomBuildVariantResult{
 			Refs: result.Refs, Digest: result.Digest,
@@ -284,9 +292,7 @@ func (worker *Worker) execute(
 			executionContext, current.ID, variant, current.LeaseToken,
 			variantResult, worker.now(),
 		); err != nil {
-			cancel()
-			<-heartbeatDone
-			return err
+			return fail(err)
 		}
 	}
 	if err := stopHeartbeat(); err != nil {
