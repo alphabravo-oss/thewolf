@@ -1,4 +1,4 @@
-// Richer fixtures for the visual baseline sweep (docs/UI_DESIGN_PLAN.md T3.5):
+// Richer fixtures for the visual baseline sweep (docs/archive/2026-11-14/UI_DESIGN_PLAN.md T3.5):
 // real tables and cards on the list pages instead of empty states. Registered
 // after installScannerApiMock so these win for the paths they know and fall
 // back to the shared mock for everything else. The clock is pinned so relative

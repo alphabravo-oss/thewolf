@@ -1,4 +1,4 @@
-// Enterprise capabilities live in Settings (docs/UI_DESIGN_PLAN.md Phase 4):
+// Enterprise capabilities live in Settings (docs/archive/2026-11-14/UI_DESIGN_PLAN.md Phase 4):
 // SSO under Users & access, SIEM/ticketing under Integrations, entitlements and
 // diagnostics under License & support; old /enterprise links redirect.
 import { expect, test, type Page } from "@playwright/test";

@@ -20,7 +20,7 @@ export default tseslint.config(
     },
     rules: {
       "react-hooks/rules-of-hooks": "error",
-      // Design-system guards (docs/UI_DESIGN_PLAN.md T1.8). Confirmation and
+      // Design-system guards (docs/archive/2026-11-14/UI_DESIGN_PLAN.md T1.8). Confirmation and
       // notices go through ConfirmDialog / toast, never the browser globals.
       "no-restricted-globals": [
         "error",

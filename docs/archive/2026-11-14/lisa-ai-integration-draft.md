@@ -1,5 +1,7 @@
 # Specification Draft: i want it plan how to add an integration of ai. phase 1 is having commands to enrich the json or individual findings (should be able to set by finding type... like maybe only critical and high) that tells teh user waht to pass to an ai agent to fix the issue. phase 2 is leveraging AI tools of varying kinds (so this needs to be flexible) wether its passing it to claude code or codex or antigravity/gemini or opencode or cursor agent, etc, and potentially some arbitrary other systems or directly to openai api compatible or anthropic endpoint and having the ai agents automatically work to remediate issues, scan again, and attempt to fix again. we should be able t to set the number of loops it should run on this auto loop. waht else would make this a deterministic scan, ai scan, ai fix loop. we may also want to support paid sast and dast and other types of tools via a plugin system. lets talk about this
 
+> **Archived 2026-11-14 — superseded.** Historical AI-integration planning notes; see [docs/PLAN.md](../../PLAN.md) for current work.
+
 *Interview in progress - Started: 2026-05-19*
 
 ## Overview

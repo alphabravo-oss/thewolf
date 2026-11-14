@@ -18,7 +18,7 @@ exclude-queries:
   - d3499f6d-1651-41bb-a9a7-de925fea487b
 
   # docker-compose docker-socket mount — intentional, wolf orchestrates
-  # docker scanners via the daemon socket. See PLAN.md §10.1 for
+  # docker scanners via the daemon socket. See docs/archive/2026-11-14/PLAN-2026-10-24.md §13 for
   # security posture.
   - d6355c88-1e8d-49e9-b2f2-f8a1ca12c75b
   # docker-compose 'volume has sensitive host dir' — same finding from
