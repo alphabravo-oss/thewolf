@@ -1,7 +1,9 @@
 # UI design-system and admin-console plan
 
+> **Archived 2026-11-14 — superseded.** The only active plan is [docs/PLAN.md](../../PLAN.md). This file keeps task IDs, acceptance criteria and evidence as history; its status labels, checkmarks, commands and links are not current instructions.
+
 Status: executing (Phases 1 and 3 merged; Phase 2 on branch `ui/settings-enterprise`). Owner decision 2026-10-27. This elaborates workstream **U** in
-[`PLAN.md`](PLAN.md); it is not a second execution plan. Check tasks off here and
+[`PLAN.md`](../../PLAN.md); it is not a second execution plan. Check tasks off here and
 reference the evidence in `PLAN.md` §U when they land.
 
 ## Why

@@ -70,7 +70,7 @@
   --brand-foreground: 210 20% 96.1%;
 
   /* Status scale: pill text over a ~12% wash of itself, on bg/card/muted.
-     Each tone is >= 4.5:1 there (checked, see UI_DESIGN_PLAN T1.1). */
+     Each tone is >= 4.5:1 there (checked, see docs/archive/2026-11-14/UI_DESIGN_PLAN.md T1.1). */
   --status-success: #045e44;
   --status-warning: #7c4309;
   --status-error: #a81919;

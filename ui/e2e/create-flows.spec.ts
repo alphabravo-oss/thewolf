@@ -1,4 +1,4 @@
-// Create flows that moved from inline forms into dialogs (docs/UI_DESIGN_PLAN.md
+// Create flows that moved from inline forms into dialogs (docs/archive/2026-11-14/UI_DESIGN_PLAN.md
 // T3.2): each opens from its `Add …` button, validates, submits, and confirms.
 import { expect, test } from "@playwright/test";
 import { installScannerApiMock } from "./scanner-api-mock";

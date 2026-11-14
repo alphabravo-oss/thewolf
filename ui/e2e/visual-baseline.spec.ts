@@ -1,4 +1,4 @@
-// Visual baseline sweep (docs/UI_DESIGN_PLAN.md T1.9): every route, light and
+// Visual baseline sweep (docs/archive/2026-11-14/UI_DESIGN_PLAN.md T1.9): every route, light and
 // dark, on the mock fixtures, with an axe contrast/WCAG check per shot.
 //
 //   pnpm test:e2e                       screenshots land in test-results/ (untracked)

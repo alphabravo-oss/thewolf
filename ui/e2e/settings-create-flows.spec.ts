@@ -1,4 +1,4 @@
-// One spec per converted create flow (docs/UI_DESIGN_PLAN.md T2.7): the
+// One spec per converted create flow (docs/archive/2026-11-14/UI_DESIGN_PLAN.md T2.7): the
 // `+ Add …` button opens a dialog, an empty submit shows field errors and sends
 // nothing, a valid submit posts the right body, closes the dialog and toasts.
 // Destructive row actions go through a confirm (typed-name for the high-risk).
