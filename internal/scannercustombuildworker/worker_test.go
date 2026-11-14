@@ -255,7 +255,7 @@ func TestWorkerHeartbeatsWhileLoadingClaimedInventory(t *testing.T) {
 		Persistence: repository,
 		delay:       250 * time.Millisecond,
 	}
-	worker := newTestWorkerWithStore(t, store,
+	worker := newTestWorkerWithLease(t, store,
 		func(
 			context.Context,
 			scannerbuild.BuildRequest,
@@ -268,6 +268,7 @@ func TestWorkerHeartbeatsWhileLoadingClaimedInventory(t *testing.T) {
 		},
 		nil,
 		time.Minute,
+		100*time.Millisecond, // shorter than the 250ms inventory load: only heartbeats keep it
 	)
 	if worked, err := worker.Once(context.Background()); err != nil || !worked {
 		t.Fatalf("Once worked=%t err=%v", worked, err)
@@ -428,6 +429,10 @@ func newTestWorker(
 	)
 }
 
+// testLease is long enough that a loaded CI runner (race detector, shared
+// PostgreSQL) cannot expire it mid-test; only the heartbeat test needs a short one.
+const testLease = 5 * time.Second
+
 func newTestWorkerWithStore(
 	t *testing.T,
 	store scannercustombuildworker.Store,
@@ -440,11 +445,27 @@ func newTestWorkerWithStore(
 	timeout time.Duration,
 ) *scannercustombuildworker.Worker {
 	t.Helper()
+	return newTestWorkerWithLease(t, store, executor, credentials, timeout, testLease)
+}
+
+func newTestWorkerWithLease(
+	t *testing.T,
+	store scannercustombuildworker.Store,
+	executor func(
+		context.Context,
+		scannerbuild.BuildRequest,
+		func(string),
+	) (scannerbuild.BuildResult, error),
+	credentials scannercustombuildworker.CredentialResolver,
+	timeout time.Duration,
+	lease time.Duration,
+) *scannercustombuildworker.Worker {
+	t.Helper()
 	worker, err := scannercustombuildworker.New(scannercustombuildworker.Config{
 		Store: store, Executor: scannercustombuildworker.ExecutorFunc(executor),
 		Credentials: credentials, WorkerID: "custom-build-worker-test",
 		PollInterval: time.Millisecond, HeartbeatInterval: 5 * time.Millisecond,
-		LeaseDuration: 100 * time.Millisecond, OperationTimeout: timeout,
+		LeaseDuration: lease, OperationTimeout: timeout,
 		Once: true,
 	})
 	if err != nil {
