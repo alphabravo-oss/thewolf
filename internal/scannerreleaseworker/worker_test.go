@@ -31,7 +31,10 @@ const (
 func TestWorkerExecutesDAGRetriesAndRedactsEvidence(t *testing.T) {
 	t.Parallel()
 	fixture := newFixture(t, successPlan())
-	executor := &recordingExecutor{failOnce: map[string]bool{"lock-reproducibility": true}}
+	executor := &recordingExecutor{
+		failOnce:   map[string]bool{"lock-reproducibility": true},
+		rendezvous: map[string]bool{"test-a": true, "test-b": true},
+	}
 	worker := newWorker(t, fixture.persistence, executor, scannerreleaseworker.Config{
 		MaxParallelSteps: 2,
 		MaxStepAttempts:  2,
@@ -677,6 +680,10 @@ type recordingExecutor struct {
 	policyInput *scannerreleaseworker.PolicyInput
 	active      atomic.Int64
 	maxActive   atomic.Int64
+	// rendezvous names steps that hold until every one of them is in flight, so a
+	// parallelism assertion does not depend on how a loaded runner schedules them.
+	rendezvous map[string]bool
+	arrived    atomic.Int64
 }
 
 // durableReplayExecutor models a process-independent backend result journal:
@@ -770,6 +777,19 @@ func (e *recordingExecutor) Execute(
 	e.mu.Unlock()
 	if shouldFail {
 		return scannerreleaseworker.StepResult{}, errors.New("transient executor failure token=super-secret")
+	}
+	if e.rendezvous[request.Step.Key] {
+		e.arrived.Add(1)
+		deadline := time.After(600 * time.Millisecond)
+		for e.arrived.Load() < int64(len(e.rendezvous)) {
+			select {
+			case <-ctx.Done():
+				return scannerreleaseworker.StepResult{}, ctx.Err()
+			case <-deadline:
+				e.arrived.Store(int64(len(e.rendezvous)))
+			case <-time.After(time.Millisecond):
+			}
+		}
 	}
 	select {
 	case <-ctx.Done():
